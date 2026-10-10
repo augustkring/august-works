@@ -37,6 +37,9 @@ export async function reviewWorkflowRun(db: Db, companyId: string, runId: string
     }
     const [run] = await tx.select().from(workflowRuns).where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.id, runId))).for("update");
     if (!run) throw notFound("Workflow run not found");
+    if (run.source === "test") throw conflict("Internal workflow tests cannot become production correction evidence", {
+      code: "workflow_test_not_production_evidence",
+    });
     if (!["succeeded", "failed", "cancelled"].includes(run.status)) throw conflict("Review requires a terminal workflow run");
     const [existing] = await tx.select().from(workflowRunReviews).where(and(eq(workflowRunReviews.companyId, companyId), eq(workflowRunReviews.workflowRunId, runId)));
     if (existing) {

@@ -344,6 +344,7 @@ export const WORKFLOW_RUN_SOURCES = [
   "routine",
   "pipeline",
   "task",
+  "test",
 ] as const;
 export type WorkflowRunSource = (typeof WORKFLOW_RUN_SOURCES)[number];
 

@@ -1161,9 +1161,15 @@
       },
       "criticality": "C3",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/components/WorkflowTestControls.tsx",
+        "server/src/services/workflows/workflow-customer-test.ts",
+        "server/src/services/workflows/workflow-executor.ts",
+        "server/src/__tests__/v9-workflow-test-routes.test.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/workflow-test.json"
     },
     {
       "screenId": "WORKFLOW-INSPECT",
@@ -1184,7 +1190,8 @@
         "packages/shared/src/workflow-run-experience.ts",
         "ui/src/components/WorkflowStopControls.tsx",
         "server/src/services/workflows/workflow-customer-stop.ts",
-        "packages/shared/src/workflow-stop.ts"
+        "packages/shared/src/workflow-stop.ts",
+        "packages/shared/src/workflow-test.ts"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/workflow-inspect.json"
@@ -1257,7 +1264,8 @@
         "packages/shared/src/workflow-operations.ts",
         "ui/src/components/WorkflowRunControls.tsx",
         "packages/shared/src/workflow-launch.ts",
-        "server/src/services/workflows/workflow-customer-launch.ts"
+        "server/src/services/workflows/workflow-customer-launch.ts",
+        "packages/shared/src/workflow-test.ts"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/workflow-operate.json"

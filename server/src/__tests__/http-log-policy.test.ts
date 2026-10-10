@@ -14,6 +14,14 @@ it("purpose-separates native run metadata and rejected requests from generic log
   expect(privateExperienceLogUrl(url)).toBe("/api/companies/:companyId/workflow-runs/:runId/experience");
   expect(isPrivateExperienceHttpRequest("GET", "/api/companies/id/workflow-runs/id/experience-other")).toBe(false);
 });
+it("omits native test identity and command context from success and rejected generic logs", () => {
+  const url = "/api/companies/private-company/workflows/private-workflow/experience/test?expectedUserId=private-user";
+  for (const method of ["GET", "POST", "DELETE"]) {
+    expect(isPrivateExperienceHttpRequest(method, url)).toBe(true);
+    expect(isSecretSensitiveHttpRequest(method, url)).toBe(true);
+  }
+  expect(privateExperienceLogUrl(url)).toBe("/api/companies/:companyId/workflows/:workflowId/experience");
+});
 
 it("minimizes account and Company control metadata on successful and rejected requests", () => {
   const url = "/api/companies/private-company/experience/company?expectedUserId=private-user";

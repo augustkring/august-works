@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, ne, inArray } from "drizzle-orm";
 
 import type { Db } from "@paperclipai/db";
 import {
@@ -325,6 +325,7 @@ export function optimizerSuggestionService(
             eq(workflowRuns.companyId, companyId),
             eq(workflowRuns.workflowId, workflowId),
             eq(workflowRuns.workflowRevisionId, workflow.publishedRevisionId),
+            ne(workflowRuns.source, "test"),
             inArray(workflowRuns.status, [...TERMINAL_STATUSES]),
           ),
         )

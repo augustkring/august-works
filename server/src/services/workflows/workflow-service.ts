@@ -275,7 +275,7 @@ export function workflowService(db: Db) {
           throw notFound("Workflow revision not found");
         const scope = and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.workflowId, workflowId));
         const select = { id: workflowRuns.id, workflowRevisionId: workflowRuns.workflowRevisionId,
-          status: workflowRuns.status, createdAt: workflowRuns.createdAt, finishedAt: workflowRuns.finishedAt };
+          status: workflowRuns.status, source: workflowRuns.source, createdAt: workflowRuns.createdAt, finishedAt: workflowRuns.finishedAt };
         const recent = await nativeDb.select(select).from(workflowRuns).where(scope)
           .orderBy(desc(workflowRuns.createdAt), desc(workflowRuns.id)).limit(11).for("share");
         const blockers = await nativeDb.select(select).from(workflowRuns)
@@ -301,7 +301,7 @@ export function workflowService(db: Db) {
         if (!currentFlags.enableWorkflowsV1 || !v9FeatureEnabled(currentFlags, "progressive_shell_v9"))
           throw notFound("Workflow overview is not enabled");
         const project = (run: typeof recent[number]) => ({ id: run.id, revisionId: run.workflowRevisionId,
-          status: run.status, createdAt: run.createdAt.toISOString(), finishedAt: run.finishedAt?.toISOString() ?? null });
+          status: run.status, purpose: run.source === "test" ? "test" : "live", createdAt: run.createdAt.toISOString(), finishedAt: run.finishedAt?.toISOString() ?? null });
         return workflowOperationsSchema.parse({ companyId, workflowId, updatedAt: detail.updatedAt.toISOString(),
           publishedRevisionId: detail.publishedRevisionId, status,
           nextTrigger: status === "draft" ? { state: "not_published" }

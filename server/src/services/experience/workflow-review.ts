@@ -4,9 +4,13 @@ import {
   type WorkflowNodeDefinitionDescriptor,
   type WorkflowRevision,
   type WorkflowExperienceRevision,
+  type WorkflowTestReceipt,
 } from "@paperclipai/shared";
 import { workflowComparison } from "./workflow-comparison.js";
-import { customerWorkflowLaunchReady } from "../workflows/workflow-customer-launch.js";
+import {
+  customerWorkflowLaunchReady,
+  customerWorkflowTestReady,
+} from "../workflows/workflow-customer-launch.js";
 
 /** Native graph projection only. Config, prompts, schemas, variables and results never leave here. */
 export function workflowReview(
@@ -15,6 +19,8 @@ export function workflowReview(
   canEdit: boolean,
   canOperate = false,
   canRequestRun = false,
+  canRequestTest = false,
+  testReceipt: WorkflowTestReceipt | null = null,
 ) {
   if (
     Boolean(detail.draftRevisionId) !== Boolean(detail.draftRevision) ||
@@ -124,6 +130,21 @@ export function workflowReview(
     canEdit: canEdit && detail.status !== "archived",
     canOperate,
     canRequestRun,
+    canRequestTest,
+    testReceipt,
+    testAvailability:
+      detail.status !== "active"
+        ? "not_active"
+        : !detail.draftRevision
+          ? "no_draft"
+          : customerWorkflowTestReady(detail.draftRevision)
+            ? "internal_ready"
+            : "review_required",
+    testDeadlineSeconds:
+      detail.status === "active" &&
+      customerWorkflowTestReady(detail.draftRevision)
+        ? detail.draftRevision!.graph.settings.totalDeadlineSeconds
+        : null,
     runAvailability:
       detail.status !== "active" || !detail.publishedRevisionId
         ? "not_active"

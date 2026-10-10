@@ -13,9 +13,25 @@ const types = new Set([
 export function customerWorkflowLaunchReady(
   revision: WorkflowRevision | null,
 ): boolean {
+  return (
+    revision?.state === "published" &&
+    customerWorkflowInternalGraphReady(revision)
+  );
+}
+export function customerWorkflowTestReady(
+  revision: WorkflowRevision | null,
+): boolean {
+  return (
+    revision?.state === "draft" && customerWorkflowInternalGraphReady(revision)
+  );
+}
+/** Native admission/recovery validates the immutable test graph, irrespective
+ * of later draft replacement/publication. This predicate grants no authority. */
+export function customerWorkflowInternalGraphReady(
+  revision: WorkflowRevision | null,
+): boolean {
   if (
     !revision ||
-    revision.state !== "published" ||
     revision.inputSchema !== null ||
     revision.outputSchema !== null
   )
@@ -31,7 +47,8 @@ export function customerWorkflowLaunchReady(
   )
     return false;
   try {
-    if (JSON.stringify(revision.graph).length > 65_536) return false;
+    if (Buffer.byteLength(JSON.stringify(revision.graph), "utf8") > 65_536)
+      return false;
   } catch {
     return false;
   }

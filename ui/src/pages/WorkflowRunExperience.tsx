@@ -152,7 +152,7 @@ export function WorkflowRunExperience({
           {t("workflowRunBack")}
         </Link>
         <h1 ref={heading} tabIndex={-1} className="text-2xl font-semibold">
-          {t("workflowRunTitle")}
+          {t(detail.purpose === "test" ? "workflowTestRunTitle" : "workflowRunTitle")}
         </h1>
         <p>
           {t("workflowRunRevision", {

@@ -659,3 +659,46 @@ projects and a revoked real command grant after their first native decision.
 UI tests cover current-company invalidation and a late old response. Full source
 qualification remains required; semantic authoring/channel parity and human
 usability are not promoted by these read-only fixes.
+
+## ADR-V9-031 — Test unpublished immutable revisions in the native executor
+
+2026-10-10. A reviewed draft test uses canonical native run source `test`.
+It binds the actual immutable draft ID, workflow timestamp, request UUID and
+expected Succeeded result. Native queue admission and the original activity
+receipt commit together under current company/privacy/settings/authority and
+workflow locks. Test admission publishes no revision and creates no hidden live
+clone, executor, scheduler or result store. Existing leases, cancellation,
+deadline enforcement and recovery own the run. Draft replacement changes the
+native pointer while the recorded run stays on its original immutable revision.
+
+Only manual/condition/switch/merge/parallel internal C0 graphs qualify: empty
+synthetic input, no input/output contracts or variables, no agent/model/tool/
+network/child/approval/Optimizer execution, no delayed retries/human recovery,
+20 nodes/40 edges/64 KiB UTF-8 and an explicit 1–60 second execution deadline.
+The UI discloses input, expected result and deadline and requires fresh explicit
+acknowledgement. This is a software control-flow test. Representative customer
+inputs, material test modes and full section 81.8 remain open.
+
+Admission, replay and private receipt recovery require current native human
+read/edit/run grants and actual non-viewer membership/current admin role. Queued
+execution and each internal step recheck the original initiating human; recovery
+cannot replace that principal with a system actor. The original receipt is
+recovered for its submitter after reload with actual revision/run/private source
+admission and strict bindings. Admission is separate from current run status.
+Unknown transport outcomes retain the same reviewed command; an unrelated older
+receipt cannot acknowledge a pending request.
+
+Test purpose derives from native source in private run/operation DTOs and stays
+explicit after publication. Native Optimizer trace/correction ingestion, sample/
+terminal-run/live-drift queries and production transform bindings reject or
+exclude tests. Privacy/erasure, history and pending-work cancellation/retirement
+continue to include them. Legacy manual requests cannot select this source and
+legacy retry cannot convert a test to live work.
+
+Generated migration 0463 changes only the run-source constraint. Preserve test
+history on rollback; disable customer admission and drain existing work. Deploy
+compatible shared/server/UI and quiesce old workers before enabling this path:
+older executors do not execute unpublished revisions and older Optimizer readers
+lack the test evidence exclusions. Mixed-version qualification remains required.
+Hosted/provider/human evidence and V9 source completion are not promoted;
+R0/sourceComplete=false remains unchanged.

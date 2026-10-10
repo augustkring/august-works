@@ -170,6 +170,7 @@ export function workflowRunReview(
     revisionNumber: revision.revisionNumber,
     revisionState: revision.state,
     status: run.status,
+    purpose: run.source === "test" ? "test" : "live",
     updatedAt: run.updatedAt.toISOString(),
     canRequestStop,
     stopReceipt,

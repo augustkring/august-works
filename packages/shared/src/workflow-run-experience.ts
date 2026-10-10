@@ -16,6 +16,7 @@ export const workflowRunExperienceSchema = z
     revisionNumber: z.number().int().positive(),
     revisionState: z.enum(WORKFLOW_REVISION_STATES),
     status: z.enum(WORKFLOW_RUN_STATUSES),
+    purpose: z.enum(["test", "live"]),
     updatedAt: z.iso.datetime(),
     canRequestStop: z.boolean(),
     stopReceipt: workflowStopReceiptSchema.nullable(),

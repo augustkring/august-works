@@ -157,6 +157,9 @@ export function optimizerTraceService(db: Db) {
         )
         .then((rows) => rows[0] ?? null);
       if (!run) throw notFound("Workflow run not found");
+      if (run.source === "test") throw conflict("Internal workflow tests cannot become production optimization evidence", {
+        code: "optimizer_trace_test_run",
+      });
 
       if (!TERMINAL_RUN_STATUSES.has(run.status) || !run.finishedAt) {
         throw conflict("Optimizer trace requires a terminal workflow run", {

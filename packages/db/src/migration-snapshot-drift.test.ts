@@ -1,7 +1,7 @@
 import { readdir, readFile } from "node:fs/promises";
 import { fileURLToPath, pathToFileURL } from "node:url";
 import path from "node:path";
-import { describe, expect, it } from "vitest";
+import { beforeAll, describe, expect, it } from "vitest";
 import { generateDrizzleJson, generateMigration } from "drizzle-kit/api";
 
 // The newest snapshot in `src/migrations/meta` is the state `drizzle-kit
@@ -58,9 +58,15 @@ async function importSchemaModules(): Promise<Record<string, unknown>> {
 }
 
 describe("migration snapshot drift", () => {
+  let schema: Record<string, unknown>;
+  // Loading every schema module is fixture setup. Keep the safety assertion's
+  // normal timeout while allowing cold TypeScript imports to finish first.
+  beforeAll(async () => {
+    schema = await importSchemaModules();
+  }, 20_000);
   it("keeps the newest snapshot in sync with the drizzle schema", async () => {
     const { file, snapshot } = await readNewestSnapshot();
-    const current = generateDrizzleJson(await importSchemaModules(), snapshot.id as string);
+    const current = generateDrizzleJson(schema, snapshot.id as string);
     const statements = await generateMigration(
       snapshot as Parameters<typeof generateMigration>[0],
       current as Parameters<typeof generateMigration>[1],

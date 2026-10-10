@@ -6,6 +6,7 @@ const observed = "2026-10-09T10:00:00.000Z";
 const run: {
   id: string;
   revisionId: string;
+  purpose: string;
   status: string;
   createdAt: string;
   finishedAt: string | null;
@@ -13,6 +14,7 @@ const run: {
 } = {
   id,
   revisionId: id,
+  purpose: "live",
   status: "waiting",
   createdAt: observed,
   finishedAt: null,

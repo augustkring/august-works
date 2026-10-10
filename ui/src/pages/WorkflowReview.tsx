@@ -12,6 +12,7 @@ import { WorkflowBuilder } from "./WorkflowBuilder";
 import { WorkflowLifecycleControls } from "../components/WorkflowLifecycleControls";
 import { WorkflowOperations } from "../components/WorkflowOperations";
 import { WorkflowRunControls } from "../components/WorkflowRunControls";
+import { WorkflowTestControls } from "../components/WorkflowTestControls";
 import { queryKeys } from "../lib/queryKeys";
 
 export function WorkflowEntry() {
@@ -106,6 +107,9 @@ export function WorkflowReview({
   }, [query.isError]);
   const controls = (
     <>
+    <WorkflowTestControls key="test" company={company} principal={principal} id={id}
+      detail={!query.isPending && !query.isFetching && !query.isError ? query.data : null}
+      refresh={() => void query.refetch()} />
     <WorkflowRunControls key="launch" company={company} principal={principal} id={id}
       detail={!query.isPending && !query.isFetching && !query.isError ? query.data : null}
       refresh={() => void query.refetch()} />

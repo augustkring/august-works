@@ -22,6 +22,9 @@ import { evaluateLiveOptimizerDrift } from "./optimizer-live-drift.js";
 export async function executeOptimizedWorkflowTransform(db: Db, run: typeof workflowRuns.$inferSelect,
   nodeId: string, input: unknown, memoryRecordIds: string[], trusted: () => unknown | Promise<unknown>,
   stepId: string, actor: AutomationArtifactMutationActor) {
+  if (run.source === "test") throw conflict("Internal workflow tests cannot execute production optimization bindings", {
+    code: "workflow_test_not_production_evidence",
+  });
   const [binding] = await db.select({ id: workflowOptimizerEvaluations.id, artifactVersionId: workflowOptimizerEvaluations.artifactVersionId, artifactId: workflowOptimizerEvaluations.artifactId,
     status: workflowOptimizerEvaluations.status, canaryTrafficPercent: workflowOptimizerEvaluations.canaryTrafficPercent,
     knownInputShapes: workflowOptimizerEvaluations.knownInputShapes, memoryRecordIds: workflowOptimizerEvaluations.memoryRecordIds })

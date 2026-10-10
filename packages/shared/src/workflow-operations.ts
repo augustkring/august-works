@@ -5,6 +5,7 @@ const run = z.strictObject({
   id: z.uuid(),
   revisionId: z.uuid(),
   status: z.enum(WORKFLOW_RUN_STATUSES),
+  purpose: z.enum(["test", "live"]),
   createdAt: z.iso.datetime(),
   finishedAt: z.iso.datetime().nullable(),
 });

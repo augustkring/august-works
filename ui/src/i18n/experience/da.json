@@ -635,5 +635,25 @@
   "workflowStopUnknown": "Stopanmodningen kunne ikke bekræftes. Gentag den oprindelige anmodning for at kontrollere kvitteringen.",
   "workflowStopChanged": "Kørslen ændrede sig, før denne stopanmodning blev accepteret. Gennemgå den aktuelle kørsel.",
   "workflowStopPending": "Anmoder om stop…",
-  "workflowStopRetry": "Gentag oprindelig stopanmodning"
+  "workflowStopRetry": "Gentag oprindelig stopanmodning",
+  "workflowTestTitle": "Test kladden",
+  "workflowTestNow": "Gennemgå intern test",
+  "workflowTestConfirmTitle": "Test denne kladdeversion?",
+  "workflowTestConsequence": "Dette kører den upublicerede kladde med tomt testinput. Kun interne kontroltrin bliver udført. Testen publicerer ikke kladden og verificerer ikke et produktionsresultat.",
+  "workflowTestExpected": "Kladdeversion {{version}}. Forventet resultat: Gennemført inden for de konfigurerede {{deadline}} sekunder. Kontrollér den faktiske kørselsstatus bagefter.",
+  "workflowTestAcknowledge": "Jeg forstår, at dette er en intern test uden produktionsinput.",
+  "workflowTestConfirm": "Start intern test",
+  "workflowTestPending": "Sender den oprindelige testanmodning…",
+  "workflowTestAdmitted": "Den oprindelige interne test er optaget. Åbn testen for at kontrollere dens faktiske status og trin.",
+  "workflowTestInspect": "Inspicér intern test",
+  "workflowTestRetry": "Afklar oprindelig test",
+  "workflowTestUnknown": "Testresultatet er ukendt. Afklar den samme anmodning, eller genindlæs for at genfinde dens native kvittering, før du starter en ny test.",
+  "workflowTestRefused": "Kladden er ændret eller kræver en anden test. Gennemgå den opdaterede kladde.",
+  "workflowTestReviewRequired": "Denne kladde kræver en særskilt kvalificeret test, fordi dens trin eller input går ud over den interne test.",
+  "workflowTestInactive": "En aktuel kladde på et aktivt workflow er nødvendig for at starte en test.",
+  "workflowTestRunTitle": "Intern workflow-test",
+  "workflowRunPurpose": {
+    "test": "Intern test",
+    "live": "Produktionskørsel"
+  }
 }

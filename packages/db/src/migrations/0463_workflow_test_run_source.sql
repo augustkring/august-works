@@ -1,0 +1,2 @@
+ALTER TABLE "workflow_runs" DROP CONSTRAINT "workflow_runs_source_check";--> statement-breakpoint
+ALTER TABLE "workflow_runs" ADD CONSTRAINT "workflow_runs_source_check" CHECK ("workflow_runs"."source" in ('manual', 'schedule', 'webhook', 'api', 'connector_event', 'routine', 'pipeline', 'task', 'test'));

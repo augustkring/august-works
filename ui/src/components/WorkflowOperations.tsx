@@ -105,6 +105,7 @@ export function WorkflowOperations({
                     className="inline-flex min-h-11 items-center underline"
                     to={`/workflows/${detail.id}/runs/${run.id}`}
                   >
+                    {t(`workflowRunPurpose.${run.purpose}`)} ·{" "}
                     {t(`workflowRunStatus.${run.status}`)} ·{" "}
                     {date(run.createdAt)}
                   </Link>
@@ -127,6 +128,7 @@ export function WorkflowOperations({
                     className="inline-flex min-h-11 items-center underline"
                     to={`/workflows/${detail.id}/runs/${run.id}`}
                   >
+                    {t(`workflowRunPurpose.${run.purpose}`)} ·{" "}
                     {t(`workflowRunStatus.${run.status}`)} ·{" "}
                     {date(run.createdAt)}
                   </Link>

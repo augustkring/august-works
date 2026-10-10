@@ -25,6 +25,7 @@ const detail: WorkflowRunExperience = {
   status: "waiting",
   updatedAt: "2026-10-09T10:00:00.000Z",
   canRequestStop: true,
+  purpose: "live",
   stopReceipt: null,
   trace: { state: "available", attempts: [] },
 };

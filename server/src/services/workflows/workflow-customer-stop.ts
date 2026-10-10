@@ -2,16 +2,12 @@ import { isDeepStrictEqual } from "node:util";
 import { and, desc, eq, sql } from "drizzle-orm";
 import {
   activityLog,
-  companyMemberships,
-  instanceSettings,
-  principalPermissionGrants,
   workflowRevisions,
   workflowRuns,
   workflows,
   type Db,
 } from "@paperclipai/db";
 import {
-  v9FeatureEnabled,
   workflowStopReceiptSchema,
   workflowStopCommandSchema,
   type WorkflowStopCommand,
@@ -19,17 +15,12 @@ import {
   type WorkflowRunDetail,
 } from "@paperclipai/shared";
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
-import {
-  hasCurrentInstanceAdminRole,
-  type AuthorizationActor,
-} from "../authorization.js";
-import { assertV5Authorization, v5HumanActorId } from "../v5-authorization.js";
-import { instanceSettingsService } from "../instance-settings.js";
-import { lockAnalyticalCompany } from "../analytical-privacy.js";
-import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
+import { type AuthorizationActor } from "../authorization.js";
+import { v5HumanActorId } from "../v5-authorization.js";
 import { assertLearnedAssetAnalyticalSources } from "../learning/learning-analytical-sources.js";
 import { assertLearnedWorkflowPayloadAccess } from "../analytical-context-authority.js";
 import { persistActivity } from "../activity-log.js";
+import { lockCustomerWorkflowControlAuthority } from "./workflow-customer-authority.js";
 
 export interface CustomerWorkflowStop {
   command: WorkflowStopCommand;
@@ -78,29 +69,7 @@ export async function readCustomerWorkflowStopReceipt(
     throw notFound("Original workflow stop receipt is unavailable");
   return receipt.data;
 }
-/** The native cancellation route also retains the board viewer write fence.
- * Read the current membership, not the role copied into a request snapshot. */
-export async function currentWorkflowStopRoleAllows(
-  db: Db,
-  companyId: string,
-  authority: AuthorizationActor,
-) {
-  if (authority.source === "local_implicit") return true;
-  const principal = v5HumanActorId(authority);
-  if (await hasCurrentInstanceAdminRole(db, principal)) return true;
-  const [membership] = await db
-    .select({ role: companyMemberships.membershipRole })
-    .from(companyMemberships)
-    .where(
-      and(
-        eq(companyMemberships.companyId, companyId),
-        eq(companyMemberships.principalType, "user"),
-        eq(companyMemberships.principalId, principal),
-        eq(companyMemberships.status, "active"),
-      ),
-    );
-  return !!membership && membership.role !== "viewer";
-}
+export { currentCustomerWorkflowWriteRoleAllows as currentWorkflowStopRoleAllows } from "./workflow-customer-authority.js";
 function budget(request: CustomerWorkflowStop) {
   if (performance.now() > request.deadline)
     throw unprocessable("Workflow stop source review exceeded its budget");
@@ -111,63 +80,10 @@ export async function lockCustomerWorkflowStop(
   companyId: string,
   request: CustomerWorkflowStop,
 ) {
-  const principal = v5HumanActorId(request.authority);
-  await lockAnalyticalCompany(tx, companyId);
-  await lockMemoryPrivacy(tx, companyId);
-  await instanceSettingsService(tx).getExperimental();
-  await tx
-    .select({ id: instanceSettings.id })
-    .from(instanceSettings)
-    .for("share");
-  const flags = await instanceSettingsService(tx).getExperimental();
-  if (
-    !flags.enableWorkflowsV1 ||
-    !v9FeatureEnabled(flags, "progressive_shell_v9")
-  )
-    throw notFound("Workflow stop is not enabled");
-  if (request.authority.source !== "local_implicit") {
-    const currentAdmin = await hasCurrentInstanceAdminRole(tx, principal, true);
-    const memberships = await tx
-      .select({
-        id: companyMemberships.id,
-        role: companyMemberships.membershipRole,
-      })
-      .from(companyMemberships)
-      .where(
-        and(
-          eq(companyMemberships.companyId, companyId),
-          eq(companyMemberships.principalType, "user"),
-          eq(companyMemberships.principalId, principal),
-          eq(companyMemberships.status, "active"),
-        ),
-      )
-      .for("share");
-    if (!currentAdmin && memberships[0]?.role === "viewer")
-      throw forbidden("Viewer access is read-only");
-    await tx
-      .select({ id: principalPermissionGrants.id })
-      .from(principalPermissionGrants)
-      .where(
-        and(
-          eq(principalPermissionGrants.companyId, companyId),
-          eq(principalPermissionGrants.principalType, "user"),
-          eq(principalPermissionGrants.principalId, principal),
-        ),
-      )
-      .for("share");
-  }
-  await assertV5Authorization(
-    tx,
-    request.authority,
-    companyId,
+  await lockCustomerWorkflowControlAuthority(tx, companyId, request.authority, [
     "workflows:read",
-  );
-  await assertV5Authorization(
-    tx,
-    request.authority,
-    companyId,
     "workflows:run",
-  );
+  ]);
   const [workflow] = await tx
     .select({ id: workflows.id })
     .from(workflows)

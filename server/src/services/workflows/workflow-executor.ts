@@ -12,6 +12,8 @@ import { directAgentConfig, dispatchDirectAgent } from "./workflow-direct-agent.
 import { lockCustomerWorkflowStop, inspectCustomerWorkflowStop, recordCustomerWorkflowStop, type CustomerWorkflowStop } from "./workflow-customer-stop.js";
 import { v5HumanActorId } from "../v5-authorization.js";
 import { logger } from "../../middleware/logger.js";
+import { customerWorkflowInternalGraphReady, customerWorkflowTestReady } from "./workflow-customer-launch.js";
+import { assertCustomerWorkflowTestRuntimeAuthority, assertCustomerWorkflowTestAuthority, customerWorkflowTestActor, lockCustomerWorkflowControlAuthority } from "./workflow-customer-authority.js";
 import { executeOptimizedWorkflowTransform } from "../optimizer/optimizer-workflow-runtime.js";
 import { subworkflowConfig, requireSubworkflowRevision, assertSubworkflowGraph } from "./workflow-subworkflow.js";
 import { executeWorkflowMap } from "./workflow-map.js";
@@ -43,6 +45,9 @@ import {
   workflowStopCommandSchema,
   type WorkflowStopCommand,
   type WorkflowStopReceipt,
+  workflowTestCommandSchema,
+  type WorkflowTestCommand,
+  type WorkflowRevision,
   type CancelWorkflowRun,
   type ExecutionPrincipal,
   type RetryWorkflowRun,
@@ -79,7 +84,7 @@ import {
   workflowRetryDelayMs,
   workflowStepIdempotencyKey,
 } from "./workflow-execution-policy.js";
-import { workflowNodeDefinitions } from "./workflow-node-registry.js";
+import { workflowNodeDefinitions, workflowNodeRegistryService } from "./workflow-node-registry.js";
 import { resolveToolActionWait, scheduleToolActionWait } from "./workflow-tool-action-wait.js";
 import { executeNativeWorkflowQuery } from "./workflow-native-nodes.js";
 import { executeWorkflowHttpRequest } from "./workflow-http-request.js";
@@ -369,6 +374,7 @@ export interface EnqueueWorkflowRunInput {
   actor: WorkflowRunActor;
   parentWorkflowRunId?: string;
   parentNodeId?: string;
+  customerTestCommand?: WorkflowTestCommand;
 }
 
 export async function enqueueWorkflowRunInTransaction(
@@ -379,6 +385,14 @@ export async function enqueueWorkflowRunInTransaction(
   created: boolean;
   publications: ActivityPublication[];
 }> {
+  if (input.source === "test") {
+    const command = workflowTestCommandSchema.parse(input.customerTestCommand);
+    if (command.expectedWorkflowId !== input.workflowId || command.expectedDraftRevisionId !== input.revisionId || input.correlationId !== command.requestId)
+      throw conflict("Workflow test request binding changed", { code: "workflow_test_request_conflict" });
+    await lockCustomerWorkflowControlAuthority(executor, input.companyId, customerWorkflowTestActor(input.actor.principal),
+      ["workflows:read", "workflows:edit", "workflows:run"]);
+    await assertCustomerWorkflowTestAuthority(executor, input.companyId, input.actor.principal);
+  }
   await assertLearnedAssetAnalyticalSources(executor,input.companyId,"workflow_revision",input.revisionId,learningActorFromPrincipal(input.companyId,input.actor.principal,input.actor.runId));
   if (input.idempotencyKey) {
     const existing = await getIdempotentRun(
@@ -387,6 +401,7 @@ export async function enqueueWorkflowRunInTransaction(
       input.idempotencyKey,
     );
     if (existing) {
+      if (input.source === "test") throw conflict("Reconcile the original native test receipt", { code: "workflow_test_request_conflict" });
       assertIdempotentRequestMatches(existing, input);
       return { run: existing, created: false, publications: [] };
     }
@@ -396,7 +411,7 @@ export async function enqueueWorkflowRunInTransaction(
   // enqueue is insufficient: pause/retirement can commit while callers prepare
   // input. The lifecycle owner takes the same row lock. Replayed receipts above
   // admit no new work and remain recoverable after pause.
-  const [workflow] = await executor.select({ status: workflows.status })
+  const [workflow] = await executor.select({ status: workflows.status, draftRevisionId: workflows.draftRevisionId, updatedAt: workflows.updatedAt })
     .from(workflows)
     .where(and(eq(workflows.companyId, input.companyId), eq(workflows.id, input.workflowId)))
     .for("update");
@@ -404,6 +419,7 @@ export async function enqueueWorkflowRunInTransaction(
   if (input.idempotencyKey) {
     const committed = await getIdempotentRun(executor, input.companyId, input.idempotencyKey);
     if (committed) {
+      if (input.source === "test") throw conflict("Reconcile the original native test receipt", { code: "workflow_test_request_conflict" });
       assertIdempotentRequestMatches(committed, input);
       return { run: committed, created: false, publications: [] };
     }
@@ -411,6 +427,24 @@ export async function enqueueWorkflowRunInTransaction(
   if (workflow.status !== "active") throw conflict("Workflow is not active", {
     code: "workflow_invalid_transition", status: workflow.status,
   });
+
+  if (input.source === "test") {
+    const command = workflowTestCommandSchema.parse(input.customerTestCommand);
+    if (command.expectedWorkflowId !== input.workflowId || command.expectedDraftRevisionId !== input.revisionId ||
+        workflow.draftRevisionId !== input.revisionId || workflow.updatedAt.toISOString() !== command.expectedUpdatedAt ||
+        input.triggerId || input.parentWorkflowRunId || input.retryOfRunId || !isDeepStrictEqual(input.triggerPayload, {}))
+      throw conflict("Workflow test changed; review the current draft", { code: "workflow_test_conflict" });
+    const [revision] = await executor.select().from(workflowRevisions).where(and(
+      eq(workflowRevisions.companyId, input.companyId), eq(workflowRevisions.workflowId, input.workflowId), eq(workflowRevisions.id, input.revisionId),
+    )).for("share");
+    if (!revision || !customerWorkflowTestReady({ ...revision, state: revision.state as WorkflowRevision["state"] }) ||
+        revision.graph.nodes.filter(node => node.type === "core.manual_trigger").length !== 1 ||
+        revision.graph.nodes.find(node => node.type === "core.manual_trigger")?.id !== input.nodeId)
+      throw conflict("This draft requires a separately qualified test", { code: "workflow_test_review_required" });
+    await workflowNodeRegistryService(executor).validatePublishGraph(input.companyId, revision.graph, input.workflowId);
+  } else if (input.customerTestCommand) {
+    throw conflict("A test command cannot admit live workflow work");
+  }
 
   const now = new Date();
   const [run] = await executor
@@ -1856,18 +1890,17 @@ async function revisionForRun(
   db: Db,
   run: typeof workflowRuns.$inferSelect,
 ) {
-  return db
-    .select()
-    .from(workflowRevisions)
-    .where(
-      and(
-        eq(workflowRevisions.id, run.workflowRevisionId),
-        eq(workflowRevisions.companyId, run.companyId),
-        eq(workflowRevisions.workflowId, run.workflowId),
-        inArray(workflowRevisions.state, ["published", "superseded"]),
-      ),
-    )
-    .then((rows) => rows[0] ?? null);
+  const [revision] = await db.select().from(workflowRevisions).where(and(
+    eq(workflowRevisions.id, run.workflowRevisionId),
+    eq(workflowRevisions.companyId, run.companyId),
+    eq(workflowRevisions.workflowId, run.workflowId),
+    inArray(workflowRevisions.state, run.source === "test"
+      ? ["draft", "discarded", "published", "superseded"] : ["published", "superseded"]),
+  ));
+  if (!revision || (run.source === "test" && !customerWorkflowInternalGraphReady({
+    ...revision, state: revision.state as WorkflowRevision["state"],
+  }))) return null;
+  return revision;
 }
 
 function waitDurationSeconds(node: WorkflowNode): number {
@@ -6103,6 +6136,10 @@ async function executeWorkflowGraph(
   };
 
   while (current) {
+    if (ownedRun.source === "test") {
+      try { await assertCustomerWorkflowTestRuntimeAuthority(db, ownedRun); }
+      catch { await failRun(db, ownedRun, actor, "workflow_test_authority_revoked", "The initiating human's test authority is no longer current"); return; }
+    }
     try { await assertSaasDomainAdmission(db, ownedRun.companyId, "workflows.use"); }
     catch { await failRun(db, ownedRun, actor, "workflow_commercial_admission_closed", "Workflow work is suspended until account access is restored"); return; }
     ownedRun = await renewRunLease(db, ownedRun);
@@ -8298,6 +8335,9 @@ export function workflowExecutorService(
         )
         .then((rows) => rows[0] ?? null);
       if (!sourceRun) throw notFound("Workflow run not found");
+      if (sourceRun.source === "test") throw conflict("Review and test the current draft instead of retrying it as live work", {
+        code: "workflow_test_retry_requires_review",
+      });
       if (sourceRun.status !== "failed" && sourceRun.status !== "cancelled") {
         throw conflict("Only failed or cancelled workflow runs can be retried", {
           code: "workflow_run_not_retryable",

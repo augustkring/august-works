@@ -5,7 +5,7 @@ import type {AuthorizationActor} from "../authorization.js";
 import { assertLearningAssetCurrent } from "../learning/learning-assets.js";
 import { performance } from "node:perf_hooks";
 import { isDeepStrictEqual } from "node:util";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, ne, inArray } from "drizzle-orm";
 import { automationArtifacts, automationArtifactVersions, workflowOptimizerEvaluations, workflowOptimizerObservations,
   approvals, workflowOptimizerSuggestions, workflowRevisions, workflowRunReviews, workflowRuns, workflowStepRuns, workflows, type Db } from "@paperclipai/db";
 import type { OptimizerCompiledCandidate, OptimizerReplayCase, OptimizerShadowEvaluation,
@@ -112,7 +112,7 @@ export function optimizerEvaluationService(db: Db) {
       .innerJoin(workflowRuns, and(eq(workflowRuns.companyId, workflowOptimizerObservations.companyId), eq(workflowRuns.id, workflowOptimizerObservations.workflowRunId)))
       .innerJoin(workflowStepRuns, and(eq(workflowStepRuns.companyId, workflowRuns.companyId), eq(workflowStepRuns.workflowRunId, workflowRuns.id), eq(workflowStepRuns.nodeId, workflowOptimizerObservations.nodeId)))
       .where(and(eq(workflowOptimizerObservations.companyId, companyId), eq(workflowOptimizerObservations.evaluationId, evaluationId),
-        eq(workflowRuns.status, "succeeded"), eq(workflowStepRuns.status, "succeeded")))
+        ne(workflowRuns.source, "test"), eq(workflowRuns.status, "succeeded"), eq(workflowStepRuns.status, "succeeded")))
       .orderBy(desc(workflowOptimizerObservations.observedAt)).limit(100);
     return rows.map((item) => item.observation);
   }
@@ -169,7 +169,7 @@ export function optimizerEvaluationService(db: Db) {
       if (!revision) throw notFound("Workflow revision not found");
       const sourceActor=learningActorFromPrincipal(companyId,actor.principal,actor.runId);
       await assertLearningAssetCurrent(db,companyId,"workflow_revision",revision.id,sourceActor);
-      const runs = await db.select().from(workflowRuns).where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.workflowRevisionId, revision.id), eq(workflowRuns.status, "succeeded")))
+      const runs = await db.select().from(workflowRuns).where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.workflowRevisionId, revision.id), ne(workflowRuns.source, "test"), eq(workflowRuns.status, "succeeded")))
         .orderBy(desc(workflowRuns.finishedAt)).limit(50);
       const cases: OptimizerReplayCase[] = [];
       const samples: Parameters<typeof compileOptimizerCandidate>[0]["traceSamples"] = [];

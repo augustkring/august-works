@@ -35,7 +35,8 @@
       "Oversized, duplicate or unbound history is unavailable; no attempt history is distinct from successful execution",
       "Completed native condition/switch checkpoints select a next-step name from the exact historical graph. Private keys and raw outputs are never returned; selection does not prove the next step ran. Recovery, missing/deleted/ambiguous checkpoints remain not recorded.",
       "Current native updatedAt and effective workflows:run capability are bound to the exact company/workflow/run view.",
-      "Cancellation-requested receipt is historical admission; actual cancelling/cancelled status and unresolved outcomes remain separate."
+      "Cancellation-requested receipt is historical admission; actual cancelling/cancelled status and unresolved outcomes remain separate.",
+      "Native source=test is labeled Internal test; its status cannot become production validity or optimizer evidence, including after later publication."
     ]
   },
   "inputs": [

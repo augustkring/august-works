@@ -635,5 +635,25 @@
   "workflowStopUnknown": "The stop request could not be confirmed. Retry the original request to check its receipt.",
   "workflowStopChanged": "The run changed before this stop request was accepted. Review the current run.",
   "workflowStopPending": "Requesting stop…",
-  "workflowStopRetry": "Retry original stop request"
+  "workflowStopRetry": "Retry original stop request",
+  "workflowTestTitle": "Test the draft",
+  "workflowTestNow": "Review internal test",
+  "workflowTestConfirmTitle": "Test this draft version?",
+  "workflowTestConsequence": "This runs the unpublished draft with empty test input. It only follows internal control steps. It does not publish the draft or verify a production result.",
+  "workflowTestExpected": "Draft version {{version}}. Expected result: Succeeded, within the configured {{deadline}} seconds. Check the actual run status afterwards.",
+  "workflowTestAcknowledge": "I understand this is an internal test with no production input.",
+  "workflowTestConfirm": "Start internal test",
+  "workflowTestPending": "Sending the original test request…",
+  "workflowTestAdmitted": "The original internal test was admitted. Open the test to check its actual status and steps.",
+  "workflowTestInspect": "Inspect internal test",
+  "workflowTestRetry": "Reconcile original test",
+  "workflowTestUnknown": "The test result is unknown. Reconcile the same request or reload to recover its native receipt before starting another test.",
+  "workflowTestRefused": "The draft changed or needs a different test. Review the refreshed draft.",
+  "workflowTestReviewRequired": "This draft needs a separately qualified test because it uses steps or inputs beyond the internal test.",
+  "workflowTestInactive": "A current draft on an active workflow is required to start a test.",
+  "workflowTestRunTitle": "Internal workflow test",
+  "workflowRunPurpose": {
+    "test": "Internal test",
+    "live": "Production run"
+  }
 }

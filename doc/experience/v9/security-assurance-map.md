@@ -1,5 +1,16 @@
 # V9 Security Assurance Map
 
+Unpublished workflow testing (ADR-V9-031) uses native source `test`, current
+human read/edit/run and actual role admission, original-principal step recovery,
+immutable revision binding and an atomic activity receipt. The closed C0 graph
+admits empty synthetic input only. Private receipt reads recheck the actual
+retained revision/run and source owners; another human's admission and corrupt
+bindings are unavailable. Purpose remains explicit after publication, and
+Optimizer production traces/corrections/samples/live drift exclude test runs.
+Native privacy/erasure/cancellation/history retain them. Generated migration
+0463 extends only the source constraint. Compatible worker deployment, full
+material testing, hosted/provider and human acceptance remain open.
+
 Source assurance map, not release acceptance. The V9 brief defines product behavior;
 the attached playbooks provide guidance. Native authority and evidence gates remain.
 

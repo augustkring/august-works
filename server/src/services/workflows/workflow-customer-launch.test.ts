@@ -1,6 +1,9 @@
 import { expect, it } from "vitest";
 import type { WorkflowRevision } from "@paperclipai/shared";
-import { customerWorkflowLaunchReady } from "./workflow-customer-launch.js";
+import {
+  customerWorkflowLaunchReady,
+  customerWorkflowTestReady,
+} from "./workflow-customer-launch.js";
 function revision(): WorkflowRevision {
   return {
     id: "10000000-0000-4000-8000-000000000001",
@@ -42,6 +45,7 @@ it.each([
   "missing_deadline",
   "long_deadline",
   "large_graph",
+  "large_unicode_graph",
   "many_nodes",
   "network",
   "child",
@@ -63,6 +67,8 @@ it.each([
     value.graph.settings.totalDeadlineSeconds = 61;
   if (scenario === "large_graph")
     value.graph.nodes[0].config = { private: "X".repeat(65536) };
+  if (scenario === "large_unicode_graph")
+    value.graph.nodes[0].config = { private: "界".repeat(22_000) };
   if (scenario === "many_nodes")
     value.graph.nodes = Array.from({ length: 21 }, (_, i) => ({
       ...value.graph.nodes[0],
@@ -84,5 +90,16 @@ it.each([
     };
   if (scenario === "node_input_contract") value.graph.nodes[0].inputSchema = {};
   if (scenario === "unknown") value.graph.nodes[0].type = "self.declared.pure";
+  expect(customerWorkflowLaunchReady(value)).toBe(false);
+  if (scenario !== "draft") {
+    value.state = "draft";
+    expect(customerWorkflowTestReady(value)).toBe(false);
+  }
+});
+it("keeps draft test eligibility distinct from published live launch eligibility", () => {
+  const value = revision();
+  expect(customerWorkflowTestReady(value)).toBe(false);
+  value.state = "draft";
+  expect(customerWorkflowTestReady(value)).toBe(true);
   expect(customerWorkflowLaunchReady(value)).toBe(false);
 });

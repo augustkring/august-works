@@ -13,6 +13,7 @@ const data = {
   status: "succeeded",
   updatedAt: "2026-10-09T00:00:00.000Z",
   canRequestStop: false,
+  purpose: "live",
   stopReceipt: null,
   trace: { state: "available", attempts: [] },
 };

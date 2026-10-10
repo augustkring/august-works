@@ -143,7 +143,7 @@ export const workflowRuns = pgTable(
     ),
     sourceCheck: check(
       "workflow_runs_source_check",
-      sql`${table.source} in ('manual', 'schedule', 'webhook', 'api', 'connector_event', 'routine', 'pipeline', 'task')`,
+      sql`${table.source} in ('manual', 'schedule', 'webhook', 'api', 'connector_event', 'routine', 'pipeline', 'task', 'test')`,
     ),
     leasePairCheck: check(
       "workflow_runs_lease_pair_check",

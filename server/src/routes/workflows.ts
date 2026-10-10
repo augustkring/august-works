@@ -16,6 +16,7 @@ import {
   workflowLifecycleCommandSchema,
   workflowLaunchCommandSchema,
   workflowStopCommandSchema,
+  workflowTestCommandSchema,
   v9FeatureEnabled,
   type PermissionKey,
   type WorkflowCapabilities,
@@ -26,6 +27,7 @@ import { workflowReview } from "../services/experience/workflow-review.js";
 import { workflowRunReview } from "../services/experience/workflow-run-review.js";
 import { currentWorkflowStopRoleAllows, readCustomerWorkflowStopReceipt } from "../services/workflows/workflow-customer-stop.js";
 import { assertV5Authorization } from "../services/v5-authorization.js";
+import { admitCustomerWorkflowTest, readCustomerWorkflowTestReceipt } from "../services/workflows/workflow-customer-test.js";
 import {
   accessService,
   instanceSettingsService,
@@ -659,6 +661,27 @@ export function workflowRoutes(db: Db) {
     },
   );
 
+  router.post("/companies/:companyId/workflows/:workflowId/experience/test", validate(workflowTestCommandSchema), async (req, res) => {
+    assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId), workflowId = z.uuid().parse(req.params.workflowId);
+    const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+    if (!principal) throw unauthorized("Authenticated user identity required");
+    if (req.query.expectedUserId !== principal) throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
+    res.set("Cache-Control", "private, no-store");
+    await assertWorkflowsEnabled();
+    for (const action of ["workflows:read", "workflows:edit", "workflows:run"] as const) await assertPermission(req, companyId, action);
+    const receipt = await admitCustomerWorkflowTest(db, companyId, workflowId, req.body, req.actor);
+    // The exact native run/source and its original initiating principal remain
+    // authoritative. A queued test is neither publication nor verification.
+    try { await executor.executeQueuedRun(companyId, receipt.runId, runActor(req)); } catch { /* Native recovery retains the admitted test. */ }
+    if (!await executor.getRun(companyId, receipt.runId, req.actor)) throw notFound("Workflow test run not found");
+    await assertWorkflowsEnabled();
+    for (const action of ["workflows:read", "workflows:edit", "workflows:run"] as const) await assertV5Authorization(db, req.actor, companyId, action);
+    if (!v9FeatureEnabled(await settings.getExperimental(), "progressive_shell_v9") || !await currentWorkflowStopRoleAllows(db, companyId, req.actor))
+      throw notFound("Workflow test receipt is unavailable");
+    res.json(receipt);
+  });
+
   router.post("/companies/:companyId/workflows/:workflowId/experience/launch", validate(workflowLaunchCommandSchema), async (req, res) => {
     assertBoard(req);
     const companyId = z.uuid().parse(req.params.companyId), workflowId = z.uuid().parse(req.params.workflowId);
@@ -701,11 +724,21 @@ export function workflowRoutes(db: Db) {
     const operate = await decidePermission(req, companyId, "workflows:publish");
     const run = await decidePermission(req, companyId, "workflows:run");
     const rollout = v9FeatureEnabled(await settings.getExperimental(), "progressive_shell_v9");
+    const testDecisions = await Promise.all(["workflows:read", "workflows:edit", "workflows:run"].map(action =>
+      access.decide({actor: req.actor, action: action as WorkflowPermission, resource: {type: "company", companyId}})));
+    const canTest = rollout && testDecisions.every(decision => decision.allowed) && await currentWorkflowStopRoleAllows(db, companyId, req.actor);
+    const testReceipt = canTest ? await readCustomerWorkflowTestReceipt(db, companyId, workflowId, req.actor) : null;
     const result = workflowReview(detail, nodeRegistry.list(), edit.allowed,
-      operate.allowed && rollout, run.allowed && rollout);
+      operate.allowed && rollout, run.allowed && rollout, canTest, testReceipt);
     // Current native admission remains necessary after the asynchronous private read.
     await assertWorkflowsEnabled();
     await assertPermission(req, companyId, "workflows:read");
+    await assertV5Authorization(db, req.actor, companyId, "workflows:read");
+    if (canTest) {
+      for (const action of ["workflows:edit", "workflows:run"] as const) await assertV5Authorization(db, req.actor, companyId, action);
+      if (!v9FeatureEnabled(await settings.getExperimental(), "progressive_shell_v9") || !await currentWorkflowStopRoleAllows(db, companyId, req.actor))
+        throw notFound("Workflow test view is unavailable");
+    }
     res.json(result);
   });
 

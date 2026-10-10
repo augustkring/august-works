@@ -32,6 +32,10 @@ const detail: WorkflowExperience = {
   updatedAt: "2026-10-09T10:00:00.000Z",
   canEdit: false,
   canOperate: false,
+  canRequestTest: false,
+  testAvailability: "review_required",
+  testDeadlineSeconds: null,
+  testReceipt: null,
   canRequestRun: false,
   runAvailability: "review_required",
   draft: null,
@@ -56,6 +60,7 @@ const view: Operations = {
       {
         id,
         revisionId: revision,
+        purpose: "live",
         status: "succeeded",
         createdAt: "2026-10-09T08:00:00.000Z",
         finishedAt: "2026-10-09T08:01:00.000Z",
@@ -68,6 +73,7 @@ const view: Operations = {
       {
         id,
         revisionId: revision,
+        purpose: "live",
         status: "waiting",
         createdAt: "2026-10-09T08:00:00.000Z",
         finishedAt: null,
