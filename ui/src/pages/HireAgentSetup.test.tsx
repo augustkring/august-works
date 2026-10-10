@@ -15,6 +15,7 @@ import { agentAuthoringApi } from "../api/agent-authoring";
 import { ApiError } from "../api/client";
 import { instanceSettingsApi } from "../api/instanceSettings";
 import { HireAgentSetup } from "./HireAgentSetup";
+import { i18n } from "../i18n";
 import { queryKeys } from "../lib/queryKeys";
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 const context = vi.hoisted(() => ({
@@ -72,6 +73,7 @@ afterEach(async () => {
   container?.remove();
   context.handlers.clear();
   vi.restoreAllMocks();
+  await i18n.changeLanguage("en");
 });
 async function mount(step = "hire_access", enabled = true) {
   client = new QueryClient({
@@ -364,4 +366,29 @@ it("never sends a same-turn discard while the original session query is fetching
   });
   expect(discard).not.toHaveBeenCalled(); expect(container.querySelector("input")).toBeNull();
   await act(async () => releaseSession());
+});
+
+it("changes the setup language while preserving the original unsaved input and making no save or discard request", async () => {
+  const get = vi.spyOn(agentAuthoringApi, "get").mockResolvedValue(draft);
+  const save = vi.spyOn(agentAuthoringApi, "save");
+  const discard = vi.spyOn(agentAuthoringApi, "discard");
+  await mount();
+  const input = container.querySelector("input")!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "PRIVATE unchanged native name");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    await i18n.changeLanguage("da");
+  });
+  await vi.waitFor(() => expect(container.querySelector("h1")?.textContent).toBe("Ejer og viden"));
+  expect(container.querySelector('nav')?.getAttribute('aria-label')).toBe("Trin i agentopsætningen");
+  expect(container.querySelector("input")?.value).toBe("PRIVATE unchanged native name");
+  expect(container.querySelector("textarea")?.value).toBe(draft.content!.outcome);
+  expect(container.textContent).toContain("Ingen obligatoriske kilder er angivet.");
+  expect(container.textContent).toContain("Gemt opsætning v1 · 1.0.0");
+  expect(container.textContent).toContain("Gem og afslut");
+  expect(container.textContent).not.toContain("Accountable owner");
+  expect(get).toHaveBeenCalledOnce(); expect(save).not.toHaveBeenCalled(); expect(discard).not.toHaveBeenCalled();
+  await act(async () => { await i18n.changeLanguage("en"); });
+  expect(container.querySelector("h1")?.textContent).toBe("Owner & knowledge");
+  expect(container.querySelector("input")?.value).toBe("PRIVATE unchanged native name");
 });
