@@ -1,0 +1,34 @@
+name: BLENTERA V9 public browser and accessibility review
+on:
+  push:
+    branches:
+      - blentera-preview/clarity-first-v9-20261010
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  live-e2e:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    defaults:
+      run:
+        working-directory: blentera-v9-next
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - name: Locate Chrome
+        run: command -v google-chrome || command -v chromium
+      - name: Install browser tests
+        run: npm install --no-save --no-audit --no-fund puppeteer-core@24 @axe-core/puppeteer@4
+      - name: Check live pages, roles, overflow and WCAG via Axe
+        run: node tests/live-preview.mjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: blentera-v9-public-browser-e2e
+          path: |
+            blentera-v9-next/v9-*.png
+            blentera-v9-next/live-e2e-results.json
+          if-no-files-found: warn
