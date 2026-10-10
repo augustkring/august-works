@@ -1,4 +1,4 @@
-import { useRef, useState } from "react";
+import { useId, useRef, useState } from "react";
 import {
   useInfiniteQuery,
   useMutation,
@@ -10,8 +10,11 @@ import {
   feedbackInternalDetailSchema,
   feedbackInternalStateSchema,
   feedbackTriageSchema,
+  customerFeedbackSchema,
 } from "@paperclipai/shared";
-import { useAccountIdentity } from "../api/companies-query";
+import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
+import { useV9PrivateReadAuthority } from "../hooks/useV9PrivateReadAuthority";
+import { useExperienceHeading } from "../hooks/useExperienceHeading";
 import { api } from "../api/client";
 import { isRejectedFeedbackRequest } from "../api/customer-feedback";
 import { Link } from "../lib/router";
@@ -27,6 +30,7 @@ function Queue({
 }) {
   const { t } = useTranslation("experience"),
     client = useQueryClient();
+  const authority = useV9PrivateReadAuthority(principal);
   const [selected, setSelected] = useState<string | null>(null),
     [state, setState] =
       useState<(typeof feedbackInternalStateSchema.options)[number]>(
@@ -41,26 +45,30 @@ function Queue({
     id: string;
     input: ReturnType<typeof feedbackTriageSchema.parse>;
   } | null>(null);
+  const uncertain = useRef(false);
   const path = `/internal/customer-feedback/${companyId}?expectedUserId=${encodeURIComponent(principal)}`;
+  const listKey = ["feedback-triage", principal, companyId, "list", authority.epoch];
   const query = useInfiniteQuery({
-    queryKey: ["feedback-triage", principal, companyId],
+    queryKey: listKey,
     queryFn: async ({ signal, pageParam }) =>
-      feedbackInternalListSchema.parse(
+      authority.read(async () => feedbackInternalListSchema.parse(
         await api.get(path + (pageParam ? `&before=${pageParam}` : ""), {
           signal,
           cache: "no-store",
         }),
-      ),
+      )),
     initialPageParam: null as string | null,
     getNextPageParam: (last) =>
       last.length === 25 ? last.at(-1)!.id : undefined,
     staleTime: 0,
     gcTime: 0,
     retry: false,
+    enabled: authority.readReady,
   });
+  const detailKey = ["feedback-triage", principal, companyId, "detail", selected, authority.epoch];
   const detail = useInfiniteQuery({
-    queryKey: ["feedback-triage", principal, companyId, "detail", selected],
-    queryFn: async ({ signal, pageParam }) => {
+    queryKey: detailKey,
+    queryFn: ({ signal, pageParam }) => authority.read(async () => {
       const result = feedbackInternalDetailSchema.parse(
         await api.get(
           `/internal/customer-feedback/${companyId}/${selected}?expectedUserId=${encodeURIComponent(principal)}` +
@@ -71,26 +79,31 @@ function Queue({
       if (result.companyId !== companyId || result.id !== selected)
         throw new Error("Feedback context changed");
       return result;
-    },
+    }),
     initialPageParam: null as string | null,
     getNextPageParam: (last) => last.nextEventCursor ?? undefined,
-    enabled: !!selected && query.isSuccess,
+    enabled: authority.readReady && !!selected && query.isSuccess && !query.isFetching,
     staleTime: 0,
     gcTime: 0,
     retry: false,
   });
   const current =
-    query.isSuccess &&
+    authority.readReady && query.isSuccess &&
     !query.isFetching &&
     detail.isSuccess &&
     !detail.isFetching
       ? detail.data.pages[0]
       : null;
+  function canTriage() {
+    const list = client.getQueryState(listKey), selectedDetail = client.getQueryState(detailKey);
+    return authority.canRead() && list?.status === "success" && list.fetchStatus === "idle" && !list.isInvalidated &&
+      selectedDetail?.status === "success" && selectedDetail.fetchStatus === "idle" && !selectedDetail.isInvalidated;
+  }
   const save = useMutation({
     mutationKey: ["feedback-triage", principal, companyId],
     gcTime: 0,
     mutationFn: async () => {
-      if (!current || !selected) throw new Error("Feedback context changed");
+      if (!canTriage() || !current || !selected) throw new Error("Feedback context changed");
       attempted.current ??= {
         id: selected!,
         input: feedbackTriageSchema.parse({
@@ -102,23 +115,29 @@ function Queue({
           ...(linkId ? { link: { type: linkType, id: linkId } } : {}),
         }),
       };
-      return api.post(
-        `/internal/customer-feedback/${companyId}/${attempted.current.id}/triage?expectedUserId=${encodeURIComponent(principal)}`,
-        attempted.current.input,
-      );
+      const request = attempted.current;
+      const value = await authority.write(async () => customerFeedbackSchema.parse(await api.post(
+        `/internal/customer-feedback/${companyId}/${request.id}/triage?expectedUserId=${encodeURIComponent(principal)}`,
+        request.input,
+      )));
+      if (!canTriage() || value.companyId !== companyId || value.id !== request.id)
+        throw new Error("Triage needs current confirmation");
+      return value;
     },
     retry: false,
     onError: (error) => {
-      if (isRejectedFeedbackRequest(error)) {
+      if (!uncertain.current && canTriage() && isRejectedFeedbackRequest(error)) {
         attempted.current = null;
         setKey(crypto.randomUUID());
         void client.invalidateQueries({
           queryKey: ["feedback-triage", principal, companyId],
         });
-      }
+      } else if (attempted.current) uncertain.current = true;
     },
-    onSuccess: () => {
+    onSuccess: (value) => {
+      if (!canTriage() || !authority.confirmed(value)) return;
       attempted.current = null;
+      uncertain.current = false;
       void client.invalidateQueries({
         queryKey: ["feedback-triage", principal, companyId],
       });
@@ -136,21 +155,25 @@ function Queue({
     setKey(crypto.randomUUID());
     save.reset();
   }
-  if (query.isError)
+  if (authority.failed || query.isError)
     return (
       <div role="alert">
         <p>{t("feedback.triageDenied")}</p>
         <Button
           variant="outline"
           className="min-h-11"
-          onClick={() => void query.refetch()}
+          disabled={authority.rechecking}
+          onClick={() => {
+            if (authority.canRead()) void query.refetch();
+            else void authority.recheck().catch(() => {});
+          }}
         >
           {t("tryAgain")}
         </Button>
       </div>
     );
   const inputsLocked = save.isPending || !!attempted.current;
-  if (query.isLoading || query.isFetching)
+  if (!authority.readReady || query.isPending || query.isFetching)
     return <p role="status">{t("loading")}</p>;
   return (
     <div className="space-y-6">
@@ -377,13 +400,19 @@ function Queue({
   );
 }
 export function FeedbackTriage() {
+  const identity = useV9CurrentAccount();
+  return <ScopedFeedbackTriage key={identity.userId ?? "unresolved"} identity={identity} />;
+}
+function ScopedFeedbackTriage({ identity }: { identity: ReturnType<typeof useV9CurrentAccount> }) {
   const { t } = useTranslation("experience"),
-    identity = useAccountIdentity();
+    authority = useV9PrivateReadAuthority(identity.userId ?? "");
   const [companyInput, setCompanyInput] = useState(""),
     [companyId, setCompanyId] = useState<string | null>(null);
+  const headingId = useId();
+  const heading = useExperienceHeading(`${identity.userId ?? "unresolved"}:${companyId ?? ""}`, !authority.readReady, authority.failed);
   return (
-    <main className="mx-auto max-w-3xl space-y-6 p-6">
-      <h1 className="text-2xl font-semibold">{t("feedback.triageTitle")}</h1>
+    <section aria-labelledby={headingId} className="mx-auto max-w-3xl space-y-6 p-6">
+      <h1 ref={heading} id={headingId} tabIndex={-1} className="text-2xl font-semibold">{t("feedback.triageTitle")}</h1>
       <p>{t("feedback.triagePurpose")}</p>
       <Link
         className="inline-flex min-h-11 items-center underline"
@@ -391,10 +420,11 @@ export function FeedbackTriage() {
       >
         {t("feedback.operations")}
       </Link>
-      <form
+      {authority.readReady ? <form
         className="flex flex-wrap items-end gap-3"
         onSubmit={(event) => {
           event.preventDefault();
+          if (!authority.canRead()) return;
           setCompanyId(companyInput);
         }}
       >
@@ -414,15 +444,19 @@ export function FeedbackTriage() {
         >
           {t("feedback.openQueue")}
         </Button>
-      </form>
-      {identity.failed && <p role="alert">{t("feedback.triageDenied")}</p>}
-      {identity.settled && identity.userId && companyId && (
+      </form> : !authority.failed && <p role="status">{t("loading")}</p>}
+      {identity.failed && <div role="alert" className="space-y-2">
+        <p>{t("feedback.triageDenied")}</p>
+        {!companyId && <Button className="min-h-11" disabled={authority.rechecking}
+          onClick={() => void authority.recheck().catch(() => {})}>{t("tryAgain")}</Button>}
+      </div>}
+      {identity.userId && !identity.localImplicit && companyId && (
         <Queue
           key={`${identity.userId}:${companyId}`}
           companyId={companyId}
           principal={identity.userId}
         />
       )}
-    </main>
+    </section>
   );
 }

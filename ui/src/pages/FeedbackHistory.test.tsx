@@ -6,10 +6,13 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import type { CustomerFeedback } from "@paperclipai/shared";
 import { i18n } from "../i18n";
-import { api } from "../api/client";
+import { api, ApiError } from "../api/client";
+import { authApi } from "../api/auth";
 import { customerFeedbackApi } from "../api/customer-feedback";
 import { FeedbackTriage } from "./FeedbackTriage";
 import { MyFeedback } from "./MyFeedback";
+import { v9SessionFixture } from "../hooks/v9-session.test-support";
+Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 const context = vi.hoisted(() => ({
   company: "10000000-0000-4000-8000-000000000001",
   principal: "current-member",
@@ -32,14 +35,6 @@ vi.mock("../context/CompanyContext", () => ({
   useCompany: () => ({
     selectedCompanyId: context.company,
     selectedCompany: { issuePrefix: "AW" },
-  }),
-}));
-vi.mock("../api/companies-query", () => ({
-  useAccountIdentity: () => ({
-    userId: context.principal,
-    localImplicit: false,
-    settled: context.settled,
-    failed: false,
   }),
 }));
 const companyId = "10000000-0000-4000-8000-000000000001",
@@ -108,6 +103,10 @@ async function mount(page: "customer" | "operator") {
   client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   });
+  // Keep the full original session response alive through mounting; the real
+  // identity observer owns subsequent cache changes and revalidation.
+  client.setQueryDefaults(["auth", "session"], { gcTime: Infinity });
+  client.setQueryData(["auth", "session"], v9SessionFixture(context.principal));
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -229,21 +228,47 @@ it.each(["company", "account", "identity"])(
     if (kind === "company")
       context.company = "10000000-0000-4000-8000-000000000004";
     else if (kind === "account") context.principal = "other-member";
-    else context.settled = false;
-    await act(async () =>
+    let pendingIdentity: Promise<unknown> | undefined, resolveIdentity!: (value: object) => void;
+    await act(async () => {
+      if (kind === "account")
+        client.setQueryData(["auth", "session"], v9SessionFixture(context.principal));
+      else if (kind === "identity")
+        pendingIdentity = client.fetchQuery({ queryKey: ["auth", "session"], queryFn: () => new Promise<object>(resolve => { resolveIdentity = resolve; }) });
       root.render(
         <QueryClientProvider client={client}>
           <MemoryRouter initialEntries={[`/AW/my-feedback?feedbackId=${id}`]}>
             <MyFeedback />
           </MemoryRouter>
         </QueryClientProvider>,
-      ),
-    );
+      );
+    });
     expect(container.textContent).not.toContain(item.body);
     expect(container.textContent).not.toContain(item.feedbackId);
     expect(container.querySelector("textarea")).toBeNull();
+    if (pendingIdentity) await act(async () => { resolveIdentity(v9SessionFixture(context.principal)); await pendingIdentity; });
   },
 );
+it("recovers a failed Native session from operator entry without reading a queue or replaying a write", async () => {
+  const get = vi.spyOn(api, "get");
+  const send = vi.spyOn(api, "post");
+  await mount("operator");
+  await vi.waitFor(() => expect(container.querySelector("input")).not.toBeNull());
+  const session = vi.spyOn(authApi, "getSession").mockRejectedValueOnce(new Error("Private session transport failed"));
+  await act(async () => { await client.refetchQueries({ queryKey: ["auth", "session"], exact: true }); });
+  await vi.waitFor(() => expect(container.querySelector("input")).toBeNull());
+  expect(container.textContent).not.toContain("Private session transport failed");
+  let restore!: (value: ReturnType<typeof v9SessionFixture>) => void;
+  session.mockImplementation(() => new Promise(resolve => { restore = resolve; }));
+  await click("Try again");
+  expect(get).not.toHaveBeenCalled();
+  expect(send).not.toHaveBeenCalled();
+  expect(container.querySelector("input")).toBeNull();
+  await act(async () => { restore(v9SessionFixture(context.principal)); });
+  await vi.waitFor(() => expect(container.querySelector("input")).not.toBeNull());
+  expect(get).not.toHaveBeenCalled();
+  expect(send).not.toHaveBeenCalled();
+});
+
 it("loads operator-only history and freezes the complete triage request across an unknown acknowledgement", async () => {
   const get = vi
     .spyOn(api, "get")
@@ -372,7 +397,7 @@ it("hides private feedback and an unsaved reply during session revalidation, pre
       }),
   );
   await act(async () => {
-    resolveSession({});
+    resolveSession(v9SessionFixture(context.principal));
     await pendingSession;
   });
   await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(priorDetail + 1));
@@ -387,4 +412,148 @@ it("hides private feedback and an unsaved reply during session revalidation, pre
   );
   expect(container.textContent).toContain(item.body);
   expect(send).not.toHaveBeenCalled();
+});
+
+it("blocks a reply after the original session cache changes in the same turn", async () => {
+  const list = vi.spyOn(customerFeedbackApi, "list").mockResolvedValue([item]);
+  const get = vi.spyOn(customerFeedbackApi, "get").mockResolvedValue(item);
+  const send = vi.spyOn(customerFeedbackApi, "followUp");
+  await mount("customer");
+  await vi.waitFor(() => expect(document.querySelector("textarea")).toBeTruthy());
+  await enter(document.querySelector("textarea")!, "PRIVATE-REPLY");
+  // A different principal needs an independent Native owner read. Do not give
+  // that new principal the first person's owned receipt in the IO fixture.
+  list.mockImplementation(() => new Promise(() => {}));
+  get.mockImplementation(() => new Promise(() => {}));
+  const form = document.querySelector("form")!;
+  await act(async () => {
+    client.setQueryData(["auth", "session"], v9SessionFixture("different-member"));
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+  expect(send).not.toHaveBeenCalled();
+  await vi.waitFor(() => expect(container.textContent).not.toContain(item.body));
+  expect(document.querySelector("textarea")).toBeNull();
+});
+
+it("keeps the exact unknown reply after a late acknowledgement crosses current-session revalidation", async () => {
+  vi.spyOn(customerFeedbackApi, "list").mockResolvedValue([item]);
+  vi.spyOn(customerFeedbackApi, "get").mockResolvedValue(item);
+  let resolveReply!: (value: CustomerFeedback) => void;
+  const send = vi.spyOn(customerFeedbackApi, "followUp")
+    .mockImplementationOnce(() => new Promise(resolve => { resolveReply = resolve; }))
+    .mockResolvedValueOnce({ ...item, version: 2 });
+  await mount("customer");
+  await vi.waitFor(() => expect(document.querySelector("textarea")).toBeTruthy());
+  await enter(document.querySelector("textarea")!, "PRIVATE-FROZEN-REPLY");
+  await click("Send feedback");
+  await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(1));
+  const original = send.mock.calls[0]![3];
+  let resolveSession!: (value: object) => void, session!: Promise<unknown>;
+  await act(async () => {
+    session = client.fetchQuery({ queryKey: ["auth", "session"], queryFn: () => new Promise<object>(resolve => { resolveSession = resolve; }) });
+  });
+  await vi.waitFor(() => expect(document.querySelector("textarea")).toBeNull());
+  await act(async () => resolveReply({ ...item, version: 2 }));
+  expect(container.textContent).not.toContain("PRIVATE-FROZEN-REPLY");
+  await act(async () => { resolveSession(v9SessionFixture(context.principal)); await session; });
+  await vi.waitFor(() => expect(document.querySelector("textarea")?.value).toBe("PRIVATE-FROZEN-REPLY"));
+  expect(document.querySelector("textarea")!.disabled).toBe(true);
+  expect(container.querySelector('[role="alert"]')).toBeTruthy();
+  expect(send).toHaveBeenCalledTimes(1);
+  await click("Send feedback");
+  await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(2));
+  expect(send.mock.calls[1]![3]).toEqual(original);
+});
+
+it("blocks operator triage after the original session changes before React renders it", async () => {
+  vi.spyOn(api, "get").mockImplementation(async path => path.includes(`/${id}?`) ? detail : [summary]);
+  const send = vi.spyOn(api, "post");
+  await mount("operator");
+  await enter(document.querySelector("input")!, companyId);
+  await click("Open queue");
+  await vi.waitFor(() => expect(container.textContent).toContain(item.feedbackId));
+  await click(item.feedbackId + " · NEEDS_INFO");
+  await vi.waitFor(() => expect(container.querySelector("textarea")).toBeTruthy());
+  await enter(container.querySelector("textarea")!, "PRIVATE-OPERATOR-QUESTION");
+  const form = container.querySelectorAll("form")[1]!;
+  await act(async () => {
+    client.setQueryData(["auth", "session"], v9SessionFixture("different-operator"));
+    form.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+  });
+  expect(send).not.toHaveBeenCalled();
+  expect(container.textContent).not.toContain("Confidential operator note");
+  expect(container.querySelector("textarea")).toBeNull();
+  expect(container.querySelector("input")?.value).toBe("");
+});
+
+it("hides private history when the original session is invalidated without starting a request", async () => {
+  const list = vi.spyOn(customerFeedbackApi, "list").mockResolvedValue([item]);
+  const get = vi.spyOn(customerFeedbackApi, "get").mockResolvedValue(item);
+  const send = vi.spyOn(customerFeedbackApi, "followUp");
+  await mount("customer");
+  await vi.waitFor(() => expect(container.textContent).toContain(item.body));
+  const previousList = list.mock.calls.length, previousDetail = get.mock.calls.length;
+  await enter(document.querySelector("textarea")!, "PRIVATE-UNSAVED-REPLY");
+  await act(async () => { await client.invalidateQueries({ queryKey: ["auth", "session"], exact: true, refetchType: "none" }); });
+  expect(client.getQueryState(["auth", "session"])?.fetchStatus).toBe("idle");
+  expect(container.textContent).not.toContain(item.body);
+  expect(document.querySelector("textarea")).toBeNull();
+  expect(list).toHaveBeenCalledTimes(previousList);
+  expect(get).toHaveBeenCalledTimes(previousDetail);
+  await act(async () => { client.setQueryData(["auth", "session"], v9SessionFixture(context.principal)); });
+  await vi.waitFor(() => expect(document.querySelector("textarea")?.value).toBe("PRIVATE-UNSAVED-REPLY"));
+  expect(list).toHaveBeenCalledTimes(previousList + 1);
+  expect(get).toHaveBeenCalledTimes(previousDetail + 1);
+  expect(send).not.toHaveBeenCalled();
+});
+
+it("retains an unknown reply's body and UUID when a later retry receives a validation refusal", async () => {
+  vi.spyOn(customerFeedbackApi, "list").mockResolvedValue([item]);
+  vi.spyOn(customerFeedbackApi, "get").mockResolvedValue(item);
+  const send = vi.spyOn(customerFeedbackApi, "followUp")
+    .mockRejectedValueOnce(new Error("Lost acknowledgement"))
+    .mockRejectedValueOnce(new ApiError("Validation refused", 422, {}))
+    .mockResolvedValueOnce({ ...item, version: 2 });
+  await mount("customer");
+  await vi.waitFor(() => expect(document.querySelector("textarea")).toBeTruthy());
+  await enter(document.querySelector("textarea")!, "ORIGINAL-UNKNOWN-REPLY");
+  await click("Send feedback");
+  await vi.waitFor(() => expect(container.querySelector('[role="alert"]')).toBeTruthy());
+  const original = send.mock.calls[0]![3];
+  await click("Send feedback");
+  await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(2));
+  await vi.waitFor(() => expect(container.querySelector<HTMLButtonElement>('button[type="submit"]')?.disabled).toBe(false));
+  expect(document.querySelector("textarea")!.disabled).toBe(true);
+  expect(document.querySelector("textarea")!.value).toBe("ORIGINAL-UNKNOWN-REPLY");
+  expect(send.mock.calls[1]![3]).toEqual(original);
+  await click("Send feedback");
+  await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(3));
+  expect(send.mock.calls[2]![3]).toEqual(original);
+});
+
+it("retains unknown operator triage through a later validation refusal", async () => {
+  vi.spyOn(api, "get").mockImplementation(async path => path.includes(`/${id}?`) ? detail : [summary]);
+  const send = vi.spyOn(api, "post")
+    .mockRejectedValueOnce(new Error("Lost acknowledgement"))
+    .mockRejectedValueOnce(new ApiError("Validation refused", 422, {}))
+    .mockResolvedValueOnce(item);
+  await mount("operator");
+  await enter(document.querySelector("input")!, companyId);
+  await click("Open queue");
+  await vi.waitFor(() => expect(container.textContent).toContain(item.feedbackId));
+  await click(item.feedbackId + " · NEEDS_INFO");
+  await vi.waitFor(() => expect(container.querySelector("textarea")).toBeTruthy());
+  await enter(container.querySelector("textarea")!, "ORIGINAL-UNKNOWN-TRIAGE");
+  await click("Apply triage");
+  await vi.waitFor(() => expect(container.querySelector('[role="alert"]')).toBeTruthy());
+  const original = send.mock.calls[0]![1];
+  await click("Apply triage");
+  await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(2));
+  await vi.waitFor(() => expect([...container.querySelectorAll<HTMLButtonElement>("button")].find(b => b.textContent === "Apply triage")?.disabled).toBe(false));
+  expect(container.querySelector("textarea")!.disabled).toBe(true);
+  expect(container.querySelector("textarea")!.value).toBe("ORIGINAL-UNKNOWN-TRIAGE");
+  expect(send.mock.calls[1]![1]).toEqual(original);
+  await click("Apply triage");
+  await vi.waitFor(() => expect(send).toHaveBeenCalledTimes(3));
+  expect(send.mock.calls[2]![1]).toEqual(original);
 });

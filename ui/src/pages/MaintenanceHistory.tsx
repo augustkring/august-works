@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Link, useParams } from "../lib/router";
 import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
+import { useV9PrivateReadAuthority } from "../hooks/useV9PrivateReadAuthority";
 import { maintenanceHistoryApi } from "../api/maintenance-history";
 import { useCompany } from "../context/CompanyContext";
 import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
@@ -16,9 +17,17 @@ export function MaintenanceHistoryEntry() {
     { installationId } = useParams(),
     { t } = useTranslation("experience");
   const principal = identity.localImplicit ? "local-board" : identity.userId;
+  const authority = useV9PrivateReadAuthority(principal ?? "", identity.localImplicit);
   if (feature.query.isError || identity.failed)
-    return <p role="alert">{t("maintenanceHistoryUnavailable")}</p>;
-  if (feature.query.isPending || !identity.settled)
+    return <div role="alert" className="space-y-4">
+      <p>{t("maintenanceHistoryUnavailable")}</p>
+      <Button className="min-h-11" disabled={authority.rechecking || feature.query.isFetching}
+        onClick={() => {
+          if (identity.failed) void authority.recheck().catch(() => {});
+          else void feature.query.refetch();
+        }}>{t("tryAgain")}</Button>
+    </div>;
+  if (feature.query.isPending || feature.query.isFetching || !identity.settled)
     return <p role="status">{t("loading")}</p>;
   if (!feature.enabled || !principal || !installationId)
     return <p role="alert">{t("maintenanceHistoryUnavailable")}</p>;
@@ -43,6 +52,7 @@ export function MaintenanceHistory({
 }) {
   const { t } = useTranslation("experience"),
     client = useQueryClient();
+  const authority = useV9PrivateReadAuthority(principal, principal === "local-board");
   const [epoch, setEpoch] = useState(0),
     heading = useRef<HTMLHeadingElement>(null),
     alert = useRef<HTMLDivElement>(null),
@@ -51,9 +61,10 @@ export function MaintenanceHistory({
     restoreFocus = useRef<{ heading: true } | { href: string } | null>(null);
   const prefix = ["maintenance-history", company, principal, installationId];
   const query = useQuery({
-    queryKey: [...prefix, epoch],
+    queryKey: [...prefix, authority.epoch, epoch],
     queryFn: ({ signal }) =>
-      maintenanceHistoryApi.get(company, principal, installationId, signal),
+      authority.read(() => maintenanceHistoryApi.get(company, principal, installationId, signal)),
+    enabled: authority.readReady,
     retry: false,
     gcTime: 0,
     staleTime: 0,
@@ -68,7 +79,7 @@ export function MaintenanceHistory({
     client.removeQueries({ queryKey: prefix });
     setEpoch((old) => old + 1);
   });
-  const current = query.isSuccess && !query.isFetching;
+  const current = authority.readReady && query.isSuccess && !query.isFetching;
   if (
     !current &&
     !query.isError &&
@@ -107,11 +118,14 @@ export function MaintenanceHistory({
     if (query.isError && !document.activeElement?.closest('[role="dialog"]'))
       alert.current?.focus();
   }, [query.isError]);
-  if (query.isError)
+  if (authority.failed || query.isError)
     return (
       <div ref={alert} role="alert" tabIndex={-1} className="space-y-4">
         <p>{t("maintenanceHistoryUnavailable")}</p>
-        <Button className="min-h-11" onClick={() => void query.refetch()}>
+        <Button className="min-h-11" disabled={authority.rechecking} onClick={() => {
+          if (authority.canRead()) void query.refetch();
+          else void authority.recheck().catch(() => {});
+        }}>
           {t("tryAgain")}
         </Button>
       </div>

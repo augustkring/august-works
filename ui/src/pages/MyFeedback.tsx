@@ -8,6 +8,7 @@ import {
 import { useTranslation } from "react-i18next";
 import { useSearchParams } from "../lib/router";
 import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
+import { useV9PrivateReadAuthority, type V9PrivateReadAuthority } from "../hooks/useV9PrivateReadAuthority";
 import { useCompany } from "../context/CompanyContext";
 import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
 import { useExperienceHeading } from "../hooks/useExperienceHeading";
@@ -26,12 +27,16 @@ function Response({
   principal,
   active,
   id,
+  authority,
+  readEpoch,
 }: {
   item: CustomerFeedback | null;
   companyId: string;
   principal: string;
   active: boolean;
   id: string;
+  authority: V9PrivateReadAuthority;
+  readEpoch: number;
 }) {
   const { t } = useTranslation("experience"),
     client = useQueryClient();
@@ -42,35 +47,51 @@ function Response({
     expectedVersion: number;
     idempotencyKey: string;
   } | null>(null);
+  const uncertain = useRef(false);
+  const alive = useRef(true), context = useRef({ active, readEpoch });
+  context.current = { active, readEpoch };
+  useEffect(() => {
+    alive.current = true;
+    return () => { alive.current = false; };
+  }, []);
+  const canReply = () => alive.current && context.current.active && authority.canRead();
   const send = useMutation({
     mutationKey: ["customer-feedback", companyId, principal, id, "reply"],
     gcTime: 0,
-    mutationFn: () => {
-      if (!active || !item) throw new Error("Feedback context changed");
+    mutationFn: async () => {
+      if (!canReply() || !item) throw new Error("Feedback context changed");
       attempted.current ??= {
         body,
         expectedVersion: item.version,
         idempotencyKey: key,
       };
-      return customerFeedbackApi.followUp(
+      const request = attempted.current;
+      const epoch = context.current.readEpoch;
+      const value = await authority.write(() => customerFeedbackApi.followUp(
         companyId,
         principal,
         item.id,
-        attempted.current,
-      );
+        request,
+      ));
+      if (!canReply() || context.current.readEpoch !== epoch)
+        throw new Error("The feedback reply needs current confirmation");
+      return value;
     },
     retry: false,
     onError: (error) => {
-      if (isRejectedFeedbackRequest(error)) {
+      if (!alive.current) return;
+      if (!uncertain.current && canReply() && isRejectedFeedbackRequest(error)) {
         attempted.current = null;
         setKey(crypto.randomUUID());
         void client.invalidateQueries({
           queryKey: ["customer-feedback", companyId, principal],
         });
-      }
+      } else if (attempted.current) uncertain.current = true;
     },
-    onSuccess: () => {
+    onSuccess: (value) => {
+      if (!canReply() || !authority.confirmed(value)) return;
       attempted.current = null;
+      uncertain.current = false;
       setBody("");
       setKey(crypto.randomUUID());
       void client.invalidateQueries({
@@ -139,8 +160,9 @@ export function MyFeedback() {
     [params, setParams] = useSearchParams();
   const { enabled } = useV9FeatureEnabled("customer_feedback_v9");
   const principal = identity.localImplicit ? "local-board" : identity.userId;
+  const authority = useV9PrivateReadAuthority(principal ?? "", identity.localImplicit);
   const selected = params.get("feedbackId");
-  const allowed = !!selectedCompanyId && identity.settled && !!principal;
+  const allowed = !!selectedCompanyId && authority.readReady && !!principal;
   const scope = `${selectedCompanyId ?? ""}:${principal ?? "unresolved"}`;
   const [revision, setRevision] = useState({ scope, epoch: 0 });
   const epoch = revision.scope === scope ? revision.epoch : 0;
@@ -168,14 +190,14 @@ export function MyFeedback() {
     client.removeQueries({ queryKey: prefix });
   });
   const query = useInfiniteQuery({
-    queryKey: [...prefix, "list", identity.authorityEpoch, epoch],
+    queryKey: [...prefix, "list", authority.epoch, epoch],
     queryFn: ({ signal, pageParam }) =>
-      customerFeedbackApi.list(
+      authority.read(() => customerFeedbackApi.list(
         selectedCompanyId!,
         principal!,
         signal,
         pageParam ?? undefined,
-      ),
+      )),
     initialPageParam: null as string | null,
     getNextPageParam: (last) =>
       last.length === 25 ? last.at(-1)!.id : undefined,
@@ -191,16 +213,16 @@ export function MyFeedback() {
       principal,
       "detail",
       selected,
-      identity.authorityEpoch,
+      authority.epoch,
       epoch,
     ],
     queryFn: ({ signal }) =>
-      customerFeedbackApi.get(
+      authority.read(() => customerFeedbackApi.get(
         selectedCompanyId!,
         principal!,
         selected!,
         signal,
-      ),
+      )),
     enabled: allowed && !!selected,
     staleTime: 0,
     gcTime: 0,
@@ -301,6 +323,8 @@ export function MyFeedback() {
           id={selected}
           companyId={selectedCompanyId}
           principal={principal}
+          authority={authority}
+          readEpoch={epoch}
         />
       )}
     </div>

@@ -6,8 +6,10 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import type { MaintenanceHistory as View } from "@paperclipai/shared";
 import { maintenanceHistoryApi } from "../api/maintenance-history";
+import { authApi } from "../api/auth";
 import { MaintenanceHistory } from "./MaintenanceHistory";
 import "../i18n";
+import { v9SessionFixture } from "../hooks/v9-session.test-support";
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 let live: (event: {
   companyId: string;
@@ -56,6 +58,7 @@ afterEach(async () => {
   vi.restoreAllMocks();
 });
 async function render(principal = "owner") {
+  client.setQueryData(["auth", "session"], v9SessionFixture(principal));
   await act(async () =>
     root.render(
       <QueryClientProvider client={client}>
@@ -199,6 +202,44 @@ it("drops the previous principal's result while a new account read is pending", 
   await render("changed-account");
   expect(container.querySelector("li")).toBeNull();
   expect(container.querySelector('[role="status"]')).not.toBeNull();
+});
+
+it("hides receipts on Native session invalidation without requesting private history", async () => {
+  const get = vi.spyOn(maintenanceHistoryApi, "get").mockResolvedValue(data);
+  await mount();
+  await vi.waitFor(() => expect(container.querySelector("li")).not.toBeNull());
+  await act(async () => { await client.invalidateQueries({ queryKey: ["auth", "session"], exact: true, refetchType: "none" }); });
+  expect(client.getQueryState(["auth", "session"])?.fetchStatus).toBe("idle");
+  expect(container.querySelector("li")).toBeNull();
+  expect(get).toHaveBeenCalledTimes(1);
+  await act(async () => { client.setQueryData(["auth", "session"], v9SessionFixture("owner")); });
+  await vi.waitFor(() => expect(container.querySelector("li")).not.toBeNull());
+  expect(get).toHaveBeenCalledTimes(2);
+});
+
+it("retries failed Native identity before reading private maintenance history again", async () => {
+  const get = vi.spyOn(maintenanceHistoryApi, "get").mockResolvedValue(data);
+  await mount();
+  await vi.waitFor(() => expect(container.querySelector("li")).not.toBeNull());
+  const session = vi.spyOn(authApi, "getSession").mockRejectedValueOnce(new Error("Private session transport failed"));
+  await act(async () => { await client.refetchQueries({ queryKey: ["auth", "session"], exact: true }); });
+  await vi.waitFor(() => expect(container.querySelector('[role="alert"]')).not.toBeNull());
+  expect(container.querySelector("li")).toBeNull();
+  expect(container.textContent).not.toContain("Private session transport failed");
+  let restoreSession!: (value: ReturnType<typeof v9SessionFixture>) => void;
+  let restoreHistory!: (value: View) => void;
+  session.mockImplementation(() => new Promise(resolve => { restoreSession = resolve; }));
+  get.mockImplementation(() => new Promise(resolve => { restoreHistory = resolve; }));
+  const button = container.querySelector("button")!;
+  await act(async () => { button.click(); button.click(); });
+  expect(session).toHaveBeenCalledTimes(2);
+  expect(get).toHaveBeenCalledTimes(1);
+  expect(container.querySelector("li")).toBeNull();
+  await act(async () => { restoreSession(v9SessionFixture("owner")); });
+  await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+  expect(container.querySelector("li")).toBeNull();
+  await act(async () => { restoreHistory(data); });
+  await vi.waitFor(() => expect(container.querySelector("li")).not.toBeNull());
 });
 
 it("restores the equivalent navigation link after a private live recheck", async () => {
