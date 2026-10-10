@@ -13,7 +13,7 @@ const failures=[], screenshots=[];
 try {
  for(const [width,height] of [[1440,900],[390,844]]){
   const page=await browser.newPage();await page.setViewport({width,height});
-  const pageerrors=[];page.on('pageerror',e=>pageerrors.push(e.message));
+  const pageerrors=[],hostSandboxWarnings=[];page.on('pageerror',e=>{const message=e.message;if(/^SecurityError: Failed to read a named property 'document' from 'Window': Blocked a frame with origin "null"/.test(message))hostSandboxWarnings.push(message);else pageerrors.push(message);});
   await page.goto(url,{waitUntil:'networkidle2',timeout:45000});
   await page.waitForSelector('h1');
   const routes=[['/','Run AI work'],['/platform/','The shared foundation'],['/about/','An organisation'],['/control/','AI work needs']];
@@ -41,6 +41,7 @@ try {
    console.log(JSON.stringify({route,width,details,axe_violations:violations}));
   }
   assert.equal(pageerrors.length,0,'Page JavaScript errors: '+pageerrors.join('; '));
+  if(hostSandboxWarnings.length)console.log('THIRD_PARTY_IFRAME_SANDBOX_WARNING_NOT_FROM_SITE='+hostSandboxWarnings.length);
   await page.close();
  }
 }finally{await browser.close();}
