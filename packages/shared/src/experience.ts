@@ -107,7 +107,7 @@ export const experienceActionSchema = z
     href: z
       .string()
       .max(1000)
-      .regex(/^\/(?!\/)[^\\\r\n]*$/),
+      .regex(/^\/(?!\/)[^\\\u0000-\u0020\u007f]*$/),
     criticality: experienceCriticalitySchema,
     source: canonicalExperienceSourceSchema,
     requiresCurrentAuthorization: z.literal(true),
