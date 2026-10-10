@@ -20,7 +20,8 @@
     "displayedState": [
       "Title, why action is needed, known pending-state consequence, compact native evidence, action link and freshness in that order.",
       "A bounded native attention page; more_items_available is partial coverage, never a complete empty queue.",
-      "No future business impact, full-queue count, effective authority or completed decision is inferred."
+      "No future business impact, full-queue count, effective authority or completed decision is inferred.",
+      "Current M2 exhausted configured-change budgets may appear only with current native installation/candidate/source and agent read/configure authority; stale or missing maintenance sources never imply a complete empty queue. Critical native approvals retain priority under the global 25-card boundary."
     ]
   },
   "inputs": [],
@@ -29,12 +30,17 @@
       "label": "Review",
       "operation": "Open the exact native attention/decision resolver; no approval/reject/retry is performed by the projection."
     },
-    "secondary": ["Open full queue", "Retry a failed current projection read"],
+    "secondary": [
+      "Open full queue",
+      "Retry a failed current projection read",
+      "Open existing agent package review for other installation/history items when maintenance is included."
+    ],
     "destructiveOrIrreversible": []
   },
   "systemWork": {
     "canonicalReadDomains": [
-      "Native Attention source owners and current company/resource authorization"
+      "Native Attention source owners and current company/resource authorization",
+      "Existing Native Core Steward package installation, original reviewed budget receipt, current release qualification and actual 24-hour configured-change counts; maximum five installations, re-read before response."
     ],
     "canonicalWriteOperation": "None; existing native resolvers own every mutation.",
     "authorityEffect": "Presentation and drafts cannot grant permissions. Material effects always require current native permissions, approvals and version preconditions.",
@@ -100,7 +106,8 @@
   "acceptance": {
     "functional": [
       "Check pending-state consequence copy, source-specific card kind, exact resolver IDs and conservative consequence levels.",
-      "Verify partial native pagination, unavailable versus empty, principal switches and unchanged native decision/action owners."
+      "Verify partial native pagination, unavailable versus empty, principal switches and unchanged native decision/action owners.",
+      "Prove real native budget exhaustion, current candidate withdrawal and owner suspension, rollout closure, abort and current membership loss; keep critical native approval recall under truncation."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."

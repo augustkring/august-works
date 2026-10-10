@@ -19,7 +19,8 @@
   "help": "Hjælp / Support",
   "domain": {
     "tasks": "Arbejde",
-    "attention": "Kræver dig"
+    "attention": "Kræver dig",
+    "maintenance": "Vedligeholdelse"
   },
   "nav": {
     "home": "Hjem",
@@ -726,5 +727,11 @@
     "suspended": "Suspenderet",
     "uninstalled": "Afinstalleret"
   },
-  "maintenanceHistoryVersion": "Installationsversion {{version}}"
+  "maintenanceHistoryVersion": "Installationsversion {{version}}",
+  "maintenanceAttentionTitle": "Vurder grænsen for automatiske pakkeændringer",
+  "maintenanceAttentionWhy": "Du kan vurdere installationens aktuelle konfiguration.",
+  "maintenanceAttentionConsequence": "Opdateringen med uændret indhold er fortsat blokeret af den aktuelle grænse for automatiske ændringer. Vurder den via den eksisterende pakkeinstallation.",
+  "maintenanceAttentionEvidence": "Den aktuelle grænse for automatiske konfigurationsændringer er nået.",
+  "needsYouMaintenanceBounded": "Pakkevedligeholdelse vises i et særskilt, begrænset udvalg. Vurder andre installationer og bevaret historik under agentpakker.",
+  "openPackageReview": "Åbn vurdering af agentpakker"
 }

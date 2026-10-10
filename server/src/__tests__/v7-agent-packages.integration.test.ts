@@ -1,3 +1,5 @@
+import { readPackageMaintenanceAttention } from "../services/experience/maintenance-attention.js";
+import { experienceService } from "../services/experience/service.js";
 import express from "express";
 import request from "supertest";
 import { maintenanceHistoryRoutes } from "../routes/maintenance-history.js";
@@ -466,7 +468,27 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(history.installationStatus).toBe("active");
       expect(history.entries.filter(entry => entry.outcome === "human_review_required")).toHaveLength(1);
       expect(history.entries.filter(entry => entry.outcome === "configured_activation_required")).toHaveLength(3);
-
+      const signal = new AbortController().signal;
+      const attention = await readPackageMaintenanceAttention(db, f.actor, f.home, signal);
+      expect(attention.needsYou).toHaveLength(1);
+      expect(attention.needsYou[0]).toMatchObject({ kind: "maintenance", source: { domain: "agent_package_installation", resourceId: installed.id }, actions: [{ operation: "open", href: `/agents/packages/installations/${installed.id}/maintenance` }] });
+      const projection = await experienceService(db).home(f.actor, f.home);
+      expect(projection.needsYou.some(card => card.source.domain === "agent_package_installation" && card.source.resourceId === installed.id)).toBe(true);
+      const aborted = new AbortController(); aborted.abort();
+      await expect(readPackageMaintenanceAttention(db, f.actor, f.home, aborted.signal)).rejects.toBeDefined();
+      await instanceSettingsService(db).updateExperimental({ maintenance_autopilot_v9: false });
+      await expect(readPackageMaintenanceAttention(db, f.actor, f.home, signal)).rejects.toMatchObject({ status: 404 });
+      await instanceSettingsService(db).updateExperimental({ maintenance_autopilot_v9: true });
+      expect((await readPackageMaintenanceAttention(db, f.actor, f.home, signal)).needsYou).toHaveLength(1);
+      // A withdrawn actual candidate cannot keep an old escalation actionable.
+      const candidateId = blocked[0]!.details!.candidateVersion as string;
+      await service.revoke(f.actor, candidateId);
+      expect((await readPackageMaintenanceAttention(db, f.actor, f.home, signal)).needsYou).toEqual([]);
+      // A real later native source change makes the original blocked review stale.
+      await service.decide(f.actor, f.home, installed.id, "suspend", { expectedVersion: history.installationVersion, reason: "Native owner suspension supersedes the original automatic repair observation" });
+      expect((await readPackageMaintenanceAttention(db, f.actor, f.home, signal)).needsYou).toEqual([]);
+      await db.update(companyMemberships).set({ status: "suspended" }).where(and(eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
+      await expect(readPackageMaintenanceAttention(db, { ...f.actor, isInstanceAdmin: true }, f.home, signal)).rejects.toMatchObject({ status: 403 });
     });
     it("V9 maintenance history requires current native tenant and agent read authority and closes on rollback", async () => {
       await enableV9Maintenance();

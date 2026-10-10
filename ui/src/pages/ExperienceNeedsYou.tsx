@@ -50,10 +50,25 @@ export function ExperienceNeedsYou() {
   const attention = query.data.dependencies.find(
     (dependency) => dependency.domain === "attention",
   );
-  const bounded =
-    attention?.state === "partial" &&
-    attention.reason === "more_items_available";
-  const unavailable = !attention || (attention.state !== "fresh" && !bounded);
+  const attentionDependencies = query.data.dependencies.filter(
+    (dependency) =>
+      dependency.domain === "attention" || dependency.domain === "maintenance",
+  );
+  const bounded = attentionDependencies.some(
+    (dependency) =>
+      dependency.state === "partial" &&
+      dependency.reason === "more_items_available",
+  );
+  const unavailable =
+    !attention ||
+    attentionDependencies.some(
+      (dependency) =>
+        dependency.state !== "fresh" &&
+        !(
+          dependency.state === "partial" &&
+          dependency.reason === "more_items_available"
+        ),
+    );
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
       <h1 ref={heading} tabIndex={-1} className="text-2xl font-semibold">
@@ -89,6 +104,21 @@ export function ExperienceNeedsYou() {
       >
         {t("openFullQueue")}
       </Link>
+      {attentionDependencies.some(
+        (dependency) => dependency.domain === "maintenance",
+      ) && (
+        <div className="space-y-2">
+          <p className="text-sm text-muted-foreground">
+            {t("needsYouMaintenanceBounded")}
+          </p>
+          <Link
+            className="inline-flex min-h-11 items-center underline"
+            to="/agents/packages"
+          >
+            {t("openPackageReview")}
+          </Link>
+        </div>
+      )}
     </div>
   );
 }

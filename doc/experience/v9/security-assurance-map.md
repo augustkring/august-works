@@ -124,3 +124,5 @@ are exposed as fixed categories. Raw audit details, actor identities, release
 prose, components and provider configuration are omitted. Account-bound query
 epochs hide old data during checking and refuse late responses. Reads perform no
 repair, activation, reconciliation, grant or notification.
+
+| Current M2 Needs You escalation | Existing Core Steward/package/activity, authorization and Experience owners | Actual current company/agent read and configure; exact installation version/time/source and qualified unchanged-content candidate; exhausted native configured-change counts | Five current sources under existing 1500 ms admission; bounded reread, safe fixed copy, historical receipt insufficient; Native approval priority and partial coverage retained | Real native exhaustion/projection/withdrawal/owner suspension/rollout/grant-loss and UI degradation checks; built browser and general M0–M4 acceptance remain pending |

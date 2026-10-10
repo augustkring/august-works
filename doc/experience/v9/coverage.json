@@ -660,7 +660,10 @@
       "implementationStatus": "in_progress",
       "componentPaths": [
         "ui/src/pages/ExperienceHome.tsx",
-        "server/src/services/experience/service.ts"
+        "server/src/services/experience/service.ts",
+        "server/src/services/experience/maintenance-attention.ts",
+        "server/src/services/experience/projection.ts",
+        "server/src/services/stewards/maintenance-policy.ts"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/home.json"
@@ -682,7 +685,10 @@
         "ui/src/pages/WhatNeedsMe.tsx",
         "ui/src/components/ExperienceCard.tsx",
         "server/src/services/experience/attention-card.ts",
-        "server/src/services/experience/service.ts"
+        "server/src/services/experience/service.ts",
+        "server/src/services/experience/maintenance-attention.ts",
+        "server/src/services/experience/projection.ts",
+        "server/src/services/stewards/maintenance-policy.ts"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/needs-you.json"

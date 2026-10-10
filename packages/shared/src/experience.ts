@@ -77,6 +77,7 @@ export const canonicalExperienceSourceSchema = z
       "connection",
       "insight",
       "feedback",
+      "agent_package_installation",
     ]),
     companyId: z.uuid(),
     resourceId: boundedText,

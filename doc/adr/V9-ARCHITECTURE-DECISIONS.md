@@ -752,3 +752,16 @@ configuration required activation; a recorded budget exhaustion required human
 review. Neither receipt establishes current activation, resolved escalation or
 business verification. Current installation status is displayed separately.
 No history table, new maintenance engine, grant, notification or repair is added.
+
+## V9-036 — Escalate current maintenance findings through Needs You
+
+Only original native M2 budget exhaustion with still-current installation, reviewed
+candidate qualification, unchanged execution content and exhausted actual counts
+may project a human-review card. Current native company/agent read and configure
+authority are required, without stale instance-admin shortcuts. Source/authority
+and rollout repeat within the existing Experience admission deadline. Historical
+receipts alone are insufficient; candidate withdrawal or owner changes suppress
+the card. Missing review bindings degrade coverage rather than claim all clear.
+The 25-card projection retains critical native approval priority and marks each
+truncated owner's actual coverage partial. The existing package owner retains
+every effect; no alternate escalation queue, repair, grant or notification is added.

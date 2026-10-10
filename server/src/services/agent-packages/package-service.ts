@@ -626,7 +626,7 @@ export function agentPackageService(
             if (!previous) await logActivity(tx, { companyId, actorType: "system", actorId: "core-stewards",
               action: "agent_package.maintenance_loop_blocked", entityType: "agent_package_installation", entityId: id,
               details: { policyVersion: PACKAGE_MAINTENANCE_POLICY_VERSION, maintenanceClass: "M2", reason: "configured_change_budget",
-                policyOwnerUserId: row.installedByUserId, humanReviewRequired: true } }, p);
+                policyOwnerUserId: row.installedByUserId, humanReviewRequired: true, reviewedSource: review, candidateVersion: nextVersionId } }, p);
             return { updated: false };
           }
         }

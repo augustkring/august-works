@@ -11,7 +11,10 @@ export interface ExperienceReader {
   domain: string;
   read: (signal: AbortSignal) => Promise<
     Partial<Record<ExperienceSection, ExperienceCard[]>> & {
-      coverage?: { state: "partial"; reason: "more_items_available" };
+      coverage?: {
+        state: "partial";
+        reason: "more_items_available" | "source_stale";
+      };
     }
   >;
 }
@@ -47,6 +50,7 @@ export async function composeExperience(input: {
     watch: [],
   };
   const dependencies: ExperienceDependency[] = [];
+  const cardOwners = new Map<string, string>();
   const onAbort = () => controller.abort();
   input.signal?.addEventListener("abort", onAbort, { once: true });
   if (input.signal?.aborted) controller.abort();
@@ -90,8 +94,15 @@ export async function composeExperience(input: {
             ...cards,
           });
           for (const section of Object.keys(sections) as ExperienceSection[]) {
-            if (result[section])
-              sections[section].push(...validated[section].slice(0, 25));
+            if (result[section]) {
+              const admitted = validated[section].slice(0, 25);
+              for (const card of admitted)
+                cardOwners.set(
+                  `${card.source.domain}:${card.source.resourceId}`,
+                  reader.domain,
+                );
+              sections[section].push(...admitted);
+            }
           }
           dependencies.push({
             domain: reader.domain,
@@ -113,14 +124,40 @@ export async function composeExperience(input: {
       }),
     );
     for (const section of Object.keys(sections) as ExperienceSection[]) {
-      sections[section] = [
+      const cards = [
         ...new Map(
           sections[section].map((card) => [
             `${card.source.domain}:${card.source.resourceId}`,
             card,
           ]),
         ).values(),
-      ].slice(0, 25);
+      ];
+      if (section === "needsYou") {
+        const rank = (card: ExperienceCard) =>
+          Math.max(
+            0,
+            ...card.actions.map((action) =>
+              Number(action.criticality.slice(1)),
+            ),
+          );
+        cards.sort(
+          (a, b) =>
+            rank(b) - rank(a) ||
+            Number(b.source.domain === "attention") -
+              Number(a.source.domain === "attention"),
+        );
+      }
+      for (const card of cards.slice(25)) {
+        const owner = cardOwners.get(
+          `${card.source.domain}:${card.source.resourceId}`,
+        );
+        const dependency = dependencies.find((entry) => entry.domain === owner);
+        if (dependency?.state === "fresh") {
+          dependency.state = "partial";
+          dependency.reason = "more_items_available";
+        }
+      }
+      sections[section] = cards.slice(0, 25);
     }
     return experienceModelSchema.parse({
       companyId: input.companyId,

@@ -19,7 +19,8 @@
   "help": "Help / Support",
   "domain": {
     "tasks": "Work",
-    "attention": "Needs You"
+    "attention": "Needs You",
+    "maintenance": "Maintenance"
   },
   "nav": {
     "home": "Home",
@@ -726,5 +727,11 @@
     "suspended": "Suspended",
     "uninstalled": "Uninstalled"
   },
-  "maintenanceHistoryVersion": "Installation version {{version}}"
+  "maintenanceHistoryVersion": "Installation version {{version}}",
+  "maintenanceAttentionTitle": "Review the automatic package change limit",
+  "maintenanceAttentionWhy": "You can review this installation’s current configuration.",
+  "maintenanceAttentionConsequence": "The unchanged-content update remains blocked by the current automatic change limit. Review it through the existing package owner.",
+  "maintenanceAttentionEvidence": "The current automatic configuration budget is exhausted.",
+  "needsYouMaintenanceBounded": "Package maintenance is a separate bounded view. Review other installations and retained history in agent packages.",
+  "openPackageReview": "Open agent package review"
 }

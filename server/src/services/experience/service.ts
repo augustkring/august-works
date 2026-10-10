@@ -1,3 +1,4 @@
+import { readPackageMaintenanceAttention } from "./maintenance-attention.js";
 import type { Db } from "@paperclipai/db";
 import {
   activityLog,
@@ -416,6 +417,21 @@ export function experienceService(db: Db) {
             signal: admittedSignal,
             deadlineMs: remainingMs(),
             readers: [
+              ...(v9FeatureEnabled(flags, "maintenance_autopilot_v9") &&
+              v7FeatureEnabled(flags, "agent_packages_v7")
+                ? [
+                    {
+                      domain: "maintenance",
+                      read: (signal: AbortSignal) =>
+                        readPackageMaintenanceAttention(
+                          db,
+                          actor,
+                          companyId,
+                          signal,
+                        ),
+                    },
+                  ]
+                : []),
               {
                 domain: "attention",
                 read: async (signal) => {
@@ -583,7 +599,9 @@ export function experienceService(db: Db) {
             }
             result[section] = currentCards;
           }
-          if (result.needsYou.length) {
+          if (
+            result.needsYou.some((card) => card.source.domain === "attention")
+          ) {
             const feed = await attentionService(db, {
               materializeQueues: false,
             }).list(companyId, {
@@ -592,7 +610,9 @@ export function experienceService(db: Db) {
             });
             const current = new Map(feed.items.map((item) => [item.id, item]));
             const cards: ExperienceCard[] = [];
-            for (const card of result.needsYou) {
+            for (const card of result.needsYou.filter(
+              (card) => card.source.domain === "attention",
+            )) {
               admittedSignal.throwIfAborted();
               const item = current.get(card.source.resourceId);
               if (!item || item.updatedAt !== card.source.version) {
@@ -612,7 +632,54 @@ export function experienceService(db: Db) {
               }
               cards.push(attentionExperienceCard(item, feed.generatedAt));
             }
-            result.needsYou = cards;
+            result.needsYou = [
+              ...cards,
+              ...result.needsYou.filter(
+                (card) => card.source.domain !== "attention",
+              ),
+            ];
+          }
+          if (
+            result.needsYou.some(
+              (card) => card.source.domain === "agent_package_installation",
+            )
+          ) {
+            try {
+              const reread = await readPackageMaintenanceAttention(
+                db,
+                actor,
+                companyId,
+                admittedSignal,
+              );
+              const current = new Map(
+                reread.needsYou.map((card) => [card.id, card]),
+              );
+              result.needsYou = result.needsYou.flatMap((card) => {
+                if (card.source.domain !== "agent_package_installation")
+                  return [card];
+                const source = current.get(card.id);
+                if (!source || source.source.version !== card.source.version) {
+                  markPartial("maintenance", "source_stale");
+                  return [];
+                }
+                return [source];
+              });
+              if (reread.coverage) {
+                const dependency = result.dependencies.find(
+                  (entry) => entry.domain === "maintenance",
+                );
+                if (dependency) {
+                  dependency.state = "partial";
+                  dependency.reason = reread.coverage.reason;
+                }
+              }
+            } catch {
+              admittedSignal.throwIfAborted();
+              result.needsYou = result.needsYou.filter(
+                (card) => card.source.domain !== "agent_package_installation",
+              );
+              markPartial("maintenance", "denied");
+            }
           }
           for (const action of allowed.keys()) {
             admittedSignal.throwIfAborted();

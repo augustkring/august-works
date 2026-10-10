@@ -144,4 +144,68 @@ describe("experience fan-in", () => {
     });
     expect(called).toBe(false);
   });
+  it("keeps current high-criticality attention ahead of lower-priority maintenance regardless of reader completion order", async () => {
+    const approvalCards = Array.from({ length: 25 }, (_, index) => ({
+      ...card,
+      id: `approval-${index}`,
+      source: {
+        ...source,
+        domain: "attention" as const,
+        resourceId: `approval-${index}`,
+      },
+      actions: card.actions.map((action) => ({
+        ...action,
+        criticality: "C3" as const,
+        source: {
+          ...source,
+          domain: "attention" as const,
+          resourceId: `approval-${index}`,
+        },
+      })),
+    }));
+    const maintenanceCards = [
+      {
+        ...card,
+        id: "maintenance-receipt",
+        kind: "maintenance" as const,
+        source: {
+          ...source,
+          domain: "agent_package_installation" as const,
+          resourceId: "installation",
+        },
+        actions: card.actions.map((action) => ({
+          ...action,
+          criticality: "C2" as const,
+          source: {
+            ...source,
+            domain: "agent_package_installation" as const,
+            resourceId: "installation",
+          },
+        })),
+      },
+    ];
+    const model = await composeExperience({
+      companyId,
+      profile: "manager",
+      readers: [
+        {
+          domain: "maintenance",
+          read: async () => ({ needsYou: maintenanceCards }),
+        },
+        {
+          domain: "attention",
+          read: async () => {
+            await Promise.resolve();
+            return { needsYou: approvalCards };
+          },
+        },
+      ],
+    });
+    expect(model.needsYou.map((value) => value.id)).toEqual(
+      approvalCards.map((value) => value.id),
+    );
+    expect(
+      model.dependencies.find((value) => value.domain === "maintenance"),
+    ).toMatchObject({ state: "partial", reason: "more_items_available" });
+  });
 });

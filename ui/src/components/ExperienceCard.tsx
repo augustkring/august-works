@@ -11,15 +11,27 @@ export function ExperienceCard({
 }) {
   const { t } = useTranslation("experience");
   const Heading = headingLevel === 2 ? "h2" : "h3";
+  const maintenance =
+    card.source.domain === "agent_package_installation" &&
+    card.kind === "maintenance";
+  const title = maintenance ? t("maintenanceAttentionTitle") : card.title;
   return (
     <article
       className="space-y-2 rounded-lg border border-border bg-card p-4"
-      aria-label={card.title}
+      aria-label={title}
     >
-      <Heading className="font-medium text-foreground">{card.title}</Heading>
-      {card.whyYou && <p className="text-sm text-foreground">{card.whyYou}</p>}
+      <Heading className="font-medium text-foreground">{title}</Heading>
+      {card.whyYou && (
+        <p className="text-sm text-foreground">
+          {maintenance ? t("maintenanceAttentionWhy") : card.whyYou}
+        </p>
+      )}
       {card.consequence && (
-        <p className="text-sm text-muted-foreground">{card.consequence}</p>
+        <p className="text-sm text-muted-foreground">
+          {maintenance
+            ? t("maintenanceAttentionConsequence")
+            : card.consequence}
+        </p>
       )}
       {card.evidence.length > 0 && (
         <ul className="text-sm text-muted-foreground">
@@ -27,7 +39,9 @@ export function ExperienceCard({
             <li key={i}>
               {card.source.domain === "task"
                 ? t(`taskStatus.${item}`, { defaultValue: item })
-                : item}
+                : maintenance
+                  ? t("maintenanceAttentionEvidence")
+                  : item}
             </li>
           ))}
         </ul>

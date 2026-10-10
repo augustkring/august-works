@@ -169,3 +169,75 @@ it("uses the Danish empty-state contract", async () => {
     expect(container.textContent).toContain("ingen handlinger til dig"),
   );
 });
+
+it.each(["unavailable", "partial"] as const)(
+  "does not call %s native maintenance a clear queue",
+  async (state) => {
+    vi.spyOn(experienceApi, "home").mockResolvedValue({
+      ...model,
+      dependencies: [
+        ...model.dependencies,
+        {
+          domain: "maintenance",
+          state,
+          observedAt: null,
+          reason: state === "partial" ? "source_stale" : "timeout",
+        },
+      ],
+    });
+    await mount();
+    await vi.waitFor(() =>
+      expect(container.textContent).toContain("does not mean"),
+    );
+    expect(container.textContent).not.toContain("Nothing needs your action");
+  },
+);
+it("localizes the native maintenance finding and opens its current native history owner", async () => {
+  await i18n.changeLanguage("da");
+  const maintenanceSource = {
+    ...source,
+    domain: "agent_package_installation" as const,
+    resourceId: "installation",
+  };
+  vi.spyOn(experienceApi, "home").mockResolvedValue({
+    ...model,
+    dependencies: [
+      ...model.dependencies,
+      {
+        domain: "maintenance",
+        state: "fresh",
+        observedAt: source.observedAt,
+        reason: null,
+      },
+    ],
+    needsYou: [
+      {
+        ...card,
+        id: "maintenance:event",
+        kind: "maintenance",
+        source: maintenanceSource,
+        evidence: ["configured_change_budget"],
+        actions: [
+          {
+            ...card.actions[0]!,
+            source: maintenanceSource,
+            href: "/agents/packages/installations/installation/maintenance",
+          },
+        ],
+      },
+    ],
+  });
+  await mount();
+  await vi.waitFor(() =>
+    expect(container.textContent).toContain(
+      "Vurder grænsen for automatiske pakkeændringer",
+    ),
+  );
+  expect(container.textContent).toContain("aktuelle konfiguration");
+  expect(container.textContent).not.toContain("configured_change_budget");
+  expect(container.querySelector('a[href="/AW/agents/packages"]')).toBeTruthy();
+  expect(container.textContent).toContain("andre installationer");
+  expect(container.querySelector("article a")?.getAttribute("href")).toContain(
+    "/agents/packages/installations/installation/maintenance",
+  );
+});
