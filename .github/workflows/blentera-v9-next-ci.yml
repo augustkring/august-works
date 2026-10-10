@@ -1,0 +1,33 @@
+name: BLENTERA V9 Next.js independently verified build
+on:
+  push:
+    branches:
+      - blentera-preview/clarity-first-v9-20261010
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    timeout-minutes: 20
+    defaults:
+      run:
+        working-directory: blentera-v9-next
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+      - run: npm install --no-audit --no-fund
+      - run: npm run typecheck
+      - run: npm run build
+      - run: npm audit --omit=dev --audit-level=high
+      - name: Check exported routes
+        run: |
+          test -s out/index.html
+          test -s out/platform/index.html
+          test -s out/about/index.html
+          test -s out/control/index.html
+          test -s out/_headers
+          test -s out/robots.txt
+          echo 'NEXT_EXPORT_VERIFIED_4_ROUTES'
