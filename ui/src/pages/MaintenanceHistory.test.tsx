@@ -59,12 +59,14 @@ async function render(principal = "owner") {
     root.render(
       <QueryClientProvider client={client}>
         <MemoryRouter>
-          <MaintenanceHistory
-            key={principal}
-            company="company"
-            principal={principal}
-            installationId="installation"
-          />
+          <main>
+            <MaintenanceHistory
+              key={principal}
+              company="company"
+              principal={principal}
+              installationId="installation"
+            />
+          </main>
         </MemoryRouter>
       </QueryClientProvider>,
     ),
@@ -84,6 +86,7 @@ it("distinguishes historical configuration and exhausted limit receipts from the
     expect(container.textContent).toContain("human review was required"),
   );
   expect(container.textContent).toContain("activation was required");
+  expect(container.querySelectorAll("main")).toHaveLength(1);
   expect(container.textContent).toContain("do not confirm");
   expect(container.textContent).toContain("ten most recent");
   expect(container.querySelector("h1")).toBe(document.activeElement);

@@ -118,7 +118,7 @@ export function AgentMonitor({
   if (!current) return <p role="status">{t("loading")}</p>;
   const view = query.data!;
   return (
-    <main ref={main} className="space-y-6">
+    <section ref={main} className="space-y-6">
       <h1 ref={heading} tabIndex={-1} className="text-2xl font-semibold">
         {t("agentMonitorTitle", { name: view.name })}
       </h1>
@@ -177,6 +177,6 @@ export function AgentMonitor({
       >
         {t("agentMonitorAdvanced")}
       </Link>
-    </main>
+    </section>
   );
 }

@@ -63,12 +63,14 @@ async function mount(principal = "owner") {
     root.render(
       <QueryClientProvider client={client}>
         <MemoryRouter>
-          <AgentMonitor
-            key={principal}
-            company="company"
-            principal={principal}
-            agentId="agent"
-          />
+          <main>
+            <AgentMonitor
+              key={principal}
+              company="company"
+              principal={principal}
+              agentId="agent"
+            />
+          </main>
         </MemoryRouter>
       </QueryClientProvider>,
     ),
@@ -81,6 +83,7 @@ it("shows native status and bounded history without treating success as business
     expect(container.textContent).toContain("Monitor Native agent"),
   );
   expect(container.textContent).toContain("budget limit");
+  expect(container.querySelectorAll("main")).toHaveLength(1);
   expect(container.textContent).toContain("does not confirm");
   expect(container.textContent).toContain("six most recent");
   expect(container.querySelector("h1")).toBe(document.activeElement);

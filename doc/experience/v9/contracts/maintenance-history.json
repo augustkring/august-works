@@ -2,7 +2,12 @@
   "screenId": "MAINTENANCE-HISTORY",
   "journeyId": "maintenance",
   "routeOrSurface": "/agents/packages/installations/:installationId/maintenance",
-  "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
   "customerOutcome": "Read historical native bounded M2 package configuration and loop-breaker receipts separately from current activation state.",
   "entryConditions": [
     "Current company and authenticated human account or explicit local board.",
@@ -33,7 +38,9 @@
       "label": "Return to agent packages",
       "operation": "Navigate to the existing native installation review owner; this read creates no repair, activation, grant or decision."
     },
-    "secondary": ["Retry the safe current read"],
+    "secondary": [
+      "Retry the safe current read"
+    ],
     "destructiveOrIrreversible": []
   },
   "systemWork": {
@@ -72,7 +79,7 @@
     "targetSize": "Token min-h-11 links/buttons.",
     "zoomReflow": "Stacked current state and receipt rows at narrow width; no horizontal table.",
     "reducedMotion": "No animation.",
-    "screenReaderNotes": "Named sections, text status and semantic time elements."
+    "screenReaderNotes": "Named sections, text status and semantic time elements. The existing Native Layout owns the sole main landmark; the customer page renders a section inside it."
   },
   "responsive": {
     "wide": "Stacked current installation state and historical maintenance receipts.",
