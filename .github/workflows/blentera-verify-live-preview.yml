@@ -1,0 +1,29 @@
+name: Verify BLENTERA Cloudflare preview URL
+on:
+  push:
+    branches:
+      - blentera-preview/cloudflare-hosted-20261010
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  smoke:
+    runs-on: ubuntu-latest
+    timeout-minutes: 3
+    steps:
+      - name: Verify live HTTP and HTML
+        shell: bash
+        run: |
+          set -euo pipefail
+          url='https://sharehtml.zhenjia.dev/v/2Y9HrzEs24/'
+          curl --fail-with-body --silent --show-error --location --retry 2 --max-time 30 \
+            --dump-header "$RUNNER_TEMP/headers.txt" --output "$RUNNER_TEMP/page.html" "$url"
+          grep -q '<!doctype html>' "$RUNNER_TEMP/page.html"
+          grep -q 'id="tpl-about"' "$RUNNER_TEMP/page.html"
+          grep -q 'id="tpl-platform"' "$RUNNER_TEMP/page.html"
+          grep -q 'data-exec="cmo"' "$RUNNER_TEMP/page.html"
+          grep -q '#!about' "$RUNNER_TEMP/page.html"
+          echo "HTTP_VERIFIED_LIVE_PREVIEW=$url"
+          head -n 18 "$RUNNER_TEMP/headers.txt" | sed -n '/^HTTP\//p;/^[Cc]ontent-[Tt]ype:/p;/^[Cc]ontent-[Ss]ecurity-[Pp]olicy:/p;/^[Xx]-[Rr]obots-[Tt]ag:/p'
+          printf '\nPreview size: '
+          wc -c < "$RUNNER_TEMP/page.html"
