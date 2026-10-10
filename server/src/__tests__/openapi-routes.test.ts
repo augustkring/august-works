@@ -14,6 +14,8 @@ const ROUTES_DIR = path.resolve(__dirname, "../routes");
 const apiPrefixes: Record<string, string> = {
   "agent-authoring.ts": "/api",
   "customer-feedback.ts": "/api",
+  "agent-monitor.ts": "/api",
+  "maintenance-history.ts": "/api",
   "experience.ts": "/api",
   "business-events.ts": "/api",
   "business-metrics.ts": "/api",
@@ -976,6 +978,8 @@ describe("openapi routes", () => {
     expect(triage.responses[200].content["application/json"].schema.properties.messages).toBeDefined();
     const policy = spec.paths["/api/customer-feedback/policy"].get;
     expect(policy.security).toEqual([]);
+    expect(policy.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    expect(policy.responses[200].content["application/json"].schema.properties.ga.properties.allowed.enum).toEqual([false]);
     expect(policy["x-paperclip-authorization"]).toEqual({ actor: "public" });
     expect(spec.paths[`${root}/customer-feedback/{feedbackId}/follow-up`].post.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
   });

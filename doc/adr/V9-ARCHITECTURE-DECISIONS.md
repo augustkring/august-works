@@ -765,3 +765,13 @@ the card. Missing review bindings degrade coverage rather than claim all clear.
 The 25-card projection retains critical native approval priority and marks each
 truncated owner's actual coverage partial. The existing package owner retains
 every effect; no alternate escalation queue, repair, grant or notification is added.
+
+## V9-037 — Privacy declarations do not qualify feedback GA
+
+All six §85.22 policy references are startup-owned, strict, bounded configuration.
+Unset preview remains explicit; partial/malformed declarations fail without private
+input in errors. Policy keys carry no invented retention period or legal decision.
+Public policy state exposes no policy references or owner identity. Configured
+references remain execution-unqualified and GA admission refuses even when all
+keys exist. Native retention/DSR/legal holds and protected attachment qualification
+remain necessary. Customer/admin/triage/model input cannot set these policies.

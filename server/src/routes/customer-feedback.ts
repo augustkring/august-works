@@ -1,17 +1,25 @@
 import { Router, type Request } from "express";
 import { z } from "zod";
 import type { Db } from "@paperclipai/db";
-import { FEEDBACK_CONTACTS } from "@paperclipai/shared";
+import {
+  FEEDBACK_CONTACTS,
+  customerFeedbackPolicySchema,
+} from "@paperclipai/shared";
 import { assertBoard, hasCompanyAccess } from "./authz.js";
 import { badRequest, conflict, forbidden } from "../errors.js";
 import { customerFeedbackService } from "../services/customer-feedback.js";
+import { loadFeedbackDataProcessingAdmission } from "../services/feedback-data-processing.js";
 
 export function customerFeedbackRoutes(
   db: Db,
-  options: { operatorUserIds?: readonly string[] } = {},
+  options: {
+    operatorUserIds?: readonly string[];
+    runtimeEnv?: Readonly<Record<string, string | undefined>>;
+  } = {},
 ) {
   const router = Router(),
-    service = customerFeedbackService(db, options);
+    service = customerFeedbackService(db, options),
+    dataProcessing = loadFeedbackDataProcessingAdmission(options.runtimeEnv);
   function identity(req: Request) {
     assertBoard(req);
     const principal =
@@ -35,19 +43,26 @@ export function customerFeedbackRoutes(
     return id.data;
   }
   const feedbackId = (req: Request) => z.uuid().parse(req.params.feedbackId);
-  router.get("/customer-feedback/policy", (_req, res) =>
-    res.json({
-      contacts: FEEDBACK_CONTACTS,
-      attachments: {
-        enabled: false,
-        reason: "scanner_qualification_required",
-        types: ["image/png", "image/jpeg", "image/webp"],
-        maxFiles: 3,
-        maxBytes: 10485760,
-      },
-      retention: { status: "owner_decision_required" },
-    }),
-  );
+  router.get("/customer-feedback/policy", (_req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    res.json(
+      customerFeedbackPolicySchema.parse({
+        contacts: FEEDBACK_CONTACTS,
+        attachments: {
+          enabled: false,
+          reason: "scanner_qualification_required",
+          types: ["image/png", "image/jpeg", "image/webp"],
+          maxFiles: 3,
+          maxBytes: 10485760,
+        },
+        retention: { status: dataProcessing.retentionStatus },
+        ga: {
+          allowed: dataProcessing.gaAllowed,
+          reason: "data_processing_qualification_required",
+        },
+      }),
+    );
+  });
   router.get("/companies/:companyId/customer-feedback", async (req, res) => {
     res.setHeader("Cache-Control", "private, no-store");
     res.json(

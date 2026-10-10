@@ -98,7 +98,8 @@
   "systemWork": {
     "canonicalReadDomains": [
       "Current identity and selected company",
-      "Customer Feedback submission policy"
+      "Customer Feedback submission policy",
+      "Startup-owned strict references for all six Privacy policy purposes; declared references remain execution-unqualified and cannot enable GA."
     ],
     "canonicalWriteOperation": "POST canonical Customer Feedback with immutable body/goal and explicit disclosure choices, company membership, durable request key and abuse limit.",
     "authorityEffect": "Presentation and drafts cannot grant permissions. Material effects always require current native permissions, approvals and version preconditions.",
@@ -149,7 +150,7 @@
     "sensitiveFields": [
       "Raw intent, company facts, feedback and results remain customer data"
     ],
-    "loggingConstraints": "Exclude customer prose, prompts, result bodies, attachments and raw errors from generic analytics/activity details; native domain audit is purpose-separated."
+    "loggingConstraints": "Exclude customer prose, prompts, result bodies, attachments and raw errors from generic analytics/activity details; native domain audit is purpose-separated. Startup parser errors omit private configuration; the public no-store policy DTO excludes owner identity and policy refs."
   },
   "analytics": {
     "allowedEvents": [],
@@ -169,7 +170,8 @@
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
     ],
     "securityPrivacy": [
-      "Verify current membership/resource revocation, tenant isolation, untrusted content and separate private feedback identity purpose."
+      "Verify current membership/resource revocation, tenant isolation, untrusted content and separate private feedback identity purpose.",
+      "Refuse GA for missing required Privacy policy references and for complete declarations without qualified native policy execution; partial/numeric/unknown declarations cannot silently choose legal periods."
     ],
     "usability": [
       "Use representative exploratory and pre-registered confirmatory journey evidence with explicit PASS/FAIL/INCONCLUSIVE; source checks are insufficient."

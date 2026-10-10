@@ -3325,6 +3325,7 @@ export * from "./analytical-context.js";
 export * from "./management-chat-tools.js";
 
 export * from "./customer-feedback.js";
+export * from "./feedback-data-processing.js";
 export * from "./experience-commands.js";
 export * from "./activation.js";
 export * from "./company-experience.js";

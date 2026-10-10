@@ -855,7 +855,9 @@
       "implementationStatus": "in_progress",
       "componentPaths": [
         "ui/src/components/CustomerFeedbackDialog.tsx",
-        "server/src/services/customer-feedback.ts"
+        "server/src/services/customer-feedback.ts",
+        "server/src/services/feedback-data-processing.ts",
+        "packages/shared/src/feedback-data-processing.ts"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/feedback.json"

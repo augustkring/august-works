@@ -113,6 +113,25 @@ const support = await getEmbeddedPostgresTestSupport();
         viewportClass: "wide",
       },
     });
+    it("keeps Privacy configuration distinct from qualified retention and never exposes private policy references", async () => {
+      const preview = await request(app()).get("/api/customer-feedback/policy").expect(200);
+      expect(preview.headers["cache-control"]).toBe("private, no-store");
+      expect(preview.body.retention.status).toBe("owner_decision_required");
+      expect(preview.body.ga.allowed).toBe(false);
+      const application = express();
+      application.use("/api", customerFeedbackRoutes(db, { runtimeEnv: {
+        AW_FEEDBACK_DATA_PROCESSING_JSON: JSON.stringify({ schemaVersion: 1, privacyOwner: "never-expose-private-owner", policyVersion: "private-fixture-v1",
+          policies: { submissionRetention: "private.submission", attachmentRetention: "private.attachment", followUpRetention: "private.followup", deletionDsr: "private.dsr", incidentLegalHold: "private.hold", aggregateLearningRetention: "private.aggregate" } }),
+      } }));
+      const declared = await request(application).get("/api/customer-feedback/policy").expect(200);
+      expect(declared.headers["cache-control"]).toBe("private, no-store");
+      expect(declared.body.retention.status).toBe("configured_execution_unqualified");
+      expect(declared.body.ga.allowed).toBe(false);
+      expect(declared.body.attachments.enabled).toBe(false);
+      expect(JSON.stringify(declared.body)).not.toContain("never-expose");
+      expect(JSON.stringify(declared.body)).not.toContain("private.submission");
+      expect(() => customerFeedbackRoutes(db, { runtimeEnv: { AW_CUSTOMER_FEEDBACK_CHANNEL: "ga" } })).toThrow("all six Privacy-owned");
+    });
     it("lets a current viewer submit actor-owned feedback and keeps no-name identity out of the canonical submission", async () => {
       const response = await request(app())
         .post(`/api/companies/${companyId}/customer-feedback`)

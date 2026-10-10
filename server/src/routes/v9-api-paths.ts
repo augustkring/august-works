@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  customerFeedbackPolicySchema,
   maintenanceHistorySchema,
   agentMonitorSchema,
   workflowPublicationCommandSchema,
@@ -248,7 +249,9 @@ export const v9ApiPaths: V9ApiOperation[] = [
     method: "get",
     path: "/api/customer-feedback/policy",
     summary:
-      "Read configured feedback contacts and currently closed attachment admission",
+      "Read safe feedback contacts, declared Privacy policy state and closed attachment/GA admission",
+    result: customerFeedbackPolicySchema,
+    privateResponse: true,
     auth: "public",
     successStatus: 200,
   },
