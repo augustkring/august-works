@@ -1,0 +1,67 @@
+name: BLENTERA Studio V5 — Cloudflare-hosted review
+on:
+  push:
+    branches:
+      - blentera-preview/editorial-v5-20261010
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 7
+    steps:
+      - uses: actions/checkout@v4
+      - name: Confirm authored V5 build
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s blentera-v5-editorial.html
+          grep -q 'AI will change.' blentera-v5-editorial.html
+          grep -q 'data-preview-route="platform"' blentera-v5-editorial.html
+          grep -q 'data-preview-route="about"' blentera-v5-editorial.html
+          grep -q 'data-preview-route="trust"' blentera-v5-editorial.html
+          grep -q 'role="tabpanel"' blentera-v5-editorial.html
+          grep -q 'Chief Technology Officer' blentera-v5-editorial.html
+          grep -q 'Hosted production' blentera-v5-editorial.html
+      - name: Publish on Cloudflare-hosted review service
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --connect-timeout 20 --max-time 90 --retry 2 \
+            -F 'file=@blentera-v5-editorial.html;type=text/html' \
+            -F 'title=BLENTERA Studio V5 — Editorial Design Review' \
+            https://sharehtml.zhenjia.dev/api/shares > "$RUNNER_TEMP/blentera-response.json"
+          python3 - <<'PY'
+          import json, os
+          d=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'blentera-response.json')))
+          link=d['share']['preview_url']
+          assert link.startswith('https://sharehtml.zhenjia.dev/v/') and link.endswith('/'),link
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('url='+link+'\n')
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as f:
+              f.write('## BLENTERA V5 — editorial review\n\n')
+              f.write('**[OPEN PUBLIC LIVE SITE]('+link+')**\n\n')
+              f.write('Four-page preview, illustrative organisation, restricted prelaunch status. Not a first-party Cloudflare Pages production deployment.\n')
+          print('BLENTERA_V5_REVIEW_URL='+link)
+          PY
+      - name: Verify public response
+        shell: bash
+        env:
+          PREVIEW_URL: ${{steps.publish.outputs.url}}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --location --max-time 40 \
+            --dump-header "$RUNNER_TEMP/headers" \
+            --output "$RUNNER_TEMP/live.html" "$PREVIEW_URL"
+          grep -qi '<!doctype html>' "$RUNNER_TEMP/live.html"
+          grep -q 'AI will change.' "$RUNNER_TEMP/live.html"
+          grep -q 'data-preview-route="about"' "$RUNNER_TEMP/live.html"
+          grep -q 'data-preview-route="platform"' "$RUNNER_TEMP/live.html"
+          grep -q 'data-preview-route="trust"' "$RUNNER_TEMP/live.html"
+          grep -q 'data-exec="cto"' "$RUNNER_TEMP/live.html"
+          grep -q 'data-scenario="incident"' "$RUNNER_TEMP/live.html"
+          grep -q 'Hosted production' "$RUNNER_TEMP/live.html"
+          echo 'PUBLIC_HTTP_VERIFIED=' "$PREVIEW_URL"
+          grep -Ei '^HTTP/|^[Cc]ontent-[Tt]ype:' "$RUNNER_TEMP/headers" || true
+          wc -c "$RUNNER_TEMP/live.html"
