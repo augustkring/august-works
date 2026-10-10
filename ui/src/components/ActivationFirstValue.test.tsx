@@ -23,7 +23,7 @@ const result = activationFirstValueResultSchema.parse({
   resultHash: "a".repeat(64),
   title: "<img src=x onerror=alert(1)> Reviewed research draft",
   verifiedAt: "2026-10-10T08:00:00.000Z",
-  artifacts: [{ documentId: id, revisionId: id, hash: "b".repeat(64) }],
+  artifacts: [{ documentId: id, documentKey: "result", revisionId: id, hash: "b".repeat(64) }],
 });
 let root: Root, container: HTMLDivElement;
 beforeEach(() => {
@@ -81,6 +81,24 @@ it("shows a current independently reviewed result with the original task and no 
   expect(container.querySelector("a")?.getAttribute("href")).toBe(
     `/issues/${id}`,
   );
+  expect(container.querySelector("button")).toBeNull();
+  const output = Array.from(container.querySelectorAll("a")).find((link) =>
+    link.textContent?.includes("Open reviewed output"),
+  );
+  expect(output?.getAttribute("href")).toBe(`/issues/${id}#document-result&viewer=full`);
+  expect(container.querySelector("summary")?.textContent).toBe("Why is this result ready?");
+  expect(container.textContent).toContain("One saved output matches");
+  expect(container.textContent).toContain("changes need a new review");
+  expect(container.textContent).not.toContain(id);
+});
+it("retains the original task link for an older receipt without inventing a document destination", async () => {
+  const legacy = activationFirstValueResultSchema.parse({
+    ...result,
+    artifacts: [{ documentId: id, revisionId: id, hash: "b".repeat(64) }],
+  });
+  await render({ status: "verified", result: legacy, candidates: [], hasMore: false });
+  expect(container.querySelectorAll("a")).toHaveLength(1);
+  expect(container.querySelector("a")?.getAttribute("href")).toBe(`/issues/${id}`);
   expect(container.querySelector("button")).toBeNull();
 });
 it("withdraws old titles, references and recording controls when evidence is unavailable or the current read is pending", async () => {

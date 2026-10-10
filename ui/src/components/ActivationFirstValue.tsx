@@ -2,6 +2,7 @@ import { useTranslation } from "react-i18next";
 import type { ActivationCommand, ActivationView } from "@paperclipai/shared";
 import { Button } from "./ui/button";
 import { Link } from "../lib/router";
+import { buildDocumentAnnotationHash } from "../lib/document-annotation-hash";
 
 export function ActivationFirstValue({
   value,
@@ -34,6 +35,32 @@ export function ActivationFirstValue({
         <Link to={`/issues/${value.result.issueId}`} className="underline">
           {value.result.title}
         </Link>
+        <ul className="space-y-2">
+          {value.result.artifacts.map((artifact, index) =>
+            artifact.documentKey ? (
+              <li key={`${artifact.documentId}:${artifact.revisionId}`}>
+                <Link
+                  to={`/issues/${value.result!.issueId}${buildDocumentAnnotationHash({
+                    documentKey: artifact.documentKey,
+                    threadId: null,
+                    commentId: null,
+                    viewer: "full",
+                  })}`}
+                  className="inline-flex min-h-11 items-center underline"
+                >
+                  {t("activation.openReviewedOutput", { number: index + 1 })}
+                </Link>
+              </li>
+            ) : null,
+          )}
+        </ul>
+        <p>{t("activation.outputReviewScope")}</p>
+        <details>
+          <summary className="min-h-11 cursor-pointer">
+            {t("activation.whyResultReady")}
+          </summary>
+          <p>{t("activation.resultEvidenceSummary", { count: value.result.artifacts.length })}</p>
+        </details>
         <p>{t("activation.independentReview")}</p>
         <p>{t("activation.resultLimit")}</p>
       </section>

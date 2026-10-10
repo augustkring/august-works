@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { issueDocumentKeySchema } from "./validators/issue.js";
 
 export const ACTIVATION_STEPS = [
   "intent",
@@ -40,6 +41,7 @@ export const activationFirstValueResultSchema =
       .array(
         z.strictObject({
           documentId: z.uuid(),
+          documentKey: issueDocumentKeySchema.optional(),
           revisionId: z.uuid(),
           hash: z.string().regex(/^[a-f0-9]{64}$/),
         }),

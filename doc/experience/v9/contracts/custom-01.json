@@ -12,7 +12,8 @@
     "Current verified authenticated company membership and native agents:create or target agents:configure authority; instance-admin status does not bypass membership.",
     "Draft belongs to the current creator; editing an existing agent requires current native read and configure authority.",
     "hire_agent_v9 and its effective prerequisites admit new saves; existing reads and content discard survive flag rollback.",
-    "Existing-agent entry uses a metadata-only native admission check and the native unsaved-configuration navigation guard. No proposal is created until the existing draft flow confirms creation."
+    "Existing-agent entry uses a metadata-only native admission check and the native unsaved-configuration navigation guard. No proposal is created until the existing draft flow confirms creation.",
+    "Pending/failed current account or settings checks hide private content and controls. Same-account drafts remain mounted and resume only after a fresh original-owner read; a different settled principal cannot inherit the draft."
   ],
   "exitConditions": [
     "Only a canonical accepted draft ID/version permits a saved claim.",
@@ -78,7 +79,7 @@
     ],
     "canonicalWriteOperation": "Creator-scoped agent configuration create/save/discard with request hash, row version, database scope/version fences, native audit and post-commit publication",
     "authorityEffect": "No grants, agent mutation, external messages, runtime provisioning or work execution. Native publication mapping and representative execution are unqualified.",
-    "asyncWork": "Bounded native references and 25-row native timestamp/ID pagination; unknown acknowledgements retain immutable client request bodies/keys.",
+    "asyncWork": "Bounded native references and 25-row native timestamp/ID pagination; unknown acknowledgements retain immutable client request bodies/keys. V9 account observation rechecks on return inside the ordinary 30-second freshness window, without restarting reads for nested observers. Same-turn QueryClient fetch guards and authority epochs fence Native transport and late acknowledgements.",
     "receipt": "Current creator-owned canonical draft ID/version; never an inferred active version or first-value receipt."
   },
   "states": {

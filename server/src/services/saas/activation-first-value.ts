@@ -1,8 +1,9 @@
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, sql } from "drizzle-orm";
 import {
   companyAgentPackageInstallations,
   heartbeatRuns,
   issues,
+  issueDocuments,
   orchestrationPlans,
   orchestrationWorkerAttempts,
   orchestrationWorkers,
@@ -190,13 +191,28 @@ export async function readActivationFirstValue(
     throw conflict(
       "A successful run for this exact package activation is required",
     );
-  const artifacts = packet.evidence
-    .filter((e) => e.type === "task_document")
-    .map((e) => ({
+  const outputEvidence = packet.evidence.filter((e) => e.type === "task_document");
+  if (!outputEvidence.length || outputEvidence.length > 16)
+    throw conflict("Complete bounded first-result output evidence is required");
+  const outputLinks = await tx
+    .select({ documentId: issueDocuments.documentId, key: issueDocuments.key })
+    .from(issueDocuments)
+    .where(and(
+      eq(issueDocuments.companyId, companyId),
+      eq(issueDocuments.issueId, task.id),
+      inArray(issueDocuments.documentId, outputEvidence.map((e) => e.sourceId)),
+    ))
+    .for("share");
+  const artifacts = outputEvidence.map((e) => {
+    const link = outputLinks.find((output) => output.documentId === e.sourceId);
+    if (!link) throw conflict("The reviewed output is no longer linked to this task");
+    return {
       documentId: e.sourceId,
+      documentKey: link.key,
       revisionId: e.sourceVersion,
       hash: e.hash,
-    }));
+    };
+  });
   const [finished] = await tx.execute(
     sql`select clock_timestamp() as observed_at`,
   );

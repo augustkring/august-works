@@ -1534,7 +1534,7 @@ const support = await getEmbeddedPostgresTestSupport();
       const beforeRuns = (await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home))).length;
       const candidate = (await activation.get(f.actor, f.home)).firstValue!.candidates[0]!;
       expect(candidate).toMatchObject({ issueId: fixture.task.id, runId: fixture.run.id, verificationRunId: fixture.review.id,
-        installationId: fixture.installation.id, artifacts: [{ documentId: fixture.document.id, revisionId: fixture.revision.id }] });
+        installationId: fixture.installation.id, artifacts: [{ documentId: fixture.document.id, documentKey: "result", revisionId: fixture.revision.id }] });
       const input = { operation: "record_verified_result" as const, expectedVersion: fixture.onboarding.version, requestId: randomUUID(),
         installationId: fixture.installation.id, verificationRunId: fixture.review.id };
       const [first, replay] = await Promise.all([activation.command(f.actor, f.home, input), activation.command(f.actor, f.home, input)]);
@@ -1556,6 +1556,27 @@ const support = await getEmbeddedPostgresTestSupport();
       const completionReplay = await activation.command(f.actor, f.home, completion);
       expect(completionReplay.version).toBe(completed.version);
       expect(completionReplay.state.firstValueAt).toBe(first.state.firstValueAt);
+    }, 60000);
+    it("withdraws reviewed output links when the original saved document changes", async () => {
+      const fixture = await firstValueFixture(), activation = activationService(db);
+      const recorded = await activation.command(f.actor, f.home, {
+        operation: "record_verified_result", expectedVersion: fixture.onboarding.version,
+        requestId: randomUUID(), installationId: fixture.installation.id, verificationRunId: fixture.review.id,
+      });
+      expect(recorded.firstValue?.result?.artifacts[0]?.documentKey).toBe("result");
+      const [changedRevision] = await db.insert(documentRevisions).values({
+        companyId: f.home, documentId: fixture.document.id, revisionNumber: 2,
+        body: "Changed saved output requires an independent new review",
+      }).returning();
+      await db.update(documents).set({ latestBody: changedRevision!.body,
+        latestRevisionId: changedRevision!.id, latestRevisionNumber: 2, updatedAt: new Date(),
+      }).where(eq(documents.id, fixture.document.id));
+      const current = await activation.get(f.actor, f.home);
+      expect(current.firstValue).toEqual({ status: "withdrawn", result: null, candidates: [], hasMore: false });
+      expect(current.state.firstValueAt).toBe(recorded.state.firstValueAt);
+      await expect(activation.command(f.actor, f.home, { operation: "complete_activation",
+        expectedVersion: current.version, requestId: randomUUID(),
+      })).rejects.toMatchObject({ status: 409 });
     }, 60000);
     it("withdraws first-result presentation on package revocation and cannot renew its original receipt", async () => {
       const fixture = await firstValueFixture(), activation = activationService(db);

@@ -1235,3 +1235,76 @@ human/instance-role and Agent-policy revocation, 10,000-Task populations, full
 Earlier incomplete and failed waves remain recorded; no deadline, data-volume,
 assertion or runtime prerequisite was relaxed. The complete integrated suite,
 hosted performance and release acceptance remain pending.
+
+
+### ADR-V9-055 — Setup correction and current original output navigation
+
+2026-10-10. Change setup is a strict, versioned original onboarding command
+available only in review before a first result. It retains literal customer
+answers, clears the selected capability and returns to intent. Existing work,
+Foundation drafts, installations and access retain their owners. Current creator
+membership, rollout, Native locks, request hash and version fences precede the
+change; capability selection later requires fresh Native admission.
+
+Nine actual migrated PostgreSQL activation checks pass on the separate source
+SHA-256 `baeea87151098e1f93896a104ba7045596053dfd8f1ca8dd12f340b6fdf9953e`,
+including identical concurrent commands, changed-content refusal, stale versions,
+rollout rollback, current membership revocation and unchanged work/access counts.
+Twenty-one focused checks pass. Early verifier launches failed before tests
+because the unprivileged runtime could not read public installed modules or
+write its public bundler caches; their logs are retained. No product assertion,
+loader or runtime prerequisite was changed. Integrated qualification is pending.
+
+First-result views resolve bounded current Native document keys under the same
+Task/company and share-lock those links. They retain exact reviewed revision and
+hash references and navigate through the original document-pane hash builder.
+The link opens current saved content under Native access; editing remains owned
+by that Task and invalidates old verification. Older responses without a key
+retain only the original Task link. A disclosure explains the completed Task,
+successful run and independent human review without exposing private rationale.
+Twenty-one focused checks and token/coverage gates pass for the separate output
+change; current combined Native and browser qualification remain pending.
+Neither change supplies safe first-task execution or human release acceptance.
+
+The combined source now passes 23 focused checks, shared build and token/coverage
+gates, 51 actual migrated PostgreSQL checks across activation/package suites, and
+all three built-browser first-result/account/setup-correction cases. Native tests
+withdraw links after an output revision changes and block completion without a
+new review. Browser cases recover an uncertain correction through a current GET,
+preserve the saved goal, verify the document destination and explanation, and
+check narrow focus/axe/reflow and absence of extra work. The matching Native and
+browser source SHA-256 is `9c1235bb326c0fbe3b0442474c64fc70f843f5ae08b3a923b80d918bf9ab45e3`. Complete integrated workspace
+qualification and manual/hosted/usability acceptance remain pending.
+
+
+### ADR-V9-056 — Authoring follows current account epochs and fresh original reads
+
+2026-10-10. Custom drafts, Hire catalog/setup and saved setups hide private
+content while the current account/settings or original draft read is unresolved.
+A same-account editor remains mounted; a new source epoch requires fresh Native
+reads before it shows the retained unsaved input. Current source fetch states
+fence same-turn requests. Late acknowledgements carry only private epoch tags,
+so they cannot navigate, expose a receipt or confirm a save across a recheck.
+Original immutable request bodies and IDs remain available for their original
+Native replay; no key is renewed by uncertainty.
+
+Existing reads and content discard keep their original rollback allowance.
+New creates/saves require the current rollout. Native membership, purpose,
+permissions, versions and draft owners remain authoritative; no new executor,
+permission owner, publication or representative-test claim is introduced.
+
+The built browser found that the global 30-second freshness window prevented a
+quick return from rechecking the session. V9 now observes the original session
+with zero stale time and no nested mount refetch. The original account helper
+keeps its defaults for other callers. An actual-query regression covers both the
+freshness window and nested observation. Saved setups use their parent's scope
+instead of remounting session/settings readers through their loading view.
+
+Seventy-two checks in eight files, strict UI types and tokens pass, including
+original account-client, company-context and feedback regressions. Both actual
+built-browser Custom/Hire cases pass on matching source SHA-256
+`3d38334ac4ab1e27857ba299598bded9234cb4bd6c819e7eb401c5d9f2e91b69`: hidden fields during pending account/source reads,
+retained unsaved input, correct heading focus, narrow axe/reflow and zero draft
+writes, Tasks, Agents or runs. Earlier failed browser/focused/type waves remain
+recorded. Current integrated workspace/regression and human/hosted acceptance
+remain pending.
