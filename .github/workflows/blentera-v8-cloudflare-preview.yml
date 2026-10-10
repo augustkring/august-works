@@ -1,0 +1,66 @@
+name: BLENTERA V8 public design preview
+on:
+  push:
+    branches:
+      - blentera-preview/v8-supabase-system-20261010
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  publish-and-verify:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Validate preview source
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s blentera-v8-live.html
+          grep -q 'Change the tools.' blentera-v8-live.html
+          grep -q 'data-page="organisation"' blentera-v8-live.html
+          grep -q 'data-page="platform"' blentera-v8-live.html
+          grep -q 'data-page="trust"' blentera-v8-live.html
+          grep -q 'id="executive-roles"' blentera-v8-live.html
+          grep -q 'scenario-tab-incident' blentera-v8-live.html
+          grep -q '#/about' blentera-v8-live.html
+      - name: Publish to Cloudflare-hosted live preview
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --max-time 90 --connect-timeout 20 --retry 2 \
+            -F 'file=@blentera-v8-live.html;type=text/html' \
+            -F 'title=BLENTERA V8 — Live Website and AI Organisation Preview' \
+            https://sharehtml.zhenjia.dev/api/shares > "$RUNNER_TEMP/share.json"
+          python3 - <<'PY'
+          import json,os
+          j=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'share.json')))
+          url=j['share']['preview_url']
+          assert url.startswith('https://sharehtml.zhenjia.dev/v/') and url.endswith('/'),url
+          print('BLENTERA_V8_LIVE_URL='+url)
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f:f.write('url='+url+'\n')
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as f:
+            f.write('## BLENTERA V8 — verified design preview\n\n')
+            f.write('**[OPEN LIVE PREVIEW]('+url+')**\n\n')
+            f.write('**[OPEN ABOUT / AI ORGANISATION]('+url+'#/about)**\n\n')
+            f.write('Original source; interactive example; non-production, unlisted.\n')
+          PY
+      - name: Verify the published website over HTTPS
+        shell: bash
+        env:
+          PREVIEW_URL: ${{ steps.publish.outputs.url }}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --location --max-time 40 \
+            --dump-header "$RUNNER_TEMP/headers.txt" \
+            --output "$RUNNER_TEMP/live.html" "$PREVIEW_URL"
+          grep -qi '<!doctype html>' "$RUNNER_TEMP/live.html"
+          grep -q 'Change the tools.' "$RUNNER_TEMP/live.html"
+          grep -q 'data-page="organisation"' "$RUNNER_TEMP/live.html"
+          grep -q 'id="executive-roles"' "$RUNNER_TEMP/live.html"
+          grep -q 'Chief of Staff' "$RUNNER_TEMP/live.html"
+          grep -q '#/about' "$RUNNER_TEMP/live.html"
+          printf 'VERIFIED_BLENTERA_V8_URL=%s\n' "$PREVIEW_URL"
+          grep -i -E '^HTTP/|^content-type:' "$RUNNER_TEMP/headers.txt" || true
+          echo "LIVE_BYTES=$(wc -c < "$RUNNER_TEMP/live.html")"
