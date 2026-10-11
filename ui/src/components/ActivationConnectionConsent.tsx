@@ -115,7 +115,8 @@ export function ActivationConnectionConsent({ companyId, principal, runId, versi
         {(preview[field] as string[]).map(statement => <li key={statement}>{statement}</li>)}</ul> : preview[field] as string}</dd>
     </div>)}</dl> : null}
     <p>{t("activation.connectionConsent.boundary")}</p>
-    {reviewed?.existingConnection ? <p>{t("activation.connectionConsent.reuseBoundary")}</p> : null}
+    {reviewed?.existingConnection ? <p>{t(reviewed.existingConnection.needsValidation
+      ? "activation.connectionConsent.retainedBoundary" : "activation.connectionConsent.reuseBoundary")}</p> : null}
     {reviewed?.supersedesConsentId ? <p>{t("activation.connectionConsent.successorBoundary")}</p> : null}
     {failure ? <p role="alert">{failure}</p> : null}
     {saved ? <p role="status">{t(`activation.connectionConsent.status.${samePurpose ? saved.status === "connected" && !setupRecorded ? "needs_validation" : saved.status : "changed"}`)}</p> : null}

@@ -45,9 +45,11 @@ export const activationConnectionReviewSchema = z.strictObject({
     capabilityName: statement,
     providerWriteTools: z.array(statement).max(100),
   }),
-  existingConnection: z.strictObject({ id: z.uuid(), name: z.string().min(1).max(200), setupHash: hash }).nullable(),
+  existingConnection: z.strictObject({ id: z.uuid(), name: z.string().min(1).max(200), setupHash: hash,
+    needsValidation: z.literal(true).optional() }).nullable(),
   reviewHash: hash,
-});
+}).refine(value => !value.existingConnection?.needsValidation || value.supersedesConsentId !== null,
+  { path: ["supersedesConsentId"], message: "Pending validation requires the exact retained purpose" });
 
 /** The original Native owner recomputes every review field under current
  * authority. Neither client-supplied scopes, agent IDs nor organization access

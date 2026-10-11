@@ -10,6 +10,7 @@ import { nativeSha256 } from "../native-runtime/canonical.js";
 import { logActivity, withV7ActivityTransaction } from "../v7-mutations.js";
 import { toolAccessService, activationConnectionMethodSource, type GalleryAppAllocationOwner } from "../tool-access.js";
 import { readDeferredActivationSetup, recordDeferredActivationCompletion } from "./activation-connection-completion.js";
+import { readRetainedActivationConnectionReview } from "./activation-retained-connection-review.js";
 import { assertActivationAccess, lockActivationSnapshot, readActivationOwner } from "./activation-owner.js";
 import { readFirstAgentCapabilityPin } from "./activation-first-agent.js";
 
@@ -62,7 +63,7 @@ async function source(tx: Db, actor: AuthorizationActor, companyId: string, appl
     eq(toolConnections.applicationId, app.id))).orderBy(toolConnections.id).limit(2).for("share");
   if (connections.length > 1) throw conflict("The exact original connection needs review");
   const connection = connections[0];
-  let existingConnection: { id: string; name: string; setupHash: string } | null = null;
+  let existingConnection: { id: string; name: string; setupHash: string; needsValidation?: true } | null = null;
   let existingMethodKey: string | undefined = approvedPurpose?.connectionMethodKey;
   let supersedesConsentId = approvedPurpose?.supersedesConsentId ?? null;
   if (connection) {
@@ -74,7 +75,8 @@ async function source(tx: Db, actor: AuthorizationActor, companyId: string, appl
     if (owned?.status === "withdrawn") supersedesConsentId = owned.id;
     if (!owned || owned.status === "withdrawn" || owned.existingConnectionId) {
       const setup = await readDeferredActivationSetup(tx, { companyId, applicationId: app.id, connectionId: connection.id, subjectUserId: current.userId });
-      if ((!owned || owned.status === "withdrawn") && !setup || typeof connection.config.connectionMethodKey !== "string" || connection.config.sourceTemplateKey !== galleryKey)
+      const retained = owned?.status === "withdrawn" && !setup ? await readRetainedActivationConnectionReview(tx, owned) : null;
+      if (((!owned || owned.status === "withdrawn") && !setup && !retained) || typeof connection.config.connectionMethodKey !== "string" || connection.config.sourceTemplateKey !== galleryKey)
         throw conflict("The existing personal connection needs its original access review and validation");
       const definition = getConnectableAppDefinition(galleryKey), selectedMethod = definition?.methods.find(candidate => candidate.key === connection.config.connectionMethodKey);
       if (!definition || !selectedMethod) throw conflict("The original provider method is unavailable");
@@ -86,8 +88,10 @@ async function source(tx: Db, actor: AuthorizationActor, companyId: string, appl
       // A current unchanged business purpose survives credential expiry. Its
       // original adoption pin stays immutable; only Original finish can append
       // positive proof for a new validated credential version.
+      const needsValidation = owned && owned.status !== "withdrawn" ? !owned.existingSetupValidated : !!retained;
       existingConnection = { id: connection.id, name: connection.name,
-        setupHash: owned && owned.status !== "withdrawn" ? owned.existingSetupHash! : setup!.hash };
+        setupHash: owned && owned.status !== "withdrawn" ? owned.existingSetupHash! : (setup ?? retained)!.hash,
+        ...(needsValidation ? { needsValidation: true as const } : {}) };
       existingMethodKey = connection.config.connectionMethodKey;
     }
   }
@@ -107,7 +111,10 @@ function review(current: Awaited<ReturnType<typeof source>>, method: Method) {
     existingConnection: current.existingConnection,
     providerScopes: method.providerScopes, scopeProfile: method.scopeProfile, grantKind: "user", deferAgentAccess: true,
     preview: {
-      neededNow: [current.existingConnection ? `Reuse the exact validated personal ${method.providerName} connection ${current.existingConnection.name}; resource: ${method.resource}` : `Personal sign-in to ${method.providerName}; resource: ${method.resource}`, ...method.providerScopes],
+      neededNow: [current.existingConnection ? current.existingConnection.needsValidation
+        ? `Review the retained personal ${method.providerName} connection ${current.existingConnection.name}; sign-in and current validation are still required; resource: ${method.resource}`
+        : `Reuse the exact validated personal ${method.providerName} connection ${current.existingConnection.name}; resource: ${method.resource}`
+        : `Personal sign-in to ${method.providerName}; resource: ${method.resource}`, ...method.providerScopes],
       why: current.purpose,
       usedBy: `${current.pin.name}; no Agent receives this connection during setup.`,
       canRead: [`Provider sign-in requests exactly these scopes: ${method.providerScopes.join(", ")}. Access covers the account authorized at the provider.`],
@@ -284,6 +291,7 @@ export function activationConnectionConsentService(db: Db, methods: Methods = to
           requestKey: input.requestKey, requestHash, reviewHash: input.expectedReviewHash,
           supersedesConsentId: current.supersedesConsentId,
           existingConnectionId: current.existingConnection?.id ?? null, existingSetupHash: current.existingConnection?.setupHash ?? null,
+          existingSetupValidated: !current.existingConnection?.needsValidation,
         }).returning();
         await logActivity(tx, { companyId, actorType: "user", actorId: current.userId,
           action: "activation.connection_consent_approved", entityType: "activation_connection_consent", entityId: row!.id,
@@ -295,11 +303,13 @@ export function activationConnectionConsentService(db: Db, methods: Methods = to
             .where(eq(activationConnectionConsents.id, row!.id));
           const [bound] = await tx.update(activationConnectionConsents).set({ status: "allocated", connectionId: current.existingConnection.id })
             .where(eq(activationConnectionConsents.id, row!.id)).returning();
-          await recordDeferredActivationCompletion(tx, bound!);
+          if (!current.existingConnection.needsValidation) await recordDeferredActivationCompletion(tx, bound!);
           const [adopted] = await tx.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.id, row!.id));
-          await logActivity(tx, { companyId, actorType: "user", actorId: current.userId, action: "activation.connection_purpose_adopted",
+          await logActivity(tx, { companyId, actorType: "user", actorId: current.userId,
+            action: current.existingConnection.needsValidation ? "activation.connection_purpose_validation_pending" : "activation.connection_purpose_adopted",
             entityType: "activation_connection_consent", entityId: row!.id,
-            details: { connectionId: current.existingConnection.id, newAllocation: false, deferredAgentAccess: true } }, publications);
+            details: { connectionId: current.existingConnection.id, newAllocation: false, deferredAgentAccess: true,
+              validationPending: !!current.existingConnection.needsValidation } }, publications);
           return publicReceipt(adopted!);
         }
         return publicReceipt(row!);

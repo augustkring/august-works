@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
-import { activationConnectionConsentCommandSchema, activationConnectionConsentReceiptSchema, activationConnectionPermissionPreviewSchema } from "./activation-connection-consent.js";
+import { activationConnectionConsentCommandSchema, activationConnectionConsentReceiptSchema, activationConnectionPermissionPreviewSchema, activationConnectionReviewSchema } from "./activation-connection-consent.js";
 
 describe("Onboarding connection consent boundaries", () => {
   it("requires a separate explicit current review and refuses client authority", () => {
@@ -33,5 +33,19 @@ describe("Onboarding connection consent boundaries", () => {
     const connected = { ...receipt, status: "connected", connectionId: randomUUID(), connectedAt: new Date().toISOString() };
     expect(activationConnectionConsentReceiptSchema.parse(connected)).toEqual(connected);
     expect(activationConnectionConsentReceiptSchema.parse({ ...connected, status: "withdrawn" }).connectedAt).toBe(connected.connectedAt);
+  });
+  it("allows pending retained validation only with an exact predecessor and never a client qualification claim", () => {
+    const id = randomUUID(), preview = { neededNow: ["Personal sign-in required"], why: "Prepare a draft", usedBy: "Draft capability",
+      canRead: ["Provider account"], canChange: ["No AW changes"], notRequested: ["No Agent access"], automatic: ["No execution"], asksFirst: ["Separate review"] };
+    const reviewed = { companyId: id, onboardingRunId: id, onboardingVersion: 1, packageVersionId: id, packageContentHash: "a".repeat(64),
+      applicationId: id, applicationKey: "gmail", applicationName: "Gmail", galleryKey: "gmail", connectionMethodKey: "paperclip-read",
+      methodHash: "b".repeat(64), providerScopes: ["https://www.googleapis.com/auth/gmail.readonly"], scopeProfile: "gmail.read",
+      grantKind: "user", deferAgentAccess: true, preview, supersedesConsentId: id,
+      explanation: { providerName: "Gmail", resource: "https://gmailmcp.googleapis.com/mcp/v1", capabilityName: "Draft capability", providerWriteTools: [] },
+      existingConnection: { id, name: "Retained Gmail", setupHash: "c".repeat(64), needsValidation: true }, reviewHash: "d".repeat(64) };
+    expect(activationConnectionReviewSchema.parse(reviewed)).toEqual(reviewed);
+    expect(activationConnectionReviewSchema.safeParse({ ...reviewed, supersedesConsentId: null }).success).toBe(false);
+    expect(activationConnectionReviewSchema.safeParse({ ...reviewed, existingConnection: { ...reviewed.existingConnection, needsValidation: false } }).success).toBe(false);
+    expect(activationConnectionReviewSchema.safeParse({ ...reviewed, existingConnection: { ...reviewed.existingConnection, validated: true } }).success).toBe(false);
   });
 });

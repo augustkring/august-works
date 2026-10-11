@@ -144,6 +144,25 @@ it("refetches the current successor review after withdrawal and requires a separ
   expect(post.mock.calls[0]![3].expectedReviewHash).toBe(successor.reviewHash);
 });
 
+it("requires separate provider setup after retained-connection C3 without automatically opening or allocating anything", async () => {
+  reads();
+  const connectionId = "70000000-0000-4000-8000-000000000001";
+  const retained = { ...review, supersedesConsentId: receipt("60000000-0000-4000-8000-000000000001").id,
+    existingConnection: { id: connectionId, name: "Saved Gmail", setupHash: "d".repeat(64), needsValidation: true as const } };
+  vi.mocked(activationConnectionApi.review).mockResolvedValue(retained);
+  const post = vi.spyOn(activationConnectionApi, "approve").mockImplementation(async (_c, _u, _k, command) => ({ ...receipt(command.requestKey),
+    status: "allocated", connectionId }));
+  await mount();
+  expect(container.textContent).toContain("Provider sign-in and current validation are still required before continuing");
+  expect(container.textContent).not.toContain("does not create another connection or repeat provider sign-in");
+  expect(flow).not.toHaveBeenCalled(); await approve();
+  await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+  expect(setupChanged).not.toHaveBeenCalled(); expect(flow).not.toHaveBeenCalled();
+  await act(async () => button("activation.connectionConsent.providerSetup").click());
+  expect(flow.mock.calls.at(-1)?.[0].deferredOnboarding).toMatchObject({ connectionId,
+    requestKey: post.mock.calls[0]![3].requestKey, applicationId, methodKey: "paperclip-read" });
+});
+
 it("changes permission explanations to Danish without translating authored purpose or changing the pending C3 command", async () => {
   reads(); const post = vi.spyOn(activationConnectionApi, "approve").mockImplementation(async (_c, _u, _k, command) => receipt(command.requestKey));
   await mount();

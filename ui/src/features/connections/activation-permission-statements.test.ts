@@ -48,3 +48,14 @@ it("keeps unknown provider scopes explicit and distinguishes broad provider send
   expect(preview.canChange.join(" ")).toContain("Opret e-mailkladder (create_draft), unassessed_tool");
   expect(preview.notRequested.join(" ")).toContain("Ingen August Works-tilladelse til at sende beskeder");
 });
+
+it("explains retained metadata without claiming validated setup in both supported languages", () => {
+  for (const locale of [en, da]) {
+    const value = { ...review, supersedesConsentId: id, existingConnection: { id, name: "Retained Gmail", setupHash: "d".repeat(64), needsValidation: true as const } };
+    const preview = activationPermissionStatements(value, translate(locale));
+    expect(preview.neededNow[0]).toBe(translate(locale)("activation.connectionConsent.explanation.retained",
+      { provider: review.explanation.providerName, connection: "Retained Gmail", resource: review.explanation.resource }));
+    expect(preview.why).toBe(review.preview.why);
+    expect(preview.neededNow[1]).toContain(review.providerScopes[0]);
+  }
+});

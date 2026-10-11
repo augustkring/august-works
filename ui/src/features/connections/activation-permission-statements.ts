@@ -24,7 +24,7 @@ export function activationPermissionStatements(review: ActivationConnectionRevie
   const tools = facts.providerWriteTools.map(tool => writeToolNames.has(tool) ? `${text(`tools.${tool}`)} (${tool})` : tool);
   return {
     neededNow: [review.existingConnection
-      ? text("reuse", { provider: facts.providerName, connection: review.existingConnection.name, resource: facts.resource })
+      ? text(review.existingConnection.needsValidation ? "retained" : "reuse", { provider: facts.providerName, connection: review.existingConnection.name, resource: facts.resource })
       : text("personal", { provider: facts.providerName, resource: facts.resource }), ...scopes],
     // The package author's purpose is content, not a translatable UI string.
     why: review.preview.why,

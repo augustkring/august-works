@@ -210,3 +210,72 @@ test("withdrawal refetches the exact successor and requires new C3 without reviv
     expect(approvals).toHaveLength(1); expect(providerSetup).toEqual([]);
   } finally { expect((await request.delete(`/api/companies/${company.id}`)).ok()).toBe(true); }
 });
+
+test("retained login requires fresh C3 and stays blocked until separately observed current validation", async ({ page, request }) => {
+  const company = await json(await request.post("/api/companies", { data: { name: "Disposable retained validation fixture" } }));
+  try {
+    const session = await json(await request.get("/api/auth/get-session"));
+    const id = "10000000-0000-4000-8000-000000000001", connectionId = "20000000-0000-4000-8000-000000000001";
+    const { receipts: _, ...initial } = initialActivationState();
+    const value = activationViewSchema.parse({ runId: id, companyId: company.id, companyName: company.name, version: 3, status: "in_progress",
+      state: { ...initial, step: "access", intent: "Prepare one internal draft", packageVersionId: id },
+      capabilities: [{ versionId: id, name: "Draft agent", purpose: "Prepare an internal draft", requiredConnections: ["gmail"], knownLimitations: [] }],
+      requiredAccess: [{ key: "gmail", status: "needs_review", checkedAt: null }], sources: [], blockers: ["required_access_pending"],
+      firstValue: { status: "not_recorded", result: null, candidates: [], hasMore: false },
+      firstTask: { candidates: [], hasMore: false, current: null, preparationOptions: [] },
+      firstAgent: { status: "not_created", agentId: null, name: null, canPrepare: false } });
+    const review = activationConnectionReviewSchema.parse({ companyId: company.id, onboardingRunId: id, onboardingVersion: 3,
+      packageVersionId: id, packageContentHash: "a".repeat(64), applicationId: id, applicationKey: "gmail", applicationName: "Original Gmail",
+      galleryKey: "gmail", connectionMethodKey: "paperclip-read", methodHash: "b".repeat(64), providerScopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+      explanation: { providerName: "Gmail", resource: "https://gmailmcp.googleapis.com/mcp/v1", capabilityName: "Draft agent", providerWriteTools: [] },
+      supersedesConsentId: id, existingConnection: { id: connectionId, name: "Saved personal Gmail", setupHash: "d".repeat(64), needsValidation: true },
+      scopeProfile: "gmail.read", grantKind: "user", deferAgentAccess: true, reviewHash: "c".repeat(64),
+      preview: { neededNow: ["Review Saved personal Gmail; current sign-in and validation required", "https://www.googleapis.com/auth/gmail.readonly"], why: "Prepare the original draft",
+        usedBy: "Draft agent; no Agent receives access now", canRead: ["The authorized personal account"], canChange: ["No business changes authorized"],
+        notRequested: ["No sending, deletion or spending"], automatic: ["No Agent execution"], asksFirst: ["Agent access needs its own review and Safe Test"] } });
+    let saved: ReturnType<typeof activationConnectionConsentReceiptSchema.parse> | null = null;
+    const withdrawals: string[] = [];
+    const approvals: Record<string, unknown>[] = [], providerSetup: string[] = [];
+    await page.route("**/api/auth/get-session", route => route.fulfill({ json: { ...session, session: { ...session.session, localImplicit: false } } }));
+    await page.route("**/api/saas/capabilities", route => route.fulfill({ json: { activationV9: true, onboarding: true } }));
+    await page.route(`**/api/companies/${company.id}/activation?**`, route => route.fulfill({ json: saved?.status === "connected" ? { ...value,
+      requiredAccess: [{ key: "gmail", status: "recorded", checkedAt: saved.connectedAt }], blockers: [] } : value }));
+    await page.route(`**/api/companies/${company.id}/activation/connections/gmail/review?**`, route => route.fulfill({ json: review }));
+    await page.route(`**/api/companies/${company.id}/activation/connections/gmail/consent?**`, route => {
+      if (route.request().method() === "GET") return route.fulfill({ json: saved });
+      const input = route.request().postDataJSON(); approvals.push(input);
+      expect(input).toEqual({ requestKey: expect.any(String), confirmConnectionAuthorization: true, expectedReviewHash: review.reviewHash });
+      saved = activationConnectionConsentReceiptSchema.parse({ id: "30000000-0000-4000-8000-000000000001", companyId: company.id, onboardingRunId: id, onboardingVersion: 3,
+        packageVersionId: id, applicationId: id, requestKey: input.requestKey, reviewHash: review.reviewHash,
+        status: "allocated", connectionId, connectedAt: null, requestedAt: new Date().toISOString() });
+      return route.fulfill({ json: saved });
+    });
+    page.on("request", req => {
+      if (req.method() !== "POST") return;
+      const path = new URL(req.url()).pathname;
+      if (/\/connect$|\/oauth\/start/.test(path)) providerSetup.push(req.url());
+      if (/\/withdraw$/.test(path)) withdrawals.push(req.url());
+    });
+    await page.goto(`/${company.issuePrefix}/dashboard`); await expect(page.getByRole("main")).toBeVisible();
+    await page.goto("/saas/activation/8");
+    const section = page.getByRole("region", { name: "Connection permissions: Original Gmail (gmail)", exact: true });
+    await expect(section.locator("dt")).toHaveCount(8);
+    await expect(section).toContainText("Provider sign-in and current validation are still required before continuing");
+    await expect(page.getByRole("button", { name: "Continue", exact: true })).toBeDisabled();
+    expect(approvals).toHaveLength(0); expect(providerSetup).toEqual([]);
+    await page.getByRole("button", { name: "Review connection approval", exact: true }).click();
+    await page.getByRole("checkbox").check(); await page.getByRole("button", { name: "Confirm decision", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Continue to provider sign-in", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Continue", exact: true })).toBeDisabled();
+    expect(approvals).toHaveLength(1); expect(providerSetup).toEqual([]);
+    await page.reload();
+    await expect(page.getByRole("button", { name: "Continue to provider sign-in", exact: true })).toBeVisible();
+    await expect(page.getByRole("button", { name: "Continue", exact: true })).toBeDisabled();
+    expect(approvals).toHaveLength(1); expect(withdrawals).toHaveLength(0); expect(providerSetup).toEqual([]);
+    // A separately supplied software response checks parent refresh only.
+    // Actual provider finish and Native proof are tested in the database suite.
+    saved = activationConnectionConsentReceiptSchema.parse({ ...saved, status: "connected", connectedAt: new Date().toISOString() });
+    await page.reload(); await expect(page.getByRole("button", { name: "Continue", exact: true })).toBeEnabled();
+    expect(approvals).toHaveLength(1); expect(providerSetup).toEqual([]);
+  } finally { expect((await request.delete(`/api/companies/${company.id}`)).ok()).toBe(true); }
+});

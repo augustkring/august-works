@@ -62,4 +62,15 @@ describe("Original onboarding connection transport", () => {
     await expect(f.tools.startOAuth(f.connectionId, { asCurrentUser: true })).rejects.toThrow("original connection receipt");
     expect(f.original.startOAuth).toHaveBeenCalledTimes(1);
   });
+  it("continues a retained allocated row through Original sign-in and finish without entering the allocator", async () => {
+    const f = fixture(); f.receipt.status = "allocated"; f.receipt.connectionId = f.connectionId;
+    f.context.connectionId = f.connectionId;
+    await f.tools.startOAuth(f.connectionId, { asCurrentUser: true });
+    await f.tools.finishApp(f.context.companyId, f.connectionId,
+      { enabledCatalogEntryIds: [], askFirstCatalogEntryIds: [], access: { agentIds: [] } });
+    expect(f.original.startOAuth).toHaveBeenCalledWith(f.connectionId, { asCurrentUser: true });
+    expect(f.original.finishApp).toHaveBeenCalledWith(f.context.companyId, f.connectionId,
+      { enabledCatalogEntryIds: [], askFirstCatalogEntryIds: [], access: { agentIds: [] } });
+    expect(f.original.connectApp).not.toHaveBeenCalled(); expect(f.consent.connect).not.toHaveBeenCalled();
+  });
 });

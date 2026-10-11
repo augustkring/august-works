@@ -400,10 +400,12 @@
         "changed": "The reviewed setup changed. Withdraw the earlier purpose approval before reviewing a new one."
       },
       "reuseBoundary": "This decision reuses the exact validated personal connection. It does not create another connection or repeat provider sign-in. Agent access remains unassigned.",
+      "retainedBoundary": "This decision retains the exact personal connection. Provider sign-in and current validation are still required before continuing. It creates no additional connection and grants no Agent access.",
       "successorBoundary": "This is a new purpose decision. The earlier approval stays withdrawn, with its history and provider credentials retained. Review the current purpose before reusing this connection.",
       "explanation": {
         "personal": "Personal sign-in to {{provider}}; resource: {{resource}}",
         "reuse": "Reuse the exact validated personal {{provider}} connection {{connection}}; resource: {{resource}}",
+        "retained": "Review the retained personal {{provider}} connection {{connection}}; sign-in and current validation are still required; resource: {{resource}}",
         "usedBy": "{{capability}}; no Agent receives this connection during setup.",
         "providerAccount": "These provider permissions cover the account authorized at the provider. The identifiers below are the exact requested scopes.",
         "unmappedScope": "Provider scope requiring its own detailed review: {{scope}}",
