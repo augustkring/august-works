@@ -32,6 +32,8 @@ describe("explicit local feedback images", () => {
   it("previews a selected image and releases its Blob URL on removal without any request", async () => {
     const { create, revoke } = urls(), fetch = vi.fn(); vi.stubGlobal("fetch", fetch);
     await render();
+    expect(container!.querySelector<HTMLInputElement>('input[type="file"]')!.hidden).toBe(true);
+    expect(container!.querySelectorAll("button")).toHaveLength(1);
     await select([new File(["owned-png"], "local-private-name.png", { type: "image/png" })]);
     expect(create).toHaveBeenCalledOnce();
     expect(container!.querySelector("img")!.getAttribute("src")).toBe("blob:owned-selected-image");
@@ -56,10 +58,15 @@ describe("explicit local feedback images", () => {
     await act(async () => root!.unmount()); root = null; expect(revoke).toHaveBeenCalledOnce();
   });
   it("disables selection while runtime admission is unavailable or the original request is locked", async () => {
+    const { create } = urls();
     await render({ enabled: false });
     expect(container!.querySelector("button")!.hasAttribute("disabled")).toBe(true);
     expect(container!.querySelector("input")!.hasAttribute("disabled")).toBe(true);
+    await select([new File(["png"], "name.png", { type: "image/png" })]);
+    expect(create).not.toHaveBeenCalled();
     await act(async () => root!.render(<Harness locked />));
     expect(container!.querySelector("button")!.hasAttribute("disabled")).toBe(true);
+    await select([new File(["png"], "name.png", { type: "image/png" })]);
+    expect(create).not.toHaveBeenCalled();
   });
 });

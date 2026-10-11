@@ -35,11 +35,12 @@ export function FeedbackImageSelection({ images, onChange, enabled, locked }: {
   const [error, setError] = useState(false);
   return <section className="space-y-3" aria-label={t("feedback.images.title")}>
     <p className="text-sm text-muted-foreground">{t(enabled ? "feedback.images.notice" : "feedback.imagesUnavailable")}</p>
-    <input ref={input} className="sr-only" type="file" multiple accept="image/png,image/jpeg,image/webp"
+    <input ref={input} hidden tabIndex={-1} type="file" multiple accept="image/png,image/jpeg,image/webp"
       disabled={!enabled || locked || images.length >= 3} aria-label={t("feedback.images.select")}
       onChange={event => {
         const files = Array.from(event.currentTarget.files ?? []);
         event.currentTarget.value = "";
+        if (!enabled || locked) return;
         // Validate the entire selection before creating any local Blob URL.
         if (images.length + files.length > 3 || files.some(file => !types.has(file.type) || file.size < 1 || file.size > MAX_BYTES)) {
           setError(true); return;

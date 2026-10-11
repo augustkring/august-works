@@ -28,8 +28,8 @@ are present: native retention/DSR/legal-hold behavior, protected attachment
 storage/scanning and exact-artifact release evidence remain unqualified. Never
 use `preview` to claim a GA launch. The V9 release coverage gate remains closed.
 
-The existing public policy endpoint returns only fixed contacts, closed attachment
-admission, `owner_decision_required` or `configured_execution_unqualified`, and
+The public policy endpoint returns only fixed contacts, preview attachment
+availability for validation, `owner_decision_required` or `configured_execution_unqualified`, and
 `ga.allowed=false`, with private/no-store caching. It never returns owner identity,
 policy references, retention periods or private parser errors. The supplied
 contacts remain privacy@blentera.com, security@blentera.com and
@@ -106,7 +106,16 @@ accounting acknowledgements are recorded separately. A rejected provider PUT
 acknowledgement remains unknown and never qualifies a second upload or cleanup.
 
 Explicit account and company erasure use their existing workers. No automatic
-feedback-retention purge or retention scheduler is activated. Image HTTP intake
-remains closed while its full native and UI implementation is being qualified.
+feedback-retention purge or retention scheduler is activated. Preview image HTTP
+intake requires configured protected Storage/local scanner, current original
+feedback authority, native hold and abuse admission, actual scanner control and
+bounded multipart processing. Configuration alone never qualifies a scanner or GA.
 The synthetic Unix-socket test daemon validates wire/content ownership; it is
 not evidence of deployed antivirus coverage.
+
+The selected-image HTTP/UI source now passed the scoped qualification: 103
+focused cases, UI typing and all three built-browser cases, including both
+unchanged current-account regressions. Its unchanged backend previously passed
+all 66 Native cases with the original feedback/account/SaaS files. The dated
+feedback-image plan records exact source hashes, earlier failures and fixture
+limits. These checks do not enable automatic retention deletion or GA.

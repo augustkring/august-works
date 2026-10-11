@@ -7,7 +7,7 @@ import {
   customerFeedbackPolicySchema,
 } from "@paperclipai/shared";
 import { assertBoard, hasCompanyAccess } from "./authz.js";
-import { badRequest, conflict, forbidden, unprocessable } from "../errors.js";
+import { badRequest, conflict, forbidden, tooManyRequests, unprocessable } from "../errors.js";
 import { customerFeedbackService } from "../services/customer-feedback.js";
 import { loadFeedbackDataProcessingAdmission } from "../services/feedback-data-processing.js";
 import { configuredFeedbackImageScanner, FEEDBACK_IMAGE_MAX_BYTES } from "../services/feedback-image-intake.js";
@@ -32,9 +32,11 @@ export function customerFeedbackRoutes(
   const retention = customerFeedbackRetentionService(db, options);
   const upload = multer({ storage: multer.memoryStorage(),
     limits: { fileSize: FEEDBACK_IMAGE_MAX_BYTES, files: 1, fields: 0, parts: 1, headerPairs: 100 } });
-  // Attachment intake stays closed until native retention/hold/DSR ownership
-  // is integrated and qualified. A scanner/configuration flag alone cannot
-  // promote the existing public policy's literal disabled state.
+  // HOUSE per-process bound includes scanner, multipart buffers and decoder
+  // work. Native per-principal budgets remain shared across server processes.
+  let activeImageUploads = 0;
+  // Preview intake still requires current native authority, the original
+  // abuse budget and actual local scanner admission before parsing any bytes.
   function images() {
     if (!imageService) throw unprocessable("Protected feedback image storage is unavailable");
     return imageService;
@@ -76,6 +78,19 @@ export function customerFeedbackRoutes(
   });
   const imageId = (req: Request) => z.uuid().toLowerCase().parse(req.params.imageId);
   const imagePath = "/companies/:companyId/customer-feedback/:feedbackId/images";
+  const internalImagePath = "/internal/customer-feedback/:companyId/:feedbackId/images";
+  router.get(internalImagePath, async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store"); identity(req);
+    res.json(await images().internalList(req.actor, z.uuid().toLowerCase().parse(req.params.companyId), feedbackId(req)));
+  });
+  router.get(`${internalImagePath}/:imageId`, async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store"); identity(req);
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
+    const result = await images().internalRead(req.actor, z.uuid().toLowerCase().parse(req.params.companyId), feedbackId(req), imageId(req));
+    res.setHeader("Content-Disposition", "inline; filename=\"image\"");
+    res.type(result.mediaType).send(result.body);
+  });
   router.get(imagePath, async (req, res) => {
     res.setHeader("Cache-Control", "private, no-store");
     res.json(await images().list(req.actor, context(req), feedbackId(req)));
@@ -87,10 +102,35 @@ export function customerFeedbackRoutes(
   router.post(imagePath, async (req, res) => {
     res.setHeader("Cache-Control", "private, no-store");
     const companyId = context(req), id = feedbackId(req);
-    await images().preflight(req.actor, companyId, id);
-    // Existing policy is closed while the native data-processing owners are
-    // still under construction. No selected bytes are read or scanned here.
-    throw unprocessable("Feedback images require qualified native data processing", { code: "FEEDBACK_IMAGES_UNAVAILABLE" });
+    if (!scanner) {
+      await images().preflight(req.actor, companyId, id);
+      throw unprocessable("Feedback image scanning is unavailable", { code: "FEEDBACK_IMAGES_UNAVAILABLE" });
+    }
+    if (!req.is("multipart/form-data")) throw badRequest("Choose one image file");
+    const requestKey = z.uuid().toLowerCase().parse(req.header("X-AW-Feedback-Request-Key"));
+    if (activeImageUploads >= 4) throw tooManyRequests("Image processing is busy. Try again later.");
+    activeImageUploads++;
+    try {
+      const admission = await images().admitUpload(req.actor, companyId, id, requestKey);
+      await new Promise<void>((resolve, reject) => {
+        let done = false;
+        const finish = (error?: unknown) => {
+          if (done) return; done = true;
+          clearTimeout(timer); req.removeListener("aborted", aborted);
+          if (error) reject(error); else resolve();
+        };
+        const aborted = () => finish(badRequest("Image input was interrupted"));
+        const timer = setTimeout(() => {
+          finish(badRequest("Image input timed out")); req.destroy();
+        }, 30_000);
+        req.once("aborted", aborted);
+        upload.single("file")(req, res, error => finish(error
+          ? unprocessable("Choose one PNG, JPEG or WebP image of at most 10 MiB") : undefined));
+      });
+      if (!req.file) throw badRequest("Choose one image file");
+      res.status(201).json(await images().upload(req.actor, companyId, id, requestKey,
+        req.file.buffer, req.file.mimetype, admission));
+    } finally { activeImageUploads--; }
   });
   router.get(`${imagePath}/:imageId`, async (req, res) => {
     res.setHeader("Cache-Control", "private, no-store");
@@ -110,8 +150,8 @@ export function customerFeedbackRoutes(
       customerFeedbackPolicySchema.parse({
         contacts: FEEDBACK_CONTACTS,
         attachments: {
-          enabled: false,
-          reason: "scanner_qualification_required",
+          enabled: !!imageService && !!scanner,
+          reason: imageService && scanner ? "validation_required" : "scanner_qualification_required",
           types: ["image/png", "image/jpeg", "image/webp"],
           maxFiles: 3,
           maxBytes: 10485760,

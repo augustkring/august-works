@@ -8,7 +8,9 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { i18n } from "../i18n";
 import { customerFeedbackApi } from "../api/customer-feedback";
-import { ApiError } from "../api/client";
+import { api, ApiError } from "../api/client";
+import { FEEDBACK_CONTACTS } from "@paperclipai/shared";
+import { feedbackImagesApi } from "../api/feedback-images";
 import { CustomerFeedbackDialog } from "./CustomerFeedbackDialog";
 const identityState = vi.hoisted(() => ({ principal: "feedback-member" }));
 vi.mock("../hooks/useV9FeatureEnabled", () => ({
@@ -34,6 +36,7 @@ afterEach(async () => {
   container?.remove();
   client?.clear();
   vi.restoreAllMocks();
+  vi.unstubAllGlobals();
   identityState.principal = "feedback-member";
   await i18n.changeLanguage("en");
 });
@@ -95,6 +98,17 @@ const accepted = {
   messages: [],
 };
 describe("feedback consent and canonical receipt", () => {
+  it("opens by Enter without carrying its default action to the category select", async () => {
+    await mount();
+    await click("Cancel");
+    const trigger = [...document.querySelectorAll("button")].find(button => button.textContent === "Feedback")!;
+    trigger.focus();
+    const event = new KeyboardEvent("keydown", { key: "Enter", bubbles: true, cancelable: true });
+    await act(async () => trigger.dispatchEvent(event));
+    expect(event.defaultPrevented).toBe(true);
+    expect(document.querySelectorAll('[role="dialog"]')).toHaveLength(1);
+    expect(document.activeElement).toBe(document.querySelector("select"));
+  });
   it("starts diagnostics/name exclusion off and links to the user-confirmed distinct contact purposes", async () => {
     await mount();
     expect(document.activeElement?.tagName).toBe("SELECT");
@@ -316,4 +330,65 @@ it("blocks a same-turn submit before React observes the session fetch", async ()
   expect(post).not.toHaveBeenCalled();
   await act(async () => { resolve(v9SessionFixture(identityState.principal));await pending; });
   await vi.waitFor(() => expect(document.querySelector("textarea")?.value).toBe(accepted.body));
+});
+
+function selectedImagePolicy() {
+  const image = { id: "30000000-0000-4000-8000-000000000001", companyId: accepted.companyId, feedbackId: accepted.id,
+    status: "storing", mediaType: "image/png", byteSize: 3, createdAt: accepted.createdAt, deletedAt: null };
+  vi.spyOn(api, "get").mockImplementation(async path => path === "/customer-feedback/policy" ? {
+    contacts: FEEDBACK_CONTACTS, attachments: { enabled: true, reason: "validation_required", types: ["image/png", "image/jpeg", "image/webp"], maxFiles: 3, maxBytes: 10485760 },
+    retention: { status: "owner_decision_required" }, ga: { allowed: false, reason: "data_processing_qualification_required" },
+  } : [image]);
+  const create = vi.fn(() => "blob:owned-selected-input"), revoke = vi.fn();
+  vi.stubGlobal("URL", class extends URL { static createObjectURL = create; static revokeObjectURL = revoke; });
+  return { image, create, revoke };
+}
+async function selectImage() {
+  await vi.waitFor(() => expect(document.querySelector<HTMLInputElement>('input[type="file"]')?.disabled).toBe(false));
+  const input = document.querySelector<HTMLInputElement>('input[type="file"]')!;
+  Object.defineProperty(input, "files", { value: [new File(["png"], "private-local-image-name.png", { type: "image/png" })], configurable: true });
+  await act(async () => input.dispatchEvent(new Event("change", { bubbles: true })));
+}
+it("sends explicitly selected images only after the canonical feedback receipt and preserves the original send on a double click", async () => {
+  const { image } = selectedImagePolicy(); let finish!: (value: typeof accepted) => void;
+  const post = vi.spyOn(customerFeedbackApi, "create").mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  const upload = vi.spyOn(feedbackImagesApi, "upload").mockResolvedValue({ ...image, status: "ready", mediaType: "image/png" });
+  await mount(); await enter(accepted.body); await selectImage();
+  expect(document.body.textContent).toContain("private-local-image-name.png"); expect(document.querySelector("img")?.getAttribute("src")).toBe("blob:owned-selected-input");
+  expect(upload).not.toHaveBeenCalled();
+  await act(async () => {
+    const send = [...document.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Send feedback")!;
+    send.click(); send.click();
+  });
+  expect(post).toHaveBeenCalledOnce(); expect(upload).not.toHaveBeenCalled();
+  expect(JSON.stringify(post.mock.calls[0]![2])).not.toContain("private-local-image-name");
+  await act(async () => finish(accepted));
+  await vi.waitFor(() => expect(upload).toHaveBeenCalledOnce());
+  expect(upload.mock.calls[0]!.slice(0, 3)).toEqual([accepted.companyId, identityState.principal, accepted.id]);
+  expect(upload.mock.calls[0]![4]).toBeInstanceOf(File);
+  await vi.waitFor(() => expect(document.body.textContent).toContain(accepted.feedbackId));
+});
+it("keeps a received case after an unknown image reply and checks its status without repeating the upload", async () => {
+  selectedImagePolicy(); const post = vi.spyOn(customerFeedbackApi, "create").mockResolvedValue(accepted);
+  const upload = vi.spyOn(feedbackImagesApi, "upload").mockRejectedValue(Error("PRIVATE-PROVIDER-CANARY"));
+  await mount(); await enter(accepted.body); await selectImage(); await click("Send feedback");
+  await vi.waitFor(() => expect(document.body.textContent).toContain("Some selected images could not be confirmed"));
+  expect(document.body.textContent).toContain(accepted.feedbackId); expect(document.body.textContent).not.toContain("PRIVATE-PROVIDER-CANARY");
+  await vi.waitFor(() => expect([...document.querySelectorAll("button")].some(button => button.textContent === "Check image status")).toBe(true));
+  await click("Check image status");
+  await vi.waitFor(() => expect(document.body.textContent).toContain("not yet confirmed"));
+  expect(post).toHaveBeenCalledOnce(); expect(upload).toHaveBeenCalledOnce();
+});
+it("keeps one focused canonical receipt status while protected image metadata is still loading", async () => {
+  selectedImagePolicy(); const get = vi.mocked(api.get); let finish!: (value: unknown[]) => void;
+  const policy = await get("/customer-feedback/policy");
+  get.mockImplementation(path => path === "/customer-feedback/policy" ? Promise.resolve(policy) : new Promise(resolve => { finish = resolve; }));
+  vi.spyOn(customerFeedbackApi, "create").mockResolvedValue(accepted);
+  await mount(); await enter(accepted.body); await click("Send feedback");
+  await vi.waitFor(() => expect(finish).toBeDefined());
+  expect(document.querySelectorAll('[role="dialog"] [role="status"]')).toHaveLength(1);
+  expect(document.querySelector('[role="dialog"] [role="status"]')?.textContent).toContain(accepted.feedbackId);
+  expect(document.activeElement).toBe(document.querySelector('[role="dialog"] [role="status"]'));
+  expect(document.querySelector('[aria-busy="true"]')).not.toBeNull();
+  await act(async () => finish([]));
 });

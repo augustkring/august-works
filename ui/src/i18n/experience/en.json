@@ -146,7 +146,14 @@
       "invalid": "Choose at most three PNG, JPEG or WebP images of at most 10 MiB each.",
       "preview": "Selected image {{number}}",
       "removeNumber": "Remove selected image {{number}}",
-      "remove": "Remove image"
+      "remove": "Remove image",
+      "stored": "Attached image",
+      "storedPreview": "Attached feedback image",
+      "view": "View image",
+      "readFailed": "The image could not be loaded. Check your access and try again.",
+      "unconfirmed": "This image is not yet confirmed. Check its current status.",
+      "check": "Check image status",
+      "submissionUnconfirmed": "Feedback received. Some selected images could not be confirmed. Check their current status below or in My feedback."
     },
     "retentionTitle": "Retention exceptions",
     "retentionPolicy": "House defaults: feedback and replies 90 days after closure, images 30 days after upload, open cases 12 months. An active legal or incident hold blocks deletion. Automatic retention deletion is not enabled.",

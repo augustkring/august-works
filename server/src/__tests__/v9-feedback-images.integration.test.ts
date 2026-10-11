@@ -13,6 +13,7 @@ import { companies, companyMemberships, authUsers, createDb, closeRegisteredClie
   customerFeedbackImages, feedbackImageDeletions, customerFeedbackRetention, customerFeedbackRetentionChanges,
   customerFeedbackAccess, authAccounts, accountDeletionOperations, activityLog, authRateLimits, companyDeletionOperations } from "@paperclipai/db";
 import { customerFeedbackService } from "../services/customer-feedback.js";
+import { companyService } from "../services/companies.js";
 import { customerFeedbackImageService, processFeedbackImageDeletion } from "../services/customer-feedback-images.js";
 import { configuredFeedbackImageScanner } from "../services/feedback-image-intake.js";
 import { createStorageService } from "../storage/service.js";
@@ -412,5 +413,155 @@ describe("native selected feedback images with owned scanner-wire and filesystem
     await request(application).post(base).attach("file", await bytes(), "not-persisted-private-name.png").expect(422);
     expect(await rows()).toHaveLength(1);
     expect((await request(application).get("/api/customer-feedback/policy")).body.attachments.enabled).toBe(false);
+  });
+  function imageApplication(principal = userId, scan = true, selectedStorage = storage) {
+    const application = express(); application.use(express.json());
+    application.use((req, _res, next) => { req.actor = actor(principal); next(); });
+    application.use("/api", customerFeedbackRoutes(db, { storage: selectedStorage, operatorUserIds: [otherUser], runtimeEnv: scan ? {
+      AW_FEEDBACK_CLAMD_SOCKET: join(directory, "scanner.sock"), AW_FEEDBACK_CLAMD_UID: String(process.getuid?.()),
+    } : {} })); application.use(errorHandler); return application;
+  }
+  const imageBase = () => `/api/companies/${companyId}/customer-feedback/${feedbackId}/images`;
+  it("accepts one explicitly selected HTTP image through native pre-body admission and charges the original budget once", async () => {
+    const application = imageApplication(), key = randomUUID(), body = await bytes();
+    const policy = await request(application).get("/api/customer-feedback/policy").expect(200);
+    expect(policy.body.attachments).toMatchObject({ enabled: true, reason: "validation_required", maxFiles: 3, maxBytes: 10485760 });
+    expect(policy.body.ga.allowed).toBe(false);
+    const response = await request(application).post(imageBase()).set("X-AW-Feedback-Request-Key", key)
+      .attach("file", body, "private-local-name-never-persist.png").expect(201);
+    expect(response.body).toMatchObject({ status: "ready", companyId, feedbackId });
+    const [row] = await rows(); expect(row!.objectKey).not.toContain("private-local-name");
+    const digest = (value: string) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+    const budgetKey = `customer-feedback:${digest(userId)}:${digest(companyId)}`;
+    const [budget] = await db.select().from(authRateLimits).where(eq(authRateLimits.key, budgetKey));
+    expect(budget!.count).toBe(2); // Original feedback creation plus one HTTP byte intake.
+    const result = await request(application).get(imageBase() + "/" + response.body.id).expect(200);
+    expect(result.headers["cache-control"]).toBe("private, no-store");
+    expect(result.headers["x-content-type-options"]).toBe("nosniff");
+    expect((await sharp(result.body).metadata()).format).toBe("png");
+    const replay = await request(application).post(imageBase()).set("X-AW-Feedback-Request-Key", key)
+      .attach("file", body, "another-local-name.png").expect(201);
+    expect(replay.body).toEqual(response.body); expect(await rows()).toHaveLength(1);
+  });
+  it("refuses exhausted native budget and a failed actual scanner control before parsing an invalid multipart body", async () => {
+    const digest = (value: string) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+    const budgetKey = `customer-feedback:${digest(userId)}:${digest(companyId)}`;
+    await db.update(authRateLimits).set({ count: 20 }).where(eq(authRateLimits.key, budgetKey));
+    await request(imageApplication()).post(imageBase()).set("X-AW-Feedback-Request-Key", randomUUID())
+      .set("Content-Type", "multipart/form-data; boundary=owned-invalid-envelope").send("invalid-envelope").expect(429);
+    expect(scanned).toEqual([]); expect(await rows()).toEqual([]);
+    await db.update(authRateLimits).set({ count: 1 }).where(eq(authRateLimits.key, budgetKey)); alwaysClean = true;
+    await request(imageApplication()).post(imageBase()).set("X-AW-Feedback-Request-Key", randomUUID())
+      .set("Content-Type", "multipart/form-data; boundary=owned-invalid-envelope").send("invalid-envelope").expect(422);
+    expect(scanned.length).toBeGreaterThan(0); expect(await rows()).toEqual([]);
+  });
+  it("bounds the HTTP envelope, refuses extra files and fields, and validates actual image content", async () => {
+    const application = imageApplication(), body = await bytes();
+    await request(application).post(imageBase()).set("X-AW-Feedback-Request-Key", randomUUID())
+      .attach("file", body, "one.png").attach("file", body, "two.png").expect(422);
+    await request(application).post(imageBase()).set("X-AW-Feedback-Request-Key", randomUUID())
+      .field("private-extra-field", "not-accepted").attach("file", body, "one.png").expect(422);
+    await request(application).post(imageBase()).set("X-AW-Feedback-Request-Key", randomUUID())
+      .attach("file", Buffer.alloc(10485761), "too-large.png").expect(422);
+    expect(await rows()).toEqual([]);
+    await request(application).post(imageBase()).set("X-AW-Feedback-Request-Key", randomUUID())
+      .attach("file", Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"/>'), "mislabelled.png").expect(422);
+    const [failed] = await rows(); expect(failed).toMatchObject({ status: "failed", objectKey: null });
+  });
+  it("keeps HTTP ingress admission server-local, scoped to the original principal and single-use", async () => {
+    const body = await bytes(), key = randomUUID();
+    await expect(service.upload(actor(), companyId, feedbackId, key, body, "image/png", { admitted: true })).rejects.toMatchObject({ status: 409 });
+    expect(await rows()).toEqual([]);
+    const admission = await service.admitUpload(actor(), companyId, feedbackId, key);
+    const image = await service.upload(actor(), companyId, feedbackId, key, body, "image/png", admission);
+    expect(image.status).toBe("ready");
+    await expect(service.upload(actor(), companyId, feedbackId, key, body, "image/png", admission)).rejects.toMatchObject({ status: 409 });
+    expect(await rows()).toHaveLength(1);
+  });
+  it("uses separate current internal operator authority for protected image views and rechecks it after object I/O", async () => {
+    const image = await upload();
+    await request(imageApplication(otherUser)).get(imageBase() + "/" + image.id).expect(404);
+    const internal = `/api/internal/customer-feedback/${companyId}/${feedbackId}/images`;
+    await request(imageApplication(userId)).get(internal).expect(403);
+    const listed = await request(imageApplication(otherUser)).get(internal).expect(200);
+    expect(listed.body).toEqual([image]);
+    const read = await request(imageApplication(otherUser)).get(internal + "/" + image.id).expect(200);
+    expect(read.headers["cache-control"]).toBe("private, no-store");
+    expect(read.headers["x-content-type-options"]).toBe("nosniff");
+    const changed = { ...storage, async getObject(company: string, key: string) {
+      const object = await storage.getObject(company, key);
+      await db.update(authUsers).set({ emailVerified: false }).where(eq(authUsers.id, otherUser));
+      return object;
+    } };
+    const owner = customerFeedbackImageService(db, changed, { scanner, operatorUserIds: [otherUser] });
+    await expect(owner.internalRead(actor(otherUser), companyId, feedbackId, image.id)).rejects.toMatchObject({ status: 403 });
+  });
+  it("retains an explicit removal receipt when account authority changes after actual provider deletion", async () => {
+    const image = await upload(), [row] = await rows();
+    const changed = { ...storage, async deleteObject(company: string, key: string) {
+      await storage.deleteObject(company, key);
+      await db.update(companyMemberships).set({ status: "inactive" }).where(and(
+        eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalId, userId)));
+    } };
+    const owner = customerFeedbackImageService(db, changed, { scanner });
+    await expect(owner.remove(actor(), companyId, feedbackId, image.id)).rejects.toMatchObject({ status: 403 });
+    expect((await rows())[0]).toMatchObject({ status: "deleting", deletedAt: null });
+    const [pending] = await db.select().from(feedbackImageDeletions).where(eq(feedbackImageDeletions.imageId, image.id));
+    expect(pending).toMatchObject({ companyId, objectKey: row!.objectKey, transportSettledAt: expect.any(Date), deletedAt: null });
+    expect(await storage.headObject(companyId, row!.objectKey!)).toEqual({ exists: false });
+    expect(await processFeedbackImageDeletion(db, storage, undefined, companyId)).toBe(true);
+    expect((await rows())[0]).toMatchObject({ status: "deleted", deletedAt: expect.any(Date) });
+  });
+  it("bounds concurrent HTTP scanner/buffer/storage work and admits new input after the original transports settle", async () => {
+    const ids = [feedbackId];
+    for (let index = 0; index < 3; index++) ids.push((await customerFeedbackService(db).create(actor(), companyId, {
+      idempotencyKey: randomUUID(), category: "BUG", body: "Owned concurrent image case", omitName: true,
+      context: { surfaceKey: "home", locale: "en", timezone: "UTC", viewportClass: "wide" },
+    })).id);
+    let enter!: () => void, release!: () => void, writes = 0;
+    const entered = new Promise<void>(resolve => { enter = resolve; }), gate = new Promise<void>(resolve => { release = resolve; });
+    const provider = createLocalDiskStorageProvider(join(directory, "objects"));
+    const bounded = createStorageService({ ...provider, async putObject(input) {
+      writes++; if (writes === 4) enter(); await gate; await provider.putObject(input);
+    } });
+    const application = imageApplication(userId, true, bounded), body = await bytes();
+    const pending = ids.map(id => request(application).post(`/api/companies/${companyId}/customer-feedback/${id}/images`)
+      .set("X-AW-Feedback-Request-Key", randomUUID()).attach("file", body, "owned.png")
+      .then(value => ({ value }), error => ({ error })));
+    try {
+      await Promise.race([entered, ...pending.map(async result => {
+        await result; throw Error("An owned HTTP request settled before all four original PUTs were in flight");
+      })]);
+      const count = scanned.length;
+      await request(application).post(imageBase()).set("X-AW-Feedback-Request-Key", randomUUID())
+        .set("Content-Type", "multipart/form-data; boundary=owned-invalid-envelope").send("invalid-envelope").expect(429);
+      expect(scanned).toHaveLength(count); expect(writes).toBe(4);
+      release();
+      for (const result of await Promise.all(pending)) expect(result).toMatchObject({ value: { status: 201, body: { status: "ready" } } });
+      await request(application).post(imageBase()).set("X-AW-Feedback-Request-Key", randomUUID()).attach("file", body, "next.png").expect(201);
+      expect(writes).toBe(5);
+    } finally { release(); await Promise.all(pending); }
+  });
+  it("refuses a same-company foreign-case object key under the actual native reservation fence", async () => {
+    const [row] = await db.insert(customerFeedbackImages).values({ companyId, feedbackId, requestKey: randomUUID(),
+      requestHash: "a".repeat(64), mediaType: "image/png", leaseToken: randomUUID(), leaseExpiresAt: sql`clock_timestamp()+interval '120 seconds'`,
+    }).returning();
+    await expect(db.update(customerFeedbackImages).set({ status: "storing", objectKey: `${companyId}/feedback-images/${randomUUID()}/${row!.id}/owned.png`,
+      byteSize: 3, sha256: "a".repeat(64), scannerToken: "b".repeat(64), scanCheckedAt: new Date(),
+    }).where(eq(customerFeedbackImages.id, row!.id))).rejects.toMatchObject({ cause: { code: "23514", message: "Protected image path requires its exact original owner" } });
+    expect((await rows())[0]).toMatchObject({ status: "scanning", objectKey: null });
+  });
+  it("blocks legacy local company completion until the original protected objects and erasure receipts are confirmed", async () => {
+    const image = await upload(), [row] = await rows(), local = companyService(db);
+    await expect(local.remove(companyId)).rejects.toMatchObject({ status: 409 });
+    expect(await db.select().from(companies).where(eq(companies.id, companyId))).toHaveLength(1);
+    expect(await db.select().from(customerFeedback).where(eq(customerFeedback.id, feedbackId))).toHaveLength(1);
+    expect((await storage.headObject(companyId, row!.objectKey!)).exists).toBe(true);
+    expect(await service.remove(actor(), companyId, feedbackId, image.id)).toMatchObject({ status: "deleted" });
+    expect(await local.remove(companyId)).toMatchObject({ id: companyId });
+    expect(await db.select().from(companies).where(eq(companies.id, companyId))).toEqual([]);
+    expect(await storage.headObject(companyId, row!.objectKey!)).toEqual({ exists: false });
+    expect(await db.select().from(feedbackImageDeletions).where(eq(feedbackImageDeletions.companyId, companyId)))
+      .toEqual([expect.objectContaining({ deletedAt: expect.any(Date) })]);
   });
 });

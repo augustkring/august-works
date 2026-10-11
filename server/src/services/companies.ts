@@ -34,9 +34,12 @@ import {
   routineRevisions,
   routines,
   customerFeedback,
+  customerFeedbackImages,
+  feedbackImageDeletions,
+  customerFeedbackRetention,
   saasNotifications,
 } from "@paperclipai/db";
-import { notFound, unprocessable } from "../errors.js";
+import { conflict, notFound, unprocessable } from "../errors.js";
 import { isCloudManagedInstance } from "./cloud-instance.js";
 import { notifyCloudOfPrimaryCompanyLifecycleChange } from "./cloud-lifecycle-sync.js";
 import {
@@ -539,6 +542,24 @@ export function companyService(db: Db) {
 
     remove: (id: string) =>
       db.transaction(async (tx) => {
+        // The legacy local remove has no durable provider-erasure owner.
+        // Preserve its original semantics only after protected images have
+        // settled; it cannot report completion while leaving their objects.
+        await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, id)).for("update");
+        const holds = await tx.select({ id: customerFeedbackRetention.id }).from(customerFeedbackRetention).where(and(
+          eq(customerFeedbackRetention.companyId, id), eq(customerFeedbackRetention.legalHold, true),
+          sql`(${customerFeedbackRetention.holdReleaseAt} is null or ${customerFeedbackRetention.holdReleaseAt}>clock_timestamp())`,
+        )).limit(1);
+        if (holds.length) throw conflict("Company removal requires release of current feedback retention holds");
+        const pendingImages = await tx.select({ id: customerFeedbackImages.id }).from(customerFeedbackImages).where(and(
+          eq(customerFeedbackImages.companyId, id), sql`${customerFeedbackImages.objectKey} is not null`,
+          sql`${customerFeedbackImages.status}<>'deleted'`,
+        )).limit(1);
+        const pendingReceipts = await tx.select({ id: feedbackImageDeletions.id }).from(feedbackImageDeletions).where(and(
+          eq(feedbackImageDeletions.companyId, id), isNull(feedbackImageDeletions.deletedAt),
+        )).limit(1);
+        if (pendingImages.length || pendingReceipts.length)
+          throw conflict("Company removal requires confirmed protected-image erasure");
         // Delete from child tables in dependency order
         // The original feedback root owns its private access and event rows
         // through tenant-bound cascade FKs. Erase it before its company.

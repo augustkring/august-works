@@ -18,6 +18,7 @@ import {
   customerFeedbackApi,
   isRejectedFeedbackRequest,
 } from "../api/customer-feedback";
+import { FeedbackImages } from "../components/FeedbackImages";
 import { Button } from "../components/ui/button";
 import { Textarea } from "../components/ui/textarea";
 import type { CustomerFeedback } from "@paperclipai/shared";
@@ -298,6 +299,9 @@ export function MyFeedback() {
           {current.goal && (
             <p className="whitespace-pre-wrap break-words">{current.goal}</p>
           )}
+          {principal && <FeedbackImages key={`${scope}:${current.id}:${authority.epoch}:${epoch}`}
+            companyId={selectedCompanyId} principal={principal} feedbackId={current.id}
+            authority={authority} active={!!current} readEpoch={epoch} />}
           {current.messages.map((message) => (
             <div
               key={message.id}

@@ -111,7 +111,17 @@ BEGIN
   END IF;
   PERFORM id FROM customer_feedback WHERE company_id=NEW.company_id AND id=NEW.feedback_id FOR UPDATE;
   IF NOT FOUND THEN RAISE EXCEPTION 'Original feedback owner is unavailable' USING ERRCODE='23514'; END IF;
+  IF TG_OP='INSERT' AND (NEW.status<>'scanning' OR NEW.object_key IS NOT NULL OR NEW.transport_settled_at IS NOT NULL) THEN
+    RAISE EXCEPTION 'Image allocation requires its original native reservation' USING ERRCODE='23514';
+  END IF;
+  IF NEW.object_key IS NOT NULL AND strpos(NEW.object_key,
+      NEW.company_id::text || '/feedback-images/' || NEW.feedback_id::text || '/' || NEW.id::text || '/')<>1 THEN
+    RAISE EXCEPTION 'Protected image path requires its exact original owner' USING ERRCODE='23514';
+  END IF;
   IF TG_OP='UPDATE' THEN
+    IF OLD.object_key IS NULL AND NEW.object_key IS NOT NULL AND (OLD.status<>'scanning' OR NEW.status<>'storing') THEN
+      RAISE EXCEPTION 'Image allocation requires its original native reservation' USING ERRCODE='23514';
+    END IF;
     IF (NEW.id,NEW.company_id,NEW.feedback_id,NEW.request_key,NEW.request_hash,NEW.media_type,NEW.created_at)
       IS DISTINCT FROM (OLD.id,OLD.company_id,OLD.feedback_id,OLD.request_key,OLD.request_hash,OLD.media_type,OLD.created_at) THEN
       RAISE EXCEPTION 'Feedback image ownership and request are immutable' USING ERRCODE='23514';

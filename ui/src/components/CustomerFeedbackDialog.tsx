@@ -5,6 +5,7 @@ import { useTranslation } from "react-i18next";
 import {
   FEEDBACK_CONTACTS,
   feedbackCategorySchema,
+  customerFeedbackPolicySchema,
   type CreateCustomerFeedback,
 } from "@paperclipai/shared";
 import { useLocation, Link } from "../lib/router";
@@ -15,6 +16,11 @@ import {
 import { useCompany } from "../context/CompanyContext";
 import { hasCurrentV9Session, useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
 import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
+import { useV9PrivateReadAuthority } from "../hooks/useV9PrivateReadAuthority";
+import { api } from "../api/client";
+import { feedbackImagesApi } from "../api/feedback-images";
+import { FeedbackImageSelection, useSelectedFeedbackImages, type SelectedFeedbackImage } from "./FeedbackImageSelection";
+import { FeedbackImages } from "./FeedbackImages";
 import {
   feedbackClientEnvironment,
   feedbackPageContext,
@@ -48,6 +54,10 @@ function FeedbackForm({
   const { t, i18n } = useTranslation("experience"),
     location = useLocation();
   const client = useQueryClient();
+  const privateAuthority = useV9PrivateReadAuthority(principal, allowLocalImplicit);
+  const selectedImages = useSelectedFeedbackImages();
+  const imageAttempt = useRef<readonly SelectedFeedbackImage[] | null>(null);
+  const sending = useRef(false);
   const current = useRef({ ready: accountReady, authorityEpoch, epoch: 0 });
   if (current.current.ready !== accountReady || current.current.authorityEpoch !== authorityEpoch)
     current.current = { ready: accountReady, authorityEpoch, epoch: current.current.epoch + 1 };
@@ -69,6 +79,19 @@ function FeedbackForm({
     CreateCustomerFeedback["context"] | null
   >(null);
   const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
+  const imagePolicy = useQuery({
+    queryKey: ["customer-feedback-image-policy", companyId, principal, authorityEpoch],
+    enabled: open && accountReady, retry: false, staleTime: 0, gcTime: 0,
+    queryFn: async ({ signal }) => customerFeedbackPolicySchema.parse(
+      await api.get("/customer-feedback/policy", { signal, cache: "no-store" })),
+  });
+  const imagesEnabled = imagePolicy.isSuccess && !imagePolicy.isFetching && imagePolicy.data.attachments.enabled;
+  useEffect(() => {
+    // Binary drafts stay in this account/form only. Rechecking authority drops
+    // local previews; it never retries an image upload after session recovery.
+    selectedImages.change([]);
+    imageAttempt.current = null;
+  }, [authorityEpoch]);
   const attempted = useRef<CreateCustomerFeedback | null>(null);
   const trigger = useRef<HTMLButtonElement>(null),
     categoryInput = useRef<HTMLSelectElement>(null),
@@ -81,16 +104,35 @@ function FeedbackForm({
     mutationFn: async (input: CreateCustomerFeedback) => {
       if (!canUseContext()) throw new Error("Feedback context is unavailable");
       const epoch = current.current.epoch;
+      const chosen = imageAttempt.current ?? [];
       const receipt = await customerFeedbackApi.create(companyId, principal, input);
-      return { receipt, epoch };
+      let attachmentsUnconfirmed = false;
+      for (const image of chosen) {
+        if (!canUseContext() || current.current.epoch !== epoch) {
+          attachmentsUnconfirmed = true;
+          break;
+        }
+        try {
+          const value = await feedbackImagesApi.upload(companyId, principal, receipt.id, image.requestKey, image.file);
+          if (value.status !== "ready" || !canUseContext() || current.current.epoch !== epoch)
+            attachmentsUnconfirmed = true;
+        } catch {
+          // Feedback already has its canonical receipt. An uncertain image
+          // reply cannot resend that case or automatically repeat the PUT.
+          attachmentsUnconfirmed = true;
+        }
+      }
+      return { receipt, epoch, attachmentsUnconfirmed };
     },
     retry: false,
     onError: (error) => {
       if (isRejectedFeedbackRequest(error)) {
         attempted.current = null;
+        imageAttempt.current = null;
         setRequestKey(crypto.randomUUID());
       }
     },
+    onSettled: () => { sending.current = false; },
   });
   const original = useQuery({
     queryKey: ["customer-feedback-receipt", companyId, principal, send.data?.receipt.id, current.current.epoch],
@@ -161,6 +203,14 @@ function FeedbackForm({
         className="min-h-11"
         disabled={!accountReady}
         onClick={() => show()}
+        onKeyDown={(event) => {
+          if (event.key === "Enter") {
+            // Moving focus to the native select must not also pass the
+            // trigger's Enter default action to that newly focused control.
+            event.preventDefault();
+            show();
+          }
+        }}
       >
         {t("feedback.action")}
       </Button>
@@ -215,6 +265,9 @@ function FeedbackForm({
             >
               <p>{t("feedback.received")}</p>
               <p>{confirmed.feedbackId}</p>
+              {send.data?.attachmentsUnconfirmed && <p>{t("feedback.images.submissionUnconfirmed")}</p>}
+              <FeedbackImages companyId={companyId} principal={principal} feedbackId={confirmed.id}
+                authority={privateAuthority} active={!!confirmed} />
               <Link
                 className="inline-flex min-h-11 items-center underline"
                 to={`/my-feedback?feedbackId=${confirmed.id}`}
@@ -233,6 +286,8 @@ function FeedbackForm({
                   setOmitName(false);
                   setIncludeDiagnostics(false);
                   attempted.current = null;
+                  imageAttempt.current = null;
+                  selectedImages.change([]);
                   setRequestKey(crypto.randomUUID());
                   send.reset();
                 }}
@@ -255,7 +310,9 @@ function FeedbackForm({
               className="space-y-4"
               onSubmit={(event) => {
                 event.preventDefault();
-                if (context && canUseContext()) {
+                if (context && canUseContext() && !sending.current) {
+                  sending.current = true;
+                  imageAttempt.current ??= Object.freeze([...selectedImages.images]);
                   attempted.current ??= {
                     idempotencyKey: requestKey,
                     category,
@@ -378,9 +435,8 @@ function FeedbackForm({
                   {t("feedback.nameNotice")}
                 </p>
               )}
-              <p className="text-sm text-muted-foreground">
-                {t("feedback.imagesUnavailable")}
-              </p>
+              <FeedbackImageSelection images={selectedImages.images} onChange={selectedImages.change}
+                enabled={imagesEnabled} locked={inputsLocked} />
               {send.isError && (
                 <p
                   ref={errorFocus}

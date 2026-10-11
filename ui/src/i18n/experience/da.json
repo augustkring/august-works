@@ -146,7 +146,14 @@
       "invalid": "Vælg højst tre PNG-, JPEG- eller WebP-billeder på højst 10 MiB hver.",
       "preview": "Valgt billede {{number}}",
       "removeNumber": "Fjern valgt billede {{number}}",
-      "remove": "Fjern billede"
+      "remove": "Fjern billede",
+      "stored": "Vedhæftet billede",
+      "storedPreview": "Billede vedhæftet feedback",
+      "view": "Vis billede",
+      "readFailed": "Billedet kunne ikke indlæses. Kontrollér din adgang, og prøv igen.",
+      "unconfirmed": "Billedet er endnu ikke bekræftet. Kontrollér dets aktuelle status.",
+      "check": "Kontrollér billedstatus",
+      "submissionUnconfirmed": "Feedbacken er modtaget. Nogle valgte billeder kunne ikke bekræftes. Kontrollér deres aktuelle status nedenfor eller i Min feedback."
     },
     "retentionTitle": "Undtagelser til opbevaring",
     "retentionPolicy": "Standarder: feedback og svar 90 dage efter lukning, billeder 30 dage efter upload, åbne sager 12 måneder. En aktiv juridisk eller hændelsesrelateret blokering forhindrer sletning. Automatisk opbevaringssletning er ikke aktiveret.",

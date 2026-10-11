@@ -9,6 +9,7 @@ import type { AuthorizationActor } from "./authorization.js";
 import { customerFeedbackService } from "./customer-feedback.js";
 import { configuredFeedbackImageScanner, prepareFeedbackImage, FEEDBACK_IMAGE_MAX_BYTES } from "./feedback-image-intake.js";
 
+export type FeedbackImageUploadAdmission = Readonly<{ admitted: true }>;
 type ImageRow = typeof customerFeedbackImages.$inferSelect;
 const sha = (body: Buffer) => createHash("sha256").update(body).digest("hex");
 const projection = (row: ImageRow) => feedbackImageSchema.parse({
@@ -26,6 +27,9 @@ export function customerFeedbackImageService(db: Db, storage: StorageService, op
   operatorUserIds?: readonly string[];
 }) {
   const feedback = customerFeedbackService(db, options);
+  const admissions = new WeakMap<FeedbackImageUploadAdmission, {
+    companyId: string; feedbackId: string; requestKey: string; principal: string; expiresAt: string;
+  }>();
   async function noHold(reader: Db, companyId: string, feedbackId: string) {
     const [hold] = await reader.select({ id: customerFeedbackRetention.id }).from(customerFeedbackRetention).where(and(
       eq(customerFeedbackRetention.companyId, companyId), eq(customerFeedbackRetention.feedbackId, feedbackId),
@@ -50,9 +54,57 @@ export function customerFeedbackImageService(db: Db, storage: StorageService, op
     <T>(operation: Parameters<typeof feedback.withOwnedImage<T>>[3], mutation = false) =>
       feedback.withOwnedImage(actor, companyId, feedbackId, operation, mutation);
 
+  async function readProtected(actor: AuthorizationActor, companyId: string, feedbackId: string, imageId: string, internal: boolean) {
+      companyId = z.uuid().toLowerCase().parse(companyId); feedbackId = z.uuid().toLowerCase().parse(feedbackId);
+      imageId = z.uuid().toLowerCase().parse(imageId);
+      const owned = <T>(operation: (reader: Db) => Promise<T>) => internal
+        ? feedback.withInternalRetention(actor, companyId, feedbackId, reader => operation(reader))
+        : scope(actor, companyId, feedbackId)(operation);
+      const before = await owned(async reader => {
+        const row = await image(reader, companyId, feedbackId, imageId);
+        if (row.status !== "ready" || !row.objectKey || !row.sha256 || !row.byteSize) throw notFound("Feedback image is unavailable");
+        return row;
+      });
+      const object = await storage.getObject(companyId, before.objectKey!), parts: Buffer[] = [];
+      let size = 0;
+      try {
+        for await (const chunk of object.stream) {
+          const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
+          size += bytes.length;
+          if (size > FEEDBACK_IMAGE_MAX_BYTES || size > before.byteSize!) throw conflict("Protected image could not be confirmed");
+          parts.push(bytes);
+        }
+      } finally { object.stream.destroy(); }
+      const body = Buffer.concat(parts);
+      if (body.length !== before.byteSize || sha(body) !== before.sha256) throw conflict("Protected image could not be confirmed");
+      return owned(async reader => {
+        const current = await image(reader, companyId, feedbackId, imageId);
+        if (current.status !== "ready" || current.objectKey !== before.objectKey || current.sha256 !== before.sha256)
+          throw conflict("Feedback image changed; check current access");
+        return { body, mediaType: feedbackImageMediaTypeSchema.parse(current.mediaType) };
+      });
+  }
+
   return {
     preflight: (actor: AuthorizationActor, companyId: string, feedbackId: string) =>
       scope(actor, companyId, feedbackId)(async () => undefined, true),
+    async admitUpload(actor: AuthorizationActor, companyId: string, feedbackId: string, requestKey: string) {
+      companyId = z.uuid().toLowerCase().parse(companyId); feedbackId = z.uuid().toLowerCase().parse(feedbackId);
+      requestKey = z.uuid().toLowerCase().parse(requestKey);
+      if (!options.scanner) throw unprocessable("Feedback image scanning is unavailable");
+      const admitted = await scope(actor, companyId, feedbackId)(async (reader, owner) => {
+        await noHold(reader, companyId, feedbackId);
+        await feedback.chargeImageAttempt(reader, companyId, owner.principal);
+        const [clock] = await reader.execute<{ expiresAt: string }>(sql`select (clock_timestamp()+interval '120 seconds')::text as "expiresAt"`);
+        return { principal: owner.principal, expiresAt: clock!.expiresAt };
+      }, true);
+      // Native abuse admission precedes any multipart body processing. This
+      // server-local identity cannot be supplied by a customer JSON request.
+      await options.scanner.verify();
+      const token: FeedbackImageUploadAdmission = Object.freeze({ admitted: true });
+      admissions.set(token, { companyId, feedbackId, requestKey, ...admitted });
+      return token;
+    },
     list: (actor: AuthorizationActor, companyId: string, feedbackId: string) =>
       scope(actor, companyId, feedbackId)(async reader => feedbackImagesSchema.parse((await reader.select()
         .from(customerFeedbackImages).where(and(eq(customerFeedbackImages.companyId, companyId),
@@ -67,7 +119,7 @@ export function customerFeedbackImageService(db: Db, storage: StorageService, op
         )).limit(1);
         return row ? projection(row) : null;
       }),
-    async upload(actor: AuthorizationActor, companyId: string, feedbackId: string, requestKey: string, body: Buffer, mediaType: string) {
+    async upload(actor: AuthorizationActor, companyId: string, feedbackId: string, requestKey: string, body: Buffer, mediaType: string, admission?: FeedbackImageUploadAdmission) {
       companyId = z.uuid().toLowerCase().parse(companyId); feedbackId = z.uuid().toLowerCase().parse(feedbackId);
       requestKey = z.uuid().toLowerCase().parse(requestKey);
       if (!options.scanner) throw unprocessable("Feedback image scanning is unavailable");
@@ -77,6 +129,15 @@ export function customerFeedbackImageService(db: Db, storage: StorageService, op
       const originalHash = sha(body), requestHash = sha(Buffer.from(JSON.stringify({ originalHash, mediaType, byteSize: body.length }))),
         leaseToken = randomUUID(), owned = scope(actor, companyId, feedbackId);
       const reserved = await owned(async (reader, owner) => {
+        if (admission) {
+          const token = admissions.get(admission);
+          admissions.delete(admission);
+          if (!token || token.companyId !== companyId || token.feedbackId !== feedbackId ||
+              token.requestKey !== requestKey || token.principal !== owner.principal)
+            throw conflict("Image intake admission changed");
+          const [clock] = await reader.execute<{ expired: boolean }>(sql`select ${token.expiresAt}::timestamptz <= clock_timestamp() as expired`);
+          if (clock?.expired) throw conflict("Image intake admission expired");
+        }
         const [prior] = await reader.select().from(customerFeedbackImages).where(and(
           eq(customerFeedbackImages.companyId, companyId), eq(customerFeedbackImages.feedbackId, feedbackId),
           eq(customerFeedbackImages.requestKey, requestKey),
@@ -96,7 +157,7 @@ export function customerFeedbackImageService(db: Db, storage: StorageService, op
           inArray(customerFeedbackImages.status, ["scanning", "storing", "ready", "deleting"]),
         )).limit(4);
         if (count.length - (prior?.status === "scanning" ? 1 : 0) >= 3) throw conflict("Feedback allows at most three images");
-        await feedback.chargeImageAttempt(reader, companyId, owner.principal);
+        if (!admission) await feedback.chargeImageAttempt(reader, companyId, owner.principal);
         const [row] = prior
           ? await reader.update(customerFeedbackImages).set({ status: "scanning", leaseToken,
             leaseExpiresAt: sql`clock_timestamp() + interval '120 seconds'` }).where(eq(customerFeedbackImages.id, prior.id)).returning()
@@ -204,34 +265,16 @@ export function customerFeedbackImageService(db: Db, storage: StorageService, op
         }
       }
     },
-    async read(actor: AuthorizationActor, companyId: string, feedbackId: string, imageId: string) {
-      companyId = z.uuid().toLowerCase().parse(companyId); feedbackId = z.uuid().toLowerCase().parse(feedbackId);
-      imageId = z.uuid().toLowerCase().parse(imageId);
-      const owned = scope(actor, companyId, feedbackId);
-      const before = await owned(async reader => {
-        const row = await image(reader, companyId, feedbackId, imageId);
-        if (row.status !== "ready" || !row.objectKey || !row.sha256 || !row.byteSize) throw notFound("Feedback image is unavailable");
-        return row;
-      });
-      const object = await storage.getObject(companyId, before.objectKey!), parts: Buffer[] = [];
-      let size = 0;
-      try {
-        for await (const chunk of object.stream) {
-          const bytes = Buffer.isBuffer(chunk) ? chunk : Buffer.from(chunk);
-          size += bytes.length;
-          if (size > FEEDBACK_IMAGE_MAX_BYTES || size > before.byteSize!) throw conflict("Protected image could not be confirmed");
-          parts.push(bytes);
-        }
-      } finally { object.stream.destroy(); }
-      const body = Buffer.concat(parts);
-      if (body.length !== before.byteSize || sha(body) !== before.sha256) throw conflict("Protected image could not be confirmed");
-      return owned(async reader => {
-        const current = await image(reader, companyId, feedbackId, imageId);
-        if (current.status !== "ready" || current.objectKey !== before.objectKey || current.sha256 !== before.sha256)
-          throw conflict("Feedback image changed; check current access");
-        return { body, mediaType: feedbackImageMediaTypeSchema.parse(current.mediaType) };
-      });
-    },
+    read: (actor: AuthorizationActor, companyId: string, feedbackId: string, imageId: string) =>
+      readProtected(actor, companyId, feedbackId, imageId, false),
+    internalRead: (actor: AuthorizationActor, companyId: string, feedbackId: string, imageId: string) =>
+      readProtected(actor, companyId, feedbackId, imageId, true),
+    internalList: (actor: AuthorizationActor, companyId: string, feedbackId: string) =>
+      feedback.withInternalRetention(actor, companyId, feedbackId, async reader =>
+        feedbackImagesSchema.parse((await reader.select().from(customerFeedbackImages).where(and(
+          eq(customerFeedbackImages.companyId, companyId), eq(customerFeedbackImages.feedbackId, feedbackId),
+          inArray(customerFeedbackImages.status, ["scanning", "storing", "ready", "deleting"])))
+          .orderBy(asc(customerFeedbackImages.createdAt), asc(customerFeedbackImages.id)).limit(4)).map(projection))),
     async remove(actor: AuthorizationActor, companyId: string, feedbackId: string, imageId: string) {
       companyId = z.uuid().toLowerCase().parse(companyId); feedbackId = z.uuid().toLowerCase().parse(feedbackId);
       imageId = z.uuid().toLowerCase().parse(imageId);
@@ -248,6 +291,8 @@ export function customerFeedbackImageService(db: Db, storage: StorageService, op
         }
         if (!["ready", "deleting"].includes(row.status) || !row.objectKey || !row.transportSettledAt)
           throw conflict("Image storage is unconfirmed; check the original request");
+        await reader.insert(feedbackImageDeletions).values({ imageId: row.id, companyId,
+          objectKey: row.objectKey, transportSettledAt: row.transportSettledAt }).onConflictDoNothing();
         const [next] = await reader.update(customerFeedbackImages).set({ status: "deleting" })
           .where(eq(customerFeedbackImages.id, row.id)).returning();
         return next!;
@@ -297,6 +342,15 @@ export async function processFeedbackImageDeletion(db: Db, storage: StorageServi
   return db.transaction(async tx => {
     await tx.execute(sql`set local statement_timeout='5s'`);
     await tx.execute(sql`set local lock_timeout='1s'`);
+    // Same company -> parent -> image -> receipt order as explicit removal
+    // and parent erasure. No lock survives the provider DELETE/HEAD calls.
+    await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, candidate.companyId)).for("update");
+    await tx.execute(sql`select f.id from customer_feedback f join customer_feedback_images i
+      on i.company_id=f.company_id and i.feedback_id=f.id
+      where i.company_id=${candidate.companyId} and i.id=${candidate.imageId} for update of f`);
+    await tx.select({ id: customerFeedbackImages.id }).from(customerFeedbackImages).where(and(
+      eq(customerFeedbackImages.companyId, candidate.companyId), eq(customerFeedbackImages.id, candidate.imageId),
+    )).for("update");
     const [row] = await tx.select().from(feedbackImageDeletions).where(eq(feedbackImageDeletions.id, candidate.id)).for("update");
     if (!row || row.deletedAt) return false;
     if (row.companyId !== candidate.companyId || row.objectKey !== candidate.objectKey || !row.transportSettledAt)

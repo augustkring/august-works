@@ -91,3 +91,85 @@ records are `/workspace/v9-feedback-images-{types,native}-v4-source-*.json`.
 Both runs used frozen HEAD `22c74cb81e0d3497df2b342de50f2d8c1fee6a3c`
 plus the recorded uncommitted source, with original deadlines and assertions.
 These scoped passes do not qualify full V9 or deployed antivirus/storage operation.
+
+## Selected image HTTP/UI source — 2026-10-11
+
+The new preview route admits the original current submitter, native hold and
+shared feedback budget before reading multipart bytes. An actual local scanner
+control precedes parsing; a server-local, exact-scope single-use admission avoids
+double charging. One file, no extra fields, 10 MiB, a 30-second body deadline and
+four active requests per process bound ingestion. Native count, allocation,
+content validation and final authority checks remain separate owners.
+
+The picker is wired into the existing Send feedback action. Selected files are
+uploaded only after the original durable feedback receipt. An unknown image
+reply preserves that case and offers read-only status checks; no automatic upload
+retry occurs. Names appear in local previews but the multipart request carries a
+generic name. Binary drafts never enter browser persistence. My Feedback and
+internal triage use distinct original submitter/operator read purposes. Shown
+Blob URLs are owned and revoked by their component; private metadata recheck,
+account change and deletion hide the preview immediately.
+
+Configured local scanner/storage makes preview input available for validation;
+each request must still pass the actual scanner and native owners. This is not
+scanner operating qualification or GA admission. All six Privacy policy keys,
+native retention execution, unknown-provider recovery, deployed operating proof,
+built-browser and complete integrated V9 acceptance remain pending. The current
+HTTP/UI changes are undergoing the frozen v5 qualification, not yet a passed
+source or a merge-ready claim.
+
+V5 passed 101 focused cases in 15 complete files, the Shared/DB builds and
+server/UI typechecks. Its Native run passed 64 cases and failed the unchanged
+missing-scanner refusal assertion: missing request-key validation returned 400
+before scanner unavailability could return its original 422. The source fixes
+that order without changing the assertion. V5's matching before/after public
+Source SHA-256 was `2227c7ae9ed73cb0ec854ea1f91247f84fa97cf24eef471c5be2fbf409ed387f`;
+the original failed Native log remains preserved.
+
+The local legacy company remove now refuses completion while an allocated
+image or pending erasure receipt remains. It does not have the SaaS path's
+durable provider-erasure owner, so cannot report successful erasure of remaining
+objects. Native coverage tests both refusal and confirmed-object completion.
+An added built-browser fixture exercises explicit image selection/removal,
+original Native feedback receipt, a software image acknowledgement loss, protected
+read, original account recheck, keyboard/mobile/axe behavior. This fixture is not
+provider/scanner qualification. The changed frozen source is undergoing v6.
+
+V6 passed all 101 focused cases, Shared/DB builds, server/UI typechecks and all
+66 Native cases (29 image cases plus the full unchanged 16 feedback, six account
+and 15 SaaS-domain cases). Matching before/after public Source SHA-256:
+`c66b2795ec8f292c3e151a28c1c4c505c345d36ee39c229cc4cc9aa4ede0d342`.
+The built browser passed one original case and failed two: a nested image-loading
+status broke the original unique focused feedback receipt, and the new fixture
+invoked the palette before bootstrap was ready. The product now uses an explicit
+busy image region without a second receipt status; the new test waits for the
+original global Feedback trigger and exercises the native file chooser by
+keyboard. The unchanged original browser assertions remain. The added focused
+receipt regression passed with the full dialog/image-view files (17 cases).
+
+V7 checks the changed UI/test source through the full focused scope, UI typing
+and built browser. Backend source/migration/native owners are unchanged from
+the passed V6 scope; these UI-only corrections do not activate data retention
+deletion or GA. Original failed logs and deadlines are preserved.
+
+V7 passed 102 focused cases and UI typing; the built browser passed both
+unchanged current-account cases and failed the new category-focus assertion.
+A trace-only diagnostic on that same source preserved the focus assertion and
+then exposed two accessible Choose images controls: the internal file input
+and visible button. The picker now hides the internal input from the accessibility
+tree, and the feedback trigger handles Enter before moving focus to the native
+select. A focused regression preserves one dialog and category focus.
+
+V9 passed 103 cases in all 15 focused files, token/coverage checks, UI typing and
+all three built-browser cases: both unchanged current-account cases and the new
+selected-image case. The latter covers real keyboard file selection/removal,
+original Native case receipt, software image acknowledgement loss, one explicit
+protected binary read, no automatic image replay, account recheck, mobile overflow
+and axe. It does not qualify deployed storage, malware scanning or human AT use.
+Matching before/after public source SHA-256 for each V9 stage was
+`f33df850283ca810b24416cecbbcf98a49f39dd56abd4371ca9243a1a205480a`, at HEAD
+`f6f7bc62f61c4e113f2d686e5961773292bf2637` plus recorded uncommitted source.
+Backend and migration source did not change after V6's 66-case Native pass; V9
+requalified the changed UI/browser scope. The V5/V6/V7 and trace diagnostic
+failures remain recorded. No original assertion, timeout, permission or budget
+was weakened. Full integrated V9 acceptance and retention execution remain open.

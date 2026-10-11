@@ -41,8 +41,8 @@ export const customerFeedbackPolicySchema = z.strictObject({
     privacy: z.literal(FEEDBACK_CONTACTS.privacy),
   }),
   attachments: z.strictObject({
-    enabled: z.literal(false),
-    reason: z.literal("scanner_qualification_required"),
+    enabled: z.boolean(),
+    reason: z.enum(["scanner_qualification_required", "validation_required"]),
     types: z.tuple([
       z.literal("image/png"),
       z.literal("image/jpeg"),
@@ -50,6 +50,9 @@ export const customerFeedbackPolicySchema = z.strictObject({
     ]),
     maxFiles: z.literal(3),
     maxBytes: z.literal(10485760),
+  }).superRefine((value, context) => {
+    if (value.enabled !== (value.reason === "validation_required"))
+      context.addIssue({ code: "custom", message: "Image intake availability must match its validation state" });
   }),
   retention: z.strictObject({
     status: z.enum([

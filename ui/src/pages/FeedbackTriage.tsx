@@ -19,6 +19,7 @@ import { api } from "../api/client";
 import { isRejectedFeedbackRequest } from "../api/customer-feedback";
 import { Link } from "../lib/router";
 import { Button } from "../components/ui/button";
+import { FeedbackImages } from "../components/FeedbackImages";
 import { FeedbackRetentionControls } from "../components/FeedbackRetentionControls";
 import { Textarea } from "../components/ui/textarea";
 
@@ -397,6 +398,8 @@ function Queue({
           </div>
         </form>
       )}
+      {current && <FeedbackImages key={`${principal}:${companyId}:${current.id}:${authority.epoch}`}
+        companyId={companyId} feedbackId={current.id} principal={principal} authority={authority} active={!!current} internal />}
       {current && <FeedbackRetentionControls key={`${principal}:${companyId}:${current.id}:${authority.epoch}`}
         companyId={companyId} feedbackId={current.id} principal={principal} />}
     </div>
