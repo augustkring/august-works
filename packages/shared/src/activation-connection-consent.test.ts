@@ -24,6 +24,7 @@ describe("Onboarding connection consent boundaries", () => {
   it("never labels a reserved UUID as a positive allocation or connection", () => {
     const receipt = { id: randomUUID(), companyId: randomUUID(), onboardingRunId: randomUUID(), packageVersionId: randomUUID(),
       applicationId: randomUUID(), requestKey: randomUUID(), status: "allocating", connectionId: null,
+      reviewHash: "a".repeat(64), onboardingVersion: 1,
       requestedAt: new Date().toISOString(), connectedAt: null };
     expect(activationConnectionConsentReceiptSchema.parse(receipt)).toEqual(receipt);
     for (const extra of [{ connectionId: randomUUID() }, { status: "allocated" }, { status: "connected" },

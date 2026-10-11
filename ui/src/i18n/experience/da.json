@@ -359,6 +359,44 @@
       "pending_approval": "Agentforberedelsen afventer den nødvendige godkendelse. Intet arbejde er startet.",
       "needs_review": "Den oprindelige agent eller kapabilitet er ændret. Gennemgå den aktuelle opsætning, før du fortsætter.",
       "unavailable": "Den oprindeligt forberedte agent er ikke tilgængelig. Der er ikke oprettet en erstatning."
+    },
+    "connectionConsent": {
+      "title": "Adgang til forbindelsen",
+      "checking": "Kontrollerer den aktuelle adgang til forbindelsen…",
+      "contextChanged": "Opsætningen eller kontoadgangen er ændret. Kontroller den igen.",
+      "unavailable": "Denne forbindelse kræver en verificeret gennemgang af adgangen. Du kan vælge en anden funktion eller gennemgå den i Apps.",
+      "boundary": "Denne beslutning godkender kun opsætning af en personlig forbindelse. Login hos udbyderen er en særskilt beslutning. Agentadgang og forretningshandlinger kræver egen gennemgang og en sikker test.",
+      "unknown": "Svaret kunne ikke bekræftes. Kontroller den oprindelige kvittering, før du fortsætter.",
+      "withdrawn": "Godkendelsen af formålet er trukket tilbage. Udbyderens credentials og forbindelsens historik håndteres fortsat i Apps.",
+      "reviewDecision": "Gennemgå godkendelse af forbindelsen",
+      "withdraw": "Træk godkendelsen af formålet tilbage",
+      "withdrawTitle": "Træk godkendelsen af dette formål tilbage?",
+      "approveTitle": "Godkend formålet med forbindelsen?",
+      "withdrawBoundary": "Det forhindrer fortsættelse af dette onboardingformål. Det tilbagekalder ikke udbyderens credentials og bekræfter ikke, at en igangværende handling hos udbyderen er stoppet. Administrer udbyderforbindelsen i Apps.",
+      "confirmWithdrawal": "Jeg bekræfter, at godkendelsen af dette formål trækkes tilbage.",
+      "confirmApproval": "Jeg godkender præcis det viste formål med den personlige forbindelse, uden agentadgang.",
+      "confirm": "Bekræft beslutningen",
+      "checkReceipt": "Kontroller den oprindelige kvittering",
+      "providerSetup": "Fortsæt til login hos udbyderen",
+      "deferAgentAccess": "Ingen agent får adgang under opsætningen. Agentadgang kræver en særskilt gennemgang af det aktuelle formål og en sikker test.",
+      "fields": {
+        "neededNow": "Nødvendigt nu",
+        "why": "Hvorfor",
+        "usedBy": "Bruges af",
+        "canRead": "Kan læse",
+        "canChange": "Kan ændre",
+        "notRequested": "Beder ikke om",
+        "automatic": "Automatisk",
+        "asksFirst": "Spørger først"
+      },
+      "status": {
+        "approved": "Formålet er godkendt. Login hos udbyderen er endnu ikke bekræftet.",
+        "allocating": "Den oprindelige opsætning afventer. Kontroller kvitteringen; start ikke en ny forbindelse.",
+        "allocated": "Den oprindelige forbindelse findes. Login og validering hos udbyderen skal stadig bekræftes.",
+        "connected": "Den oprindelige personlige forbindelse er valideret. Det giver ingen agentadgang.",
+        "withdrawn": "Godkendelsen af formålet er trukket tilbage.",
+        "changed": "Den gennemgåede opsætning er ændret. Træk den tidligere godkendelse af formålet tilbage, før du gennemgår en ny."
+      }
     }
   },
   "company": {

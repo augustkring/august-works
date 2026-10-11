@@ -1,6 +1,11 @@
 import { and, eq, or, sql } from "drizzle-orm";
-import { connectionGrants, principalPermissionGrants, toolApplications, toolConnections, toolConnectionInstalls, type Db } from "@paperclipai/db";
+import { activationConnectionConsents, connectionGrants, principalPermissionGrants, toolApplications, toolConnections, toolConnectionInstalls, type Db } from "@paperclipai/db";
 import { activationRequiredAccessSchema, type ActivationRequiredAccess } from "@paperclipai/shared";
+import { getConnectableAppDefinition } from "@paperclipai/shared";
+import { activationConnectionMethodSource } from "../tool-access.js";
+import { nativeSha256 } from "../native-runtime/canonical.js";
+import { readDeferredActivationSetup } from "./activation-connection-completion.js";
+import { readFirstAgentCapabilityPin } from "./activation-first-agent.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { authorizationService } from "../authorization.js";
 import { v5HumanActorId } from "../v5-authorization.js";
@@ -9,7 +14,7 @@ import { v5HumanActorId } from "../v5-authorization.js";
  * not resolve credentials, contact providers, install anything, grant a future
  * Agent access, or certify representative execution. The original tool and
  * Agent owners still decide whether that Agent may use a connection. */
-export async function readActivationRequiredAccess(tx: Db, actor: AuthorizationActor, companyId: string, required: string[]): Promise<ActivationRequiredAccess[]> {
+export async function readActivationRequiredAccess(tx: Db, actor: AuthorizationActor, companyId: string, required: string[], purposeContext?: { runId: string; version: number; packageVersionId: string; step: string }): Promise<ActivationRequiredAccess[]> {
   const keys = [...new Set(required)];
   if (!keys.length) return [];
   if (keys.length > 20) throw new Error("Required access exceeds the original package bound");
@@ -26,7 +31,7 @@ export async function readActivationRequiredAccess(tx: Db, actor: AuthorizationA
   for (const key of keys) {
     // Stable original application keys only; display names, endpoints and
     // caller-supplied connection IDs are never inferred as provider authority.
-    const apps = await tx.select({ id: toolApplications.id }).from(toolApplications).where(and(
+    const apps = await tx.select().from(toolApplications).where(and(
       eq(toolApplications.companyId, companyId), eq(toolApplications.applicationKey, key), eq(toolApplications.status, "active"), sql`${toolApplications.archivedAt} is null`,
     )).orderBy(toolApplications.id).limit(2).for("share");
     if (apps.length !== 1) { result.push({ key, status: apps.length ? "needs_review" : "not_connected", checkedAt: null }); continue; }
@@ -38,6 +43,29 @@ export async function readActivationRequiredAccess(tx: Db, actor: AuthorizationA
       .orderBy(toolConnections.id).limit(2).for("share");
     if (connections.length !== 1) { result.push({ key, status: connections.length ? "needs_review" : "not_connected", checkedAt: null }); continue; }
     const connection = connections[0]!;
+    const purposes = await tx.select().from(activationConnectionConsents).where(and(
+      eq(activationConnectionConsents.companyId, companyId), eq(activationConnectionConsents.connectionId, connection.id))).limit(2).for("share");
+    if (purposes.length) {
+      const purpose = purposes[0]!, app = apps[0]!;
+      const pin = purposeContext ? await readFirstAgentCapabilityPin(tx, purposeContext.packageVersionId) : null;
+      const setup = purpose.status === "connected" ? await readDeferredActivationSetup(tx, purpose) : null;
+      const definition = getConnectableAppDefinition(purpose.galleryKey);
+      const method = definition?.methods.find(candidate => candidate.key === purpose.connectionMethodKey);
+      let methodCurrent = false;
+      if (definition && method) {
+        try { methodCurrent = nativeSha256(activationConnectionMethodSource(definition, method)) === purpose.methodHash; }
+        catch { /* Unsupported original profiles remain unqualified setup. */ }
+      }
+      const recorded = !!methodCurrent && purposes.length === 1 && !!purposeContext && purpose.onboardingRunId === purposeContext.runId &&
+        purpose.subjectUserId === userId && purpose.packageVersionId === purposeContext.packageVersionId &&
+        purposeContext.version >= purpose.onboardingVersion && (purposeContext.step !== "access" || purposeContext.version === purpose.onboardingVersion) &&
+        pin?.hash === purpose.packageContentHash && nativeSha256({ id: app.id, key: app.applicationKey, name: app.name,
+          metadata: app.metadata, status: app.status, archivedAt: app.archivedAt?.toISOString() ?? null }) === purpose.applicationHash &&
+        !!setup && setup.hash === purpose.connectionHash;
+      result.push(activationRequiredAccessSchema.parse({ key, status: recorded ? "recorded" : "needs_review",
+        checkedAt: connection.checked?.toISOString() ?? null }));
+      continue;
+    }
     const installs = await tx.select({ id: toolConnectionInstalls.id }).from(toolConnectionInstalls).where(and(
       eq(toolConnectionInstalls.companyId, companyId), eq(toolConnectionInstalls.connectionId, connection.id),
       eq(toolConnectionInstalls.targetType, "company"), sql`lower(${toolConnectionInstalls.targetId})=${companyId.toLowerCase()}`,

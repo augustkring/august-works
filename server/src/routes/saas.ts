@@ -172,6 +172,18 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
     res.set("Cache-Control", "private, no-store");
     res.json(await activationConnectionConsentService(db).approve(req.actor, companyId, applicationKey, req.body, methodKey));
   });
+  router.get("/companies/:companyId/activation/connections/:applicationKey/consent", async (req, res) => {
+    const companyId = z.uuid().parse(req.params.companyId), applicationKey = z.string().min(1).max(120).parse(req.params.applicationKey);
+    await company(req, companyId);
+    res.set("Cache-Control", "private, no-store");
+    res.json(await activationConnectionConsentService(db).getCurrentReceipt(req.actor, companyId, applicationKey));
+  });
+  router.post("/companies/:companyId/activation/connection-consents/:requestKey/withdraw", async (req, res) => {
+    const companyId = z.uuid().parse(req.params.companyId), requestKey = z.uuid().parse(req.params.requestKey);
+    await company(req, companyId);
+    res.set("Cache-Control", "private, no-store");
+    res.json(await activationConnectionConsentService(db).withdraw(req.actor, companyId, requestKey, req.body));
+  });
   router.get("/companies/:companyId/activation/connection-consents/:requestKey", async (req, res) => {
     const companyId = z.uuid().parse(req.params.companyId), requestKey = z.uuid().parse(req.params.requestKey);
     await company(req, companyId);

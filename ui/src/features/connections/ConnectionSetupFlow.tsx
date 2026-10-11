@@ -1,3 +1,4 @@
+import { onboardingConnectionTools, type DeferredOnboardingConnection } from "./onboarding-connection-transport";
 import { RemoteMcpProductionSetup } from "./remote-mcp/RemoteMcpProductionSetup";
 import { useMemoryConnectorsEnabled } from "@/hooks/useMemoryConnectorsEnabled";
 import { AiConnectionCredentialStep } from "@/components/ai-connections/AiConnectionCredentialStep";
@@ -508,6 +509,8 @@ export function readConnectionIntentOAuthOutcome(
 }
 
 export interface ConnectionSetupFlowProps {
+  /** Native-approved first-run setup; personal identity and no Agent reach. */
+  deferredOnboarding?: DeferredOnboardingConnection;
   upstreamServiceName?: string;
   aiConnection?: import("@paperclipai/shared").AiConnectionBinding;
   /** Provider-specific authentication inside the existing access/setup shell. Undefined retains the standard credential form. */
@@ -548,7 +551,7 @@ export function ConnectionSetupFlow(props: ConnectionSetupFlowProps = {}) {
     return null;
   }, [interactionId, selectedCompanyId, source]);
   const existingId = props.configuredConnection?.id || searchParams.get("resume") || searchParams.get("reconnect") || draftId;
-  const lookup = Boolean(existingId && (!source || isRemoteMcpConnectorId(source) || isMemoryConnectorId(source)));
+  const lookup = (!props.deferredOnboarding || (selectedCompanyId === props.deferredOnboarding.companyId && props.deferredOnboarding.canUseAuthority())) && Boolean(existingId && (!source || isRemoteMcpConnectorId(source) || isMemoryConnectorId(source)));
   const existing = useQuery({ queryKey: ["tools", "connection", existingId], queryFn: () => toolsApi.getConnection(existingId!), enabled: lookup });
   const provider = source || existing.data?.config?.sourceTemplateKey;
   const method = searchParams.get("method") || existing.data?.config?.connectionMethodKey;
@@ -562,10 +565,13 @@ export function ConnectionSetupFlow(props: ConnectionSetupFlowProps = {}) {
     && isRemoteMcpConnectorId(provider) && (!method || isRemoteMcpConnectorMethod(provider, method))) {
     return <RemoteMcpProductionSetup key={`${interactionId || "page"}:${provider}`} {...props} interactionId={interactionId} providerId={provider} connection={existing.data} />;
   }
+  if (props.deferredOnboarding && (selectedCompanyId !== props.deferredOnboarding.companyId || !props.deferredOnboarding.canUseAuthority()))
+    return <p role="status">Checking current connection access…</p>;
   return <StandardConnectionSetupFlow {...props} />;
 }
 
 function StandardConnectionSetupFlow({
+  deferredOnboarding,
   byoOnly = false,
   credentialSource = "paperclip_vault",
   host = "page",
@@ -591,6 +597,9 @@ function StandardConnectionSetupFlow({
   }, [host, routeNavigate]);
   const routeParams = useParams<{ appKey?: string }>();
   const { selectedCompany, selectedCompanyId } = useCompany();
+  const tools = deferredOnboarding ? onboardingConnectionTools(deferredOnboarding) : toolsApi;
+  const privateQueryKey = (key: readonly unknown[]) => deferredOnboarding
+    ? [...key, "onboarding", deferredOnboarding.principal, deferredOnboarding.requestKey] : key;
   const { enabled: chatConnectorsEnabled } = useChatConnectorsEnabled();
   const { enabled: memoryConnectorsEnabled } = useMemoryConnectorsEnabled();
   const { setBreadcrumbs } = useBreadcrumbs();
@@ -603,8 +612,8 @@ function StandardConnectionSetupFlow({
   const sourceSlug = searchParams.get("source")?.trim() || null;
   const createNewConnection = forceNewConnection || searchParams.get("new") === "1";
   const routeStage = searchParams.get("stage")?.trim() || null;
-  const requestedMethodKey = searchParams.get("method")?.trim() || null;
-  const resumeConnectionId = searchParams.get("resume")?.trim() || null;
+  const requestedMethodKey = deferredOnboarding?.methodKey ?? searchParams.get("method")?.trim() ?? null;
+  const resumeConnectionId = deferredOnboarding?.connectionId ?? searchParams.get("resume")?.trim() ?? null;
   const oauthCallbackOutcome = searchParams.get("oauth");
   const oauthCallbackCode = searchParams.get("code");
   const githubInstallationUrl = githubRecoveryUrl(searchParams.get("installation_url"));
@@ -682,7 +691,7 @@ function StandardConnectionSetupFlow({
   const [access, setAccess] = useState<"all" | "specific">("all");
   const [agentIds, setAgentIds] = useState<Set<string>>(new Set());
   const [installAgentIds, setInstallAgentIds] = useState<Set<string>>(
-    () => new Set(restoredEnrollmentAccess?.agentIds ?? (requestedAgentId ? [requestedAgentId] : [])),
+    () => new Set(deferredOnboarding ? [] : restoredEnrollmentAccess?.agentIds ?? (requestedAgentId ? [requestedAgentId] : [])),
   );
   /**
    * Access-step selections (PAP-17835). These are chosen before the credential
@@ -690,10 +699,10 @@ function StandardConnectionSetupFlow({
    * backwards through the wizard.
    */
   const [grantKind, setGrantKind] = useState<ConnectionGrantKind>(
-    restoredEnrollmentAccess?.grantKind ?? reconnectGrantKindHint ?? (requestedAgentId ? "user" : "organization"),
+    deferredOnboarding ? "user" : restoredEnrollmentAccess?.grantKind ?? reconnectGrantKindHint ?? (requestedAgentId ? "user" : "organization"),
   );
   const [installChoice, setInstallChoice] = useState<"specific" | "all">(
-    restoredEnrollmentAccess?.installChoice ?? (requestedAgentId ? "specific" : "all"),
+    deferredOnboarding ? "specific" : restoredEnrollmentAccess?.installChoice ?? (requestedAgentId ? "specific" : "all"),
   );
   const resumingAfterOAuthFailure = Boolean(
     resumeConnectionId
@@ -777,7 +786,9 @@ function StandardConnectionSetupFlow({
     const controller = new AbortController();
     oauthHandoffAbortRef.current = controller;
     try {
-      const target = await prepareOAuthNavigation(start, { signal: controller.signal });
+      const prepare = () => prepareOAuthNavigation(start, { signal: controller.signal });
+      const target = await (deferredOnboarding ? deferredOnboarding.withAuthority(prepare) : prepare());
+      if (deferredOnboarding && !deferredOnboarding.canUseAuthority()) throw new Error("Current connection access changed during sign-in");
       if (target.kind === "reauthentication") {
         const destination = host === "dialog" ? oauthPopupRef.current : window;
         if (!destination || destination.closed || !start.handoff) {
@@ -798,7 +809,7 @@ function StandardConnectionSetupFlow({
     } finally {
       if (oauthHandoffAbortRef.current === controller) oauthHandoffAbortRef.current = null;
     }
-  }, [host, onPhaseChange, openAuthorization]);
+  }, [host, onPhaseChange, openAuthorization, deferredOnboarding]);
 
   useEffect(() => () => oauthHandoffAbortRef.current?.abort(), []);
 
@@ -854,7 +865,7 @@ function StandardConnectionSetupFlow({
       if (returned.searchParams.get("success") !== "1") return;
       checking = true;
       try {
-        const connection = await toolsApi.getConnection(dialogOAuthConnectionId);
+        const connection = await tools.getConnection(dialogOAuthConnectionId);
         if (!cancelled && connection.status === "active") {
           setDialogOAuthConnectionId(null);
           popup.close();
@@ -960,12 +971,12 @@ function StandardConnectionSetupFlow({
   }, [byoOnly, host, setBreadcrumbs, vercelConnectMode]);
 
   const galleryQuery = useQuery({
-    queryKey: queryKeys.apps.gallery(selectedCompanyId ?? "__none__"),
-    queryFn: () => toolsApi.listGallery(selectedCompanyId!),
-    select: useCallback((data: Awaited<ReturnType<typeof toolsApi.listGallery>>) => connectionIntentId ? {
+    queryKey: privateQueryKey(queryKeys.apps.gallery(selectedCompanyId ?? "__none__")),
+    queryFn: () => tools.listGallery(selectedCompanyId!),
+    select: useCallback((data: Awaited<ReturnType<typeof toolsApi.listGallery>>) => deferredOnboarding ? { ...data, apps: data.apps.filter(app => app.slug === deferredOnboarding.galleryKey).map(app => ({ ...app, methods: app.methods.filter(method => method.key === deferredOnboarding.methodKey) })) } : connectionIntentId ? {
       ...data,
       apps: data.apps.map(app => ({ ...app, methods: app.methods.filter(method => aiConnection ? method.ai?.provider === aiConnection.provider && (aiConnection.mode === "responsible_user" || method.ai.method === aiConnection.method) : method.transport !== "runtime_auth") })).filter(app => app.methods.length > 0),
-    } : data, [connectionIntentId, aiConnection?.provider, aiConnection?.method, aiConnection?.mode]),
+    } : data, [connectionIntentId, aiConnection?.provider, aiConnection?.method, aiConnection?.mode, deferredOnboarding?.galleryKey, deferredOnboarding?.methodKey]),
     enabled: !!selectedCompanyId,
   });
   // Use the same visible catalog for cards and every branded URL shortcut.
@@ -1006,7 +1017,7 @@ function StandardConnectionSetupFlow({
   const [enrollmentAuthorizationUrl, setEnrollmentAuthorizationUrl] = useState<string | null>(null);
   const connectorEnrollmentQuery = useQuery({
     queryKey: ["cloud-connector", "enrollment"],
-    queryFn: () => toolsApi.getCloudConnectorEnrollment(),
+    queryFn: () => tools.getCloudConnectorEnrollment(),
     refetchInterval: enrollmentAuthorizationUrl ? 2_000 : false,
     enabled: Boolean(
       selectedCompanyId
@@ -1057,7 +1068,7 @@ function StandardConnectionSetupFlow({
     void galleryQuery.refetch();
   }, [enrollmentAuthorizationUrl, connectorEnrollmentQuery.data?.status, galleryQuery.refetch, closeEnrollmentPopup]);
   const startConnectorEnrollment = useMutation({
-    mutationFn: () => toolsApi.startCloudConnectorEnrollment(
+    mutationFn: () => tools.startCloudConnectorEnrollment(
       selectedCompanyId!,
       selectedCompany?.name,
       requestedAppKey
@@ -1084,14 +1095,14 @@ function StandardConnectionSetupFlow({
     },
   });
   const applicationsQuery = useQuery({
-    queryKey: queryKeys.tools.applications(selectedCompanyId ?? "__none__"),
-    queryFn: () => toolsApi.listApplications(selectedCompanyId!),
+    queryKey: privateQueryKey(queryKeys.tools.applications(selectedCompanyId ?? "__none__")),
+    queryFn: () => tools.listApplications(selectedCompanyId!),
     enabled: !!selectedCompanyId && (!!directOAuthSource || !!resumeConnectionId || !!reconnectConnectionId),
     refetchOnMount: "always",
   });
   const connectionsQuery = useQuery({
-    queryKey: queryKeys.tools.connections(selectedCompanyId ?? "__none__"),
-    queryFn: () => toolsApi.listConnections(selectedCompanyId!),
+    queryKey: privateQueryKey(queryKeys.tools.connections(selectedCompanyId ?? "__none__")),
+    queryFn: () => tools.listConnections(selectedCompanyId!),
     enabled: !!selectedCompanyId && (!!directOAuthSource || !!resumeConnectionId || !!reconnectConnectionId),
     refetchOnMount: "always",
   });
@@ -1165,7 +1176,7 @@ function StandardConnectionSetupFlow({
         ? "agent"
       : "organization"
     : null;
-  const fixedGrantKind = reconnectGrantKind ?? existingOAuthGrantKind;
+  const fixedGrantKind = deferredOnboarding ? "user" : reconnectGrantKind ?? existingOAuthGrantKind;
 
   useEffect(() => {
     if (fixedGrantKind) setGrantKind(fixedGrantKind);
@@ -1208,7 +1219,7 @@ function StandardConnectionSetupFlow({
     // Retry/reconnect reads identity from the durable connection. Provider is
     // not identity: an organization Notion connection must stay organization-
     // scoped, while a personal one must put its token back on that user grant.
-    mutationFn: (connection: ToolConnection) => toolsApi.startOAuth(connection.id, {
+    mutationFn: (connection: ToolConnection) => tools.startOAuth(connection.id, {
       asCurrentUser: connection.credentialPolicy === "per_user",
       ...(connection.credentialPolicy === "per_agent"
         ? { asAgentId: configuredAgentIdentity(connection) ?? [...installAgentIds][0] }
@@ -1252,7 +1263,7 @@ function StandardConnectionSetupFlow({
       ? { onAll: true, agentIds: new Set<string>() }
       : { onAll: false, agentIds: installAgentIds };
     const desired = installPayload(selectedCompanyId!, installState);
-    await toolsApi.putConnectionInstalls(connectionId, desired);
+    await tools.putConnectionInstalls(connectionId, desired);
   };
 
   const effectiveGrantKind = fixedGrantKind ?? grantKind;
@@ -1274,7 +1285,7 @@ function StandardConnectionSetupFlow({
           trimmedGalleryName || connectEntry.name,
           requestedGrantKind,
         );
-        result = await toolsApi.connectApp(selectedCompanyId!, {
+        result = await tools.connectApp(selectedCompanyId!, {
           galleryKey: connectEntry.slug,
           ...(connectionMethodKey ? { connectionMethodKey } : {}),
           name: connectionName,
@@ -1316,7 +1327,7 @@ function StandardConnectionSetupFlow({
           genericPayload.name ?? defaultGenericMcpName(linkUrl) ?? "Custom app",
           effectiveGrantKind,
         );
-        result = await toolsApi.connectApp(selectedCompanyId!, {
+        result = await tools.connectApp(selectedCompanyId!, {
           ...genericPayload,
           ...(reconnectConnectionId ? { reconnectConnectionId } : {}),
           // Zapier issues a credential-bearing URL, so its branded setup keeps
@@ -1534,11 +1545,11 @@ function StandardConnectionSetupFlow({
       const matchingEnrollmentAccess = restoredEnrollmentAccess?.companyId === selectedCompanyId
         ? restoredEnrollmentAccess
         : null;
-      setGrantKind(reconnectGrantKind ?? matchingEnrollmentAccess?.grantKind ?? defaultGrantKindFor(initialMethod, Boolean(requestedAgentId)));
+      setGrantKind(deferredOnboarding ? "user" : reconnectGrantKind ?? matchingEnrollmentAccess?.grantKind ?? defaultGrantKindFor(initialMethod, Boolean(requestedAgentId)));
       setInstallAgentIds(new Set(
-        matchingEnrollmentAccess?.agentIds ?? (requestedAgentId ? [requestedAgentId] : []),
+        deferredOnboarding ? [] : matchingEnrollmentAccess?.agentIds ?? (requestedAgentId ? [requestedAgentId] : []),
       ));
-      setInstallChoice(matchingEnrollmentAccess?.installChoice ?? (requestedAgentId ? "specific" : "all"));
+      setInstallChoice(deferredOnboarding ? "specific" : matchingEnrollmentAccess?.installChoice ?? (requestedAgentId ? "specific" : "all"));
       // Route/service selection initializes the wizard once. Later renders must
       // preserve the user's current step in both hosts instead of snapping back
       // to Access after they continue.
@@ -1705,10 +1716,10 @@ function StandardConnectionSetupFlow({
       // The Access step asks one question about agent reach, so profile access
       // and installs are committed to the same target set instead of drifting
       // apart behind two separate wizard screens.
-      const selection: AppAccessSelection = installChoice === "all"
+      const selection: AppAccessSelection = deferredOnboarding ? { agentIds: [] } : installChoice === "all"
         ? "all_agents"
         : { agentIds: Array.from(installAgentIds) };
-      const finished = await toolsApi.finishApp(selectedCompanyId!, connected.connectionId, {
+      const finished = await tools.finishApp(selectedCompanyId!, connected.connectionId, {
         enabledCatalogEntryIds: enabledIds,
         askFirstCatalogEntryIds: askFirstIds,
         access: selection,
@@ -2418,6 +2429,7 @@ function StandardConnectionSetupFlow({
         <AccessStep
           companyId={selectedCompanyId}
           authKind={accessStepAuthKind}
+          deferredAgentAccess={deferredOnboarding?.deferredAgentAccessLabel}
           grantKinds={fixedGrantKind ? [fixedGrantKind] : accessStepMethod?.grantKinds}
           grantKind={effectiveGrantKind}
           setGrantKind={setGrantKind}
@@ -3935,6 +3947,7 @@ export function AccessStep({ companyId, ...props }: Omit<Parameters<typeof Acces
   const agentsQuery = useQuery({
     queryKey: queryKeys.agents.list(companyId),
     queryFn: () => agentsApi.list(companyId),
+    enabled: !props.deferredAgentAccess,
   });
   return <AccessStepContent {...props} agents={(agentsQuery.data ?? []).filter((agent) => agent.status !== "terminated")} agentsLoading={agentsQuery.isLoading} />;
 }
@@ -3958,6 +3971,7 @@ export function AccessStepContent({
   continuesToProvider = false,
   identityLoading = false,
   preserveAgentAccess = false,
+  deferredAgentAccess,
   pending = false,
   onBack,
   onContinue,
@@ -3987,6 +4001,7 @@ export function AccessStepContent({
   identityLoading?: boolean;
   /** Reconnect changes credentials only; existing install reach stays intact. */
   preserveAgentAccess?: boolean;
+  deferredAgentAccess?: string;
   pending?: boolean;
   onBack: () => void;
   onContinue: () => void;
@@ -4009,7 +4024,9 @@ export function AccessStepContent({
     || grantKind === "user"
     || grantKind === "agent"
     || canCreateOrganizationGrant;
-  const canContinue = identityChoiceAllowed && (preserveAgentAccess
+  const canContinue = identityChoiceAllowed && (deferredAgentAccess
+    ? grantKind === "user" && installChoice === "specific" && installAgentIds.size === 0
+    : preserveAgentAccess
     ? true
     : lockedAgentId
     ? installAgentIds.has(lockedAgentId)
@@ -4131,7 +4148,7 @@ export function AccessStepContent({
 
           <section className="p-6">
             <h2 className="text-sm font-semibold text-foreground">{agentAccessHeading}</h2>
-            {preserveAgentAccess ? (
+            {deferredAgentAccess ? <p className="mt-2 text-sm text-muted-foreground">{deferredAgentAccess}</p> : preserveAgentAccess ? (
               <div className="mt-4 flex items-start gap-3 rounded-md border border-border bg-muted/40 p-4">
                 <UsersRound className="mt-0.5 h-4 w-4 shrink-0 text-primary" aria-hidden="true" />
                 <div>
@@ -4187,7 +4204,7 @@ export function AccessStepContent({
                 ]}
               />
             )}
-            {!preserveAgentAccess && !lockedAgentId && installChoice === "specific" ? (
+            {!deferredAgentAccess && !preserveAgentAccess && !lockedAgentId && installChoice === "specific" ? (
               <div className="mt-3">
                 <AgentMultiSelect
                   agents={agents}

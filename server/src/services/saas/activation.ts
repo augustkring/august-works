@@ -42,7 +42,7 @@ import { withV7ActivityTransaction } from "../v7-mutations.js";
 /** A presentation state machine on the existing onboarding owner. It never supplies
  * execution authority, grants, provider credentials, or synthetic first-value proof. */
 export function activationService(db: Db) {
-  async function capabilities(tx: Db): Promise<ActivationView["capabilities"]> {
+  async function capabilities(tx: Db, selectedVersionId: string | null = null): Promise<ActivationView["capabilities"]> {
     if (
       !v7FeatureEnabled(
         await instanceSettingsService(tx).getExperimental(),
@@ -65,9 +65,16 @@ export function activationService(db: Db) {
       )
       .orderBy(agentPackages.key, desc(agentPackageVersions.createdAt))
       .limit(200);
+    // A bounded discovery page is not the owner of an already-selected pin.
+    // Read that exact original version under the same qualification rules and
+    // locks; then retain it within the existing twenty-choice display bound.
+    const selectedRows = selectedVersionId ? await tx.select({ version: agentPackageVersions, package: agentPackages })
+      .from(agentPackageVersions).innerJoin(agentPackages, eq(agentPackages.id, agentPackageVersions.packageId))
+      .where(and(eq(agentPackageVersions.id, selectedVersionId), eq(agentPackageVersions.state, "published"), eq(agentPackages.status, "active")))
+      .limit(1).for("share") : [];
     const seen = new Set<string>();
     const result: ActivationView["capabilities"] = [];
-    for (const row of rows) {
+    for (const row of [...selectedRows, ...rows]) {
       const parsed = packageReleaseSchema.safeParse(row.version.release);
       if (!parsed.success) continue;
       const release = parsed.data;
@@ -102,11 +109,11 @@ export function activationService(db: Db) {
       .from(companies)
       .where(eq(companies.id, companyId));
     if (!company) throw notFound("Company not found");
-    const available = await capabilities(tx);
+    const available = await capabilities(tx, state.packageVersionId);
     const selected = available.find(
       (c) => c.versionId === state.packageVersionId,
     );
-    const requiredAccess = selected ? await readActivationRequiredAccess(tx, actor, companyId, selected.requiredConnections) : [];
+    const requiredAccess = selected ? await readActivationRequiredAccess(tx, actor, companyId, selected.requiredConnections, { runId: run.id, version: run.version, packageVersionId: selected.versionId, step: state.step }) : [];
     const firstValue = await activationFirstValueView(
       tx,
       actor,
@@ -355,7 +362,7 @@ export function activationService(db: Db) {
           }
           case "continue_access": {
             requireStep("access");
-            const selected = (await capabilities(txDb)).find(
+            const selected = (await capabilities(txDb, state.packageVersionId)).find(
               (c) => c.versionId === state.packageVersionId,
             );
             if (!selected)
@@ -364,7 +371,7 @@ export function activationService(db: Db) {
               });
             if (!await readFirstAgentCapabilityPin(txDb, selected.versionId))
               throw conflict("Choose a current qualified capability", { code: "CAPABILITY_UNAVAILABLE" });
-            const required = await readActivationRequiredAccess(txDb, actor, companyId, selected.requiredConnections);
+            const required = await readActivationRequiredAccess(txDb, actor, companyId, selected.requiredConnections, { runId: run.id, version: run.version, packageVersionId: selected.versionId, step: state.step });
             if (required.some(row => row.status !== "recorded"))
               throw conflict("Required connection setup needs review", {
                 code: "REQUIRED_ACCESS_PENDING",
@@ -377,7 +384,7 @@ export function activationService(db: Db) {
             if (state.firstAgent || state.firstTask || state.preparedFirstTask || state.firstValueReceipt || state.firstValueAt)
               throw conflict("Continue the existing preparation through its original controls", { code: "FIRST_PREPARATION_EXISTS" });
             await assertV5Authorization(txDb, { ...actor, ignoreInstanceAdmin: true }, companyId, "agents:create");
-            const selected = (await capabilities(txDb)).find(c => c.versionId === state.packageVersionId);
+            const selected = (await capabilities(txDb, state.packageVersionId)).find(c => c.versionId === state.packageVersionId);
             if (!selected) throw conflict("Choose a current qualified capability", { code: "CAPABILITY_UNAVAILABLE" });
             if (await hasOriginalFirstAgentPreparation(txDb, companyId, selected.versionId, run.answers))
               throw conflict("Continue the existing original agent or installed capability", { code: "FIRST_PREPARATION_EXISTS" });
@@ -467,7 +474,7 @@ export function activationService(db: Db) {
           case "record_verified_result": {
             if (!["review", "running"].includes(state.step)) throw conflict("Continue at the current setup step");
             if (
-              !(await capabilities(txDb)).some(
+              !(await capabilities(txDb, state.packageVersionId)).some(
                 (c) => c.versionId === state.packageVersionId,
               )
             )

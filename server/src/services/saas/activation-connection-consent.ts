@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { and, eq, ne } from "drizzle-orm";
 import { activationConnectionConsents, agentPackageVersions, companies, toolApplications, toolConnections, type Db } from "@paperclipai/db";
-import { activationConnectionConsentCommandSchema, activationConnectionConsentReceiptSchema, activationConnectionReviewSchema, packageReleaseSchema, v9FeatureEnabled } from "@paperclipai/shared";
+import { activationConnectionConsentCommandSchema, activationConnectionConsentWithdrawalCommandSchema, activationConnectionConsentReceiptSchema, activationConnectionReviewSchema, packageReleaseSchema, v9FeatureEnabled } from "@paperclipai/shared";
 import { conflict, forbidden, notFound } from "../../errors.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { assertV5Authorization } from "../v5-authorization.js";
@@ -20,6 +20,7 @@ const publicReceipt = (row: Receipt) => activationConnectionConsentReceiptSchema
   id: row.id, companyId: row.companyId, onboardingRunId: row.onboardingRunId,
   packageVersionId: row.packageVersionId, applicationId: row.applicationId,
   requestKey: row.requestKey, status: row.status, connectionId: row.connectionId,
+  reviewHash: row.reviewHash, onboardingVersion: row.onboardingVersion,
   requestedAt: row.requestedAt.toISOString(), connectedAt: row.connectedAt?.toISOString() ?? null,
 });
 
@@ -53,7 +54,7 @@ async function source(tx: Db, actor: AuthorizationActor, companyId: string, appl
   const galleryKey = app.metadata?.sourceTemplateKey ?? app.metadata?.galleryKey;
   if (typeof galleryKey !== "string") throw conflict("The original application provider needs review");
   return { ...current, app, galleryKey, pin, purpose: release.manifest.purpose,
-    applicationHash: nativeSha256({ id: app.id, key: app.applicationKey, name: app.name, metadata: app.metadata, updatedAt: app.updatedAt.toISOString() }) };
+    applicationHash: nativeSha256({ id: app.id, key: app.applicationKey, name: app.name, metadata: app.metadata, status: app.status, archivedAt: app.archivedAt?.toISOString() ?? null }) };
 }
 
 function review(current: Awaited<ReturnType<typeof source>>, method: Method) {
@@ -88,6 +89,36 @@ export function activationConnectionConsentService(db: Db, methods: Methods = to
     return { initial, method };
   }
   return {
+    async getCurrentReceipt(actor: AuthorizationActor, companyId: string, applicationKey: string) {
+      return db.transaction(async tx => {
+        const current = await owner(tx as unknown as Db, actor, companyId);
+        const rows = await tx.select().from(activationConnectionConsents).where(and(
+          eq(activationConnectionConsents.companyId, companyId), eq(activationConnectionConsents.onboardingRunId, current.run.id),
+          eq(activationConnectionConsents.subjectUserId, current.userId), eq(activationConnectionConsents.applicationKey, applicationKey),
+          ne(activationConnectionConsents.status, "withdrawn"))).orderBy(activationConnectionConsents.id).limit(2);
+        if (rows.length > 1) throw conflict("The original application identity needs review");
+        return rows[0] ? publicReceipt(rows[0]) : null;
+      });
+    },
+    async withdraw(actor: AuthorizationActor, companyId: string, requestKey: string, raw: unknown) {
+      const input = activationConnectionConsentWithdrawalCommandSchema.parse(raw);
+      return withV7ActivityTransaction(db, async (tx, publications) => {
+        const current = await owner(tx, actor, companyId, true);
+        await assertV5Authorization(tx, { ...actor, ignoreInstanceAdmin: true }, companyId, "tools:admin");
+        const [row] = await tx.select().from(activationConnectionConsents).where(and(
+          eq(activationConnectionConsents.companyId, companyId), eq(activationConnectionConsents.onboardingRunId, current.run.id),
+          eq(activationConnectionConsents.subjectUserId, current.userId), eq(activationConnectionConsents.requestKey, requestKey))).for("update");
+        if (!row) throw notFound("Original connection consent receipt not found");
+        if (row.reviewHash !== input.expectedReviewHash) throw conflict("The original purpose decision changed; review it again");
+        if (row.status === "withdrawn") return publicReceipt(row);
+        const [changed] = await tx.update(activationConnectionConsents).set({ status: "withdrawn" })
+          .where(eq(activationConnectionConsents.id, row.id)).returning();
+        await logActivity(tx, { companyId, actorType: "user", actorId: current.userId,
+          action: "activation.connection_consent_withdrawn", entityType: "activation_connection_consent", entityId: row.id,
+          details: { connectionId: row.connectionId, providerCredentialRevocation: "original_apps_owner" } }, publications);
+        return publicReceipt(changed!);
+      });
+    },
     /** Internal callbacks for the existing Apps allocator. Claim precedes P2;
      * guard and binding share the original connection insertion transaction. */
     allocationOwner(actor: AuthorizationActor, companyId: string, requestKey: string): GalleryAppAllocationOwner {

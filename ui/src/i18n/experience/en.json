@@ -359,6 +359,44 @@
       "pending_approval": "Agent preparation is awaiting the required approval. No work has started.",
       "needs_review": "The original agent or capability has changed. Review its current setup before continuing.",
       "unavailable": "The original prepared agent is unavailable. No replacement has been created."
+    },
+    "connectionConsent": {
+      "title": "Connection permissions",
+      "checking": "Checking current connection access…",
+      "contextChanged": "Setup or account access changed. Check it again.",
+      "unavailable": "This connection needs a verified permission review. You can choose another capability or review it in Apps.",
+      "boundary": "This decision authorizes personal connection setup only. Provider sign-in is separate. Agent access and business actions need their own review and Safe Test.",
+      "unknown": "The reply could not be confirmed. Check the original receipt before continuing.",
+      "withdrawn": "The purpose approval was withdrawn. Provider credentials and any connection history remain with Apps.",
+      "reviewDecision": "Review connection approval",
+      "withdraw": "Withdraw purpose approval",
+      "withdrawTitle": "Withdraw this purpose approval?",
+      "approveTitle": "Approve this connection purpose?",
+      "withdrawBoundary": "This prevents continuing this onboarding purpose. It does not revoke provider credentials or confirm that an in-flight provider operation stopped. Manage the provider connection in Apps.",
+      "confirmWithdrawal": "I confirm withdrawal of this purpose approval.",
+      "confirmApproval": "I approve the exact personal connection purpose above, with no Agent access.",
+      "confirm": "Confirm decision",
+      "checkReceipt": "Check original receipt",
+      "providerSetup": "Continue to provider sign-in",
+      "deferAgentAccess": "No Agent receives access during setup. Agent access needs a separate current purpose review and Safe Test.",
+      "fields": {
+        "neededNow": "Needed now",
+        "why": "Why",
+        "usedBy": "Used by",
+        "canRead": "Can read",
+        "canChange": "Can change",
+        "notRequested": "Not requested",
+        "automatic": "Automatic",
+        "asksFirst": "Asks first"
+      },
+      "status": {
+        "approved": "Purpose approved. Provider sign-in has not been confirmed.",
+        "allocating": "Original setup is pending. Check its receipt; do not start another connection.",
+        "allocated": "The original connection exists. Provider sign-in and validation still need confirmation.",
+        "connected": "The original personal connection was validated. This grants no Agent access.",
+        "withdrawn": "Purpose approval withdrawn.",
+        "changed": "The reviewed setup changed. Withdraw the earlier purpose approval before reviewing a new one."
+      }
     }
   },
   "company": {

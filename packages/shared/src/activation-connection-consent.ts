@@ -48,6 +48,11 @@ export const activationConnectionConsentCommandSchema = z.strictObject({
   expectedReviewHash: hash,
 });
 
+export const activationConnectionConsentWithdrawalCommandSchema = z.strictObject({
+  confirmWithdrawal: z.literal(true),
+  expectedReviewHash: hash,
+});
+
 export const activationConnectionConsentReceiptSchema = z.strictObject({
   id: z.uuid(),
   companyId: z.uuid(),
@@ -55,6 +60,8 @@ export const activationConnectionConsentReceiptSchema = z.strictObject({
   packageVersionId: z.uuid(),
   applicationId: z.uuid(),
   requestKey,
+  reviewHash: hash,
+  onboardingVersion: z.number().int().positive(),
   status: z.enum(["approved", "allocating", "allocated", "connected", "withdrawn"]),
   connectionId: z.uuid().nullable(),
   requestedAt: z.iso.datetime(),

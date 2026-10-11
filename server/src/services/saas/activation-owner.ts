@@ -1,11 +1,14 @@
 import { and, eq, sql } from "drizzle-orm";
-import { authUsers, companyMemberships, companyOnboardingRuns, instanceSettings, type Db } from "@paperclipai/db";
-import { activationStateSchema } from "@paperclipai/shared";
-import { forbidden, notFound } from "../../errors.js";
+import { activationConnectionConsents, authUsers, companies, companyMemberships, companyOnboardingRuns, instanceSettings, toolApplications, toolConnections, type Db } from "@paperclipai/db";
+import { activationStateSchema, v9FeatureEnabled } from "@paperclipai/shared";
+import { conflict, forbidden, notFound } from "../../errors.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { assertV5Authorization, v5HumanActorId } from "../v5-authorization.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
+import { readFirstAgentCapabilityPin } from "./activation-first-agent.js";
+import { instanceSettingsService } from "../instance-settings.js";
+import { nativeSha256 } from "../native-runtime/canonical.js";
 
 /** Shared original onboarding locks and human authority. No cached session,
  * instance-admin flag, consent receipt or provider credential grants access. */
@@ -78,4 +81,41 @@ export async function readActivationOwner(
     userId,
     state: activationStateSchema.parse(run.activationState),
   };
+}
+
+/** At the original provider/finish boundary. A historical allocation receipt
+ * never replaces the current initiating human, scope or capability authority. */
+export async function assertActivationConnectionPurpose(db: Db, actor: AuthorizationActor, companyId: string, connectionId: string,
+  validateConnection: (connection: typeof toolConnections.$inferSelect, purpose: typeof activationConnectionConsents.$inferSelect) => void) {
+  return db.transaction(transaction => assertActivationConnectionPurposeInTransaction(transaction as unknown as Db, actor, companyId, connectionId, validateConnection));
+}
+
+/** Recheck in the original finish transaction, before its writes. */
+export async function assertActivationConnectionPurposeInTransaction(tx: Db, actor: AuthorizationActor, companyId: string, connectionId: string,
+  validateConnection: (connection: typeof toolConnections.$inferSelect, purpose: typeof activationConnectionConsents.$inferSelect) => void) {
+    await assertActivationAccess(tx, actor, companyId);
+    await lockActivationSnapshot(tx, companyId);
+    await assertActivationAccess(tx, actor, companyId, true);
+    const [company] = await tx.select().from(companies).where(eq(companies.id, companyId)).for("share");
+    if (!company || company.status !== "active") throw forbidden("Company setup is unavailable");
+    const current = await readActivationOwner(tx, actor, companyId, true);
+    await assertV5Authorization(tx, { ...actor, ignoreInstanceAdmin: true }, companyId, "tools:admin");
+    const [purpose] = await tx.select().from(activationConnectionConsents).where(and(
+      eq(activationConnectionConsents.companyId, companyId), eq(activationConnectionConsents.connectionId, connectionId))).for("share");
+    if (!purpose || !["allocated", "connected"].includes(purpose.status) || purpose.subjectUserId !== current.userId ||
+        purpose.onboardingRunId !== current.run.id || purpose.packageVersionId !== current.state.packageVersionId ||
+        current.run.status !== "in_progress" || current.run.version !== purpose.onboardingVersion || current.state.step !== "access" ||
+        !v9FeatureEnabled(await instanceSettingsService(tx).getExperimental(), "activation_v9"))
+      throw conflict("The original connection purpose is no longer current");
+    const pin = await readFirstAgentCapabilityPin(tx, purpose.packageVersionId);
+    const [app] = await tx.select().from(toolApplications).where(and(eq(toolApplications.companyId, companyId),
+      eq(toolApplications.id, purpose.applicationId))).for("share");
+    if (!pin || pin.hash !== purpose.packageContentHash || !app || app.status !== "active" || app.archivedAt ||
+        nativeSha256({ id: app.id, key: app.applicationKey, name: app.name, metadata: app.metadata, status: app.status, archivedAt: null }) !== purpose.applicationHash)
+      throw conflict("The approved capability or connection application changed");
+    const [connection] = await tx.select().from(toolConnections).where(and(eq(toolConnections.companyId, companyId),
+      eq(toolConnections.id, connectionId))).for("share");
+    if (!connection) throw notFound("The original connection allocation is unavailable");
+    validateConnection(connection, purpose);
+    return purpose;
 }

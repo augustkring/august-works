@@ -1,3 +1,4 @@
+import { ActivationConnectionConsent } from "../components/ActivationConnectionConsent";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
@@ -633,6 +634,14 @@ function ActivationScope({
               ))}
             </ul>
           ) : null}
+          {!isPast && selected && companyId ? selected.requiredConnections.map(applicationKey => <ActivationConnectionConsent
+            key={`${current.runId}:${current.version}:${applicationKey}`} companyId={companyId} principal={principal}
+            runId={current.runId} version={current.version} packageVersionId={selected.versionId} applicationKey={applicationKey}
+            enabled={enabled && !frozen} onSetupChanged={() => { if (canUseAuthority()) void client.invalidateQueries({ queryKey: key, exact: true }); }} canUseAuthority={() => {
+              const snapshot = client.getQueryState(key), value = client.getQueryData<ActivationView>(key);
+              return canUseAuthority() && snapshot?.status === "success" && snapshot.fetchStatus === "idle" && !snapshot.isInvalidated &&
+                value?.runId === current.runId && value.version === current.version && value.state.packageVersionId === selected.versionId;
+            }} />) : null}
           <p>{t("activation.noGrants")}</p>
           {selected?.requiredConnections.length ? (
             <p>{t("activation.connectionOutcome", { purpose: selected.purpose })}</p>
