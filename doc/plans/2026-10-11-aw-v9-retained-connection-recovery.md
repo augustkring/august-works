@@ -43,3 +43,11 @@ All 12 pruned historical snapshots were restored byte-for-byte. The inspectable
 Native metadata guard was appended; Original positive completion and validation
 guards remain unchanged. Shared/DB builds, focus, Native, types and built-browser
 qualification remains pending; no customer migration ran.
+
+Shared and DB builds V1 passed; Focus V1 passed 220 cases in eight complete
+Original files. Native V1 retained 458 passes and one failure out of 459: the new
+expiry fixture attempted to update an active grant after withdrawal. Original
+callback ownership correctly forbids that mutation. The fixture now sets the
+owned credential expiry while the original purpose is current, then withdraws
+before the pending successor review. No production fence, assertion or deadline
+changed. Types/browser V1 did not start. Exact-source rerun V2 is pending.

@@ -2083,10 +2083,11 @@ const support = await getEmbeddedPostgresTestSupport();
       expect((await c.owner.getReceipt(f.actor, f.home, c.command.requestKey))?.status).toBe("withdrawn");
     });
     it("retains one expired personal connection under fresh C3 until actual Original reconnect establishes current evidence", async () => {
-      const c = await originalCompletedPersonalConnection(), original = await withdrawCompletedPurpose(c);
+      const c = await originalCompletedPersonalConnection();
       const [grant] = await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, c.allocated.connectionId));
       await db.update(connectionGrants).set({ providerTenant: { ...grant!.providerTenant,
         oauth: { ...grant!.providerTenant?.oauth, accessTokenExpiresAt: "2000-01-01T00:00:00Z" } } }).where(eq(connectionGrants.id, grant!.id));
+      const original = await withdrawCompletedPurpose(c);
       const connections = await db.select().from(toolConnections).where(eq(toolConnections.id, c.allocated.connectionId));
       const grants = await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, c.allocated.connectionId));
       const secrets = await db.select().from(companySecrets).where(eq(companySecrets.companyId, f.home));
