@@ -106,3 +106,17 @@ traceability gates, with unchanged Source SHA-256
 Later additions cover original membership and OAuth ownership plus the truthful
 onboarding review heading; a fresh focused check will precede heavy scope
 qualification. None of these checks qualifies Native retirement or full V9.
+
+## Generated Native migration — 2026-10-11
+
+Actual `pnpm db:generate` created `0464_short_talon.sql` and its Drizzle
+snapshot/journal entry. The reviewed migration installs the new receipt table,
+original composite Agent/company cascade references and permanent Native
+state, binding and automation fences. Generated DDL contains no destructive
+table/column/data operation. The historical 0459 snapshot automatically pruned
+by generation is restored unchanged from committed source.
+
+Original migration numbering and safety checks pass (existing historical
+baseline remains unchanged). Actual migrated Native, current full server/UI
+types and built retirement browser qualification remain pending. A generated
+migration or source fence is not a passed postcondition.
