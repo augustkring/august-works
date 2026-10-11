@@ -1421,7 +1421,11 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
       });
       expect(fresh).not.toBeNull();
       await drainHeartbeatRunsToQuiescence(db, heartbeat);
-      expect(legacyAdapterExecute).toHaveBeenCalledOnce();
+      const [freshDiagnosis] = await db.select({ status: heartbeatRuns.status, error: heartbeatRuns.error,
+        errorCode: heartbeatRuns.errorCode }).from(heartbeatRuns).where(eq(heartbeatRuns.id, fresh!.id));
+      // This original test uses owned fake provider/workspace data only. Keep
+      // the original success assertion and expose its bounded native refusal.
+      expect(legacyAdapterExecute, JSON.stringify(freshDiagnosis)).toHaveBeenCalledOnce();
       await expect(
         db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fresh!.id)),
       ).resolves.toEqual([
