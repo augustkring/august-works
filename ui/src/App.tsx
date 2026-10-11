@@ -4,6 +4,7 @@ import {
   MemoryMaintenanceHistoryEntry,
   ExperienceMeasuresEntry,
   AgentMonitorEntry,
+  AgentRetirementEntry,
   CustomAgent,
   HireAgent,
   MyFeedback,
@@ -372,6 +373,7 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       <Route path="agents/hire/drafts/:draftId/:screen?" element={<HireAgent />} />
       <Route path="agents/custom/:draftId/:screen?" element={<CustomAgent />} />
       <Route path="agents/:agentId/monitor" element={<AgentMonitorEntry />} />
+      <Route path="agents/:agentId/retire" element={<AgentRetirementEntry />} />
       <Route path="agents/:agentId" element={<AgentDetail />} />
       <Route path="agents/:agentId/:tab" element={<AgentDetail />} />
       <Route path="agents/:agentId/runs/:runId" element={<AgentDetail />} />

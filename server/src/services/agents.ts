@@ -2,7 +2,7 @@ import { isSaasDeployment } from "../deployment-profile.js";
 import { assertSaasRemoteAdapterConfig } from "./saas/execution-admission.js";
 import { agentAppearanceSchema, randomAgentAppearance, resolveAgentAppearance, agentAvatarUrl } from "@paperclipai/shared";
 import { createHash, randomBytes } from "node:crypto";
-import { and, desc, eq, gte, inArray, lt, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
@@ -1031,26 +1031,28 @@ export function agentService(db: Db) {
     },
 
     terminate: async (id: string) => {
-      const existing = await getById(id);
-      if (!existing) return null;
+      return db.transaction(async (transaction) => {
+        const tx = transaction as unknown as Db;
+        const [existing] = await tx.select({ id: agents.id }).from(agents).where(eq(agents.id, id)).for("update");
+        if (!existing) return null;
+        await tx
+          .update(agents)
+          .set({
+            status: "terminated",
+            pauseReason: null,
+            pausedAt: null,
+            errorReason: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(agents.id, id));
 
-      await db
-        .update(agents)
-        .set({
-          status: "terminated",
-          pauseReason: null,
-          pausedAt: null,
-          errorReason: null,
-          updatedAt: new Date(),
-        })
-        .where(eq(agents.id, id));
+        await tx
+          .update(agentApiKeys)
+          .set({ revokedAt: new Date() })
+          .where(and(eq(agentApiKeys.agentId, id), isNull(agentApiKeys.revokedAt)));
 
-      await db
-        .update(agentApiKeys)
-        .set({ revokedAt: new Date() })
-        .where(eq(agentApiKeys.agentId, id));
-
-      return getById(id);
+        return agentService(tx).getById(id);
+      });
     },
 
     remove: async (id: string) => {

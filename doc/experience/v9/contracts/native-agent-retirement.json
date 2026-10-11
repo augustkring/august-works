@@ -1,0 +1,52 @@
+{
+  "screenId": "NATIVE-AGENT-RETIREMENT",
+  "routeOrSurface": "/agents/:agentId/retire",
+  "sourceSections": [
+    "79.6"
+  ],
+  "status": "in_progress",
+  "canonicalReadOwners": [
+    "Original Agent",
+    "Original work/automation/approval owners",
+    "Original Agent-local access",
+    "Original provider grants and credential issuance",
+    "Original package installation",
+    "Original account/company authority"
+  ],
+  "canonicalWriteOperation": "Original transactional Agent termination and reviewed Agent-only cleanup with one immutable receipt and original Activity Log audit",
+  "entryConditions": [
+    "Current verified human membership",
+    "Original Agent read/configure/runtime authority",
+    "Original permission- and tool-administration authority",
+    "Paused Agent or explicitly reviewed legacy stopped Agent",
+    "Settled/reassigned work and disconnected automation/dependent agents",
+    "Original provider credentials and installations reconciled",
+    "Bounded current access review",
+    "Explicit current-source C3 confirmation"
+  ],
+  "content": [
+    "Original Agent name and current observation time",
+    "Fixed outstanding requirements",
+    "Bounded local access and permission-settings counts",
+    "Permanent confirmation",
+    "Original-owner unknown-answer read and same-request retry"
+  ],
+  "processingContract": "packages/shared/src/agent-retirement.ts#AGENT_RETIREMENT_PROCESSING_CONTRACT",
+  "prohibitedClaims": [
+    "Legacy termination alone proves full retirement",
+    "External runtime physically stopped",
+    "Provider-side credentials revoked by this operation",
+    "Shared provider or credential definitions deleted",
+    "History erased or retention execution qualified",
+    "Different intent authorized by old confirmation",
+    "Full Agent lifecycle or V9 launch acceptance"
+  ],
+  "privacy": "Private no-store all-method namespace, strict account/company/Agent binding, current authorization/source locks, bounded metadata only, original Agent/company receipt lifetime and original audit retention. No Telemetry caller or provider export.",
+  "recovery": "Pre-commit failure rolls back Agent, keys, access, receipt and audit without live publication. Unknown replies require current original-owner read or exact same request. Changed source/authority needs renewed review. No automatic undo or reconstructed grant.",
+  "localization": [
+    "en",
+    "da"
+  ],
+  "accessibility": "Single original main landmark, heading/error/return-link focus, semantic checkbox and counts, keyboard actions, token touch targets and mobile reflow.",
+  "acceptance": "Two earlier scoped snapshots each passed 33 focused cases and token gates; the second also passed non-release traceability. Later membership/OAuth ownership and review-heading Source changes require a fresh focused check. Migration, strict types, Native, built UI, full regression and human/live acceptance remain pending. All 70 launch surfaces are pending and sourceComplete remains false."
+}

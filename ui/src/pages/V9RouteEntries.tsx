@@ -36,6 +36,9 @@ export const AgentMonitorEntry = deferredPage(() =>
     default: page.AgentMonitorEntry,
   })),
 );
+export const AgentRetirementEntry = deferredPage(() =>
+  import("./AgentRetirement").then((page) => ({ default: page.AgentRetirementEntry })),
+);
 export const CustomAgent = deferredPage(() =>
   import("./CustomAgent").then((page) => ({ default: page.CustomAgent })),
 );

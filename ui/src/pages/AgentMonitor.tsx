@@ -9,6 +9,7 @@ import { useCompany } from "../context/CompanyContext";
 import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
 import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
 import { Button } from "../components/ui/button";
+import { AgentRetirementLink } from "../components/AgentRetirementLink";
 
 export function AgentMonitorEntry() {
   const feature = useV9FeatureEnabled("progressive_shell_v9");
@@ -126,6 +127,7 @@ export function AgentMonitor({
         {t("agentMonitorTitle", { name: view.name })}
       </h1>
       <p className="text-muted-foreground">{t("agentMonitorBoundary")}</p>
+      <AgentRetirementLink company={company} principal={principal} agentId={agentId} />
       <section
         aria-label={t("agentMonitorState")}
         className="space-y-2 rounded-lg border border-border p-4"

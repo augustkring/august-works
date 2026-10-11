@@ -1438,5 +1438,48 @@
     "pending_one": "{{count}} ventende native kørsel er tilbage. Gennemgå dens oprindelige kontrolfunktioner.",
     "pending_other": "{{count}} ventende native kørsler er tilbage. Gennemgå deres oprindelige kontrolfunktioner.",
     "unavailable": "Ventende arbejde kunne ikke kontrolleres fuldt ud. Gennemgå kørslernes oprindelige kontrolfunktioner, før agenten betragtes som afklaret."
+  },
+  "retirement": {
+    "title": "Pensionér {{name}}",
+    "review": "Gennemgå pensionering",
+    "boundary": "Pensionering stopper permanent nyt arbejde fra denne agent og fjerner de lokale adgange nedenfor. Konfiguration, afsluttet arbejde og revisionshistorik følger virksomhedens eksisterende opbevaringspolitik. Tilsluttede tjenester og uafklaret arbejde skal håndteres først.",
+    "alreadyStopped": "Denne agent er tidligere blevet stoppet. Fuld pensionering og oprydning i dens adgange kræver stadig gennemgang.",
+    "observed": "Aktuel tilstand kontrolleret:",
+    "completed": "Pensionering er bekræftet. De viste lokale adgange blev fjernet. Handlingen kontaktede ingen eksterne tjenester.",
+    "required": "Før pensionering",
+    "ready": "Den aktuelle gennemgang viser ingen udestående krav til pensionering.",
+    "removed": "Fjernede lokale adgange",
+    "toRemove": "Lokale adgange, der skal fjernes",
+    "accessUnavailable": "Et komplet antal adgange er ikke tilgængeligt. Pensionering er blokeret, indtil alle adgange kan gennemgås.",
+    "confirm": "Jeg har gennemgået de aktuelle krav og lokale adgange. Pensionér denne agent permanent, og bevar historikken efter virksomhedens eksisterende politik.",
+    "retire": "Pensionér agent permanent",
+    "back": "Tilbage til agent",
+    "unavailable": "Pensionering er ikke tilgængelig. Kontrollér din konto og aktuelle adgang igen.",
+    "unconfirmed": "Pensioneringsanmodningen kunne ikke bekræftes. Kontrollér den aktuelle tilstand, eller prøv samme anmodning igen. Din bekræftelse gælder ikke en anden anmodning.",
+    "retrySame": "Prøv samme pensionering igen",
+    "checkStatus": "Kontrollér aktuel tilstand",
+    "reviewWork": "Gennemgå arbejde",
+    "reviewApps": "Gennemgå tilsluttede apps",
+    "reviewAgents": "Gennemgå agenter",
+    "blocker": {
+      "pause_required": "Sæt agenten på pause, før du gennemgår pensionering.",
+      "work_pending": "Afslut eller omfordel udestående arbejde, anmodninger og uafklarede handlinger via deres eksisterende kontroller.",
+      "automation_connected": "Fjern agenten fra tilsluttede rutiner, pipelines og workflows, før den pensioneres.",
+      "reports_pending": "Omfordel agenter, der rapporterer til denne agent.",
+      "disconnect_required": "Afbryd installerede funktioner og udbyderadgang, og afklar udestående adgangsoplysninger via deres eksisterende kontroller.",
+      "protected_agent": "Denne indbyggede agent kan ikke pensioneres her.",
+      "source_limit": "Gennemgangen af adgange overskrider den understøttede grænse. Pensionering kan ikke nøjes med at fjerne nogle af adgangene.",
+      "disabled": "Nye pensioneringer er i øjeblikket deaktiveret i denne installation."
+    },
+    "access": {
+      "apiKeys": "Agentens API-nøgler",
+      "permissions": "Agenttilladelser og delegeret adgang",
+      "connectedApps": "Lokale appforbindelser",
+      "credentialBindings": "Lokale links til adgangsoplysninger",
+      "runtimeBindings": "Links til runtimeadgang",
+      "toolTokens": "Lokale værktøjstokens og sessioner",
+      "toolProfiles": "Links til værktøjsprofiler",
+      "agentPermissionSettings": "Agentens tilladelsesindstillinger"
+    }
   }
 }

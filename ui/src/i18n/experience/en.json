@@ -1438,5 +1438,48 @@
     "pending_one": "{{count}} pending native run remains. Review its original run controls.",
     "pending_other": "{{count}} pending native runs remain. Review their original run controls.",
     "unavailable": "Pending work could not be fully checked. Review the original run controls before treating the agent as settled."
+  },
+  "retirement": {
+    "title": "Retire {{name}}",
+    "review": "Review retirement",
+    "boundary": "Retirement permanently stops new work by this agent and removes the local access listed below. Configuration, completed work and audit history follow the existing company retention policy. Connected services and unresolved work must be handled first.",
+    "alreadyStopped": "This agent was previously stopped. Its full retirement and access cleanup still require review.",
+    "observed": "Current state checked:",
+    "completed": "Retirement is confirmed. The listed local access was removed. No external service was contacted by this operation.",
+    "required": "Before retirement",
+    "ready": "The current review has no outstanding retirement requirements.",
+    "removed": "Local access removed",
+    "toRemove": "Local access to remove",
+    "accessUnavailable": "A complete access count is unavailable. Retirement is blocked until all access can be reviewed.",
+    "confirm": "I have reviewed the current requirements and local access. Permanently retire this agent and keep its history under the existing company policy.",
+    "retire": "Permanently retire agent",
+    "back": "Back to agent",
+    "unavailable": "Retirement controls are unavailable. Recheck your account and current access.",
+    "unconfirmed": "The retirement request could not be confirmed. Check the current state, or retry the same request. Your confirmation does not authorize a different request.",
+    "retrySame": "Retry the same retirement",
+    "checkStatus": "Check current state",
+    "reviewWork": "Review work",
+    "reviewApps": "Review connected apps",
+    "reviewAgents": "Review agents",
+    "blocker": {
+      "pause_required": "Pause this agent before reviewing retirement.",
+      "work_pending": "Settle or reassign outstanding work, requests and unresolved actions through their original controls.",
+      "automation_connected": "Remove this agent from connected routines, pipelines and workflows before retiring it.",
+      "reports_pending": "Reassign agents that report to this agent.",
+      "disconnect_required": "Disconnect installed capabilities and provider access, and reconcile outstanding credentials through their original controls.",
+      "protected_agent": "This built-in agent cannot be retired here.",
+      "source_limit": "The access review exceeds the supported limit. Retirement cannot remove only part of its access.",
+      "disabled": "New retirements are currently disabled in this instance."
+    },
+    "access": {
+      "apiKeys": "Agent API keys",
+      "permissions": "Agent permissions and delegated access",
+      "connectedApps": "Local app connections",
+      "credentialBindings": "Local credential links",
+      "runtimeBindings": "Runtime access links",
+      "toolTokens": "Local tool tokens and sessions",
+      "toolProfiles": "Tool profile links",
+      "agentPermissionSettings": "Agent permission settings"
+    }
   }
 }

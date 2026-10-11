@@ -1,5 +1,13 @@
 # V9 experience coverage
 
+The supporting [original Agent retirement contract](contracts/native-agent-retirement.json)
+adds a reviewed C3 cleanup boundary on the original Agent owner. It preserves
+work/history and shared provider state, blocks unsettled work or credentials,
+and requires explicit current-source confirmation. Migration, Native and built
+UI checks remain pending in the
+[scope plan](../../plans/2026-10-11-aw-v9-agent-retirement.md). Full lifecycle,
+human/live acceptance and V9 launch readiness remain open.
+
 The [coverage manifest](coverage.json) links stable screen IDs to exact sections
 of the unchanged V3 brief, including all ONB/HIRE/CUSTOM screens. It distinguishes
 source-defined policy from delivered and verified behavior. Source paragraph

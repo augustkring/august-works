@@ -2,6 +2,7 @@ import { customerSupportRoutes } from "./routes/customer-support.js";
 import { maintenanceHistoryRoutes } from "./routes/maintenance-history.js";
 import { experienceMeasuresRoutes } from "./routes/experience-measures.js";
 import { agentMonitorRoutes } from "./routes/agent-monitor.js";
+import { agentRetirementRoutes } from "./routes/agent-retirement.js";
 import { enterpriseRoutes } from "./routes/enterprise.js";
 import { agentPackageRoutes } from "./routes/agent-packages.js";
 import { agentAuthoringRoutes } from "./routes/agent-authoring.js";
@@ -913,6 +914,7 @@ export async function createApp(
   api.use(experienceRoutes(db));
   api.use(agentAuthoringRoutes(db));
   api.use(agentMonitorRoutes(db));
+  api.use(agentRetirementRoutes(db));
   api.use(maintenanceHistoryRoutes(db));
   api.use(experienceMeasuresRoutes(db));
   api.use(customerSupportRoutes(db));

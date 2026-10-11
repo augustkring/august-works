@@ -297,3 +297,4 @@ export { adaptivePlanningProposals } from "./adaptive_planning.js";
 
 export * from "./customer_feedback.js";
 export * from "./agent_configuration_drafts.js";
+export * from "./agent_retirements.js";
