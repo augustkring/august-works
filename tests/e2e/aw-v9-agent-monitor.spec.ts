@@ -62,6 +62,12 @@ test("customer agent monitor follows native state and keeps business verificatio
         exact: true,
       }),
     ).toBeVisible();
+    const pausedView = await json(await request.get(
+      `/api/companies/${company.id}/agents/${agent.id}/experience?expectedUserId=local-board`,
+    ));
+    expect(pausedView.pausedWork).toEqual({ status: "none", pendingRuns: 0 });
+    await expect(page.getByText("No pending native runs were recorded at this check.", { exact: false })).toBeVisible();
+    await expect(page.getByText("does not confirm that a remote process stopped", { exact: false })).toBeVisible();
     await page.setViewportSize({ width: 390, height: 844 });
     await page.addScriptTag({ path: axePath });
     const violations = await page.evaluate(
