@@ -1,3 +1,5 @@
+import { readActivationFirstValue } from "../services/saas/activation-first-value.js";
+import { lockActivationSnapshot, readActivationOwner } from "../services/saas/activation-owner.js";
 import { toolAccessRoutes } from "../routes/tool-access.js";
 import { activationConnectionConsentService } from "../services/saas/activation-connection-consent.js";
 import { toolAccessService } from "../services/tool-access.js";
@@ -2190,6 +2192,17 @@ const support = await getEmbeddedPostgresTestSupport();
         [referenceKind]: { installationId: fixture.installation.id, installationHash: fixture.installation.activationHash!, planId: fixture.review.planId, issueId: fixture.task.id } },
         currentStage: referenceKind === "firstTask" ? "v9_running" : "v9_review", version: fixture.onboarding.version + 1 }).where(eq(companyOnboardingRuns.id, fixture.onboarding.id));
       const activation = activationService(db), current = await activation.get(f.actor, f.home);
+      if (!current.firstValue?.candidates.length) {
+        // Inspect the same original refusal only when projection is empty.
+        // Preserve the assertion and every authority/clock budget below.
+        await db.transaction(async transaction => {
+          const tx = transaction as unknown as Db;
+          await lockActivationSnapshot(tx, f.home);
+          const original = await readActivationOwner(tx, f.actor, f.home, true);
+          await readActivationFirstValue(tx, f.actor, f.home, { createdAt: original.run.createdAt,
+            createdByUserId: original.userId, activationState: original.state }, fixture.installation.id, fixture.review.id);
+        });
+      }
       expect(current.firstValue?.candidates).toHaveLength(1);
       const recorded = await activation.command(f.actor, f.home, { operation: "record_verified_result", requestId: randomUUID(),
         expectedVersion: current.version, installationId: fixture.installation.id, verificationRunId: fixture.review.id });

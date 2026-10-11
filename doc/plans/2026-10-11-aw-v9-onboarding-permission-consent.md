@@ -108,3 +108,29 @@ and configurable resources need their own verified original preview.
 The declared connected receipt state is not a writer or qualification by itself.
 No Agent promotion, Safe Test, hosted Free Core, usable first value, full V9 or
 PR readiness is claimed. Continue the original complete V9 implementation.
+
+
+## Qualified original consent/allocation owner (2026-10-11)
+
+Native V5 passed all 434 cases in all three complete original suites (351 Apps,
+72 packages, 11 activation), including all eight new ownership cases. Shared/DB
+builds and the original full server/UI type commands passed in Types V4.
+Both runs froze HEAD a5bba5f233ed63ea597c0f374bae6248807ff847 plus the
+refusal-only first-task diagnostic at Source SHA256
+4628ddabd9c07f0162a135e1d63c835a369aa33b223f84d1a854c3a8e0df91b3.
+The before/after source hashes match. Actual migrated PostgreSQL and native
+ArtifactSandbox ran as UID 1004 with no network in owned fixtures.
+
+Native V4 previously passed all eight new cases but failed an existing first-task
+candidate assertion (433 passed, one failed). The retained diagnostic calls its
+original owner only on an empty projection; it does not weaken that assertion,
+change authority or create missing proof. V5 did not reproduce the empty
+projection, so its original cause is unresolved and needs assessment in the final
+full run. Types V3 did not start after V4 failed. No failed stage is a pass.
+
+This qualification covers original consent/allocation only. The independent
+onboarding-permission UI branch contains unfinished/unqualified follow-up work;
+inline UI, original current-purpose boundaries, withdrawal, connected-state
+writing and activation continuation are not qualified by this checkpoint.
+No real provider authorization, deployed credentials, Agent access, Safe Test,
+first value, complete V9 or PR readiness is claimed.
