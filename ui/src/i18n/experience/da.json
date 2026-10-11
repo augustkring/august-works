@@ -275,7 +275,10 @@
       "cancelled": "Stop er registreret. De oprindelige arbejdskontroller håndterer annullering.",
       "failed": "Den første opgave fejlede. Gennemgå den oprindelige opgave for at vælge næste handling.",
       "withdrawn": "Den gemte første opgave er ikke længere tilgængelig i denne visning."
-    }
+    },
+    "firstTaskPrepareReview": "Gennemgå agenten og det godkendte formål",
+    "firstTaskPrepareBoundary": "Klargøring opretter én intern udkastsopgave og en afgrænset plan. Den starter ikke arbejde og giver ikke adgang. Bekræft dette aktuelle godkendte formål, før du klargør din første opgave.",
+    "prepareFirstTask": "Klargør første opgave"
   },
   "company": {
     "title": "Virksomhed",

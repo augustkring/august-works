@@ -3,9 +3,11 @@ import type { ActivationCommand, ActivationView } from "@paperclipai/shared";
 import { Button } from "./ui/button";
 import { Link } from "../lib/router";
 
+type Prepare = Omit<Extract<ActivationCommand, { operation: "prepare_first_task" }>, "requestId" | "expectedVersion">;
 type Start = Omit<Extract<ActivationCommand, { operation: "start_first_task" }>, "requestId" | "expectedVersion">;
-export function ActivationFirstTask({ value, canStart, canStop, pending, onStart, onContinue, onStop, onRefresh }: {
+export function ActivationFirstTask({ value, canStart, canStop, pending, onStart, onPrepare, onContinue, onStop, onRefresh }: {
   value: ActivationView["firstTask"]; canStart: boolean; canStop: boolean; pending: boolean;
+  onPrepare?: (input: Prepare) => void;
   onStart: (input: Start) => void; onContinue: () => void; onStop: (planVersion: number) => void; onRefresh: () => void;
 }) {
   const { t } = useTranslation("experience");
@@ -24,8 +26,21 @@ export function ActivationFirstTask({ value, canStart, canStop, pending, onStart
       <p>{t("activation.firstTaskReviewRequired")}</p>
     </section>;
   }
-  if (!value.candidates.length) return null;
+  if (!value.candidates.length && !value.preparationOptions?.length) return null;
   return <section aria-label={t("activation.firstTaskReview")} className="space-y-3">
+    {value.preparationOptions?.length ? <section aria-label={t("activation.firstTaskPrepareReview")} className="space-y-3">
+      <p>{t("activation.firstTaskPrepareBoundary")}</p>
+      {value.preparationOptions.map(option => <article key={option.installationId} className="space-y-3">
+        <h2 className="text-lg font-semibold">{option.agentName}</h2>
+        <p>{option.intendedPurpose}</p>
+        <Button className="min-h-11" disabled={!canStart || pending || !onPrepare}
+          onClick={() => onPrepare?.({ operation: "prepare_first_task", installationId: option.installationId,
+            expectedInstallationVersion: option.installationVersion, expectedInstallationHash: option.installationHash,
+            expectedUseCaseVersion: option.useCaseVersion, expectedPurposeVersion: option.purposeVersion, confirmCurrentPurpose: true })}>
+          {t("activation.prepareFirstTask")}
+        </Button>
+      </article>)}
+    </section> : null}
     <p>{t("activation.firstTaskScope")}</p>
     <p>{t("activation.firstTaskCompute")}</p>
     {value.candidates.map(task => <article key={`${task.planId}:${task.installationHash}`} className="space-y-3">

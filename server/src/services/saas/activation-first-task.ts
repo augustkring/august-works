@@ -141,6 +141,7 @@ export async function activationFirstTaskView(rootDb: Db, tx: Db, actor: Authori
     .orderBy(desc(orchestrationPlans.createdAt), orchestrationPlans.id).limit(6);
   const candidates = [];
   for (const row of rows) {
+    if (state.preparedFirstTask && (state.preparedFirstTask.installationId !== row.installationId || state.preparedFirstTask.planId !== row.planId)) continue;
     try { candidates.push(await readActivationFirstTask(rootDb, tx, actor, companyId, onboarding, row.installationId, row.planId)); }
     catch (error) { if (!(error instanceof HttpError) || ![403, 404, 409, 422].includes(error.status)) throw error; }
   }

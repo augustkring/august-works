@@ -23,6 +23,7 @@ import {
   governanceObligationSchema,
   type AIUseCaseView,
 } from "@paperclipai/shared";
+import type { ActivityPublication } from "../activity-log.js";
 import type { AuthorizationActor } from "../authorization.js";
 import {
   assertV7Enabled,
@@ -110,6 +111,141 @@ export function aiGovernanceService(db: Db) {
       createdAt: row.createdAt.toISOString(),
       updatedAt: row.updatedAt.toISOString(),
     };
+  }
+  /** Bind through the original governance owner inside an existing transaction.
+   * This deploys a current approved purpose; it creates no approval or grants. */
+  async function bindWithinTransaction(
+    tx: Db, publications: ActivityPublication[], actor: AuthorizationActor,
+    companyId: string, id: string, raw: z.infer<typeof useCaseDeploymentSchema>,
+  ) {
+    const input = useCaseDeploymentSchema.parse(raw);
+    await assertV7Enabled(tx, "ai_use_cases_v7");
+    await access(tx, actor, companyId, true);
+    const [task] = await tx
+      .select()
+      .from(issues)
+      .where(
+        and(eq(issues.companyId, companyId), eq(issues.id, input.issueId)),
+      )
+      .for("share");
+    if (!task || task.hiddenAt || task.assigneeAgentId !== input.agentId)
+      throw conflict(
+        "Bind the current owned native Task, not another presence's purpose",
+      );
+    await assertV7Authorization(tx, actor, companyId, "issue:mutate", {
+      type: "issue",
+      companyId,
+      issueId: task.id,
+      projectId: task.projectId,
+      parentIssueId: task.parentId,
+      assigneeAgentId: task.assigneeAgentId,
+      assigneeUserId: task.assigneeUserId,
+      status: task.status,
+    });
+    const worker: AuthorizationActor = {
+      type: "agent",
+      companyId,
+      agentId: input.agentId,
+      onBehalfOfUserId: v7HumanActorId(actor),
+    };
+    await assertV7Authorization(tx, worker, companyId, "issue:read", {
+      type: "issue",
+      companyId,
+      issueId: task.id,
+      projectId: task.projectId,
+      parentIssueId: task.parentId,
+      assigneeAgentId: task.assigneeAgentId,
+      assigneeUserId: task.assigneeUserId,
+      status: task.status,
+    });
+    await agentProviderBindingService(tx).assertRuntime(
+      companyId,
+      input.agentId,
+    );
+    const source = await current(tx, companyId, id, true);
+    version(source.row, input.expectedVersion);
+    if (
+      source.row.status !== "approved" ||
+      source.row.nextReviewAt <= new Date()
+    )
+      throw conflict("Deploy only a currently approved use-case purpose");
+    const [obligations] = await tx.execute(
+      sql`select aw_v7_governance_obligations_current(${companyId}::uuid) as allowed`,
+    );
+    if (obligations?.allowed !== true)
+      throw conflict(
+        "Review uncertain or overdue company obligations before activating this use case",
+      );
+    const requiredRisk = Number(source.revision.purpose.riskClass.slice(1));
+    if (requiredRisk >= 2) {
+      const [planning] = await tx.execute(
+        sql`select exists(select 1 from orchestration_plans p where p.company_id=${companyId}::uuid and (p.issue_id=${task.id}::uuid or exists(select 1 from orchestration_workers w where w.company_id=p.company_id and w.plan_id=p.id and w.issue_id=${task.id}::uuid)) and substring(p.risk_class from 2)::int>=${requiredRisk} and p.verification_mode='independent_required' and (${requiredRisk}<3 or p.human_oversight_mode='required')) as allowed`,
+      );
+      if (planning?.allowed !== true)
+        throw conflict(
+          "Create a matching independently verified orchestration plan before activating this use case",
+        );
+    }
+    const [prior] = await tx
+      .select()
+      .from(aiUseCaseDeployments)
+      .where(
+        and(
+          eq(aiUseCaseDeployments.companyId, companyId),
+          eq(aiUseCaseDeployments.issueId, task.id),
+          inArray(aiUseCaseDeployments.status, [
+            "active",
+            "review_required",
+            "suspended",
+          ]),
+        ),
+      )
+      .for("update");
+    if (prior?.status === "active")
+      throw conflict("Task already has an active intended purpose");
+    if (prior)
+      await tx
+        .update(aiUseCaseDeployments)
+        .set({ status: "retired", updatedAt: new Date() })
+        .where(eq(aiUseCaseDeployments.id, prior.id));
+    const [hash] = await tx.execute(
+      sql`select aw_v7_governance_authority_hash(${companyId}::uuid,${task.id}::uuid,${input.agentId}::uuid,${v7HumanActorId(actor)}) as hash`,
+    );
+    if (!hash || typeof hash.hash !== "string")
+      throw conflict("Current native authority is unavailable");
+    const [deployment] = await tx
+      .insert(aiUseCaseDeployments)
+      .values({
+        companyId,
+        useCaseId: id,
+        purposeVersion: source.row.purposeVersion,
+        issueId: task.id,
+        agentId: input.agentId,
+        purposeHash: source.revision.purposeHash,
+        authorityHash: hash.hash,
+        status: "active",
+        createdByUserId: v7HumanActorId(actor),
+      })
+      .returning();
+    await logActivity(
+      tx,
+      {
+        companyId,
+        actorType: "user",
+        actorId: v7HumanActorId(actor),
+        action: "governance.deployment_bound",
+        entityType: "ai_use_case",
+        entityId: id,
+        details: {
+          deploymentId: deployment!.id,
+          issueId: task.id,
+          agentId: input.agentId,
+          purposeVersion: source.row.purposeVersion,
+        },
+      },
+      publications,
+    );
+    return deployment!;
   }
   return {
     /** Native read of an exact human obligation. Review-due legal evidence is
@@ -586,135 +722,10 @@ export function aiGovernanceService(db: Db) {
     ) => {
       const input = useCaseDeploymentSchema.parse(raw);
       await assertV7Enabled(db, "ai_use_cases_v7");
-      return withV7ActivityTransaction(db, async (tx, publications) => {
-        await access(tx, actor, companyId, true);
-        const [task] = await tx
-          .select()
-          .from(issues)
-          .where(
-            and(eq(issues.companyId, companyId), eq(issues.id, input.issueId)),
-          )
-          .for("share");
-        if (!task || task.hiddenAt || task.assigneeAgentId !== input.agentId)
-          throw conflict(
-            "Bind the current owned native Task, not another presence's purpose",
-          );
-        await assertV7Authorization(tx, actor, companyId, "issue:mutate", {
-          type: "issue",
-          companyId,
-          issueId: task.id,
-          projectId: task.projectId,
-          parentIssueId: task.parentId,
-          assigneeAgentId: task.assigneeAgentId,
-          assigneeUserId: task.assigneeUserId,
-          status: task.status,
-        });
-        const worker: AuthorizationActor = {
-          type: "agent",
-          companyId,
-          agentId: input.agentId,
-          onBehalfOfUserId: v7HumanActorId(actor),
-        };
-        await assertV7Authorization(tx, worker, companyId, "issue:read", {
-          type: "issue",
-          companyId,
-          issueId: task.id,
-          projectId: task.projectId,
-          parentIssueId: task.parentId,
-          assigneeAgentId: task.assigneeAgentId,
-          assigneeUserId: task.assigneeUserId,
-          status: task.status,
-        });
-        await agentProviderBindingService(tx).assertRuntime(
-          companyId,
-          input.agentId,
-        );
-        const source = await current(tx, companyId, id, true);
-        version(source.row, input.expectedVersion);
-        if (
-          source.row.status !== "approved" ||
-          source.row.nextReviewAt <= new Date()
-        )
-          throw conflict("Deploy only a currently approved use-case purpose");
-        const [obligations] = await tx.execute(
-          sql`select aw_v7_governance_obligations_current(${companyId}::uuid) as allowed`,
-        );
-        if (obligations?.allowed !== true)
-          throw conflict(
-            "Review uncertain or overdue company obligations before activating this use case",
-          );
-        const requiredRisk = Number(source.revision.purpose.riskClass.slice(1));
-        if (requiredRisk >= 2) {
-          const [planning] = await tx.execute(
-            sql`select exists(select 1 from orchestration_plans p where p.company_id=${companyId}::uuid and (p.issue_id=${task.id}::uuid or exists(select 1 from orchestration_workers w where w.company_id=p.company_id and w.plan_id=p.id and w.issue_id=${task.id}::uuid)) and substring(p.risk_class from 2)::int>=${requiredRisk} and p.verification_mode='independent_required' and (${requiredRisk}<3 or p.human_oversight_mode='required')) as allowed`,
-          );
-          if (planning?.allowed !== true)
-            throw conflict(
-              "Create a matching independently verified orchestration plan before activating this use case",
-            );
-        }
-        const [prior] = await tx
-          .select()
-          .from(aiUseCaseDeployments)
-          .where(
-            and(
-              eq(aiUseCaseDeployments.companyId, companyId),
-              eq(aiUseCaseDeployments.issueId, task.id),
-              inArray(aiUseCaseDeployments.status, [
-                "active",
-                "review_required",
-                "suspended",
-              ]),
-            ),
-          )
-          .for("update");
-        if (prior?.status === "active")
-          throw conflict("Task already has an active intended purpose");
-        if (prior)
-          await tx
-            .update(aiUseCaseDeployments)
-            .set({ status: "retired", updatedAt: new Date() })
-            .where(eq(aiUseCaseDeployments.id, prior.id));
-        const [hash] = await tx.execute(
-          sql`select aw_v7_governance_authority_hash(${companyId}::uuid,${task.id}::uuid,${input.agentId}::uuid,${v7HumanActorId(actor)}) as hash`,
-        );
-        if (!hash || typeof hash.hash !== "string")
-          throw conflict("Current native authority is unavailable");
-        const [deployment] = await tx
-          .insert(aiUseCaseDeployments)
-          .values({
-            companyId,
-            useCaseId: id,
-            purposeVersion: source.row.purposeVersion,
-            issueId: task.id,
-            agentId: input.agentId,
-            purposeHash: source.revision.purposeHash,
-            authorityHash: hash.hash,
-            status: "active",
-            createdByUserId: v7HumanActorId(actor),
-          })
-          .returning();
-        await logActivity(
-          tx,
-          {
-            companyId,
-            actorType: "user",
-            actorId: v7HumanActorId(actor),
-            action: "governance.deployment_bound",
-            entityType: "ai_use_case",
-            entityId: id,
-            details: {
-              deploymentId: deployment!.id,
-              issueId: task.id,
-              agentId: input.agentId,
-              purposeVersion: source.row.purposeVersion,
-            },
-          },
-          publications,
-        );
-        return deployment!;
-      });
+      return withV7ActivityTransaction(db, (tx, publications) =>
+        bindWithinTransaction(tx, publications, actor, companyId, id, input));
     },
+    bindWithinTransaction,
     decide: async (
       actor: AuthorizationActor,
       companyId: string,

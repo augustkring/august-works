@@ -673,6 +673,7 @@ function ActivationScope({
             canStart={enabled && !frozen && !isPast}
             canStop={!frozen && !isPast}
             pending={pending}
+            onPrepare={input => command.mutate({ ...envelope(), ...input })}
             onStart={input => command.mutate({ ...input, ...envelope() })}
             onContinue={() => command.mutate({ ...envelope(), operation: "continue_first_task" })}
             onStop={expectedPlanVersion => command.mutate({ ...envelope(), operation: "stop_first_task", expectedPlanVersion })}

@@ -28,6 +28,12 @@ import { activationService } from "../services/saas/activation.js";
 import { orchestrationService } from "../services/orchestration/orchestration-service.js";
 import { verificationService } from "../services/supervision/verification-service.js";
 import { agentRuntimeFabricService } from "../services/agent-runtime-fabric.js";
+import { aiConnectionService } from "../services/ai-connections.js";
+import { discoverNativeCapabilities } from "../services/native-provider-conformance.js";
+import { workerModelGateway } from "../services/orchestration/worker-model-gateway.js";
+import type { WorkerModelProfile } from "../services/orchestration/worker-model-profiles.js";
+import { registerNativeDraftGateway } from "../services/orchestration/native-draft-runtime.js";
+import type { guardedRemoteHttpFetch } from "../services/remote-http-fetch.js";
 import { initialActivationState, createOrchestrationPlanSchema, type CreateOrchestrationPlanInput } from "@paperclipai/shared";
 import { purpose as governancePurpose, oversight as governanceOversight, reviews as governanceReviews } from "./helpers/governance-fixture.js";
 import { billingAccounts, billingAccountCompanies, billingSubscriptions, companyOnboardingRuns,
@@ -54,11 +60,15 @@ import {
   expect,
   vi,
 } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import {
   createDb,
   principalPermissionGrants,
+  orchestrationPlans,
   connectionGrants,
   agentPackageVersions,
   agentPackageComponents,
@@ -106,14 +116,21 @@ const support = await getEmbeddedPostgresTestSupport();
       input: PackageRelease,
       versionId: string,
       roleId: string,
-      roleVersionId: string;
+      roleVersionId: string,
+      fixtureHome: string;
     beforeAll(async () => {
+      fixtureHome = await mkdtemp(join(tmpdir(), "aw-v9-first-preparation-"));
+      vi.stubEnv("PAPERCLIP_HOME", fixtureHome);
       database = await startEmbeddedPostgresTestDatabase("aw-v7-packages-");
       db = createDb(database.connectionString);
       await instanceSettingsService(db).getExperimental();
       await enableV5ForTest(db);
     }, 60000);
-    afterAll(async () => database?.cleanup(), 30000);
+    afterAll(async () => {
+      await database?.cleanup();
+      if (fixtureHome) await rm(fixtureHome, { recursive: true, force: true });
+      vi.unstubAllEnvs();
+    }, 30000);
     beforeEach(async () => {
       await instanceSettingsService(db).updateExperimental({
         saas_deployment_profile_v6: true,
@@ -1451,7 +1468,7 @@ const support = await getEmbeddedPostgresTestSupport();
           .where(eq(agentPackageStopActions.id, action!.id)),
       ).rejects.toMatchObject({ cause: { code: "23514" } });
     });
-    async function prepareFirstValueFixture(budgets: CreateOrchestrationPlanInput["budgets"] = {}) {
+    async function prepareFirstValueFixture(budgets: CreateOrchestrationPlanInput["budgets"] = {}, configurePresence?: () => Promise<void>) {
       await instanceSettingsService(db).updateExperimental({
         activation_v9: true, free_core_commercial_v7: true, billing_entitlements_v6: true,
         billing_usage_v6: true, enableWorkflowsV1: true,
@@ -1483,6 +1500,7 @@ const support = await getEmbeddedPostgresTestSupport();
       await db.insert(principalPermissionGrants).values(["company_scope:read", "foundation:read"].map(permissionKey => ({
         companyId: f.home, principalType: "agent", principalId: f.presence.id, permissionKey,
       }))).onConflictDoNothing();
+      await configurePresence?.();
       const governance = aiGovernanceService(db);
       const oversight = await governance.oversight(f.actor, f.home, governanceOversight);
       let useCase = await governance.create(f.actor, f.home, { key: `first-value-${randomUUID()}`, purpose: {
@@ -1509,6 +1527,54 @@ const support = await getEmbeddedPostgresTestSupport();
       }));
       return { onboarding: onboarding!, installation, task: task!, created, intent, orchestration, useCase };
     }
+    async function noChargePreparationFixture() {
+      const modelProfileId = randomUUID();
+      const transport = vi.fn<typeof guardedRemoteHttpFetch>(async () => { throw new Error("Preparation must never call a model transport"); });
+      let profile!: WorkerModelProfile;
+      const fixture = await prepareFirstValueFixture({}, async () => {
+        const connection = await aiConnectionService(db).save(f.home, f.userId, {
+          provider: "anthropic", method: "api_key", ownership: "shared", name: "No-charge preparation software fixture",
+          apiKey: "fixture", allAgents: false, agentIds: [f.presence.id],
+        }, "fixture-private-preparation-credential-123456");
+        await db.update(agents).set({ adapterType: "paperclip_runner", adapterConfig: {
+          provider: "aw_text_only", workerModelProfileId: modelProfileId, model: "fixture-preparation-model-20261010",
+          maxOutputTokens: 256, lifecycleMode: "per_turn",
+        }, runtimeConfig: { heartbeat: { enabled: false, wakeOnDemand: true } } }).where(eq(agents.id, f.presence.id));
+        const [presence] = await db.select().from(agents).where(eq(agents.id, f.presence.id));
+        const providers = agentProviderBindingService(db);
+        const discovery = await discoverNativeCapabilities({ companyId: f.home, adapterType: "paperclip_runner", config: presence!.adapterConfig });
+        const recorded = await providers.recordDiscovery(f.home, f.presence.id, discovery, {
+          connect: true, identity: true, start: true, stream: true, wait: true, cancel: true, memoryScoping: true,
+        });
+        await providers.revalidate(f.actor, f.home, f.presence.id, recorded.capabilitySnapshotHash!,
+          "Original Native software fixture review of exact text-only configuration; no provider delivery qualification claimed");
+        const bound = await providers.assertRuntime(f.home, f.presence.id);
+        profile = { id: modelProfileId, companyId: f.home, workerAgentId: f.presence.id,
+          providerBindingId: bound.provider.id, providerSnapshotHash: bound.provider.capabilitySnapshotHash!,
+          providerProfileRef: bound.runtime.providerProfileRef, qualifiedConfigurationHash: bound.runtime.qualifiedConfigurationHash!,
+          binding: { provider: "anthropic", method: "api_key", mode: "shared", ...connection },
+          transport: "server-text-only-v1", contract: "anthropic-text-messages-2023-06-01",
+          maximumEnvelopeBytes: 64000, inputTokensUpperBound: 100000, maxOutputTokens: 1024,
+          tariff: { provider: "anthropic", model: "fixture-preparation-model-20261010", currency: "USD",
+            inputMinorPerMillion: 0, outputMinorPerMillion: 0, fixedMinor: 0, qualificationHash: "b".repeat(64), sourceSha: "a".repeat(40),
+            testedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 120000).toISOString() },
+          qualificationEvidenceRef: "https://qualification.test.invalid/qualification/preparation-software-fixture.json",
+          qualificationArtifactSha256: "c".repeat(64),
+        };
+        registerNativeDraftGateway(db, workerModelGateway(db, { profiles: [profile], sourceSha: "a".repeat(40),
+          protectedEvidenceOrigin: "https://qualification.test.invalid", fetch: transport }));
+      });
+      const activation = activationService(db);
+      const view = await activation.get(f.actor, f.home);
+      const option = view.firstTask!.preparationOptions[0]!;
+      expect(option).toMatchObject({ installationId: fixture.installation.id, maximumModelCostMinor: 0 });
+      const input = { operation: "prepare_first_task" as const, requestId: randomUUID(), expectedVersion: view.version,
+        installationId: option.installationId, expectedInstallationVersion: option.installationVersion,
+        expectedInstallationHash: option.installationHash, expectedUseCaseVersion: option.useCaseVersion,
+        expectedPurposeVersion: option.purposeVersion, confirmCurrentPurpose: true as const };
+      return { ...fixture, activation, input, transport, profile };
+    }
+
     async function firstValueFixture() {
       const { onboarding, installation, task, created, intent, orchestration } = await prepareFirstValueFixture();
       const plan = await orchestration.decide(f.actor, f.home, created.id, { expectedVersion: created.version, action: "start",
@@ -1619,6 +1685,53 @@ const support = await getEmbeddedPostgresTestSupport();
         }),
       ).toBe(false);
     });
+    it("atomically prepares one original canonical Task, purpose deployment and bounded plan, then replays without execution", async () => {
+      try {
+        const fixture = await noChargePreparationFixture();
+        const beforeTasks = await db.select().from(issues).where(eq(issues.companyId, f.home));
+        const beforePlans = await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.companyId, f.home));
+        const grants = await db.select().from(principalPermissionGrants).where(eq(principalPermissionGrants.companyId, f.home));
+        const [prepared, replay] = await Promise.all([fixture.activation.command(f.actor, f.home, fixture.input), fixture.activation.command(f.actor, f.home, fixture.input)]);
+        expect(prepared.version).toBe(fixture.onboarding.version + 1);expect(replay.version).toBe(prepared.version);
+        expect(prepared.state.step).toBe("review");expect(prepared.state.firstTask).toBeUndefined();expect(prepared.state.preparedFirstTask).toBeDefined();
+        const reference = prepared.state.preparedFirstTask!;
+        expect(prepared.firstTask!.preparationOptions).toEqual([]);
+        expect(prepared.firstTask!.candidates).toHaveLength(1);expect(prepared.firstTask!.candidates[0]!.planId).toBe(reference.planId);
+        const task = (await db.select().from(issues).where(eq(issues.id, reference.issueId)))[0]!;
+        expect(task).toMatchObject({ createdByUserId: f.userId, responsibleUserId: f.userId, assigneeAgentId: f.presence.id,
+          originKind: "v9_activation", originId: fixture.onboarding.id, status: "todo", executionRunId: null, checkoutRunId: null });
+        const plan = (await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, reference.planId)))[0]!;
+        expect(plan).toMatchObject({ status: "draft", mode: "single_worker", riskClass: "C1", actionClass: "internal_draft", executionPrincipal: null, startedAt: null });
+        expect(plan.budgets).toEqual({ maxWorkerCount: 1, maxParallelWorkers: 1, maxDelegationDepth: 0, maxRetries: 0,
+          maxWallClockSeconds: 300, maxModelCostMinor: 0, maxToolActions: 2 });
+        const detail = await fixture.orchestration.get(f.actor, f.home, plan.id);
+        expect(detail.completionContract!.objective).toBe(fixture.intent);expect(detail.completionContract!.requiredOutputs).toHaveLength(1);
+        expect(await db.select().from(issues).where(eq(issues.companyId, f.home))).toHaveLength(beforeTasks.length + 1);
+        expect(await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.companyId, f.home))).toHaveLength(beforePlans.length + 1);
+        expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home))).toEqual([]);
+        expect(await db.select().from(principalPermissionGrants).where(eq(principalPermissionGrants.companyId, f.home))).toEqual(grants);
+        expect(fixture.transport).not.toHaveBeenCalled();
+        await fixture.activation.get(f.actor, f.home);expect(fixture.transport).not.toHaveBeenCalled();
+        await expect(fixture.activation.command(f.actor, f.home, { ...fixture.input, requestId: randomUUID(), expectedVersion: prepared.version })).rejects.toMatchObject({ status: 409 });
+        const changed = await fixture.activation.command(f.actor, f.home, { operation: "change_setup", requestId: randomUUID(), expectedVersion: prepared.version });
+        expect(changed.state.step).toBe("intent");expect(changed.state.preparedFirstTask).toBeUndefined();
+        expect((await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, plan.id)))[0]!.status).toBe("cancelled");
+        expect(fixture.transport).not.toHaveBeenCalled();
+      } finally { registerNativeDraftGateway(db, undefined); }
+    });
+    it("refuses a stale reviewed purpose before creating a first Task and preserves original authorities", async () => {
+      try {
+        const fixture = await noChargePreparationFixture();
+        const before = await db.select().from(issues).where(eq(issues.companyId, f.home));
+        await expect(fixture.activation.command(f.actor, f.home, { ...fixture.input, expectedPurposeVersion: fixture.input.expectedPurposeVersion + 1 })).rejects.toMatchObject({ status: 409 });
+        expect(await db.select().from(issues).where(eq(issues.companyId, f.home))).toEqual(before);
+        expect((await fixture.activation.get(f.actor, f.home)).version).toBe(fixture.onboarding.version);
+        expect(fixture.transport).not.toHaveBeenCalled();
+        registerNativeDraftGateway(db, undefined);
+        await expect(fixture.activation.command(f.actor, f.home, fixture.input)).rejects.toMatchObject({ status: 409 });
+        expect(await db.select().from(issues).where(eq(issues.companyId, f.home))).toEqual(before);
+      } finally { registerNativeDraftGateway(db, undefined); }
+    });
     it("does not start an unqualified default first task or change the original owners", async () => {
       const fixture = await prepareFirstValueFixture({ maxWorkerCount: 1, maxParallelWorkers: 1, maxDelegationDepth: 0,
         maxRetries: 0, maxToolActions: 2, maxModelCostMinor: 0 });
@@ -1655,19 +1768,19 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(audits).toHaveLength(1);
       expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home))).toHaveLength(0);
     });
-    it("requires the exact recorded first plan when recording its independently reviewed output", async () => {
+    it.each(["firstTask", "preparedFirstTask"] as const)("requires the exact %s plan when recording its independently reviewed output", async (referenceKind) => {
       const fixture = await firstValueFixture();
-      await db.update(companyOnboardingRuns).set({ activationState: { ...fixture.onboarding.activationState!, step: "running",
-        firstTask: { installationId: fixture.installation.id, installationHash: fixture.installation.activationHash!, planId: fixture.review.planId, issueId: fixture.task.id } },
-        currentStage: "v9_running", version: fixture.onboarding.version + 1 }).where(eq(companyOnboardingRuns.id, fixture.onboarding.id));
+      await db.update(companyOnboardingRuns).set({ activationState: { ...fixture.onboarding.activationState!, step: referenceKind === "firstTask" ? "running" : "review",
+        [referenceKind]: { installationId: fixture.installation.id, installationHash: fixture.installation.activationHash!, planId: fixture.review.planId, issueId: fixture.task.id } },
+        currentStage: referenceKind === "firstTask" ? "v9_running" : "v9_review", version: fixture.onboarding.version + 1 }).where(eq(companyOnboardingRuns.id, fixture.onboarding.id));
       const activation = activationService(db), current = await activation.get(f.actor, f.home);
       expect(current.firstValue?.candidates).toHaveLength(1);
       const recorded = await activation.command(f.actor, f.home, { operation: "record_verified_result", requestId: randomUUID(),
         expectedVersion: current.version, installationId: fixture.installation.id, verificationRunId: fixture.review.id });
       expect(recorded.firstValue?.status).toBe("verified");expect(recorded.state.step).toBe("result");
-      await db.update(companyOnboardingRuns).set({ activationState: { ...fixture.onboarding.activationState!, step: "running",
-        firstTask: { installationId: fixture.installation.id, installationHash: fixture.installation.activationHash!, planId: randomUUID(), issueId: fixture.task.id } },
-        version: recorded.version + 1, currentStage: "v9_running" }).where(eq(companyOnboardingRuns.id, fixture.onboarding.id));
+      await db.update(companyOnboardingRuns).set({ activationState: { ...fixture.onboarding.activationState!, step: referenceKind === "firstTask" ? "running" : "review",
+        [referenceKind]: { installationId: fixture.installation.id, installationHash: fixture.installation.activationHash!, planId: randomUUID(), issueId: fixture.task.id } },
+        version: recorded.version + 1, currentStage: referenceKind === "firstTask" ? "v9_running" : "v9_review" }).where(eq(companyOnboardingRuns.id, fixture.onboarding.id));
       await expect(activation.command(f.actor, f.home, { operation: "record_verified_result", requestId: randomUUID(), expectedVersion: recorded.version + 1,
         installationId: fixture.installation.id, verificationRunId: fixture.review.id })).rejects.toMatchObject({ status: 409 });
     });

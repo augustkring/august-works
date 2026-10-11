@@ -46,8 +46,15 @@ export const activationFirstTaskCandidateSchema = activationFirstTaskReferenceSc
   maximumModelCostMinor: z.literal(0),
   currency: z.literal("USD"),
 });
+export const activationFirstTaskPreparationSchema = z.strictObject({
+  installationId: z.uuid(), installationVersion: z.number().int().positive(),
+  installationHash: z.string().regex(/^[a-f0-9]{64}$/), agentName: z.string().max(200),
+  useCaseVersion: z.number().int().positive(), purposeVersion: z.number().int().positive(),
+  intendedPurpose: z.string().max(4000), maximumModelCostMinor: z.literal(0),
+});
 export const activationFirstTaskViewSchema = z.strictObject({
   candidates: z.array(activationFirstTaskCandidateSchema).max(5),
+  preparationOptions: z.array(activationFirstTaskPreparationSchema).max(5).default([]),
   hasMore: z.boolean(),
   current: activationFirstTaskReferenceSchema.extend({
     planVersion: z.number().int().positive(),
@@ -98,6 +105,7 @@ export const activationStateSchema = z.strictObject({
   firstValueAt: z.iso.datetime().nullable(),
   firstValueReceipt: activationFirstValueReceiptSchema.optional(),
   firstTask: activationFirstTaskReferenceSchema.optional(),
+  preparedFirstTask: activationFirstTaskReferenceSchema.optional(),
   receipts: z
     .array(
       z.strictObject({
@@ -152,6 +160,13 @@ export const activationCommandSchema = z.discriminatedUnion("operation", [
   }),
   z.strictObject({ ...envelope, operation: z.literal("continue_access") }),
   z.strictObject({ ...envelope, operation: z.literal("change_setup") }),
+  z.strictObject({
+    ...envelope, operation: z.literal("prepare_first_task"),
+    installationId: z.uuid(), expectedInstallationVersion: z.number().int().positive(),
+    expectedInstallationHash: z.string().regex(/^[a-f0-9]{64}$/),
+    expectedUseCaseVersion: z.number().int().positive(), expectedPurposeVersion: z.number().int().positive(),
+    confirmCurrentPurpose: z.literal(true),
+  }),
   z.strictObject({
     ...envelope, operation: z.literal("start_first_task"),
     installationId: z.uuid(), planId: z.uuid(),

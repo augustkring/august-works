@@ -275,7 +275,10 @@
       "cancelled": "Stop is recorded. The original work controls handle cancellation.",
       "failed": "The first task failed. Review its original task for the next action.",
       "withdrawn": "The saved first task is no longer available for this view."
-    }
+    },
+    "firstTaskPrepareReview": "Review the agent and approved purpose",
+    "firstTaskPrepareBoundary": "Preparing creates one internal draft task and its bounded plan. It does not start work or grant access. Confirm this current approved purpose before preparing your first task.",
+    "prepareFirstTask": "Prepare first task"
   },
   "company": {
     "title": "Company",

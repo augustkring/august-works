@@ -76,7 +76,7 @@ export async function readActivationFirstValue(
     .for("share");
   if (!review || review.erasedAt)
     throw notFound("Retained first-result review not found");
-  const firstTask = onboarding.activationState.firstTask;
+  const firstTask = onboarding.activationState.firstTask ?? onboarding.activationState.preparedFirstTask;
   if (firstTask && (firstTask.installationId !== installation.id || firstTask.installationHash !== installation.activationHash ||
     firstTask.planId !== review.planId || firstTask.issueId !== review.issueId))
     throw conflict("The reviewed result must belong to the recorded first task");

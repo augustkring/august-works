@@ -493,11 +493,11 @@ it("starts only the reviewed original first task and keeps its native references
   const candidate = { installationId: "10000000-0000-4000-8000-000000000004", installationHash: "a".repeat(64),
     planId: "10000000-0000-4000-8000-000000000005", issueId: "10000000-0000-4000-8000-000000000006",
     planVersion: 3, title: "Original prepared first task", maximumModelCostMinor: 0 as const, currency: "USD" as const };
-  const review = { ...view("review"), firstTask: { candidates: [candidate], hasMore: false, current: null } };
+  const review = { ...view("review"), firstTask: { candidates: [candidate], preparationOptions: [], hasMore: false, current: null } };
   await mount(review, "/saas/activation/9");
   const running: ActivationView = { ...review, version: review.version + 1, state: { ...review.state, step: "running", firstTask: {
     installationId: candidate.installationId, installationHash: candidate.installationHash, planId: candidate.planId, issueId: candidate.issueId } },
-    firstTask: { candidates: [], hasMore: false, current: { ...candidate, planVersion: 4, status: "running", dispatched: false } } };
+    firstTask: { candidates: [], preparationOptions: [], hasMore: false, current: { ...candidate, planVersion: 4, status: "running", dispatched: false } } };
   const write = vi.spyOn(activationApi, "command").mockRejectedValueOnce(new Error("Response lost"));
   await click("Run first task");
   await vi.waitFor(() => expect(write).toHaveBeenCalledOnce());
@@ -517,7 +517,7 @@ it("fences a stale Run button before transport when the original session changes
   const candidate = { installationId: "10000000-0000-4000-8000-000000000004", installationHash: "a".repeat(64),
     planId: "10000000-0000-4000-8000-000000000005", issueId: "10000000-0000-4000-8000-000000000006",
     planVersion: 3, title: "Original prepared first task", maximumModelCostMinor: 0 as const, currency: "USD" as const };
-  await mount({ ...view("review"), firstTask: { candidates: [candidate], hasMore: false, current: null } }, "/saas/activation/9");
+  await mount({ ...view("review"), firstTask: { candidates: [candidate], preparationOptions: [], hasMore: false, current: null } }, "/saas/activation/9");
   await vi.waitFor(() => expect([...container.querySelectorAll("button")].some(b => b.textContent === "Run first task")).toBe(true));
   const run = [...container.querySelectorAll("button")].find(b => b.textContent === "Run first task")!;
   const write = vi.spyOn(activationApi, "command");

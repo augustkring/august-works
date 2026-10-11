@@ -165,3 +165,13 @@ describe("V9 activation input boundaries", () => {
       ).toBe(false);
   });
 });
+
+it("binds first-task preparation to reviewed original versions and rejects grant or execution fields", () => {
+  const input = { operation: "prepare_first_task", requestId: randomUUID(), expectedVersion: 4,
+    installationId: randomUUID(), expectedInstallationVersion: 2, expectedInstallationHash: "a".repeat(64),
+    expectedUseCaseVersion: 3, expectedPurposeVersion: 1, confirmCurrentPurpose: true };
+  expect(activationCommandSchema.parse(input)).toEqual(input);
+  for (const extra of [{ confirmCurrentPurpose: false }, { expectedPurposeVersion: 0 }, { expectedInstallationHash: "invalid" },
+    { permissions: ["tasks:assign"] }, { start: true }, { maximumModelCostMinor: 100 }, { goal: "Change the reviewed goal" }])
+    expect(activationCommandSchema.safeParse({ ...input, ...extra }).success).toBe(false);
+});

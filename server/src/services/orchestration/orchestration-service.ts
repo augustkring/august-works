@@ -89,6 +89,59 @@ export function orchestrationService(db: Db) {
     await audit(tx, actor, updated!, `orchestration.${input.action}_requested`, publications, { rationaleRecorded: Boolean(input.rationale) });
     return updated!;
   }
+  /** Original plan writer for callers already holding the original transaction.
+   * The same validation, Source, authorization, contract and audit fences apply. */
+  async function createWithinTransaction(
+    tx: Db, publications: ActivityPublication[], actor: AuthorizationActor,
+    companyId: string, raw: CreateOrchestrationPlanInput,
+  ) {
+    const input = createOrchestrationPlanSchema.parse(raw);
+      for (const contract of [input.completionContract, ...input.workers.flatMap(worker => worker.completionContract ? [worker.completionContract] : [])]) for (const output of contract.requiredOutputs) if (output.jsonSchema) assertWorkflowOutputSchema(output.jsonSchema);
+    await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId); await admit(actor, companyId, tx, true);
+    const taskIds = [...new Set([input.issueId, ...input.workers.map(worker => worker.issueId)])].sort();
+    const tasks = await tx.select().from(issues).where(and(eq(issues.companyId, companyId), inArray(issues.id, taskIds))).orderBy(issues.id).for("update");
+    if (tasks.length !== taskIds.length) throw notFound("A canonical Task is outside this company or missing");
+    for (const task of tasks) await assertAnalyticalContextPayloadAccess(tx, companyId, actor, { issueId: task.id });
+    const root = tasks.find(task => task.id === input.issueId)!;
+    if (root.updatedAt.toISOString() !== input.expectedIssueUpdatedAt) throw conflict("Task changed; reload the current brief before planning");
+    if (tasks.some(task => ["done", "cancelled"].includes(task.status) || task.executionRunId || task.checkoutRunId)) throw conflict("Plan creation requires nonterminal Tasks without a live execution owner");
+    for (const task of tasks) await assertV7Authorization(tx, actor, companyId, "issue:mutate", { type: "issue", companyId, issueId: task.id, projectId: task.projectId, parentIssueId: task.parentId, assigneeAgentId: task.assigneeAgentId, assigneeUserId: task.assigneeUserId, status: task.status });
+    if (input.workers.length > 1) {
+      const [accepted] = await tx.select().from(issuePlanDecompositions).where(and(eq(issuePlanDecompositions.companyId, companyId), eq(issuePlanDecompositions.sourceIssueId, root.id), eq(issuePlanDecompositions.acceptedPlanRevisionId, input.acceptedPlanRevisionId!))).for("share");
+      const [current] = await tx.select({ revisionId: documents.latestRevisionId }).from(issueDocuments).innerJoin(documents, and(eq(documents.companyId, issueDocuments.companyId), eq(documents.id, issueDocuments.documentId))).where(and(eq(issueDocuments.companyId, companyId), eq(issueDocuments.issueId, root.id), eq(issueDocuments.key, "plan"))).for("share", { of: documents });
+      const [confirmation] = accepted?.acceptedInteractionId ? await tx.select().from(issueThreadInteractions).where(and(eq(issueThreadInteractions.companyId, companyId), eq(issueThreadInteractions.issueId, root.id), eq(issueThreadInteractions.id, accepted.acceptedInteractionId))).for("share") : [];
+      const wanted = input.workers.map(worker => worker.issueId).sort();
+      if (current?.revisionId !== input.acceptedPlanRevisionId || confirmation?.status !== "accepted" || !accepted || accepted.status !== "completed" || !accepted.acceptedInteractionId || JSON.stringify([...accepted.childIssueIds].sort()) !== JSON.stringify(wanted)
+        || tasks.some(task => task.id !== root.id && (task.parentId !== root.id || task.projectId !== root.projectId))) throw conflict("Use the existing accepted Task decomposition and its exact canonical children");
+      if (input.budgets.maxDelegationDepth < 1) throw conflict("Parallel children require a delegation depth budget");
+    }
+    if (tasks.some(task => task.requestDepth - root.requestDepth > input.budgets.maxDelegationDepth || task.requestDepth < root.requestDepth)) throw conflict("Task depth exceeds the explicit delegation budget");
+    let workflowRevisionId: string | null = null;
+    if (input.workflowId) {
+      await assertV7Authorization(tx, actor, companyId, "workflows:read");
+      const [workflow] = await tx.select().from(workflows).where(and(eq(workflows.companyId, companyId), eq(workflows.id, input.workflowId))).for("share");
+      if (!workflow || workflow.status !== "active" || !workflow.publishedRevisionId) throw conflict("Bind an existing published, active Workflow");
+      workflowRevisionId = workflow.publishedRevisionId;
+    }
+    for (const worker of input.workers) {
+      const task = tasks.find(item => item.id === worker.issueId)!;
+      if (!input.workflowId && !task.assigneeAgentId) throw conflict("Assign each worker Task to one canonical agent first");
+      if (task.assigneeAgentId) {
+        const [agent] = await tx.select().from(agents).where(and(eq(agents.companyId, companyId), eq(agents.id, task.assigneeAgentId))).for("share");
+        if (!agent || !["idle", "running", "error"].includes(agent.status)) throw forbidden("An invokable current local agent is required");
+      }
+    }
+    const contract = await writeOrchestrationContract(tx, companyId, root.id, input.completionContract, v7HumanActorId(actor));
+    const [created] = await tx.insert(orchestrationPlans).values({ companyId, issueId: root.id, completionContractId: contract.id, ...selectOrchestrationShape(input), actionClass: input.actionClass,
+      riskClass: input.riskClass, workflowRevisionId, workflowId: input.workflowId, acceptedPlanRevisionId: input.acceptedPlanRevisionId, supervisionPolicy: input.supervisionPolicy, budgets: input.budgets, createdBy: v7HumanActorId(actor) }).returning();
+    for (const worker of input.workers) {
+      const task = tasks.find(item => item.id === worker.issueId)!;
+      const workerContract = worker.issueId === root.id ? contract : await writeOrchestrationContract(tx, companyId, worker.issueId, worker.completionContract!, v7HumanActorId(actor));
+      await tx.insert(orchestrationWorkers).values({ companyId, planId: created!.id, issueId: task.id, agentId: task.assigneeAgentId, completionContractId: workerContract.id, workerKey: worker.key, dependsOn: worker.dependsOn });
+    }
+    await audit(tx, actor, created!, "orchestration.plan_created", publications, { mode: created!.mode, workerCount: input.workers.length, completionContractId: contract.id });
+    return created!;
+  }
   return {
     list: async (actor: AuthorizationActor, companyId: string) => withV7ActivityTransaction(db, async tx => {
       await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
@@ -120,53 +173,10 @@ export function orchestrationService(db: Db) {
       const input = createOrchestrationPlanSchema.parse(raw);
       for (const contract of [input.completionContract, ...input.workers.flatMap(worker => worker.completionContract ? [worker.completionContract] : [])]) for (const output of contract.requiredOutputs) if (output.jsonSchema) assertWorkflowOutputSchema(output.jsonSchema);
       await admit(actor, companyId, db, true);
-      return withV7ActivityTransaction(db, async (tx, publications) => {
-        await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId); await admit(actor, companyId, tx, true);
-        const taskIds = [...new Set([input.issueId, ...input.workers.map(worker => worker.issueId)])].sort();
-        const tasks = await tx.select().from(issues).where(and(eq(issues.companyId, companyId), inArray(issues.id, taskIds))).orderBy(issues.id).for("update");
-        if (tasks.length !== taskIds.length) throw notFound("A canonical Task is outside this company or missing");
-        for (const task of tasks) await assertAnalyticalContextPayloadAccess(tx, companyId, actor, { issueId: task.id });
-        const root = tasks.find(task => task.id === input.issueId)!;
-        if (root.updatedAt.toISOString() !== input.expectedIssueUpdatedAt) throw conflict("Task changed; reload the current brief before planning");
-        if (tasks.some(task => ["done", "cancelled"].includes(task.status) || task.executionRunId || task.checkoutRunId)) throw conflict("Plan creation requires nonterminal Tasks without a live execution owner");
-        for (const task of tasks) await assertV7Authorization(tx, actor, companyId, "issue:mutate", { type: "issue", companyId, issueId: task.id, projectId: task.projectId, parentIssueId: task.parentId, assigneeAgentId: task.assigneeAgentId, assigneeUserId: task.assigneeUserId, status: task.status });
-        if (input.workers.length > 1) {
-          const [accepted] = await tx.select().from(issuePlanDecompositions).where(and(eq(issuePlanDecompositions.companyId, companyId), eq(issuePlanDecompositions.sourceIssueId, root.id), eq(issuePlanDecompositions.acceptedPlanRevisionId, input.acceptedPlanRevisionId!))).for("share");
-          const [current] = await tx.select({ revisionId: documents.latestRevisionId }).from(issueDocuments).innerJoin(documents, and(eq(documents.companyId, issueDocuments.companyId), eq(documents.id, issueDocuments.documentId))).where(and(eq(issueDocuments.companyId, companyId), eq(issueDocuments.issueId, root.id), eq(issueDocuments.key, "plan"))).for("share", { of: documents });
-          const [confirmation] = accepted?.acceptedInteractionId ? await tx.select().from(issueThreadInteractions).where(and(eq(issueThreadInteractions.companyId, companyId), eq(issueThreadInteractions.issueId, root.id), eq(issueThreadInteractions.id, accepted.acceptedInteractionId))).for("share") : [];
-          const wanted = input.workers.map(worker => worker.issueId).sort();
-          if (current?.revisionId !== input.acceptedPlanRevisionId || confirmation?.status !== "accepted" || !accepted || accepted.status !== "completed" || !accepted.acceptedInteractionId || JSON.stringify([...accepted.childIssueIds].sort()) !== JSON.stringify(wanted)
-            || tasks.some(task => task.id !== root.id && (task.parentId !== root.id || task.projectId !== root.projectId))) throw conflict("Use the existing accepted Task decomposition and its exact canonical children");
-          if (input.budgets.maxDelegationDepth < 1) throw conflict("Parallel children require a delegation depth budget");
-        }
-        if (tasks.some(task => task.requestDepth - root.requestDepth > input.budgets.maxDelegationDepth || task.requestDepth < root.requestDepth)) throw conflict("Task depth exceeds the explicit delegation budget");
-        let workflowRevisionId: string | null = null;
-        if (input.workflowId) {
-          await assertV7Authorization(tx, actor, companyId, "workflows:read");
-          const [workflow] = await tx.select().from(workflows).where(and(eq(workflows.companyId, companyId), eq(workflows.id, input.workflowId))).for("share");
-          if (!workflow || workflow.status !== "active" || !workflow.publishedRevisionId) throw conflict("Bind an existing published, active Workflow");
-          workflowRevisionId = workflow.publishedRevisionId;
-        }
-        for (const worker of input.workers) {
-          const task = tasks.find(item => item.id === worker.issueId)!;
-          if (!input.workflowId && !task.assigneeAgentId) throw conflict("Assign each worker Task to one canonical agent first");
-          if (task.assigneeAgentId) {
-            const [agent] = await tx.select().from(agents).where(and(eq(agents.companyId, companyId), eq(agents.id, task.assigneeAgentId))).for("share");
-            if (!agent || !["idle", "running", "error"].includes(agent.status)) throw forbidden("An invokable current local agent is required");
-          }
-        }
-        const contract = await writeOrchestrationContract(tx, companyId, root.id, input.completionContract, v7HumanActorId(actor));
-        const [created] = await tx.insert(orchestrationPlans).values({ companyId, issueId: root.id, completionContractId: contract.id, ...selectOrchestrationShape(input), actionClass: input.actionClass,
-          riskClass: input.riskClass, workflowRevisionId, workflowId: input.workflowId, acceptedPlanRevisionId: input.acceptedPlanRevisionId, supervisionPolicy: input.supervisionPolicy, budgets: input.budgets, createdBy: v7HumanActorId(actor) }).returning();
-        for (const worker of input.workers) {
-          const task = tasks.find(item => item.id === worker.issueId)!;
-          const workerContract = worker.issueId === root.id ? contract : await writeOrchestrationContract(tx, companyId, worker.issueId, worker.completionContract!, v7HumanActorId(actor));
-          await tx.insert(orchestrationWorkers).values({ companyId, planId: created!.id, issueId: task.id, agentId: task.assigneeAgentId, completionContractId: workerContract.id, workerKey: worker.key, dependsOn: worker.dependsOn });
-        }
-        await audit(tx, actor, created!, "orchestration.plan_created", publications, { mode: created!.mode, workerCount: input.workers.length, completionContractId: contract.id });
-        return created!;
-      });
+      return withV7ActivityTransaction(db, (tx, publications) =>
+        createWithinTransaction(tx, publications, actor, companyId, input));
     },
+    createWithinTransaction,
     decideWithinTransaction,
     decide: async (actor: AuthorizationActor, companyId: string, id: string, raw: z.infer<typeof orchestrationDecisionSchema>) => {
       const input = orchestrationDecisionSchema.parse(raw);

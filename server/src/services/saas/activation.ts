@@ -34,6 +34,7 @@ import {
   readActivationFirstValue,
 } from "./activation-first-value.js";
 import { activationFirstTaskView, readActivationFirstTask, readRecordedActivationFirstTask, assertActivationFirstTaskDispatch } from "./activation-first-task.js";
+import { activationFirstTaskPreparationOptions, prepareActivationFirstTask } from "./activation-first-task-preparation.js";
 import { orchestrationService } from "../orchestration/orchestration-service.js";
 import { orchestrationRuntimeControl } from "../orchestration/orchestration-runtime-control.js";
 import { withV7ActivityTransaction } from "../v7-mutations.js";
@@ -189,6 +190,10 @@ export function activationService(db: Db) {
     const firstTask = await activationFirstTaskView(db, tx, actor, companyId, {
       createdAt: run.createdAt, createdByUserId: userId, activationState: state,
     });
+    if (selected && v9FeatureEnabled(await instanceSettingsService(tx).getExperimental(), "activation_v9"))
+      firstTask.preparationOptions = await activationFirstTaskPreparationOptions(db, tx, actor, companyId, {
+        id: run.id, createdAt: run.createdAt, createdByUserId: userId, activationState: state,
+      });
     const blockers: ActivationView["blockers"] = [];
     if (!available.length || (state.packageVersionId && !selected))
       blockers.push("no_qualified_capability");
@@ -196,7 +201,7 @@ export function activationService(db: Db) {
       blockers.push("required_access_pending");
     if (
       ["review", "running", "result", "activated"].includes(state.step) &&
-      firstValue.status !== "verified" && !firstTask.candidates.length && !firstTask.current
+      firstValue.status !== "verified" && !firstTask.candidates.length && !firstTask.preparationOptions.length && !firstTask.current
     )
       blockers.push("safe_execution_unqualified");
     // Do not return internal idempotency receipts to the presentation layer.
@@ -423,6 +428,16 @@ export function activationService(db: Db) {
               throw conflict("Review the recorded result through its original controls", {
                 code: "FIRST_RESULT_ALREADY_RECORDED",
               });
+            if (state.preparedFirstTask) {
+              const prepared = await orchestrationService(txDb).get(actor, companyId, state.preparedFirstTask.planId, true);
+              if (prepared.issueId !== state.preparedFirstTask.issueId || prepared.createdBy !== userId || prepared.erasedAt ||
+                !["draft", "ready"].includes(prepared.status) || prepared.attempts.length)
+                throw conflict("Review the changed prepared Task through its original controls");
+              await orchestrationService(db).decideWithinTransaction(txDb, publications, actor, companyId, prepared.id, {
+                expectedVersion: prepared.version, action: "cancel", rationale: "The initiating human changed the first-task setup before any execution.",
+              });
+              delete next.preparedFirstTask;
+            }
             // This changes only the person's onboarding choice. Original
             // Foundation drafts, installations, grants and work keep their
             // own owners; selecting a capability again requires current admission.
@@ -430,8 +445,17 @@ export function activationService(db: Db) {
             next.step = "intent";
             break;
           }
+          case "prepare_first_task": {
+            requireStep("review");
+            next.preparedFirstTask = await prepareActivationFirstTask(db, txDb, publications, actor, companyId, {
+              id: run.id, createdAt: run.createdAt, createdByUserId: userId, activationState: state,
+            }, input);
+            break;
+          }
           case "start_first_task": {
             requireStep("review");
+            if (state.preparedFirstTask && (state.preparedFirstTask.installationId !== input.installationId || state.preparedFirstTask.planId !== input.planId))
+              throw conflict("Review the exact first draft prepared for this setup");
             if (state.firstTask || state.firstValueReceipt) throw conflict("Read the existing first task before starting another");
             const candidate = await readActivationFirstTask(db, txDb, actor, companyId, {
               createdAt: run.createdAt, createdByUserId: userId, activationState: state,
@@ -486,7 +510,8 @@ export function activationService(db: Db) {
               input.installationId,
               input.verificationRunId,
             );
-            if (state.firstTask && (state.firstTask.issueId !== result.issueId || state.firstTask.installationId !== result.installationId))
+            const firstReference = state.firstTask ?? state.preparedFirstTask;
+            if (firstReference && (firstReference.issueId !== result.issueId || firstReference.installationId !== result.installationId))
               throw conflict("Review the result of the recorded first task");
             next.firstValueReceipt = {
               installationId: result.installationId,

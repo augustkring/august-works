@@ -15,7 +15,7 @@ const candidate = { installationId: "10000000-0000-4000-8000-000000000001", inst
 let root: Root, container: HTMLDivElement, client: QueryClient;
 afterEach(async () => { if (root) await act(async () => root.unmount()); container?.remove(); client?.clear(); await i18n.changeLanguage("en"); });
 async function mount(value: ReturnType<typeof activationFirstTaskViewSchema.parse>, canStart = true, canStop = true) {
-  const handlers = { onStart: vi.fn(), onContinue: vi.fn(), onStop: vi.fn(), onRefresh: vi.fn() };
+  const handlers = { onPrepare: vi.fn(), onStart: vi.fn(), onContinue: vi.fn(), onStop: vi.fn(), onRefresh: vi.fn() };
   container = document.createElement("div");document.body.append(container);root = createRoot(container);
   client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter><ActivationFirstTask value={value} canStart={canStart} canStop={canStop} pending={false} {...handlers} /></MemoryRouter></QueryClientProvider>));
@@ -65,4 +65,20 @@ describe("Original first-task controls", () => {
     await act(async () => container.querySelector("button")!.click());expect(handlers.onRefresh).toHaveBeenCalledOnce();
     expect(handlers.onStart).not.toHaveBeenCalled();expect(handlers.onContinue).not.toHaveBeenCalled();
   });
+});
+
+it("prepares only the exact approved current purpose on explicit confirmation and never starts work", async () => {
+  const option = { installationId: candidate.installationId, installationVersion: 2,
+    installationHash: candidate.installationHash, agentName: "Original source-bound agent", useCaseVersion: 3,
+    purposeVersion: 1, intendedPurpose: "Prepare an approved internal source-bound draft", maximumModelCostMinor: 0 };
+  const handlers = await mount(activationFirstTaskViewSchema.parse({ candidates: [], hasMore: false, current: null,
+    preparationOptions: [option] }));
+  expect(container.textContent).toContain(option.intendedPurpose);
+  expect(handlers.onPrepare).not.toHaveBeenCalled();expect(handlers.onStart).not.toHaveBeenCalled();
+  const button = [...container.querySelectorAll("button")].find(value => value.textContent === "Prepare first task")!;
+  await act(async () => button.click());
+  expect(handlers.onPrepare).toHaveBeenCalledExactlyOnceWith({ operation: "prepare_first_task", installationId: candidate.installationId,
+    expectedInstallationVersion: 2, expectedInstallationHash: candidate.installationHash,
+    expectedUseCaseVersion: 3, expectedPurposeVersion: 1, confirmCurrentPurpose: true });
+  expect(handlers.onStart).not.toHaveBeenCalled(); expect(handlers.onContinue).not.toHaveBeenCalled();
 });

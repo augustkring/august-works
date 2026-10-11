@@ -48,6 +48,16 @@ export function registerNativeDraftGateway(
   else installed.delete(db);
 }
 
+/** Read-only original controller qualification before a canonical Task exists.
+ * The private gateway still owns current provider, credential and tariff checks. */
+export async function qualifyNativeDraftPresence(
+  rootDb: Db, tx: Db, companyId: string, agentId: string, responsibleUserId: string,
+) {
+  const gateway = installed.get(rootDb);
+  if (!gateway) throw conflict("The installed native draft controller is required");
+  return gateway.qualifyDraft(tx, { companyId, agentId, responsibleUserId });
+}
+
 export async function qualifyNativeDraftWorker(
   rootDb: Db,
   tx: Db,
