@@ -51,3 +51,13 @@ callback ownership correctly forbids that mutation. The fixture now sets the
 owned credential expiry while the original purpose is current, then withdraws
 before the pending successor review. No production fence, assertion or deadline
 changed. Types/browser V1 did not start. Exact-source rerun V2 is pending.
+
+Native V2 retained 458 passes and one failure out of 459. The new raw positive
+completion assertion exposed missing expiry enforcement in the Native completion
+guard: Original server setup reads and the Native revalidation guard already
+refused expired credentials, but a direct allocated-to-connected update could
+pass the earlier health-only completion fence. The unreleased 0475 appends the
+Original completion function with the same grant-first expiry condition used by
+Native validation. All other current human/run/package/application/method/scope/
+secret/health/zero-reach conditions remain intact. The rejection assertion remains
+unchanged. Types/browser V2 did not start; exact-source V3 is pending.
