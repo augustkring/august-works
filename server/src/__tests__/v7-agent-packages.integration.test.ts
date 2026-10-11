@@ -335,6 +335,8 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(audit.filter((event) => event.action === "agent_configuration.draft_saved")).toHaveLength(1);
     });
     it("prepares a pinned Hire draft through the Original inactive Agent owner without installation or execution", async () => {
+      const originalFlags = await instanceSettingsService(db).getExperimental();
+      try {
       await instanceSettingsService(db).updateExperimental({ free_core_commercial_v7: true, billing_entitlements_v6: true, billing_usage_v6: true });
       const { published, hire } = await hireFixture();
       const [account] = await db.insert(billingAccounts).values({ displayName: "Hire preparation Free Core", payerUserId: f.userId }).returning();
@@ -355,6 +357,10 @@ const support = await getEmbeddedPostgresTestSupport();
       await service.revoke(f.actor, published.id);
       await expect(hire.prepare(f.actor, f.home, another.id, { ...command, requestId: randomUUID(), expectedVersion: another.version, expectedReviewHash: nextReview.reviewHash })).rejects.toMatchObject({ status: 422 });
       expect(await db.select().from(agents)).toHaveLength(beforeAgents + 1);
+      } finally {
+        await instanceSettingsService(db).updateExperimental({ free_core_commercial_v7: originalFlags.free_core_commercial_v7,
+          billing_entitlements_v6: originalFlags.billing_entitlements_v6, billing_usage_v6: originalFlags.billing_usage_v6 });
+      }
     });
     it("retains readable Hire pins through withdrawal and flag rollback, fences native pin/step substitution and permits discard", async () => {
       const {published, hire} = await hireFixture();

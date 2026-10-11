@@ -43,3 +43,11 @@ fixture, Focus V2 passed all 53 cases in six complete files. Token gates V1
 passed. Native V1 did not reach any tests: its owned public prerequisite file
 was not group-readable by the isolated UID. That single file's access is
 corrected for V2; no customer/private path, Source assertion or deadline changed.
+
+Native V2 retained 460 passes and 15 failures out of 475. The preparation SQL
+used a logical property name instead of the physical `agent_packages.package_key`
+column; corrected in unreleased 0476 and its inspectable guard. The new Hire
+fixture also left Free Core/billing flags enabled for following Original tests,
+changing their actual capacity guards. Its three flags now restore their exact
+previous values in `finally`. No production fence or assertion is weakened.
+Types/browser V1 did not start; the full exact-source Native rerun is pending.

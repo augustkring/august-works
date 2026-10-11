@@ -47,7 +47,7 @@ BEGIN
     IF NEW.kind='hire' AND NOT EXISTS (
       SELECT 1 FROM agent_package_versions v JOIN agent_packages p ON p.id=v.agent_package_id
       WHERE v.id=NEW.package_version_id AND v.state='published' AND p.status='active'
-        AND v.content_hash=NEW.package_content_hash AND p.key=NEW.package_key
+        AND v.content_hash=NEW.package_content_hash AND p.package_key=NEW.package_key
     ) THEN RAISE EXCEPTION 'Current Original published capability pin is required' USING ERRCODE='23514'; END IF;
   END IF;
   RETURN NEW;
