@@ -36,6 +36,7 @@ export const activationConnectionReviewSchema = z.strictObject({
   grantKind: z.literal("user"),
   deferAgentAccess: z.literal(true),
   preview: activationConnectionPermissionPreviewSchema,
+  existingConnection: z.strictObject({ id: z.uuid(), name: z.string().min(1).max(200), setupHash: hash }).nullable(),
   reviewHash: hash,
 });
 

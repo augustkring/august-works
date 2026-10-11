@@ -13561,7 +13561,7 @@ export function toolAccessService(
         connection.credentialSecretRefs.length || connection.externalCredential ||
         connection.config.sourceTemplateKey !== current.galleryKey || connection.config.connectionMethodKey !== current.connectionMethodKey ||
         connection.config.url !== source.resource || oauth.resource !== source.resource || oauth.connectorProfile !== source.scopeProfile ||
-        oauth.strategy !== method.oauthStrategy || oauth.provider !== "google" || nativeSha256(oauth.scopes) !== nativeSha256(source.providerScopes))
+        oauth.strategy !== method.oauthStrategy || !["google", current.galleryKey].includes(String(oauth.provider)) || nativeSha256(oauth.scopes) !== nativeSha256(source.providerScopes))
       throw conflict("The connection resource or scopes changed; review the original permission again");
     });
   }

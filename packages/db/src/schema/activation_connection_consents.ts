@@ -21,6 +21,8 @@ export const activationConnectionConsents = pgTable("activation_connection_conse
   requestKey: uuid("request_key").notNull(),
   requestHash: text("request_hash").notNull(),
   reviewHash: text("review_hash").notNull(),
+  existingConnectionId: uuid("existing_connection_id"),
+  existingSetupHash: text("existing_setup_hash"),
   status: text("status").notNull().default("approved"),
   reservedConnectionId: uuid("reserved_connection_id"),
   connectionId: uuid("connection_id"),
@@ -33,6 +35,7 @@ export const activationConnectionConsents = pgTable("activation_connection_conse
   uniqueIndex("activation_connection_consents_reserved_uq").on(t.reservedConnectionId),
   uniqueIndex("activation_connection_consents_live_application_uq").on(t.onboardingRunId, t.applicationId).where(sql`${t.status}<>'withdrawn'`),
   index("activation_connection_consents_owner_idx").on(t.companyId, t.subjectUserId, t.onboardingRunId),
+  check("activation_connection_consents_existing_ck", sql`(${t.existingConnectionId} is null and ${t.existingSetupHash} is null) or (${t.existingConnectionId} is not null and ${t.existingSetupHash} is not null and ${t.existingSetupHash} ~ '^[a-f0-9]{64}$')`),
   check("activation_connection_consents_version_ck", sql`${t.onboardingVersion}>0`),
   check("activation_connection_consents_hash_ck", sql`${t.packageContentHash} ~ '^[a-f0-9]{64}$' and ${t.applicationHash} ~ '^[a-f0-9]{64}$' and ${t.methodHash} ~ '^[a-f0-9]{64}$' and ${t.requestHash} ~ '^[a-f0-9]{64}$' and ${t.reviewHash} ~ '^[a-f0-9]{64}$' and (${t.connectionHash} is null or ${t.connectionHash} ~ '^[a-f0-9]{64}$')`),
   check("activation_connection_consents_status_ck", sql`

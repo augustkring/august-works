@@ -23,7 +23,7 @@ test("eight distinct permission fields, keyboard C3, unknown receipt recovery an
     const review = activationConnectionReviewSchema.parse({ companyId: company.id, onboardingRunId: id, onboardingVersion: 3,
       packageVersionId: id, packageContentHash: "a".repeat(64), applicationId: id, applicationKey: "gmail", applicationName: "Original Gmail",
       galleryKey: "gmail", connectionMethodKey: "paperclip-read", methodHash: "b".repeat(64), providerScopes: ["https://www.googleapis.com/auth/gmail.readonly"],
-      scopeProfile: "gmail.read", grantKind: "user", deferAgentAccess: true, reviewHash: "c".repeat(64),
+      existingConnection: null, scopeProfile: "gmail.read", grantKind: "user", deferAgentAccess: true, reviewHash: "c".repeat(64),
       preview: { neededNow: ["Personal Google sign-in", "https://www.googleapis.com/auth/gmail.readonly"], why: "Prepare the original draft",
         usedBy: "Draft agent; no Agent receives access now", canRead: ["The authorized personal account"], canChange: ["No business changes authorized"],
         notRequested: ["No sending, deletion or spending"], automatic: ["No Agent execution"], asksFirst: ["Agent access needs its own review and Safe Test"] } });

@@ -75,6 +75,7 @@ export function ActivationConnectionConsent({ companyId, principal, runId, versi
   }, onSuccess: value => {
     if (!authority.confirmed(value) || !scopeCurrent()) return;
     client.setQueryData(receiptKey, value); setUnknown(false); setDecision(null); setConfirmed(false); setFailure(null);
+    if (value.status === "connected") onSetupChanged();
   }, onError: () => { setUnknown(true); setDecision(null); setSetup(false); setFailure(t("activation.connectionConsent.unknown")); } });
   const withdraw = useMutation({ mutationFn: async () => {
     const value = currentReceipt();
@@ -111,6 +112,7 @@ export function ActivationConnectionConsent({ companyId, principal, runId, versi
         {(reviewed.preview[field] as string[]).map(statement => <li key={statement}>{statement}</li>)}</ul> : reviewed.preview[field] as string}</dd>
     </div>)}</dl> : null}
     <p>{t("activation.connectionConsent.boundary")}</p>
+    {reviewed?.existingConnection ? <p>{t("activation.connectionConsent.reuseBoundary")}</p> : null}
     {failure ? <p role="alert">{failure}</p> : null}
     {saved ? <p role="status">{t(`activation.connectionConsent.status.${samePurpose ? saved.status : "changed"}`)}</p> : null}
     <AlertDialog open={decision !== null} onOpenChange={open => { if (!open) { setDecision(null); setConfirmed(false); } }}>

@@ -1,3 +1,4 @@
+import { secretService } from "../services/secrets.js";
 import { readActivationFirstValue } from "../services/saas/activation-first-value.js";
 import { lockActivationSnapshot, readActivationOwner } from "../services/saas/activation-owner.js";
 import { toolAccessRoutes } from "../routes/tool-access.js";
@@ -1858,6 +1859,70 @@ const support = await getEmbeddedPostgresTestSupport();
       await expect(c.apps.completePaperclipCloudConnectorCallback({ state, claimId: "owned-claim", actor })).rejects.toMatchObject({ status: 409 });
       expect(c.connector.claim).not.toHaveBeenCalled();
       expect(await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, allocated.connectionId))).toEqual([]);
+    });
+    async function existingOriginalPersonalConnection() {
+      const c = await connectionConsentFixture(true), actor = { actorType: "user" as const, actorId: f.userId };
+      const connected = await c.apps.connectGalleryApp(f.home, { galleryKey: "gmail", connectionMethodKey: c.review.connectionMethodKey,
+        applicationId: c.app.id, grantKind: "user" }, actor);
+      const authorizationUrl = connected.auth?.startUrl ?? (await c.apps.startOAuth(f.home, connected.connectionId,
+        { redirectUri: "https://owned-fixture.invalid/callback", subjectUserId: f.userId, actor })).authorizationUrl;
+      const state = new URL(authorizationUrl).searchParams.get("state")!;
+      await c.apps.completePaperclipCloudConnectorCallback({ state, claimId: "owned-legacy-claim", actor });
+      // Construct an unassigned legacy connection through its original owners.
+      // This removes access only in this disposable owned fixture.
+      await c.apps.putConnectionInstalls(connected.connectionId, { installs: [] }, actor);
+      await c.apps.finishGalleryAppConnection(f.home, connected.connectionId,
+        { enabledCatalogEntryIds: [], askFirstCatalogEntryIds: [], access: { agentIds: [] } }, actor);
+      await c.apps.checkHealth(connected.connectionId, actor);
+      return { ...c, actor, connectionId: connected.connectionId };
+    }
+    it("adopts the exact existing validated personal connection through C3 without another allocation, credential or Agent owner", async () => {
+      const c = await existingOriginalPersonalConnection(), reviewed = await c.owner.getReview(f.actor, f.home, c.key);
+      expect(reviewed.existingConnection).toMatchObject({ id: c.connectionId, setupHash: expect.stringMatching(/^[a-f0-9]{64}$/) });
+      const before = { connections: await db.select().from(toolConnections).where(eq(toolConnections.applicationId, c.app.id)),
+        grants: await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, c.connectionId)),
+        secrets: await db.select().from(companySecrets).where(eq(companySecrets.companyId, f.home)),
+        agents: await db.select().from(agents).where(eq(agents.companyId, f.home)) };
+      const starts = vi.mocked(c.connector.startAuthorization).mock.calls.length, claims = vi.mocked(c.connector.claim).mock.calls.length;
+      const command = { ...c.command, expectedReviewHash: reviewed.reviewHash };
+      const [first, replay] = await Promise.all([c.owner.approve(f.actor, f.home, c.key, command), c.owner.approve(f.actor, f.home, c.key, command)]);
+      expect(replay).toEqual(first); expect(first).toMatchObject({ status: "connected", connectionId: c.connectionId });
+      expect(await c.owner.getCurrentReceipt(f.actor, f.home, c.key)).toEqual(first);
+      expect((await c.owner.getReview(f.actor, f.home, c.key)).reviewHash).toBe(reviewed.reviewHash);
+      expect(await db.select().from(toolConnections).where(eq(toolConnections.applicationId, c.app.id))).toEqual(before.connections);
+      expect(await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, c.connectionId))).toEqual(before.grants);
+      expect(await db.select().from(companySecrets).where(eq(companySecrets.companyId, f.home))).toEqual(before.secrets);
+      expect(await db.select().from(agents).where(eq(agents.companyId, f.home))).toEqual(before.agents);
+      expect(c.connector.startAuthorization).toHaveBeenCalledTimes(starts); expect(c.connector.claim).toHaveBeenCalledTimes(claims);
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("recorded");
+      const [native] = await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.id, first.id));
+      expect(native).toMatchObject({ existingConnectionId: c.connectionId, existingSetupHash: reviewed.existingConnection!.setupHash });
+      await expect(db.update(activationConnectionConsents).set({ existingConnectionId: randomUUID() }).where(eq(activationConnectionConsents.id, first.id)))
+        .rejects.toMatchObject({ cause: { code: "23514" } });
+    });
+    it("refuses stale existing personal grant scopes before adoption and retains only the original connection", async () => {
+      const c = await existingOriginalPersonalConnection(), reviewed = await c.owner.getReview(f.actor, f.home, c.key);
+      const [grant] = await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, c.connectionId));
+      await db.update(connectionGrants).set({ providerTenant: { ...grant!.providerTenant, oauth: { ...grant!.providerTenant?.oauth, scopes: ["unapproved-broader-scope"] } } })
+        .where(eq(connectionGrants.id, grant!.id));
+      await expect(c.owner.approve(f.actor, f.home, c.key, { ...c.command, expectedReviewHash: reviewed.reviewHash })).rejects.toMatchObject({ status: 409 });
+      expect(await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.applicationId, c.app.id))).toEqual([]);
+      expect(await db.select().from(toolConnections).where(eq(toolConnections.applicationId, c.app.id))).toHaveLength(1);
+    });
+    it("refuses an existing connection review after the original secret owner rotates its credential version", async () => {
+      const c = await existingOriginalPersonalConnection(), reviewed = await c.owner.getReview(f.actor, f.home, c.key);
+      const [grant] = await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, c.connectionId));
+      await secretService(db).rotate(grant!.credentialSecretRefs[0]!.secretId, { value: "owned-rotated-software-token", expectedLatestVersion: 1 }, { userId: f.userId });
+      await expect(c.owner.approve(f.actor, f.home, c.key, { ...c.command, expectedReviewHash: reviewed.reviewHash })).rejects.toMatchObject({ status: 409 });
+      expect(await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.applicationId, c.app.id))).toEqual([]);
+    });
+    it("preserves existing Agent/company reach and refuses to reinterpret it as an unassigned onboarding connection", async () => {
+      const c = await existingOriginalPersonalConnection();
+      await c.apps.putConnectionInstalls(c.connectionId, { installs: [{ targetType: "company", targetId: f.home }] }, c.actor);
+      const before = await db.select().from(toolConnectionInstalls).where(eq(toolConnectionInstalls.connectionId, c.connectionId));
+      await expect(c.owner.getReview(f.actor, f.home, c.key)).rejects.toMatchObject({ status: 409 });
+      expect(await db.select().from(toolConnectionInstalls).where(eq(toolConnectionInstalls.connectionId, c.connectionId))).toEqual(before);
+      expect(await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.applicationId, c.app.id))).toEqual([]);
     });
     it("retains the exact qualified onboarding choice outside the bounded discovery page and refuses it after original revocation", async () => {
       const selected = await firstAgentPreparationFixture({}, "access");

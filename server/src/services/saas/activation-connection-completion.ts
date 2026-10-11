@@ -20,7 +20,7 @@ export function activationConnectionSetupHash(connection: Connection, grant: Gra
 
 /** Only original personal credentials and an actual current health observation
  * qualify setup. This never qualifies execution, Safe Test or Agent authority. */
-export async function readDeferredActivationSetup(tx: Db, purpose: Purpose, requireProfile = true) {
+export async function readDeferredActivationSetup(tx: Db, purpose: Pick<Purpose, "companyId" | "connectionId" | "applicationId" | "subjectUserId">, requireProfile = true) {
   const [connection] = await tx.select().from(toolConnections).where(and(eq(toolConnections.companyId, purpose.companyId),
     eq(toolConnections.id, purpose.connectionId!))).for("share");
   if (!connection || connection.applicationId !== purpose.applicationId || connection.createdByUserId !== purpose.subjectUserId ||

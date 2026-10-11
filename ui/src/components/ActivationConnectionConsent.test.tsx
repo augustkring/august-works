@@ -20,7 +20,7 @@ const companyId = "10000000-0000-4000-8000-000000000001", runId = "20000000-0000
 const review: ActivationConnectionReview = { companyId, onboardingRunId: runId, onboardingVersion: 1, packageVersionId,
   packageContentHash: "a".repeat(64), applicationId, applicationKey: "gmail", applicationName: "Original Gmail",
   galleryKey: "gmail", connectionMethodKey: "paperclip-read", methodHash: "b".repeat(64), providerScopes: ["gmail.readonly"],
-  scopeProfile: "gmail.read", grantKind: "user", deferAgentAccess: true, reviewHash: "c".repeat(64),
+  existingConnection: null, scopeProfile: "gmail.read", grantKind: "user", deferAgentAccess: true, reviewHash: "c".repeat(64),
   preview: { neededNow: ["Personal account", "gmail.readonly"], why: "Prepare the original draft", usedBy: "No Agent access",
     canRead: ["Original provider scope"], canChange: ["No business changes"], notRequested: ["No deletion or spending"],
     automatic: ["No execution"], asksFirst: ["Agent actions require their own decision"] } };
@@ -94,4 +94,16 @@ it("reads Native completion after the original flow and keeps withdrawal as a se
   await act(async () => (document.querySelector('[role="alertdialog"] input') as HTMLInputElement).click());
   await act(async () => button("activation.connectionConsent.confirm").click());
   await vi.waitFor(() => expect(withdraw).toHaveBeenCalledWith(companyId, "initiator", saved.requestKey, saved.reviewHash));
+});
+
+
+it("explains an exact existing connection reuse and refreshes onboarding only on a confirmed Native connected receipt", async () => {
+  reads(); vi.mocked(activationConnectionApi.review).mockResolvedValue({ ...review,
+    existingConnection: { id: "70000000-0000-4000-8000-000000000001", name: "Saved personal Gmail", setupHash: "d".repeat(64) } });
+  const post = vi.spyOn(activationConnectionApi, "approve").mockImplementation(async (_c, _u, _k, command) => ({ ...receipt(command.requestKey),
+    status: "connected", connectionId: "70000000-0000-4000-8000-000000000001", connectedAt: "2026-10-11T01:00:00Z" }));
+  await mount(); expect(container.textContent).toContain("does not create another connection or repeat provider sign-in");
+  expect(setupChanged).not.toHaveBeenCalled(); await approve();
+  await vi.waitFor(() => expect(setupChanged).toHaveBeenCalledTimes(1));
+  expect(post).toHaveBeenCalledTimes(1); expect(flow).not.toHaveBeenCalled();
 });

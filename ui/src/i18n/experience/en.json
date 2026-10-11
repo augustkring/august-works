@@ -396,7 +396,8 @@
         "connected": "The original personal connection was validated. This grants no Agent access.",
         "withdrawn": "Purpose approval withdrawn.",
         "changed": "The reviewed setup changed. Withdraw the earlier purpose approval before reviewing a new one."
-      }
+      },
+      "reuseBoundary": "This decision reuses the exact validated personal connection. It does not create another connection or repeat provider sign-in. Agent access remains unassigned."
     }
   },
   "company": {

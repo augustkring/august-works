@@ -1,14 +1,15 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, ne } from "drizzle-orm";
 import { activationConnectionConsents, agentPackageVersions, companies, toolApplications, toolConnections, type Db } from "@paperclipai/db";
-import { activationConnectionConsentCommandSchema, activationConnectionConsentWithdrawalCommandSchema, activationConnectionConsentReceiptSchema, activationConnectionReviewSchema, packageReleaseSchema, v9FeatureEnabled } from "@paperclipai/shared";
+import { getConnectableAppDefinition, activationConnectionConsentCommandSchema, activationConnectionConsentWithdrawalCommandSchema, activationConnectionConsentReceiptSchema, activationConnectionReviewSchema, packageReleaseSchema, v9FeatureEnabled } from "@paperclipai/shared";
 import { conflict, forbidden, notFound } from "../../errors.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { assertV5Authorization } from "../v5-authorization.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { logActivity, withV7ActivityTransaction } from "../v7-mutations.js";
-import { toolAccessService, type GalleryAppAllocationOwner } from "../tool-access.js";
+import { toolAccessService, activationConnectionMethodSource, type GalleryAppAllocationOwner } from "../tool-access.js";
+import { readDeferredActivationSetup, recordDeferredActivationCompletion } from "./activation-connection-completion.js";
 import { assertActivationAccess, lockActivationSnapshot, readActivationOwner } from "./activation-owner.js";
 import { readFirstAgentCapabilityPin } from "./activation-first-agent.js";
 
@@ -53,7 +54,38 @@ async function source(tx: Db, actor: AuthorizationActor, companyId: string, appl
   const app = apps[0]!;
   const galleryKey = app.metadata?.sourceTemplateKey ?? app.metadata?.galleryKey;
   if (typeof galleryKey !== "string") throw conflict("The original application provider needs review");
-  return { ...current, app, galleryKey, pin, purpose: release.manifest.purpose,
+  const [approvedPurpose] = await tx.select().from(activationConnectionConsents).where(and(
+    eq(activationConnectionConsents.companyId, companyId), eq(activationConnectionConsents.onboardingRunId, current.run.id),
+    eq(activationConnectionConsents.applicationId, app.id), eq(activationConnectionConsents.subjectUserId, current.userId),
+    ne(activationConnectionConsents.status, "withdrawn"))).for("share");
+  const connections = await tx.select().from(toolConnections).where(and(eq(toolConnections.companyId, companyId),
+    eq(toolConnections.applicationId, app.id))).orderBy(toolConnections.id).limit(2).for("share");
+  if (connections.length > 1) throw conflict("The exact original connection needs review");
+  const connection = connections[0];
+  let existingConnection: { id: string; name: string; setupHash: string } | null = null;
+  let existingMethodKey: string | undefined = approvedPurpose?.connectionMethodKey;
+  if (connection) {
+    const [owned] = await tx.select().from(activationConnectionConsents).where(and(eq(activationConnectionConsents.companyId, companyId),
+      eq(activationConnectionConsents.connectionId, connection.id))).for("share");
+    if (owned && (owned.onboardingRunId !== current.run.id || owned.subjectUserId !== current.userId || owned.status === "withdrawn"))
+      throw conflict("This retained connection needs a separate current purpose renewal");
+    if (!owned || owned.existingConnectionId) {
+      const setup = await readDeferredActivationSetup(tx, { companyId, applicationId: app.id, connectionId: connection.id, subjectUserId: current.userId });
+      if (!setup || typeof connection.config.connectionMethodKey !== "string" || connection.config.sourceTemplateKey !== galleryKey ||
+          owned && owned.existingSetupHash !== setup.hash)
+        throw conflict("The existing personal connection needs its original access review and validation");
+      const definition = getConnectableAppDefinition(galleryKey), selectedMethod = definition?.methods.find(candidate => candidate.key === connection.config.connectionMethodKey);
+      if (!definition || !selectedMethod) throw conflict("The original provider method is unavailable");
+      const original = activationConnectionMethodSource(definition, selectedMethod), oauth = connection.config.oauth as Record<string, unknown> | undefined;
+      if (connection.config.url !== original.resource || oauth?.resource !== original.resource || oauth.connectorProfile !== original.scopeProfile ||
+          oauth.strategy !== selectedMethod.oauthStrategy || !["google", galleryKey].includes(String(oauth.provider)) ||
+          nativeSha256(oauth.scopes) !== nativeSha256(original.providerScopes))
+        throw conflict("The existing provider resource or scopes need a separate review");
+      existingConnection = { id: connection.id, name: connection.name, setupHash: setup.hash };
+      existingMethodKey = connection.config.connectionMethodKey;
+    }
+  }
+  return { ...current, app, galleryKey, pin, existingConnection, existingMethodKey, purpose: release.manifest.purpose,
     applicationHash: nativeSha256({ id: app.id, key: app.applicationKey, name: app.name, metadata: app.metadata, status: app.status, archivedAt: app.archivedAt?.toISOString() ?? null }) };
 }
 
@@ -63,9 +95,10 @@ function review(current: Awaited<ReturnType<typeof source>>, method: Method) {
     packageVersionId: current.pin.versionId, packageContentHash: current.pin.hash,
     applicationId: current.app.id, applicationKey: current.app.applicationKey!, applicationName: current.app.name,
     galleryKey: current.galleryKey, connectionMethodKey: method.method.key, methodHash: nativeSha256(method),
+    existingConnection: current.existingConnection,
     providerScopes: method.providerScopes, scopeProfile: method.scopeProfile, grantKind: "user", deferAgentAccess: true,
     preview: {
-      neededNow: [`Personal sign-in to ${method.providerName}; resource: ${method.resource}`, ...method.providerScopes],
+      neededNow: [current.existingConnection ? `Reuse the exact validated personal ${method.providerName} connection ${current.existingConnection.name}; resource: ${method.resource}` : `Personal sign-in to ${method.providerName}; resource: ${method.resource}`, ...method.providerScopes],
       why: current.purpose,
       usedBy: `${current.pin.name}; no Agent receives this connection during setup.`,
       canRead: [`Provider sign-in requests exactly these scopes: ${method.providerScopes.join(", ")}. Access covers the account authorized at the provider.`],
@@ -85,7 +118,9 @@ function review(current: Awaited<ReturnType<typeof source>>, method: Method) {
 export function activationConnectionConsentService(db: Db, methods: Methods = toolAccessService(db)) {
   async function prepare(actor: AuthorizationActor, companyId: string, applicationKey: string, methodKey?: string) {
     const initial = await db.transaction(tx => source(tx as unknown as Db, actor, companyId, applicationKey));
-    const method = await methods.activationConnectionMethod(initial.galleryKey, methodKey);
+    if (initial.existingMethodKey && methodKey && methodKey !== initial.existingMethodKey)
+      throw conflict("Reusing a connection must preserve its original provider method");
+    const method = await methods.activationConnectionMethod(initial.galleryKey, initial.existingMethodKey ?? methodKey);
     return { initial, method };
   }
   return {
@@ -228,17 +263,32 @@ export function activationConnectionConsentService(db: Db, methods: Methods = to
           throw conflict("The reviewed connection changed; review it again");
         const connections = await tx.select({ id: toolConnections.id }).from(toolConnections).where(and(
           eq(toolConnections.companyId, companyId), eq(toolConnections.applicationId, current.app.id))).limit(1).for("share");
-        if (connections.length) throw conflict("The existing connection needs its own current permission review");
+        if (connections.length && connections[0]!.id !== current.existingConnection?.id) throw conflict("The existing connection needs its own current permission review");
         const [row] = await tx.insert(activationConnectionConsents).values({
           companyId, onboardingRunId: current.run.id, subjectUserId: current.userId,
           packageVersionId: current.pin.versionId, packageContentHash: current.pin.hash, onboardingVersion: current.run.version,
           applicationId: current.app.id, applicationKey, applicationHash: current.applicationHash, galleryKey: current.galleryKey,
           connectionMethodKey: method.method.key, methodHash: currentReview.methodHash,
           requestKey: input.requestKey, requestHash, reviewHash: input.expectedReviewHash,
+          existingConnectionId: current.existingConnection?.id ?? null, existingSetupHash: current.existingConnection?.setupHash ?? null,
         }).returning();
         await logActivity(tx, { companyId, actorType: "user", actorId: current.userId,
           action: "activation.connection_consent_approved", entityType: "activation_connection_consent", entityId: row!.id,
           details: { onboardingRunId: current.run.id, applicationId: current.app.id, deferredAgentAccess: true } }, publications);
+        if (current.existingConnection) {
+          // C3 adopts the real original row in this same Native snapshot. It
+          // allocates nothing, copies no credentials and starts no provider I/O.
+          await tx.update(activationConnectionConsents).set({ status: "allocating", reservedConnectionId: current.existingConnection.id })
+            .where(eq(activationConnectionConsents.id, row!.id));
+          const [bound] = await tx.update(activationConnectionConsents).set({ status: "allocated", connectionId: current.existingConnection.id })
+            .where(eq(activationConnectionConsents.id, row!.id)).returning();
+          await recordDeferredActivationCompletion(tx, bound!);
+          const [adopted] = await tx.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.id, row!.id));
+          await logActivity(tx, { companyId, actorType: "user", actorId: current.userId, action: "activation.connection_purpose_adopted",
+            entityType: "activation_connection_consent", entityId: row!.id,
+            details: { connectionId: current.existingConnection.id, newAllocation: false, deferredAgentAccess: true } }, publications);
+          return publicReceipt(adopted!);
+        }
         return publicReceipt(row!);
       });
     },
