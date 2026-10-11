@@ -19,6 +19,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { HireDeclaredAccess } from "@/components/HireDeclaredAccess";
 import { AgentDraftPreparation } from "@/components/AgentDraftPreparation";
+import { AgentDraftRuntime } from "@/components/AgentDraftRuntime";
 import { useV9AuthoringAuthority } from "@/hooks/useV9AuthoringAuthority";
 
 const labels = {
@@ -539,6 +540,9 @@ export function HireAgentSetup({
             onConfirmed={value => { if (!alive.current || !authority.canRead() || checking.current) return;
               client.setQueryData(key, value); setReceipt(value); setContent(value.content); }} />
           <p>{t("hireSetup.expected")}{" "}{receipt.content.outcome}</p>
+          <AgentDraftRuntime company={company} principal={principal} draft={receipt} enabled={viewReady}
+            canUseAuthority={() => alive.current && authority.canRead() && !checking.current && !checkingAccess &&
+              client.getQueryState(key)?.fetchStatus === "idle"} />
           <p role="status">{t("hireSetup.testUnavailable")}</p>
         </section>
       )}

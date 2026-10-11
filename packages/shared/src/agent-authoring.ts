@@ -174,6 +174,20 @@ export const agentDraftPrepareSchema = z.strictObject({
 });
 export type AgentDraftPrepare = z.infer<typeof agentDraftPrepareSchema>;
 export type AgentDraftPreparationReview = z.infer<typeof agentDraftPreparationReviewSchema>;
+/** Current Original runtime proof, distinct from representative execution. */
+export const agentDraftRuntimeViewSchema = z.strictObject({
+  draftId: z.uuid(), companyId: z.uuid(), version: z.number().int().positive(),
+  agentId: z.uuid().nullable(), runtimeBindingId: z.uuid().nullable(),
+  configurationHash: z.string().regex(/^[a-f0-9]{64}$/).nullable(),
+  status: z.enum(["not_prepared", "awaiting_approval", "needs_setup", "qualified", "unavailable"]),
+  runtimeQualified: z.boolean(), safeTestQualified: z.literal(false), executionStarted: z.literal(false),
+}).superRefine((value, ctx) => {
+  if (value.runtimeQualified !== (value.status === "qualified") || (value.runtimeQualified && (!value.agentId || !value.runtimeBindingId || !value.configurationHash)))
+    ctx.addIssue({ code: "custom", message: "Runtime qualification requires the exact current Native Agent and binding" });
+  if (value.status === "not_prepared" && (value.agentId || value.runtimeBindingId || value.configurationHash))
+    ctx.addIssue({ code: "custom", message: "An unprepared draft has no actual runtime identity" });
+});
+export type AgentDraftRuntimeView = z.infer<typeof agentDraftRuntimeViewSchema>;
 export const agentAuthoringDraftViewSchema = z.strictObject({
   id: z.uuid(),
   companyId: z.uuid(),

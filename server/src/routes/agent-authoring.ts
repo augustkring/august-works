@@ -82,6 +82,9 @@ export function agentAuthoringRoutes(db: Db) {
   router.get(`${root}/:id/preparation-review`, async (req, res) => res.json(
     await service.preparationReview(req.actor, company(req), z.uuid().parse(req.params.id)),
   ));
+  router.get(`${root}/:id/runtime`, async (req, res) => res.json(
+    await service.runtime(req.actor, company(req), z.uuid().parse(req.params.id)),
+  ));
   router.post(`${root}/:id/prepare`, validate(agentDraftPrepareSchema), async (req, res) => res.json(
     await service.prepare(req.actor, company(req), z.uuid().parse(req.params.id), req.body),
   ));

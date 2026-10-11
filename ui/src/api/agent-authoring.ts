@@ -5,6 +5,7 @@ import {
   hireAgentCapabilityStatusSchema,
   agentDraftAdmissionSchema,
   agentDraftPreparationReviewSchema,
+  agentDraftRuntimeViewSchema,
   type AgentDraftPrepare,
   type AgentDraftSave,
   type AgentAuthoringReview,
@@ -20,6 +21,8 @@ export interface AgentAuthoringOptions {
   runtimes: Array<{ id: string }>;
 }
 export const agentAuthoringApi = {
+  runtime: async (company: string, principal: string, id: string, signal?: AbortSignal) =>
+    agentDraftRuntimeViewSchema.parse(await api.get(scope(`${root(company)}/${id}/runtime`, principal), { signal, cache: "no-store" })),
   preparationReview: async (company: string, principal: string, id: string, signal?: AbortSignal) =>
     agentDraftPreparationReviewSchema.parse(await api.get(scope(`${root(company)}/${id}/preparation-review`, principal),
       { signal, cache: "no-store" })),

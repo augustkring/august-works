@@ -35,6 +35,9 @@ for (const kind of ["custom", "hire"] as const) {
           return route.fulfill({ json: draft });
         }
         if (path.endsWith("/options")) return route.fulfill({ json: { owners: [{ id: session.user.id, name: "Accountable owner" }], knowledge: [], runtimes: [] } });
+        if (path.endsWith("/runtime")) return route.fulfill({ json: { draftId: id, companyId: company.id, version: draft.version,
+          agentId: draft.preparation!.agentId, runtimeBindingId: null, configurationHash: "a".repeat(64), status: "needs_setup",
+          runtimeQualified: false, safeTestQualified: false, executionStarted: false } });
         if (path.endsWith("/hire-capability")) return route.fulfill({ json: { key: "research", versionId: packageId, version: "1.0.0", name: "Research draft", category: "Research",
           outcome: "Prepare an internal research draft", requiredKnowledge: [], requiredConnections: [], limits: [], actionClasses: ["internal_draft"], available: true } });
         if (path.endsWith("/preparation-review")) return route.fulfill({ json: { draftId: id, companyId: company.id, version: 1, name: draft.content!.name,

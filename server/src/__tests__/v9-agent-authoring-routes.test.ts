@@ -19,6 +19,7 @@ const service = vi.hoisted(() => ({
   review: vi.fn(),
   preparationReview: vi.fn(),
   prepare: vi.fn(),
+  runtime: vi.fn(),
 }));
 vi.mock("../services/agents/authoring-drafts.js", () => ({
   agentAuthoringService: () => service,
@@ -47,6 +48,15 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 describe("native authoring HTTP boundary", () => {
+  it("binds current runtime metadata to the private principal and never requests execution", async () => {
+    const path = `/api/companies/${companyId}/agent-configuration-drafts/${id}/runtime`;
+    service.runtime.mockResolvedValue({ draftId: id, status: "needs_setup", runtimeQualified: false, safeTestQualified: false });
+    await request(app()).get(`${path}?expectedUserId=other`).expect(409);
+    expect(service.runtime).not.toHaveBeenCalled();
+    await request(app()).get(`${path}?expectedUserId=author`).expect(200).expect("Cache-Control", "private, no-store");
+    expect(service.runtime).toHaveBeenCalledWith(expect.objectContaining({ userId: "author" }), companyId, id);
+    expect(service.prepare).not.toHaveBeenCalled(); expect(service.save).not.toHaveBeenCalled();
+  });
   it("requires explicit inactive preparation and current principal without accepting runtime or publication authority", async () => {
     const path = `/api/companies/${companyId}/agent-configuration-drafts/${id}`;
     const command = { requestId, expectedVersion: 2, expectedReviewHash: "a".repeat(64), confirmInactiveAgentPreparation: true };

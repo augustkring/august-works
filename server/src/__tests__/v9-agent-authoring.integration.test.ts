@@ -18,9 +18,12 @@ import {
   toolConnectionInstalls,
   agentPresenceRuntimeBindings,
 } from "@paperclipai/db";
-import { agentAuthoringContentSchema } from "@paperclipai/shared";
+import { PROVIDER_CAPABILITY_FEATURES, agentAuthoringContentSchema, type ProviderCapabilitySnapshot } from "@paperclipai/shared";
 import { agentAuthoringService } from "../services/agents/authoring-drafts.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
+import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
+import { providerConformanceRequirements, makeProviderCapabilitySnapshot } from "../services/provider-capabilities.js";
+import { hashContextPolicySnapshot } from "../services/context/context-manifest.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
 import {
   getEmbeddedPostgresTestSupport,
@@ -141,6 +144,64 @@ const support = await getEmbeddedPostgresTestSupport();
       expect((await service.get(f.actor, f.home, draft.id)).preparation!.status).toBe("needs_review");
       expect((await service.review(f.actor, f.home, draft.id)).publishAllowed).toBe(false);
       await expect(service.prepare(f.actor, f.home, draft.id, { ...command, requestId: randomUUID(), expectedVersion: saved.version })).rejects.toMatchObject({ status: 409 });
+    });
+    it("reads only the actual prepared runtime and never qualifies an unconfigured or different Agent's placeholder", async () => {
+      const { draft, command } = await preparationFixture();
+      expect(await service.runtime(f.actor, f.home, draft.id)).toMatchObject({ agentId: null, runtimeBindingId: null, configurationHash: null,
+        status: "not_prepared", runtimeQualified: false, safeTestQualified: false, executionStarted: false });
+      const prepared = await service.prepare(f.actor, f.home, draft.id, command);
+      const [owned] = await db.select().from(agentPresenceRuntimeBindings).where(eq(agentPresenceRuntimeBindings.agentId, prepared.preparation!.agentId));
+      const before = await db.select().from(activityLog), effects = await effectCounts();
+      const observed = await service.runtime(f.actor, f.home, draft.id);
+      expect(observed).toMatchObject({ draftId: draft.id, companyId: f.home, version: prepared.version, agentId: prepared.preparation!.agentId,
+        runtimeBindingId: owned!.id, status: "needs_setup", runtimeQualified: false, safeTestQualified: false, executionStarted: false });
+      const [row] = await db.select().from(agentConfigurationDrafts).where(eq(agentConfigurationDrafts.id, draft.id));
+      expect(observed.configurationHash).toBe(row!.preparationConfigurationHash);
+      expect(await db.select().from(activityLog)).toEqual(before); expect(await effectCounts()).toEqual(effects);
+      expect(Object.keys(observed)).not.toContain("adapterConfig"); expect(Object.keys(observed)).not.toContain("providerProfileRef");
+      await instanceSettingsService(db).updateExperimental({ hire_agent_v9: false });
+      expect((await service.runtime(f.actor, f.home, draft.id)).status).toBe("needs_setup");
+      await db.update(authUsers).set({ emailVerified: false }).where(eq(authUsers.id, f.userId));
+      await expect(service.runtime({ ...f.actor, isInstanceAdmin: true }, f.home, draft.id)).rejects.toMatchObject({ status: 403 });
+    });
+    it("keeps board approval separate from runtime proof and preserves the existing revision's actual identity", async () => {
+      const { draft, command } = await preparationFixture();
+      await db.update(companies).set({ requireBoardApprovalForNewAgents: true }).where(eq(companies.id, f.home));
+      const review = await service.preparationReview(f.actor, f.home, draft.id);
+      await service.prepare(f.actor, f.home, draft.id, { ...command, expectedReviewHash: review.reviewHash });
+      expect(await service.runtime(f.actor, f.home, draft.id)).toMatchObject({ status: "awaiting_approval", runtimeQualified: false, safeTestQualified: false });
+      const revision = await service.create(f.actor, f.home, { requestId: randomUUID(), agentId: f.presence.id });
+      const [binding] = await db.select().from(agentPresenceRuntimeBindings).where(eq(agentPresenceRuntimeBindings.agentId, f.presence.id));
+      expect(await service.runtime(f.actor, f.home, revision.id)).toMatchObject({ agentId: f.presence.id, runtimeBindingId: binding!.id,
+        status: "needs_setup", safeTestQualified: false, executionStarted: false });
+      await expect(service.runtime(f.actor, f.guest, draft.id)).rejects.toMatchObject({ status: 404 });
+    });
+    it("projects exact retained Original runtime pins and withdraws the projection on configuration or profile drift", async () => {
+      const { draft, command } = await preparationFixture(), prepared = await service.prepare(f.actor, f.home, draft.id, command), agentId = prepared.preparation!.agentId;
+      const bindingService = agentProviderBindingService(db), binding = (await bindingService.getForPresence(f.actor, f.home, agentId))!;
+      const [agent] = await db.select().from(agents).where(eq(agents.id, agentId));
+      // Explicit metadata fixture through the Original internal owner. These
+      // retained rows test projection; no provider probes or GA proof is claimed.
+      const snapshot: Omit<ProviderCapabilitySnapshot, "hash"> = { provider: binding.provider.providerType, version: "software-contract-fixture-v1",
+        features: Object.fromEntries(PROVIDER_CAPABILITY_FEATURES.map(key => [key, false])) as ProviderCapabilitySnapshot["features"],
+        skills: [], tools: [], discoveredAt: new Date().toISOString() };
+      const retain = () => bindingService.recordDiscovery(f.home, agentId, snapshot,
+        Object.fromEntries(providerConformanceRequirements(makeProviderCapabilitySnapshot(snapshot), binding.provider.isolationMode).map(check => [check, true])),
+        { configurationHash: hashContextPolicySnapshot({ adapterType: agent!.adapterType, adapterConfig: agent!.adapterConfig }), runtimeId: binding.runtime.id,
+          profileRef: binding.runtime.providerProfileRef, bindingId: binding.provider.id, accountingComplete: true });
+      await retain();
+      const before = await db.select().from(activityLog), effects = await effectCounts();
+      const observed = await service.runtime(f.actor, f.home, draft.id);
+      expect(observed).toMatchObject({ status: "qualified", agentId, runtimeBindingId: binding.runtime.id, runtimeQualified: true, safeTestQualified: false, executionStarted: false });
+      expect(await db.select().from(activityLog)).toEqual(before); expect(await effectCounts()).toEqual(effects);
+      await db.update(agentPresenceRuntimeBindings).set({ providerProfileRef: "changed-profile" }).where(eq(agentPresenceRuntimeBindings.id, binding.runtime.id));
+      expect((await service.runtime(f.actor, f.home, draft.id)).runtimeQualified).toBe(false);
+      await db.update(agentPresenceRuntimeBindings).set({ providerProfileRef: binding.runtime.providerProfileRef }).where(eq(agentPresenceRuntimeBindings.id, binding.runtime.id));
+      expect((await service.runtime(f.actor, f.home, draft.id)).runtimeQualified).toBe(true);
+      await db.update(agents).set({ adapterConfig: { changed: "PRIVATE runtime configuration" } }).where(eq(agents.id, agentId));
+      const drifted = await service.runtime(f.actor, f.home, draft.id);
+      expect(drifted.status).toBe("needs_setup"); expect(drifted.runtimeQualified).toBe(false);
+      expect(drifted.configurationHash).not.toBe(observed.configurationHash); expect(JSON.stringify(drifted)).not.toContain("PRIVATE runtime configuration");
     });
     it("checks current revision admission without returning configuration or writing proposals, grants or audits", async () => {
       const drafts = await db.select().from(agentConfigurationDrafts);

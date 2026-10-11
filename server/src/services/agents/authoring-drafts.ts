@@ -7,6 +7,7 @@ import {
   authUsers,
   companyMemberships,
   agentPresenceRuntimeBindings,
+  agentProviderBindings,
   foundationDocuments,
   agentPackageVersions,
   agentPackages,
@@ -21,6 +22,8 @@ import {
   agentDraftAdmissionSchema,
   agentDraftPreparationReviewSchema,
   agentDraftPrepareSchema,
+  agentDraftRuntimeViewSchema,
+  type AgentDraftRuntimeView,
   CUSTOM_AGENT_STEPS,
   HIRE_AGENT_STEPS,
   hireAgentCatalogSchema,
@@ -44,6 +47,7 @@ import { withV5ActivityTransaction } from "../v5-mutations.js";
 import { logActivity } from "../activity-log.js";
 import { createPausedOnboardingAgent } from "../saas/onboarding-agent.js";
 import { deduplicateAgentName } from "../agents.js";
+import { agentProviderBindingService } from "../agent-provider-bindings.js";
 import {
   approvedFoundationView,
   foundationService,
@@ -54,6 +58,7 @@ import {
   forbidden,
   notFound,
   tooManyRequests,
+  HttpError,
   unprocessable,
 } from "../../errors.js";
 
@@ -361,6 +366,40 @@ export function agentAuthoringService(db: Db) {
     }
   }
   return {
+    runtime: async (actor: AuthorizationActor, companyId: string, id: string) => db.transaction(async rawTx => {
+      const tx = rawTx as unknown as Db;
+      v5HumanActorId(actor);
+      await assertV5Authorization(tx, { ...actor, ignoreInstanceAdmin: true }, companyId, "company_scope:read");
+      await tx.select({ id: agentConfigurationDrafts.id }).from(agentConfigurationDrafts)
+        .where(and(eq(agentConfigurationDrafts.companyId, companyId), eq(agentConfigurationDrafts.id, id))).for("share");
+      const row = await read(tx, actor, companyId, id), agentId = row.agentId ?? row.preparedAgentId;
+      let status: AgentDraftRuntimeView["status"] = "not_prepared", runtimeBindingId: string | null = null, configurationHash: string | null = null;
+      if (agentId) {
+        const [agent] = await tx.select({ status: agents.status }).from(agents)
+          .where(and(eq(agents.companyId, companyId), eq(agents.id, agentId))).for("share");
+        status = !agent || agent.status === "terminated" ? "unavailable" : agent.status === "pending_approval" ? "awaiting_approval" : "needs_setup";
+        configurationHash = agent ? await targetHash(tx, companyId, agentId) : null;
+        if (agent && status !== "unavailable") {
+          const bindings = agentProviderBindingService(tx);
+          await tx.select({ id: agentPresenceRuntimeBindings.id }).from(agentPresenceRuntimeBindings)
+            .where(and(eq(agentPresenceRuntimeBindings.companyId, companyId), eq(agentPresenceRuntimeBindings.agentId, agentId))).for("share");
+          const binding = await bindings.getForPresence({ ...actor, ignoreInstanceAdmin: true }, companyId, agentId);
+          if (binding) {
+            await tx.select({ id: agentProviderBindings.id }).from(agentProviderBindings)
+              .where(eq(agentProviderBindings.id, binding.provider.id)).for("share");
+            runtimeBindingId = binding.runtime.id;
+            if (status !== "awaiting_approval") {
+              try { await bindings.assertRuntime(companyId, agentId); status = "qualified"; }
+              catch (error) { if (!(error instanceof HttpError) || error.status !== 409) throw error; }
+            }
+          }
+        }
+      }
+      await access(tx, actor, companyId, row.agentId);
+      if (row.preparedAgentId) await access(tx, actor, companyId, row.preparedAgentId);
+      return agentDraftRuntimeViewSchema.parse({ draftId: id, companyId, version: row.version, agentId, runtimeBindingId, configurationHash, status,
+        runtimeQualified: status === "qualified", safeTestQualified: false, executionStarted: false });
+    }),
     preparationReview: async (actor: AuthorizationActor, companyId: string, id: string) => db.transaction(async tx => {
       const current = tx as unknown as Db, row = await read(current, actor, companyId, id, false, true);
       await assertSaasDomainAdmission(current, companyId);

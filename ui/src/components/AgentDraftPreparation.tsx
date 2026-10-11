@@ -55,6 +55,7 @@ export function AgentDraftPreparation({ company, principal, draft, enabled, canU
     if (!current(requiresWrite) || value.companyId !== company || value.id !== draft.id || value.createdByUserId !== principal || value.version < draft.version)
       throw new Error(t("agentPreparation.changed"));
     sessionStorage.removeItem(storageKey); attempt.current = null;
+    if (!value.preparation) void client.invalidateQueries({ queryKey: reviewKey, exact: true });
     setUnknown(false); setOpen(false); setConfirmed(false); setFailure(null); onConfirmed(value);
   }
   const prepare = useMutation({ mutationFn: async () => {

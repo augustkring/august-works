@@ -1664,5 +1664,21 @@
       "needs_review": "The original agent configuration or lifecycle changed. Review it before testing or activation.",
       "unavailable": "The original prepared agent is unavailable."
     }
+  },
+  "agentRuntime": {
+    "title": "Execution setup",
+    "checking": "Checking this agent’s current execution setup…",
+    "unavailable": "Current execution setup is unavailable. Refresh the original draft before continuing.",
+    "changed": "Draft, agent or account access changed. Refresh the original draft.",
+    "configure": "Open this agent’s configuration",
+    "boundary": "Runtime validation and a representative Safe Test are separate. This view starts no work and grants no permissions.",
+    "configurationBoundary": "Configure this exact agent in Advanced, using the original save controls. Runtime changes can invalidate validation and test evidence.",
+    "status": {
+      "not_prepared": "Prepare the inactive agent before configuring its own execution setup.",
+      "awaiting_approval": "This agent is awaiting the company’s original board approval. Execution remains unavailable.",
+      "needs_setup": "This agent’s own runtime is not currently qualified. Configure and validate it before Safe Test.",
+      "qualified": "This agent’s own runtime has current validation. A representative Safe Test is still required.",
+      "unavailable": "The original agent or its execution setup is unavailable."
+    }
   }
 }

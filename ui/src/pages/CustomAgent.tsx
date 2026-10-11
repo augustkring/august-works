@@ -29,6 +29,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { AgentDraftPreparation } from "@/components/AgentDraftPreparation";
+import { AgentDraftRuntime } from "@/components/AgentDraftRuntime";
 
 const labels: Record<(typeof CUSTOM_AGENT_STEPS)[number], string> = {
   outcome: "customAgent.stepOutcome",
@@ -748,6 +749,8 @@ function DraftEditor({
                 client.getQueryState(["agent-authoring", company, principal, id, authority.epoch])?.fetchStatus === "idle"}
               onConfirmed={value => { if (!alive.current || !authority.canRead() || securityPending.current) return;
                 client.setQueryData(["agent-authoring", company, principal, id, authority.epoch], value); setReceipt(value); setContent(value.content); }} />
+            <AgentDraftRuntime company={company} principal={principal} draft={receipt} enabled={viewReady}
+              canUseAuthority={() => alive.current && authority.canRead() && !securityPending.current && !reauthorizing} />
             <p>{t("customAgent.runtimeBoundary")}</p>
             <label className="block space-y-2">{t("customAgent.runtimeSelection")}<select
                 className="min-h-11 w-full rounded-md border bg-background p-2"

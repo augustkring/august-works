@@ -7,9 +7,19 @@ import {
   agentAuthoringDraftViewSchema,
   hireAgentCapabilitySchema,
   hireAgentDeclaredAccessSchema,
+  agentDraftRuntimeViewSchema,
 } from "./agent-authoring.js";
 
 describe("unpublished agent authoring contracts", () => {
+  it("keeps runtime qualification tied to an actual identity and rejects claimed Safe Test or execution success", () => {
+    const observation = { draftId: "10000000-0000-4000-8000-000000000001", companyId: "10000000-0000-4000-8000-000000000002", version: 2,
+      agentId: "10000000-0000-4000-8000-000000000003", runtimeBindingId: "10000000-0000-4000-8000-000000000004", configurationHash: "a".repeat(64),
+      status: "qualified", runtimeQualified: true, safeTestQualified: false, executionStarted: false };
+    expect(agentDraftRuntimeViewSchema.safeParse(observation).success).toBe(true);
+    for (const changed of [{ agentId: null }, { runtimeBindingId: null }, { configurationHash: null }, { status: "needs_setup" },
+      { safeTestQualified: true }, { executionStarted: true }, { providerCredentials: "private" }])
+      expect(agentDraftRuntimeViewSchema.safeParse({ ...observation, ...changed }).success).toBe(false);
+  });
   it("keeps old capability reads available without interpreting absent declarations as assessed access", () => {
     const capability = hireAgentCapabilitySchema.parse({
       key: "research",

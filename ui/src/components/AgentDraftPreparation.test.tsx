@@ -98,6 +98,21 @@ it("rejects a late creation response after the current account changes", async (
   await act(async () => resolve(prepared));
   expect(confirmed).not.toHaveBeenCalled();
 });
+it("refreshes the current decision after checking an unprepared original draft and requires a new explicit confirmation", async () => {
+  const post = vi.spyOn(agentAuthoringApi, "prepare").mockRejectedValueOnce(new Error("Changed decision")).mockResolvedValue(prepared);
+  vi.spyOn(agentAuthoringApi, "get").mockResolvedValue(draft);
+  await mount(); await approve();
+  await vi.waitFor(() => expect(container.textContent).toContain("response is unknown"));
+  vi.mocked(agentAuthoringApi.preparationReview).mockResolvedValue({ ...review, reviewHash: "b".repeat(64), requiresBoardApproval: false });
+  await click("Check original draft");
+  await vi.waitFor(() => expect(confirmed).toHaveBeenCalledWith(draft));
+  await vi.waitFor(() => expect(container.textContent).not.toContain("requires board approval"));
+  expect(post).toHaveBeenCalledTimes(1);
+  await approve();
+  await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+  const first = post.mock.calls[0]![3], second = post.mock.calls[1]![3];
+  expect(second.expectedReviewHash).toBe("b".repeat(64)); expect(second.requestId).not.toBe(first.requestId);
+});
 it("does not review or prepare unsaved draft changes", async () => {
   context.enabled = false;
   const post = vi.spyOn(agentAuthoringApi, "prepare");
