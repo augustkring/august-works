@@ -397,7 +397,8 @@ export function activationService(db: Db) {
             if (!pin) throw conflict("The selected capability is unavailable");
             const name = Array.from(pin.name.trim()).slice(0, 80).join("");
             if (!name) throw conflict("The selected capability has no current agent name");
-            const { agent, approvalId } = await createPausedOnboardingAgent(txDb, companyId, userId, name, "general");
+            const { agent, approvalId } = await createPausedOnboardingAgent(txDb, companyId, userId, name, "general",
+              { canCreateAgents: false, canCreateSkills: false });
             next.firstAgent = { agentId: agent.id, packageVersionId: selected.versionId, packageContentHash: pin.hash,
               configurationHash: await firstAgentConfigurationHash(txDb, companyId, agent.id), approvalId };
             await logActivity(txDb, { companyId, actorType: "user", actorId: userId, action: "agent.hire_created",

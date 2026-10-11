@@ -160,11 +160,29 @@ export const agentDraftDiscardSchema = z.strictObject({
   requestId: z.uuid(),
   expectedVersion: z.number().int().positive(),
 });
+export const agentDraftPreparationReviewSchema = z.strictObject({
+  draftId: z.uuid(), companyId: z.uuid(), version: z.number().int().positive(),
+  name: z.string().trim().min(1).max(200), outcome: z.string().trim().min(1).max(2000),
+  accountableOwner: z.strictObject({ userId: z.string().min(1).max(200), name: z.string().min(1).max(200) }),
+  requiresBoardApproval: z.boolean(), createsInactiveAgent: z.literal(true),
+  runtimeQualified: z.literal(false), authorityGranted: z.literal(false),
+  executionStarted: z.literal(false), reviewHash: z.string().regex(/^[a-f0-9]{64}$/),
+});
+export const agentDraftPrepareSchema = z.strictObject({
+  requestId: z.uuid().refine(value => value === value.toLowerCase(), "Use the canonical request identity"), expectedVersion: z.number().int().positive(),
+  expectedReviewHash: z.string().regex(/^[a-f0-9]{64}$/), confirmInactiveAgentPreparation: z.literal(true),
+});
+export type AgentDraftPrepare = z.infer<typeof agentDraftPrepareSchema>;
+export type AgentDraftPreparationReview = z.infer<typeof agentDraftPreparationReviewSchema>;
 export const agentAuthoringDraftViewSchema = z.strictObject({
   id: z.uuid(),
   companyId: z.uuid(),
   agentId: z.uuid().nullable(),
   createdByUserId: z.string(),
+  preparation: z.strictObject({ agentId: z.uuid(), name: z.string().min(1).max(200), approvalId: z.uuid().nullable(),
+    status: z.enum(["prepared", "pending_approval", "needs_review", "unavailable"]),
+    runtimeQualified: z.literal(false), authorityGranted: z.literal(false), executionStarted: z.literal(false),
+  }).nullable().optional(),
   version: z.number().int().positive(),
   status: z.enum(["draft", "discarded"]),
   kind: z.enum(["custom", "hire"]).optional(),

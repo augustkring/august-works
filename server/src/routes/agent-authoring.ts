@@ -5,6 +5,7 @@ import {
   agentDraftCreateSchema,
   agentDraftSaveSchema,
   agentDraftDiscardSchema,
+  agentDraftPrepareSchema,
 } from "@paperclipai/shared";
 import { assertBoard, assertCompanyAccess } from "./authz.js";
 import { conflict, unprocessable } from "../errors.js";
@@ -78,6 +79,12 @@ export function agentAuthoringRoutes(db: Db) {
       await service.get(req.actor, company(req), z.uuid().parse(req.params.id)),
     ),
   );
+  router.get(`${root}/:id/preparation-review`, async (req, res) => res.json(
+    await service.preparationReview(req.actor, company(req), z.uuid().parse(req.params.id)),
+  ));
+  router.post(`${root}/:id/prepare`, validate(agentDraftPrepareSchema), async (req, res) => res.json(
+    await service.prepare(req.actor, company(req), z.uuid().parse(req.params.id), req.body),
+  ));
   router.post(
     `${root}/:id/save`,
     validate(agentDraftSaveSchema),

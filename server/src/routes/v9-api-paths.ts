@@ -12,6 +12,8 @@ import {
   agentDraftCreateSchema,
   agentDraftSaveSchema,
   agentDraftDiscardSchema,
+  agentDraftPreparationReviewSchema,
+  agentDraftPrepareSchema,
   agentDraftAdmissionSchema,
   agentAuthoringDraftViewSchema,
   agentAuthoringDraftPageSchema,
@@ -213,6 +215,12 @@ export const v9ApiPaths: V9ApiOperation[] = [
     "Read one creator-private proposal after current native admission",
     agentAuthoringDraftViewSchema,
   ),
+  read(`${drafts}/{id}/preparation-review`,
+    "Review one current creator-private inactive Agent preparation; no runtime, execution or grants",
+    agentDraftPreparationReviewSchema),
+  { ...write(`${drafts}/{id}/prepare`,
+    "Explicitly prepare one actual inactive Agent for this original unpublished draft; no publication",
+    agentDraftPrepareSchema, agentAuthoringDraftViewSchema), unavailable: true },
   {
     ...write(
       `${drafts}/{id}/save`,

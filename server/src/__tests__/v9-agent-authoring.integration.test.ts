@@ -9,6 +9,14 @@ import {
   activityLog,
   companyMemberships,
   principalPermissionGrants,
+  billingAccounts,
+  billingAccountCompanies,
+  companies,
+  approvals,
+  toolApplications,
+  toolConnections,
+  toolConnectionInstalls,
+  agentPresenceRuntimeBindings,
 } from "@paperclipai/db";
 import { agentAuthoringContentSchema } from "@paperclipai/shared";
 import { agentAuthoringService } from "../services/agents/authoring-drafts.js";
@@ -45,6 +53,94 @@ const support = await getEmbeddedPostgresTestSupport();
       });
       f = await seedV5Presences(db);
       service = agentAuthoringService(db);
+    });
+    async function preparationFixture() {
+      await instanceSettingsService(db).updateExperimental({ free_core_commercial_v7: true, billing_entitlements_v6: true, billing_usage_v6: true });
+      const [account] = await db.insert(billingAccounts).values({ displayName: "Unfunded Free Core preparation", payerUserId: f.userId }).returning();
+      await db.insert(billingAccountCompanies).values({ companyId: f.home, billingAccountId: account!.id });
+      const initial = await service.create(f.actor, f.home, { requestId: randomUUID() });
+      const draft = await service.save(f.actor, f.home, initial.id, { requestId: randomUUID(), expectedVersion: initial.version, step: "runtime",
+        content: { ...initial.content!, name: "Prepared specialist", outcome: "Prepare a private internal draft" } });
+      const review = await service.preparationReview(f.actor, f.home, draft.id);
+      const command = { requestId: randomUUID(), expectedVersion: draft.version, expectedReviewHash: review.reviewHash, confirmInactiveAgentPreparation: true as const };
+      return { draft, review, command };
+    }
+    async function effectCounts() {
+      return db.execute(sql`select
+        (select count(*) from heartbeat_runs where company_id=${f.home}::uuid) as runs,
+        (select count(*) from tool_connection_installs where company_id=${f.home}::uuid) as installs,
+        (select count(*) from tool_profile_bindings where company_id=${f.home}::uuid) as bindings,
+        (select count(*) from connection_grants where company_id=${f.home}::uuid) as grants,
+        (select count(*) from connection_grant_delegations where company_id=${f.home}::uuid) as delegations,
+        (select count(*) from company_agent_package_installations where company_id=${f.home}::uuid) as packages,
+        (select count(*) from billing_subscriptions s join billing_account_companies c on c.billing_account_id=s.billing_account_id where c.company_id=${f.home}::uuid) as subscriptions`);
+    }
+    it("prepares one actual inactive Agent only after explicit C3 and reconciles concurrent replay without runtime or business authority", async () => {
+      const before = (await db.select().from(agents)).length, effects = await effectCounts();
+      const { draft, review, command } = await preparationFixture();
+      expect(await db.select().from(agents)).toHaveLength(before);
+      expect(review).toMatchObject({ createsInactiveAgent: true, runtimeQualified: false, authorityGranted: false, executionStarted: false });
+      const [prepared, replay] = await Promise.all([service.prepare(f.actor, f.home, draft.id, command), service.prepare(f.actor, f.home, draft.id, command)]);
+      expect(prepared).toEqual(replay);
+      expect(prepared.agentId).toBeNull();
+      expect(prepared.preparation).toMatchObject({ status: "prepared", runtimeQualified: false, authorityGranted: false, executionStarted: false });
+      expect(await db.select().from(agents)).toHaveLength(before + 1);
+      const [agent] = await db.select().from(agents).where(eq(agents.id, prepared.preparation!.agentId));
+      expect(agent).toMatchObject({ companyId: f.home, name: review.name, status: "paused", adapterType: "openclaw_gateway", adapterConfig: {}, budgetMonthlyCents: 0,
+        permissions: { canCreateAgents: false, canCreateSkills: false }, runtimeConfig: { heartbeat: { enabled: false } } });
+      expect(await effectCounts()).toEqual(effects);
+      expect((await service.review(f.actor, f.home, draft.id)).publishAllowed).toBe(false);
+      const audits = await db.select().from(activityLog).where(eq(activityLog.entityId, draft.id));
+      expect(audits.filter(a => a.action === "agent_configuration.draft_agent_prepared")).toHaveLength(1);
+      await expect(service.prepare(f.actor, f.home, draft.id, { ...command, expectedReviewHash: "b".repeat(64) })).rejects.toMatchObject({ status: 409 });
+      await expect(db.update(agentConfigurationDrafts).set({ preparedAgentId: f.presence.id }).where(eq(agentConfigurationDrafts.id, draft.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+      await instanceSettingsService(db).updateExperimental({ hire_agent_v9: false });
+      expect((await service.get(f.actor, f.home, draft.id)).preparation!.agentId).toBe(agent!.id);
+      await expect(service.prepare(f.actor, f.home, draft.id, command)).rejects.toMatchObject({ status: 404 });
+    });
+    it("rechecks board approval, saved version, verified creator and ownership before creating the prepared Agent", async () => {
+      const { draft, command } = await preparationFixture(), before = (await db.select().from(agents)).length;
+      await db.update(companies).set({ requireBoardApprovalForNewAgents: true }).where(eq(companies.id, f.home));
+      await expect(service.prepare(f.actor, f.home, draft.id, command)).rejects.toMatchObject({ status: 409 });
+      const review = await service.preparationReview(f.actor, f.home, draft.id), current = { ...command, expectedReviewHash: review.reviewHash };
+      await db.update(authUsers).set({ emailVerified: false }).where(eq(authUsers.id, f.userId));
+      await expect(service.prepare({ ...f.actor, isInstanceAdmin: true }, f.home, draft.id, current)).rejects.toMatchObject({ status: 403 });
+      await db.update(authUsers).set({ emailVerified: true }).where(eq(authUsers.id, f.userId));
+      await expect(service.prepare(f.actor, f.guest, draft.id, current)).rejects.toMatchObject({ status: 404 });
+      await expect(service.prepare(f.actor, f.home, draft.id, { ...current, expectedVersion: 1 })).rejects.toMatchObject({ status: 409 });
+      expect(await db.select().from(agents)).toHaveLength(before);
+      const prepared = await service.prepare(f.actor, f.home, draft.id, current);
+      expect(prepared.preparation!.status).toBe("pending_approval");
+      const [approval] = await db.select().from(approvals).where(eq(approvals.id, prepared.preparation!.approvalId!));
+      expect(approval).toMatchObject({ companyId: f.home, type: "hire_agent", status: "pending", requestedByUserId: f.userId, payload: { agentId: prepared.preparation!.agentId } });
+      expect((await service.review(f.actor, f.home, draft.id)).publishAllowed).toBe(false);
+    });
+    it("keeps inherited company-wide access unchanged and refuses to call it zero-authority preparation", async () => {
+      const { draft, command } = await preparationFixture(), before = (await db.select().from(agents)).length;
+      const [application] = await db.insert(toolApplications).values({ companyId: f.home, applicationKey: "linear", name: "Existing company app", type: "mcp_http" }).returning();
+      const [connection] = await db.insert(toolConnections).values({ companyId: f.home, applicationId: application!.id, name: "Existing organization connection", uid: randomUUID(), transport: "rest_api", authKind: "none" }).returning();
+      const [install] = await db.insert(toolConnectionInstalls).values({ companyId: f.home, connectionId: connection!.id, targetType: "company", targetId: f.home }).returning();
+      await expect(service.preparationReview(f.actor, f.home, draft.id)).rejects.toMatchObject({ status: 422, details: { code: "draft_inherited_access_requires_review" } });
+      await expect(service.prepare(f.actor, f.home, draft.id, command)).rejects.toMatchObject({ status: 422 });
+      expect(await db.select().from(agents)).toHaveLength(before);
+      expect((await db.select().from(toolConnectionInstalls).where(eq(toolConnectionInstalls.id, install!.id)))[0]).toEqual(install);
+    });
+    it("only admits the prepared Agent's own runtime reference and preserves the unqualified test boundary after configuration changes", async () => {
+      const { draft, command } = await preparationFixture();
+      const prepared = await service.prepare(f.actor, f.home, draft.id, command);
+      const [foreign] = await db.select().from(agentPresenceRuntimeBindings).where(eq(agentPresenceRuntimeBindings.agentId, f.presence.id));
+      await expect(service.save(f.actor, f.home, draft.id, { requestId: randomUUID(), expectedVersion: prepared.version, step: "runtime",
+        content: { ...prepared.content!, runtimeBindingId: foreign!.id } })).rejects.toMatchObject({ status: 422 });
+      const [own] = await db.select().from(agentPresenceRuntimeBindings).where(eq(agentPresenceRuntimeBindings.agentId, prepared.preparation!.agentId));
+      expect(own).toBeDefined();
+      const saved = await service.save(f.actor, f.home, draft.id, { requestId: randomUUID(), expectedVersion: prepared.version, step: "runtime",
+        content: { ...prepared.content!, runtimeBindingId: own!.id } });
+      expect(saved.content!.runtimeBindingId).toBe(own!.id);
+      expect((await service.review(f.actor, f.home, draft.id)).test.status).toBe("unqualified");
+      await db.update(agents).set({ name: "Changed original configuration" }).where(eq(agents.id, prepared.preparation!.agentId));
+      expect((await service.get(f.actor, f.home, draft.id)).preparation!.status).toBe("needs_review");
+      expect((await service.review(f.actor, f.home, draft.id)).publishAllowed).toBe(false);
+      await expect(service.prepare(f.actor, f.home, draft.id, { ...command, requestId: randomUUID(), expectedVersion: saved.version })).rejects.toMatchObject({ status: 409 });
     });
     it("checks current revision admission without returning configuration or writing proposals, grants or audits", async () => {
       const drafts = await db.select().from(agentConfigurationDrafts);

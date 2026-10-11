@@ -28,6 +28,7 @@ import { Link, useNavigate, useParams, useSearchParams } from "@/lib/router";
 import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
+import { AgentDraftPreparation } from "@/components/AgentDraftPreparation";
 
 const labels: Record<(typeof CUSTOM_AGENT_STEPS)[number], string> = {
   outcome: "customAgent.stepOutcome",
@@ -284,7 +285,7 @@ function DraftEditor({
       !action.includes("permission") &&
       !(
         event.payload.entityType === "agent" &&
-        event.payload.entityId === receipt?.agentId
+        event.payload.entityId === (receipt?.agentId ?? receipt?.preparation?.agentId)
       )
     )
       return;
@@ -328,14 +329,14 @@ function DraftEditor({
       "agent-authoring-options",
       company,
       principal,
-      receipt?.agentId ?? null,
+      receipt?.agentId ?? receipt?.preparation?.agentId ?? null,
       authority.epoch,
     ],
     queryFn: ({ signal }) =>
       authority.read(() => agentAuthoringApi.options(
         company,
         principal,
-        receipt?.agentId ?? null,
+        receipt?.agentId ?? receipt?.preparation?.agentId ?? null,
         signal,
       )),
     enabled: authority.readReady && draft.isSuccess && !draft.isFetching && Boolean(receipt),
@@ -741,6 +742,12 @@ function DraftEditor({
         )}
         {step === "runtime" && (
           <>
+            <AgentDraftPreparation key={`${receipt.id}:${receipt.version}`} company={company} principal={principal} draft={receipt}
+              enabled={viewReady && enabled && !save.isPending && !discard.isPending && JSON.stringify(content) === JSON.stringify(receipt.content)}
+              canUseAuthority={() => alive.current && authority.canRead() && !securityPending.current && !reauthorizing &&
+                client.getQueryState(["agent-authoring", company, principal, id, authority.epoch])?.fetchStatus === "idle"}
+              onConfirmed={value => { if (!alive.current || !authority.canRead() || securityPending.current) return;
+                client.setQueryData(["agent-authoring", company, principal, id, authority.epoch], value); setReceipt(value); setContent(value.content); }} />
             <p>{t("customAgent.runtimeBoundary")}</p>
             <label className="block space-y-2">{t("customAgent.runtimeSelection")}<select
                 className="min-h-11 w-full rounded-md border bg-background p-2"

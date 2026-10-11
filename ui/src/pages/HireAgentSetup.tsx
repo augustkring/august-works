@@ -18,6 +18,7 @@ import { Button } from "@/components/ui/button";
 import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { HireDeclaredAccess } from "@/components/HireDeclaredAccess";
+import { AgentDraftPreparation } from "@/components/AgentDraftPreparation";
 import { useV9AuthoringAuthority } from "@/hooks/useV9AuthoringAuthority";
 
 const labels = {
@@ -159,7 +160,8 @@ export function HireAgentSetup({
       !action.startsWith("resource_membership.") &&
       !action.includes("permission") &&
       !action.includes("erased") &&
-      !action.endsWith("deleted")
+      !action.endsWith("deleted") &&
+      !(event.payload.entityType === "agent" && event.payload.entityId === receipt?.preparation?.agentId)
     )
       return;
     checking.current = true;
@@ -530,6 +532,12 @@ export function HireAgentSetup({
       {step === "hire_test" && (
         <section className="space-y-3" aria-labelledby="hire-test">
           <h2 id="hire-test" className="text-lg font-semibold">{t("hireSetup.expectedActual")}</h2>
+          <AgentDraftPreparation key={`${receipt.id}:${receipt.version}`} company={company} principal={principal} draft={receipt}
+            enabled={viewReady && enabled && !save.isPending && !discard.isPending && JSON.stringify(content) === JSON.stringify(receipt.content)}
+            canUseAuthority={() => alive.current && authority.canRead() && !checking.current && !checkingAccess &&
+              client.getQueryState(key)?.fetchStatus === "idle"}
+            onConfirmed={value => { if (!alive.current || !authority.canRead() || checking.current) return;
+              client.setQueryData(key, value); setReceipt(value); setContent(value.content); }} />
           <p>{t("hireSetup.expected")}{" "}{receipt.content.outcome}</p>
           <p role="status">{t("hireSetup.testUnavailable")}</p>
         </section>

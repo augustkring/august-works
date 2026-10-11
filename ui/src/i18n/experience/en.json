@@ -1640,5 +1640,29 @@
       "toolProfiles": "Tool profile links",
       "agentPermissionSettings": "Agent permission settings"
     }
+  },
+  "agentPreparation": {
+    "title": "Prepare a draft agent",
+    "boundary": "This creates one inactive agent for the saved draft. It starts no work, grants no tool or creation permissions, and does not qualify a runtime or Safe Test. Testing and activation remain separate decisions.",
+    "checking": "Checking current draft preparation…",
+    "saveFirst": "Save your draft changes before reviewing agent preparation.",
+    "unavailable": "Current agent preparation is unavailable. Review the saved name, responsibility, owner and access.",
+    "name": "Agent name",
+    "responsibility": "Responsibility",
+    "owner": "Accountable owner",
+    "boardApproval": "Your company requires board approval for new agents. This agent will remain pending approval.",
+    "review": "Review inactive agent preparation",
+    "confirmTitle": "Prepare this inactive agent?",
+    "confirmation": "I approve creating this inactive agent for the exact saved draft, with no execution or added permissions.",
+    "confirm": "Prepare inactive agent",
+    "checkOriginal": "Check original draft",
+    "changed": "Draft or account access changed. Check the original draft before continuing.",
+    "unknown": "The preparation response is unknown. Check the original draft before making another decision.",
+    "status": {
+      "prepared": "The inactive agent exists. Configure its own runtime before a separately reviewed Safe Test.",
+      "pending_approval": "The original agent is waiting for board approval. Runtime qualification and Safe Test remain unconfirmed.",
+      "needs_review": "The original agent configuration or lifecycle changed. Review it before testing or activation.",
+      "unavailable": "The original prepared agent is unavailable."
+    }
   }
 }

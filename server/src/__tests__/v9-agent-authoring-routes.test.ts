@@ -17,6 +17,8 @@ const service = vi.hoisted(() => ({
   save: vi.fn(),
   discard: vi.fn(),
   review: vi.fn(),
+  preparationReview: vi.fn(),
+  prepare: vi.fn(),
 }));
 vi.mock("../services/agents/authoring-drafts.js", () => ({
   agentAuthoringService: () => service,
@@ -45,6 +47,24 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 describe("native authoring HTTP boundary", () => {
+  it("requires explicit inactive preparation and current principal without accepting runtime or publication authority", async () => {
+    const path = `/api/companies/${companyId}/agent-configuration-drafts/${id}`;
+    const command = { requestId, expectedVersion: 2, expectedReviewHash: "a".repeat(64), confirmInactiveAgentPreparation: true };
+    service.preparationReview.mockResolvedValue({ draftId: id });
+    await request(app()).get(`${path}/preparation-review?expectedUserId=other`).expect(409);
+    expect(service.preparationReview).not.toHaveBeenCalled();
+    await request(app()).get(`${path}/preparation-review?expectedUserId=author`).expect(200).expect("Cache-Control", "private, no-store");
+    for (const body of [{ ...command, confirmInactiveAgentPreparation: false }, { ...command, runtimeQualified: true }, { ...command, publish: true }]) {
+      await request(app()).post(`${path}/prepare?expectedUserId=author`).send(body).expect(400);
+    }
+    await request(app()).post(`${path}/prepare?expectedUserId=other`).send(command).expect(409);
+    expect(service.prepare).not.toHaveBeenCalled();
+    service.prepare.mockResolvedValue({ id });
+    await request(app()).post(`${path}/prepare?expectedUserId=author`).send(command).expect(200).expect("Cache-Control", "private, no-store");
+    expect(service.prepare).toHaveBeenCalledWith(expect.objectContaining({ userId: "author" }), companyId, id, command);
+    expect(service.create).not.toHaveBeenCalled();
+    expect(service.save).not.toHaveBeenCalled();
+  });
   it("checks current draft admission without creating a proposal or reading authoring options", async () => {
     service.admission.mockResolvedValue({
       companyId,

@@ -1640,5 +1640,29 @@
       "toolProfiles": "Links til værktøjsprofiler",
       "agentPermissionSettings": "Agentens tilladelsesindstillinger"
     }
+  },
+  "agentPreparation": {
+    "title": "Forbered en agent til udkastet",
+    "boundary": "Dette opretter én inaktiv agent til det gemte udkast. Det starter intet arbejde, tildeler ingen værktøjs- eller oprettelsesrettigheder og kvalificerer hverken runtime eller Safe Test. Test og aktivering kræver separate beslutninger.",
+    "checking": "Kontrollerer udkastets aktuelle agentforberedelse…",
+    "saveFirst": "Gem dine ændringer i udkastet, før du gennemgår agentforberedelsen.",
+    "unavailable": "Agentforberedelsen er ikke tilgængelig nu. Gennemgå det gemte navn, ansvar, ejer og adgang.",
+    "name": "Agentnavn",
+    "responsibility": "Ansvar",
+    "owner": "Ansvarlig ejer",
+    "boardApproval": "Din virksomhed kræver bestyrelsesgodkendelse af nye agenter. Agenten afventer derfor godkendelse.",
+    "review": "Gennemgå oprettelse af inaktiv agent",
+    "confirmTitle": "Forbered denne inaktive agent?",
+    "confirmation": "Jeg godkender oprettelse af denne inaktive agent til det præcise gemte udkast uden udførelse eller nye rettigheder.",
+    "confirm": "Forbered inaktiv agent",
+    "checkOriginal": "Kontrollér det oprindelige udkast",
+    "changed": "Udkastet eller kontoadgangen er ændret. Kontrollér det oprindelige udkast, før du fortsætter.",
+    "unknown": "Svaret på agentforberedelsen er ukendt. Kontrollér det oprindelige udkast, før du træffer en ny beslutning.",
+    "status": {
+      "prepared": "Den inaktive agent er oprettet. Konfigurér dens egen runtime før en separat gennemgået Safe Test.",
+      "pending_approval": "Den oprindelige agent afventer bestyrelsesgodkendelse. Runtime og Safe Test er fortsat ikke bekræftet.",
+      "needs_review": "Den oprindelige agents konfiguration eller livscyklus er ændret. Gennemgå den før test eller aktivering.",
+      "unavailable": "Den oprindelige forberedte agent er ikke tilgængelig."
+    }
   }
 }

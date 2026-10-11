@@ -334,6 +334,28 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(audit.filter((event) => event.action === "agent_configuration.draft_created")).toHaveLength(1);
       expect(audit.filter((event) => event.action === "agent_configuration.draft_saved")).toHaveLength(1);
     });
+    it("prepares a pinned Hire draft through the Original inactive Agent owner without installation or execution", async () => {
+      await instanceSettingsService(db).updateExperimental({ free_core_commercial_v7: true, billing_entitlements_v6: true, billing_usage_v6: true });
+      const { published, hire } = await hireFixture();
+      const [account] = await db.insert(billingAccounts).values({ displayName: "Hire preparation Free Core", payerUserId: f.userId }).returning();
+      await db.insert(billingAccountCompanies).values({ companyId: f.home, billingAccountId: account!.id });
+      const beforeAgents = (await db.select().from(agents)).length, beforeInstalls = await db.select().from(companyAgentPackageInstallations);
+      const draft = await hire.create(f.actor, f.home, { requestId: randomUUID(), packageVersionId: published.id });
+      const reviewed = await hire.preparationReview(f.actor, f.home, draft.id);
+      const command = { requestId: randomUUID(), expectedVersion: draft.version, expectedReviewHash: reviewed.reviewHash, confirmInactiveAgentPreparation: true as const };
+      const prepared = await hire.prepare(f.actor, f.home, draft.id, command);
+      expect(prepared.package?.versionId).toBe(published.id);
+      expect(prepared.preparation).toMatchObject({ status: "prepared", runtimeQualified: false, authorityGranted: false, executionStarted: false });
+      expect(await db.select().from(agents)).toHaveLength(beforeAgents + 1);
+      expect(await db.select().from(companyAgentPackageInstallations)).toEqual(beforeInstalls);
+      expect((await hire.prepare(f.actor, f.home, draft.id, command)).preparation!.agentId).toBe(prepared.preparation!.agentId);
+      expect((await hire.review(f.actor, f.home, draft.id)).publishAllowed).toBe(false);
+      const another = await hire.create(f.actor, f.home, { requestId: randomUUID(), packageVersionId: published.id });
+      const nextReview = await hire.preparationReview(f.actor, f.home, another.id);
+      await service.revoke(f.actor, published.id);
+      await expect(hire.prepare(f.actor, f.home, another.id, { ...command, requestId: randomUUID(), expectedVersion: another.version, expectedReviewHash: nextReview.reviewHash })).rejects.toMatchObject({ status: 422 });
+      expect(await db.select().from(agents)).toHaveLength(beforeAgents + 1);
+    });
     it("retains readable Hire pins through withdrawal and flag rollback, fences native pin/step substitution and permits discard", async () => {
       const {published, hire} = await hireFixture();
       const request = {requestId: randomUUID(), packageVersionId: published.id};

@@ -3319,6 +3319,13 @@
       "when": 1791757134339,
       "tag": "0475_dizzy_miss_america",
       "breakpoints": true
+    },
+    {
+      "idx": 476,
+      "version": "7",
+      "when": 1791758972362,
+      "tag": "0476_lean_wind_dancer",
+      "breakpoints": true
     }
   ]
 }
