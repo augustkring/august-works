@@ -59,3 +59,15 @@ with all customer/C1/draft-only/release checks. `select_capability` now supplies
 the explicitly selected UUID to that existing owner, keeping display bounds
 and Native qualification intact. The page-boundary Native case now exercises
 actual reselect/select and still refuses the revoked pin.
+
+Native V3 passed all 475 cases in four complete Original files on actual
+PostgreSQL with Native artifact execution under isolated UID 1004/network none.
+Types V2 passed Shared/DB builds and full server/UI typechecks. Browser V2 passed
+four built Chromium journeys for Hire/Custom preparation and account rechecking;
+those explicit software responses do not establish live-provider assurance.
+All Native/types/browser before/after Source identities match `e86064f96`
+(SHA-256 `b40e9c15350bdace713a477e7b3abd14201607d1e9c4be30fd4a4bc5592b5e7d`).
+Focus V2 retains all 53 passing cases; subsequent changes were Native SQL,
+billing-fixture isolation and exact capability selection. No assertions or
+deadlines changed. Actual inactive preparation is ready for bounded integration.
+Runtime setup, representative execution, publication and full V9 remain pending.
