@@ -28,6 +28,7 @@ import { Textarea } from "../components/ui/textarea";
 import { CustomerFeedbackDialog } from "../components/CustomerFeedbackDialog";
 import { ActivationMeasuresLink } from "../components/ActivationMeasuresLink";
 import { ActivationFirstValue } from "../components/ActivationFirstValue";
+import { ActivationFirstAgent } from "../components/ActivationFirstAgent";
 import { ActivationFirstTask } from "../components/ActivationFirstTask";
 import { SaasWelcomePage } from "./SaasWelcome";
 import { hasCurrentV9Session } from "../hooks/useV9CurrentAccount";
@@ -274,6 +275,8 @@ function ActivationScope({
   const selected = current?.capabilities.find(
     (c) => c.versionId === current.state.packageVersionId,
   );
+  const connectionSetupRecorded = !!selected && selected.requiredConnections.every(key =>
+    current?.requiredAccess?.some(row => row.key === key && row.status === "recorded"));
   const envelope = () => ({
     requestId: crypto.randomUUID(),
     expectedVersion: current!.version,
@@ -615,33 +618,49 @@ function ActivationScope({
       {current && screen === 8 ? (
         <section className="space-y-4">
           <p>
-            {selected?.requiredConnections.length
-              ? t("activation.accessPending")
+            {!selected ? t("activation.selectedUnavailable") : selected.requiredConnections.length
+              ? t(connectionSetupRecorded ? "activation.accessRecorded" : "activation.accessPending")
               : t("activation.noConnections")}
           </p>
           {selected?.requiredConnections.length ? (
             <ul>
               {selected.requiredConnections.map((connection) => (
-                <li key={connection}>{connection}</li>
+                <li className="break-words" key={connection}>
+                  {connection}: {t(`activation.accessStatus.${current.requiredAccess?.find(row => row.key === connection)?.status ?? "unavailable"}`)}
+                </li>
               ))}
             </ul>
           ) : null}
           <p>{t("activation.noGrants")}</p>
+          {selected?.requiredConnections.length ? (
+            <p>{t("activation.connectionOutcome", { purpose: selected.purpose })}</p>
+          ) : null}
+          {selected?.requiredConnections.length ? (
+            <Link className="inline-flex min-h-11 items-center underline" to="/apps">{t("activation.reviewApps")}</Link>
+          ) : null}
           {!isPast ? (
-            <Button
-              className="min-h-11"
-              disabled={
-                !enabled ||
-                frozen ||
-                !selected ||
-                !!selected.requiredConnections.length
-              }
-              onClick={() =>
-                command.mutate({ ...envelope(), operation: "continue_access" })
-              }
-            >
-              {t("activation.continue")}
-            </Button>
+            <div className="flex flex-wrap items-center justify-between gap-3">
+              {!selected || selected.requiredConnections.length ? (
+                <Button className="min-h-11" variant="outline" disabled={!enabled || frozen}
+                  onClick={() => command.mutate({ ...envelope(), operation: "reselect_capability" })}>
+                  {t("activation.notNow")}
+                </Button>
+              ) : null}
+              <Button
+                className="ml-auto min-h-11"
+                disabled={
+                  !enabled ||
+                  frozen ||
+                  !selected ||
+                  !connectionSetupRecorded
+                }
+                onClick={() =>
+                  command.mutate({ ...envelope(), operation: "continue_access" })
+                }
+              >
+                {t("activation.continue")}
+              </Button>
+            </div>
           ) : null}
         </section>
       ) : null}
@@ -657,7 +676,7 @@ function ActivationScope({
               <dd>{selected?.name ?? t("activation.noCapability")}</dd>
             </div>
           </dl>
-          {!isPast && current.state.step === "review" && !current.state.firstTask ? (
+          {!isPast && current.state.step === "review" && !current.state.firstTask && (!current.firstAgent || current.firstAgent.status === "not_created") ? (
             <div className="space-y-3">
               <p>{t("activation.changeSetupScope")}</p>
               <Button
@@ -670,6 +689,11 @@ function ActivationScope({
               </Button>
             </div>
           ) : null}
+          <ActivationFirstAgent value={current.firstAgent}
+            canPrepare={enabled && !frozen && !isPast && current.state.step === "review"}
+            pending={pending}
+            onPrepare={() => command.mutate({ ...envelope(), operation: "prepare_first_agent", confirmPausedPreparation: true })}
+          />
           <ActivationFirstTask value={current.firstTask}
             canStart={enabled && !frozen && !isPast}
             canStop={!frozen && !isPast}

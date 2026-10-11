@@ -202,3 +202,16 @@ it("never restores a late agent result for an older session with the same person
   await vi.waitFor(() => expect(container.textContent).toContain("Monitor Current session agent"));
   expect(get).toHaveBeenCalledTimes(2);
 });
+
+it.each([
+  [{ status: "pending", pendingRuns: 1 }, "1 pending native run remains"],
+  [{ status: "pending", pendingRuns: 2 }, "2 pending native runs remain"],
+  [{ status: "none", pendingRuns: 0 }, "No pending native runs were recorded"],
+  [undefined, "Pending work could not be fully checked"],
+] as const)("keeps paused scheduling separate from current work observation %j", async (pausedWork, message) => {
+  vi.spyOn(agentMonitorApi, "get").mockResolvedValue({ ...data, pausedWork });
+  await mount();
+  await vi.waitFor(() => expect(container.textContent).toContain(message));
+  expect(container.textContent).toContain("requests cancellation");
+  expect(container.textContent).toContain("does not confirm that a remote process stopped");
+});

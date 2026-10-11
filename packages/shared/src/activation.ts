@@ -93,6 +93,22 @@ export const activationFirstValueViewSchema = z
       (!value.hasMore || value.candidates.length === 5),
     "First-result status requires matching current evidence",
   );
+// A preparation reference to the original paused agent. It never grants access
+// or certifies a provider, representative test, package activation or Free Core.
+export const activationFirstAgentReferenceSchema = z.strictObject({
+  agentId: z.uuid(), packageVersionId: z.uuid(), packageContentHash: z.string().regex(/^[a-f0-9]{64}$/),
+  configurationHash: z.string().regex(/^[a-f0-9]{64}$/), approvalId: z.uuid().nullable(),
+});
+export const activationFirstAgentViewSchema = z.strictObject({
+  status: z.enum(["not_created", "prepared", "pending_approval", "needs_review", "unavailable"]),
+  agentId: z.uuid().nullable(), name: z.string().min(1).max(200).nullable(), canPrepare: z.boolean(),
+}).superRefine((view, ctx) => {
+  const available = ["prepared", "pending_approval", "needs_review"].includes(view.status);
+  if (available !== (view.agentId !== null && view.name !== null) ||
+      (!available && (view.agentId !== null || view.name !== null)) ||
+      (view.status !== "not_created" && view.canPrepare))
+    ctx.addIssue({ code: "custom", message: "Inconsistent original first-agent preparation view" });
+});
 export const activationStateSchema = z.strictObject({
   schemaVersion: z.literal(1),
   step: z.enum(ACTIVATION_STEPS),
@@ -105,6 +121,7 @@ export const activationStateSchema = z.strictObject({
   firstValueAt: z.iso.datetime().nullable(),
   firstValueReceipt: activationFirstValueReceiptSchema.optional(),
   firstTask: activationFirstTaskReferenceSchema.optional(),
+  firstAgent: activationFirstAgentReferenceSchema.optional(),
   preparedFirstTask: activationFirstTaskReferenceSchema.optional(),
   receipts: z
     .array(
@@ -159,7 +176,9 @@ export const activationCommandSchema = z.discriminatedUnion("operation", [
     packageVersionId: z.uuid(),
   }),
   z.strictObject({ ...envelope, operation: z.literal("continue_access") }),
+  z.strictObject({ ...envelope, operation: z.literal("reselect_capability") }),
   z.strictObject({ ...envelope, operation: z.literal("change_setup") }),
+  z.strictObject({ ...envelope, operation: z.literal("prepare_first_agent"), confirmPausedPreparation: z.literal(true) }),
   z.strictObject({
     ...envelope, operation: z.literal("prepare_first_task"),
     installationId: z.uuid(), expectedInstallationVersion: z.number().int().positive(),
@@ -185,15 +204,23 @@ export const activationCommandSchema = z.discriminatedUnion("operation", [
   z.strictObject({ ...envelope, operation: z.literal("complete_activation") }),
 ]);
 export type ActivationCommand = z.infer<typeof activationCommandSchema>;
+export const activationRequiredAccessSchema = z.strictObject({
+  key: z.string().min(1).max(120),
+  status: z.enum(["recorded", "not_connected", "needs_review", "unavailable"]),
+  checkedAt: z.iso.datetime().nullable(),
+}).refine(value => value.status !== "recorded" || value.checkedAt !== null, "Recorded access requires an original observation");
+export type ActivationRequiredAccess = z.infer<typeof activationRequiredAccessSchema>;
 export const activationViewSchema = z.strictObject({
   runId: z.uuid(),
   companyId: z.uuid(),
   companyName: z.string(),
   version: z.number().int().positive(),
   status: z.enum(["in_progress", "completed", "abandoned"]),
-  state: activationStateSchema.omit({ receipts: true }),
+  state: activationStateSchema.omit({ receipts: true, firstAgent: true }),
+  firstAgent: activationFirstAgentViewSchema.optional(),
   firstValue: activationFirstValueViewSchema.optional(),
   firstTask: activationFirstTaskViewSchema.optional(),
+  requiredAccess: z.array(activationRequiredAccessSchema).max(20).refine(rows => new Set(rows.map(row => row.key)).size === rows.length).optional(),
   sources: z
     .array(
       z.strictObject({

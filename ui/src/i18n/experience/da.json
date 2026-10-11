@@ -186,7 +186,7 @@
     "screen6": "Ser det rigtigt ud?",
     "screen7": "Et godt første skridt",
     "screen8": "Nødvendig adgang",
-    "screen9": "Klar til din første opgave",
+    "screen9": "Gennemgå før din første opgave",
     "screen10": "Vi arbejder på det",
     "screen11": "Dit første resultat er klar",
     "screen12": "Du er klar",
@@ -219,6 +219,17 @@
     "noConnections": "Der anmodes ikke om yderligere forbindelser",
     "useAgent": "Brug denne agent",
     "accessPending": "Den nødvendige adgang er ikke klar. Din opsætning er gemt; ingen nye tilladelser er givet.",
+    "accessRecorded": "De nødvendige forbindelser er registreret. Gennemgå agentens adgang og sikre test, før arbejdet starter.",
+    "accessStatus": {
+      "recorded": "Forbindelsens opsætning er registreret",
+      "not_connected": "Der mangler en forbindelse",
+      "needs_review": "Gennemgå forbindelsens opsætning",
+      "unavailable": "Bed en administrator om at gennemgå forbindelsen"
+    },
+    "reviewApps": "Gennemgå forbindelser i Apps",
+    "connectionOutcome": "Agenten har brug for disse forbindelser til: {{purpose}}. Uden dem afventer denne første opgave. Du kan vælge en anden agent eller vende tilbage til din gemte opsætning senere.",
+    "notNow": "Ikke nu — vælg en anden agent",
+    "selectedUnavailable": "Den valgte funktion er ikke længere tilgængelig. Dit mål er gemt; vælg en anden kvalificeret agent eller vend tilbage senere.",
     "noGrants": "Valg af en funktion giver ikke tilladelser til forbindelser eller udførelse.",
     "agent": "Valgt agent",
     "executionPending": "Sikker udførelse af den første opgave afventer kvalificering. Gem opsætningen, og vend tilbage, når udførelse er tilgængelig.",
@@ -278,7 +289,17 @@
     },
     "firstTaskPrepareReview": "Gennemgå agenten og det godkendte formål",
     "firstTaskPrepareBoundary": "Klargøring opretter én intern udkastsopgave og en afgrænset plan. Den starter ikke arbejde og giver ikke adgang. Bekræft dette aktuelle godkendte formål, før du klargør din første opgave.",
-    "prepareFirstTask": "Klargør første opgave"
+    "prepareFirstTask": "Klargør første opgave",
+    "firstAgentTitle": "Forbered din første agent",
+    "firstAgentBoundary": "Dette opretter en pauset agent. Det starter intet arbejde, forbinder ingen apps og tilføjer ingen tilladelser. Nødvendig adgang, en sikker test og eventuel godkendelse skal stadig gennemføres.",
+    "prepareFirstAgent": "Forbered første agent",
+    "openPreparedAgent": "Åbn forberedt agent",
+    "firstAgentStatus": {
+      "prepared": "Agenten er forberedt og pauset. Adgang og test mangler stadig.",
+      "pending_approval": "Agentforberedelsen afventer den nødvendige godkendelse. Intet arbejde er startet.",
+      "needs_review": "Den oprindelige agent eller kapabilitet er ændret. Gennemgå den aktuelle opsætning, før du fortsætter.",
+      "unavailable": "Den oprindeligt forberedte agent er ikke tilgængelig. Der er ikke oprettet en erstatning."
+    }
   },
   "company": {
     "title": "Virksomhed",
@@ -1409,5 +1430,13 @@
       "eleven_to_thirty": "Elleve til tredive registrerede overgange",
       "over_thirty": "Over tredive registrerede overgange"
     }
+  },
+  "agentMonitorPausedWorkBoundary": "Pause stopper nyt selvstændigt arbejde og bevarer agentens opsætning og historik. Kontrollér igangværende arbejde særskilt.",
+  "agentMonitorPauseCancelPolicy": "Pause i Avanceret anmoder om at annullere aktive native kørsler. Pauset status bekræfter ikke i sig selv, at en ekstern proces er stoppet, eller at dens opgave er afsluttet.",
+  "agentMonitorPausedWork": {
+    "none": "Ingen ventende native kørsler blev registreret ved denne kontrol. Det bekræfter ikke, at eksternt arbejde er stoppet.",
+    "pending_one": "{{count}} ventende native kørsel er tilbage. Gennemgå dens oprindelige kontrolfunktioner.",
+    "pending_other": "{{count}} ventende native kørsler er tilbage. Gennemgå deres oprindelige kontrolfunktioner.",
+    "unavailable": "Ventende arbejde kunne ikke kontrolleres fuldt ud. Gennemgå kørslernes oprindelige kontrolfunktioner, før agenten betragtes som afklaret."
   }
 }

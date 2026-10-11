@@ -61,3 +61,16 @@ usable-account TTFO baseline stays unavailable. No new dataset/provider export
 is introduced; existing Paperclip Telemetry remains a separate unchanged path.
 The [scope plan](../../plans/2026-10-11-aw-v9-activation-measures.md) records exact
 Native, focused, type and built-UI software snapshots and remaining acceptance.
+
+The supporting [first-agent preparation contract](contracts/native-first-agent-preparation.json)
+creates one paused original agent or one original hire-approval request through
+the existing onboarding/Agent writers. Preparation is distinct from a safe
+test, runtime activation and first value. The
+[scope plan](../../plans/2026-10-11-aw-v9-first-agent-preparation.md) records the
+canonical owners, recovery boundaries, focused checks and pending Native/types/browser tests.
+
+The [activation connection review](../../plans/2026-10-11-aw-v9-activation-connection-review.md)
+projects current original Apps setup for published requirements and rechecks it
+before the original onboarding step advances to review. Recorded connection
+setup remains distinct from Agent authority, credential resolution and a safe
+first task. Qualification on this authored scope remains pending.

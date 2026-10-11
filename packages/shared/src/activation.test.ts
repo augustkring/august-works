@@ -9,12 +9,29 @@ import {
   activationFirstTaskCandidateSchema,
   activationFirstTaskViewSchema,
   initialActivationState,
+  activationFirstAgentReferenceSchema,
+  activationFirstAgentViewSchema,
+  activationRequiredAccessSchema,
 } from "./activation.js";
 import {
   companyExperienceSchema,
   COMPANY_EXPERIENCE_SECTIONS,
 } from "./company-experience.js";
 describe("V9 activation input boundaries", () => {
+  it("accepts only bounded connection observations without execution authority or credentials", () => {
+    const observation = { key: "linear", status: "recorded", checkedAt: new Date().toISOString() };
+    expect(activationRequiredAccessSchema.parse(observation)).toEqual(observation);
+    for (const extra of [{ checkedAt: null }, { credential: "private" }, { agentAccess: true },
+      { status: "ready" }, { key: "x".repeat(121) }])
+      expect(activationRequiredAccessSchema.safeParse({ ...observation, ...extra }).success).toBe(false);
+    expect(activationRequiredAccessSchema.parse({ key: "linear", status: "unavailable", checkedAt: null }).status).toBe("unavailable");
+    const command = { operation: "continue_access", requestId: randomUUID(), expectedVersion: 1 };
+    expect(activationCommandSchema.parse(command)).toEqual(command);
+    expect(activationCommandSchema.safeParse({ ...command, requiredAccess: [observation] }).success).toBe(false);
+    const reselect = { ...command, operation: "reselect_capability" };
+    expect(activationCommandSchema.parse(reselect)).toEqual(reselect);
+    expect(activationCommandSchema.safeParse({ ...reselect, packageVersionId: randomUUID(), permissionGranted: true }).success).toBe(false);
+  });
   it("starts only an explicitly reviewed no-charge native first task without accepting client authority", () => {
     const input = { operation: "start_first_task", requestId: randomUUID(), expectedVersion: 1,
       installationId: randomUUID(), planId: randomUUID(), expectedPlanVersion: 1,
@@ -174,4 +191,24 @@ it("binds first-task preparation to reviewed original versions and rejects grant
   for (const extra of [{ confirmCurrentPurpose: false }, { expectedPurposeVersion: 0 }, { expectedInstallationHash: "invalid" },
     { permissions: ["tasks:assign"] }, { start: true }, { maximumModelCostMinor: 100 }, { goal: "Change the reviewed goal" }])
     expect(activationCommandSchema.safeParse({ ...input, ...extra }).success).toBe(false);
+});
+
+it("admits only explicit paused-agent preparation without accepting runtime, cost, grants or activation proof", () => {
+  const command = { operation: "prepare_first_agent", requestId: randomUUID(), expectedVersion: 1, confirmPausedPreparation: true };
+  expect(activationCommandSchema.parse(command)).toEqual(command);
+  for (const extra of [{ confirmPausedPreparation: false }, { agentId: randomUUID() }, { role: "ceo" },
+    { credentials: "PRIVATE" }, { runtimeBindingId: randomUUID() }, { permissions: ["tools:admin"] }, { activated: true }])
+    expect(activationCommandSchema.safeParse({ ...command, ...extra }).success).toBe(false);
+  expect(activationFirstAgentReferenceSchema.safeParse({ agentId: randomUUID(), packageVersionId: randomUUID(), packageContentHash: "a".repeat(64),
+    configurationHash: "b".repeat(64), approvalId: null }).success).toBe(true);
+});
+it("cannot turn missing or changed original agent references into a ready/active receipt or replacement action", () => {
+  const none = { status: "not_created", agentId: null, name: null, canPrepare: true };
+  expect(activationFirstAgentViewSchema.parse(none)).toEqual(none);
+  const prepared = { status: "prepared", agentId: randomUUID(), name: "Original paused target", canPrepare: false };
+  expect(activationFirstAgentViewSchema.parse(prepared)).toEqual(prepared);
+  for (const view of [{ ...prepared, status: "active" }, { ...prepared, canPrepare: true }, { ...prepared, credentials: "PRIVATE" },
+    { ...prepared, status: "unavailable" }, { ...none, status: "unavailable" }, { ...prepared, name: null }])
+    expect(activationFirstAgentViewSchema.safeParse(view).success).toBe(false);
+  expect(activationFirstAgentViewSchema.safeParse({ status: "unavailable", agentId: null, name: null, canPrepare: false }).success).toBe(true);
 });

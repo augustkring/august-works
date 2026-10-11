@@ -19,6 +19,11 @@ export const agentMonitorSchema = z
     ]),
     pauseReason: z.enum(["manual", "budget", "system", "unknown"]).nullable(),
     lastHeartbeatAt: z.iso.datetime().nullable(),
+    // Absent on an older read owner: UI must treat it as unavailable.
+    pausedWork: z.strictObject({
+      status: z.enum(["none", "pending", "unavailable"]),
+      pendingRuns: z.number().int().min(0).max(6).nullable(),
+    }).optional(),
     recent: z.strictObject({
       runs: z
         .array(
@@ -53,6 +58,12 @@ export const agentMonitorSchema = z
         code: "custom",
         message: "Native scheduling state binding changed",
       });
+    if (view.pausedWork && (
+      view.nativeStatus !== "paused" ||
+      (view.pausedWork.status === "none" && view.pausedWork.pendingRuns !== 0) ||
+      (view.pausedWork.status === "pending" && !(view.pausedWork.pendingRuns !== null && view.pausedWork.pendingRuns > 0)) ||
+      (view.pausedWork.status === "unavailable" && view.pausedWork.pendingRuns !== null)
+    )) ctx.addIssue({ code: "custom", message: "Paused work observation is inconsistent" });
     if (
       new Set(view.recent.runs.map((run) => run.id)).size !==
       view.recent.runs.length

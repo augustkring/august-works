@@ -135,6 +135,15 @@ export function AgentMonitor({
         {view.pauseReason && (
           <p>{t(`agentMonitorPause.${view.pauseReason}`)}</p>
         )}
+        {view.nativeStatus === "paused" && (
+          <div className="space-y-2">
+            <p>{t("agentMonitorPausedWorkBoundary")}</p>
+            <p>{t(`agentMonitorPausedWork.${view.pausedWork?.status ?? "unavailable"}`, {
+              count: view.pausedWork?.pendingRuns ?? 0,
+            })}</p>
+            <p>{t("agentMonitorPauseCancelPolicy")}</p>
+          </div>
+        )}
         <p>
           {t("agentMonitorObserved")}{" "}
           <time dateTime={view.observedAt}>

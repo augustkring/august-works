@@ -83,6 +83,36 @@ describePg("V9 native current agent monitoring", () => {
       );
     },
   );
+  it.each(["queued", "scheduled_retry", "running"])("keeps an older %s run visible after pause despite newer completed history", async status => {
+    const f = await source("paused"), foreign = await source("paused");
+    await db.insert(heartbeatRuns).values({ companyId: f.companyId, agentId: f.agentId, status,
+      createdAt: new Date(Date.now() - 60000), resultJson: { private: "old-private-running-output" } });
+    await db.insert(heartbeatRuns).values(Array.from({ length: 8 }, (_, n) => ({
+      companyId: f.companyId, agentId: f.agentId, status: "succeeded", createdAt: new Date(Date.now() + n),
+    })));
+    await db.insert(heartbeatRuns).values({ companyId: foreign.companyId, agentId: foreign.agentId, status: "running" });
+    const view = await readAgentMonitor(db, local, f.companyId, f.agentId);
+    expect(view.recent.runs.every(run => run.status === "succeeded")).toBe(true);
+    expect(view.pausedWork).toEqual({ status: "pending", pendingRuns: 1 });
+    expect(JSON.stringify(view)).not.toContain("old-private-running-output");
+  });
+  it("does not certify settled paused work beyond its bounded source and returns zero only for an empty original pending set", async () => {
+    const f = await source("paused");
+    expect((await readAgentMonitor(db, local, f.companyId, f.agentId)).pausedWork).toEqual({ status: "none", pendingRuns: 0 });
+    await db.insert(heartbeatRuns).values(Array.from({ length: 7 }, () => ({
+      companyId: f.companyId, agentId: f.agentId, status: "running",
+    })));
+    expect((await readAgentMonitor(db, local, f.companyId, f.agentId)).pausedWork).toEqual({ status: "unavailable", pendingRuns: null });
+  });
+  it("withdraws paused-work metadata for an older nonterminal run whose original conversation is retired", async () => {
+    const f = await source("paused"), issueId = randomUUID();
+    await db.insert(issues).values({ id: issueId, companyId: f.companyId, title: "Retired private source", status: "cancelled",
+      hiddenAt: new Date(), conversationRetiredAt: new Date() });
+    await db.insert(heartbeatRuns).values({ companyId: f.companyId, agentId: f.agentId, status: "running", runtimeMode: "native",
+      nativeIssueId: issueId, createdAt: new Date(Date.now() - 60000) });
+    await db.insert(heartbeatRuns).values(Array.from({ length: 8 }, () => ({ companyId: f.companyId, agentId: f.agentId, status: "succeeded" })));
+    await expect(readAgentMonitor(db, local, f.companyId, f.agentId)).rejects.toMatchObject({ status: 403 });
+  });
   it("bounds actual native history and excludes another company/agent", async () => {
     const f = await source(),
       foreign = await source();

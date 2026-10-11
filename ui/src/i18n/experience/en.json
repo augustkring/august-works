@@ -186,7 +186,7 @@
     "screen6": "Does this look right?",
     "screen7": "A good first step",
     "screen8": "Required access",
-    "screen9": "Ready for your first run",
+    "screen9": "Review before your first run",
     "screen10": "Working on it",
     "screen11": "Your first result is ready",
     "screen12": "You're ready",
@@ -219,6 +219,17 @@
     "noConnections": "No additional connections requested",
     "useAgent": "Use this agent",
     "accessPending": "Required access is not ready. Your setup is saved; no new permissions have been granted.",
+    "accessRecorded": "The required connections are recorded. Review the agent's access and safe test before starting work.",
+    "accessStatus": {
+      "recorded": "Connection setup recorded",
+      "not_connected": "Connection needed",
+      "needs_review": "Review connection setup",
+      "unavailable": "Ask a company administrator to review"
+    },
+    "reviewApps": "Review connections in Apps",
+    "connectionOutcome": "This agent needs these connections for: {{purpose}}. Without them, this first task stays on hold. You can choose another agent or return to your saved setup later.",
+    "notNow": "Not now — choose another agent",
+    "selectedUnavailable": "The selected capability is no longer available. Your outcome is saved; choose another qualified agent or return later.",
     "noGrants": "Selecting a capability does not create connection or execution permissions.",
     "agent": "Selected agent",
     "executionPending": "Safe first-task execution is awaiting qualification. Save this setup and return when it is available.",
@@ -278,7 +289,17 @@
     },
     "firstTaskPrepareReview": "Review the agent and approved purpose",
     "firstTaskPrepareBoundary": "Preparing creates one internal draft task and its bounded plan. It does not start work or grant access. Confirm this current approved purpose before preparing your first task.",
-    "prepareFirstTask": "Prepare first task"
+    "prepareFirstTask": "Prepare first task",
+    "firstAgentTitle": "Prepare your first agent",
+    "firstAgentBoundary": "This creates a paused agent. It starts no work, connects no apps and adds no permissions. Required access, a safe test and any required approval still need to be completed.",
+    "prepareFirstAgent": "Prepare first agent",
+    "openPreparedAgent": "Open prepared agent",
+    "firstAgentStatus": {
+      "prepared": "Agent prepared and paused. Access and testing are still needed.",
+      "pending_approval": "Agent preparation is awaiting the required approval. No work has started.",
+      "needs_review": "The original agent or capability has changed. Review its current setup before continuing.",
+      "unavailable": "The original prepared agent is unavailable. No replacement has been created."
+    }
   },
   "company": {
     "title": "Company",
@@ -1409,5 +1430,13 @@
       "eleven_to_thirty": "Eleven to thirty recorded transitions",
       "over_thirty": "More than thirty recorded transitions"
     }
+  },
+  "agentMonitorPausedWorkBoundary": "Pause stops new autonomous work and preserves the agent configuration and history. Check existing work separately.",
+  "agentMonitorPauseCancelPolicy": "Pause in Advanced requests cancellation of active native runs. A paused status alone does not confirm that a remote process stopped or that its task finished.",
+  "agentMonitorPausedWork": {
+    "none": "No pending native runs were recorded at this check. This does not confirm that remote work has stopped.",
+    "pending_one": "{{count}} pending native run remains. Review its original run controls.",
+    "pending_other": "{{count}} pending native runs remain. Review their original run controls.",
+    "unavailable": "Pending work could not be fully checked. Review the original run controls before treating the agent as settled."
   }
 }

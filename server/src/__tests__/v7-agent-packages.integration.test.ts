@@ -22,11 +22,17 @@ import {
   readinessAssessments,
   knowledgeQualityFindings,
   companyMemberships,
+  approvals,
+  agentApiKeys,
+  agentPresenceRuntimeBindings,
+  agentProviderBindings,
   activityLog,
 } from "@paperclipai/db";
 import { learningService } from "../services/learning/learning-service.js";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { activationService } from "../services/saas/activation.js";
+import { readActivationRequiredAccess } from "../services/saas/activation-connections.js";
+import { approvalService } from "../services/approvals.js";
 import { orchestrationService } from "../services/orchestration/orchestration-service.js";
 import { verificationService } from "../services/supervision/verification-service.js";
 import { agentRuntimeFabricService } from "../services/agent-runtime-fabric.js";
@@ -72,6 +78,9 @@ import {
   principalPermissionGrants,
   orchestrationPlans,
   connectionGrants,
+  toolApplications,
+  toolConnections,
+  toolConnectionInstalls,
   agentPackageVersions,
   agentPackageComponents,
   companyAgentPackageInstallations,
@@ -283,12 +292,12 @@ const support = await getEmbeddedPostgresTestSupport();
         reason: "Explicit internal evaluation",
       });
     }
-    async function hireFixture() {
+    async function hireFixture(requiredConnections: string[] = []) {
       await instanceSettingsService(db).updateExperimental({hire_agent_v9: true});
       const evidence = input.releaseEvidence.provenance;
       const release: PackageRelease = {
         ...input, packageKey: `hire-native-fixture-${randomUUID()}`,
-        manifest: {...input.manifest, audience: "customer", commercialProductKey: "agent_package_research"},
+        manifest: {...input.manifest, audience: "customer", requiredConnections, commercialProductKey: "agent_package_research"},
         releaseEvidence: {...input.releaseEvidence, sbom: evidence, scan: evidence, evaluations: evidence, protectedHoldout: evidence, customerDemand: evidence},
       };
       return {release, published: await service.publish(f.actor, release), hire: agentAuthoringService(db)};
@@ -1577,6 +1586,253 @@ const support = await getEmbeddedPostgresTestSupport();
       return { ...fixture, activation, input, transport, profile };
     }
 
+    // Original publisher/account/onboarding rows, no installed package/runtime.
+    // This qualifies paused provisioning, not hosted compute or first value.
+    async function firstAgentPreparationFixture(answers: Record<string, unknown> = {}, step: "review" | "access" = "review", requiredConnections: string[] = []) {
+      await instanceSettingsService(db).updateExperimental({ activation_v9: true, free_core_commercial_v7: true,
+        billing_entitlements_v6: true, billing_usage_v6: true, transactional_email_v6: true,
+        email_verification_required_v6: true, server_onboarding_v6: true });
+      const { published } = await hireFixture(requiredConnections); versionId = published.id;
+      const [account] = await db.insert(billingAccounts).values({ displayName: "Paused preparation fixture", payerUserId: f.userId }).returning();
+      await db.insert(billingAccountCompanies).values({ companyId: f.home, billingAccountId: account!.id });
+      const [onboarding] = await db.insert(companyOnboardingRuns).values({ companyId: f.home, billingAccountId: account!.id,
+        createdByUserId: f.userId, idempotencyKey: randomUUID(), requestHash: "a".repeat(64), currentStage: "v9_review", answers,
+        activationState: { ...initialActivationState(), step, intent: "PRIVATE preparation goal", packageVersionId: versionId } }).returning();
+      const activation = activationService(db), input = { operation: "prepare_first_agent" as const,
+        requestId: randomUUID(), expectedVersion: onboarding!.version, confirmPausedPreparation: true as const };
+      return { published, onboarding: onboarding!, activation, input };
+    }
+    // Original Apps rows are software fixtures for setup projection, never
+    // provider-health, credential-resolution or representative-execution proof.
+    async function connectionSetupFixture(companyId = f.home, key = "linear") {
+      const [app] = await db.insert(toolApplications).values({ companyId, applicationKey: key, name: `App ${randomUUID()}`, type: "mcp_http" }).returning();
+      const observed = new Date();
+      const [connection] = await db.insert(toolConnections).values({ companyId, applicationId: app!.id, name: "Recorded setup", uid: randomUUID(),
+        transport: "rest_api", authKind: "none", status: "active", enabled: true, healthStatus: "ok", healthCheckedAt: observed, updatedAt: observed,
+        config: { private: "PRIVATE endpoint configuration" }, healthMessage: "PRIVATE provider observation" }).returning();
+      await db.insert(toolConnectionInstalls).values({ companyId, connectionId: connection!.id, targetType: "company", targetId: companyId });
+      return { app: app!, connection: connection! };
+    }
+    const readRequiredSetup = (required = ["linear"]) => db.transaction(tx => readActivationRequiredAccess(tx as unknown as Db, f.actor, f.home, required));
+    it("preserves the original outcome and company purpose when Not now returns to capability choice without granting access", async () => {
+      const fixture = await firstAgentPreparationFixture({}, "access", ["linear"]);
+      const before = await db.select().from(principalPermissionGrants).where(eq(principalPermissionGrants.companyId, f.home));
+      const original = await fixture.activation.get(f.actor, f.home);
+      const command = { operation: "reselect_capability" as const, expectedVersion: fixture.onboarding.version, requestId: randomUUID() };
+      const [first, replay] = await Promise.all([fixture.activation.command(f.actor, f.home, command), fixture.activation.command(f.actor, f.home, command)]);
+      expect(first.state).toMatchObject({ step: "capability", packageVersionId: null, intent: original.state.intent, companyPurpose: original.state.companyPurpose });
+      expect(replay.version).toBe(first.version);
+      expect(await db.select().from(principalPermissionGrants).where(eq(principalPermissionGrants.companyId, f.home))).toEqual(before);
+      expect(await db.select().from(toolConnectionInstalls).where(eq(toolConnectionInstalls.companyId, f.home))).toEqual([]);
+      expect(await db.select().from(connectionGrants).where(eq(connectionGrants.companyId, f.home))).toEqual([]);
+      await expect(fixture.activation.command(f.actor, f.home, { ...command, requestId: randomUUID(), expectedVersion: first.version }))
+        .rejects.toMatchObject({ status: 409, details: { code: "ACTIVATION_STEP_CONFLICT" } });
+    });
+    it("projects only current company setup and continues to review once without native access changes", async () => {
+      const fixture = await firstAgentPreparationFixture({}, "access", ["linear"]);
+      const setup = await connectionSetupFixture();
+      const beforeAgents = await db.select().from(agents).where(eq(agents.companyId, f.home));
+      const beforeGrants = await db.select().from(principalPermissionGrants).where(eq(principalPermissionGrants.companyId, f.home));
+      const beforeApps = await db.select().from(toolConnections).where(eq(toolConnections.companyId, f.home));
+      const view = await fixture.activation.get(f.actor, f.home);
+      expect(view.requiredAccess).toEqual([{ key: "linear", status: "recorded", checkedAt: setup.connection.healthCheckedAt!.toISOString() }]);
+      expect(view.blockers).not.toContain("required_access_pending");
+      expect(JSON.stringify(view.requiredAccess)).not.toMatch(/PRIVATE|credential|agentAccess|connectionId/);
+      const command = { operation: "continue_access" as const, expectedVersion: fixture.onboarding.version, requestId: randomUUID() };
+      const [first, replay] = await Promise.all([fixture.activation.command(f.actor, f.home, command), fixture.activation.command(f.actor, f.home, command)]);
+      expect(first.state.step).toBe("review"); expect(replay.version).toBe(first.version);
+      expect(first.blockers).toContain("safe_execution_unqualified");
+      expect(await db.select().from(agents).where(eq(agents.companyId, f.home))).toEqual(beforeAgents);
+      expect(await db.select().from(principalPermissionGrants).where(eq(principalPermissionGrants.companyId, f.home))).toEqual(beforeGrants);
+      expect(await db.select().from(toolConnections).where(eq(toolConnections.companyId, f.home))).toEqual(beforeApps);
+      expect(await db.select().from(connectionGrants).where(eq(connectionGrants.companyId, f.home))).toEqual([]);
+      expect(await readRequiredSetup(["linear", "linear"])).toHaveLength(1);
+      await expect(readRequiredSetup(Array.from({ length: 21 }, (_, index) => `app-${index}`))).rejects.toThrow("original package bound");
+    });
+    it("rechecks connection changes after the displayed review and preserves the onboarding step", async () => {
+      const fixture = await firstAgentPreparationFixture({}, "access", ["linear"]);
+      const setup = await connectionSetupFixture();
+      expect((await fixture.activation.get(f.actor, f.home)).requiredAccess?.[0]?.status).toBe("recorded");
+      await db.update(toolConnections).set({ enabled: false, updatedAt: new Date() }).where(eq(toolConnections.id, setup.connection.id));
+      await expect(fixture.activation.command(f.actor, f.home, { operation: "continue_access", expectedVersion: fixture.onboarding.version, requestId: randomUUID() }))
+        .rejects.toMatchObject({ status: 409, details: { code: "REQUIRED_ACCESS_PENDING" } });
+      expect((await fixture.activation.get(f.actor, f.home)).state.step).toBe("access");
+      const [original] = await db.select().from(companyOnboardingRuns).where(eq(companyOnboardingRuns.id, fixture.onboarding.id));
+      expect(original!.version).toBe(fixture.onboarding.version);
+    });
+    it("does not substitute another company's connection or a duplicate account for required setup", async () => {
+      await connectionSetupFixture(f.guest);
+      expect(await readRequiredSetup()).toEqual([{ key: "linear", status: "not_connected", checkedAt: null }]);
+      const setup = await connectionSetupFixture();
+      await db.insert(toolConnections).values({ companyId: f.home, applicationId: setup.app.id, name: "Other account", uid: randomUUID(), transport: "rest_api" });
+      expect(await readRequiredSetup()).toEqual([{ key: "linear", status: "needs_review", checkedAt: null }]);
+    });
+    it("does not reuse stale health or an absent company installation", async () => {
+      const setup = await connectionSetupFixture();
+      await db.update(toolConnections).set({ updatedAt: new Date(setup.connection.healthCheckedAt!.getTime() + 1) }).where(eq(toolConnections.id, setup.connection.id));
+      expect((await readRequiredSetup())[0]?.status).toBe("needs_review");
+      await db.update(toolConnections).set({ updatedAt: setup.connection.updatedAt }).where(eq(toolConnections.id, setup.connection.id));
+      await db.delete(toolConnectionInstalls).where(eq(toolConnectionInstalls.connectionId, setup.connection.id));
+      expect((await readRequiredSetup())[0]?.status).toBe("needs_review");
+    });
+    it("keeps per-user credentials separate from company and other-user grants", async () => {
+      const setup = await connectionSetupFixture();
+      await db.update(toolConnections).set({ authKind: "api_key", credentialPolicy: "per_user" }).where(eq(toolConnections.id, setup.connection.id));
+      const refs = [{ configPath: "headers.Authorization", secretId: randomUUID() }];
+      await db.insert(connectionGrants).values([{ companyId: f.home, connectionId: setup.connection.id, kind: "organization", isDefault: true, credentialSecretRefs: refs },
+        { companyId: f.home, connectionId: setup.connection.id, kind: "user", subjectUserId: "another-user", credentialSecretRefs: refs }]);
+      expect((await readRequiredSetup())[0]?.status).toBe("needs_review");
+      const [personal] = await db.insert(connectionGrants).values({ companyId: f.home, connectionId: setup.connection.id, kind: "user", subjectUserId: f.userId, credentialSecretRefs: refs }).returning();
+      expect((await readRequiredSetup())[0]?.status).toBe("recorded");
+      await db.update(connectionGrants).set({ status: "needs_reauthorization" }).where(eq(connectionGrants.id, personal!.id));
+      expect((await readRequiredSetup())[0]?.status).toBe("needs_review");
+    });
+    it("does not borrow a personal or organization credential for a dedicated future agent", async () => {
+      const setup = await connectionSetupFixture();
+      await db.update(toolConnections).set({ authKind: "api_key", credentialPolicy: "per_agent" }).where(eq(toolConnections.id, setup.connection.id));
+      await db.insert(connectionGrants).values({ companyId: f.home, connectionId: setup.connection.id, kind: "organization", isDefault: true,
+        credentialSecretRefs: [{ configPath: "headers.Authorization", secretId: randomUUID() }] });
+      expect((await readRequiredSetup())[0]?.status).toBe("needs_review");
+    });
+    it("records shared credentials only under their original policy and honors personal fallback explicitly", async () => {
+      const setup = await connectionSetupFixture();
+      await db.update(toolConnections).set({ authKind: "api_key", credentialPolicy: "shared" }).where(eq(toolConnections.id, setup.connection.id));
+      const [personal] = await db.insert(connectionGrants).values({ companyId: f.home, connectionId: setup.connection.id, kind: "user", subjectUserId: f.userId,
+        credentialSecretRefs: [{ configPath: "headers.Authorization", secretId: randomUUID() }] }).returning();
+      expect((await readRequiredSetup())[0]?.status).toBe("needs_review");
+      await db.update(toolConnections).set({ credentialPolicy: "per_user_with_fallback" }).where(eq(toolConnections.id, setup.connection.id));
+      expect((await readRequiredSetup())[0]?.status).toBe("recorded");
+      await db.update(connectionGrants).set({ status: "revoked", revokedAt: new Date() }).where(eq(connectionGrants.id, personal!.id));
+      expect((await readRequiredSetup())[0]?.status).toBe("needs_review");
+      await db.update(toolConnections).set({ credentialPolicy: "shared", credentialSecretRefs: [{ configPath: "headers.Authorization", secretId: randomUUID() }] })
+        .where(eq(toolConnections.id, setup.connection.id));
+      expect((await readRequiredSetup())[0]?.status).toBe("recorded");
+    });
+    it("hides observations after current tools authority is withdrawn despite instance-admin flags", async () => {
+      const setup = await connectionSetupFixture();
+      await db.update(companyMemberships).set({ membershipRole: "operator" }).where(and(eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
+      await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId, f.home), eq(principalPermissionGrants.principalId, f.userId), eq(principalPermissionGrants.permissionKey, "tools:admin")));
+      const result = await db.transaction(tx => readActivationRequiredAccess(tx as unknown as Db, { ...f.actor, isInstanceAdmin: true }, f.home, ["linear"]));
+      expect(result).toEqual([{ key: "linear", status: "unavailable", checkedAt: null }]);
+      expect(await db.select().from(toolConnections).where(eq(toolConnections.id, setup.connection.id))).toHaveLength(1);
+    });
+    it("prepares one original paused agent across concurrent clicks and lost replies without work, credentials, grants or installation", async () => {
+      const fixture = await firstAgentPreparationFixture();
+      const before = await db.execute(sql`select
+        (select count(*) from agents where company_id=${f.home}::uuid) as agents,
+        (select count(*) from heartbeat_runs where company_id=${f.home}::uuid) as runs,
+        (select count(*) from agent_api_keys where company_id=${f.home}::uuid) as keys,
+        (select count(*) from principal_permission_grants where company_id=${f.home}::uuid) as grants,
+        (select count(*) from company_agent_package_installations where company_id=${f.home}::uuid) as installs,
+        (select count(*) from agent_presence_runtime_bindings where company_id=${f.home}::uuid) as bindings`);
+      const [first, replay] = await Promise.all([fixture.activation.command(f.actor, f.home, fixture.input), fixture.activation.command(f.actor, f.home, fixture.input)]);
+      expect(first.version).toBe(fixture.onboarding.version + 1); expect(replay.version).toBe(first.version);
+      expect(first.firstAgent).toMatchObject({ status: "prepared", canPrepare: false });
+      expect(replay.firstAgent?.agentId).toBe(first.firstAgent?.agentId);
+      const targetId = first.firstAgent!.agentId!;
+      const [target] = await db.select().from(agents).where(eq(agents.id, targetId));
+      expect(target).toMatchObject({ companyId: f.home, status: "paused", role: "general", adapterConfig: {}, runtimeConfig: { heartbeat: { enabled: false } } });
+      const after = await db.execute(sql`select
+        (select count(*) from agents where company_id=${f.home}::uuid) as agents,
+        (select count(*) from heartbeat_runs where company_id=${f.home}::uuid) as runs,
+        (select count(*) from agent_api_keys where company_id=${f.home}::uuid) as keys,
+        (select count(*) from principal_permission_grants where company_id=${f.home}::uuid) as grants,
+        (select count(*) from company_agent_package_installations where company_id=${f.home}::uuid) as installs,
+        (select count(*) from agent_presence_runtime_bindings where company_id=${f.home}::uuid) as bindings`);
+      expect(Number(after[0]!.agents)).toBe(Number(before[0]!.agents) + 1);
+      for (const key of ["runs", "keys", "grants", "installs"] as const) expect(after[0]![key]).toBe(before[0]![key]);
+      // The original V5 INSERT trigger creates a local unqualified provider
+      // placeholder for every agent. Preserve that owner and prove it cannot run.
+      expect(Number(after[0]!.bindings)).toBe(Number(before[0]!.bindings) + 1);
+      const [binding] = await db.select().from(agentPresenceRuntimeBindings).where(eq(agentPresenceRuntimeBindings.agentId, targetId));
+      expect(binding).toMatchObject({ companyId: f.home, providerBindingId: targetId,
+        qualifiedConfigurationHash: null, conformanceSnapshotHash: null, conformanceReport: null });
+      const [provider] = await db.select().from(agentProviderBindings).where(eq(agentProviderBindings.id, targetId));
+      expect(provider).toMatchObject({ status: "unqualified", capabilitySnapshot: null, conformance: {} });
+      await expect(agentProviderBindingService(db).assertRuntime(f.home, targetId)).rejects.toMatchObject({ status: 409 });
+      const [stored] = await db.select().from(companyOnboardingRuns).where(eq(companyOnboardingRuns.id, fixture.onboarding.id));
+      expect(stored!.activationState!.firstAgent!.agentId).toBe(targetId);
+      expect(JSON.stringify(first)).not.toContain(stored!.activationState!.firstAgent!.configurationHash);
+      expect(first.state).not.toHaveProperty("firstAgent");
+      const receipts = await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.home), eq(activityLog.action, "agent.hire_created")));
+      expect(receipts).toHaveLength(1); expect(JSON.stringify(receipts)).not.toContain("PRIVATE preparation goal");
+      await expect(fixture.activation.command(f.actor, f.home, { ...fixture.input, requestId: randomUUID(), expectedVersion: first.version })).rejects.toMatchObject({ status: 409 });
+      await expect(fixture.activation.command(f.actor, f.home, { operation: "change_setup", requestId: randomUUID(), expectedVersion: first.version })).rejects.toMatchObject({ status: 409 });
+      expect((await fixture.activation.command(f.actor, f.home, fixture.input)).firstAgent?.agentId).toBe(targetId);
+    }, 60000);
+    it("keeps the original board-approval owner and treats later agent changes or withdrawal as review, not readiness", async () => {
+      const fixture = await firstAgentPreparationFixture();
+      await db.update(companies).set({ requireBoardApprovalForNewAgents: true }).where(eq(companies.id, f.home));
+      const first = await fixture.activation.command(f.actor, f.home, fixture.input), targetId = first.firstAgent!.agentId!;
+      expect(first.firstAgent?.status).toBe("pending_approval");
+      const requests = await db.select().from(approvals).where(eq(approvals.companyId, f.home));
+      expect(requests).toHaveLength(1); expect(requests[0]).toMatchObject({ type: "hire_agent", status: "pending", requestedByUserId: f.userId, payload: { agentId: targetId } });
+      // The original approval owner can change the Native row. Its approval
+      // is not a representative safe-test, runtime or first-value receipt.
+      await approvalService(db).approve(requests[0]!.id, f.userId);
+      expect((await fixture.activation.get(f.actor, f.home)).firstAgent?.status).toBe("needs_review");
+      await db.update(agents).set({ title: "Changed native preparation" }).where(eq(agents.id, targetId));
+      expect((await fixture.activation.get(f.actor, f.home)).firstAgent?.status).toBe("needs_review");
+      await service.revoke(f.actor, fixture.published.id);
+      expect((await fixture.activation.get(f.actor, f.home)).firstAgent?.status).toBe("needs_review");
+      await db.update(agents).set({ status: "terminated" }).where(eq(agents.id, targetId));
+      expect((await fixture.activation.get(f.actor, f.home)).firstAgent).toEqual({ status: "unavailable", agentId: null, name: null, canPrepare: false });
+      expect((await db.select().from(agentApiKeys).where(eq(agentApiKeys.agentId, targetId)))).toEqual([]);
+      const [binding] = await db.select().from(agentPresenceRuntimeBindings).where(eq(agentPresenceRuntimeBindings.agentId, targetId));
+      expect(binding).toMatchObject({ qualifiedConfigurationHash: null, conformanceReport: null });
+      await expect(agentProviderBindingService(db).assertRuntime(f.home, targetId)).rejects.toMatchObject({ status: 409 });
+    }, 60000);
+    it("rejects current permission loss, rollout withdrawal and revoked capability without creating a target", async () => {
+      const fixture = await firstAgentPreparationFixture();
+      const count = () => db.select({ id: agents.id }).from(agents).where(eq(agents.companyId, f.home));
+      const before = await count();
+      await db.update(companyMemberships).set({ membershipRole: "viewer" }).where(and(eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
+      const removedGrants = await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId, f.home),
+        eq(principalPermissionGrants.principalType, "user"), eq(principalPermissionGrants.principalId, f.userId), eq(principalPermissionGrants.permissionKey, "agents:create"))).returning();
+      await expect(fixture.activation.command(f.actor, f.home, fixture.input)).rejects.toMatchObject({ status: 403 });
+      await db.update(companyMemberships).set({ membershipRole: "owner" }).where(and(eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
+      expect(removedGrants).toHaveLength(1);
+      await db.insert(principalPermissionGrants).values(removedGrants);
+      await instanceSettingsService(db).updateExperimental({ activation_v9: false });
+      await expect(fixture.activation.command(f.actor, f.home, fixture.input)).rejects.toMatchObject({ status: 404 });
+      await instanceSettingsService(db).updateExperimental({ activation_v9: true });
+      await service.revoke(f.actor, fixture.published.id);
+      await expect(fixture.activation.command(f.actor, f.home, fixture.input)).rejects.toMatchObject({ status: 409 });
+      expect(await count()).toEqual(before);
+      const [stored] = await db.select().from(companyOnboardingRuns).where(eq(companyOnboardingRuns.id, fixture.onboarding.id));
+      expect(stored!.version).toBe(fixture.onboarding.version); expect(stored!.activationState).not.toHaveProperty("firstAgent");
+    }, 60000);
+    it.each(["legacy", "installed"] as const)("does not replace an existing %s preparation whose safe-task option is unavailable", async kind => {
+      const fixture = await firstAgentPreparationFixture(kind === "legacy" ? { createdFirstAgentId: f.presence.id } : {});
+      if (kind === "installed") await service.install(f.actor, f.home, installInput());
+      const before = await db.select({ id: agents.id }).from(agents).where(eq(agents.companyId, f.home));
+      const current = await fixture.activation.get(f.actor, f.home);
+      expect(current.firstTask?.preparationOptions).toEqual([]);
+      expect(current.firstAgent).toEqual({ status: "not_created", agentId: null, name: null, canPrepare: false });
+      await expect(fixture.activation.command(f.actor, f.home, fixture.input)).rejects.toMatchObject({ status: 409 });
+      expect(await db.select({ id: agents.id }).from(agents).where(eq(agents.companyId, f.home))).toEqual(before);
+    }, 60000);
+    it("rolls back the original agent, approval and audit when preparation fails before commit", async () => {
+      const fixture = await firstAgentPreparationFixture();
+      await db.update(companies).set({ requireBoardApprovalForNewAgents: true }).where(eq(companies.id, f.home));
+      const counts = async () => (await db.execute(sql`select
+        (select count(*) from agents where company_id=${f.home}::uuid) as agents,
+        (select count(*) from approvals where company_id=${f.home}::uuid) as approvals,
+        (select count(*) from activity_log where company_id=${f.home}::uuid) as audits`))[0];
+      const before = await counts(), transact = db.transaction.bind(db);
+      const fault = vi.spyOn(db, "transaction").mockImplementationOnce((callback, config) => transact(async tx => {
+        await callback(tx);
+        throw new Error("Owned preparation fixture failure before Native commit");
+      }, config));
+      try { await expect(fixture.activation.command(f.actor, f.home, fixture.input)).rejects.toThrow("Owned preparation fixture failure before Native commit"); }
+      finally { fault.mockRestore(); }
+      expect(await counts()).toEqual(before);
+      const [stored] = await db.select().from(companyOnboardingRuns).where(eq(companyOnboardingRuns.id, fixture.onboarding.id));
+      expect(stored!.version).toBe(fixture.onboarding.version); expect(stored!.activationState).not.toHaveProperty("firstAgent");
+      const retried = await fixture.activation.command(f.actor, f.home, fixture.input);
+      expect(retried.firstAgent?.status).toBe("pending_approval");
+      expect(Number((await counts())!.agents)).toBe(Number(before!.agents) + 1);
+    }, 60000);
     async function firstValueFixture() {
       const { onboarding, installation, task, created, intent, orchestration } = await prepareFirstValueFixture();
       const plan = await orchestration.decide(f.actor, f.home, created.id, { expectedVersion: created.version, action: "start",

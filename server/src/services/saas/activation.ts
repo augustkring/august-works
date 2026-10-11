@@ -35,6 +35,10 @@ import {
 } from "./activation-first-value.js";
 import { activationFirstTaskView, readActivationFirstTask, readRecordedActivationFirstTask, assertActivationFirstTaskDispatch } from "./activation-first-task.js";
 import { activationFirstTaskPreparationOptions, prepareActivationFirstTask } from "./activation-first-task-preparation.js";
+import { activationFirstAgentView, firstAgentConfigurationHash, readFirstAgentCapabilityPin, hasOriginalFirstAgentPreparation } from "./activation-first-agent.js";
+import { createPausedOnboardingAgent } from "./onboarding-agent.js";
+import { readActivationRequiredAccess } from "./activation-connections.js";
+import { logActivity } from "../activity-log.js";
 import { orchestrationService } from "../orchestration/orchestration-service.js";
 import { orchestrationRuntimeControl } from "../orchestration/orchestration-runtime-control.js";
 import { withV7ActivityTransaction } from "../v7-mutations.js";
@@ -176,6 +180,7 @@ export function activationService(db: Db) {
     const selected = available.find(
       (c) => c.versionId === state.packageVersionId,
     );
+    const requiredAccess = selected ? await readActivationRequiredAccess(tx, actor, companyId, selected.requiredConnections) : [];
     const firstValue = await activationFirstValueView(
       tx,
       actor,
@@ -194,10 +199,16 @@ export function activationService(db: Db) {
       firstTask.preparationOptions = await activationFirstTaskPreparationOptions(db, tx, actor, companyId, {
         id: run.id, createdAt: run.createdAt, createdByUserId: userId, activationState: state,
       });
+    const selectedPin = selected ? await readFirstAgentCapabilityPin(tx, selected.versionId) : null;
+    const originalAgentPreparation = selected ? await hasOriginalFirstAgentPreparation(tx, companyId, selected.versionId, run.answers) : true;
+    const firstAgent = await activationFirstAgentView(tx, actor, companyId, state,
+      !!selectedPin && !originalAgentPreparation && state.step === "review" && !state.firstTask && !state.preparedFirstTask && !state.firstValueReceipt &&
+      !firstTask.current && !firstTask.candidates.length && !firstTask.preparationOptions.length &&
+      v9FeatureEnabled(await instanceSettingsService(tx).getExperimental(), "activation_v9"), selectedPin?.hash ?? null);
     const blockers: ActivationView["blockers"] = [];
     if (!available.length || (state.packageVersionId && !selected))
       blockers.push("no_qualified_capability");
-    if (state.step === "access" && selected?.requiredConnections.length)
+    if (state.step === "access" && requiredAccess.some(row => row.status !== "recorded"))
       blockers.push("required_access_pending");
     if (
       ["review", "running", "result", "activated"].includes(state.step) &&
@@ -205,7 +216,7 @@ export function activationService(db: Db) {
     )
       blockers.push("safe_execution_unqualified");
     // Do not return internal idempotency receipts to the presentation layer.
-    const { receipts: _, ...publicState } = state;
+    const { receipts: _, firstAgent: _preparedAgent, ...publicState } = state;
     await access(tx, actor, companyId);
     const [finished] = await tx.execute(
       sql`select clock_timestamp() as observed_at`,
@@ -225,6 +236,8 @@ export function activationService(db: Db) {
       state: publicState,
       firstValue,
       firstTask,
+      firstAgent,
+      requiredAccess,
       sources: [
         {
           id: "customer_context",
@@ -234,7 +247,7 @@ export function activationService(db: Db) {
               : "not_requested",
         },
         { id: "website", status: "not_requested" },
-        { id: "connections", status: "not_connected" },
+        { id: "connections", status: requiredAccess.length && requiredAccess.every(row => row.status === "recorded") ? "available" : "not_connected" },
       ],
       capabilities: available,
       blockers,
@@ -406,6 +419,14 @@ export function activationService(db: Db) {
             next.step = "access";
             break;
           }
+          case "reselect_capability": {
+            requireStep("access");
+            if (state.firstAgent || state.firstTask || state.preparedFirstTask || state.firstValueReceipt || state.firstValueAt)
+              throw conflict("Continue the existing preparation through its original controls", { code: "FIRST_PREPARATION_EXISTS" });
+            next.packageVersionId = null;
+            next.step = "capability";
+            break;
+          }
           case "continue_access": {
             requireStep("access");
             const selected = (await capabilities(txDb)).find(
@@ -415,15 +436,44 @@ export function activationService(db: Db) {
               throw conflict("Choose a current qualified capability", {
                 code: "CAPABILITY_UNAVAILABLE",
               });
-            if (selected.requiredConnections.length)
-              throw conflict("Required access is not ready", {
+            if (!await readFirstAgentCapabilityPin(txDb, selected.versionId))
+              throw conflict("Choose a current qualified capability", { code: "CAPABILITY_UNAVAILABLE" });
+            const required = await readActivationRequiredAccess(txDb, actor, companyId, selected.requiredConnections);
+            if (required.some(row => row.status !== "recorded"))
+              throw conflict("Required connection setup needs review", {
                 code: "REQUIRED_ACCESS_PENDING",
               });
             next.step = "review";
             break;
           }
+          case "prepare_first_agent": {
+            requireStep("review");
+            if (state.firstAgent || state.firstTask || state.preparedFirstTask || state.firstValueReceipt || state.firstValueAt)
+              throw conflict("Continue the existing preparation through its original controls", { code: "FIRST_PREPARATION_EXISTS" });
+            await assertV5Authorization(txDb, { ...actor, ignoreInstanceAdmin: true }, companyId, "agents:create");
+            const selected = (await capabilities(txDb)).find(c => c.versionId === state.packageVersionId);
+            if (!selected) throw conflict("Choose a current qualified capability", { code: "CAPABILITY_UNAVAILABLE" });
+            if (await hasOriginalFirstAgentPreparation(txDb, companyId, selected.versionId, run.answers))
+              throw conflict("Continue the existing original agent or installed capability", { code: "FIRST_PREPARATION_EXISTS" });
+            const original = { id: run.id, createdAt: run.createdAt, createdByUserId: userId, activationState: state };
+            const tasks = await activationFirstTaskView(db, txDb, actor, companyId, original);
+            const options = await activationFirstTaskPreparationOptions(db, txDb, actor, companyId, original);
+            if (tasks.current || tasks.candidates.length || options.length)
+              throw conflict("Use the existing first-task preparation instead of creating another agent", { code: "FIRST_PREPARATION_EXISTS" });
+            const pin = await readFirstAgentCapabilityPin(txDb, selected.versionId);
+            if (!pin) throw conflict("The selected capability is unavailable");
+            const name = Array.from(pin.name.trim()).slice(0, 80).join("");
+            if (!name) throw conflict("The selected capability has no current agent name");
+            const { agent, approvalId } = await createPausedOnboardingAgent(txDb, companyId, userId, name, "general");
+            next.firstAgent = { agentId: agent.id, packageVersionId: selected.versionId, packageContentHash: pin.hash,
+              configurationHash: await firstAgentConfigurationHash(txDb, companyId, agent.id), approvalId };
+            await logActivity(txDb, { companyId, actorType: "user", actorId: userId, action: "agent.hire_created",
+              entityType: "agent", entityId: agent.id, details: { approvalId, onboardingRunId: run.id, preparationOnly: true } }, publications);
+            break;
+          }
           case "change_setup": {
             requireStep("review");
+            if (state.firstAgent) throw conflict("Review the prepared agent through its original controls before changing setup", { code: "FIRST_PREPARATION_EXISTS" });
             if (state.firstValueAt || state.firstValueReceipt || state.firstTask)
               throw conflict("Review the recorded result through its original controls", {
                 code: "FIRST_RESULT_ALREADY_RECORDED",

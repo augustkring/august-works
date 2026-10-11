@@ -145,6 +145,69 @@ async function enter(text: string) {
   });
 }
 describe("Native V9 onboarding UI", () => {
+  it("allows current capability choice after the previous publication became unavailable without claiming connections are unnecessary", async () => {
+    const data = view("access"); data.state.packageVersionId = "10000000-0000-4000-8000-000000000003";
+    data.requiredAccess = [];
+    const mutate = vi.spyOn(activationApi, "command").mockResolvedValue({ ...data, version: 2, state: { ...data.state, step: "capability", packageVersionId: null } });
+    await mount(data, "/saas/activation/8");
+    await vi.waitFor(() => expect(container.textContent).toContain("The selected capability is no longer available"));
+    expect(container.textContent).not.toContain("No additional connections requested");
+    expect([...container.querySelectorAll("button")].find(button => button.textContent === "Continue")?.disabled).toBe(true);
+    await click("Not now — choose another agent");
+    expect(mutate).toHaveBeenCalledExactlyOnceWith(companyId, "activation-owner", { operation: "reselect_capability", expectedVersion: 1, requestId: expect.any(String) });
+  });
+  it("returns from Not now to current capability choice while preserving the saved outcome and granting no access", async () => {
+    const data = view("access"), versionId = "10000000-0000-4000-8000-000000000003";
+    data.state.intent = "My saved outcome"; data.state.packageVersionId = versionId;
+    data.capabilities = [{ versionId, name: "Draft agent", purpose: "Draft a proposal", requiredConnections: ["linear"], knownLimitations: [] }];
+    data.requiredAccess = [{ key: "linear", status: "not_connected", checkedAt: null }];
+    const alternative = { ...data, version: 2, state: { ...data.state, step: "capability" as const, packageVersionId: null } };
+    const mutate = vi.spyOn(activationApi, "command").mockResolvedValue(alternative);
+    await mount(data, "/saas/activation/8");
+    await vi.waitFor(() => expect(container.textContent).toContain("Draft a proposal. Without them"));
+    await click("Not now — choose another agent");
+    await vi.waitFor(() => expect(container.textContent).toContain("Use this agent"));
+    expect(mutate).toHaveBeenCalledExactlyOnceWith(companyId, "activation-owner", {
+      operation: "reselect_capability", expectedVersion: 1, requestId: expect.any(String),
+    });
+    expect(client.getQueriesData<ActivationView>({ queryKey: ["activation", companyId, "activation-owner"] })
+      .some(([, result]) => result?.version === 2 && result.state.intent === "My saved outcome")).toBe(true);
+    expect(container.textContent).not.toContain("Run first task");
+  });
+  it("continues to review from recorded connection setup without claiming agent access or starting work", async () => {
+    const data = view("access"), versionId = "10000000-0000-4000-8000-000000000003";
+    data.state.packageVersionId = versionId;
+    data.capabilities = [{ versionId, name: "Draft agent", purpose: "Prepare an internal draft", requiredConnections: ["linear"], knownLimitations: [] }];
+    data.requiredAccess = [{ key: "linear", status: "recorded", checkedAt: new Date().toISOString() }];
+    data.blockers = [];
+    const reviewed = { ...data, version: 2, state: { ...data.state, step: "review" as const } };
+    const mutate = vi.spyOn(activationApi, "command").mockResolvedValue(reviewed);
+    await mount(data, "/saas/activation/8");
+    await vi.waitFor(() => expect(container.textContent).toContain("Connection setup recorded"));
+    expect(container.textContent).toContain("Review the agent's access and safe test");
+    expect(container.querySelector('a[href$="/apps"]')).toBeTruthy();
+    await click("Continue");
+    await vi.waitFor(() => expect(container.textContent).toContain("Review before your first run"));
+    expect(mutate).toHaveBeenCalledExactlyOnceWith(companyId, "activation-owner", {
+      operation: "continue_access", expectedVersion: 1, requestId: expect.any(String),
+    });
+    expect(container.textContent).not.toContain("Your agent is ready");
+  });
+  it.each(["not_connected", "needs_review", "unavailable", "missing"] as const)("keeps %s connection setup blocked even when other requested connections are recorded", async status => {
+    const data = view("access"), versionId = "10000000-0000-4000-8000-000000000003";
+    data.state.packageVersionId = versionId;
+    data.capabilities = [{ versionId, name: "Draft agent", purpose: "Draft", requiredConnections: ["linear", "notion"], knownLimitations: [] }];
+    data.requiredAccess = [{ key: "linear", status: "recorded", checkedAt: new Date().toISOString() },
+      ...(status === "missing" ? [] : [{ key: "notion", status, checkedAt: null }])];
+    const mutate = vi.spyOn(activationApi, "command");
+    await mount(data, "/saas/activation/8");
+    await vi.waitFor(() => expect(container.textContent).toContain("Required access is not ready"));
+    const button = [...container.querySelectorAll("button")].find(item => item.textContent === "Continue")!;
+    expect(button.disabled).toBe(true);
+    await act(async () => button.click());
+    expect(mutate).not.toHaveBeenCalled();
+    expect(container.querySelector('a[href$="/apps"]')).toBeTruthy();
+  });
   it("does not submit retained onboarding fields after the original session cache changes account", async () => {
     const mutate = vi.spyOn(activationApi, "command");
     await mount(view());

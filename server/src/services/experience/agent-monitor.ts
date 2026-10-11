@@ -1,4 +1,4 @@
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, inArray } from "drizzle-orm";
 import { agents, heartbeatRuns, type Db } from "@paperclipai/db";
 import { agentMonitorSchema, v9FeatureEnabled } from "@paperclipai/shared";
 import { isDeepStrictEqual } from "node:util";
@@ -78,9 +78,22 @@ export async function readAgentMonitor(
       .orderBy(desc(heartbeatRuns.createdAt), desc(heartbeatRuns.id))
       .limit(7);
   }
+
+  async function pendingRuns() {
+    // Query the original nonterminal owners, independently of recent history.
+    // An older running/retry run must never disappear behind six newer results.
+    return db.select({ id: heartbeatRuns.id, status: heartbeatRuns.status }).from(heartbeatRuns)
+      .where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, agentId),
+        inArray(heartbeatRuns.status, ["queued", "scheduled_retry", "running"])))
+      .orderBy(heartbeatRuns.id).limit(7);
+  }
   await access();
-  const source = await agent(),
-    recent = await runs();
+  const source = await agent(), recent = await runs();
+  const pending = source.status === "paused" ? await pendingRuns() : null;
+  for (const run of pending?.slice(0, 6) ?? []) {
+    budget();
+    await assertAnalyticalContextPayloadAccess(db, companyId, current, { runId: run.id });
+  }
   for (const run of recent.slice(0, 6)) {
     budget();
     await assertAnalyticalContextPayloadAccess(db, companyId, current, {
@@ -89,7 +102,8 @@ export async function readAgentMonitor(
   }
   if (
     !isDeepStrictEqual(source, await agent()) ||
-    !isDeepStrictEqual(recent, await runs())
+    !isDeepStrictEqual(recent, await runs()) ||
+    (pending !== null && !isDeepStrictEqual(pending, await pendingRuns()))
   )
     throw conflict("Agent state changed; reload", {
       code: "agent_monitor_stale",
@@ -99,6 +113,10 @@ export async function readAgentMonitor(
     await assertAnalyticalContextPayloadAccess(db, companyId, current, {
       runId: run.id,
     });
+  }
+  for (const run of pending?.slice(0, 6) ?? []) {
+    budget();
+    await assertAnalyticalContextPayloadAccess(db, companyId, current, { runId: run.id });
   }
   await access();
   const lifecycle =
@@ -126,6 +144,10 @@ export async function readAgentMonitor(
           ? source.pauseReason
           : "unknown",
     lastHeartbeatAt: source.lastHeartbeatAt?.toISOString() ?? null,
+    ...(pending === null ? {} : { pausedWork: {
+      status: pending.length > 6 ? "unavailable" : pending.length ? "pending" : "none",
+      pendingRuns: pending.length > 6 ? null : pending.length,
+    } }),
     recent: {
       hasMore: recent.length > 6,
       runs: recent.slice(0, 6).map((run) => ({

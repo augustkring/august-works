@@ -1,11 +1,10 @@
-import { agentService } from "../agents.js";
+import { createPausedOnboardingAgent } from "./onboarding-agent.js";
 import { issueService } from "../issues.js";
 import { rolePackService } from "../role-packs.js";
 import { assertV5Authorization } from "../v5-authorization.js";
 import { and, eq, sql } from "drizzle-orm";
 import {
   activityLog,
-  approvals,
   agents,
   authUsers,
   billingAccounts,
@@ -421,61 +420,7 @@ export function saasOnboardingService(db: Db) {
           "Reach the current agent stage before creating the first agent",
           { code: "ONBOARDING_VERSION_CONFLICT" },
         );
-      await entitlementService(txDb).require(companyId, "platform.access");
-      const [company] = await tx
-        .select()
-        .from(companies)
-        .where(eq(companies.id, companyId))
-        .for("share");
-      if (!company) throw notFound("Company not found");
-      const agent = await agentService(txDb).create(companyId, {
-        name,
-        role: "ceo",
-        adapterType: "openclaw_gateway",
-        adapterConfig: {},
-        runtimeConfig: { heartbeat: { enabled: false } },
-        budgetMonthlyCents: 0,
-        status: company.requireBoardApprovalForNewAgents
-          ? "pending_approval"
-          : "paused",
-      });
-      let approvalId: string | null = null;
-      if (company.requireBoardApprovalForNewAgents) {
-        const [approval] = await tx
-          .insert(approvals)
-          .values({
-            companyId,
-            type: "hire_agent",
-            requestedByUserId: userId,
-            status: "pending",
-            payload: {
-              agentId: agent.id,
-              name: agent.name,
-              role: agent.role,
-              adapterType: agent.adapterType,
-              adapterConfig: agent.adapterConfig,
-              runtimeConfig: agent.runtimeConfig,
-              budgetMonthlyCents: 0,
-              requestedConfigurationSnapshot: {
-                adapterType: agent.adapterType,
-                adapterConfig: agent.adapterConfig,
-                runtimeConfig: agent.runtimeConfig,
-                desiredSkills: [],
-              },
-            },
-          })
-          .returning();
-        approvalId = approval!.id;
-        await tx.insert(activityLog).values({
-          companyId,
-          actorType: "user",
-          actorId: userId,
-          action: "approval.created",
-          entityType: "approval",
-          entityId: approvalId,
-          details: { type: "hire_agent" },
-        });
-      }
+      const { agent, approvalId } = await createPausedOnboardingAgent(txDb, companyId, userId, name);
       await tx
         .update(companyOnboardingRuns)
         .set({
