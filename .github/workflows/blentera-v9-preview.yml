@@ -1,0 +1,59 @@
+name: BLENTERA V9 public design preview
+on:
+  push:
+    branches:
+      - blentera-preview/v9-company-work-20261011
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  publish:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+      - name: Check website preview snapshot
+        shell: bash
+        run: |
+          set -euo pipefail
+          test -s blentera-v9-website-preview.html
+          grep -q 'data-preview-page="about"' blentera-v9-website-preview.html
+          grep -q 'data-executive="cto"' blentera-v9-website-preview.html
+          grep -q 'data-case="access"' blentera-v9-website-preview.html
+      - name: Publish to Cloudflare-hosted preview
+        id: publish
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --connect-timeout 20 --max-time 90 --retry 2 \
+            -F 'file=@blentera-v9-website-preview.html;type=text/html' \
+            -F 'title=BLENTERA V9 - Source-first editorial product design review' \
+            https://sharehtml.zhenjia.dev/api/shares > "$RUNNER_TEMP/response.json"
+          python3 - <<'PY'
+          import json,os
+          obj=json.load(open(os.path.join(os.environ['RUNNER_TEMP'],'response.json')))
+          url=obj['share']['preview_url']
+          assert url.startswith('https://sharehtml.zhenjia.dev/v/') and url.endswith('/'),url
+          with open(os.environ['GITHUB_OUTPUT'],'a') as f: f.write('url='+url+'\n')
+          with open(os.environ['GITHUB_STEP_SUMMARY'],'a') as f:
+              f.write('## BLENTERA V9 public design preview\n\n')
+              f.write('**[Open live website preview]('+url+')**\n\n')
+              f.write('Unlisted source-first review; not a first-party production deployment.\n')
+          print('BLENTERA_V9_URL='+url)
+          PY
+      - name: Verify remote HTTP 200 and expected content
+        shell: bash
+        env:
+          PREVIEW_URL: ${{steps.publish.outputs.url}}
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --location --max-time 35 \
+            --dump-header "$RUNNER_TEMP/headers" --output "$RUNNER_TEMP/live.html" "$PREVIEW_URL"
+          grep -qi '<!doctype html>' "$RUNNER_TEMP/live.html"
+          grep -q 'data-preview-page="about"' "$RUNNER_TEMP/live.html"
+          grep -q 'data-case="access"' "$RUNNER_TEMP/live.html"
+          grep -q 'One place for your people' "$RUNNER_TEMP/live.html"
+          echo "V9_VERIFIED_URL=$PREVIEW_URL"
+          grep -iE '^HTTP/|^content-type:' "$RUNNER_TEMP/headers" || true
+          printf 'Body bytes: '
+          wc -c < "$RUNNER_TEMP/live.html"
