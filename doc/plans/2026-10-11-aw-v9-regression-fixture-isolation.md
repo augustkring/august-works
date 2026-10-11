@@ -36,3 +36,11 @@ same original SDK linker for only its owned disposable fixture package.
 Original production owners, success assertions and timeouts remain unchanged.
 These current fixture changes require fresh Native qualification; prior
 failures remain preserved. No customer inbound directory was accessed.
+
+## Completed bounded qualification — 2026-10-11
+
+Actual checks passed: Shared/server/UI types and all 55 Native cases in three complete original files (13 session, 11 plugin install and 31 workspace exposure).
+
+Frozen scope HEAD: `f1494451dd7d833fed6c5d33860865d8e1b4c0d3`. Matching before/after public Source SHA-256: `79c4502cc3d10e1b7efa259da7af8529a5adc14cd774da77eebafc69069cc9be`. Stage logs and source snapshots are retained under `/workspace/v9-regression-fixture-isolation-<stage>-v<version>-*`: types v2, native v3. Earlier failures are preserved. No original assertion, skip policy or deadline was weakened.
+
+These checks qualify this bounded implementation in its own worktree. They do not replace the current integrated full typecheck, test run and build. Built browser transport fixtures do not qualify external provider effects. Full V9 implementation, human acceptance, provider operating proof and review remain open; `sourceComplete` stays false and all 70 launch surfaces stay pending.

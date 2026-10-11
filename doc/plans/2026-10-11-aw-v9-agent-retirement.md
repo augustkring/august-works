@@ -147,3 +147,11 @@ rollback. Tests now retain the original 409 check, add a direct Native resume
 fence assertion and assert refusal around the complete transaction. Production
 Source, triggers, test budgets and prior assertions are unchanged. Fresh
 qualification is required; the v3 failure remains preserved.
+
+## Completed bounded qualification — 2026-10-11
+
+Actual checks passed: 55 focused cases in eight complete files; Shared/DB builds and server/UI types; 196 Native cases in eleven complete original files; one complete built-browser scenario.
+
+Frozen scope HEAD: `f6b773f34cb533e06878d45fef2be78717b4b492`. Matching before/after public Source SHA-256: `a856b31f1e705c9e2e7f0b33861ce0d01e1202966353a0504314bd75c037ca28`. Stage logs and source snapshots are retained under `/workspace/v9-agent-retirement-<stage>-v<version>-*`: focused v8, types v4, native v4, browser v4. Earlier failures are preserved. No original assertion, skip policy or deadline was weakened.
+
+These checks qualify this bounded implementation in its own worktree. They do not replace the current integrated full typecheck, test run and build. Built browser transport fixtures do not qualify external provider effects. Full V9 implementation, human acceptance, provider operating proof and review remain open; `sourceComplete` stays false and all 70 launch surfaces stay pending.
