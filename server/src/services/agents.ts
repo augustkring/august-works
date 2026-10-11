@@ -961,6 +961,7 @@ export function agentService(db: Db) {
       const existing = await getById(id);
       if (!existing) return null;
       if (existing.status === "terminated") throw conflict("Cannot pause terminated agent");
+      if (existing.status === "pending_approval") throw conflict("Pending approval agents cannot be paused");
 
       const updated = await db
         .update(agents)
@@ -971,9 +972,10 @@ export function agentService(db: Db) {
           errorReason: null,
           updatedAt: new Date(),
         })
-        .where(eq(agents.id, id))
+        .where(and(eq(agents.id, id), ne(agents.status, "pending_approval"), ne(agents.status, "terminated")))
         .returning()
         .then((rows) => rows[0] ?? null);
+      if (!updated) throw conflict("Agent state changed before pause; reload the agent");
       return updated ? getById(updated.id) : null;
     },
 
@@ -994,9 +996,10 @@ export function agentService(db: Db) {
           errorReason: null,
           updatedAt: new Date(),
         })
-        .where(eq(agents.id, id))
+        .where(and(eq(agents.id, id), ne(agents.status, "pending_approval"), ne(agents.status, "terminated")))
         .returning()
         .then((rows) => rows[0] ?? null);
+      if (!updated) throw conflict("Agent state changed before resume; reload the agent");
       return updated ? getById(updated.id) : null;
     },
 

@@ -1680,5 +1680,16 @@
       "qualified": "This agent’s own runtime has current validation. A representative Safe Test is still required.",
       "unavailable": "The original agent or its execution setup is unavailable."
     }
+  },
+  "agentPause": {
+    "title": "Pause {{name}}",
+    "description": "Stop new work and triggers while preserving configuration and history. Choose what happens to work already in progress.",
+    "pendingWork": "Work in progress",
+    "drain": "Let running work finish",
+    "drainDetail": "Running work continues through its normal checks. Queued work stays on hold until the agent is resumed.",
+    "cancel": "Request cancellation",
+    "cancelDetail": "Cancel pending work through the normal stop process. A cancellation request does not prove that a remote process has stopped.",
+    "back": "Back",
+    "confirm": "Pause agent"
   }
 }

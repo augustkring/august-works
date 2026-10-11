@@ -1890,6 +1890,8 @@ export {
   builtInAgentResetSchema,
   createAgentHireSchema,
   updateAgentSchema,
+  pauseAgentSchema,
+  type PauseAgent,
   agentInstructionsBundleModeSchema,
   updateAgentInstructionsBundleSchema,
   upsertAgentInstructionsFileSchema,

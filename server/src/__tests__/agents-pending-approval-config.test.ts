@@ -130,6 +130,10 @@ describeEmbeddedPostgres("pending approval agent config integrity", () => {
       },
     });
 
+    await expect(agentSvc.pause(pending.id)).rejects.toMatchObject({ status: 409 });
+    await expect(agentSvc.resume(pending.id)).rejects.toMatchObject({ status: 409 });
+    await expect(agentSvc.getById(pending.id)).resolves.toMatchObject({ status: "pending_approval" });
+
     await db
       .update(agents)
       .set({

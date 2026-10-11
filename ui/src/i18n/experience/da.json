@@ -1680,5 +1680,16 @@
       "qualified": "Denne agents egen runtime har aktuel validering. En repræsentativ Safe Test kræves stadig.",
       "unavailable": "Den oprindelige agent eller dens opsætning er utilgængelig."
     }
+  },
+  "agentPause": {
+    "title": "Sæt {{name}} på pause",
+    "description": "Stop nyt arbejde og udløsere, og bevar konfiguration og historik. Vælg, hvad der skal ske med igangværende arbejde.",
+    "pendingWork": "Igangværende arbejde",
+    "drain": "Lad kørende arbejde afslutte",
+    "drainDetail": "Kørende arbejde fortsætter med de normale kontroller. Arbejde i kø forbliver på hold, indtil agenten genoptages.",
+    "cancel": "Anmod om annullering",
+    "cancelDetail": "Annullér ventende arbejde gennem den normale stopproces. En anmodning om annullering beviser ikke, at en fjernproces er stoppet.",
+    "back": "Tilbage",
+    "confirm": "Sæt agent på pause"
   }
 }

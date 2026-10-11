@@ -112,6 +112,12 @@ export const createAgentSchema = z.object({
 
 export type CreateAgent = z.infer<typeof createAgentSchema>;
 
+/** Existing callers retain cancellation; customer UI explicitly chooses. */
+export const pauseAgentSchema = z.strictObject({
+  pendingWork: z.enum(["drain", "cancel"]).optional().default("cancel"),
+});
+export type PauseAgent = z.infer<typeof pauseAgentSchema>;
+
 export const builtInAgentProvisionSchema = z.object({
   adapterType: agentAdapterTypeSchema.optional(),
   adapterConfig: adapterConfigSchema.optional(),

@@ -78,6 +78,7 @@ import {
   createAgentSchema,
   createAgentHireSchema,
   updateAgentSchema,
+  pauseAgentSchema,
   updateAgentPermissionsSchema,
   updateAgentInstructionsPathSchema,
   updateAgentInstructionsBundleSchema,
@@ -4025,9 +4026,9 @@ registry.registerPath({
   method: "post",
   path: "/api/agents/{id}/pause",
   tags: ["agents"],
-  summary: "Pause an agent",
-  request: { params: z.object({ id: z.string() }) },
-  responses: { 200: r.ok(), 401: r.unauthorized },
+  summary: "Pause new agent work and explicitly drain or cancel pending work",
+  request: { params: z.object({ id: z.string() }), body: jsonBody(pauseAgentSchema) },
+  responses: { 200: r.ok(), 400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound, 409: r.conflict },
 });
 
 registry.registerPath({
