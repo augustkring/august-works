@@ -65,3 +65,46 @@ Native owned fixtures qualify local ownership; software OAuth replies qualify
 UI behavior only. Neither supplies real provider credentials, deployed consent,
 Safe Test, Free Core hosting/funding or first-value release evidence. Current
 source is pending implementation and does not qualify full V9 or PR readiness.
+
+
+## Original consent/allocation owner implemented; qualification pending
+
+The current source implements the strict eight-field review, a separate C3
+approval on the original Native onboarding owner, immutable minimal receipt,
+private reservation and same-transaction original Apps connection binding.
+Managed Google scopes come from the original connector profile; availability is
+read outside native locks. The dedicated endpoint accepts only explicit provider
+setup confirmation and derives the personal identity/application/method from the
+original approval. It allocates once and leaves provider sign-in to the shared
+setup flow after a confirmed reply. It does not start OAuth twice on dialog setup.
+
+Original connection insert and receipt binding commit together. An unknown reply
+can read the original receipt; an allocating reservation never appears as a
+positive connection UUID. Later provider errors retain the already-bound row.
+Native guards preserve the original receipt, personal identity and zero Agent or
+company installs/profile bindings/delegations. Original OAuth finalization and
+finish refuse organization promotion or Agent reach for this deferred connection.
+Existing normal Apps, reconnect and access defaults stay with their original owner.
+
+Qualification history is preserved, not promoted to a pass:
+- Focused contract/unchanged UI tests: 31 cases / 4 files passed.
+- Native V1: 427 passed, 6 failed / 433 cases; owned allocation fixtures lacked
+  controlled DNS and one version fixture bypassed the original onboarding writer.
+- Native V2: 433 passed, 1 failed / 434 cases. Seven new owner cases and all
+  original packages/activation/Apps cases passed. The new HTTP fixture used the
+  wrong membership property; its correction still needs the full Native rerun.
+- Type V1 did not reach the compiler because cargo was absent from its PATH.
+- Type V2 Shared/DB builds passed; server types found a missing conflict import
+  in the new account guard. Fixed source must pass the original full type command.
+- No provider sign-in, credential claim, live Google access or customer data was
+  used. Native tests use original PostgreSQL and controlled software metadata.
+
+The complete inline UI, explicit withdrawal/current receipt reload, current
+purpose recheck at every provider/finish boundary, connected-state writer and
+legacy-connection purpose adoption/activation continuation are still open.
+The preview currently supports actual enrolled managed Google profiles without
+resource configuration; GitHub App permissions, API-key authority, customer OAuth
+and configurable resources need their own verified original preview.
+The declared connected receipt state is not a writer or qualification by itself.
+No Agent promotion, Safe Test, hosted Free Core, usable first value, full V9 or
+PR readiness is claimed. Continue the original complete V9 implementation.

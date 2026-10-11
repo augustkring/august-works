@@ -1,5 +1,6 @@
 import { v7FeatureEnabled, v9FeatureEnabled, activationCommandSchema } from "@paperclipai/shared";
 import { activationService } from "../services/saas/activation.js";
+import { activationConnectionConsentService } from "../services/saas/activation-connection-consent.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { z } from "zod";
 import { Router, type Request } from "express";
@@ -154,6 +155,28 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
     await company(req,companyId);
     res.set("Cache-Control","private, no-store");
     res.json(await activationService(db).command(req.actor,companyId,activationCommandSchema.parse(req.body)));
+  });
+  router.get("/companies/:companyId/activation/connections/:applicationKey/review", async (req, res) => {
+    const companyId = z.uuid().parse(req.params.companyId);
+    const applicationKey = z.string().min(1).max(120).parse(req.params.applicationKey);
+    const methodKey = z.string().min(1).max(120).optional().parse(req.query.methodKey);
+    await company(req, companyId);
+    res.set("Cache-Control", "private, no-store");
+    res.json(await activationConnectionConsentService(db).getReview(req.actor, companyId, applicationKey, methodKey));
+  });
+  router.post("/companies/:companyId/activation/connections/:applicationKey/consent", async (req, res) => {
+    const companyId = z.uuid().parse(req.params.companyId);
+    const applicationKey = z.string().min(1).max(120).parse(req.params.applicationKey);
+    const methodKey = z.string().min(1).max(120).optional().parse(req.query.methodKey);
+    await company(req, companyId);
+    res.set("Cache-Control", "private, no-store");
+    res.json(await activationConnectionConsentService(db).approve(req.actor, companyId, applicationKey, req.body, methodKey));
+  });
+  router.get("/companies/:companyId/activation/connection-consents/:requestKey", async (req, res) => {
+    const companyId = z.uuid().parse(req.params.companyId), requestKey = z.uuid().parse(req.params.requestKey);
+    await company(req, companyId);
+    res.set("Cache-Control", "private, no-store");
+    res.json(await activationConnectionConsentService(db).getReceipt(req.actor, companyId, requestKey));
   });
   router.patch("/companies/:companyId/onboarding", async (req, res) => {
     const companyId = String(req.params.companyId);

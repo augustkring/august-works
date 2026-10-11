@@ -302,3 +302,4 @@ export * from "./agent_configuration_drafts.js";
 export * from "./agent_retirements.js";
 
 export * from "./feedback_retention_erasures.js";
+export * from "./activation_connection_consents.js";

@@ -1,3 +1,8 @@
+import { toolAccessRoutes } from "../routes/tool-access.js";
+import { activationConnectionConsentService } from "../services/saas/activation-connection-consent.js";
+import { toolAccessService } from "../services/tool-access.js";
+import type { PaperclipCloudConnector } from "../services/paperclip-cloud-connector.js";
+import { activationConnectionConsents, companySecrets } from "@paperclipai/db";
 import { readExperienceMeasures } from "../services/experience/measures.js";
 import { experienceMeasuresRoutes } from "../routes/experience-measures.js";
 import { readPackageMaintenanceAttention } from "../services/experience/maintenance-attention.js";
@@ -1614,6 +1619,131 @@ const support = await getEmbeddedPostgresTestSupport();
       return { app: app!, connection: connection! };
     }
     const readRequiredSetup = (required = ["linear"]) => db.transaction(tx => readActivationRequiredAccess(tx as unknown as Db, f.actor, f.home, required));
+    async function connectionConsentFixture() {
+      const key = `required-gmail-${randomUUID()}`;
+      const fixture = await firstAgentPreparationFixture({}, "access", [key]);
+      const [app] = await db.insert(toolApplications).values({ companyId: f.home, applicationKey: key, name: `Personal Gmail ${randomUUID()}`,
+        type: "mcp_http", status: "active", metadata: { sourceTemplateKey: "gmail", galleryKey: "gmail" } }).returning();
+      const connector: PaperclipCloudConnector = {
+        getCapabilities: vi.fn(async () => ["gmail.read", "gmail.draft"]),
+        startAuthorization: vi.fn(async () => { throw new Error("No real provider authorization in this owner fixture"); }),
+        claim: vi.fn(async () => { throw new Error("No provider credential claim in this owner fixture"); }),
+        refresh: vi.fn(async () => { throw new Error("No provider refresh in this owner fixture"); }),
+        revoke: vi.fn(async () => { throw new Error("No provider revocation in this owner fixture"); }),
+      };
+      const apps = toolAccessService(db, { paperclipCloudConnector: connector,
+        remoteHttpEndpointLookup: async () => [{ address: "8.8.8.8", family: 4 }],
+        remoteHttpRequest: async () => { throw new Error("No provider HTTP execution in this ownership fixture"); } });
+      const owner = activationConnectionConsentService(db, apps);
+      const review = await owner.getReview(f.actor, f.home, key);
+      const command = { requestKey: randomUUID(), confirmConnectionAuthorization: true as const, expectedReviewHash: review.reviewHash };
+      return { ...fixture, key, app: app!, connector, apps, owner, review, command };
+    }
+    it("records one distinct current purpose consent without credentials, provider authorization or Agent reach", async () => {
+      const c = await connectionConsentFixture();
+      expect(Object.keys(c.review.preview)).toHaveLength(8);
+      expect(c.review).toMatchObject({ applicationId: c.app.id, applicationKey: c.key, grantKind: "user", deferAgentAccess: true,
+        scopeProfile: "gmail.read", providerScopes: ["https://www.googleapis.com/auth/gmail.readonly"] });
+      const before = { agents: await db.select().from(agents), secrets: await db.select().from(companySecrets), grants: await db.select().from(connectionGrants) };
+      const [first, replay] = await Promise.all([c.owner.approve(f.actor, f.home, c.key, c.command), c.owner.approve(f.actor, f.home, c.key, c.command)]);
+      expect(first).toEqual(replay); expect(first).toMatchObject({ status: "approved", connectionId: null });
+      expect(await c.owner.getReceipt(f.actor, f.home, c.command.requestKey)).toEqual(first);
+      expect(await db.select().from(agents)).toEqual(before.agents);
+      expect(await db.select().from(companySecrets)).toEqual(before.secrets);
+      expect(await db.select().from(connectionGrants)).toEqual(before.grants);
+      expect(c.connector.startAuthorization).not.toHaveBeenCalled(); expect(c.connector.claim).not.toHaveBeenCalled();
+      expect((await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.onboardingRunId, c.onboarding.id)))).toHaveLength(1);
+      await expect(c.owner.approve(f.actor, f.home, c.key, { ...c.command, expectedReviewHash: "b".repeat(64) })).rejects.toMatchObject({ status: 409 });
+    });
+    it("rejects stale reviews after Native package, application or onboarding changes without creating an approval", async () => {
+      const c = await connectionConsentFixture();
+      await db.update(toolApplications).set({ name: "Changed provider explanation", updatedAt: new Date() }).where(eq(toolApplications.id, c.app.id));
+      await expect(c.owner.approve(f.actor, f.home, c.key, c.command)).rejects.toMatchObject({ status: 409 });
+      const refreshed = await c.owner.getReview(f.actor, f.home, c.key);
+      const reselected = await c.activation.command(f.actor, f.home, { operation: "reselect_capability", requestId: randomUUID(), expectedVersion: c.onboarding.version });
+      await c.activation.command(f.actor, f.home, { operation: "select_capability", requestId: randomUUID(), expectedVersion: reselected.version, packageVersionId: c.published.id });
+      await expect(c.owner.approve(f.actor, f.home, c.key, { ...c.command, expectedReviewHash: refreshed.reviewHash })).rejects.toMatchObject({ status: 409 });
+      await service.revoke(f.actor, c.published.id);
+      await expect(c.owner.getReview(f.actor, f.home, c.key)).rejects.toMatchObject({ status: 409 });
+      expect(await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.onboardingRunId, c.onboarding.id))).toEqual([]);
+    });
+    it("keeps the actual original allocation on an unknown reply and refuses a second connection or credential owner", async () => {
+      const c = await connectionConsentFixture();
+      await c.owner.approve(f.actor, f.home, c.key, c.command);
+      const input = await c.owner.getApprovedSetup(f.actor, f.home, c.command.requestKey);
+      const connected = await c.apps.connectGalleryApp(f.home, input, { actorType: "user", actorId: f.userId }, c.owner.allocationOwner(f.actor, f.home, c.command.requestKey));
+      const receipt = await c.owner.getReceipt(f.actor, f.home, c.command.requestKey);
+      expect(receipt).toMatchObject({ status: "allocated", connectionId: connected.connectionId, connectedAt: null });
+      expect(JSON.stringify(receipt)).not.toMatch(/reservedConnectionId|credential|methodHash|subjectUserId/);
+      await expect(c.apps.connectGalleryApp(f.home, input, { actorType: "user", actorId: f.userId }, c.owner.allocationOwner(f.actor, f.home, c.command.requestKey))).rejects.toMatchObject({ status: 409 });
+      await expect(c.apps.connectGalleryApp(f.home, input, { actorType: "user", actorId: f.userId })).rejects.toMatchObject({ status: 409 });
+      expect(await db.select().from(toolConnections).where(eq(toolConnections.applicationId, c.app.id))).toHaveLength(1);
+      expect(await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, connected.connectionId))).toEqual([]);
+      expect(await db.select().from(toolConnectionInstalls).where(eq(toolConnectionInstalls.connectionId, connected.connectionId))).toEqual([]);
+      expect(c.connector.startAuthorization).not.toHaveBeenCalled(); expect(c.connector.claim).not.toHaveBeenCalled();
+    });
+    it("uses the original HTTP allocator once and leaves provider sign-in to the explicit setup flow", async () => {
+      const c = await connectionConsentFixture(); await c.owner.approve(f.actor, f.home, c.key, c.command);
+      const app = express(); app.use(express.json());
+      app.use((req, _res, next) => { req.actor = { ...f.actor, memberships: [{ companyId: f.home, membershipRole: "owner", status: "active" }] }; next(); });
+      app.use("/api", toolAccessRoutes(db, { paperclipCloudConnector: c.connector,
+        remoteHttpEndpointLookup: async () => [{ address: "8.8.8.8", family: 4 }],
+        remoteHttpRequest: async () => { throw new Error("No live provider HTTP in this ownership fixture"); } }));
+      app.use(errorHandler);
+      const path = `/api/companies/${f.home}/activation/connection-consents/${c.command.requestKey}/connect`;
+      expect((await request(app).post(path).send({ confirmProviderSetup: true, grantKind: "organization" })).status).toBe(400);
+      const allocated = await request(app).post(path).send({ confirmProviderSetup: true });
+      expect(allocated.status).toBe(201); expect(allocated.body.connection.credentialPolicy).toBe("per_user");
+      expect(allocated.body.auth.startUrl).toBeNull();
+      expect(c.connector.startAuthorization).not.toHaveBeenCalled(); expect(c.connector.claim).not.toHaveBeenCalled();
+      expect((await c.owner.getReceipt(f.actor, f.home, c.command.requestKey)).connectionId).toBe(allocated.body.connectionId);
+      expect((await request(app).post(path).send({ confirmProviderSetup: true })).status).toBe(409);
+      expect(await db.select().from(toolConnections).where(eq(toolConnections.applicationId, c.app.id))).toHaveLength(1);
+    });
+    it("rechecks membership after the original claim before committing the Native connection binding", async () => {
+      const c = await connectionConsentFixture(); await c.owner.approve(f.actor, f.home, c.key, c.command);
+      const input = await c.owner.getApprovedSetup(f.actor, f.home, c.command.requestKey);
+      const original = c.owner.allocationOwner(f.actor, f.home, c.command.requestKey);
+      const interrupted = { ...original, claim: async (...args: Parameters<typeof original.claim>) => {
+        const id = await original.claim(...args);
+        await db.update(companyMemberships).set({ status: "suspended" }).where(and(eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
+        return id;
+      } };
+      await expect(c.apps.connectGalleryApp(f.home, input, { actorType: "user", actorId: f.userId }, interrupted)).rejects.toMatchObject({ status: 403 });
+      expect(await db.select().from(toolConnections).where(eq(toolConnections.applicationId, c.app.id))).toEqual([]);
+      const [receipt] = await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.requestKey, c.command.requestKey));
+      expect(receipt).toMatchObject({ status: "allocating", connectionId: null });
+      await expect(c.owner.getReceipt({ ...f.actor, isInstanceAdmin: true }, f.home, c.command.requestKey)).rejects.toMatchObject({ status: 403 });
+      expect(c.connector.startAuthorization).not.toHaveBeenCalled();
+    });
+    it("rolls back the original connection insert with a failed receipt bind and never invents positive allocation evidence", async () => {
+      const c = await connectionConsentFixture(); await c.owner.approve(f.actor, f.home, c.key, c.command);
+      const input = await c.owner.getApprovedSetup(f.actor, f.home, c.command.requestKey), original = c.owner.allocationOwner(f.actor, f.home, c.command.requestKey);
+      await expect(c.apps.connectGalleryApp(f.home, input, { actorType: "user", actorId: f.userId }, { ...original, bind: async () => { throw new Error("Owned binding failure"); } })).rejects.toThrow("Owned binding failure");
+      expect(await db.select().from(toolConnections).where(eq(toolConnections.applicationId, c.app.id))).toEqual([]);
+      expect(await c.owner.getReceipt(f.actor, f.home, c.command.requestKey)).toMatchObject({ status: "allocating", connectionId: null });
+      await expect(c.owner.getApprovedSetup(f.actor, f.home, c.command.requestKey)).rejects.toMatchObject({ status: 409 });
+    });
+    it("refuses a different original method before P2 allocation rather than silently broadening approved scopes", async () => {
+      const c = await connectionConsentFixture(); await c.owner.approve(f.actor, f.home, c.key, c.command);
+      const input = await c.owner.getApprovedSetup(f.actor, f.home, c.command.requestKey);
+      await expect(c.apps.connectGalleryApp(f.home, { ...input, connectionMethodKey: "paperclip-draft" }, { actorType: "user", actorId: f.userId },
+        c.owner.allocationOwner(f.actor, f.home, c.command.requestKey))).rejects.toMatchObject({ status: 409 });
+      expect(await c.owner.getReceipt(f.actor, f.home, c.command.requestKey)).toMatchObject({ status: "approved", connectionId: null });
+      expect(await db.select().from(toolConnections).where(eq(toolConnections.applicationId, c.app.id))).toEqual([]);
+    });
+    it("enforces immutable consent and zero company or Agent installation on the Native owner", async () => {
+      const c = await connectionConsentFixture(); const consent = await c.owner.approve(f.actor, f.home, c.key, c.command);
+      await expect(db.update(activationConnectionConsents).set({ reviewHash: "c".repeat(64) }).where(eq(activationConnectionConsents.id, consent.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+      const input = await c.owner.getApprovedSetup(f.actor, f.home, c.command.requestKey);
+      const connected = await c.apps.connectGalleryApp(f.home, input, { actorType: "user", actorId: f.userId }, c.owner.allocationOwner(f.actor, f.home, c.command.requestKey));
+      for (const target of [{ targetType: "company" as const, targetId: f.home }, { targetType: "agent" as const, targetId: f.presence.id }])
+        await expect(db.insert(toolConnectionInstalls).values({ companyId: f.home, connectionId: connected.connectionId, ...target })).rejects.toMatchObject({ cause: { code: "23514" } });
+      await expect(db.insert(connectionGrants).values({ companyId: f.home, connectionId: connected.connectionId, kind: "organization", isDefault: true })).rejects.toMatchObject({ cause: { code: "23514" } });
+      await expect(c.apps.finalizeOAuthAccess(f.home, connected.connectionId, { grantKind: "organization" }, { actorType: "user", actorId: f.userId })).rejects.toMatchObject({ status: 409 });
+      await expect(c.apps.finishGalleryAppConnection(f.home, connected.connectionId, { enabledCatalogEntryIds: [], askFirstCatalogEntryIds: [], access: "all_agents" }, { actorType: "user", actorId: f.userId })).rejects.toMatchObject({ status: 409 });
+      expect(await db.select().from(toolConnectionInstalls).where(eq(toolConnectionInstalls.connectionId, connected.connectionId))).toEqual([]);
+    });
     it("preserves the original outcome and company purpose when Not now returns to capability choice without granting access", async () => {
       const fixture = await firstAgentPreparationFixture({}, "access", ["linear"]);
       const before = await db.select().from(principalPermissionGrants).where(eq(principalPermissionGrants.companyId, f.home));

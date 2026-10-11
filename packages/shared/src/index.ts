@@ -3335,6 +3335,7 @@ export * from "./feedback-retention-controls.js";
 export * from "./feedback-images.js";
 export * from "./experience-commands.js";
 export * from "./activation.js";
+export * from "./activation-connection-consent.js";
 export * from "./company-experience.js";
 export * from "./notification-policy.js";
 export * from "./agent-authoring.js";
