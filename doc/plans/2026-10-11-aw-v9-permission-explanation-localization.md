@@ -19,7 +19,10 @@ exact identifiers and the unknown scope requires its own detailed review.
 New focused coverage checks every Original profile in both locales, broad provider
 rights versus AW authority, unknown scope preservation and a language change while
 C3 is open. The latter must retain the authored purpose and exact command/hash
-without an automatic POST. Token gates V1 and whitespace checks passed. These
-focused tests, full types and built browser checks have not run yet. Source remains
+without an automatic POST. Token gates V1 and whitespace checks passed. Focused V1 passed 34 cases in five complete files; the separate Original
+AppsConnect file passed all 164 cases. The initial command named a nonexistent
+AppsConnectModal file, so its five-file result never claimed that coverage; the
+actual Original AppsConnect file was then run explicitly. Shared build V1 passed.
+Full types and built browser checks have not run yet. Source remains
 unqualified until those checks complete. Reconnect/purpose replacement and full V9
 readiness remain separate open work; this is not provider or GA evidence.
