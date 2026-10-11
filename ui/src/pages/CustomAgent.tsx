@@ -1,4 +1,6 @@
 import { useEffect, useRef, useState } from "react";
+import { useTranslation } from "@/i18n";
+import { agentAuthoringBlockerKey } from "@/lib/agent-authoring-copy";
 import {
   useInfiniteQuery,
   useMutation,
@@ -28,30 +30,30 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 
 const labels: Record<(typeof CUSTOM_AGENT_STEPS)[number], string> = {
-  outcome: "Outcome & owner",
-  identity: "Identity",
-  instructions: "Instructions",
-  knowledge: "Knowledge",
-  tools: "Tools & apps",
-  authority: "Authority",
-  memory: "Memory",
-  collaboration: "Collaboration",
-  runtime: "Runtime",
-  test: "Test",
-  review: "Review changes",
-  publish: "Publish",
-  monitor: "Monitor & improve",
+  outcome: "customAgent.stepOutcome",
+  identity: "customAgent.stepIdentity",
+  instructions: "customAgent.stepInstructions",
+  knowledge: "customAgent.stepKnowledge",
+  tools: "customAgent.stepTools",
+  authority: "customAgent.stepAuthority",
+  memory: "customAgent.stepMemory",
+  collaboration: "customAgent.stepCollaboration",
+  runtime: "customAgent.stepRuntime",
+  test: "customAgent.stepTest",
+  review: "customAgent.stepReview",
+  publish: "customAgent.stepPublish",
+  monitor: "customAgent.stepMonitor",
 };
 const operationLabels: Record<
   AgentAuthoringContent["capabilities"][number]["operation"],
   string
 > = {
-  read_approved_knowledge: "Read approved knowledge",
-  create_internal_draft: "Create internal drafts",
-  create_task: "Create tasks",
-  external_send: "Send externally",
-  spend: "Spend money",
-  change_permissions: "Change permissions",
+  read_approved_knowledge: "customAgent.readKnowledge",
+  create_internal_draft: "customAgent.createInternalDrafts",
+  create_task: "customAgent.createTasks",
+  external_send: "customAgent.sendExternally",
+  spend: "customAgent.spendMoney",
+  change_permissions: "customAgent.changePermissions",
 };
 
 function DraftStart({
@@ -63,6 +65,7 @@ function DraftStart({
   principal: string;
   enabled: boolean;
 }) {
+  const { t } = useTranslation("experience");
   const navigate = useNavigate(),
     [search] = useSearchParams(),
     alive = useRef(true);
@@ -139,25 +142,17 @@ function DraftStart({
       if (alive.current && authority.confirmed(draft)) navigate(draft.kind === "hire" ? `/agents/hire/drafts/${draft.id}/${draft.step}` : `/agents/custom/${draft.id}/${draft.step}`);
     },
   });
-  if (!authority.readReady) return <p role={authority.failed ? "alert" : "status"}>Checking current access to saved drafts…</p>;
-  if (drafts.isFetching && !drafts.isFetchingNextPage) return <p role="status">Loading saved drafts…</p>;
+  if (!authority.readReady) return <p role={authority.failed ? "alert" : "status"}>{t("customAgent.checkingSavedAccess")}</p>;
+  if (drafts.isFetching && !drafts.isFetchingNextPage) return <p role="status">{t("customAgent.loadingDrafts")}</p>;
   return (
     <div className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
       <Link
         to="/advanced"
         className="inline-flex min-h-11 items-center underline"
-      >
-        Advanced
-      </Link>
-      <h1 className="text-2xl font-semibold">Create custom agent</h1>
-      <p>
-        Define its responsibility, limits and accountable owner. Save a draft
-        and return when you are ready to review it.
-      </p>
-      <p className="text-muted-foreground">
-        Saved drafts do not change the active agent. Representative testing and
-        publishing are not qualified yet.
-      </p>
+      >{t("customAgent.advanced")}</Link>
+      <h1 className="text-2xl font-semibold">{t("customAgent.title")}</h1>
+      <p>{t("customAgent.intro")}</p>
+      <p className="text-muted-foreground">{t("customAgent.draftBoundary")}</p>
       {enabled ? (
         <Button
           className="min-h-11"
@@ -165,42 +160,33 @@ function DraftStart({
           onClick={() => create.mutate()}
         >
           {create.isPending
-            ? "Creating draft…"
+            ? t("customAgent.creating")
             : create.isError
-              ? "Retry the same draft request"
+              ? t("customAgent.retryCreate")
               : search.get("agentId")
-                ? "Create revision draft"
-                : "Start a draft"}
+                ? t("customAgent.createRevision")
+                : t("customAgent.startDraft")}
         </Button>
       ) : (
-        <p role="status">
-          New authoring is unavailable. You can still read an existing draft.
-        </p>
+        <p role="status">{t("customAgent.newUnavailable")}</p>
       )}
       {create.isError && (
-        <p role="alert">
-          The draft request was not acknowledged. Retry to check whether it was
-          already saved.
-        </p>
+        <p role="alert">{t("customAgent.createUnknown")}</p>
       )}
       <section aria-labelledby="saved-drafts">
-        <h2 id="saved-drafts" className="text-lg font-semibold">
-          Your saved drafts
-        </h2>
+        <h2 id="saved-drafts" className="text-lg font-semibold">{t("customAgent.savedDrafts")}</h2>
         {(drafts.isPending || checkingAccess) && (
-          <p role="status">Loading saved drafts…</p>
+          <p role="status">{t("customAgent.loadingDrafts")}</p>
         )}
         {drafts.isError && (
           <>
-            <p role="alert">Saved drafts could not be loaded.</p>
-            <Button className="min-h-11" onClick={() => void drafts.refetch()}>
-              Try again
-            </Button>
+            <p role="alert">{t("customAgent.draftsLoadFailed")}</p>
+            <Button className="min-h-11" onClick={() => void drafts.refetch()}>{t("customAgent.tryAgain")}</Button>
           </>
         )}
         {!checkingAccess &&
           drafts.data?.pages[0]?.items.length === 0 &&
-          !drafts.hasNextPage && <p>No saved drafts yet.</p>}
+          !drafts.hasNextPage && <p>{t("customAgent.noDrafts")}</p>}
         <ul>
           {!checkingAccess &&
             drafts.data?.pages
@@ -211,7 +197,7 @@ function DraftStart({
                     className="inline-flex min-h-11 items-center underline"
                     to={draft.kind === "hire" ? `/agents/hire/drafts/${draft.id}/${draft.step}` : `/agents/custom/${draft.id}/${draft.step}`}
                   >
-                    {draft.name || "Untitled agent"} · Draft v{draft.version}
+                    {t("customAgent.savedVersion", { name: draft.name || t("customAgent.untitled"), version: draft.version })}
                   </Link>
                 </li>
               ))}
@@ -221,9 +207,7 @@ function DraftStart({
             className="min-h-11"
             disabled={drafts.isFetchingNextPage}
             onClick={() => void drafts.fetchNextPage()}
-          >
-            Load older drafts
-          </Button>
+          >{t("customAgent.loadOlder")}</Button>
         )}
       </section>
     </div>
@@ -241,6 +225,7 @@ function DraftEditor({
   id: string;
   enabled: boolean;
 }) {
+  const { t } = useTranslation("experience");
   const navigate = useNavigate(),
     { screen } = useParams(),
     client = useQueryClient();
@@ -253,6 +238,15 @@ function DraftEditor({
     securityEpoch = useRef(0);
   const [content, setContent] = useState<AgentAuthoringContent | null>(null),
     [receipt, setReceipt] = useState<AgentAuthoringDraftView | null>(null);
+  const [validationFields, setValidationFields] = useState<string[]>([]);
+  const validationSummary = useRef<HTMLParagraphElement>(null);
+  useEffect(() => {
+    if (validationFields.length > 0) validationSummary.current?.focus();
+  }, [validationFields]);
+  function validationProps(key: string) {
+    const invalid = validationFields.includes(key) || validationFields.includes("customAgent.draftDetails");
+    return { "aria-invalid": invalid || undefined, "aria-describedby": invalid ? "custom-agent-validation" : undefined };
+  }
   const [saved, setSaved] = useState(false),
     [reauthorizing, setReauthorizing] = useState(false),
     [accessLost, setAccessLost] = useState(false),
@@ -428,12 +422,27 @@ function DraftEditor({
   });
   function persist(destination: string, nextStep = step) {
     if (!authority.canWrite() || securityPending.current || !content || !receipt) return;
+    const parsed = agentAuthoringContentSchema.safeParse(structuredClone(content));
+    if (!parsed.success) {
+      const fields: Record<string, string> = {
+        outcome: "customAgent.responsibility", ownerUserId: "customAgent.accountableOwner",
+        name: "customAgent.agentName", description: "customAgent.customerDescription",
+        internalDescription: "customAgent.internalDescription", instructions: "customAgent.stepInstructions",
+        knowledgeDocumentIds: "customAgent.sources", capabilities: "customAgent.stepAuthority",
+        memory: "customAgent.stepMemory", collaboration: "customAgent.stepCollaboration",
+        runtimeBindingId: "customAgent.runtimeSelection", scenarios: "customAgent.scenario",
+      };
+      setValidationFields([...new Set(parsed.error.issues.map((issue) =>
+        fields[String(issue.path[0])] ?? "customAgent.draftDetails"))]);
+      return;
+    }
+    setValidationFields([]);
     attempt.current ??= {
       input: {
         requestId: crypto.randomUUID(),
         expectedVersion: receipt.version,
         step: nextStep,
-        content: agentAuthoringContentSchema.parse(structuredClone(content)),
+        content: parsed.data,
       },
       destination,
     };
@@ -445,6 +454,7 @@ function DraftEditor({
   ) {
     setContent((current) => current && { ...current, [key]: value });
     setSaved(false);
+    setValidationFields([]);
   }
   const locked =
     !enabled || !authority.writeReady ||
@@ -455,50 +465,38 @@ function DraftEditor({
   if (accessLost)
     return (
       <div className="space-y-4 p-6">
-        <p role="alert">
-          Access to this draft changed. Its content has been hidden.
-        </p>
+        <p role="alert">{t("customAgent.accessChanged")}</p>
         <Link
           className="inline-flex min-h-11 items-center underline"
           to="/agents/custom"
-        >
-          Your drafts
-        </Link>
+        >{t("customAgent.yourDrafts")}</Link>
       </div>
     );
   if (reauthorizing || !authority.readReady)
-    return <p role="status">Checking current access to this draft…</p>;
+    return <p role="status">{t("customAgent.checkingDraftAccess")}</p>;
   if (draft.isPending || draft.isFetching)
-    return <p role="status">Loading your saved agent draft…</p>;
+    return <p role="status">{t("customAgent.loadingDraft")}</p>;
   if (draft.isError)
     return (
       <div className="space-y-4 p-6">
-        <p role="alert">
-          This draft could not be loaded. Check your account and company access.
-        </p>
-        <Button className="min-h-11" onClick={() => void draft.refetch()}>
-          Try again
-        </Button>
+        <p role="alert">{t("customAgent.loadFailed")}</p>
+        <Button className="min-h-11" onClick={() => void draft.refetch()}>{t("customAgent.tryAgain")}</Button>
         <Link
           className="inline-flex min-h-11 items-center underline"
           to="/agents/custom"
-        >
-          Your drafts
-        </Link>
+        >{t("customAgent.yourDrafts")}</Link>
       </div>
     );
-  if (receipt?.kind === "hire") return <p>This is a Hire Agent setup. <Link className="inline-flex min-h-11 items-center underline" to={`/agents/hire/drafts/${receipt.id}/${receipt.step}`}>Open saved setup</Link></p>;
+  if (receipt?.kind === "hire") return <p>{t("customAgent.hireSetup")} {" "}<Link className="inline-flex min-h-11 items-center underline" to={`/agents/hire/drafts/${receipt.id}/${receipt.step}`}>{t("customAgent.openSavedSetup")}</Link></p>;
   if (!receipt?.content || !content)
     return (
       <div className="space-y-4 p-6">
-        <h1>Draft discarded</h1>
-        <p>The draft content has been removed.</p>
+        <h1>{t("customAgent.discarded")}</h1>
+        <p>{t("customAgent.contentRemoved")}</p>
         <Link
           className="inline-flex min-h-11 items-center underline"
           to="/agents/custom"
-        >
-          Your drafts
-        </Link>
+        >{t("customAgent.yourDrafts")}</Link>
       </div>
     );
   const index = CUSTOM_AGENT_STEPS.indexOf(step),
@@ -508,36 +506,25 @@ function DraftEditor({
       <Link
         className="inline-flex min-h-11 items-center underline"
         to="/agents/custom"
-      >
-        Your drafts
-      </Link>
+      >{t("customAgent.yourDrafts")}</Link>
       <p className="text-sm text-muted-foreground">
-        Custom agent · Draft v{receipt.version} · {index + 1} of{" "}
-        {CUSTOM_AGENT_STEPS.length}
+        {t("customAgent.progress", { version: receipt.version, step: index + 1, total: CUSTOM_AGENT_STEPS.length })}
       </p>
       <h1 ref={heading} tabIndex={-1} className="text-2xl font-semibold">
-        {labels[step]}
+        {t(labels[step])}
       </h1>
-      <p>
-        Changes remain in this draft until an identified version is reviewed and
-        published.
-      </p>
+      <p>{t("customAgent.untilPublication")}</p>
       {!enabled && (
-        <p role="status">
-          Authoring is currently unavailable. Your saved draft is readable and
-          can be discarded.
-        </p>
+        <p role="status">{t("customAgent.unavailable")}</p>
       )}
       {receipt.agentId && (
         <Link
           className="inline-flex min-h-11 items-center underline"
           to={`/agents/${receipt.agentId}`}
-        >
-          Review the current agent
-        </Link>
+        >{t("customAgent.currentAgent")}</Link>
       )}
       <nav
-        aria-label="Agent authoring sections"
+        aria-label={t("customAgent.sections")}
         className="flex flex-wrap gap-2"
       >
         {CUSTOM_AGENT_STEPS.map((item) => (
@@ -549,29 +536,27 @@ function DraftEditor({
             aria-current={item === step ? "step" : undefined}
             onClick={() => persist(`/agents/custom/${id}/${item}`, item)}
           >
-            {labels[item]}
+            {t(labels[item])}
           </Button>
         ))}
       </nav>
       <fieldset disabled={locked} className="space-y-4">
         {step === "outcome" && (
           <>
-            <label className="block space-y-2">
-              What should this agent be responsible for?
-              <Textarea
+            <label className="block space-y-2">{t("customAgent.responsibilityQuestion")}<Textarea
+                {...validationProps("customAgent.responsibility")}
                 value={content.outcome}
                 maxLength={2000}
                 onChange={(e) => change("outcome", e.target.value)}
               />
             </label>
-            <label className="block space-y-2">
-              Accountable owner
-              <select
+            <label className="block space-y-2">{t("customAgent.accountableOwner")}<select
                 className="min-h-11 w-full rounded-md border bg-background p-2"
+                {...validationProps("customAgent.accountableOwner")}
                 value={content.ownerUserId}
                 onChange={(e) => change("ownerUserId", e.target.value)}
               >
-                <option value="">Choose an owner</option>
+                <option value="">{t("customAgent.chooseOwner")}</option>
                 {options.data?.owners.map((owner) => (
                   <option key={owner.id} value={owner.id}>
                     {owner.name}
@@ -587,12 +572,13 @@ function DraftEditor({
               (key) => (
                 <label key={key} className="block space-y-2">
                   {key === "name"
-                    ? "Agent name"
+                    ? t("customAgent.agentName")
                     : key === "description"
-                      ? "Customer-facing description"
-                      : "Internal description (optional)"}
+                      ? t("customAgent.customerDescription")
+                      : t("customAgent.internalDescription")}
                   <Input
                     className="min-h-11"
+                    {...validationProps(key === "name" ? "customAgent.agentName" : key === "description" ? "customAgent.customerDescription" : "customAgent.internalDescription")}
                     value={content[key]}
                     maxLength={
                       key === "name" ? 200 : key === "description" ? 1000 : 2000
@@ -614,17 +600,18 @@ function DraftEditor({
               <label key={key} className="block space-y-2">
                 {
                   {
-                    purpose: "Purpose",
-                    responsibilities: "Responsibilities",
-                    prohibited: "What it should not do",
+                    purpose: t("customAgent.purpose"),
+                    responsibilities: t("customAgent.responsibilities"),
+                    prohibited: t("customAgent.prohibited"),
                     missingInformation:
-                      "When information is missing or ambiguous",
-                    escalation: "Escalation and handoff",
-                    communication: "Communication style (optional)",
+                      t("customAgent.missingInformation"),
+                    escalation: t("customAgent.escalation"),
+                    communication: t("customAgent.communication"),
                   }[key]
                 }
                 <Textarea
-                  value={content.instructions[key]}
+                  {...validationProps("customAgent.stepInstructions")}
+                value={content.instructions[key]}
                   maxLength={
                     key === "responsibilities"
                       ? 6000
@@ -647,15 +634,9 @@ function DraftEditor({
         )}
         {step === "knowledge" && (
           <>
-            <p>
-              Choose only approved sources needed for the responsibility. This
-              selection does not grant access.
-            </p>
+            <p>{t("customAgent.sourceBoundary")}</p>
             {options.data?.knowledge.length === 0 && (
-              <p>
-                No approved company sources are available. Review Company
-                knowledge before testing.
-              </p>
+              <p>{t("customAgent.noSources")}</p>
             )}
             {options.data?.knowledge.map((source) => (
               <label
@@ -664,6 +645,7 @@ function DraftEditor({
               >
                 <input
                   type="checkbox"
+                  {...validationProps("customAgent.sources")}
                   checked={content.knowledgeDocumentIds.includes(source.id)}
                   onChange={(e) =>
                     change(
@@ -676,23 +658,18 @@ function DraftEditor({
                     )
                   }
                 />
-                {source.title} · Read approved version · {source.sensitivity}
+                {t("customAgent.sourceVersion", { title: source.title, sensitivity: source.sensitivity })}
               </label>
             ))}
             <Link
               className="inline-flex min-h-11 items-center underline"
               to="/foundation"
-            >
-              Review company knowledge
-            </Link>
+            >{t("customAgent.reviewKnowledge")}</Link>
           </>
         )}
         {(step === "tools" || step === "authority") && (
           <>
-            <p>
-              Propose a bounded capability policy. Publishing must independently
-              validate each operation and its resource scope.
-            </p>
+            <p>{t("customAgent.capabilityBoundary")}</p>
             {Object.entries(operationLabels).map(([raw, label]) => {
               const operation = raw as keyof typeof operationLabels,
                 selected =
@@ -701,10 +678,11 @@ function DraftEditor({
                   )?.autonomy ?? "not_allowed";
               return (
                 <label key={operation} className="block space-y-2">
-                  {label}
+                  {t(label)}
                   <select
                     className="min-h-11 w-full rounded-md border bg-background p-2"
-                    value={selected}
+                    {...validationProps("customAgent.stepAuthority")}
+                value={selected}
                     onChange={(e) =>
                       change("capabilities", [
                         ...content.capabilities.filter(
@@ -720,16 +698,16 @@ function DraftEditor({
                       ])
                     }
                   >
-                    <option value="not_allowed">Not allowed</option>
+                    <option value="not_allowed">{t("customAgent.notAllowed")}</option>
                     {operation !== "change_permissions" && (
-                      <option value="ask_first">Asks before</option>
+                      <option value="ask_first">{t("customAgent.asksBefore")}</option>
                     )}
                     {[
                       "read_approved_knowledge",
                       "create_internal_draft",
                       "create_task",
                     ].includes(operation) && (
-                      <option value="automatic">Can do automatically</option>
+                      <option value="automatic">{t("customAgent.automatic")}</option>
                     )}
                   </select>
                 </label>
@@ -739,10 +717,9 @@ function DraftEditor({
         )}
         {step === "memory" && (
           <>
-            <label className="block space-y-2">
-              Memory preference
-              <select
+            <label className="block space-y-2">{t("customAgent.memoryPreference")}<select
                 className="min-h-11 w-full rounded-md border bg-background p-2"
+                {...validationProps("customAgent.stepMemory")}
                 value={content.memory}
                 onChange={(e) =>
                   change(
@@ -751,62 +728,43 @@ function DraftEditor({
                   )
                 }
               >
-                <option value="none">No persistent personalization</option>
-                <option value="approved_work_preferences">
-                  Remember approved work preferences and context
-                </option>
-                <option value="approved_company_knowledge">
-                  Use approved company knowledge
-                </option>
+                <option value="none">{t("customAgent.noPersonalization")}</option>
+                <option value="approved_work_preferences">{t("customAgent.rememberPreferences")}</option>
+                <option value="approved_company_knowledge">{t("customAgent.companyKnowledge")}</option>
               </select>
             </label>
-            <p>
-              These are proposed settings. Retention, correction, reset and
-              deletion scope must be confirmed before publication.
-            </p>
+            <p>{t("customAgent.memoryBoundary")}</p>
           </>
         )}
         {step === "collaboration" && (
-          <p>
-            No delegation is configured. Delegation remains unavailable until a
-            bounded policy, cancellation and verification are qualified.
-          </p>
+          <p>{t("customAgent.delegationBoundary")}</p>
         )}
         {step === "runtime" && (
           <>
-            <p>
-              A current binding does not qualify the draft's changed behavior.
-              Runtime changes require fresh evaluation.
-            </p>
-            <label className="block space-y-2">
-              Runtime selection
-              <select
+            <p>{t("customAgent.runtimeBoundary")}</p>
+            <label className="block space-y-2">{t("customAgent.runtimeSelection")}<select
                 className="min-h-11 w-full rounded-md border bg-background p-2"
+                {...validationProps("customAgent.runtimeSelection")}
                 value={content.runtimeBindingId ?? ""}
                 onChange={(e) =>
                   change("runtimeBindingId", e.target.value || null)
                 }
               >
-                <option value="">
-                  Choose a qualified runtime before testing
-                </option>
+                <option value="">{t("customAgent.chooseRuntime")}</option>
                 {options.data?.runtimes.map((runtime) => (
-                  <option key={runtime.id} value={runtime.id}>
-                    Current agent runtime binding
-                  </option>
+                  <option key={runtime.id} value={runtime.id}>{t("customAgent.currentRuntime")}</option>
                 ))}
               </select>
             </label>
             {options.data?.runtimes.length === 0 && (
-              <p>No runtime binding is available for this draft.</p>
+              <p>{t("customAgent.noRuntime")}</p>
             )}
           </>
         )}
         {step === "test" && (
           <>
-            <label className="block space-y-2">
-              Representative scenario
-              <Textarea
+            <label className="block space-y-2">{t("customAgent.scenario")}<Textarea
+                {...validationProps("customAgent.scenario")}
                 value={content.scenarios[0] ?? ""}
                 maxLength={2000}
                 onChange={(e) =>
@@ -814,117 +772,94 @@ function DraftEditor({
                 }
               />
             </label>
-            <p>
-              No representative test has been run. Execution and independent
-              result verification for this draft are not qualified yet.
-            </p>
+            <p>{t("customAgent.testBoundary")}</p>
           </>
         )}
         {step === "review" && (
           <>
-            <h2 className="text-lg font-semibold">Check your agent</h2>
+            <h2 className="text-lg font-semibold">{t("customAgent.checkAgent")}</h2>
             <dl className="space-y-2">
-              <dt>Name</dt>
-              <dd>{content.name || "Not set"}</dd>
-              <dt>Responsibility</dt>
+              <dt>{t("customAgent.name")}</dt>
+              <dd>{content.name || t("customAgent.notSet")}</dd>
+              <dt>{t("customAgent.responsibility")}</dt>
               <dd className="whitespace-pre-wrap">
-                {content.outcome || "Not set"}
+                {content.outcome || t("customAgent.notSet")}
               </dd>
-              <dt>Instructions</dt>
+              <dt>{t("customAgent.stepInstructions")}</dt>
               <dd className="whitespace-pre-wrap">
-                {content.instructions.responsibilities || "Not set"}
+                {content.instructions.responsibilities || t("customAgent.notSet")}
               </dd>
-              <dt>Sources</dt>
+              <dt>{t("customAgent.sources")}</dt>
               <dd>
-                {content.knowledgeDocumentIds.length} approved source selections
+                {t("customAgent.sourceCount", { count: content.knowledgeDocumentIds.length })}
               </dd>
-              <dt>Memory</dt>
+              <dt>{t("customAgent.stepMemory")}</dt>
               <dd>
                 {content.memory === "none"
-                  ? "No persistent personalization"
-                  : "Proposed approved context"}
+                  ? t("customAgent.noPersonalization")
+                  : t("customAgent.proposedContext")}
               </dd>
-              <dt>Delegation</dt>
-              <dd>None</dd>
-              <dt>Audience</dt>
-              <dd>In-app</dd>
+              <dt>{t("customAgent.delegation")}</dt>
+              <dd>{t("customAgent.none")}</dd>
+              <dt>{t("customAgent.audience")}</dt>
+              <dd>{t("customAgent.inApp")}</dd>
             </dl>
           </>
         )}
         {step === "publish" && (
           <>
-            <p>
-              Publish is blocked until current runtime, representative tests,
-              policy mapping and human approval are qualified.
-            </p>
-            <Button className="min-h-11" disabled>
-              Publish agent
-            </Button>
+            <p>{t("customAgent.publishBoundary")}</p>
+            <Button className="min-h-11" disabled>{t("customAgent.publishAgent")}</Button>
           </>
         )}
         {step === "monitor" && (
-          <p>
-            This draft has no active version or outcomes. After qualified
-            publication, monitor work and requests in the agent overview and
-            Needs You.
-          </p>
+          <p>{t("customAgent.monitorBoundary")}</p>
         )}
       </fieldset>
       {options.isError && (
         <>
-          <p role="alert">
-            Available owners, knowledge and runtimes could not be loaded.
-          </p>
-          <Button className="min-h-11" onClick={() => void options.refetch()}>
-            Retry available resources
-          </Button>
+          <p role="alert">{t("customAgent.resourcesFailed")}</p>
+          <Button className="min-h-11" onClick={() => void options.refetch()}>{t("customAgent.retryResources")}</Button>
         </>
       )}
       {review.isPending && review.fetchStatus === "fetching" && (
-        <p role="status">Checking the saved draft…</p>
+        <p role="status">{t("customAgent.checkingSaved")}</p>
       )}
       {review.isError && (
         <>
-          <p role="alert">Saved draft readiness could not be checked.</p>
-          <Button className="min-h-11" onClick={() => void review.refetch()}>
-            Retry readiness
-          </Button>
+          <p role="alert">{t("customAgent.readinessFailed")}</p>
+          <Button className="min-h-11" onClick={() => void review.refetch()}>{t("customAgent.retryReadiness")}</Button>
         </>
       )}
       {review.data && (
-        <section aria-label="Saved draft readiness" className="space-y-2">
-          <h2 className="text-lg font-semibold">Saved draft blockers</h2>
+        <section aria-label={t("customAgent.readiness")} className="space-y-2">
+          <h2 className="text-lg font-semibold">{t("customAgent.blockers")}</h2>
           <ul className="list-disc space-y-2 pl-5">
             {review.data.blockers.map((blocker) => (
-              <li key={blocker.code}>{blocker.message}</li>
+              <li key={blocker.code}>{t(agentAuthoringBlockerKey(blocker.code))}</li>
             ))}
           </ul>
         </section>
       )}
+      {validationFields.length > 0 && (
+        <p id="custom-agent-validation" ref={validationSummary} tabIndex={-1} role="alert">{t("customAgent.invalidFields", { fields: validationFields.map((key) => t(key)).join(", ") })}</p>
+      )}
       {saved && (
-        <p role="status">Draft saved. The active agent has not changed.</p>
+        <p role="status">{t("customAgent.saved")}</p>
       )}
       {save.isError && (
         <div role="alert" className="space-y-2">
           {attempt.current ? (
             <>
-              <p>
-                The save was not acknowledged. Retry the same saved request
-                before changing this draft.
-              </p>
+              <p>{t("customAgent.saveUnknown")}</p>
               <Button
                 className="min-h-11"
                 disabled={save.isPending}
                 onClick={() => attempt.current && save.mutate(attempt.current)}
-              >
-                Retry the same save
-              </Button>
+              >{t("customAgent.retrySave")}</Button>
               {save.error instanceof ApiError && save.error.status === 409 && (
                 <>
-                  <p>
-                    The saved version may have changed. Reloading replaces your
-                    unsaved edits with the saved draft.
-                  </p>
+                  <p>{t("customAgent.reloadWarning")}</p>
                   <Button
                     className="min-h-11"
                     onClick={() =>
@@ -937,36 +872,28 @@ function DraftEditor({
                         }
                       })
                     }
-                  >
-                    Reload saved draft
-                  </Button>
+                  >{t("customAgent.reload")}</Button>
                 </>
               )}
             </>
           ) : (
-            <p>
-              The draft was not saved. Check the owner, source and runtime
-              selections before saving again.
-            </p>
+            <p>{t("customAgent.saveFailed")}</p>
           )}
         </div>
       )}
       {discard.isError && (
         <div role="alert">
-          <p>Discard was not acknowledged.</p>
-          <Button className="min-h-11" onClick={() => discard.mutate()}>
-            Retry the same discard
-          </Button>
+          <p>{t("customAgent.discardUnknown")}</p>
+          <Button className="min-h-11" onClick={() => discard.mutate()}>{t("customAgent.retryDiscard")}</Button>
         </div>
       )}
-      <div className="flex flex-wrap gap-3">
+      <div className="flex flex-wrap items-center justify-between gap-3">
+        <div className="flex flex-wrap items-center gap-3">
         <Button
           className="min-h-11"
           disabled={locked}
           onClick={() => persist("/agents/custom")}
-        >
-          Save & exit
-        </Button>
+        >{t("customAgent.saveExit")}</Button>
         {index > 0 && (
           <Button
             variant="outline"
@@ -978,18 +905,7 @@ function DraftEditor({
                 CUSTOM_AGENT_STEPS[index - 1],
               )
             }
-          >
-            Back
-          </Button>
-        )}
-        {next && (
-          <Button
-            className="min-h-11"
-            disabled={locked}
-            onClick={() => persist(`/agents/custom/${id}/${next}`, next)}
-          >
-            Continue
-          </Button>
+          >{t("customAgent.back")}</Button>
         )}
         <Button
           variant="outline"
@@ -998,15 +914,22 @@ function DraftEditor({
             !authority.readReady || save.isPending || Boolean(attempt.current) || discard.isPending
           }
           onClick={() => discard.mutate()}
-        >
-          Discard draft
-        </Button>
+        >{t("customAgent.discard")}</Button>
+        </div>
+        {next && (
+          <Button
+            className="min-h-11"
+            disabled={locked}
+            onClick={() => persist(`/agents/custom/${id}/${next}`, next)}
+          >{t("customAgent.continue")}</Button>
+        )}
       </div>
     </div>
   );
 }
 
 export function CustomAgent() {
+  const { t } = useTranslation("experience");
   const { selectedCompanyId: company } = useCompany(),
     { userId: principal } = useV9CurrentAccount(),
     { draftId } = useParams();
@@ -1019,9 +942,7 @@ export function CustomAgent() {
   );
   if (!company || !principal)
     return (
-      <p role="status">
-        Choose a company and sign in with a verified account to author an agent.
-      </p>
+      <p role="status">{t("customAgent.accountRequired")}</p>
     );
   return draftId ? (
     <DraftEditor

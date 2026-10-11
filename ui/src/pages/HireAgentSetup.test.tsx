@@ -392,3 +392,15 @@ it("changes the setup language while preserving the original unsaved input and m
   expect(container.querySelector("h1")?.textContent).toBe("Owner & knowledge");
   expect(container.querySelector("input")?.value).toBe("PRIVATE unchanged native name");
 });
+
+
+it("translates current native blockers while keeping representative testing and publication blocked", async () => {
+  vi.spyOn(agentAuthoringApi, "get").mockResolvedValue(draft);
+  await mount("hire_review");
+  await vi.waitFor(() => expect(container.textContent).toContain("independently verified"));
+  await act(async () => { await i18n.changeLanguage("da"); });
+  expect(container.textContent).toContain("Repræsentativ kørsel og uafhængigt verificerede resultater");
+  expect(container.textContent).not.toContain("independently verified");
+  const hire = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Ansæt agent");
+  expect(hire).toBeDefined(); expect(hire!.disabled).toBe(true);
+});

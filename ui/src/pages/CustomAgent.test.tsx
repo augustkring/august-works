@@ -16,6 +16,7 @@ import { instanceSettingsApi } from "../api/instanceSettings";
 import { ApiError } from "../api/client";
 import { CustomAgent } from "./CustomAgent";
 import { queryKeys } from "../lib/queryKeys";
+import { i18n } from "../i18n";
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
 const context = vi.hoisted(() => ({
@@ -66,6 +67,7 @@ afterEach(async () => {
   client?.clear();
   context.principal = "author";
   context.live = null;
+  await i18n.changeLanguage("en");
   vi.restoreAllMocks();
 });
 async function render(start = false) {
@@ -359,4 +361,57 @@ it("keeps a late save unconfirmed after a completed account recheck and retries 
   await click("Retry the same save");
   expect(save.mock.calls[1]![3]).toEqual(input);
   await vi.waitFor(() => expect(container.textContent).toContain("Saved drafts destination"));
+});
+
+
+it("changes Custom Agent language while preserving unsaved native fields without sending a command", async () => {
+  const get = vi.spyOn(agentAuthoringApi, "get").mockResolvedValue(draft);
+  const save = vi.spyOn(agentAuthoringApi, "save");
+  const discard = vi.spyOn(agentAuthoringApi, "discard");
+  await mount();
+  const input = container.querySelector("input")!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "PRIVATE unchanged custom name");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+    await i18n.changeLanguage("da");
+  });
+  await vi.waitFor(() => expect(container.querySelector("h1")?.textContent).toBe("Identitet"));
+  expect(container.querySelector("nav")?.getAttribute("aria-label")).toBe("Trin i agentredigeringen");
+  expect(container.querySelector("input")?.value).toBe("PRIVATE unchanged custom name");
+  expect(container.textContent).toContain("Beskrivelse til kunder");
+  expect(container.textContent).toContain("Tilpasset agent · Udkast v1 · 2 af 13");
+  expect(container.textContent).toContain("Gem og afslut");
+  expect(container.textContent).not.toContain("Customer-facing description");
+  expect(get).toHaveBeenCalledOnce(); expect(save).not.toHaveBeenCalled(); expect(discard).not.toHaveBeenCalled();
+  await act(async () => { await i18n.changeLanguage("en"); });
+  expect(container.querySelector("h1")?.textContent).toBe("Identity");
+  expect(container.querySelector("input")?.value).toBe("PRIVATE unchanged custom name");
+});
+
+
+it("announces invalid draft fields in the selected language and allows correction without freezing or sending an invalid command", async () => {
+  vi.spyOn(agentAuthoringApi, "get").mockResolvedValue(draft);
+  const save = vi.spyOn(agentAuthoringApi, "save").mockResolvedValue({ ...draft, version: 2 });
+  await mount();
+  await act(async () => { await i18n.changeLanguage("da"); });
+  const input = container.querySelector("input")!;
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Invalid" + String.fromCharCode(0));
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  const saveButton = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Gem og afslut")!;
+  await act(async () => saveButton.click());
+  expect(save).not.toHaveBeenCalled();
+  expect(container.querySelector('[role="alert"]')?.textContent).toContain("Gennemgå Agentnavn, før du gemmer");
+  expect(input.disabled).toBe(false);
+  expect(input.getAttribute("aria-invalid")).toBe("true");
+  expect(input.getAttribute("aria-describedby")).toBe("custom-agent-validation");
+  expect(document.activeElement).toBe(container.querySelector("#custom-agent-validation"));
+  await act(async () => {
+    Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, "Corrected native name");
+    input.dispatchEvent(new Event("input", { bubbles: true }));
+  });
+  await act(async () => saveButton.click());
+  await vi.waitFor(() => expect(save).toHaveBeenCalledOnce());
+  expect(save.mock.calls[0]![3].content.name).toBe("Corrected native name");
 });

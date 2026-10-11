@@ -17,7 +17,8 @@ for (const kind of ["custom", "hire"] as const) {
       const originalFlags = await json(await request.get("/api/instance/settings/experimental"));
       const flags = { ...originalFlags, ...Object.fromEntries(V5_FEATURE_KEYS.map((key) => [key, true])),
         enableFoundationV1: true, enableContextEngineV1: true, saas_deployment_profile_v6: true,
-        billing_v6: true, agent_packages_v7: true, hire_agent_v9: true };
+        billing_v6: true, agent_packages_v7: true, hire_agent_v9: true,
+        experience_projection_v9: true, progressive_shell_v9: true };
       const id = "10000000-0000-4000-8000-000000000001";
       const packageId = "10000000-0000-4000-8000-000000000002";
       const draft = agentAuthoringDraftViewSchema.parse({ id, companyId: company.id, agentId: null,
@@ -65,12 +66,23 @@ for (const kind of ["custom", "hire"] as const) {
       await expect(name).toHaveValue("PRIVATE unsaved account draft");
       await expect(heading).toBeFocused();
       expect(reads).toBeGreaterThan(priorReads); expect(writes).toBe(0);
+      const readsBeforeLanguageChange = reads;
+      await page.getByRole("combobox", { name: "Language", exact: true }).selectOption("da");
+      await expect(page.locator("html")).toHaveAttribute("lang", "da");
+      await expect(page.getByRole("heading", { level: 1, name: kind === "custom" ? "Identitet" : "Ejer og viden", exact: true })).toBeVisible();
+      await expect(page.getByRole("textbox", { name: kind === "custom" ? "Agentnavn" : "Agentens navn", exact: true })).toHaveValue("PRIVATE unsaved account draft");
+      await expect(page.getByRole("button", { name: "Gem og afslut", exact: true })).toBeEnabled();
+      expect(reads).toBe(readsBeforeLanguageChange); expect(writes).toBe(0);
       await page.setViewportSize({ width: 390, height: 844 });
       await page.addScriptTag({ path: axePath });
       expect(await page.evaluate(async () => (await (window as unknown as {
         axe: { run(scope: string): Promise<{ violations: unknown[] }> };
       }).axe.run("main")).violations)).toEqual([]);
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+      await page.getByRole("combobox", { name: "Sprog", exact: true }).selectOption("en");
+      await expect(page.locator("html")).toHaveAttribute("lang", "en");
+      await expect(name).toHaveValue("PRIVATE unsaved account draft");
+      expect(reads).toBe(readsBeforeLanguageChange); expect(writes).toBe(0);
       const base = `/api/companies/${company.id}`;
       expect(await json(await request.get(`${base}/agents`))).toEqual([]);
       expect(await json(await request.get(`${base}/issues`))).toEqual([]);

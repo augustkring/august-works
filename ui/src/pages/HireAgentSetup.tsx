@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useTranslation } from "@/i18n";
+import { agentAuthoringBlockerKey } from "@/lib/agent-authoring-copy";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   HIRE_AGENT_STEPS,
@@ -237,7 +238,7 @@ export function HireAgentSetup({
     if (!authority.canWrite() || !receipt || !content || !enabled || checking.current) return;
     const parsed = agentAuthoringContentSchema.safeParse(content);
     if (!parsed.success) {
-      setNotice(parsed.error.issues[0]?.message ?? "hireSetup.reviewFields");
+      setNotice("hireSetup.reviewFields");
       return;
     }
     attempt.current ??= {
@@ -568,7 +569,7 @@ export function HireAgentSetup({
           {review.data && (
             <ul>
               {review.data.blockers.map((blocker) => (
-                <li key={blocker.code}>{blocker.message}</li>
+                <li key={blocker.code}>{t(agentAuthoringBlockerKey(blocker.code))}</li>
               ))}
             </ul>
           )}
