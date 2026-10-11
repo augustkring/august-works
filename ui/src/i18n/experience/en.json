@@ -378,6 +378,7 @@
       "confirm": "Confirm decision",
       "checkReceipt": "Check original receipt",
       "providerSetup": "Continue to provider sign-in",
+      "reconnect": "Reconnect this personal account",
       "deferAgentAccess": "No Agent receives access during setup. Agent access needs a separate current purpose review and Safe Test.",
       "fields": {
         "neededNow": "Needed now",
@@ -394,6 +395,7 @@
         "allocating": "Original setup is pending. Check its receipt; do not start another connection.",
         "allocated": "The original connection exists. Provider sign-in and validation still need confirmation.",
         "connected": "The original personal connection was validated. This grants no Agent access.",
+        "needs_validation": "The purpose is still approved, but the personal connection needs current validation or reconnecting. No Agent receives access.",
         "withdrawn": "Purpose approval withdrawn.",
         "changed": "The reviewed setup changed. Withdraw the earlier purpose approval before reviewing a new one."
       },

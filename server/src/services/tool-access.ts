@@ -3,6 +3,7 @@ import { isMemoryConnectorId, isRemoteMcpConnectorMethod, connectionPurposeTrans
 import { instanceSettingsService } from "./instance-settings.js";
 import { assertActivationConnectionPurpose, assertActivationConnectionPurposeInTransaction } from "./saas/activation-owner.js";
 import { readDeferredActivationSetup, recordDeferredActivationCompletion } from "./saas/activation-connection-completion.js";
+import { originalOAuthGrantExpiration } from "./tool-oauth-grant-metadata.js";
 import { nativeSha256 } from "./native-runtime/canonical.js";
 import { withV7ActivityTransaction } from "./v7-mutations.js";
 import type { ActivityPublication } from "./activity-log.js";
@@ -10762,14 +10763,7 @@ export function toolAccessService(
     grant: typeof connectionGrants.$inferSelect,
     connection: typeof toolConnections.$inferSelect,
   ): number | null {
-    const grantExpiresAt = oauthGrantConfig(grant).accessTokenExpiresAt;
-    const value =
-      typeof grantExpiresAt === "string"
-        ? grantExpiresAt
-        : oauthConfig(connection).expiresAt;
-    if (typeof value !== "string") return null;
-    const ms = Date.parse(value);
-    return Number.isFinite(ms) ? ms : null;
+    return originalOAuthGrantExpiration(grant, connection).expiresAtMs;
   }
 
   async function getOAuthGrantRow(input: {
@@ -15075,7 +15069,7 @@ export function toolAccessService(
     // may legitimately survive removal because an MCP gateway retains it, or be
     // intentionally archived on an otherwise active connection; neither case
     // should invert whether recommended defaults are rebuilt.
-    const shouldFinalizeManagedDefaults = connection.status === "draft";
+    const shouldFinalizeManagedDefaults = connection.status === "draft" || !!onboardingPurpose;
     const sourceTemplateKey =
       typeof connection.config.sourceTemplateKey === "string"
         ? connection.config.sourceTemplateKey

@@ -637,6 +637,7 @@ function ActivationScope({
           {!isPast && selected && companyId ? selected.requiredConnections.map(applicationKey => <ActivationConnectionConsent
             key={`${current.runId}:${current.version}:${applicationKey}`} companyId={companyId} principal={principal}
             runId={current.runId} version={current.version} packageVersionId={selected.versionId} applicationKey={applicationKey}
+            setupRecorded={current.requiredAccess?.find(row => row.key === applicationKey)?.status === "recorded"}
             enabled={enabled && !frozen} onSetupChanged={() => { if (canUseAuthority()) void client.invalidateQueries({ queryKey: key, exact: true }); }} canUseAuthority={() => {
               const snapshot = client.getQueryState(key), value = client.getQueryData<ActivationView>(key);
               return canUseAuthority() && snapshot?.status === "success" && snapshot.fetchStatus === "idle" && !snapshot.isInvalidated &&

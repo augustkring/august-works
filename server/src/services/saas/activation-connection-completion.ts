@@ -1,7 +1,8 @@
 import { and, eq, sql } from "drizzle-orm";
-import { activationConnectionConsents, connectionGrants, companySecrets, connectionGrantDelegations, toolConnections, toolConnectionInstalls, toolProfiles, toolProfileBindings, type Db } from "@paperclipai/db";
+import { activationConnectionConsents, activationConnectionValidations, connectionGrants, companySecrets, connectionGrantDelegations, toolConnections, toolConnectionInstalls, toolProfiles, toolProfileBindings, type Db } from "@paperclipai/db";
 import { conflict } from "../../errors.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
+import { originalOAuthGrantExpiration } from "../tool-oauth-grant-metadata.js";
 
 type Purpose = typeof activationConnectionConsents.$inferSelect;
 type Connection = typeof toolConnections.$inferSelect;
@@ -34,6 +35,8 @@ export async function readDeferredActivationSetup(tx: Db, purpose: Pick<Purpose,
   const grant = grants[0];
   if (grants.length !== 1 || !grant || grant.kind !== "user" || grant.subjectUserId !== purpose.subjectUserId ||
       grant.isDefault || grant.externalCredential || !grant.credentialSecretRefs.some(ref => ref.configPath === "oauth.access_token")) return null;
+  const expiry = originalOAuthGrantExpiration(grant, connection);
+  if (expiry.invalid || expiry.expiresAtMs !== null && expiry.expiresAtMs <= Date.now()) return null;
   const installs = await tx.select({ id: toolConnectionInstalls.id }).from(toolConnectionInstalls).where(and(
     eq(toolConnectionInstalls.companyId, purpose.companyId), eq(toolConnectionInstalls.connectionId, connection.id))).limit(1).for("share");
   const delegations = await tx.select({ id: connectionGrantDelegations.id }).from(connectionGrantDelegations).where(and(
@@ -67,11 +70,14 @@ export async function recordDeferredActivationCompletion(tx: Db, purpose: Purpos
   if (!setup || !profile) throw conflict("The original personal connection needs a current successful validation");
   const bindings = await tx.select({ id: toolProfileBindings.id }).from(toolProfileBindings).where(eq(toolProfileBindings.profileId, profile.id)).limit(1).for("share");
   if (bindings.length) throw conflict("Agent access must remain unassigned during onboarding");
-  if (purpose.status === "connected") {
-    if (purpose.connectionHash !== setup.hash) throw conflict("The original connection setup changed; review it again");
-    return;
+  if (purpose.status !== "connected") {
+    const [changed] = await tx.update(activationConnectionConsents).set({ status: "connected", connectionHash: setup.hash, connectedAt: new Date() })
+      .where(and(eq(activationConnectionConsents.id, purpose.id), eq(activationConnectionConsents.status, "allocated"))).returning({ id: activationConnectionConsents.id });
+    if (!changed) throw conflict("The original connection decision changed before completion");
   }
-  const [changed] = await tx.update(activationConnectionConsents).set({ status: "connected", connectionHash: setup.hash, connectedAt: new Date() })
-    .where(and(eq(activationConnectionConsents.id, purpose.id), eq(activationConnectionConsents.status, "allocated"))).returning({ id: activationConnectionConsents.id });
-  if (!changed) throw conflict("The original connection decision changed before completion");
+  // The original finish transaction owns this observation. It never updates
+  // the first connected receipt and never stores provider credentials here.
+  await tx.insert(activationConnectionValidations).values({ companyId: purpose.companyId, purposeId: purpose.id,
+    connectionId: setup.connection.id, setupHash: setup.hash, healthCheckedAt: setup.connection.healthCheckedAt! })
+    .onConflictDoNothing({ target: [activationConnectionValidations.purposeId, activationConnectionValidations.setupHash] });
 }

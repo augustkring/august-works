@@ -125,3 +125,16 @@ it("changes permission explanations to Danish without translating authored purpo
   await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
   expect(post.mock.calls[0]![3]).toMatchObject({ confirmConnectionAuthorization: true, expectedReviewHash: review.reviewHash });
 });
+
+it("reconnects the exact already-connected personal purpose through the Original flow without approving or allocating again", async () => {
+  const saved = { ...receipt("60000000-0000-4000-8000-000000000001"), status: "connected" as const,
+    connectionId: "70000000-0000-4000-8000-000000000001", connectedAt: "2026-10-11T01:00:00Z" };
+  reads().mockResolvedValue(saved);
+  const approve = vi.spyOn(activationConnectionApi, "approve"), allocate = vi.spyOn(activationConnectionApi, "connect");
+  await mount(); expect(flow).not.toHaveBeenCalled();
+  expect(container.textContent).toContain("the personal connection needs current validation or reconnecting");
+  await act(async () => button("activation.connectionConsent.reconnect").click());
+  expect(flow.mock.calls.at(-1)?.[0].deferredOnboarding).toMatchObject({ connectionId: saved.connectionId,
+    requestKey: saved.requestKey, principal: "initiator", methodKey: "paperclip-read" });
+  expect(approve).not.toHaveBeenCalled(); expect(allocate).not.toHaveBeenCalled();
+});

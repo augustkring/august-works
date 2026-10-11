@@ -14,9 +14,9 @@ const permissionFields = ["neededNow", "why", "usedBy", "canRead", "canChange", 
 
 /** Separate purpose approval and original provider setup. Neither an OAuth
  * callback nor this UI supplies Agent authority, Safe Test or first-value proof. */
-export function ActivationConnectionConsent({ companyId, principal, runId, version, packageVersionId, applicationKey, enabled, canUseAuthority, onSetupChanged }: {
+export function ActivationConnectionConsent({ companyId, principal, runId, version, packageVersionId, applicationKey, setupRecorded = false, enabled, canUseAuthority, onSetupChanged }: {
   companyId: string; principal: string; runId: string; version: number; packageVersionId: string;
-  applicationKey: string; enabled: boolean; canUseAuthority: () => boolean; onSetupChanged: () => void;
+  applicationKey: string; setupRecorded?: boolean; enabled: boolean; canUseAuthority: () => boolean; onSetupChanged: () => void;
 }) {
   const { t } = useTranslation("experience"), authority = useV9PrivateReadAuthority(principal), client = useQueryClient(), checkboxId = useId();
   const [decision, setDecision] = useState<"approve" | "withdraw" | null>(null), [confirmed, setConfirmed] = useState(false),
@@ -116,7 +116,7 @@ export function ActivationConnectionConsent({ companyId, principal, runId, versi
     <p>{t("activation.connectionConsent.boundary")}</p>
     {reviewed?.existingConnection ? <p>{t("activation.connectionConsent.reuseBoundary")}</p> : null}
     {failure ? <p role="alert">{failure}</p> : null}
-    {saved ? <p role="status">{t(`activation.connectionConsent.status.${samePurpose ? saved.status : "changed"}`)}</p> : null}
+    {saved ? <p role="status">{t(`activation.connectionConsent.status.${samePurpose ? saved.status === "connected" && !setupRecorded ? "needs_validation" : saved.status : "changed"}`)}</p> : null}
     <AlertDialog open={decision !== null} onOpenChange={open => { if (!open) { setDecision(null); setConfirmed(false); } }}>
       {!saved && reviewed && (!unknown || attempt.current?.expectedReviewHash === reviewed.reviewHash) ? <AlertDialogTrigger asChild><Button className="min-h-11" disabled={!enabled || pending}
         onClick={() => { try { decisionReviewHash.current = currentReview().reviewHash; setDecision("approve"); setConfirmed(false); }
@@ -134,9 +134,9 @@ export function ActivationConnectionConsent({ companyId, principal, runId, versi
     </AlertDialog>
     {unknown || (restoredAttempt && !saved) || saved?.status === "allocating" ? <Button className="min-h-11" variant="outline" disabled={pending} onClick={() => void checkReceipt()}>
       {t("activation.connectionConsent.checkReceipt")}</Button> : null}
-    {samePurpose && saved && ["approved", "allocated"].includes(saved.status) ? <Button className="min-h-11" disabled={!enabled || pending}
+    {samePurpose && saved && ["approved", "allocated", "connected"].includes(saved.status) ? <Button className="min-h-11" disabled={!enabled || pending}
       onClick={() => { try { currentReview(); currentReceipt(); setSetup(true); }
-        catch { setFailure(t("activation.connectionConsent.contextChanged")); } }}>{t("activation.connectionConsent.providerSetup")}</Button> : null}
+        catch { setFailure(t("activation.connectionConsent.contextChanged")); } }}>{t(saved.status === "connected" ? "activation.connectionConsent.reconnect" : "activation.connectionConsent.providerSetup")}</Button> : null}
     {setup && samePurpose && saved && reviewed ? <ConnectionSetupFlow key={`${saved.id}:${saved.connectionId ?? "new"}:${authority.epoch}`} host="dialog"
       serviceSlug={reviewed.galleryKey} forceNewConnection deferredOnboarding={{ companyId, principal, requestKey: saved.requestKey,
         applicationId: reviewed.applicationId, galleryKey: reviewed.galleryKey, methodKey: reviewed.connectionMethodKey,

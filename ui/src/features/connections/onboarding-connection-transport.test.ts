@@ -52,4 +52,14 @@ describe("Original onboarding connection transport", () => {
     await expect(acknowledgement).rejects.toThrow("Account epoch changed");
     expect(f.original.startOAuth).toHaveBeenCalledTimes(1);
   });
+  it("reauthorizes only the exact connected personal row without calling another allocation owner", async () => {
+    const f = fixture(); f.receipt.status = "connected"; f.receipt.connectionId = f.connectionId;
+    f.receipt.connectedAt = "2026-10-11T01:00:00Z";
+    await f.tools.startOAuth(f.connectionId, { asCurrentUser: true });
+    expect(f.original.startOAuth).toHaveBeenCalledWith(f.connectionId, { asCurrentUser: true });
+    expect(f.original.connectApp).not.toHaveBeenCalled(); expect(f.consent.connect).not.toHaveBeenCalled();
+    f.receipt.status = "withdrawn";
+    await expect(f.tools.startOAuth(f.connectionId, { asCurrentUser: true })).rejects.toThrow("original connection receipt");
+    expect(f.original.startOAuth).toHaveBeenCalledTimes(1);
+  });
 });

@@ -71,8 +71,7 @@ async function source(tx: Db, actor: AuthorizationActor, companyId: string, appl
       throw conflict("This retained connection needs a separate current purpose renewal");
     if (!owned || owned.existingConnectionId) {
       const setup = await readDeferredActivationSetup(tx, { companyId, applicationId: app.id, connectionId: connection.id, subjectUserId: current.userId });
-      if (!setup || typeof connection.config.connectionMethodKey !== "string" || connection.config.sourceTemplateKey !== galleryKey ||
-          owned && owned.existingSetupHash !== setup.hash)
+      if ((!owned && !setup) || typeof connection.config.connectionMethodKey !== "string" || connection.config.sourceTemplateKey !== galleryKey)
         throw conflict("The existing personal connection needs its original access review and validation");
       const definition = getConnectableAppDefinition(galleryKey), selectedMethod = definition?.methods.find(candidate => candidate.key === connection.config.connectionMethodKey);
       if (!definition || !selectedMethod) throw conflict("The original provider method is unavailable");
@@ -81,7 +80,10 @@ async function source(tx: Db, actor: AuthorizationActor, companyId: string, appl
           oauth.strategy !== selectedMethod.oauthStrategy || !["google", galleryKey].includes(String(oauth.provider)) ||
           nativeSha256(oauth.scopes) !== nativeSha256(original.providerScopes))
         throw conflict("The existing provider resource or scopes need a separate review");
-      existingConnection = { id: connection.id, name: connection.name, setupHash: setup.hash };
+      // A current unchanged business purpose survives credential expiry. Its
+      // original adoption pin stays immutable; only Original finish can append
+      // positive proof for a new validated credential version.
+      existingConnection = { id: connection.id, name: connection.name, setupHash: owned?.existingSetupHash ?? setup!.hash };
       existingMethodKey = connection.config.connectionMethodKey;
     }
   }

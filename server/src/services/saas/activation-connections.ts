@@ -1,5 +1,5 @@
 import { and, eq, or, sql } from "drizzle-orm";
-import { activationConnectionConsents, connectionGrants, principalPermissionGrants, toolApplications, toolConnections, toolConnectionInstalls, type Db } from "@paperclipai/db";
+import { activationConnectionConsents, activationConnectionValidations, connectionGrants, principalPermissionGrants, toolApplications, toolConnections, toolConnectionInstalls, type Db } from "@paperclipai/db";
 import { activationRequiredAccessSchema, type ActivationRequiredAccess } from "@paperclipai/shared";
 import { getConnectableAppDefinition } from "@paperclipai/shared";
 import { activationConnectionMethodSource } from "../tool-access.js";
@@ -49,6 +49,9 @@ export async function readActivationRequiredAccess(tx: Db, actor: AuthorizationA
       const purpose = purposes[0]!, app = apps[0]!;
       const pin = purposeContext ? await readFirstAgentCapabilityPin(tx, purposeContext.packageVersionId) : null;
       const setup = purpose.status === "connected" ? await readDeferredActivationSetup(tx, purpose) : null;
+      const [validation] = setup ? await tx.select({ id: activationConnectionValidations.id }).from(activationConnectionValidations).where(and(
+        eq(activationConnectionValidations.companyId, companyId), eq(activationConnectionValidations.purposeId, purpose.id),
+        eq(activationConnectionValidations.connectionId, connection.id), eq(activationConnectionValidations.setupHash, setup.hash))).for("share") : [];
       const definition = getConnectableAppDefinition(purpose.galleryKey);
       const method = definition?.methods.find(candidate => candidate.key === purpose.connectionMethodKey);
       let methodCurrent = false;
@@ -61,7 +64,7 @@ export async function readActivationRequiredAccess(tx: Db, actor: AuthorizationA
         purposeContext.version >= purpose.onboardingVersion && (purposeContext.step !== "access" || purposeContext.version === purpose.onboardingVersion) &&
         pin?.hash === purpose.packageContentHash && nativeSha256({ id: app.id, key: app.applicationKey, name: app.name,
           metadata: app.metadata, status: app.status, archivedAt: app.archivedAt?.toISOString() ?? null }) === purpose.applicationHash &&
-        !!setup && setup.hash === purpose.connectionHash;
+        !!setup && (setup.hash === purpose.connectionHash || !!validation);
       result.push(activationRequiredAccessSchema.parse({ key, status: recorded ? "recorded" : "needs_review",
         checkedAt: connection.checked?.toISOString() ?? null }));
       continue;
