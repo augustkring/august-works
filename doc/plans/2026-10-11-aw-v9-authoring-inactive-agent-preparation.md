@@ -71,3 +71,9 @@ Focus V2 retains all 53 passing cases; subsequent changes were Native SQL,
 billing-fixture isolation and exact capability selection. No assertions or
 deadlines changed. Actual inactive preparation is ready for bounded integration.
 Runtime setup, representative execution, publication and full V9 remain pending.
+
+Integrated through `1197a2491`, `93b7e6179`, `db7491c19`, `c83d3be1b` and
+`2d7a9ab51`. All 22 changed non-plan Source files are byte-identical to the
+qualified `e86064f96` scope. Root token gates V1 passed before the UI commit.
+Only bounded evidence is reused; complete integrated V9 qualification remains
+pending, along with runtime, representative tests, publication and other V9 work.
