@@ -1,0 +1,159 @@
+{
+  "screenId": "ONB-01",
+  "journeyId": "onb",
+  "routeOrSurface": "/auth",
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
+  "customerOutcome": "Establish an account through only the configured original authentication methods, preserving password-manager/paste support and non-secret input after refusal.",
+  "entryConditions": [
+    "No current authenticated session; existing original auth owner decides registration and enterprise SSO availability",
+    "The registered experience locale uses EN/DA; display language grants no identity or company authority"
+  ],
+  "exitConditions": [
+    "Only a current Native session can continue; email verification remains required where configured",
+    "Original permitted next/invite route or SaaS welcome continues into the existing company onboarding owner; no auth transport can fabricate verification"
+  ],
+  "content": {
+    "h1": "Create your account",
+    "supportingCopy": "Use the configured account method to continue to company setup.",
+    "customerTerms": [
+      "Company",
+      "Work",
+      "Needs You",
+      "Agent",
+      "Feedback"
+    ],
+    "displayedState": [
+      "Current configured email and enterprise SSO options only",
+      "A Native verification-email receipt when the original account owner requires verification",
+      "Localized pending/refusal/retry information without provider error bodies"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "name",
+      "label": "Name",
+      "dataType": "string",
+      "required": true,
+      "default": "Empty or the current unsent in-memory input",
+      "help": "Required by the original account profile during email registration",
+      "validation": "Original auth profile requirements",
+      "autofillOrPrefill": "Native name autocomplete"
+    },
+    {
+      "id": "email",
+      "label": "Email",
+      "dataType": "string",
+      "required": true,
+      "default": "Empty or the current unsent in-memory input",
+      "help": "Account identifier and configured organization SSO lookup",
+      "validation": "Native email validation",
+      "autofillOrPrefill": "Native username autocomplete; paste allowed"
+    },
+    {
+      "id": "password",
+      "label": "Password",
+      "dataType": "string",
+      "required": true,
+      "default": "Empty or the current unsent in-memory input",
+      "help": "Email authentication only; no related profile questions",
+      "validation": "Original configured minimum length and authentication owner; never logged",
+      "autofillOrPrefill": "Native current-password/new-password autocomplete; password managers and paste allowed"
+    }
+  ],
+  "actions": {
+    "primary": {
+      "label": "Continue",
+      "operation": "Explicit registration through original sign-up/email; original Sign In or company SSO uses the corresponding configured authentication owner"
+    },
+    "secondary": [
+      "Switch between email sign-in and registration when original signup is available",
+      "Use the original reset-password route where configured",
+      "Choose EN or DA without submitting credentials"
+    ],
+    "destructiveOrIrreversible": []
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Original auth get-session and public SaaS capabilities",
+      "Registered display-locale owner"
+    ],
+    "canonicalWriteOperation": "Original email registration/sign-in or configured company SSO only; no V9 identity store, synthetic verification, organization provisioning or password persistence",
+    "authorityEffect": "Native auth and current membership remain authoritative. Public capability visibility and display locale confer no permissions.",
+    "asyncWork": "Original explicit auth request, guarded safe next/invite path, original verification-mail owner and current session/company-cache reconciliation",
+    "receipt": "Original current auth session or actual configured verification receipt; no inferred first value"
+  },
+  "states": {
+    "loading": "Announce loading only while the current identity/company request is pending.",
+    "empty": "Explain an actual empty authorized result. Missing dependencies or qualified capabilities are separate unavailable states.",
+    "partial": "Retain trustworthy available results and name unavailable dependencies or sources.",
+    "stale": "Remove executable actions and refresh canonical state; preserved input is not evidence of current authority.",
+    "validation_error": "Preserve other entered values, identify the field problem and associate it programmatically with the control.",
+    "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
+    "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
+    "recovering": "Re-resolve canonical state/version and the original request identity before permitting another effect.",
+    "success": "Announce only the server-confirmed canonical result. First value additionally requires independently verified native artifact/run binding."
+  },
+  "navigation": {
+    "back": "Preserve entered non-secret in-memory values until leaving the page",
+    "cancelOrSaveExit": "No password or account-field persistence in browser storage",
+    "deepLink": "/auth",
+    "resume": "Original current-session and verification owners decide the next admissible setup step"
+  },
+  "accessibility": {
+    "initialFocus": "Main heading or the dialog category control; keyboard focus is visible and unobscured.",
+    "focusAfterError": "Error summary or first invalid control, with a programmatically associated explanation.",
+    "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
+    "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
+    "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
+    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
+    "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
+    "reducedMotion": "No essential animated transition or moving progress indicator.",
+    "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
+  },
+  "responsive": {
+    "wide": "Readable constrained content width with natural wrapping.",
+    "narrow": "Reflow cards and form actions without concealing utilities or consequences.",
+    "mobile": "Touch targets remain reachable; dialogs scroll within the viewport and do not obscure focus."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Public configured account capabilities, current form inputs and localized fixed refusal reasons"
+    ],
+    "dataCollected": [
+      "Explicit account registration/authentication fields only"
+    ],
+    "sensitiveFields": [
+      "Password and account email"
+    ],
+    "loggingConstraints": "Do not retain credentials in V9 browser storage, HTTP logs or raw error bodies; the existing auth owner handles account records and verification."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "Raw intent",
+      "Company facts",
+      "Feedback body/goal",
+      "Documents/prompts/results",
+      "Credentials/raw URLs/query strings/DOM/screenshots"
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Verify canonical state, version conflicts, safe replay, unavailable states and principal/company switching on the exact artifact."
+    ],
+    "accessibility": [
+      "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
+    ],
+    "securityPrivacy": [
+      "Verify current membership/resource revocation, tenant isolation, untrusted content and separate private feedback identity purpose."
+    ],
+    "usability": [
+      "Use representative exploratory and pre-registered confirmatory journey evidence with explicit PASS/FAIL/INCONCLUSIVE; source checks are insufficient."
+    ]
+  }
+}

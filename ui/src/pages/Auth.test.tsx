@@ -7,6 +7,8 @@ import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { queryKeys } from "../lib/queryKeys";
 import { AuthPage } from "./Auth";
+import { i18n } from "../i18n";
+import { saasApi } from "../api/saas";
 
 const getSessionMock = vi.hoisted(() => vi.fn());
 const signInEmailMock = vi.hoisted(() => vi.fn());
@@ -85,12 +87,15 @@ describe("AuthPage", () => {
   beforeEach(() => {
     container = document.createElement("div");
     document.body.appendChild(container);
+    vi.spyOn(saasApi, "capabilities").mockResolvedValue(null);
     getSessionMock.mockResolvedValue(null);
     signInEmailMock.mockResolvedValue(undefined);
     signUpEmailMock.mockResolvedValue(undefined);
   });
 
-  afterEach(() => {
+  afterEach(async () => {
+    await i18n.changeLanguage("en");
+    vi.restoreAllMocks();
     container.remove();
     document.body.innerHTML = "";
     vi.clearAllMocks();
@@ -253,4 +258,36 @@ describe("AuthPage", () => {
       root.unmount();
     });
   });
+  it("changes authentication language without submitting credentials and translates a refused request while preserving email", async () => {
+    vi.mocked(saasApi.capabilities).mockResolvedValue({ profile: "saas", signup: true, emailVerification: true,
+      enterpriseSso: false, onboarding: true, billing: false, checkout: false, runtime: false,
+      usage: false, support: false, deletion: false, notifications: false });
+    const { root } = await mount();
+    const email = container.querySelector('input[name="email"]') as HTMLInputElement;
+    const password = container.querySelector('input[name="password"]') as HTMLInputElement;
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    await act(async () => {
+      setter.call(email, "person@example.test");email.dispatchEvent(new Event("input", { bubbles: true }));
+      setter.call(password, "private-software-fixture");password.dispatchEvent(new Event("input", { bubbles: true }));
+      await i18n.changeLanguage("da");
+    });
+    await flushReact();
+    expect(container.querySelector("h1")?.textContent).toBe("Log ind på August Works");
+    expect(container.querySelector('label[for="email"]')?.textContent).toBe("E-mail");
+    expect(email.value).toBe("person@example.test");expect(password.value).toBe("private-software-fixture");
+    expect(password.getAttribute("autocomplete")).toBe("current-password");
+    expect(signInEmailMock).not.toHaveBeenCalled();expect(signUpEmailMock).not.toHaveBeenCalled();
+    expect(container.textContent).not.toContain("company SSO");
+    signInEmailMock.mockRejectedValueOnce(new Error("Invalid email or password"));
+    await act(async () => { container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })); });
+    await flushReact();await flushReact();
+    const summary = container.querySelector('[role="alert"]')!;
+    expect(summary.textContent).toBe("Ugyldig e-mail eller adgangskode");
+    expect(document.activeElement).toBe(summary);expect(email.getAttribute("aria-describedby")).toBe(summary.id);
+    expect(email.value).toBe("person@example.test");expect(signInEmailMock).toHaveBeenCalledTimes(1);
+    await act(async () => { await i18n.changeLanguage("en"); });await flushReact();
+    expect(summary.textContent).toBe("Invalid email or password");expect(signInEmailMock).toHaveBeenCalledTimes(1);
+    await act(async () => { root.unmount(); });
+  });
+
 });
