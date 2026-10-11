@@ -57,3 +57,11 @@ selects live ownership while retaining every current user/run/version/package/ap
 check. The fixture invokes the real current command; no assertion or deadline
 was removed. Types/browser V1 did not start after the failed Native prerequisite.
 The exact-source Native/types/browser rerun remains pending.
+
+Native V2 retained 455 passes and one failure out of 456. Its remaining new
+revision fixture expected access immediately after Original `change_setup`,
+which correctly clears the capability and returns to intent. The fixture now
+repeats the actual Original intent/discovery/material-facts/capability journey
+with fresh command identities and current versions before checking the required
+fresh purpose decision. Original production transitions and assertions remain
+unchanged. Types/browser V2 did not start. Native/types/browser V3 is pending.

@@ -2032,7 +2032,15 @@ const support = await getEmbeddedPostgresTestSupport();
     it("requires a fresh explicit successor decision after Original change-setup advances the onboarding version", async () => {
       const c = await originalCompletedPersonalConnection(), current = await c.activation.get(f.actor, f.home);
       const reviewStep = await c.activation.command(f.actor, f.home, { operation: "continue_access", requestId: randomUUID(), expectedVersion: current.version });
-      await c.activation.command(f.actor, f.home, { operation: "change_setup", requestId: randomUUID(), expectedVersion: reviewStep.version });
+      let revised = await c.activation.command(f.actor, f.home, { operation: "change_setup", requestId: randomUUID(), expectedVersion: reviewStep.version });
+      expect(revised.state.step).toBe("intent");
+      expect(revised.state.packageVersionId).toBeNull();
+      revised = await c.activation.command(f.actor, f.home, { operation: "save_intent", intent: "Prepare a source-bound customer research draft", requestId: randomUUID(), expectedVersion: revised.version });
+      revised = await c.activation.command(f.actor, f.home, { operation: "build_customer_draft", requestId: randomUUID(), expectedVersion: revised.version });
+      revised = await c.activation.command(f.actor, f.home, { operation: "continue_discovery", requestId: randomUUID(), expectedVersion: revised.version });
+      revised = await c.activation.command(f.actor, f.home, { operation: "confirm_material_facts", companyPurpose: "Help customers compare services", requestId: randomUUID(), expectedVersion: revised.version });
+      revised = await c.activation.command(f.actor, f.home, { operation: "select_capability", packageVersionId: c.review.packageVersionId, requestId: randomUUID(), expectedVersion: revised.version });
+      expect(revised.state.step).toBe("access");
       expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("needs_review");
       const original = await withdrawCompletedPurpose(c), reviewed = await c.owner.getReview(f.actor, f.home, c.key);
       expect(reviewed.onboardingVersion).toBeGreaterThan(original.onboardingVersion);
