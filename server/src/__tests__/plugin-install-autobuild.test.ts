@@ -67,10 +67,17 @@ async function createBundledPluginFixture(
   const distDir = path.join(packageRoot, "dist");
   const isStandaloneFixture = (options.rootDir ?? repoPluginRoot) === standaloneRepoPluginRoot;
   const postinstallScript = isStandaloneFixture
-    ? `node ${path.relative(packageRoot, path.join(REPO_ROOT, "scripts", "link-plugin-dev-sdk.mjs"))}`
+    ? "node ./scripts/link-sdk.mjs"
     : null;
 
   await mkdir(path.join(packageRoot, "scripts"), { recursive: true });
+  if (isStandaloneFixture) {
+    // Exercise the original SDK linker on this owned package. The repository
+    // postinstall CLI links every excluded plugin, including unrelated packages.
+    const linker = path.relative(path.join(packageRoot, "scripts"), path.join(REPO_ROOT, "scripts", "link-plugin-dev-sdk.mjs"));
+    await writeFile(path.join(packageRoot, "scripts", "link-sdk.mjs"),
+      `import { linkSdkInto } from ${JSON.stringify(linker)};\nlinkSdkInto(process.cwd());\n`, "utf8");
+  }
   await writeFile(
     path.join(packageRoot, "package.json"),
     JSON.stringify({

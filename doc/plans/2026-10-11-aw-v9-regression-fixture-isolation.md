@@ -25,3 +25,14 @@ full run continues unchanged; its failure artifacts remain available. The
 separate plugin-build and workspace-exposure failures need their own actual
 failure analysis. Full latest-source regression, build and V9 source completion
 remain pending.
+
+Actual Native v1 and v2 passed 52 of 55 cases. The diagnostic retry showed
+that the fresh fixture workspace needs real Git metadata for the unchanged
+legacy adapter preflight. It now initializes only its owned disposable Git
+repository with host Git configuration disabled. Standalone plugin fixture
+postinstall previously invoked the repository-wide SDK linker and tried to
+write unrelated excluded plugin packages. It now imports and executes the
+same original SDK linker for only its owned disposable fixture package.
+Original production owners, success assertions and timeouts remain unchanged.
+These current fixture changes require fresh Native qualification; prior
+failures remain preserved. No customer inbound directory was accessed.

@@ -1,4 +1,4 @@
-import { spawn } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
 import { mkdir, rm } from "node:fs/promises";
@@ -786,6 +786,10 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
 
     beforeAll(async () => {
       await mkdir(repoRoot, { mode: 0o700 });
+      // The unchanged legacy adapter preflight requires a real Git workspace.
+      // Initialize only this owned disposable fixture, without host Git config.
+      execFileSync("git", ["init", "--quiet", repoRoot], { timeout: 5000,
+        env: { ...process.env, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null" } });
       temporary = await startEmbeddedPostgresTestDatabase(
         "paperclip-native-reaper-e2e-",
       );
