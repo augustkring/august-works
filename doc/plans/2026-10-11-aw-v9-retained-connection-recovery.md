@@ -61,3 +61,15 @@ Original completion function with the same grant-first expiry condition used by
 Native validation. All other current human/run/package/application/method/scope/
 secret/health/zero-reach conditions remain intact. The rejection assertion remains
 unchanged. Types/browser V2 did not start; exact-source V3 is pending.
+
+V3 qualification passed on Source `f9575fdbb1c7df25508869e153b54c932ce14352`
+(SHA-256 `65f3323ea9b695de1a709a5f20c726bca8c1381b8780556088463036e50e8d03`).
+All before/after Native, types and browser source identities match. Native passed
+all 459 cases in three complete Original files on PostgreSQL under the isolated
+UID 1004, without network access, assertion waivers or deadline changes.
+Shared/DB builds and full server/UI typechecks passed. All five built Chromium
+permission journeys passed; browser responses remain software fixtures and do
+not establish live-provider assurance. Focus V1 retained 220 passing cases in
+eight complete files; subsequent changes only corrected the expiry fixture and
+Native completion SQL. The bounded personal retained-connection scope is ready
+for integration. Full V9, human acceptance and provider GA remain unqualified.
