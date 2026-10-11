@@ -1,0 +1,1 @@
+CREATE INDEX "feedback_image_deletions_scope_pending_idx" ON "feedback_image_deletions" USING btree ("storage_scope_id","created_at","id") WHERE "feedback_image_deletions"."deleted_at" is null and "feedback_image_deletions"."transport_settled_at" is not null;

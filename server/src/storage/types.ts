@@ -36,6 +36,9 @@ export interface HeadObjectResult {
 
 export interface StorageProvider {
   id: StorageProviderId;
+  /** Private configured namespace identity. Unknown legacy/custom providers
+   * cannot qualify protected-feedback allocation or physical erasure. */
+  readonly scopeId?: string;
   putObject(input: PutObjectInput): Promise<void>;
   getObject(input: GetObjectInput): Promise<GetObjectResult>;
   headObject(input: GetObjectInput): Promise<HeadObjectResult>;
@@ -58,6 +61,7 @@ export interface PutFileInput {
 
 export interface PutFileResult {
   provider: StorageProviderId;
+  readonly scopeId?: string;
   objectKey: string;
   contentType: string;
   byteSize: number;
@@ -74,6 +78,7 @@ export interface StorageAccounting {
 
 export interface StorageService {
   provider: StorageProviderId;
+  readonly scopeId?: string;
   putFile(input: PutFileInput): Promise<PutFileResult>;
   getObject(companyId: string, objectKey: string, options?: Pick<GetObjectInput, "range">): Promise<GetObjectResult>;
   headObject(companyId: string, objectKey: string): Promise<HeadObjectResult>;

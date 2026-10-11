@@ -422,6 +422,22 @@ describe("native selected feedback images with owned scanner-wire and filesystem
     } : {} })); application.use(errorHandler); return application;
   }
   const imageBase = () => `/api/companies/${companyId}/customer-feedback/${feedbackId}/images`;
+  it("reports namespace-unknown storage unavailable and refuses intake before multipart parsing, scanning or provider work", async () => {
+    let providerCalls = 0;
+    const unknown = { ...storage, scopeId: undefined, async putFile() { providerCalls++; throw Error("Owned provider must not run"); } };
+    const application = imageApplication(userId, true, unknown);
+    const policy = await request(application).get("/api/customer-feedback/policy").expect(200);
+    expect(policy.body.attachments).toMatchObject({ enabled: false, reason: "storage_qualification_required" });
+    expect(policy.headers["cache-control"]).toBe("private, no-store"); expect(policy.body.ga.allowed).toBe(false);
+    expect(JSON.stringify(policy.body)).not.toContain(directory); expect(policy.body.attachments).not.toHaveProperty("scopeId");
+    await request(application).post(imageBase()).set("X-AW-Feedback-Request-Key", randomUUID())
+      .set("Content-Type", "multipart/form-data; boundary=owned-invalid-envelope").send("invalid-envelope").expect(422);
+    expect(providerCalls).toBe(0); expect(scanned).toEqual([]); expect(await rows()).toEqual([]);
+    const digest = (value: string) => createHash("sha256").update(JSON.stringify(value)).digest("hex");
+    const budgetKey = `customer-feedback:${digest(userId)}:${digest(companyId)}`;
+    const budgets = await db.select().from(authRateLimits).where(eq(authRateLimits.key, budgetKey));
+    expect(budgets).toHaveLength(1); expect(budgets[0]!.count).toBe(1);
+  });
   it("accepts one explicitly selected HTTP image through native pre-body admission and charges the original budget once", async () => {
     const application = imageApplication(), key = randomUUID(), body = await bytes();
     const policy = await request(application).get("/api/customer-feedback/policy").expect(200);

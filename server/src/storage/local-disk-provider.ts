@@ -2,6 +2,7 @@ import { createReadStream, promises as fs } from "node:fs";
 import path from "node:path";
 import type { StorageProvider, GetObjectResult, HeadObjectResult } from "./types.js";
 import { notFound, badRequest } from "../errors.js";
+import { storageScopeIdentity } from "./object-scope.js";
 
 function normalizeObjectKey(objectKey: string): string {
   const normalized = objectKey.replace(/\\/g, "/").trim();
@@ -30,8 +31,9 @@ function resolveWithin(baseDir: string, objectKey: string): string {
 async function statOrNull(filePath: string) {
   try {
     return await fs.stat(filePath);
-  } catch {
-    return null;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
   }
 }
 
@@ -40,6 +42,7 @@ export function createLocalDiskStorageProvider(baseDir: string): StorageProvider
 
   return {
     id: "local_disk",
+    scopeId: storageScopeIdentity(["local_disk", root]),
 
     async putObject(input) {
       const targetPath = resolveWithin(root, input.objectKey);
@@ -87,8 +90,9 @@ export function createLocalDiskStorageProvider(baseDir: string): StorageProvider
       const filePath = resolveWithin(root, input.objectKey);
       try {
         await fs.unlink(filePath);
-      } catch {
-        // idempotent delete
+      } catch (error) {
+        // Only actual absence is an idempotent deletion acknowledgement.
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       }
     },
   };

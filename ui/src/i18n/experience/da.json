@@ -156,7 +156,7 @@
       "submissionUnconfirmed": "Feedbacken er modtaget. Nogle valgte billeder kunne ikke bekræftes. Kontrollér deres aktuelle status nedenfor eller i Min feedback."
     },
     "retentionTitle": "Undtagelser til opbevaring",
-    "retentionPolicy": "Standarder: feedback og svar 90 dage efter lukning, billeder 30 dage efter upload, åbne sager 12 måneder. En aktiv juridisk eller hændelsesrelateret blokering forhindrer sletning. Automatisk opbevaringssletning er ikke aktiveret.",
+    "retentionPolicy": "Standarder: feedback og svar 90 dage efter lukning, billeder 30 dage fra første indsendelse, åbne sager 12 måneder. En aktiv juridisk eller hændelsesrelateret blokering forhindrer sletning. Automatisk opbevaringssletning er ikke aktiveret.",
     "retentionChecking": "Kontrollerer aktuelle opbevaringsregler…",
     "retentionUnavailable": "De aktuelle opbevaringsregler kunne ikke verificeres.",
     "retentionHold": "Bevar sagen på grund af en juridisk sag eller hændelse",

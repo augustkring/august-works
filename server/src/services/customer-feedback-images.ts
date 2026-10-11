@@ -5,6 +5,7 @@ import { activityLog, companies, customerFeedback, customerFeedbackImages, custo
 import { feedbackImageSchema, feedbackImagesSchema, feedbackImageMediaTypeSchema } from "@paperclipai/shared";
 import { conflict, notFound, unprocessable } from "../errors.js";
 import type { StorageService } from "../storage/types.js";
+import { storageScopeMatches } from "../storage/object-scope.js";
 import type { AuthorizationActor } from "./authorization.js";
 import { customerFeedbackService } from "./customer-feedback.js";
 import { configuredFeedbackImageScanner, prepareFeedbackImage, FEEDBACK_IMAGE_MAX_BYTES } from "./feedback-image-intake.js";
@@ -27,6 +28,7 @@ export function customerFeedbackImageService(db: Db, storage: StorageService, op
   operatorUserIds?: readonly string[];
 }) {
   const feedback = customerFeedbackService(db, options);
+  const scopeId = storage.scopeId;
   const admissions = new WeakMap<FeedbackImageUploadAdmission, {
     companyId: string; feedbackId: string; requestKey: string; principal: string; expiresAt: string;
   }>();
@@ -62,7 +64,8 @@ export function customerFeedbackImageService(db: Db, storage: StorageService, op
         : scope(actor, companyId, feedbackId)(operation);
       const before = await owned(async reader => {
         const row = await image(reader, companyId, feedbackId, imageId);
-        if (row.status !== "ready" || !row.objectKey || !row.sha256 || !row.byteSize) throw notFound("Feedback image is unavailable");
+        if (row.status !== "ready" || !row.objectKey || !row.sha256 || !row.byteSize || !storageScopeMatches(storage, row.storageScopeId))
+          throw notFound("Feedback image is unavailable");
         return row;
       });
       const object = await storage.getObject(companyId, before.objectKey!), parts: Buffer[] = [];
@@ -79,7 +82,8 @@ export function customerFeedbackImageService(db: Db, storage: StorageService, op
       if (body.length !== before.byteSize || sha(body) !== before.sha256) throw conflict("Protected image could not be confirmed");
       return owned(async reader => {
         const current = await image(reader, companyId, feedbackId, imageId);
-        if (current.status !== "ready" || current.objectKey !== before.objectKey || current.sha256 !== before.sha256)
+        if (current.status !== "ready" || current.objectKey !== before.objectKey || current.sha256 !== before.sha256 ||
+          current.storageScopeId !== before.storageScopeId || !storageScopeMatches(storage, current.storageScopeId))
           throw conflict("Feedback image changed; check current access");
         return { body, mediaType: feedbackImageMediaTypeSchema.parse(current.mediaType) };
       });
@@ -94,6 +98,7 @@ export function customerFeedbackImageService(db: Db, storage: StorageService, op
       if (!options.scanner) throw unprocessable("Feedback image scanning is unavailable");
       const admitted = await scope(actor, companyId, feedbackId)(async (reader, owner) => {
         await noHold(reader, companyId, feedbackId);
+        if (!storageScopeMatches(storage, scopeId)) throw unprocessable("Protected feedback storage is unavailable");
         await feedback.chargeImageAttempt(reader, companyId, owner.principal);
         const [clock] = await reader.execute<{ expiresAt: string }>(sql`select (clock_timestamp()+interval '120 seconds')::text as "expiresAt"`);
         return { principal: owner.principal, expiresAt: clock!.expiresAt };
@@ -173,6 +178,7 @@ export function customerFeedbackImageService(db: Db, storage: StorageService, op
         const result = await storage.putFile({ companyId, namespace: `feedback-images/${feedbackId}/${reserved.row.id}`,
           originalFilename: `image.${extension}`, contentType: prepared.mediaType, body: prepared.body,
           onAllocated: async objectKey => {
+            if (!storageScopeMatches(storage, scopeId)) throw unprocessable("Protected feedback storage is unavailable");
             await owned(async reader => {
               const current = await image(reader, companyId, feedbackId, reserved.row.id);
               const [clock] = await reader.execute<{ expired: boolean }>(sql`select ${current.leaseExpiresAt.toISOString()}::timestamptz <= clock_timestamp() as expired`);
@@ -180,7 +186,7 @@ export function customerFeedbackImageService(db: Db, storage: StorageService, op
                 throw conflict("Image reservation changed; check the original request");
               if (!objectKey.startsWith(`${companyId}/feedback-images/${feedbackId}/${current.id}/`))
                 throw conflict("Protected image allocation changed");
-              await reader.update(customerFeedbackImages).set({ status: "storing", objectKey,
+              await reader.update(customerFeedbackImages).set({ status: "storing", objectKey, storageScopeId: scopeId,
                 byteSize: prepared.byteSize, sha256: prepared.sha256, scannerToken: prepared.scan.scannerToken,
                 scanCheckedAt: new Date(prepared.scan.checkedAt) }).where(eq(customerFeedbackImages.id, current.id));
             }, true);
@@ -201,21 +207,22 @@ export function customerFeedbackImageService(db: Db, storage: StorageService, op
               const [current] = await tx.select().from(customerFeedbackImages).where(and(
                 eq(customerFeedbackImages.companyId, companyId), eq(customerFeedbackImages.id, reserved.row.id),
               )).for("update");
-              if (current?.leaseToken === leaseToken && current.objectKey === objectKey)
+              if (current?.leaseToken === leaseToken && current.objectKey === objectKey && current.storageScopeId === scopeId)
                 await tx.update(customerFeedbackImages).set({ transportSettledAt: sql`coalesce(${customerFeedbackImages.transportSettledAt}, clock_timestamp())` })
                   .where(eq(customerFeedbackImages.id, current.id));
               await tx.update(feedbackImageDeletions).set({ transportSettledAt: sql`coalesce(${feedbackImageDeletions.transportSettledAt}, clock_timestamp())` })
                 .where(and(eq(feedbackImageDeletions.imageId, reserved.row.id), eq(feedbackImageDeletions.companyId, companyId),
-                  eq(feedbackImageDeletions.objectKey, objectKey), isNull(feedbackImageDeletions.deletedAt)));
+                  eq(feedbackImageDeletions.objectKey, objectKey), eq(feedbackImageDeletions.storageScopeId, scopeId!), isNull(feedbackImageDeletions.deletedAt)));
             });
           },
         });
         stored = true;
-        if (result.objectKey !== allocatedKey || result.sha256 !== prepared.sha256 || result.byteSize !== prepared.byteSize || result.contentType !== prepared.mediaType)
+        if (result.objectKey !== allocatedKey || result.scopeId !== scopeId || !storageScopeMatches(storage, scopeId) ||
+          result.sha256 !== prepared.sha256 || result.byteSize !== prepared.byteSize || result.contentType !== prepared.mediaType)
           throw conflict("Protected image receipt could not be confirmed");
         return await owned(async (reader, owner) => {
           const current = await image(reader, companyId, feedbackId, reserved.row.id);
-          if (current.status !== "storing" || current.leaseToken !== leaseToken || current.objectKey !== result.objectKey)
+          if (current.status !== "storing" || current.leaseToken !== leaseToken || current.objectKey !== result.objectKey || current.storageScopeId !== scopeId)
             throw conflict("Image reservation changed; check the original request");
           const [row] = await reader.update(customerFeedbackImages).set({ status: "ready", transportSettledAt: sql`coalesce(${customerFeedbackImages.transportSettledAt}, clock_timestamp())` })
             .where(eq(customerFeedbackImages.id, current.id)).returning();
@@ -239,8 +246,9 @@ export function customerFeedbackImageService(db: Db, storage: StorageService, op
             // A commit acknowledgement may be lost after `ready` committed.
             // Preserve that original receipt and object for explicit read-back.
             if (current?.status === "ready" || current?.status === "deleted") return;
-            if (current && (current.leaseToken !== leaseToken || current.objectKey !== allocatedKey)) return;
+            if (current && (current.leaseToken !== leaseToken || current.objectKey !== allocatedKey || current.storageScopeId !== scopeId)) return;
             await tx.insert(feedbackImageDeletions).values({ imageId: reserved.row.id, companyId, objectKey: allocatedKey!,
+              storageScopeId: scopeId,
               transportSettledAt: sql`clock_timestamp()` }).onConflictDoUpdate({ target: feedbackImageDeletions.imageId,
               set: { transportSettledAt: sql`coalesce(${feedbackImageDeletions.transportSettledAt}, clock_timestamp())` } });
             if (current) await tx.update(customerFeedbackImages).set({ status: "deleting", transportSettledAt: sql`coalesce(${customerFeedbackImages.transportSettledAt}, clock_timestamp())` })
@@ -260,7 +268,7 @@ export function customerFeedbackImageService(db: Db, storage: StorageService, op
           // its native delete trigger retained the same allocated object key.
           await db.update(feedbackImageDeletions).set({ transportSettledAt: sql`coalesce(${feedbackImageDeletions.transportSettledAt}, clock_timestamp())` }).where(and(
             eq(feedbackImageDeletions.imageId, reserved.row.id), eq(feedbackImageDeletions.companyId, companyId),
-            eq(feedbackImageDeletions.objectKey, allocatedKey), isNull(feedbackImageDeletions.deletedAt),
+            eq(feedbackImageDeletions.objectKey, allocatedKey), eq(feedbackImageDeletions.storageScopeId, scopeId!), isNull(feedbackImageDeletions.deletedAt),
           ));
         }
       }
@@ -289,10 +297,10 @@ export function customerFeedbackImageService(db: Db, storage: StorageService, op
           await journal(reader, companyId, owner.principal, "customer_feedback.image_removed", randomUUID());
           return cancelled!;
         }
-        if (!["ready", "deleting"].includes(row.status) || !row.objectKey || !row.transportSettledAt)
+        if (!["ready", "deleting"].includes(row.status) || !row.objectKey || !row.transportSettledAt || !storageScopeMatches(storage, row.storageScopeId))
           throw conflict("Image storage is unconfirmed; check the original request");
         await reader.insert(feedbackImageDeletions).values({ imageId: row.id, companyId,
-          objectKey: row.objectKey, transportSettledAt: row.transportSettledAt }).onConflictDoNothing();
+          objectKey: row.objectKey, storageScopeId: row.storageScopeId, transportSettledAt: row.transportSettledAt }).onConflictDoNothing();
         const [next] = await reader.update(customerFeedbackImages).set({ status: "deleting" })
           .where(eq(customerFeedbackImages.id, row.id)).returning();
         return next!;
@@ -304,13 +312,15 @@ export function customerFeedbackImageService(db: Db, storage: StorageService, op
       return owned(async (reader, owner) => {
         const current = await image(reader, companyId, feedbackId, imageId);
         if (current.status === "deleted") return projection(current);
-        if (current.status !== "deleting" || current.objectKey !== before.objectKey)
+        if (current.status !== "deleting" || current.objectKey !== before.objectKey || current.storageScopeId !== before.storageScopeId ||
+          !storageScopeMatches(storage, current.storageScopeId))
           throw conflict("Image removal changed; check the original request");
         const [row] = await reader.update(customerFeedbackImages).set({ status: "deleted", deletedAt: sql`clock_timestamp()` })
           .where(eq(customerFeedbackImages.id, current.id)).returning();
         await reader.update(feedbackImageDeletions).set({ deletedAt: sql`clock_timestamp()` }).where(and(
           eq(feedbackImageDeletions.imageId, current.id), eq(feedbackImageDeletions.companyId, companyId),
           eq(feedbackImageDeletions.objectKey, current.objectKey!),
+          eq(feedbackImageDeletions.storageScopeId, current.storageScopeId!),
           sql`${feedbackImageDeletions.transportSettledAt} is not null`, isNull(feedbackImageDeletions.deletedAt),
         ));
         await journal(reader, companyId, owner.principal, "customer_feedback.image_removed", randomUUID());
@@ -323,11 +333,13 @@ export function customerFeedbackImageService(db: Db, storage: StorageService, op
 /** Fixed original-object cleanup only. This function does not choose customer
  * retention deadlines and is not scheduled by this Source implementation. */
 export async function processFeedbackImageDeletion(db: Db, storage: StorageService, accountDeletionId?: string, companyId?: string, imageId?: string) {
+  if (!storageScopeMatches(storage, storage.scopeId)) return false;
   const candidate = await db.transaction(async tx => {
     await tx.execute(sql`set local statement_timeout='5s'`);
     await tx.execute(sql`set local lock_timeout='1s'`);
     const [row] = await tx.select().from(feedbackImageDeletions).where(and(isNull(feedbackImageDeletions.deletedAt),
       sql`${feedbackImageDeletions.transportSettledAt} is not null`,
+      eq(feedbackImageDeletions.storageScopeId, storage.scopeId!),
       accountDeletionId ? eq(feedbackImageDeletions.accountDeletionId, accountDeletionId) : undefined,
       imageId ? eq(feedbackImageDeletions.imageId, imageId) : undefined,
       companyId ? eq(feedbackImageDeletions.companyId, companyId) : undefined)).orderBy(feedbackImageDeletions.createdAt)
@@ -354,12 +366,14 @@ export async function processFeedbackImageDeletion(db: Db, storage: StorageServi
     )).for("update");
     const [row] = await tx.select().from(feedbackImageDeletions).where(eq(feedbackImageDeletions.id, candidate.id)).for("update");
     if (!row || row.deletedAt) return false;
-    if (row.companyId !== candidate.companyId || row.objectKey !== candidate.objectKey || !row.transportSettledAt)
+    if (row.companyId !== candidate.companyId || row.objectKey !== candidate.objectKey || !row.transportSettledAt ||
+      row.storageScopeId !== candidate.storageScopeId || !storageScopeMatches(storage, row.storageScopeId))
       throw conflict("Protected image deletion source changed");
     await tx.update(feedbackImageDeletions).set({ deletedAt: sql`clock_timestamp()` }).where(eq(feedbackImageDeletions.id, row.id));
     await tx.update(customerFeedbackImages).set({ status: "deleted", deletedAt: sql`clock_timestamp()` }).where(and(
       eq(customerFeedbackImages.id, row.imageId), eq(customerFeedbackImages.companyId, row.companyId),
       eq(customerFeedbackImages.objectKey, row.objectKey), eq(customerFeedbackImages.status, "deleting"),
+      eq(customerFeedbackImages.storageScopeId, row.storageScopeId!),
     ));
     return true;
   });

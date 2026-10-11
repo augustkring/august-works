@@ -13,6 +13,7 @@ import { loadFeedbackDataProcessingAdmission } from "../services/feedback-data-p
 import { configuredFeedbackImageScanner, FEEDBACK_IMAGE_MAX_BYTES } from "../services/feedback-image-intake.js";
 import { customerFeedbackImageService } from "../services/customer-feedback-images.js";
 import type { StorageService } from "../storage/types.js";
+import { storageScopeMatches } from "../storage/object-scope.js";
 import { customerFeedbackRetentionService } from "../services/customer-feedback-retention.js";
 import { customerFeedbackRetentionErasureService } from "../services/customer-feedback-retention-erasure.js";
 
@@ -30,6 +31,7 @@ export function customerFeedbackRoutes(
   const scanner = configuredFeedbackImageScanner(options.runtimeEnv);
   const imageService = options.storage
     ? customerFeedbackImageService(db, options.storage, { scanner, operatorUserIds: options.operatorUserIds }) : null;
+  const protectedStorageReady = !!options.storage && storageScopeMatches(options.storage, options.storage.scopeId);
   const retention = customerFeedbackRetentionService(db, options);
   const retentionErasure = options.storage ? customerFeedbackRetentionErasureService(db, options.storage, options) : null;
   const upload = multer({ storage: multer.memoryStorage(),
@@ -179,8 +181,8 @@ export function customerFeedbackRoutes(
       customerFeedbackPolicySchema.parse({
         contacts: FEEDBACK_CONTACTS,
         attachments: {
-          enabled: !!imageService && !!scanner,
-          reason: imageService && scanner ? "validation_required" : "scanner_qualification_required",
+          enabled: protectedStorageReady && !!scanner,
+          reason: !scanner ? "scanner_qualification_required" : protectedStorageReady ? "validation_required" : "storage_qualification_required",
           types: ["image/png", "image/jpeg", "image/webp"],
           maxFiles: 3,
           maxBytes: 10485760,

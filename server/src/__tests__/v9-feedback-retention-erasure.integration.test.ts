@@ -1,17 +1,18 @@
 import { randomUUID, createHash } from "node:crypto";
-import { mkdtemp, rm } from "node:fs/promises";
+import { chmod, mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { eq, sql } from "drizzle-orm";
 import { beforeAll, afterAll, beforeEach, afterEach, describe, expect, it } from "vitest";
 import { createDb, closeRegisteredClients, companies, authUsers, customerFeedback, customerFeedbackAccess,
-  customerFeedbackEvents, customerFeedbackImages, feedbackRetentionErasures, feedbackImageDeletions, activityLog } from "@paperclipai/db";
+  customerFeedbackEvents, customerFeedbackImages, feedbackRetentionErasures, feedbackImageDeletions, activityLog, companyMemberships } from "@paperclipai/db";
 import { customerFeedbackRetentionErasureService, processApprovedFeedbackRetentionErasure } from "../services/customer-feedback-retention-erasure.js";
 import express from "express";
 import request from "supertest";
 import { customerFeedbackRoutes } from "../routes/customer-feedback.js";
 import { errorHandler } from "../middleware/error-handler.js";
 import { customerFeedbackRetentionService } from "../services/customer-feedback-retention.js";
+import { customerFeedbackImageService, processFeedbackImageDeletion } from "../services/customer-feedback-images.js";
 import { createStorageService } from "../storage/service.js";
 import { createLocalDiskStorageProvider } from "../storage/local-disk-provider.js";
 import type { StorageService } from "../storage/types.js";
@@ -55,7 +56,7 @@ describe("native explicit feedback retention erasure", () => {
       mediaType: "image/png", leaseToken: randomUUID(), leaseExpiresAt: new Date(Date.now() + 120000), createdAt: old(days) });
     const result = await storage.putFile({ companyId, namespace: `feedback-images/${feedbackId}/${id}`, originalFilename: "image.png",
       contentType: "image/png", body, onAllocated: async objectKey => {
-        await db.update(customerFeedbackImages).set({ status: "storing", objectKey, byteSize: body.length,
+        await db.update(customerFeedbackImages).set({ status: "storing", objectKey, storageScopeId: storage.scopeId, byteSize: body.length,
           sha256: hash(body), scannerToken: hash("owned historical normalized fixture"), scanCheckedAt: sql`clock_timestamp()` })
           .where(eq(customerFeedbackImages.id, id));
       }, onTransportSettled: settled ? async () => {
@@ -233,5 +234,82 @@ describe("native explicit feedback retention erasure", () => {
     expect(changed.status).toBe(409);
     await db.update(authUsers).set({ emailVerified: false }).where(eq(authUsers.id, operatorId));
     expect((await request(application).get(base + `/requests/${input.requestKey}?expectedUserId=${operatorId}`)).status).toBe(403);
+  });
+  it("refuses protected reads, removal and stale retention consent against another disk root before provider I/O", async () => {
+    const id = await historicalCase(), image = await historicalImage(id), input = await command(id);
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: operatorId, membershipRole: "viewer", status: "active" });
+    const other = createStorageService(createLocalDiskStorageProvider(join(directory, "another-root")));
+    let reads = 0, deletes = 0, heads = 0;
+    const changed = { ...other, async getObject(company: string, key: string) { reads++; return other.getObject(company, key); },
+      async deleteObject(company: string, key: string) { deletes++; return other.deleteObject(company, key); },
+      async headObject(company: string, key: string) { heads++; return other.headObject(company, key); } };
+    const images = customerFeedbackImageService(db, changed, { ...options(), scanner: null });
+    await expect(images.internalRead(actor(), companyId, id, image.id)).rejects.toMatchObject({ status: 404 });
+    await expect(images.remove(actor(), companyId, id, image.id)).rejects.toMatchObject({ status: 409 });
+    const review = await owner(changed).review(actor(), companyId, id);
+    expect(review.caseEligible).toBe(true); expect(review.caseCanErase).toBe(false);
+    expect(review.images[0]!.canErase).toBe(false); expect(review.reviewHash).not.toBe(input.expectedReviewHash);
+    await expect(owner(changed).execute(actor(), companyId, id, input)).rejects.toMatchObject({ status: 409 });
+    expect([reads, deletes, heads]).toEqual([0, 0, 0]); expect(await records()).toEqual([]);
+    expect((await storage.headObject(companyId, image.objectKey)).exists).toBe(true);
+    expect(review).not.toHaveProperty("storageScopeId"); expect(JSON.stringify(review)).not.toContain(directory);
+    expect((await images.internalList(actor(), companyId, id))[0]).not.toHaveProperty("storageScopeId");
+  });
+  it("keeps approved parent erasure pending across a namespace change and finishes the same receipt only with original storage", async () => {
+    const id = await historicalCase(), image = await historicalImage(id), input = await command(id);
+    const uncertain = { ...storage, async deleteObject() { throw Error("Owned deletion acknowledgement unavailable"); } };
+    const pending = await owner(uncertain).execute(actor(), companyId, id, input);
+    expect(pending.status).toBe("pending");
+    const outbox = (await db.select().from(feedbackImageDeletions).where(eq(feedbackImageDeletions.imageId, image.id)))[0]!;
+    expect(outbox.storageScopeId).toBe(storage.scopeId);
+    const other = createStorageService(createLocalDiskStorageProvider(join(directory, "another-root")));
+    let calls = 0;
+    const changed = { ...other, async deleteObject() { calls++; }, async headObject() { calls++; return { exists: false }; } };
+    expect(await processFeedbackImageDeletion(db, changed, undefined, companyId, image.id)).toBe(false);
+    expect(await processApprovedFeedbackRetentionErasure(db, changed)).toBe(false);
+    expect((await owner(changed).execute(actor(), companyId, id, input)).status).toBe("pending");
+    expect(calls).toBe(0); expect((await storage.headObject(companyId, image.objectKey)).exists).toBe(true);
+    expect(await records()).toHaveLength(1);
+    const restored = createStorageService(createLocalDiskStorageProvider(directory));
+    const done = await owner(restored).execute(actor(), companyId, id, input);
+    expect(done.id).toBe(pending.id); expect(done.status).toBe("completed");
+    expect((await storage.headObject(companyId, image.objectKey)).exists).toBe(false); expect(await records()).toHaveLength(1);
+  });
+  it("keeps namespace-unknown providers behind a pending receipt without trusting absence in the current provider", async () => {
+    const id = await historicalCase(), image = await historicalImage(id), input = await command(id);
+    const pending = await owner({ ...storage, async deleteObject() { throw Error("Owned missing acknowledgement"); } }).execute(actor(), companyId, id, input);
+    let calls = 0;
+    const unknown = { ...storage, scopeId: undefined, async deleteObject() { calls++; }, async headObject() { calls++; return { exists: false }; } };
+    expect(await processApprovedFeedbackRetentionErasure(db, unknown)).toBe(false);
+    expect((await owner(unknown).execute(actor(), companyId, id, input)).status).toBe("pending"); expect(calls).toBe(0);
+    expect((await records())[0]!.id).toBe(pending.id);
+    expect((await storage.headObject(companyId, image.objectKey)).exists).toBe(true);
+  });
+  it("uses Native immutable allocation and outbox scope, refusing rebinding or a namespace-free new allocation", async () => {
+    const id = await historicalCase(), image = await historicalImage(id);
+    await expect(db.update(customerFeedbackImages).set({ storageScopeId: "b".repeat(64) }).where(eq(customerFeedbackImages.id, image.id)))
+      .rejects.toMatchObject({ cause: expect.objectContaining({ code: "23514" }) });
+    await owner({ ...storage, async deleteObject() { throw Error("Owned missing acknowledgement"); } }).execute(actor(), companyId, id, await command(id));
+    await expect(db.update(feedbackImageDeletions).set({ storageScopeId: "b".repeat(64) }).where(eq(feedbackImageDeletions.imageId, image.id)))
+      .rejects.toMatchObject({ cause: expect.objectContaining({ code: "23514" }) });
+    const open = await historicalCase(10, null), imageId = randomUUID();
+    await db.insert(customerFeedbackImages).values({ id: imageId, companyId, feedbackId: open, requestKey: randomUUID(), requestHash: hash("owned"),
+      mediaType: "image/png", leaseToken: randomUUID(), leaseExpiresAt: new Date(Date.now() + 120000) });
+    await expect(db.update(customerFeedbackImages).set({ status: "storing", objectKey: `${companyId}/feedback-images/${open}/${imageId}/owned.png`,
+      byteSize: 1, sha256: hash("owned"), scannerToken: hash("owned"), scanCheckedAt: new Date() }).where(eq(customerFeedbackImages.id, imageId)))
+      .rejects.toMatchObject({ cause: expect.objectContaining({ code: "23514" }) });
+  });
+  it("does not confirm physical erasure when the original disk becomes inaccessible", async () => {
+    const id = await historicalCase(), image = await historicalImage(id), input = await command(id);
+    await chmod(directory, 0o000);
+    try {
+      await expect(storage.headObject(companyId, image.objectKey)).rejects.toMatchObject({ code: "EACCES" });
+      const pending = await owner().execute(actor(), companyId, id, input);
+      expect(pending.status).toBe("pending"); expect(pending.completedAt).toBeNull();
+      expect((await db.select().from(feedbackImageDeletions).where(eq(feedbackImageDeletions.imageId, image.id)))[0]!.deletedAt).toBeNull();
+    } finally { await chmod(directory, 0o700); }
+    expect((await storage.headObject(companyId, image.objectKey)).exists).toBe(true);
+    expect((await owner().execute(actor(), companyId, id, input)).status).toBe("completed");
+    expect((await storage.headObject(companyId, image.objectKey)).exists).toBe(false);
   });
 });

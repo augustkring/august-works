@@ -88,8 +88,10 @@ function assertPutFileInput(input: PutFileInput): void {
 }
 
 export function createStorageService(provider: StorageProvider, accounting?: StorageAccounting): StorageService {
+  const scopeId = provider.scopeId;
   return {
     provider: provider.id,
+    scopeId,
 
     async putFile(input: PutFileInput): Promise<PutFileResult> {
       assertPutFileInput(input);
@@ -110,6 +112,7 @@ export function createStorageService(provider: StorageProvider, accounting?: Sto
 
       return {
         provider: provider.id,
+        scopeId,
         objectKey,
         contentType,
         byteSize,

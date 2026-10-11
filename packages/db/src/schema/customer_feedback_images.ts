@@ -15,6 +15,7 @@ export const customerFeedbackImages = pgTable("customer_feedback_images", {
   leaseToken: uuid("lease_token").notNull(),
   leaseExpiresAt: timestamp("lease_expires_at", { withTimezone: true }).notNull(),
   objectKey: text("object_key"),
+  storageScopeId: text("storage_scope_id"),
   mediaType: text("media_type").notNull(),
   byteSize: integer("byte_size"),
   sha256: text("sha256"),
@@ -36,6 +37,7 @@ export const customerFeedbackImages = pgTable("customer_feedback_images", {
   check("customer_feedback_images_ready_check", sql`${t.status} not in ('ready','deleting') or (${t.objectKey} is not null and ${t.byteSize} is not null and ${t.sha256} ~ '^[a-f0-9]{64}$' and ${t.scannerToken} ~ '^[a-f0-9]{64}$' and ${t.scanCheckedAt} is not null)`),
   check("customer_feedback_images_deleted_check", sql`(${t.status} = 'deleted') = (${t.deletedAt} is not null)`),
   check("customer_feedback_images_company_key_check", sql`${t.objectKey} is null or (${t.objectKey} like ${t.companyId}::text || '/feedback-images/%' and ${t.objectKey} not like '%..%')`),
+  check("customer_feedback_images_storage_scope_check", sql`${t.storageScopeId} is null or ${t.storageScopeId} ~ '^[a-f0-9]{64}$'`),
 ]);
 
 /** No feedback prose, filename or author/contact. Survives account/company
@@ -45,6 +47,7 @@ export const feedbackImageDeletions = pgTable("feedback_image_deletions", {
   imageId: uuid("image_id").notNull(),
   companyId: uuid("company_id").notNull(),
   objectKey: text("object_key").notNull(),
+  storageScopeId: text("storage_scope_id"),
   accountDeletionId: uuid("account_deletion_id"),
   transportSettledAt: timestamp("transport_settled_at", { withTimezone: true }),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
@@ -52,5 +55,8 @@ export const feedbackImageDeletions = pgTable("feedback_image_deletions", {
 }, t => [
   uniqueIndex("feedback_image_deletions_image_idx").on(t.imageId),
   index("feedback_image_deletions_pending_idx").on(t.deletedAt, t.createdAt),
+  index("feedback_image_deletions_scope_pending_idx").on(t.storageScopeId, t.createdAt, t.id)
+    .where(sql`${t.deletedAt} is null and ${t.transportSettledAt} is not null`),
   check("feedback_image_deletions_company_key_check", sql`${t.objectKey} like ${t.companyId}::text || '/feedback-images/%' and ${t.objectKey} not like '%..%'`),
+  check("feedback_image_deletions_storage_scope_check", sql`${t.storageScopeId} is null or ${t.storageScopeId} ~ '^[a-f0-9]{64}$'`),
 ]);

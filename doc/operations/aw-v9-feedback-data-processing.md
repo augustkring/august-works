@@ -138,6 +138,24 @@ expiry selection remains inactive. Scope qualification passed 79 actual Native
 cases, 119 focused cases, typing and four built-browser cases, with separate
 frozen backend/UI evidence and fixture limits in the dated plan. Native proof
 uses migrated PostgreSQL and owned disk fixtures; browser erasure responses are
-software replies and do not delete the native fixture. Original storage namespace
-persistence, operating unknown-PUT recovery, restore quarantine for a lost
-ledger and the six Privacy policy approvals remain open before GA.
+software replies and do not delete the native fixture. Operating unknown-PUT recovery, restore quarantine for a lost ledger, live
+provider/scanner qualification and the six Privacy policy approvals remain open
+before GA.
+
+## Original object namespace and physical confirmation
+
+A private constructor-owned namespace identity is persisted before an image PUT
+and retained unchanged in the parent/account/company deletion outbox. A different
+disk root, S3 bucket/region/endpoint/prefix or addressing mode cannot qualify that
+original object. Protected reads and new expiry consent refuse mismatch; cleanup
+leaves the approved original receipt pending without provider DELETE/HEAD.
+Unknown legacy scope is never backfilled from current configuration. Public
+image intake also remains unavailable when that namespace identity is unknown.
+
+Original disk HEAD/DELETE propagate filesystem failures other than actual ENOENT;
+permission denial never proves absence. Scoped checks passed 124 focused and 85
+actual Native cases, with Shared/DB/server/UI typing on the unchanged runtime
+source and a subsequent test-fixture-only correction. The dated storage-scope
+plan records exact hashes and earlier preparation failures. An unchanged locator
+with replaced physical storage or restored data requires separate operating
+migration/restore proof. Constructor S3 checks did no provider I/O.

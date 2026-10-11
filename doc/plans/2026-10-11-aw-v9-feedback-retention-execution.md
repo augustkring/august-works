@@ -109,3 +109,8 @@ Next unresolved storage boundary: original allocation/outbox keys currently
 lack provider/root/bucket/prefix binding. A changed storage configuration must
 not qualify physical erasure against a different namespace. This is open before
 PR readiness; current stable-config disk proof does not qualify that migration.
+
+The storage namespace gap above is now addressed by the separately qualified
+implementation in `2026-10-11-aw-v9-feedback-storage-scope.md`: 85 Native cases
+and 124 focused cases. Configured namespace binding is qualified with real disk;
+physical replacement/restore and live S3 operating evidence remain separate.

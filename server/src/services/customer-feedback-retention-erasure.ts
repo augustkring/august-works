@@ -8,6 +8,7 @@ import { feedbackRetentionErasureHistorySchema } from "@paperclipai/shared";
 import { conflict, notFound } from "../errors.js";
 import type { AuthorizationActor } from "./authorization.js";
 import type { StorageService } from "../storage/types.js";
+import { storageScopeMatches } from "../storage/object-scope.js";
 import { customerFeedbackService } from "./customer-feedback.js";
 import { evaluateFeedbackRetention, loadFeedbackRetentionConfiguration } from "./feedback-retention.js";
 import { processFeedbackImageDeletion } from "./customer-feedback-images.js";
@@ -26,7 +27,7 @@ async function finishApprovedErasure(reader: Db, row: Erasure) {
     const [remaining] = await reader.execute<{ count: string }>(sql`
       select count(*)::text as count from unnest(ARRAY[${sql.join(row.objectImageIds.map(id => sql`${id}::uuid`), sql`, `)}]) i(id)
       left join feedback_image_deletions d on d.company_id=${row.companyId} and d.image_id=i.id
-      where d.id is null or d.deleted_at is null or d.transport_settled_at is null`);
+      where d.id is null or d.deleted_at is null or d.transport_settled_at is null or d.storage_scope_id is null`);
     if (remaining!.count !== "0") return row;
   }
   const [complete] = await reader.update(feedbackRetentionErasures).set({ status: "completed", completedAt: sql`clock_timestamp()` })
@@ -57,7 +58,7 @@ export function customerFeedbackRetentionErasureService(db: Db, storage: Storage
     )).orderBy(customerFeedbackImages.createdAt, customerFeedbackImages.id).for("update");
     const settled = (image: typeof customerFeedbackImages.$inferSelect) => image.objectKey === null
       ? ["scanning", "failed"].includes(image.status)
-      : image.transportSettledAt !== null && ["storing", "ready", "deleting"].includes(image.status);
+      : image.transportSettledAt !== null && storageScopeMatches(storage, image.storageScopeId) && ["storing", "ready", "deleting"].includes(image.status);
     const images = rows.map(image => {
       const result = evaluateFeedbackRetention({ ...lifecycle, imageCreatedAt: image.createdAt }, configuration);
       return { id: image.id, dueAt: result.imageDueAt!, eligible: result.imageEligible,
@@ -69,7 +70,8 @@ export function customerFeedbackRetentionErasureService(db: Db, storage: Storage
     // Dates and actual transport settlement are bound even when a status or
     // optimistic version alone would appear unchanged. No object key leaves.
     const reviewHash = digest({ ...value, createdAt: owner.createdAt.toISOString(), closedAt: owner.closedAt?.toISOString() ?? null,
-      status: owner.status, transport: rows.map(image => ({ id: image.id, allocated: image.objectKey !== null,
+      status: owner.status, storageScopeId: storage.scopeId ?? null, transport: rows.map(image => ({ id: image.id, allocated: image.objectKey !== null,
+        storageScopeId: image.storageScopeId,
         settledAt: image.transportSettledAt?.toISOString() ?? null, createdAt: image.createdAt.toISOString() })) });
     return { view: feedbackRetentionErasureReviewSchema.parse({ ...value, reviewHash }), rows };
   }
@@ -144,6 +146,7 @@ export function customerFeedbackRetentionErasureService(db: Db, storage: Storage
           } else {
             await reader.update(customerFeedbackImages).set({ status: "deleting" }).where(eq(customerFeedbackImages.id, image.id));
             await reader.insert(feedbackImageDeletions).values({ companyId, imageId: image.id, objectKey: image.objectKey,
+              storageScopeId: image.storageScopeId,
               transportSettledAt: image.transportSettledAt }).onConflictDoNothing({ target: feedbackImageDeletions.imageId });
           }
         }

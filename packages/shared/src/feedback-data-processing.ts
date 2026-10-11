@@ -42,7 +42,7 @@ export const customerFeedbackPolicySchema = z.strictObject({
   }),
   attachments: z.strictObject({
     enabled: z.boolean(),
-    reason: z.enum(["scanner_qualification_required", "validation_required"]),
+    reason: z.enum(["scanner_qualification_required", "storage_qualification_required", "validation_required"]),
     types: z.tuple([
       z.literal("image/png"),
       z.literal("image/jpeg"),

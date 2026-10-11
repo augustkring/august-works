@@ -156,7 +156,7 @@
       "submissionUnconfirmed": "Feedback received. Some selected images could not be confirmed. Check their current status below or in My feedback."
     },
     "retentionTitle": "Retention exceptions",
-    "retentionPolicy": "House defaults: feedback and replies 90 days after closure, images 30 days after upload, open cases 12 months. An active legal or incident hold blocks deletion. Automatic retention deletion is not enabled.",
+    "retentionPolicy": "House defaults: feedback and replies 90 days after closure, images 30 days from first submission, open cases 12 months. An active legal or incident hold blocks deletion. Automatic retention deletion is not enabled.",
     "retentionChecking": "Checking current retention controls…",
     "retentionUnavailable": "Current retention controls could not be verified.",
     "retentionHold": "Preserve this case for a legal or incident hold",
