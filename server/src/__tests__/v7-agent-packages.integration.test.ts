@@ -2266,12 +2266,19 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(view.capabilities).toHaveLength(20);
       expect(view.capabilities[0]?.versionId).toBe(selected.published.id);
       expect(view.blockers).not.toContain("no_qualified_capability");
+      const choosing = await selected.activation.command(f.actor, f.home, { operation: "reselect_capability", requestId: randomUUID(), expectedVersion: view.version });
+      expect(choosing.capabilities.some(capability => capability.versionId === selected.published.id)).toBe(false);
+      const reselected = await selected.activation.command(f.actor, f.home, { operation: "select_capability", requestId: randomUUID(),
+        expectedVersion: choosing.version, packageVersionId: selected.published.id });
+      expect(reselected.state).toMatchObject({ step: "access", packageVersionId: selected.published.id });
+      expect(await db.select().from(toolConnectionInstalls).where(eq(toolConnectionInstalls.companyId, f.home))).toEqual([]);
+      expect(await db.select().from(connectionGrants).where(eq(connectionGrants.companyId, f.home))).toEqual([]);
       await service.revoke(f.actor, selected.published.id);
       const revoked = await selected.activation.get(f.actor, f.home);
       expect(revoked.capabilities).toHaveLength(20);
       expect(revoked.capabilities.some(capability => capability.versionId === selected.published.id)).toBe(false);
       expect(revoked.blockers).toContain("no_qualified_capability");
-      await expect(selected.activation.command(f.actor, f.home, { operation: "continue_access", requestId: randomUUID(), expectedVersion: selected.onboarding.version }))
+      await expect(selected.activation.command(f.actor, f.home, { operation: "continue_access", requestId: randomUUID(), expectedVersion: reselected.version }))
         .rejects.toMatchObject({ status: 409, details: { code: "CAPABILITY_UNAVAILABLE" } });
     });
     it("preserves the original outcome and company purpose when Not now returns to capability choice without granting access", async () => {

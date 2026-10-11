@@ -341,7 +341,7 @@ export function activationService(db: Db) {
               "agents:create",
             );
             if (
-              !(await capabilities(txDb)).some(
+              !(await capabilities(txDb, input.packageVersionId)).some(
                 (c) => c.versionId === input.packageVersionId,
               )
             )

@@ -51,3 +51,11 @@ fixture also left Free Core/billing flags enabled for following Original tests,
 changing their actual capacity guards. Its three flags now restore their exact
 previous values in `finally`. No production fence or assertion is weakened.
 Types/browser V1 did not start; the full exact-source Native rerun is pending.
+
+One V2 failure also exposed a real bounded-catalog bug: an explicit valid C1
+capability selection was validated against only the twenty-choice display page.
+The Original capability reader already supports an exact current published pin
+with all customer/C1/draft-only/release checks. `select_capability` now supplies
+the explicitly selected UUID to that existing owner, keeping display bounds
+and Native qualification intact. The page-boundary Native case now exercises
+actual reselect/select and still refuses the revoked pin.
