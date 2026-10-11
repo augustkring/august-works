@@ -83,3 +83,10 @@ V2 and combined Shared build V2 passed. Historical failed qualifications remain
 recorded above and in their logs. This is bounded personal same-run Source
 qualification; unhealthy retained login, organizational reach, full V9, final
 integrated checks, live provider, human acceptance and PR readiness remain open.
+
+Integrated after qualification while retaining existing Root localization history.
+Six overlapping Source conflicts used the already qualified combined implementation;
+all 18 runtime/schema/migration/locale/test scope files match qualified 4ab5eae9e
+byte-for-byte. The semantic helper fixture also keeps its required null predecessor.
+Root token gates V1 passed. This reuses only the stated bounded qualification;
+final integrated repository type/test/build checks remain pending.
