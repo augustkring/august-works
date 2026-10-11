@@ -1,0 +1,87 @@
+name: BLENTERA V9 public browser smoke
+on:
+  push:
+    branches:
+      - blentera-preview/v9-company-work-20261011
+  workflow_dispatch:
+permissions:
+  contents: read
+jobs:
+  browser:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+      - name: Install isolated browser test library
+        shell: bash
+        run: |
+          mkdir -p "$RUNNER_TEMP/v9-browser"
+          cd "$RUNNER_TEMP/v9-browser"
+          npm init -y >/dev/null
+          npm install playwright-core@1.56.0 --no-save --no-audit --no-fund --ignore-scripts
+      - name: Run actual Chrome browser against public link
+        shell: bash
+        env:
+          PUBLIC_URL: https://sharehtml.zhenjia.dev/v/nTB3hujrzk/
+        run: |
+          set -euo pipefail
+          cd "$RUNNER_TEMP/v9-browser"
+          mkdir -p "$RUNNER_TEMP/screenshots"
+          cat > smoke.cjs <<'JS'
+          const { chromium } = require('playwright-core');
+          const fs=require('fs');
+          const url=process.env.PUBLIC_URL;
+          (async () => {
+            const browser=await chromium.launch({channel:'chrome',headless:true,args:['--no-sandbox','--disable-dev-shm-usage']});
+            const cases=[];
+            try{
+              for (const w of [1440,390]){
+                const page=await browser.newPage({viewport:{width:w,height:900}});
+                const errors=[];page.on('pageerror',e=>errors.push(String(e)));
+                await page.goto(url,{waitUntil:'domcontentloaded',timeout:45000});
+                await page.waitForTimeout(350);
+                const home=await page.locator('[data-preview-page="home"]').isVisible();
+                const overflow=await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth);
+                if(!home || overflow>1)throw Error('Home rendering '+JSON.stringify({w,home,overflow}));
+                for(const c of ['product','access']){
+                  await page.locator('[data-case="'+c+'"]').first().click();
+                  if(!await page.locator('[data-case-panel="'+c+'"]').first().isVisible())throw Error('Case click failed '+c+' '+w);
+                }
+                await page.screenshot({path:process.env.RUNNER_TEMP+'/screenshots/v9-home-'+w+'.png'});
+                await page.goto(url+'#/about',{waitUntil:'domcontentloaded',timeout:45000});
+                await page.waitForTimeout(350);
+                const about=await page.locator('[data-preview-page="about"]').isVisible();
+                const overflowAbout=await page.evaluate(()=>document.documentElement.scrollWidth-innerWidth);
+                if(!about || overflowAbout>1)throw Error('About rendering '+JSON.stringify({w,about,overflowAbout}));
+                await page.locator('[data-executive="cfo"]').first().click();
+                if(!await page.locator('[data-executive-panel="cfo"]').first().isVisible())throw Error('CFO explorer failed '+w);
+                await page.screenshot({path:process.env.RUNNER_TEMP+'/screenshots/v9-about-'+w+'.png'});
+                for(const part of ['platform','trust']){
+                  await page.goto(url+'#/'+part,{waitUntil:'domcontentloaded',timeout:45000});
+                  await page.waitForTimeout(160);
+                  if(!await page.locator('[data-preview-page="'+part+'"]').isVisible())throw Error(part+' not visible '+w);
+                }
+                if(w===390){
+                  await page.locator('.menu-button').first().click();
+                  if(!await page.locator('#mobile-nav').first().isVisible())throw Error('Mobile nav not opening');
+                  await page.keyboard.press('Escape');
+                  if(await page.locator('#mobile-nav').first().isVisible())throw Error('Mobile nav not closing');
+                }
+                if(errors.length)throw Error('Page errors: '+errors.join('; '));
+                cases.push({width:w,homepage:true,about:true,platform:true,trust:true,interactions:true,jsErrors:0});
+                await page.close();
+              }
+            }finally {await browser.close();}
+            console.log('REMOTE_BROWSER_VERIFIED='+url);
+            console.log(JSON.stringify(cases,null,2));
+          })().catch(e=>{console.error(e);process.exit(1)});
+          JS
+          node smoke.cjs
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: blentera-v9-live-browser-screenshots
+          path: ${{runner.temp}}/screenshots
+          retention-days: 14
