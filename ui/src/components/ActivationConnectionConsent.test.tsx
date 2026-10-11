@@ -19,7 +19,8 @@ const companyId = "10000000-0000-4000-8000-000000000001", runId = "20000000-0000
   packageVersionId = "30000000-0000-4000-8000-000000000001", applicationId = "40000000-0000-4000-8000-000000000001";
 const review: ActivationConnectionReview = { companyId, onboardingRunId: runId, onboardingVersion: 1, packageVersionId,
   packageContentHash: "a".repeat(64), applicationId, applicationKey: "gmail", applicationName: "Original Gmail",
-  galleryKey: "gmail", connectionMethodKey: "paperclip-read", methodHash: "b".repeat(64), providerScopes: ["gmail.readonly"],
+  galleryKey: "gmail", connectionMethodKey: "paperclip-read", methodHash: "b".repeat(64), providerScopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+  explanation: { providerName: "Gmail", resource: "https://gmailmcp.googleapis.com/mcp/v1", capabilityName: "Draft agent", providerWriteTools: [] },
   existingConnection: null, scopeProfile: "gmail.read", grantKind: "user", deferAgentAccess: true, reviewHash: "c".repeat(64),
   preview: { neededNow: ["Personal account", "gmail.readonly"], why: "Prepare the original draft", usedBy: "No Agent access",
     canRead: ["Original provider scope"], canChange: ["No business changes"], notRequested: ["No deletion or spending"],
@@ -106,4 +107,21 @@ it("explains an exact existing connection reuse and refreshes onboarding only on
   expect(setupChanged).not.toHaveBeenCalled(); await approve();
   await vi.waitFor(() => expect(setupChanged).toHaveBeenCalledTimes(1));
   expect(post).toHaveBeenCalledTimes(1); expect(flow).not.toHaveBeenCalled();
+});
+
+it("changes permission explanations to Danish without translating authored purpose or changing the pending C3 command", async () => {
+  reads(); const post = vi.spyOn(activationConnectionApi, "approve").mockImplementation(async (_c, _u, _k, command) => receipt(command.requestKey));
+  await mount();
+  await act(async () => button("activation.connectionConsent.reviewDecision").click());
+  await act(async () => { await i18n.changeLanguage("da"); });
+  expect(container.querySelectorAll("dt")).toHaveLength(8);
+  expect(container.textContent).toContain("Læs e-mails (https://www.googleapis.com/auth/gmail.readonly)");
+  expect(container.textContent).toContain("Personligt login til Gmail; ressource: https://gmailmcp.googleapis.com/mcp/v1");
+  expect(container.textContent).toContain(review.preview.why);
+  expect(container.textContent).toContain("ingen agent får adgang");
+  expect(post).not.toHaveBeenCalled();
+  await act(async () => (document.querySelector('[role="alertdialog"] input') as HTMLInputElement).click());
+  await act(async () => button("activation.connectionConsent.confirm").click());
+  await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+  expect(post.mock.calls[0]![3]).toMatchObject({ confirmConnectionAuthorization: true, expectedReviewHash: review.reviewHash });
 });

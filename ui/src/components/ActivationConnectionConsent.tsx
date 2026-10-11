@@ -5,6 +5,7 @@ import type { ActivationConnectionConsentCommand, ActivationConnectionConsentRec
 import { activationConnectionApi } from "../api/activation-connections";
 import { useV9PrivateReadAuthority } from "../hooks/useV9PrivateReadAuthority";
 import { onboardingConsentAttemptKey, readOnboardingConsentAttempt, saveOnboardingConsentAttempt } from "../features/connections/onboarding-consent-attempt";
+import { activationPermissionStatements } from "../features/connections/activation-permission-statements";
 import { ConnectionSetupFlow } from "../features/connections/ConnectionSetupFlow";
 import { Button } from "./ui/button";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle, AlertDialogTrigger } from "./ui/alert-dialog";
@@ -101,15 +102,16 @@ export function ActivationConnectionConsent({ companyId, principal, runId, versi
   if (!authority.readReady || !canUseAuthority()) return <p role="status">{t("activation.connectionConsent.checking")}</p>;
   if (review.isPending || receipt.isPending || review.isFetching || receipt.isFetching) return <p role="status">{t("activation.connectionConsent.checking")}</p>;
   const reviewed = review.data, saved = receipt.data;
+  const preview = reviewed ? activationPermissionStatements(reviewed, (key, values) => t(key, values)) : null;
   const samePurpose = saved && reviewed && saved.packageVersionId === packageVersionId && saved.applicationId === reviewed.applicationId &&
     saved.onboardingVersion === version && saved.reviewHash === reviewed.reviewHash;
   return <section className="space-y-4 rounded-lg border border-border p-4" aria-label={`${t("activation.connectionConsent.title")}: ${reviewed?.applicationName ?? applicationKey} (${applicationKey})`}>
     <h2 className="text-lg font-semibold break-words">{reviewed?.applicationName ?? applicationKey}</h2>
     {review.isError || receipt.isError ? <p role="status">{t("activation.connectionConsent.unavailable")}</p> : null}
-    {reviewed ? <dl className="space-y-3">{permissionFields.map(field => <div key={field}>
+    {preview ? <dl className="space-y-3">{permissionFields.map(field => <div key={field}>
       <dt className="font-medium">{t(`activation.connectionConsent.fields.${field}`)}</dt>
-      <dd className="break-words">{Array.isArray(reviewed.preview[field]) ? <ul className="list-disc space-y-1 pl-5">
-        {(reviewed.preview[field] as string[]).map(statement => <li key={statement}>{statement}</li>)}</ul> : reviewed.preview[field] as string}</dd>
+      <dd className="break-words">{Array.isArray(preview[field]) ? <ul className="list-disc space-y-1 pl-5">
+        {(preview[field] as string[]).map(statement => <li key={statement}>{statement}</li>)}</ul> : preview[field] as string}</dd>
     </div>)}</dl> : null}
     <p>{t("activation.connectionConsent.boundary")}</p>
     {reviewed?.existingConnection ? <p>{t("activation.connectionConsent.reuseBoundary")}</p> : null}

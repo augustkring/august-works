@@ -397,7 +397,61 @@
         "withdrawn": "Purpose approval withdrawn.",
         "changed": "The reviewed setup changed. Withdraw the earlier purpose approval before reviewing a new one."
       },
-      "reuseBoundary": "This decision reuses the exact validated personal connection. It does not create another connection or repeat provider sign-in. Agent access remains unassigned."
+      "reuseBoundary": "This decision reuses the exact validated personal connection. It does not create another connection or repeat provider sign-in. Agent access remains unassigned.",
+      "explanation": {
+        "personal": "Personal sign-in to {{provider}}; resource: {{resource}}",
+        "reuse": "Reuse the exact validated personal {{provider}} connection {{connection}}; resource: {{resource}}",
+        "usedBy": "{{capability}}; no Agent receives this connection during setup.",
+        "providerAccount": "These provider permissions cover the account authorized at the provider. The identifiers below are the exact requested scopes.",
+        "unmappedScope": "Provider scope requiring its own detailed review: {{scope}}",
+        "writeTools": "The provider profile includes these write tools: {{tools}}. This decision does not authorize an Agent to use them.",
+        "noWriteTools": "The selected provider profile has no write tools.",
+        "noBusinessChanges": "August Works authorizes no business changes or Agent actions in this setup decision. Provider scopes may be broader than those actions.",
+        "noOrganization": "No organization identity, company installation or Agent access.",
+        "noConsequentialAuthority": "No August Works permission to send messages, delete data, spend money or broaden access.",
+        "noExecution": "No Agent execution. Sign-in and connection validation use the original connection owner; later use needs a separate current purpose and Safe Test.",
+        "separateDecision": "Agent access and automatic business actions need a separate reviewed decision.",
+        "consequentialDecision": "External communication, changes, deletion, spending and broader permissions require their own approval.",
+        "scopes": {
+          "gmail_readonly": "Read email",
+          "gmail_compose": "Manage drafts and send email",
+          "drive_readonly": "View and download Drive files",
+          "drive_file": "Create and manage Drive files used with this app",
+          "documents_readonly": "View Google documents",
+          "documents": "View and edit Google documents",
+          "spreadsheets_readonly": "View Google spreadsheets",
+          "spreadsheets": "View and edit Google spreadsheets",
+          "presentations_readonly": "View Google presentations",
+          "presentations": "View and edit Google presentations",
+          "calendar_calendarlist_readonly": "View the list of calendars",
+          "calendar_events_freebusy": "View event availability",
+          "calendar_events_readonly": "View calendar events",
+          "calendar_events": "View and edit calendar events",
+          "chat_spaces_readonly": "View Chat spaces",
+          "chat_messages_readonly": "View Chat messages",
+          "chat_messages_create": "Send Chat messages",
+          "directory_readonly": "View organization directory information",
+          "userinfo_profile": "View basic profile information",
+          "contacts_readonly": "View contacts",
+          "calendar_readonly": "View calendars and events"
+        },
+        "tools": {
+          "create_draft": "Create email drafts",
+          "copy_file": "Copy files",
+          "create_file": "Create files",
+          "update_doc": "Edit documents",
+          "update_spreadsheet": "Edit spreadsheets",
+          "update_values": "Edit spreadsheet values",
+          "update_formulas": "Edit spreadsheet formulas",
+          "insert_dimension": "Insert rows or columns",
+          "update_presentation": "Edit presentations",
+          "create_event": "Create events",
+          "update_event": "Edit events",
+          "delete_event": "Delete events",
+          "respond_to_event": "Respond to events",
+          "send_message": "Send messages"
+        }
+      }
     }
   },
   "company": {

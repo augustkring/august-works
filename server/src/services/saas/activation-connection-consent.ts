@@ -110,6 +110,8 @@ function review(current: Awaited<ReturnType<typeof source>>, method: Method) {
     },
   };
   return activationConnectionReviewSchema.parse({ ...fields,
+    explanation: { providerName: method.providerName, resource: method.resource,
+      capabilityName: current.pin.name, providerWriteTools: method.providerWriteTools },
     reviewHash: nativeSha256({ ...fields, subjectUserId: current.userId, applicationHash: current.applicationHash }) });
 }
 

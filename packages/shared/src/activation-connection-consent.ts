@@ -36,6 +36,14 @@ export const activationConnectionReviewSchema = z.strictObject({
   grantKind: z.literal("user"),
   deferAgentAccess: z.literal(true),
   preview: activationConnectionPermissionPreviewSchema,
+  // Locale-independent display facts derived from the already pinned Original
+  // method/package. Presentation language must never change consent identity.
+  explanation: z.strictObject({
+    providerName: statement,
+    resource: z.url().max(2000),
+    capabilityName: statement,
+    providerWriteTools: z.array(statement).max(100),
+  }),
   existingConnection: z.strictObject({ id: z.uuid(), name: z.string().min(1).max(200), setupHash: hash }).nullable(),
   reviewHash: hash,
 });

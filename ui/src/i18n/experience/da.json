@@ -397,7 +397,61 @@
         "withdrawn": "Godkendelsen af formålet er trukket tilbage.",
         "changed": "Den gennemgåede opsætning er ændret. Træk den tidligere godkendelse af formålet tilbage, før du gennemgår en ny."
       },
-      "reuseBoundary": "Denne beslutning genbruger den præcise, validerede personlige forbindelse. Den opretter ikke en ny forbindelse og gentager ikke login hos udbyderen. Agentadgang er fortsat ikke tildelt."
+      "reuseBoundary": "Denne beslutning genbruger den præcise, validerede personlige forbindelse. Den opretter ikke en ny forbindelse og gentager ikke login hos udbyderen. Agentadgang er fortsat ikke tildelt.",
+      "explanation": {
+        "personal": "Personligt login til {{provider}}; ressource: {{resource}}",
+        "reuse": "Genbrug den præcise validerede personlige {{provider}}-forbindelse {{connection}}; ressource: {{resource}}",
+        "usedBy": "{{capability}}; ingen agent får adgang til forbindelsen under opsætningen.",
+        "providerAccount": "Disse tilladelser hos udbyderen omfatter den konto, du godkender hos udbyderen. Identifikatorerne nedenfor er de præcise scopes, der anmodes om.",
+        "unmappedScope": "Scope hos udbyderen, der kræver sin egen detaljerede gennemgang: {{scope}}",
+        "writeTools": "Udbyderprofilen indeholder disse skriveværktøjer: {{tools}}. Denne beslutning giver ikke en agent tilladelse til at bruge dem.",
+        "noWriteTools": "Den valgte udbyderprofil har ingen skriveværktøjer.",
+        "noBusinessChanges": "August Works giver ikke tilladelse til forretningsændringer eller agenthandlinger med denne opsætningsbeslutning. Udbyderens scopes kan være bredere end disse handlinger.",
+        "noOrganization": "Ingen organisationsidentitet, virksomhedsinstallation eller agentadgang.",
+        "noConsequentialAuthority": "Ingen August Works-tilladelse til at sende beskeder, slette data, bruge penge eller udvide adgang.",
+        "noExecution": "Ingen agentkørsel. Login og validering af forbindelsen bruger den oprindelige forbindelsesejer; senere brug kræver en særskilt gennemgang af det aktuelle formål og en sikker test.",
+        "separateDecision": "Agentadgang og automatiske forretningshandlinger kræver en særskilt gennemgået beslutning.",
+        "consequentialDecision": "Ekstern kommunikation, ændringer, sletning, forbrug og bredere tilladelser kræver hver sin godkendelse.",
+        "scopes": {
+          "gmail_readonly": "Læs e-mails",
+          "gmail_compose": "Administrer kladder og send e-mails",
+          "drive_readonly": "Se og download Drive-filer",
+          "drive_file": "Opret og administrer Drive-filer, der bruges med denne app",
+          "documents_readonly": "Se Google-dokumenter",
+          "documents": "Se og rediger Google-dokumenter",
+          "spreadsheets_readonly": "Se Google-regneark",
+          "spreadsheets": "Se og rediger Google-regneark",
+          "presentations_readonly": "Se Google-præsentationer",
+          "presentations": "Se og rediger Google-præsentationer",
+          "calendar_calendarlist_readonly": "Se listen over kalendere",
+          "calendar_events_freebusy": "Se tilgængelighed for begivenheder",
+          "calendar_events_readonly": "Se kalenderbegivenheder",
+          "calendar_events": "Se og rediger kalenderbegivenheder",
+          "chat_spaces_readonly": "Se Chat-rum",
+          "chat_messages_readonly": "Se Chat-beskeder",
+          "chat_messages_create": "Send Chat-beskeder",
+          "directory_readonly": "Se oplysninger i organisationens adressebog",
+          "userinfo_profile": "Se grundlæggende profiloplysninger",
+          "contacts_readonly": "Se kontakter",
+          "calendar_readonly": "Se kalendere og begivenheder"
+        },
+        "tools": {
+          "create_draft": "Opret e-mailkladder",
+          "copy_file": "Kopier filer",
+          "create_file": "Opret filer",
+          "update_doc": "Rediger dokumenter",
+          "update_spreadsheet": "Rediger regneark",
+          "update_values": "Rediger værdier i regneark",
+          "update_formulas": "Rediger formler i regneark",
+          "insert_dimension": "Indsæt rækker eller kolonner",
+          "update_presentation": "Rediger præsentationer",
+          "create_event": "Opret begivenheder",
+          "update_event": "Rediger begivenheder",
+          "delete_event": "Slet begivenheder",
+          "respond_to_event": "Svar på begivenheder",
+          "send_message": "Send beskeder"
+        }
+      }
     }
   },
   "company": {
