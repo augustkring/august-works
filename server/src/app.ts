@@ -918,7 +918,7 @@ export async function createApp(
   api.use(maintenanceHistoryRoutes(db));
   api.use(experienceMeasuresRoutes(db));
   api.use(customerSupportRoutes(db));
-  api.use(customerFeedbackRoutes(db,{operatorUserIds:opts.saasPlatform?.config.operatorUserIds}));
+  api.use(customerFeedbackRoutes(db,{operatorUserIds:opts.saasPlatform?.config.operatorUserIds, storage: scopedStorage}));
   api.use(attentionRoutes(db));
   api.use(decisionTrainingRoutes(db));
   api.use(decisionRoutes(db, opts.decisionServiceOptions));

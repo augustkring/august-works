@@ -1,4 +1,5 @@
 import { Router, type Request } from "express";
+import multer from "multer";
 import { z } from "zod";
 import type { Db } from "@paperclipai/db";
 import {
@@ -6,20 +7,38 @@ import {
   customerFeedbackPolicySchema,
 } from "@paperclipai/shared";
 import { assertBoard, hasCompanyAccess } from "./authz.js";
-import { badRequest, conflict, forbidden } from "../errors.js";
+import { badRequest, conflict, forbidden, unprocessable } from "../errors.js";
 import { customerFeedbackService } from "../services/customer-feedback.js";
 import { loadFeedbackDataProcessingAdmission } from "../services/feedback-data-processing.js";
+import { configuredFeedbackImageScanner, FEEDBACK_IMAGE_MAX_BYTES } from "../services/feedback-image-intake.js";
+import { customerFeedbackImageService } from "../services/customer-feedback-images.js";
+import type { StorageService } from "../storage/types.js";
+import { customerFeedbackRetentionService } from "../services/customer-feedback-retention.js";
 
 export function customerFeedbackRoutes(
   db: Db,
   options: {
     operatorUserIds?: readonly string[];
     runtimeEnv?: Readonly<Record<string, string | undefined>>;
+    storage?: StorageService;
   } = {},
 ) {
   const router = Router(),
     service = customerFeedbackService(db, options),
     dataProcessing = loadFeedbackDataProcessingAdmission(options.runtimeEnv);
+  const scanner = configuredFeedbackImageScanner(options.runtimeEnv);
+  const imageService = options.storage
+    ? customerFeedbackImageService(db, options.storage, { scanner, operatorUserIds: options.operatorUserIds }) : null;
+  const retention = customerFeedbackRetentionService(db, options);
+  const upload = multer({ storage: multer.memoryStorage(),
+    limits: { fileSize: FEEDBACK_IMAGE_MAX_BYTES, files: 1, fields: 0, parts: 1, headerPairs: 100 } });
+  // Attachment intake stays closed until native retention/hold/DSR ownership
+  // is integrated and qualified. A scanner/configuration flag alone cannot
+  // promote the existing public policy's literal disabled state.
+  function images() {
+    if (!imageService) throw unprocessable("Protected feedback image storage is unavailable");
+    return imageService;
+  }
   function identity(req: Request) {
     assertBoard(req);
     const principal =
@@ -40,9 +59,51 @@ export function customerFeedbackRoutes(
     // their own feedback; native current-read membership is checked in service.
     if (!hasCompanyAccess(req, id.data))
       throw forbidden("Company access required");
-    return id.data;
+    return id.data.toLowerCase();
   }
-  const feedbackId = (req: Request) => z.uuid().parse(req.params.feedbackId);
+  const feedbackId = (req: Request) => z.uuid().toLowerCase().parse(req.params.feedbackId);
+  router.get("/internal/customer-feedback/:companyId/:feedbackId/retention", async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store"); identity(req);
+    res.json(await retention.get(req.actor, z.uuid().parse(req.params.companyId), feedbackId(req)));
+  });
+  router.post("/internal/customer-feedback/:companyId/:feedbackId/retention", async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store"); identity(req);
+    res.json(await retention.change(req.actor, z.uuid().parse(req.params.companyId), feedbackId(req), req.body));
+  });
+  router.get("/internal/customer-feedback/:companyId/:feedbackId/retention-plan", async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store"); identity(req);
+    res.json(await retention.plan(req.actor, z.uuid().parse(req.params.companyId), feedbackId(req)));
+  });
+  const imageId = (req: Request) => z.uuid().toLowerCase().parse(req.params.imageId);
+  const imagePath = "/companies/:companyId/customer-feedback/:feedbackId/images";
+  router.get(imagePath, async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    res.json(await images().list(req.actor, context(req), feedbackId(req)));
+  });
+  router.get(`${imagePath}/requests/:requestKey`, async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    res.json(await images().request(req.actor, context(req), feedbackId(req), z.uuid().parse(req.params.requestKey)));
+  });
+  router.post(imagePath, async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    const companyId = context(req), id = feedbackId(req);
+    await images().preflight(req.actor, companyId, id);
+    // Existing policy is closed while the native data-processing owners are
+    // still under construction. No selected bytes are read or scanned here.
+    throw unprocessable("Feedback images require qualified native data processing", { code: "FEEDBACK_IMAGES_UNAVAILABLE" });
+  });
+  router.get(`${imagePath}/:imageId`, async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    res.setHeader("X-Content-Type-Options", "nosniff");
+    res.setHeader("Content-Security-Policy", "default-src 'none'; sandbox");
+    const result = await images().read(req.actor, context(req), feedbackId(req), imageId(req));
+    res.setHeader("Content-Disposition", "inline; filename=\"image\"");
+    res.type(result.mediaType).send(result.body);
+  });
+  router.delete(`${imagePath}/:imageId`, async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    res.json(await images().remove(req.actor, context(req), feedbackId(req), imageId(req)));
+  });
   router.get("/customer-feedback/policy", (_req, res) => {
     res.setHeader("Cache-Control", "private, no-store");
     res.json(

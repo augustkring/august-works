@@ -2,6 +2,7 @@ import {
   feedbackDataProcessingConfigurationSchema,
   type FeedbackDataProcessingConfiguration,
 } from "@paperclipai/shared";
+import { loadFeedbackRetentionConfiguration } from "./feedback-retention.js";
 
 export interface FeedbackDataProcessingAdmission {
   configuration: Readonly<FeedbackDataProcessingConfiguration> | null;
@@ -9,6 +10,7 @@ export interface FeedbackDataProcessingAdmission {
     | "owner_decision_required"
     | "configured_execution_unqualified";
   gaAllowed: false;
+  retention: ReturnType<typeof loadFeedbackRetentionConfiguration>;
 }
 
 /** Startup-owned configuration. Customer requests never provide policy keys.
@@ -52,5 +54,6 @@ export function loadFeedbackDataProcessingAdmission(
       ? "configured_execution_unqualified"
       : "owner_decision_required",
     gaAllowed: false,
+    retention: loadFeedbackRetentionConfiguration(env),
   });
 }

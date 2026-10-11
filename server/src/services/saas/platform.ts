@@ -1,5 +1,6 @@
 import { runtimeCatalogService } from "../runtime/catalog.js";
 import { accountDeletionService } from "./account-deletion.js";
+import { processFeedbackImageDeletion } from "../customer-feedback-images.js";
 import { secretService } from "../secrets.js";
 import { runtimeBackupSchedule } from "../runtime/backup-schedule.js";
 import {
@@ -89,6 +90,10 @@ export function saasPlatform(
   );
   const onboarding = saasOnboardingService(db);
   const accountDeletion = accountDeletionService(db, {
+    removeFeedbackImages: async operationId => {
+      for (let count = 0; count < 3; count++)
+        if (!(await processFeedbackImageDeletion(db, storage, operationId))) break;
+    },
     removeSecret: (id) => secretService(db).remove(id),
     cancelRun: (id) =>
       heartbeatService(db).cancelRun(id, "Account deletion", {

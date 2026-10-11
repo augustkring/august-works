@@ -96,6 +96,7 @@ export function createStorageService(provider: StorageProvider, accounting?: Sto
       const objectKey = buildObjectKey(input.companyId, input.namespace, input.originalFilename);
       const byteSize = input.body.length;
       const contentType = input.contentType.trim().toLowerCase();
+      await input.onAllocated?.(objectKey);
       await accounting?.reserve(input.companyId, objectKey, byteSize);
       await provider.putObject({
         objectKey,

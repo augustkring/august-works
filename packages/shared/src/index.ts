@@ -3330,6 +3330,9 @@ export * from "./management-chat-tools.js";
 
 export * from "./customer-feedback.js";
 export * from "./feedback-data-processing.js";
+export * from "./feedback-retention.js";
+export * from "./feedback-retention-controls.js";
+export * from "./feedback-images.js";
 export * from "./experience-commands.js";
 export * from "./activation.js";
 export * from "./company-experience.js";

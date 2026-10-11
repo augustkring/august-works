@@ -155,8 +155,9 @@ export function customerFeedbackService(
     companyId: string,
     principal: string,
     id: string,
+    lock = false,
   ) {
-    const [row] = await reader
+    const query = reader
       .select({ feedback: customerFeedback })
       .from(customerFeedback)
       .innerJoin(
@@ -172,6 +173,7 @@ export function customerFeedbackService(
         ),
       )
       .limit(1);
+    const [row] = await (lock ? query.for("update", { of: customerFeedback }) : query);
     if (!row) throw notFound("Feedback not found");
     return row.feedback;
   }
@@ -242,6 +244,65 @@ export function customerFeedbackService(
         .onConflictDoNothing();
   }
   return {
+    /** Charge each admitted byte-processing attempt against the original
+     * feedback budget in its reservation transaction. Canonical receipt
+     * replays return before this call and never run the scanner again. */
+    async chargeImageAttempt(reader: Db, companyId: string, principal: string) {
+      const key = "customer-feedback:" + digest(principal) + ":" + digest(companyId);
+      const [clock] = await reader.execute<{ now: string }>(sql`select floor(extract(epoch from clock_timestamp()) * 1000)::bigint::text as now`);
+      const now = Number(clock!.now), cutoff = now - 600000;
+      const [row] = await reader.insert(authRateLimits).values({ id: key, key, count: 1, lastRequest: now })
+        .onConflictDoUpdate({ target: authRateLimits.key, set: {
+          count: sql`case when ${authRateLimits.lastRequest}<${cutoff} then 1 else ${authRateLimits.count}+1 end`,
+          lastRequest: sql`case when ${authRateLimits.lastRequest}<${cutoff} then ${now} else ${authRateLimits.lastRequest} end`,
+        } }).returning();
+      if (row!.count > 20) throw tooManyRequests("Feedback request limit reached. Try again later.");
+    },
+    async withInternalRetention<T>(actor: AuthorizationActor, companyId: string, id: string,
+      operation: (reader: Db, principal: string, row: Pick<FeedbackRow, "id" | "createdAt" | "closedAt" | "status">) => Promise<T>): Promise<T> {
+      if (actor.source === "local_implicit") throw forbidden("A verified operator session is required for retention controls");
+      return db.transaction(async tx => {
+        await tx.execute(sql`set local statement_timeout='5s'`);
+        await tx.execute(sql`set local lock_timeout='1s'`);
+        const reader = tx as unknown as Db, principal = await operator(reader, actor);
+        await tx.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, principal)).for("share");
+        const [company] = await tx.select({ id: companies.id, status: companies.status }).from(companies)
+          .where(eq(companies.id, companyId)).for("update");
+        if (!company) throw notFound("Company is unavailable");
+        const [row] = await tx.select({ id: customerFeedback.id, createdAt: customerFeedback.createdAt,
+          closedAt: customerFeedback.closedAt, status: customerFeedback.status }).from(customerFeedback)
+          .where(and(eq(customerFeedback.companyId, companyId), eq(customerFeedback.id, id))).for("update");
+        if (!row) throw notFound("Feedback not found");
+        const result = await operation(reader, principal, row);
+        await operator(reader, actor);
+        return result;
+      });
+    },
+    /** Short native transactions only: scanning and Storage calls happen
+     * outside these locks, then return here to recheck original authority. */
+    async withOwnedImage<T>(
+      actor: AuthorizationActor,
+      companyId: string,
+      id: string,
+      operation: (reader: Db, owner: { id: string; principal: string }) => Promise<T>,
+      mutation = false,
+    ): Promise<T> {
+      return db.transaction(async tx => {
+        await tx.execute(sql`set local statement_timeout='5s'`);
+        await tx.execute(sql`set local lock_timeout='1s'`);
+        const reader = tx as unknown as Db;
+        const principal = await access(reader, actor, companyId, true);
+        if (mutation) {
+          await tx.execute(sql`select singleton_key from instance_settings where singleton_key='default' for share`);
+          await enabled(reader);
+          await awOutputFeedbackIsLocal(reader);
+        }
+        await owned(reader, companyId, principal, id, true);
+        const result = await operation(reader, { id, principal });
+        await access(reader, actor, companyId);
+        return result;
+      });
+    },
     async internalList(
       actor: AuthorizationActor,
       companyId: string,
@@ -645,6 +706,8 @@ export function customerFeedbackService(
           .update(customerFeedback)
           .set({
             status: FEEDBACK_CUSTOMER_STATUS[input.internalState],
+            closedAt: ["CLOSED", "RESOLVED"].includes(FEEDBACK_CUSTOMER_STATUS[input.internalState])
+              ? row.closedAt ?? sql`clock_timestamp()` : null,
             internalState: input.internalState,
             version: row.version + 1,
           })

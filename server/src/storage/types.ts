@@ -48,6 +48,9 @@ export interface PutFileInput {
   originalFilename: string | null;
   contentType: string;
   body: Buffer;
+  /** Server-owned durable reservation, completed before any provider write.
+   * It receives only the original Storage owner's allocated company key. */
+  onAllocated?: (objectKey: string) => Promise<void>;
 }
 
 export interface PutFileResult {

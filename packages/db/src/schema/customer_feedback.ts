@@ -35,6 +35,7 @@ export const customerFeedback = pgTable(
     createdAt: timestamp("created_at", { withTimezone: true })
       .notNull()
       .defaultNow(),
+    closedAt: timestamp("closed_at", { withTimezone: true }),
   },
   (t) => [
     uniqueIndex("customer_feedback_company_id_idx").on(t.companyId, t.id),
