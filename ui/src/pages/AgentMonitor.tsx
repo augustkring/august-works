@@ -3,6 +3,7 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { Link, useParams } from "../lib/router";
 import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
+import { useV9PrivateReadAuthority } from "../hooks/useV9PrivateReadAuthority";
 import { agentMonitorApi } from "../api/agent-monitor";
 import { useCompany } from "../context/CompanyContext";
 import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
@@ -45,6 +46,7 @@ export function AgentMonitor({
 }) {
   const { t } = useTranslation("experience");
   const client = useQueryClient();
+  const authority = useV9PrivateReadAuthority(principal, true);
   const [epoch, setEpoch] = useState(0);
   const prefix = ["agent-monitor", company, principal, agentId];
   const heading = useRef<HTMLHeadingElement>(null);
@@ -53,9 +55,10 @@ export function AgentMonitor({
   const restoreHref = useRef<string | null>(null);
   const alert = useRef<HTMLDivElement>(null);
   const query = useQuery({
-    queryKey: [...prefix, epoch],
+    queryKey: [...prefix, authority.epoch, epoch],
     queryFn: ({ signal }) =>
-      agentMonitorApi.get(company, principal, agentId, signal),
+      authority.read(() => agentMonitorApi.get(company, principal, agentId, signal)),
+    enabled: authority.readReady,
     retry: false,
     gcTime: 0,
     staleTime: 0,
@@ -73,7 +76,7 @@ export function AgentMonitor({
       setEpoch((old) => old + 1);
     }
   });
-  const current = query.isSuccess && !query.isFetching;
+  const current = authority.readReady && query.isSuccess && !query.isFetching;
   if (
     !current &&
     !query.isError &&
@@ -103,14 +106,14 @@ export function AgentMonitor({
     }
   }, [current]);
   useEffect(() => {
-    if (query.isError && !document.activeElement?.closest('[role="dialog"]'))
+    if ((query.isError || authority.failed) && !document.activeElement?.closest('[role="dialog"]'))
       alert.current?.focus();
-  }, [query.isError]);
-  if (query.isError)
+  }, [query.isError, authority.failed]);
+  if (query.isError || authority.failed)
     return (
       <div ref={alert} role="alert" tabIndex={-1} className="space-y-4">
         <p>{t("agentMonitorUnavailable")}</p>
-        <Button className="min-h-11" onClick={() => void query.refetch()}>
+        <Button className="min-h-11" onClick={() => void (authority.readReady ? query.refetch() : authority.recheck())}>
           {t("tryAgain")}
         </Button>
       </div>

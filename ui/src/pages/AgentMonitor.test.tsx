@@ -8,6 +8,8 @@ import type { AgentMonitor as View } from "@paperclipai/shared";
 import { agentMonitorApi } from "../api/agent-monitor";
 import { AgentMonitor } from "./AgentMonitor";
 import "../i18n";
+import { queryKeys } from "../lib/queryKeys";
+import { v9SessionFixture } from "../hooks/v9-session.test-support";
 let live: (event: {
   companyId: string;
   type: string;
@@ -56,6 +58,8 @@ afterEach(async () => {
 });
 async function mount(principal = "owner") {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryDefaults(queryKeys.auth.session, { gcTime: Infinity });
+  client.setQueryData(queryKeys.auth.session, v9SessionFixture(principal));
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -144,4 +148,57 @@ it("preserves customer focus on successful background refresh", async () => {
   expect(document.activeElement?.getAttribute("href")).toBe(
     link.getAttribute("href"),
   );
+});
+
+it("hides private agent metadata through a session recheck and waits for a fresh original owner read", async () => {
+  const get = vi.spyOn(agentMonitorApi, "get").mockResolvedValue(data);
+  await mount();
+  await vi.waitFor(() => expect(container.textContent).toContain("Monitor Native agent"));
+  let releaseOwner!: (view: View) => void;
+  get.mockImplementation(() => new Promise((resolve) => { releaseOwner = resolve; }));
+  let releaseSession!: () => void;
+  await act(async () => { void client.fetchQuery({ queryKey: queryKeys.auth.session,
+    queryFn: () => new Promise<ReturnType<typeof v9SessionFixture>>((resolve) => { releaseSession = () => resolve(v9SessionFixture("owner")); }) }).catch(() => {}); });
+  expect(container.textContent).not.toContain("Native agent");
+  expect(container.querySelector('a[href*="/runs/"]')).toBeNull();
+  expect(get).toHaveBeenCalledOnce();
+  await act(async () => releaseSession());
+  await vi.waitFor(() => expect(releaseOwner).toBeDefined());
+  expect(container.textContent).not.toContain("Native agent");
+  await act(async () => releaseOwner({ ...data, name: "Fresh current agent" }));
+  await vi.waitFor(() => expect(container.textContent).toContain("Monitor Fresh current agent"));
+  expect(container.textContent).not.toContain("Monitor Native agent");
+});
+
+it("refuses a same-turn private transport and its late response after the original session starts fetching", async () => {
+  const get = vi.spyOn(agentMonitorApi, "get").mockResolvedValue(data);
+  await mount();
+  await vi.waitFor(() => expect(container.textContent).toContain("Monitor Native agent"));
+  let releaseSession!: () => void;
+  await act(async () => {
+    void client.fetchQuery({ queryKey: queryKeys.auth.session,
+      queryFn: () => new Promise<ReturnType<typeof v9SessionFixture>>((resolve) => { releaseSession = () => resolve(v9SessionFixture("owner")); }) }).catch(() => {});
+    void client.refetchQueries({ queryKey: ["agent-monitor"], type: "active" }).catch(() => {});
+  });
+  expect(get).toHaveBeenCalledOnce();
+  expect(container.textContent).not.toContain("Native agent");
+  await act(async () => releaseSession());
+  await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(2));
+  await vi.waitFor(() => expect(container.textContent).toContain("Monitor Native agent"));
+});
+
+it("never restores a late agent result for an older session with the same person", async () => {
+  let releaseOld!: (view: View) => void, releaseCurrent!: (view: View) => void;
+  const get = vi.spyOn(agentMonitorApi, "get").mockImplementationOnce(() => new Promise((resolve) => { releaseOld = resolve; }))
+    .mockImplementationOnce(() => new Promise((resolve) => { releaseCurrent = resolve; }));
+  await mount();
+  await vi.waitFor(() => expect(releaseOld).toBeDefined());
+  const next = v9SessionFixture("owner");next.session.id = "another-native-session-for-owner";
+  await act(async () => client.setQueryData(queryKeys.auth.session, next));
+  await vi.waitFor(() => expect(releaseCurrent).toBeDefined());
+  await act(async () => releaseOld(data));
+  expect(container.textContent).not.toContain("Native agent");
+  await act(async () => releaseCurrent({ ...data, name: "Current session agent" }));
+  await vi.waitFor(() => expect(container.textContent).toContain("Monitor Current session agent"));
+  expect(get).toHaveBeenCalledTimes(2);
 });
