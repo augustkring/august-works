@@ -1,8 +1,9 @@
-import * as sourceAuthorization from "../services/v7-authorization.js";
+import { authorizationService } from "../services/authorization.js";
+import { inspectAnalyticalEvidenceAuthority } from "../services/analytical-evidence.js";
 import { authorizeStrategyNativePopulation, authorizeStrategyReference } from "../services/strategy-execution/references.js";
 import {lockAnalyticalCompany} from "../services/analytical-privacy.js";
 import { randomUUID } from "node:crypto";
-import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { agents, analyticalSourceSuppressions, applyPendingMigrations, companies, companyMemberships, createDb, decisionTargetIssues, documentRevisions, foundationSections, goals, heartbeatRuns, issues, projectGoals, projects, strategyExecutionLinks, strategyExecutionLinkVersions, strategyExecutionLinkApprovals, strategyExecutionSourceBindings } from "@paperclipai/db";
 import { strategyExecutionLinkDefinitionSchema, type StrategyExecutionLinkDefinition } from "@paperclipai/shared";
@@ -52,6 +53,16 @@ suite("native strategy links on migrated PostgreSQL", () => {
     await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
     return authorizeStrategyNativePopulation(tx, companyId, reader, type, ids, "internal", deadline);
   });
+  const scalarNativeReference = (reference: Parameters<typeof authorizeStrategyReference>[3], reader: import("../services/authorization.js").AuthorizationActor) => db.transaction(async raw => {
+    const tx = raw as unknown as typeof db;
+    await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
+    return authorizeStrategyReference(tx, companyId, reader, reference, "internal", true);
+  });
+  const evidenceAuthority = (ids: string[], reader = actor as import("../services/authorization.js").AuthorizationActor, type: "issue" | "project" = "issue") => db.transaction(async raw => {
+    const tx = raw as unknown as typeof db;
+    await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
+    return inspectAnalyticalEvidenceAuthority(tx, companyId, reader, ids.map(id => ({ inputType: type, inputRef: id, inputHash: "a".repeat(64), relationship: "source" })), performance.now() + 30000);
+  });
   it("batches native row transport while preserving each actual task and project authorization and legacy snapshot", async () => {
     const units = await db.insert(issues).values([{ companyId, projectId, title: "Private source A", status: "todo" }, { companyId, projectId, title: "Private source B", status: "done" }]).returning();
     const expected = await db.transaction(async raw => {
@@ -59,16 +70,34 @@ suite("native strategy links on migrated PostgreSQL", () => {
       await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
       return new Map(await Promise.all(units.map(async unit => [unit.id, await authorizeStrategyReference(tx, companyId, actor, { type: "issue", id: unit.id }, "internal", true)] as const)));
     });
-    const admission = vi.spyOn(sourceAuthorization, "assertV7Authorization");
-    try {
-      const actual = await nativePopulation(units.map(unit => unit.id));
-      expect(actual).toEqual(expected);
-      expect(admission.mock.calls.filter(call => call[3] === "issue:read").map(call => call[4])).toEqual(units.map(unit => expect.objectContaining({ type: "issue", companyId, issueId: unit.id, projectId, status: unit.status })));
-      expect(admission.mock.calls.filter(call => call[3] === "project:read")).toHaveLength(2);
-      expect(JSON.stringify([...actual])).not.toContain("Private source");
-      const projectsRead = await nativePopulation([projectId], actor, "project");
-      expect(projectsRead.get(projectId)?.nativeObject?.snapshot.entity).toBe("project");
-    } finally { admission.mockRestore(); }
+    const actual = await nativePopulation(units.map(unit => unit.id));
+    expect(actual).toEqual(expected);
+    expect(JSON.stringify([...actual])).not.toContain("Private source");
+    const projectsRead = await nativePopulation([projectId], actor, "project");
+    expect(projectsRead.get(projectId)?.nativeObject?.snapshot.entity).toBe("project");
+  });
+  it("refuses the whole population when an individual task or its project is outside real token authority", async () => {
+    const [reader] = await db.insert(agents).values({ companyId, name: "Scoped analytical reader", role: "engineer", adapterType: "process", adapterConfig: {}, runtimeConfig: {} }).returning();
+    const [allowed, denied, projectTask] = await db.insert(issues).values([
+      { companyId, title: "Scoped native task" },
+      { companyId, title: "Task outside the token scope" },
+      { companyId, projectId, title: "Scoped task with a separately protected project" },
+    ]).returning();
+    const taskReader = { type: "agent" as const, source: "agent_jwt" as const, companyId, agentId: reader.id, keyScope: { kind: "skill_test" as const, issueId: allowed.id } };
+    expect((await nativePopulation([allowed.id], taskReader)).get(allowed.id)?.nativeObject?.snapshot.id).toBe(allowed.id);
+    await expect(evidenceAuthority([allowed.id], taskReader)).resolves.toBeUndefined();
+    await expect(evidenceAuthority([allowed.id, denied.id], taskReader)).rejects.toMatchObject({ status: 403, details: { reason: "deny_scope" } });
+    await expect(nativePopulation([allowed.id, denied.id], taskReader)).rejects.toMatchObject({ status: 403, details: { reason: "deny_scope" } });
+    await expect(scalarNativeReference({ type: "issue", id: denied.id }, taskReader)).rejects.toMatchObject({ status: 403, details: { reason: "deny_scope" } });
+    const projectReader = { ...taskReader, keyScope: { kind: "skill_test" as const, issueId: projectTask.id } };
+    const authority = authorizationService(db);
+    await expect(authority.decide({ actor: projectReader, action: "issue:read", resource: { type: "issue", companyId, issueId: projectTask.id }, enforceResponsibleUserIntersection: true })).resolves.toMatchObject({ allowed: true });
+    await expect(authority.decide({ actor: projectReader, action: "project:read", resource: { type: "project", companyId, projectId }, enforceResponsibleUserIntersection: true })).resolves.toMatchObject({ allowed: false, reason: "deny_scope" });
+    await expect(scalarNativeReference({ type: "issue", id: projectTask.id }, projectReader)).rejects.toMatchObject({ status: 403, details: { reason: "deny_scope" } });
+    await expect(nativePopulation([projectTask.id], projectReader)).rejects.toMatchObject({ status: 403, details: { reason: "deny_scope" } });
+    await expect(nativePopulation([projectId], projectReader, "project")).rejects.toMatchObject({ status: 403, details: { reason: "deny_scope" } });
+    await expect(evidenceAuthority([projectTask.id], projectReader)).rejects.toMatchObject({ status: 403, details: { reason: "deny_scope" } });
+    await expect(evidenceAuthority([projectId], projectReader, "project")).rejects.toMatchObject({ status: 403, details: { reason: "deny_scope" } });
   });
   it("refuses the complete native population for a hidden, foreign, duplicate, oversized or expired input", async () => {
     const [visible, hidden] = await db.insert(issues).values([{ companyId, title: "Visible native source" }, { companyId, title: "Hidden native source", hiddenAt: new Date() }]).returning();
@@ -83,8 +112,10 @@ suite("native strategy links on migrated PostgreSQL", () => {
     const [unit] = await db.insert(issues).values({ companyId, projectId, title: "Authorized native source" }).returning();
     const human = { type: "board" as const, source: "session" as const, userId: "local-board", ignoreInstanceAdmin: true };
     expect((await nativePopulation([unit.id], human)).get(unit.id)?.nativeObject?.snapshot.id).toBe(unit.id);
+    await expect(evidenceAuthority([unit.id], human)).resolves.toBeUndefined();
     await db.delete(companyMemberships).where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalId, "local-board")));
     await expect(nativePopulation([unit.id], human)).rejects.toMatchObject({ status: 403 });
+    await expect(evidenceAuthority([unit.id], human)).rejects.toMatchObject({ status: 403 });
   });
   const service = () => strategyExecutionService(db);
   const definition = () => strategyExecutionLinkDefinitionSchema.parse({ from: reference, to: { type: "goal", id: goalId }, relationship: "supports", rationale: "A reviewed strategic hypothesis supporting this objective", contribution: { kind: "hypothesis", statement: "We expect this objective to advance the approved strategy" }, ownerUserId: "local-board", reviewFrequencyDays: 30, retentionDays: 90, sensitivity: "internal", purpose: "management_intelligence", governanceObligationRefs: [policyId] });

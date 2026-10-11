@@ -324,8 +324,8 @@ function findOffenders(relPath: string, text: string): string[] {
 // `doc/logs` holds past verification logs, `doc/plans` holds dated design
 // plans, and `scripts` holds trusted automation with fixed arguments. It skips
 // test files, because a test names the unsafe form to assert against it. The
-// root .paperclip-runtime directory contains ignored historical session
-// recordings, not checked-in guidance; never scan those private recordings.
+// Root runtime directories contain ignored session recordings and customer
+// uploads, not checked-in guidance; never scan those private runtime records.
 
 const SKIP_DIRS = new Set([
   "node_modules",
@@ -345,6 +345,14 @@ const SKIP_PATH_PREFIXES = [
   // Generated paid-run transcripts contain historical copies of instructions,
   // including escaped warning examples; they are not authored guidance.
   "tests/runner-e2e/results/",
+  // These exact ignored browser outputs contain generated copies of source
+  // and test data. Keep their adjacent authored guidance in the scan.
+  "tests/e2e/test-results/",
+  "tests/e2e/playwright-report/",
+  "tests/release-smoke/test-results/",
+  "tests/release-smoke/playwright-report/",
+  "tests/storybook-visual/test-results/",
+  "tests/storybook-visual/playwright-report/",
 ];
 
 const SCAN_EXTENSIONS = new Set([
@@ -375,7 +383,7 @@ function listGuidanceFiles(rootDir = repoRoot): string[] {
       if (entry.isDirectory()) {
         if (SKIP_DIRS.has(entry.name)) continue;
         if (SKIP_PATH_PREFIXES.some((prefix) => `${relPath}/`.startsWith(prefix))) continue;
-        if (SKIP_DIRS.has(entry.name) || relPath === ".paperclip-runtime") continue;
+        if (relPath === ".paperclip-runtime" || relPath === ".paperclip-inbound") continue;
         walk(path.join(absDir, entry.name), relPath);
         continue;
       }
@@ -500,14 +508,24 @@ describe("paperclipai CLI invocation safety", () => {
     }
   });
 
-  it("excludes root runtime recordings but still scans unsafe docs and source guidance", () => {
+  it("excludes root runtime recordings and uploads but still scans unsafe docs and source guidance", () => {
     const fixtureRoot = mkdtempSync(path.join(os.tmpdir(), "paperclip-cli-guidance-"));
     try {
       const fixtures = [
         "doc/CLI.md",
         "src/guidance.ts",
         "src/.paperclip-runtime/guidance.md",
+        "src/.paperclip-inbound/guidance.md",
+        "tests/e2e/README.md",
+        "src/playwright-report/guidance.md",
         ".paperclip-runtime/sessions/recording.json",
+        ".paperclip-inbound/process-private/customer-upload.md",
+        "tests/e2e/test-results/run/trace.json",
+        "tests/e2e/playwright-report/data/report.json",
+        "tests/release-smoke/test-results/run/trace.json",
+        "tests/release-smoke/playwright-report/data/report.json",
+        "tests/storybook-visual/test-results/run/trace.json",
+        "tests/storybook-visual/playwright-report/data/report.json",
       ];
       for (const relPath of fixtures) {
         const file = path.join(fixtureRoot, relPath);
@@ -517,8 +535,11 @@ describe("paperclipai CLI invocation safety", () => {
       const files = listGuidanceFiles(fixtureRoot).sort();
       expect(files).toEqual([
         "doc/CLI.md",
+        "src/.paperclip-inbound/guidance.md",
         "src/.paperclip-runtime/guidance.md",
         "src/guidance.ts",
+        "src/playwright-report/guidance.md",
+        "tests/e2e/README.md",
       ]);
       for (const relPath of files) {
         expect(scanText(relPath, readFileSync(path.join(fixtureRoot, relPath), "utf8"))).toHaveLength(1);

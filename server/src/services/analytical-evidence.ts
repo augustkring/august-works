@@ -5,7 +5,7 @@ import type { AuthorizationActor } from "./authorization.js";
 import { conflict, forbidden, unprocessable } from "../errors.js";
 import { nativeSha256 } from "./native-runtime/canonical.js";
 import { assertAnalyticalSourcesNotErased } from "./analytical-privacy.js";
-import { authorizeStrategyReference } from "./strategy-execution/references.js";
+import { authorizeStrategyNativePopulation, authorizeStrategyReference } from "./strategy-execution/references.js";
 import { assertV7Authorization } from "./v7-authorization.js";
 import { processFindingService } from "./process-findings.js";
 import { inspectBusinessForecastRun } from "./business-forecasting/service.js";
@@ -133,9 +133,18 @@ export async function inspectAnalyticalEvidenceAuthority(tx:Db,companyId:string,
   // Reuse the source owner's current hidden-task, project and suppression
   // admission. Current project ancestry remains separate from recorded facts.
   const issueIds=new Set<string>(),projectIds=new Set<string>();
-  for(const object of objects) {
-    checkTime(deadline);const current=await authorizeStrategyReference(tx,companyId,actor,{type:object.objectType,id:object.objectId},"confidential");
-    for(const id of current.issueIds) issueIds.add(id);for(const id of current.projectIds) projectIds.add(id);
+  // Transport locked rows through the original native source owner. Each root
+  // and its current project ancestry still receive their own actor decision;
+  // no grant is reused across roots, captures or transactions.
+  for(const type of ["issue","project"] as const) {
+    const ids=[...new Set(objects.filter(object=>object.objectType===type).map(object=>object.objectId))];
+    for(let offset=0;offset<ids.length;offset+=4000) {
+      checkTime(deadline);
+      const admitted=await authorizeStrategyNativePopulation(tx,companyId,actor,type,ids.slice(offset,offset+4000),"confidential",deadline);
+      for(const current of admitted.values()) {
+        for(const id of current.issueIds) issueIds.add(id);for(const id of current.projectIds) projectIds.add(id);
+      }
+    }
   }
   checkTime(deadline);await assertAnalyticalSourcesNotErased(tx,companyId,[...issueIds],[...projectIds]);
 }
