@@ -73,3 +73,11 @@ not establish live-provider assurance. Focus V1 retained 220 passing cases in
 eight complete files; subsequent changes only corrected the expiry fixture and
 Native completion SQL. The bounded personal retained-connection scope is ready
 for integration. Full V9, human acceptance and provider GA remain unqualified.
+
+Integrated through Source commits `15ec7e626`, `293b97cfb`, `5e46779c7`
+and qualification document `b64324cab`. All 18 changed non-plan Source files
+are byte-identical to the qualified recovery branch; inherited lineage changes
+were already integrated independently. Root token gates V1 passed. This reuses
+only the bounded 459 Native / 220 focus / five built-browser and server/UI type
+evidence above. It does not qualify the complete integrated V9 branch, whose
+remaining implementation and full repository checks are still pending.
