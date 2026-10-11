@@ -36,3 +36,10 @@ Agents. This bounded zero-authority C3 refuses such inherited access without
 removing existing bindings. Both service review and Native preparation guard
 enforce that boundary. A later separately reviewed wider-access path is pending.
 Native, host, built-browser and type qualification remain pending.
+
+Focus V1 passed 50 cases and failed three new dialog cases because their fixture
+omitted Original V5 rollout prerequisites. After using the existing full flag
+fixture, Focus V2 passed all 53 cases in six complete files. Token gates V1
+passed. Native V1 did not reach any tests: its owned public prerequisite file
+was not group-readable by the isolated UID. That single file's access is
+corrected for V2; no customer/private path, Source assertion or deadline changed.
