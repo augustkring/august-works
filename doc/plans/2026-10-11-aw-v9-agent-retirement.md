@@ -138,3 +138,12 @@ blocker, verifies the other presence remains active, and requires fresh review
 after rehome. Original triggers and all earlier assertions remain in place.
 Current changed Source requires a new complete qualification; no pass is claimed
 from the earlier version.
+
+The corrected shared-identity Source passed actual types and 194 of 196
+Native cases. The two remaining newly authored cases expected a database
+fence where the original service already refused resume, and caught an
+intentional PostgreSQL error inside its transaction instead of allowing
+rollback. Tests now retain the original 409 check, add a direct Native resume
+fence assertion and assert refusal around the complete transaction. Production
+Source, triggers, test budgets and prior assertions are unchanged. Fresh
+qualification is required; the v3 failure remains preserved.

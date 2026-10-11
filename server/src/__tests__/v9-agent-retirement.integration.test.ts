@@ -279,7 +279,9 @@ describe("V9 retirement on the original migrated Agent owner", () => {
     await instanceSettingsService(db).updateExperimental({ hire_agent_v9: false });
     expect((await owner.get(f.actor, f.home, f.presence.id)).state).toBe("retired");
     expect((await owner.retire(f.actor, f.home, f.presence.id, input)).state).toBe("retired");
-    await expect(agentService(db).update(f.presence.id, { status: "idle" })).rejects.toMatchObject({ cause: { message: "AW_V9_AGENT_RETIRED" } });
+    await expect(agentService(db).update(f.presence.id, { status: "idle" })).rejects.toMatchObject({ status: 409, message: "Terminated agents cannot be resumed" });
+    await expect(db.update(agents).set({ status: "idle" }).where(eq(agents.id, f.presence.id)))
+      .rejects.toMatchObject({ cause: { message: "AW_V9_AGENT_RETIRED" } });
     await expect(db.update(agents).set({ permissions: { canCreateAgents: true } }).where(eq(agents.id, f.presence.id))).rejects.toMatchObject({ cause: { message: "AW_V9_AGENT_RETIRED" } });
     await expect(db.insert(agentApiKeys).values({ companyId: f.home, agentId: f.presence.id, name: "Late access", keyHash: randomUUID() })).rejects.toMatchObject({ cause: { message: "AW_V9_AGENT_RETIRED" } });
     await expect(db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, status: "queued" })).rejects.toMatchObject({ cause: { message: "AW_V9_AGENT_RETIRED" } });
@@ -299,12 +301,11 @@ describe("V9 retirement on the original migrated Agent owner", () => {
     await expect(db.insert(agentRetirements).values({ companyId: f.home, agentId: f.presence.id, requestId: input.requestId, requestHash: "a".repeat(64),
       sourceToken: input.expectedSourceToken, policyVersion: "aw.agent-retirement.v1", detachedAccess: { apiKeys: 0, permissions: 0, agentPermissionSettings: 0, connectedApps: 0, credentialBindings: 0, runtimeBindings: 0, toolTokens: 0, toolProfiles: 0 } }))
       .rejects.toMatchObject({ cause: { message: "AW_V9_AGENT_RETIREMENT_OWNER_REQUIRED" } });
-    await db.transaction(async tx => {
+    await expect(db.transaction(async tx => {
       await tx.execute(sql`select set_config('aw_v9.agent_retirement_intent', ${`${f.guest}:${f.presence.id}:${input.requestId}`}, true)`);
-      await expect(tx.insert(agentRetirements).values({ companyId: f.guest, agentId: f.presence.id, requestId: input.requestId, requestHash: "a".repeat(64),
-        sourceToken: input.expectedSourceToken, policyVersion: "aw.agent-retirement.v1", detachedAccess: { apiKeys: 0, permissions: 0, agentPermissionSettings: 0, connectedApps: 0, credentialBindings: 0, runtimeBindings: 0, toolTokens: 0, toolProfiles: 0 } }))
-        .rejects.toMatchObject({ cause: { code: "23514" } });
-    });
+      await tx.insert(agentRetirements).values({ companyId: f.guest, agentId: f.presence.id, requestId: input.requestId, requestHash: "a".repeat(64),
+        sourceToken: input.expectedSourceToken, policyVersion: "aw.agent-retirement.v1", detachedAccess: { apiKeys: 0, permissions: 0, agentPermissionSettings: 0, connectedApps: 0, credentialBindings: 0, runtimeBindings: 0, toolTokens: 0, toolProfiles: 0 } });
+    })).rejects.toMatchObject({ cause: { code: "23514" } });
     expect(await receipts()).toEqual([]);
   });
   it("keeps receipt deletion under the original Agent erasure owner and preserves the other company presence", async () => {
