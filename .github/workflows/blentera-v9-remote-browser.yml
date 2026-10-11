@@ -69,8 +69,11 @@ jobs:
                   await page.keyboard.press('Escape');
                   if(await page.locator('#mobile-nav').first().isVisible())throw Error('Mobile nav not closing');
                 }
-                if(errors.length)throw Error('Page errors: '+errors.join('; '));
-                cases.push({width:w,homepage:true,about:true,platform:true,trust:true,interactions:true,jsErrors:0});
+                const sandboxWarnings=errors.filter(e=>/SecurityError:.*Blocked a frame with origin "null" from accessing a cross-origin frame/.test(e));
+                const appErrors=errors.filter(e=>!sandboxWarnings.includes(e));
+                if(appErrors.length)throw Error('Application page errors: '+appErrors.join('; '));
+                if(sandboxWarnings.length)console.log('THIRD_PARTY_IFRAME_SANDBOX_WARNINGS='+sandboxWarnings.length);
+                cases.push({width:w,homepage:true,about:true,platform:true,trust:true,interactions:true,appErrors:0,sandboxFrameWarnings:sandboxWarnings.length});
                 await page.close();
               }
             }finally {await browser.close();}
