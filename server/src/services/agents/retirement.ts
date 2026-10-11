@@ -1,7 +1,7 @@
 import { performance } from "node:perf_hooks";
 import { and, eq, isNull, ne, sql } from "drizzle-orm";
 import {
-  agents, agentApiKeys, agentPresenceRuntimeBindings, agentRetirements,
+  agents, agentIdentities, agentApiKeys, agentPresenceRuntimeBindings, agentRetirements,
   authUsers, companies, companyMemberships, companySecretBindings,
   connectionGrantDelegations, principalPermissionGrants, toolConnectionInstalls, instanceSettings,
   toolMcpGatewayTokens, toolGatewaySessions, toolProfileBindings, type Db,
@@ -58,12 +58,22 @@ export function agentRetirementService(db: Db) {
       .where(eq(companies.id, companyId)).for("update");
     if (!company || company.status !== "active") throw forbidden("Company retirement controls are unavailable");
     await access(tx, actor, companyId, agentId);
+    // Original identity writers lock the global identity before its presence.
+    // Latch that owner in the same order; a new guest presence must not appear
+    // between the review and the original home-lifecycle trigger at commit.
+    const [association] = await tx.select({ identityId: agents.agentIdentityId }).from(agents)
+      .where(and(eq(agents.companyId, companyId), eq(agents.id, agentId)));
+    if (!association) throw notFound("Agent not found");
+    const [identity] = await tx.select({ id: agentIdentities.id, homeCompanyId: agentIdentities.homeCompanyId,
+      status: agentIdentities.status, version: sql<string>`xmin::text` }).from(agentIdentities)
+      .where(eq(agentIdentities.id, association.identityId)).for("update");
+    if (!identity) throw conflict("Original Agent identity is unavailable");
     const [agent] = await tx.select({ id: agents.id, name: agents.name, status: agents.status,
       permissionsDetached: sql<boolean>`permissions = '{}'::jsonb`,
       metadata: agents.metadata, version: sql<string>`xmin::text`, updatedAt: sql<string>`updated_at::text` }).from(agents)
       .where(and(eq(agents.companyId, companyId), eq(agents.id, agentId))).for("update");
     if (!agent) throw notFound("Agent not found");
-    return agent;
+    return { ...agent, identity };
   }
   async function bindings(tx: Db, companyId: string, agentId: string) {
     const bound = AGENT_RETIREMENT_MAX_BINDINGS + 1;
@@ -89,7 +99,12 @@ export function agentRetirementService(db: Db) {
   }
   async function blockers(tx: Db, companyId: string, agentId: string) {
     // Fixed original owner columns only. No recursive content/configuration scan.
-    const [row] = await tx.execute<{ work: boolean; automation: boolean; reports: boolean; disconnect: boolean }>(sql`select
+    const [row] = await tx.execute<{ work: boolean; automation: boolean; reports: boolean; disconnect: boolean; identity: boolean }>(sql`select
+      exists(select 1 from agents a join agent_identities i on i.id=a.agent_identity_id
+        where a.company_id=${companyId}::uuid and a.id=${agentId}::uuid and a.status<>'terminated'
+          and i.home_company_id=a.company_id and i.status<>'archived'
+          and exists(select 1 from agents other where other.agent_identity_id=i.id
+            and other.company_id<>a.company_id and other.status<>'terminated')) as identity,
       (exists(select 1 from issues where company_id=${companyId}::uuid and assignee_agent_id=${agentId}::uuid and status not in ('done','cancelled'))
        or exists(select 1 from heartbeat_runs where company_id=${companyId}::uuid and agent_id=${agentId}::uuid and status in ('queued','scheduled_retry','running'))
        or exists(select 1 from agent_wakeup_requests where company_id=${companyId}::uuid and agent_id=${agentId}::uuid and status in ('queued','claimed'))
@@ -126,7 +141,8 @@ export function agentRetirementService(db: Db) {
   }
   async function snapshot(tx: Db, companyId: string, agent: Awaited<ReturnType<typeof lock>>) {
     const access = await bindings(tx, companyId, agent.id), pending = await blockers(tx, companyId, agent.id);
-    const token = nativeSha256({ companyId, agentId: agent.id, version: agent.version, updatedAt: agent.updatedAt, access: access.source, pending });
+    const token = nativeSha256({ companyId, agentId: agent.id, version: agent.version, updatedAt: agent.updatedAt,
+      identity: agent.identity, access: access.source, pending });
     return { ...access, pending, token };
   }
   async function view(tx: Db, companyId: string, agent: Awaited<ReturnType<typeof lock>>, source: Awaited<ReturnType<typeof snapshot>>) {
@@ -135,6 +151,7 @@ export function agentRetirementService(db: Db) {
     if (!receipt) {
       if (!["paused", "terminated"].includes(agent.status)) reasons.push("pause_required");
       if (readBuiltInAgentMarker(agent.metadata)) reasons.push("protected_agent");
+      if (source.pending.identity) reasons.push("identity_lifecycle");
       if (source.pending.work) reasons.push("work_pending");
       if (source.pending.automation) reasons.push("automation_connected");
       if (source.pending.reports) reasons.push("reports_pending");

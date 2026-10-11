@@ -1469,7 +1469,8 @@
       "disconnect_required": "Disconnect installed capabilities and provider access, and reconcile outstanding credentials through their original controls.",
       "protected_agent": "This built-in agent cannot be retired here.",
       "source_limit": "The access review exceeds the supported limit. Retirement cannot remove only part of its access.",
-      "disabled": "New retirements are currently disabled in this instance."
+      "disabled": "New retirements are currently disabled in this instance.",
+      "identity_lifecycle": "This agent is the home presence of an identity used in another company. Rehome it through the original identity controls before retiring this presence."
     },
     "access": {
       "apiKeys": "Agent API keys",

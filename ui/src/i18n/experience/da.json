@@ -1469,7 +1469,8 @@
       "disconnect_required": "Afbryd installerede funktioner og udbyderadgang, og afklar udestående adgangsoplysninger via deres eksisterende kontroller.",
       "protected_agent": "Denne indbyggede agent kan ikke pensioneres her.",
       "source_limit": "Gennemgangen af adgange overskrider den understøttede grænse. Pensionering kan ikke nøjes med at fjerne nogle af adgangene.",
-      "disabled": "Nye pensioneringer er i øjeblikket deaktiveret i denne installation."
+      "disabled": "Nye pensioneringer er i øjeblikket deaktiveret i denne installation.",
+      "identity_lifecycle": "Denne agent er hjemsted for en identitet, som bruges i en anden virksomhed. Flyt hjemstedet via identitetens oprindelige kontroller, før denne agent pensioneres."
     },
     "access": {
       "apiKeys": "Agentens API-nøgler",

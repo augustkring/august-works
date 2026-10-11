@@ -12,6 +12,7 @@ import {
 import type { AgentRetirementCommand } from "@paperclipai/shared";
 import { agentRetirementService } from "../services/agents/retirement.js";
 import { agentService } from "../services/agents.js";
+import { agentIdentityService } from "../services/agent-identities.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { agentRetirementRoutes } from "../routes/agent-retirement.js";
 import { errorHandler } from "../middleware/error-handler.js";
@@ -33,7 +34,12 @@ describe("V9 retirement on the original migrated Agent owner", () => {
   }, 30000);
   beforeEach(async () => {
     await instanceSettingsService(db).updateExperimental({ saas_deployment_profile_v6: true, billing_v6: true, agent_packages_v7: true, hire_agent_v9: true });
-    f = await seedV5Presences(db); await db.update(agents).set({ status: "paused" }).where(eq(agents.id, f.presence.id));
+    f = await seedV5Presences(db);
+    // The original shared-identity fixture has an active guest. Use the native
+    // rehome owner explicitly so ordinary cases can retire only this presence
+    // while preserving the other company's active presence and global identity.
+    await agentIdentityService(db).rehome(f.actor, f.home, f.identity.id, f.guest);
+    await db.update(agents).set({ status: "paused" }).where(eq(agents.id, f.presence.id));
   });
   async function command(): Promise<AgentRetirementCommand> {
     const current = await owner.get(f.actor, f.home, f.presence.id);
@@ -43,6 +49,24 @@ describe("V9 retirement on the original migrated Agent owner", () => {
   const readAgent = async () => (await db.select().from(agents).where(eq(agents.id, f.presence.id)))[0]!;
   const receipts = async () => db.select().from(agentRetirements).where(eq(agentRetirements.companyId, f.home));
   const retirementAudits = async () => db.select().from(activityLog).where(and(eq(activityLog.companyId, f.home), eq(activityLog.action, "agent.retired")));
+
+  it("requires the original identity owner to rehome a shared home presence and rejects stale review after that change", async () => {
+    const ready = await command();
+    await agentService(db).resume(f.presence.id);
+    await agentIdentityService(db).rehome(f.actor, f.guest, f.identity.id, f.home);
+    await agentService(db).pause(f.presence.id);
+    const blocked = await owner.get(f.actor, f.home, f.presence.id);
+    expect(blocked).toMatchObject({ state: "blocked", canRetire: false, blockers: ["identity_lifecycle"] });
+    await expect(owner.retire(f.actor, f.home, f.presence.id, ready)).rejects.toMatchObject({ status: 409 });
+    expect((await readAgent()).status).toBe("paused");
+    expect((await agentService(db).getById(f.guestPresence.id))!.status).not.toBe("terminated");
+    expect(await receipts()).toEqual([]);
+    await agentIdentityService(db).rehome(f.actor, f.home, f.identity.id, f.guest);
+    const current = await command();
+    expect(current.expectedSourceToken).not.toBe(ready.expectedSourceToken);
+    await expect(owner.retire(f.actor, f.home, f.presence.id, ready)).rejects.toMatchObject({ status: 409 });
+    expect((await owner.retire(f.actor, f.home, f.presence.id, current)).state).toBe("retired");
+  });
 
   it("atomically detaches only the reviewed agent's local access and preserves shared credentials, history and prior revocation times", async () => {
     const old = new Date("2020-01-01T00:00:00Z");
@@ -79,6 +103,18 @@ describe("V9 retirement on the original migrated Agent owner", () => {
     expect(await db.select().from(issues).where(eq(issues.id, history!.id))).toEqual([history]);
     expect(await receipts()).toHaveLength(1); expect(await retirementAudits()).toHaveLength(1);
     expect(JSON.stringify(first)).not.toContain(f.userId); expect(JSON.stringify(first)).not.toContain(activeKey!.keyHash);
+  });
+  it("preserves the original sole-presence identity archival rule without affecting a shared identity", async () => {
+    const solo = await agentIdentityService(db).create(f.actor, { name: "Solo", homeCompanyId: f.home });
+    await agentService(db).pause(solo.presence.id);
+    const current = await owner.get(f.actor, f.home, solo.presence.id);
+    expect(current.canRetire).toBe(true);
+    await owner.retire(f.actor, f.home, solo.presence.id, { ...await command(), expectedSourceToken: current.sourceToken });
+    const result = await db.execute<{ status: string }>(sql`select status from agent_identities where id=${solo.identity.id}::uuid`);
+    expect(result[0]!.status).toBe("archived");
+    await expect(agentIdentityService(db).addPresence(f.actor, f.home, solo.identity.id, { companyId: f.guest, role: "general" }))
+      .rejects.toMatchObject({ status: 409 });
+    expect((await agentService(db).getById(f.guestPresence.id))!.status).not.toBe("terminated");
   });
   it("serializes concurrent requests and reads the one original receipt after an unknown acknowledgement", async () => {
     const input = await command();

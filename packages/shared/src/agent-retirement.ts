@@ -28,7 +28,7 @@ export const AGENT_RETIREMENT_PROCESSING_CONTRACT = Object.freeze({
 });
 export const AGENT_RETIREMENT_BLOCKERS = [
   "pause_required", "work_pending", "automation_connected", "reports_pending",
-  "disconnect_required", "protected_agent", "source_limit", "disabled",
+  "disconnect_required", "protected_agent", "identity_lifecycle", "source_limit", "disabled",
 ] as const;
 const boundedCount = z.number().int().min(0).max(AGENT_RETIREMENT_MAX_BINDINGS);
 export const agentRetirementCountsSchema = z.strictObject({

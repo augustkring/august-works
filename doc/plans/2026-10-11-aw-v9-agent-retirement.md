@@ -120,3 +120,21 @@ Original migration numbering and safety checks pass (existing historical
 baseline remains unchanged). Actual migrated Native, current full server/UI
 types and built retirement browser qualification remain pending. A generated
 migration or source fence is not a passed postcondition.
+
+## Original shared identity lifecycle — 2026-10-11
+
+The first actual Native run passed 103 cases but failed ten new retirement
+cases against the original shared-home lifecycle trigger; three legacy suites
+could not import four unreadable public Source files. The fixture was an active
+shared home, which cannot be terminated while another company presence is
+active. This failure is preserved in the Native v2 log.
+
+Review now latches the original identity before the presence, includes its native
+version in the reviewed source token and blocks a shared home until the original
+identity owner rehomes it. No global archive or other-company termination is
+introduced. Ordinary native retirement cases explicitly use the existing
+rehome owner, then pause this presence. A dedicated case retains the shared-home
+blocker, verifies the other presence remains active, and requires fresh review
+after rehome. Original triggers and all earlier assertions remain in place.
+Current changed Source requires a new complete qualification; no pass is claimed
+from the earlier version.
