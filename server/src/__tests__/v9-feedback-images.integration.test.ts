@@ -11,13 +11,17 @@ import request from "supertest";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { companies, companyMemberships, authUsers, createDb, closeRegisteredClients, customerFeedback,
   customerFeedbackImages, feedbackImageDeletions, customerFeedbackRetention, customerFeedbackRetentionChanges,
-  customerFeedbackAccess, authAccounts, accountDeletionOperations, activityLog, authRateLimits } from "@paperclipai/db";
+  customerFeedbackAccess, authAccounts, accountDeletionOperations, activityLog, authRateLimits, companyDeletionOperations } from "@paperclipai/db";
 import { customerFeedbackService } from "../services/customer-feedback.js";
 import { customerFeedbackImageService, processFeedbackImageDeletion } from "../services/customer-feedback-images.js";
 import { configuredFeedbackImageScanner } from "../services/feedback-image-intake.js";
 import { createStorageService } from "../storage/service.js";
 import { createLocalDiskStorageProvider } from "../storage/local-disk-provider.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
+import { saasOffboardingService } from "../services/saas/offboarding.js";
+import type { companyObjectErasure } from "../services/saas/object-erasure.js";
+import type { billingService } from "../services/billing/billing.js";
+import type { runtimeControlService } from "../services/runtime/control.js";
 import { customerFeedbackRetentionService } from "../services/customer-feedback-retention.js";
 import { accountDeletionService, eraseAccountAccess } from "../services/saas/account-deletion.js";
 import { customerFeedbackRoutes } from "../routes/customer-feedback.js";
@@ -131,9 +135,9 @@ describe("native selected feedback images with owned scanner-wire and filesystem
   });
   it("retains the original allocated key after a real write loses its accounting acknowledgement and never performs an automatic second upload", async () => {
     const provider = createLocalDiskStorageProvider(join(directory, "objects")); let writes = 0;
-    const uncertain = createStorageService({ ...provider, async putObject(input) { writes++; await provider.putObject(input); } }, {
-      reserve: async () => {}, stored: async () => { throw new Error("owned-acknowledgement-lost"); }, deleting: async () => {}, deleted: async () => {},
-    });
+    const uncertain = createStorageService({ ...provider, async putObject(input) {
+      writes++; await provider.putObject(input); throw new Error("owned-acknowledgement-lost");
+    } });
     const owner = customerFeedbackImageService(db, uncertain, { scanner }), key = randomUUID(), body = await bytes();
     await expect(owner.upload(actor(), companyId, feedbackId, key, body, "image/png")).rejects.toThrow("owned-acknowledgement-lost");
     const [row] = await rows(); expect(row!).toMatchObject({ status: "storing", objectKey: expect.any(String), transportSettledAt: null });
@@ -141,6 +145,21 @@ describe("native selected feedback images with owned scanner-wire and filesystem
     expect(await owner.request(actor(), companyId, feedbackId, key)).toMatchObject({ id: row!.id, status: "storing" });
     await expect(owner.upload(actor(), companyId, feedbackId, key, body, "image/png")).rejects.toMatchObject({ status: 409 });
     expect(writes).toBe(1); expect(await processFeedbackImageDeletion(db, storage)).toBe(false);
+  });
+  it("uses the original fulfilled provider receipt to clean a failed accounting acknowledgement without another PUT", async () => {
+    const provider = createLocalDiskStorageProvider(join(directory, "objects")); let writes = 0;
+    const accountLost = createStorageService({ ...provider, async putObject(input) { writes++; await provider.putObject(input); } }, {
+      reserve: async () => {}, stored: async () => { throw Error("owned-accounting-ack-lost"); }, deleting: async () => {}, deleted: async () => {},
+    });
+    const owner = customerFeedbackImageService(db, accountLost, { scanner }), key = randomUUID(), body = await bytes();
+    await expect(owner.upload(actor(), companyId, feedbackId, key, body, "image/png")).rejects.toThrow("owned-accounting-ack-lost");
+    const [row] = await rows(); expect(row).toMatchObject({ status: "deleting", objectKey: expect.any(String), transportSettledAt: expect.any(Date) });
+    await expect(owner.upload(actor(), companyId, feedbackId, key, body, "image/png")).rejects.toMatchObject({ status: 409 });
+    expect(writes).toBe(1);
+    expect(await processFeedbackImageDeletion(db, accountLost)).toBe(true);
+    expect(await accountLost.headObject(companyId, row!.objectKey!)).toEqual({ exists: false });
+    expect(await owner.request(actor(), companyId, feedbackId, key)).toMatchObject({ id: row!.id, status: "deleted" });
+    expect(writes).toBe(1);
   });
   it("preserves native allocation in the durable erasure owner when the original account path deletes feedback during an actual storage write", async () => {
     const provider = createLocalDiskStorageProvider(join(directory, "objects"));
@@ -155,6 +174,71 @@ describe("native selected feedback images with owned scanner-wire and filesystem
     expect(pending).toHaveLength(1); expect(pending[0]!.transportSettledAt).not.toBeNull();
     expect(await processFeedbackImageDeletion(db, storage)).toBe(true);
     expect(await storage.headObject(companyId, pending[0]!.objectKey)).toEqual({ exists: false });
+  });
+  it("confirms the exact durable cleanup receipt when the submitter removes a failed accounting candidate", async () => {
+    const provider = createLocalDiskStorageProvider(join(directory, "objects"));
+    const accountLost = createStorageService(provider, {
+      reserve: async () => {}, stored: async () => { throw Error("owned-accounting-ack-lost"); }, deleting: async () => {}, deleted: async () => {},
+    });
+    const owner = customerFeedbackImageService(db, accountLost, { scanner });
+    await expect(owner.upload(actor(), companyId, feedbackId, randomUUID(), await bytes(), "image/png")).rejects.toThrow("owned-accounting-ack-lost");
+    const [row] = await rows();
+    expect(row!.status).toBe("deleting");
+    const removed = await owner.remove(actor(), companyId, feedbackId, row!.id);
+    expect(removed).toMatchObject({ status: "deleted", deletedAt: expect.any(String) });
+    const [receipt] = await db.select().from(feedbackImageDeletions).where(eq(feedbackImageDeletions.imageId, row!.id));
+    expect(receipt).toMatchObject({ companyId, objectKey: row!.objectKey, transportSettledAt: expect.any(Date), deletedAt: expect.any(Date) });
+    expect(await accountLost.headObject(companyId, row!.objectKey!)).toEqual({ exists: false });
+    expect(await owner.remove(actor(), companyId, feedbackId, row!.id)).toEqual(removed);
+    expect(await processFeedbackImageDeletion(db, accountLost, undefined, companyId)).toBe(false);
+    const [unchanged] = await db.select().from(feedbackImageDeletions).where(eq(feedbackImageDeletions.imageId, row!.id));
+    expect(unchanged).toEqual(receipt);
+  });
+  it("cancels an unallocated reservation and refuses the late original allocation without writing any object", async () => {
+    let enter!: () => void, release!: () => void, writes = 0;
+    const entered = new Promise<void>(resolve => { enter = resolve; });
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const provider = createLocalDiskStorageProvider(join(directory, "objects"));
+    const transport = createStorageService({ ...provider, async putObject(input) { writes++; await provider.putObject(input); } });
+    const delayed = { ...transport, async putFile(input: Parameters<typeof transport.putFile>[0]) {
+      enter(); await gate; return transport.putFile(input);
+    } };
+    const owner = customerFeedbackImageService(db, delayed, { scanner }), key = randomUUID();
+    const pending = owner.upload(actor(), companyId, feedbackId, key, await bytes(), "image/png")
+      .then(value => ({ value }), error => ({ error }));
+    try {
+      await entered;
+      const [row] = await rows(); expect(row).toMatchObject({ status: "scanning", objectKey: null });
+      const removed = await owner.remove(actor(), companyId, feedbackId, row!.id);
+      expect(removed).toMatchObject({ status: "deleted", byteSize: null, deletedAt: expect.any(String) });
+      release();
+      expect(await pending).toMatchObject({ error: { status: 409 } });
+      expect(await owner.request(actor(), companyId, feedbackId, key)).toEqual(removed);
+      expect(await owner.remove(actor(), companyId, feedbackId, row!.id)).toEqual(removed);
+      expect(writes).toBe(0); expect(await owner.list(actor(), companyId, feedbackId)).toEqual([]);
+      expect(await db.select().from(feedbackImageDeletions).where(eq(feedbackImageDeletions.companyId, companyId))).toEqual([]);
+    } finally { release(); await pending; }
+  });
+  it("keeps a storing reservation pending while its actual provider PUT is still in flight", async () => {
+    let enter!: () => void, release!: () => void;
+    const entered = new Promise<void>(resolve => { enter = resolve; });
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const provider = createLocalDiskStorageProvider(join(directory, "objects"));
+    const delayed = createStorageService({ ...provider, async putObject(input) {
+      enter(); await gate; await provider.putObject(input);
+    } });
+    const owner = customerFeedbackImageService(db, delayed, { scanner });
+    const pending = owner.upload(actor(), companyId, feedbackId, randomUUID(), await bytes(), "image/png")
+      .then(value => ({ value }), error => ({ error }));
+    try {
+      await entered;
+      const [row] = await rows(); expect(row).toMatchObject({ status: "storing", objectKey: expect.any(String), transportSettledAt: null });
+      await expect(owner.remove(actor(), companyId, feedbackId, row!.id)).rejects.toMatchObject({ status: 409 });
+      expect((await rows())[0]!.deletedAt).toBeNull();
+      release(); expect(await pending).toMatchObject({ value: { status: "ready" } });
+      expect(await owner.remove(actor(), companyId, feedbackId, row!.id)).toMatchObject({ status: "deleted" });
+      expect(await delayed.headObject(companyId, row!.objectKey!)).toEqual({ exists: false });
+    } finally { release(); await pending; }
   });
   it("does not label provider deletion as confirmed while the original protected object still exists", async () => {
     const image = await upload(), [row] = await rows(), provider = createLocalDiskStorageProvider(join(directory, "objects"));
@@ -231,6 +315,41 @@ describe("native selected feedback images with owned scanner-wire and filesystem
     await account.processOne(new Date(Date.now() + 120000));
     expect(await state()).toMatchObject({ status: "completed", errorCode: null, completedAt: expect.any(Date) });
     expect(await db.select().from(authUsers).where(eq(authUsers.id, userId))).toEqual([]);
+  });
+  it("blocks company object erasure on a native hold and waits for exact protected-image cleanup before company completion", async () => {
+    const image = await upload(), [row] = await rows();
+    const controls = customerFeedbackRetentionService(db, { operatorUserIds: [otherUser] });
+    const held = await controls.change(actor(otherUser), companyId, feedbackId, { requestKey: randomUUID(), expectedVersion: 0,
+      confirmRetentionChange: true, legalHold: { active: true, releaseAt: null, reason: "Owned company hold" }, extensionUntil: null, extensionReason: "" });
+    await db.update(companyMemberships).set({ membershipRole: "owner" }).where(and(
+      eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalId, userId)));
+    // Explicit software bulk-object transport; actual owned image removal
+    // below uses the original local filesystem Storage, not a fake HEAD.
+    let bulkCalls = 0;
+    const objects = { targets: () => ({ application: { bucket: "owned-transport-fixture", prefix: companyId + "/" } }),
+      erase: async () => { bulkCalls++; return {}; } } as unknown as ReturnType<typeof companyObjectErasure>;
+    const owner = saasOffboardingService(db, {} as ReturnType<typeof billingService>, {} as ReturnType<typeof runtimeControlService>, objects);
+    const operation = await owner.request(companyId, userId, { confirmation: "Owned image fixture", acknowledgeExport: true, idempotencyKey: randomUUID() });
+    // The owned fixture has no runtime/billing effects; select the original
+    // purge stage after its actual native C3 owner request, not a fake grant.
+    await db.update(companyDeletionOperations).set({ stage: "purge", status: "processing", notBefore: new Date(0) }).where(eq(companyDeletionOperations.id, operation.id));
+    await owner.processOne(new Date(Date.now() + 1000));
+    expect(bulkCalls).toBe(0); expect((await storage.headObject(companyId, row!.objectKey!)).exists).toBe(true);
+    expect(await owner.get(companyId)).toMatchObject({ status: "processing", completedAt: null });
+    await controls.change(actor(otherUser), companyId, feedbackId, { requestKey: randomUUID(), expectedVersion: held.version,
+      confirmRetentionChange: true, legalHold: { active: false, releaseAt: null, reason: "" }, extensionUntil: null, extensionReason: "" });
+    await expect(controls.change(actor(otherUser), companyId, feedbackId, { requestKey: randomUUID(), expectedVersion: held.version + 1,
+      confirmRetentionChange: true, legalHold: { active: true, releaseAt: null, reason: "Too late to undo approved erasure" }, extensionUntil: null, extensionReason: "" }))
+      .rejects.toMatchObject({ status: 409 });
+    await owner.processOne(new Date(Date.now() + 120000));
+    expect(bulkCalls).toBe(1); expect(await rows()).toEqual([]);
+    expect(await owner.get(companyId)).toMatchObject({ status: "processing", completedAt: null });
+    const pending = await db.select().from(feedbackImageDeletions).where(eq(feedbackImageDeletions.companyId, companyId));
+    expect(pending).toHaveLength(1); expect(pending[0]!.imageId).toBe(image.id); expect(pending[0]!.deletedAt).toBeNull();
+    expect(await processFeedbackImageDeletion(db, storage, undefined, companyId)).toBe(true);
+    expect(await storage.headObject(companyId, row!.objectKey!)).toEqual({ exists: false });
+    await owner.processOne(new Date(Date.now() + 240000));
+    expect(await owner.get(companyId)).toMatchObject({ status: "completed", completedAt: expect.any(Date) });
   });
   it("blocks new holds while the original image operation is unconfirmed", async () => {
     const provider = createLocalDiskStorageProvider(join(directory, "objects"));

@@ -120,13 +120,24 @@ BEGIN
       IS DISTINCT FROM (OLD.object_key,OLD.sha256,OLD.byte_size,OLD.scanner_token,OLD.scan_checked_at) THEN
       RAISE EXCEPTION 'Allocated image content is immutable' USING ERRCODE='23514';
     END IF;
+    IF OLD.transport_settled_at IS NOT NULL AND NEW.transport_settled_at IS DISTINCT FROM OLD.transport_settled_at THEN
+      RAISE EXCEPTION 'Original image transport receipt is immutable' USING ERRCODE='23514';
+    END IF;
     IF NEW.status<>OLD.status AND NOT (
       (OLD.status='scanning' AND NEW.status IN ('storing','failed')) OR
+      (OLD.status IN ('scanning','failed') AND NEW.status='deleted' AND OLD.object_key IS NULL AND NEW.object_key IS NULL) OR
       (OLD.status='failed' AND NEW.status='scanning' AND OLD.object_key IS NULL) OR
       (OLD.status='storing' AND NEW.status IN ('ready','deleting')) OR
       (OLD.status='ready' AND NEW.status='deleting') OR
       (OLD.status='deleting' AND NEW.status='deleted')
     ) THEN RAISE EXCEPTION 'Feedback image transition requires its original owner' USING ERRCODE='23514'; END IF;
+  END IF;
+  IF NEW.status='deleted' THEN
+    IF TG_OP='UPDATE' AND OLD.status='deleted' THEN
+      IF NEW.deleted_at IS DISTINCT FROM OLD.deleted_at THEN
+        RAISE EXCEPTION 'Original image erasure receipt is immutable' USING ERRCODE='23514';
+      END IF;
+    ELSE NEW.deleted_at=clock_timestamp(); END IF;
   END IF;
   IF NEW.status IN ('scanning','storing','ready','deleting') THEN
     IF ((TG_OP='INSERT') OR NEW.status='deleting') AND EXISTS(

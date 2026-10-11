@@ -1,7 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { activityLog, customerFeedbackRetention, customerFeedbackRetentionChanges, customerFeedbackImages,
-  feedbackImageDeletions, type Db } from "@paperclipai/db";
+  feedbackImageDeletions, companyDeletionOperations, type Db } from "@paperclipai/db";
 import { feedbackRetentionCommandSchema, feedbackRetentionViewSchema } from "@paperclipai/shared";
 import { conflict, unprocessable } from "../errors.js";
 import type { AuthorizationActor } from "./authorization.js";
@@ -59,6 +59,13 @@ export function customerFeedbackRetentionService(db: Db, options: {
             sql`${feedbackImageDeletions.deletedAt} is null`,
           )).limit(1);
         if (input.legalHold.active && (deleting || cleanup)) throw conflict("An image operation is unconfirmed; settle its original owner before applying a hold");
+        if (input.legalHold.active) {
+          const [purging] = await reader.select({ id: companyDeletionOperations.id }).from(companyDeletionOperations).where(and(
+            eq(companyDeletionOperations.companyId, companyId), eq(companyDeletionOperations.stage, "purge"),
+            sql`${companyDeletionOperations.status} <> 'completed'`,
+          )).limit(1).for("share");
+          if (purging) throw conflict("Company erasure is unconfirmed; its original owner must settle before a new hold");
+        }
         await reader.insert(customerFeedbackRetention).values({ companyId, feedbackId, version: before.version + 1,
           legalHold: input.legalHold.active, holdReleaseAt: input.legalHold.releaseAt ? new Date(input.legalHold.releaseAt) : null,
           holdReason: input.legalHold.reason, extensionUntil: input.extensionUntil ? new Date(input.extensionUntil) : null,

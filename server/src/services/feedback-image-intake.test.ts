@@ -126,3 +126,9 @@ describe("local scanner IPC admission", () => {
     expect(writable.scanned).toEqual([]);
   });
 });
+
+it("refuses SVG/XML parser input mislabeled as each allowed image type before decoding", async () => {
+  const body = Buffer.from('<svg xmlns="http://www.w3.org/2000/svg"><image href="file:///owned-never-read" /></svg>');
+  for (const type of ["image/png", "image/jpeg", "image/webp"])
+    await expect(normalizeFeedbackImage(body, type)).rejects.toMatchObject({ status: 422, details: { code: "FEEDBACK_IMAGE_CONTENT" } });
+});

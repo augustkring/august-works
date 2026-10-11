@@ -72,3 +72,14 @@ it("blocks same-turn writes during account recheck and requires new review after
   await vi.waitFor(() => expect(container.querySelector("textarea")).not.toBeNull());
   expect(document.querySelector('[role="alertdialog"]')).toBeNull(); expect(post).not.toHaveBeenCalled();
 });
+
+it("requires fresh C3 review after the original native controls version changes", async () => {
+  vi.spyOn(api, "get").mockResolvedValue(ready); const post = vi.spyOn(api, "post");
+  await mount(); await review();
+  const key = client.getQueryCache().findAll({ queryKey: ["feedback-retention"] })[0]!.queryKey;
+  await act(async () => client.setQueryData(key, { ...ready, version: 2, legalHold: { ...ready.legalHold, reason: "Current changed native reason" } }));
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull(); expect(post).not.toHaveBeenCalled();
+  expect(container.querySelector<HTMLTextAreaElement>("textarea")!.value).toBe("Current changed native reason");
+  await review(); expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Current changed native reason");
+  expect(post).not.toHaveBeenCalled();
+});

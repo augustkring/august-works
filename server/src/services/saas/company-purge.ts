@@ -3,7 +3,7 @@ import { enqueueSkillVersionFileErasure } from "../learning/skill-file-erasure.j
 import { eq, is, sql, type SQL } from "drizzle-orm";
 import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
 import * as schema from "@paperclipai/db";
-import { projectRoadmapProposals, causalClaims, businessScenarios, forecastSpecs, businessMetrics, businessMetricTargets, strategyExecutionLinks, processAnalysisDefinitions, decisionContexts, companies, issues, memoryRecords, type Db } from "@paperclipai/db";
+import { customerFeedback, projectRoadmapProposals, causalClaims, businessScenarios, forecastSpecs, businessMetrics, businessMetricTargets, strategyExecutionLinks, processAnalysisDefinitions, decisionContexts, companies, issues, memoryRecords, type Db } from "@paperclipai/db";
 import { conflict } from "../../errors.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
@@ -11,6 +11,7 @@ import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 // Minimal ownership/billing/erasure receipts survive content deletion. Never physically drop the company tombstone.
 const retained = new Set([
   "companies",
+  "feedback_image_deletions",
   "company_deletion_operations",
   "billing_account_companies",
   "billing_subscriptions",
@@ -69,6 +70,11 @@ export async function purgeCompanyContent(
       await tx.execute(sql`delete from ${table} where company_id=${companyId}::uuid`);
       deleted.push(config.name);
     }
+    // Original feedback roots must run their hold and allocation-erasure
+    // triggers before the generic child-first FK planner. Private descendants
+    // cascade; minimal physical-erasure receipts remain in their native owner.
+    const feedbackRows = await tx.delete(customerFeedback).where(eq(customerFeedback.companyId, companyId)).returning({ id: customerFeedback.id });
+    if (feedbackRows.length) deleted.push("customer_feedback");
     const tables = [
       ...new Set(
         (Object.values(schema) as unknown[]).filter((value): value is PgTable =>

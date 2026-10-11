@@ -15,6 +15,22 @@ async function fixture() {
 const input = { companyId: "owned-company", namespace: "feedback-images/owned-feedback/owned-image",
   originalFilename: "image.png", contentType: "image/png", body: Buffer.from("owned-storage-fixture-bytes") };
 describe("original Storage durable allocation callback", () => {
+  it("observes fulfilled transport before accounting and never fabricates it for a rejected provider acknowledgement", async () => {
+    const { provider } = await fixture(), order: string[] = [];
+    const storage = createStorageService(provider, { reserve: async () => {},
+      stored: async () => { expect(order).toEqual(["transport"]); throw Error("owned-accounting-ack-lost"); },
+      deleting: async () => {}, deleted: async () => {} });
+    await expect(storage.putFile({ ...input, onTransportSettled: async key => {
+      expect((await provider.headObject({ objectKey: key })).exists).toBe(true); order.push("transport");
+    } })).rejects.toThrow("owned-accounting-ack-lost");
+    expect(order).toEqual(["transport"]);
+    const settled = vi.fn();
+    const uncertain = createStorageService({ ...provider, async putObject(value) {
+      await provider.putObject(value); throw Error("owned-provider-ack-lost");
+    } });
+    await expect(uncertain.putFile({ ...input, onTransportSettled: settled })).rejects.toThrow("owned-provider-ack-lost");
+    expect(settled).not.toHaveBeenCalled();
+  });
   it("awaits the allocated company key before accounting or actual filesystem writes", async () => {
     const { provider } = await fixture(), order: string[] = [];
     const reserve = vi.fn(async (_companyId: string, key: string) => {

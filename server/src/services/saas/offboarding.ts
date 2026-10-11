@@ -6,6 +6,7 @@ import {
   agents,
   companies,
   companyDeletionOperations,
+  feedbackImageDeletions,
   companyMemberships,
   runtimeBackups,
   runtimeCells,
@@ -27,6 +28,7 @@ export function saasOffboardingService(
   runtime: ReturnType<typeof runtimeControlService>,
   objects: ReturnType<typeof companyObjectErasure>,
   retireHost?: (hostId: string) => Promise<unknown>,
+  removeFeedbackImages?: (companyId: string) => Promise<unknown>,
 ) {
   async function request(
     companyId: string,
@@ -342,6 +344,19 @@ export function saasOffboardingService(
         return true;
       }
       if (operation.stage === "purge") {
+        const admitted = await db.transaction(async tx => {
+          await tx.execute(sql`set local statement_timeout='5s'`);
+          await tx.execute(sql`set local lock_timeout='1s'`);
+          await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, operation.companyId)).for("update");
+          const [current] = await tx.select({ stage: companyDeletionOperations.stage, status: companyDeletionOperations.status })
+            .from(companyDeletionOperations).where(eq(companyDeletionOperations.id, operation.id)).for("update");
+          if (!current || current.stage !== "purge" || current.status === "completed") return false;
+          const held = await tx.execute(sql`select 1 from customer_feedback_retention where company_id=${operation.companyId}::uuid
+            and legal_hold and (hold_release_at is null or hold_release_at>clock_timestamp()) limit 1`);
+          if (held.length) throw conflict("Feedback retention hold requires its original operator before company erasure");
+          return true;
+        });
+        if (!admitted) return false;
         const objectEvidence = await objects.erase(
           operation.companyId,
           now,
@@ -351,6 +366,11 @@ export function saasOffboardingService(
           db,
           operation.companyId,
         );
+        await removeFeedbackImages?.(operation.companyId);
+        const [pendingImage] = await db.select({ id: feedbackImageDeletions.id }).from(feedbackImageDeletions).where(and(
+          eq(feedbackImageDeletions.companyId, operation.companyId), isNull(feedbackImageDeletions.deletedAt),
+        )).limit(1);
+        if (pendingImage) throw conflict("Feedback image erasure is awaiting physical confirmation");
         await db
           .update(companyDeletionOperations)
           .set({

@@ -104,6 +104,7 @@ export function createStorageService(provider: StorageProvider, accounting?: Sto
         contentType,
         contentLength: byteSize,
       });
+      await input.onTransportSettled?.(objectKey);
       // A lost provider or database acknowledgement retains the reservation for reconciliation.
       await accounting?.stored(input.companyId, objectKey);
 

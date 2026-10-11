@@ -26,6 +26,13 @@ export async function normalizeFeedbackImage(body: Buffer, reportedMediaType: st
   assertBody(body);
   if (!Object.hasOwn(imageFormats, reportedMediaType)) throw rejected("FEEDBACK_IMAGE_TYPE");
   const mediaType = reportedMediaType as FeedbackImageMediaType;
+  // Reject other parser families before invoking the decoder. A caller's
+  // image MIME header must not cause SVG/XML or another format to be parsed.
+  const signature = mediaType === "image/png"
+    ? body.subarray(0, 8).equals(Buffer.from([137, 80, 78, 71, 13, 10, 26, 10]))
+    : mediaType === "image/jpeg" ? body.subarray(0, 3).equals(Buffer.from([255, 216, 255]))
+    : body.length >= 12 && body.subarray(0, 4).equals(Buffer.from("RIFF")) && body.subarray(8, 12).equals(Buffer.from("WEBP"));
+  if (!signature) throw rejected("FEEDBACK_IMAGE_CONTENT");
   try {
     const input = sharp(body, { limitInputPixels: MAX_PIXELS, failOn: "warning", animated: true });
     const metadata = await input.metadata();

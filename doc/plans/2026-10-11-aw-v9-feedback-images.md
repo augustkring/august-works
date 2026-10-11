@@ -55,8 +55,39 @@ in their original logs; they are not passes.
 Frozen HEAD: `2515c20c50fa9a2efa8faf3ebae7720d6e23bac3`; matching before/after public Source SHA-256: `b5be0025ec2f1d11a619e3db763d50d96c823ee5edb3b83d22ad0a9e4d050987`. Artifacts: `/workspace/v9-feedback-images-{focused,types,native}-v2-*` and `/workspace/v9-feedback-images-migration-check-v2.log`.
 
 HTTP image intake stays closed in this foundation. The local image picker is
-not yet wired into submission/history, and full operator image views, storage
-acknowledgement recovery, company erasure completion and retention execution
-remain work. Full built UI, integrated checks, provider operating evidence,
+not yet wired into submission/history, and full operator image views, unknown
+provider acknowledgement recovery and retention execution remain work.
+Full built UI, integrated checks, provider operating evidence,
 Privacy policy approval and complete V9 acceptance remain pending. No GA gate
 or launch acceptance is opened by these scoped results.
+
+## Original transport and company erasure — 2026-10-11
+
+Original Storage now reports fulfilled provider PUT separately from its accounting
+acknowledgement. A fulfilled exact-object write whose accounting fails retains a
+known cleanup candidate; a rejected provider acknowledgement remains uncertain
+and cannot cause a second PUT or a time-based cleanup claim. Manual removal also
+confirms any matching durable deletion receipt after actual DELETE and absent
+HEAD. An unallocated native reservation can be explicitly cancelled; its late
+original allocation is refused. An in-flight allocated PUT remains pending.
+
+The original company purge checks current native feedback holds before bulk
+object erasure, deletes the feedback root before its protected descendants, and
+retains minimal object-erasure receipts through database purge. Completion waits
+for confirmed original-object removal. A new hold cannot undo an already approved
+purge; the original operator can release an existing hold. C3 review binds the
+native retention version and immediately hides stale query state. Closed image
+magic is checked before invoking the decoder.
+
+The frozen v3 check passed 64 focused cases in ten complete files, Shared/DB
+builds, server/UI typechecks, migration checks, and 54 Native cases in four full
+files. Its matching public Source SHA-256 was
+`ccd1fe9a7783ac9c32aa11cff22eb6640800072458c1f50126cae592dbaffb61`.
+After the manual-removal/cancellation corrections, v4 passed the same builds and
+typechecks and all 57 Native cases: 20 image cases and the unchanged complete
+feedback (16), account (6) and SaaS-domain (15) files. Actual v4 before/after
+Source SHA-256 was `746d6874caad16b4d717efa8ebfdfe3dfcda0af6def63513bc26d81dff24e7fe`;
+records are `/workspace/v9-feedback-images-{types,native}-v4-source-*.json`.
+Both runs used frozen HEAD `22c74cb81e0d3497df2b342de50f2d8c1fee6a3c`
+plus the recorded uncommitted source, with original deadlines and assertions.
+These scoped passes do not qualify full V9 or deployed antivirus/storage operation.

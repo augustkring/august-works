@@ -51,6 +51,9 @@ export interface PutFileInput {
   /** Server-owned durable reservation, completed before any provider write.
    * It receives only the original Storage owner's allocated company key. */
   onAllocated?: (objectKey: string) => Promise<void>;
+  /** Observed only after the actual provider write fulfils. A rejected or
+   * unknown provider acknowledgement never invokes this callback. */
+  onTransportSettled?: (objectKey: string) => Promise<void>;
 }
 
 export interface PutFileResult {

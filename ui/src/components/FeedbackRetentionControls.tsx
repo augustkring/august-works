@@ -25,12 +25,10 @@ export function FeedbackRetentionControls({ companyId, feedbackId, principal }: 
     return value;
   }), enabled: authority.readReady, staleTime: 0, gcTime: 0, retry: false });
   const subscribe = useCallback((changed: () => void) => client.getQueryCache().subscribe(changed), [client]);
-  const nativeCurrent = useSyncExternalStore(subscribe, () => {
-    const state = client.getQueryState(queryKey);
-    return state?.status === "success" && state.fetchStatus === "idle" && !state.isInvalidated;
-  }, () => false);
+  const nativeState = useSyncExternalStore(subscribe, () => client.getQueryState(queryKey), () => undefined);
+  const nativeCurrent = nativeState?.status === "success" && nativeState.fetchStatus === "idle" && !nativeState.isInvalidated;
   const attempted = useRef<FeedbackRetentionCommand | null>(null), sending = useRef(false);
-  const [review, setReview] = useState<FeedbackRetentionCommand | null>(null), reviewEpoch = useRef(-1);
+  const [review, setReview] = useState<FeedbackRetentionCommand | null>(null), reviewEpoch = useRef(-1), reviewVersion = useRef(-1);
   const [uncertain, setUncertain] = useState(false);
   function current() {
     const state = client.getQueryState(queryKey);
@@ -70,11 +68,11 @@ export function FeedbackRetentionControls({ companyId, feedbackId, principal }: 
     <h3 className="text-base font-semibold">{t("feedback.retentionTitle")}</h3>
     <p className="text-sm text-muted-foreground">{t("feedback.retentionPolicy")}</p>
     <RetentionEditor key={`${query.data.version}:${authority.epoch}`} value={query.data}
-      disabled={change.isPending || uncertain} review={input => { if (current()) { reviewEpoch.current = authority.epoch; setReview(input); } }} />
+      disabled={change.isPending || uncertain} review={input => { if (current()) { reviewEpoch.current = authority.epoch; reviewVersion.current = query.data.version; setReview(input); } }} />
     {change.isError && <p role="alert">{t(uncertain ? "feedback.retentionUnknown" : "feedback.retentionRejected")}</p>}
     {uncertain && <Button type="button" className="min-h-11" variant="outline" disabled={change.isPending}
-      onClick={() => { if (current() && attempted.current) { reviewEpoch.current = authority.epoch; setReview(attempted.current); } }}>{t("feedback.retentionRetryExact")}</Button>}
-    <AlertDialog open={!!review && reviewEpoch.current === authority.epoch && current()} onOpenChange={open => { if (!open) setReview(null); }}>
+      onClick={() => { if (current() && attempted.current) { reviewEpoch.current = authority.epoch; reviewVersion.current = query.data.version; setReview(attempted.current); } }}>{t("feedback.retentionRetryExact")}</Button>}
+    <AlertDialog open={!!review && reviewEpoch.current === authority.epoch && reviewVersion.current === query.data.version && current()} onOpenChange={open => { if (!open) setReview(null); }}>
       <AlertDialogContent>
         <AlertDialogHeader><AlertDialogTitle>{t("feedback.retentionConfirmTitle")}</AlertDialogTitle>
           <AlertDialogDescription>{t("feedback.retentionConfirmBody")}</AlertDialogDescription></AlertDialogHeader>
@@ -87,7 +85,7 @@ export function FeedbackRetentionControls({ companyId, feedbackId, principal }: 
         <AlertDialogFooter>
           <Button type="button" variant="outline" className="min-h-11" disabled={change.isPending} onClick={() => setReview(null)}>{t("cancel")}</Button>
           <Button type="button" className="min-h-11" disabled={change.isPending || !current()} onClick={() => {
-            if (review && reviewEpoch.current === authority.epoch && current() && !sending.current) { sending.current = true; change.mutate(review); }
+            if (review && reviewEpoch.current === authority.epoch && reviewVersion.current === query.data.version && current() && !sending.current) { sending.current = true; change.mutate(review); }
           }}>{t("feedback.retentionConfirm")}</Button>
         </AlertDialogFooter>
       </AlertDialogContent>

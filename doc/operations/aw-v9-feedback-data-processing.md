@@ -97,7 +97,15 @@ all allocated image keys are physically confirmed removed and the final native
 transaction rechecks remaining links and erasure receipts. A missing provider
 acknowledgement never establishes a deleted object or completed account.
 
-Only explicit-account erasure uses the existing account worker. No automatic
+The original company offboarding owner also checks current feedback holds before
+bulk object erasure. Its native purge preserves exact protected-image deletion
+receipts, and completion waits for physical absence confirmation. A new hold
+cannot be applied once an approved company purge is pending; an existing hold
+can still be released by the original operator. Fulfilled provider PUT and failed
+accounting acknowledgements are recorded separately. A rejected provider PUT
+acknowledgement remains unknown and never qualifies a second upload or cleanup.
+
+Explicit account and company erasure use their existing workers. No automatic
 feedback-retention purge or retention scheduler is activated. Image HTTP intake
 remains closed while its full native and UI implementation is being qualified.
 The synthetic Unix-socket test daemon validates wire/content ownership; it is

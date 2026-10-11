@@ -145,6 +145,10 @@ export function saasPlatform(
     config.upcloud
       ? (hostId) => fleet.requestRetire(hostId, "runtime-scheduler")
       : undefined,
+    async companyId => {
+      for (let count = 0; count < 3; count++)
+        if (!(await processFeedbackImageDeletion(db, storage, undefined, companyId))) break;
+    },
   );
   const support = saasSupportService(db, config, notifications.notifyCompany);
   const logs = config.runLogs
