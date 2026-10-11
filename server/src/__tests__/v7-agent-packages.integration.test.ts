@@ -2031,7 +2031,7 @@ const support = await getEmbeddedPostgresTestSupport();
     });
     it("requires a fresh explicit successor decision after Original change-setup advances the onboarding version", async () => {
       const c = await originalCompletedPersonalConnection(), current = await c.activation.get(f.actor, f.home);
-      const reviewStep = await c.activation.command(f.actor, f.home, { operation: "continue", requestId: randomUUID(), expectedVersion: current.version });
+      const reviewStep = await c.activation.command(f.actor, f.home, { operation: "continue_access", requestId: randomUUID(), expectedVersion: current.version });
       await c.activation.command(f.actor, f.home, { operation: "change_setup", requestId: randomUUID(), expectedVersion: reviewStep.version });
       expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("needs_review");
       const original = await withdrawCompletedPurpose(c), reviewed = await c.owner.getReview(f.actor, f.home, c.key);

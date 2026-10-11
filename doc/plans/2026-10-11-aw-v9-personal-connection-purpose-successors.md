@@ -46,3 +46,14 @@ current-owner/positive-proof guards were appended. All 11 historical snapshots
 pruned by the Original generator were restored byte-for-byte from Git. Shared
 and DB builds V1 passed. Native, UI and full type/browser qualification remains
 pending. No customer migration or operation was executed.
+
+Combined localization was merged before qualification; conflicts retained both
+sets of fields/cases and all exact identifiers. Token gates V2 and the combined
+Shared build V2 passed. Focus V1 passed 216 cases in eight complete files.
+Native V1 retained 454 passes and two failures out of 456: the original transactional
+callback guard still chose a historical withdrawal, and the new revision fixture
+used `continue` instead of Original `continue_access`. The callback guard now
+selects live ownership while retaining every current user/run/version/package/app
+check. The fixture invokes the real current command; no assertion or deadline
+was removed. Types/browser V1 did not start after the failed Native prerequisite.
+The exact-source Native/types/browser rerun remains pending.

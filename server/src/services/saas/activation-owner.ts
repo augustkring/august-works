@@ -1,4 +1,4 @@
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, ne, sql } from "drizzle-orm";
 import { activationConnectionConsents, authUsers, companies, companyMemberships, companyOnboardingRuns, instanceSettings, toolApplications, toolConnections, type Db } from "@paperclipai/db";
 import { activationStateSchema, v9FeatureEnabled } from "@paperclipai/shared";
 import { conflict, forbidden, notFound } from "../../errors.js";
@@ -101,7 +101,8 @@ export async function assertActivationConnectionPurposeInTransaction(tx: Db, act
     const current = await readActivationOwner(tx, actor, companyId, true);
     await assertV5Authorization(tx, { ...actor, ignoreInstanceAdmin: true }, companyId, "tools:admin");
     const [purpose] = await tx.select().from(activationConnectionConsents).where(and(
-      eq(activationConnectionConsents.companyId, companyId), eq(activationConnectionConsents.connectionId, connectionId))).for("share");
+      eq(activationConnectionConsents.companyId, companyId), eq(activationConnectionConsents.connectionId, connectionId),
+      ne(activationConnectionConsents.status, "withdrawn"))).for("share");
     if (!purpose || !["allocated", "connected"].includes(purpose.status) || purpose.subjectUserId !== current.userId ||
         purpose.onboardingRunId !== current.run.id || purpose.packageVersionId !== current.state.packageVersionId ||
         current.run.status !== "in_progress" || current.run.version !== purpose.onboardingVersion || current.state.step !== "access" ||
