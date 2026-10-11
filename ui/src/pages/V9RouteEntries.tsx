@@ -28,6 +28,9 @@ export const MaintenanceHistoryEntry = deferredPage(() =>
 export const MemoryMaintenanceHistoryEntry = deferredPage(() =>
   import("./MemoryMaintenanceHistory").then((page) => ({ default: page.MemoryMaintenanceHistoryEntry })),
 );
+export const ExperienceMeasuresEntry = deferredPage(() =>
+  import("./ExperienceMeasures").then((page) => ({ default: page.ExperienceMeasuresEntry })),
+);
 export const AgentMonitorEntry = deferredPage(() =>
   import("./AgentMonitor").then((page) => ({
     default: page.AgentMonitorEntry,

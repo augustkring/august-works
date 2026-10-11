@@ -53,3 +53,11 @@ Task/run/output that has current independent human worker verification. The
 the explicit completion/revocation boundary. Actual Native tests and built-browser
 software fixtures pass; preparation/execution of a first job, Free Core delivery,
 artifact correction and full launch acceptance remain open.
+
+The supporting [current-owner activation measures contract](contracts/native-activation-measures.json)
+projects content-free buckets from original onboarding and independent review.
+Recorded transitions are distinct from all required customer actions, and the
+usable-account TTFO baseline stays unavailable. No new dataset/provider export
+is introduced; existing Paperclip Telemetry remains a separate unchanged path.
+The [scope plan](../../plans/2026-10-11-aw-v9-activation-measures.md) records exact
+Native, focused, type and built-UI software snapshots and remaining acceptance.

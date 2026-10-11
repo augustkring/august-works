@@ -26,6 +26,7 @@ import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
 import { CustomerFeedbackDialog } from "../components/CustomerFeedbackDialog";
+import { ActivationMeasuresLink } from "../components/ActivationMeasuresLink";
 import { ActivationFirstValue } from "../components/ActivationFirstValue";
 import { ActivationFirstTask } from "../components/ActivationFirstTask";
 import { SaasWelcomePage } from "./SaasWelcome";
@@ -692,6 +693,7 @@ function ActivationScope({
               })
             }
           />
+          {enabled && !frozen && <ActivationMeasuresLink />}
           {current.firstValue?.status === "verified" &&
           !isPast &&
           current.state.step === "result" ? (

@@ -1,5 +1,6 @@
 import { customerSupportRoutes } from "./routes/customer-support.js";
 import { maintenanceHistoryRoutes } from "./routes/maintenance-history.js";
+import { experienceMeasuresRoutes } from "./routes/experience-measures.js";
 import { agentMonitorRoutes } from "./routes/agent-monitor.js";
 import { enterpriseRoutes } from "./routes/enterprise.js";
 import { agentPackageRoutes } from "./routes/agent-packages.js";
@@ -913,6 +914,7 @@ export async function createApp(
   api.use(agentAuthoringRoutes(db));
   api.use(agentMonitorRoutes(db));
   api.use(maintenanceHistoryRoutes(db));
+  api.use(experienceMeasuresRoutes(db));
   api.use(customerSupportRoutes(db));
   api.use(customerFeedbackRoutes(db,{operatorUserIds:opts.saasPlatform?.config.operatorUserIds}));
   api.use(attentionRoutes(db));

@@ -2,6 +2,7 @@ import {
   CustomerSupport,
   MaintenanceHistoryEntry,
   MemoryMaintenanceHistoryEntry,
+  ExperienceMeasuresEntry,
   AgentMonitorEntry,
   CustomAgent,
   HireAgent,
@@ -438,6 +439,7 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       />
       <Route path="memory/intelligence" element={<V7FeatureGate feature="memory_observations_v7"><DerivedMemory /></V7FeatureGate>} />
       <Route path="memory/maintenance" element={<MemoryMaintenanceHistoryEntry />} />
+      <Route path="company/measures" element={<ExperienceMeasuresEntry />} />
       <Route path="orchestration" element={<V7FeatureGate feature="orchestration_v7"><Orchestration /></V7FeatureGate>} />
       <Route path="agents/packages/installations/:installationId/maintenance" element={<MaintenanceHistoryEntry />} />
       <Route path="agents/packages" element={<V7FeatureGate feature="agent_packages_v7"><AgentPackages /></V7FeatureGate>} />

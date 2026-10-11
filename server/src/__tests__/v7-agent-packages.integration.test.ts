@@ -1,3 +1,5 @@
+import { readExperienceMeasures } from "../services/experience/measures.js";
+import { experienceMeasuresRoutes } from "../routes/experience-measures.js";
 import { readPackageMaintenanceAttention } from "../services/experience/maintenance-attention.js";
 import { experienceService } from "../services/experience/service.js";
 import express from "express";
@@ -1470,7 +1472,7 @@ const support = await getEmbeddedPostgresTestSupport();
     });
     async function prepareFirstValueFixture(budgets: CreateOrchestrationPlanInput["budgets"] = {}, configurePresence?: () => Promise<void>) {
       await instanceSettingsService(db).updateExperimental({
-        activation_v9: true, free_core_commercial_v7: true, billing_entitlements_v6: true,
+        activation_v9: true, experience_analytics_v9: true, free_core_commercial_v7: true, billing_entitlements_v6: true,
         billing_usage_v6: true, enableWorkflowsV1: true,
         transactional_email_v6: true, email_verification_required_v6: true, server_onboarding_v6: true,
         readiness_engine_v7: true, orchestration_v7: true, supervision_v7: true, verifier_v7: true,
@@ -1627,6 +1629,32 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(completionReplay.version).toBe(completed.version);
       expect(completionReplay.state.firstValueAt).toBe(first.state.firstValueAt);
     }, 60000);
+    it("measures original independently reviewed output without exporting content, inventing TTFO or writing analytics", async () => {
+      const fixture = await firstValueFixture(), activation = activationService(db);
+      await activation.command(f.actor, f.home, { operation: "record_verified_result", expectedVersion: fixture.onboarding.version,
+        requestId: randomUUID(), installationId: fixture.installation.id, verificationRunId: fixture.review.id });
+      const before = await db.select().from(activityLog).where(eq(activityLog.companyId, f.home));
+      const view = await readExperienceMeasures(db, f.actor, f.home);
+      expect(view).toMatchObject({ companyId: f.home, status: "verified", setupWindow: "complete", usableBaseline: "unavailable" });
+      expect(view.creationToVerificationBucket).not.toBeNull();
+      expect(await db.select().from(activityLog).where(eq(activityLog.companyId, f.home))).toEqual(before);
+      const payload = JSON.stringify(view);
+      for (const privateValue of [f.userId, fixture.task.id, fixture.run.id, fixture.document.id, fixture.review.id, fixture.document.latestBody!, fixture.task.title])
+        expect(payload).not.toContain(privateValue);
+      const app = express();
+      app.use((req, _res, next) => { req.actor = { ...f.actor, companyIds: [f.home] }; next(); });
+      app.use("/api", experienceMeasuresRoutes(db)); app.use(errorHandler);
+      const response = await request(app).get(`/api/companies/${f.home}/experience/analytics`).query({ expectedUserId: f.userId });
+      expect(response.status).toBe(200); expect(response.headers["cache-control"]).toBe("private, no-store");
+      expect(response.body.status).toBe("verified");
+      expect((await request(app).get(`/api/companies/${f.home}/experience/analytics`).query({ expectedUserId: "another-account" })).status).toBe(409);
+      expect((await request(app).get(`/api/companies/${f.guest}/experience/analytics`).query({ expectedUserId: f.userId })).status).toBe(403);
+      // Original metadata fixtures qualify bounded inspection, not real customer effort.
+      await db.insert(activityLog).values(Array.from({ length: 129 }, (_, index) => ({ companyId: f.home,
+        actorType: "user", actorId: f.userId, action: "activation.step_completed", entityType: "onboarding", entityId: fixture.onboarding.id,
+        createdAt: fixture.onboarding.createdAt, details: { from: "intent", to: "company", version: index + 2 } })));
+      expect(await readExperienceMeasures(db, f.actor, f.home)).toMatchObject({ setupWindow: "bounded", recordedSetupChangesBucket: null });
+    }, 60000);
     it("withdraws reviewed output links when the original saved document changes", async () => {
       const fixture = await firstValueFixture(), activation = activationService(db);
       const recorded = await activation.command(f.actor, f.home, {
@@ -1644,6 +1672,8 @@ const support = await getEmbeddedPostgresTestSupport();
       const current = await activation.get(f.actor, f.home);
       expect(current.firstValue).toEqual({ status: "withdrawn", result: null, candidates: [], hasMore: false });
       expect(current.state.firstValueAt).toBe(recorded.state.firstValueAt);
+      expect(await readExperienceMeasures(db, f.actor, f.home)).toMatchObject({ status: "withdrawn", creationToVerificationBucket: null,
+        recordedSetupChangesBucket: null, setupWindow: "not_applicable", usableBaseline: "unavailable" });
       await expect(activation.command(f.actor, f.home, { operation: "complete_activation",
         expectedVersion: current.version, requestId: randomUUID(),
       })).rejects.toMatchObject({ status: 409 });

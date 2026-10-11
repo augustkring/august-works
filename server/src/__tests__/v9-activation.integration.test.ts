@@ -1,3 +1,4 @@
+import { readExperienceMeasures } from "../services/experience/measures.js";
 import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -55,6 +56,7 @@ const support = await getEmbeddedPostgresTestSupport();
         server_onboarding_v6: true,
         free_core_commercial_v7: true,
         activation_v9: true,
+        experience_analytics_v9: true,
       });
     });
     const actor = () => ({
@@ -72,6 +74,35 @@ const support = await getEmbeddedPostgresTestSupport();
         }),
       );
     }
+    it("observes no invented value and does not create measurement events or native work", async () => {
+      const run = await create();
+      const before = await db.select().from(activityLog).where(eq(activityLog.companyId, run.companyId));
+      const measures = await readExperienceMeasures(db, actor(), run.companyId);
+      expect(measures).toMatchObject({ companyId: run.companyId, status: "not_recorded", creationToVerificationBucket: null,
+        recordedSetupChangesBucket: null, setupWindow: "not_applicable", usableBaseline: "unavailable" });
+      expect(JSON.stringify(measures)).not.toContain(userId);
+      expect(await db.select().from(activityLog).where(eq(activityLog.companyId, run.companyId))).toEqual(before);
+      await expect(readExperienceMeasures(db, { ...actor(), source: "local_implicit" }, run.companyId)).rejects.toMatchObject({ status: 403 });
+      await instanceSettingsService(db).updateExperimental({ experience_analytics_v9: false });
+      await expect(readExperienceMeasures(db, actor(), run.companyId)).rejects.toMatchObject({ status: 404 });
+    });
+    it("rechecks current verified account, native membership and onboarding owner", async () => {
+      const run = await create();
+      await db.update(authUsers).set({ emailVerified: false }).where(eq(authUsers.id, userId));
+      await expect(readExperienceMeasures(db, actor(), run.companyId)).rejects.toMatchObject({ status: 403 });
+      await db.update(authUsers).set({ emailVerified: true }).where(eq(authUsers.id, userId));
+      const otherUserId = randomUUID();
+      await db.insert(authUsers).values({ id: otherUserId, name: "Another native member", email: `${otherUserId}@example.test`,
+        emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+      await db.insert(companyMemberships).values({ companyId: run.companyId, principalType: "user", principalId: otherUserId,
+        status: "active", membershipRole: "viewer" });
+      await expect(readExperienceMeasures(db, { ...actor(), userId: otherUserId }, run.companyId)).rejects.toMatchObject({ status: 404 });
+      // The original database owner fence itself also prevents a forged reassignment.
+      await expect(db.update(companyOnboardingRuns).set({ createdByUserId: otherUserId }).where(eq(companyOnboardingRuns.id, run.id)))
+        .rejects.toMatchObject({ cause: { message: "AW_V9_ONBOARDING_FLOW_REQUIRED" } });
+      await db.update(companyMemberships).set({ status: "inactive" }).where(and(eq(companyMemberships.companyId, run.companyId), eq(companyMemberships.principalId, userId)));
+      await expect(readExperienceMeasures(db, actor(), run.companyId)).rejects.toMatchObject({ status: 403 });
+    });
     const command = (
       expectedVersion: number,
       rest: Omit<

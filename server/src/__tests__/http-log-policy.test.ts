@@ -232,3 +232,13 @@ describe("shouldSilenceHttpSuccessLog", () => {
     ).toBe(false);
   });
 });
+
+it("purpose-separates activation measures and rejected account-bearing requests from generic logs", () => {
+  for (const method of ["GET", "POST", "DELETE", "HEAD"]) {
+    const url = "/api/companies/private-company/experience/analytics?expectedUserId=private-user";
+    expect(isPrivateExperienceHttpRequest(method, url)).toBe(true);
+    expect(isSecretSensitiveHttpRequest(method, url)).toBe(true);
+    expect(privateExperienceLogUrl(url)).toBe("/api/companies/:companyId/experience/analytics");
+  }
+  expect(isPrivateExperienceHttpRequest("GET", "/api/companies/id/experience/analytics-other")).toBe(false);
+});

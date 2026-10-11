@@ -1373,5 +1373,41 @@
       "verification_unavailable": "Jobbet sluttede, men den matchende oprindelige verifikationskvittering kunne ikke fastslås. Resultatet er ikke bekræftet.",
       "source_unavailable": "Den oprindelige kildebinding er ikke længere tilgængelig. Kildedetaljer og verificeret resultat vises ikke."
     }
+  },
+  "measures": {
+    "title": "Aktiveringsmålinger",
+    "open": "Se aktiveringsmålinger",
+    "boundary": "Målingerne beskriver din aktuelle onboarding og dit uafhængigt verificerede resultat. De fastlægger ikke mål for brugervenlighed og måler ikke alle opsætningshandlinger.",
+    "observed": "Observeret",
+    "unavailable": "Aktiveringsmålingerne kunne ikke indlæses. Kontrollér din aktuelle konto og virksomhed, og prøv igen.",
+    "notAvailable": "Ikke tilgængelig",
+    "creationToVerification": "Tid fra oprettet onboarding til verificeret resultat",
+    "setupChanges": "Registrerede opsætningsovergange før verifikation",
+    "bounded": "Der er flere registrerede overgange, end denne afgrænsede visning kan undersøge. Et fuldstændigt antal er ikke tilgængeligt.",
+    "ttfo": "Tid til første brugbare resultat",
+    "baselineUnavailable": "Ikke tilgængelig: startpunktet for en brugbar konto er endnu ikke fastlagt. Oprettet onboarding er en anden måling.",
+    "processing": "Denne private visning bruger eksisterende poster og gemmer ikke et særskilt analysedatasæt. Ændrede kilder kan trække tidligere målinger tilbage.",
+    "return": "Tilbage til aktivering",
+    "state": {
+      "verified": "Et aktuelt, uafhængigt verificeret resultat er registreret.",
+      "not_recorded": "Der er endnu ikke registreret et verificeret resultat.",
+      "withdrawn": "Det oprindelige resultat er ikke længere aktuelt verificeret. Tidligere målinger er ikke tilgængelige."
+    },
+    "duration": {
+      "under_minute": "Under ét minut",
+      "one_to_five_minutes": "Ét til under fem minutter",
+      "five_to_thirty_minutes": "Fem til under tredive minutter",
+      "thirty_minutes_to_two_hours": "Tredive minutter til under to timer",
+      "two_hours_to_day": "To timer til under ét døgn",
+      "over_day": "Ét døgn eller mere"
+    },
+    "changes": {
+      "none": "Ingen registrerede overgange",
+      "one": "Én registreret overgang",
+      "two_to_five": "To til fem registrerede overgange",
+      "six_to_ten": "Seks til ti registrerede overgange",
+      "eleven_to_thirty": "Elleve til tredive registrerede overgange",
+      "over_thirty": "Over tredive registrerede overgange"
+    }
   }
 }

@@ -1373,5 +1373,41 @@
       "verification_unavailable": "The job ended, but its matching native verification receipt could not be established. Success is not confirmed.",
       "source_unavailable": "The original source binding is no longer available. No source details or verified result are shown."
     }
+  },
+  "measures": {
+    "title": "Activation measures",
+    "open": "View activation measures",
+    "boundary": "These measures describe your current onboarding and independently verified result. They do not establish usability targets or measure all setup actions.",
+    "observed": "Observed at",
+    "unavailable": "Activation measures could not be loaded. Check your current account and company, then try again.",
+    "notAvailable": "Not available",
+    "creationToVerification": "Time from onboarding creation to verified result",
+    "setupChanges": "Recorded setup transitions before verification",
+    "bounded": "There are more recorded transitions than this bounded view can inspect. A complete count is unavailable.",
+    "ttfo": "Time to First Useful Outcome",
+    "baselineUnavailable": "Unavailable: the usable-account start point has not been established. Onboarding creation is a different measure.",
+    "processing": "This private view uses existing records and stores no separate analytics dataset. Source changes can withdraw prior measures.",
+    "return": "Return to activation",
+    "state": {
+      "verified": "A current independently verified result is recorded.",
+      "not_recorded": "No verified result is recorded yet.",
+      "withdrawn": "The original result is no longer currently verified. Prior measures are unavailable."
+    },
+    "duration": {
+      "under_minute": "Less than one minute",
+      "one_to_five_minutes": "One to under five minutes",
+      "five_to_thirty_minutes": "Five to under thirty minutes",
+      "thirty_minutes_to_two_hours": "Thirty minutes to under two hours",
+      "two_hours_to_day": "Two hours to under one day",
+      "over_day": "One day or more"
+    },
+    "changes": {
+      "none": "No recorded transitions",
+      "one": "One recorded transition",
+      "two_to_five": "Two to five recorded transitions",
+      "six_to_ten": "Six to ten recorded transitions",
+      "eleven_to_thirty": "Eleven to thirty recorded transitions",
+      "over_thirty": "More than thirty recorded transitions"
+    }
   }
 }
