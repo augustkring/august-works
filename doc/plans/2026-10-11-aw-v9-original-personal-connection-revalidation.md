@@ -75,3 +75,27 @@ use the actual column. The publication/refusal conditions are unchanged.
 Types V2 and built browser V2 did not start after Native failure. The new-source
 DB build and full Native/types/browser rerun remain pending. Original suites,
 authority checks and deadlines remain intact.
+
+## Qualified bounded revalidation
+
+DB build V4 passed after correcting the actual publication column. Native V3
+passed all 451 cases in the three complete Original Apps/package/activation files,
+including all six new revalidation cases. Types V3 passed Shared and DB builds
+and full server/UI typechecks. Built Browser V3 passed all three existing C3,
+reuse and unchanged Original connection cases; explicit connected-purpose
+reconnect is covered by the host/transport and actual Native callback cases.
+Token gates V2 passed before Source commit.
+
+Native, types and browser retained matching before/after Source SHA-256
+`8e528dc22dd9034cc35958d3dd5782cb1e2d080d728c5e76f2de17733d20223f`
+at Source HEAD `019f68a5105177277e9228fc57ca31fdcc229b3b`. This later additive
+qualification text changes documentation only. Failed/interrupted logs are
+retained; no assertion, authority fence or Original deadline was removed.
+
+This qualifies unchanged-purpose personal revalidation with zero Agent reach.
+Credential rotation, known expiry, revocation, terminal withdrawal, immutable
+first completion and purpose-specific validation are independently checked.
+The browser uses explicitly scoped software responses and owned local fixtures;
+it is not live-provider, hosted, human or GA evidence. New-purpose successors,
+existing-reach preservation, Safe Test/promotion/hosted first value and final
+whole-repository gates remain separate unfinished work.
