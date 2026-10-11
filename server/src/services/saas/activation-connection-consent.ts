@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, ne } from "drizzle-orm";
+import { and, eq, ne, or } from "drizzle-orm";
 import { activationConnectionConsents, agentPackageVersions, companies, toolApplications, toolConnections, type Db } from "@paperclipai/db";
 import { getConnectableAppDefinition, activationConnectionConsentCommandSchema, activationConnectionConsentWithdrawalCommandSchema, activationConnectionConsentReceiptSchema, activationConnectionReviewSchema, packageReleaseSchema, v9FeatureEnabled } from "@paperclipai/shared";
 import { conflict, forbidden, notFound } from "../../errors.js";
@@ -66,7 +66,7 @@ async function source(tx: Db, actor: AuthorizationActor, companyId: string, appl
   let existingMethodKey: string | undefined = approvedPurpose?.connectionMethodKey;
   if (connection) {
     const [owned] = await tx.select().from(activationConnectionConsents).where(and(eq(activationConnectionConsents.companyId, companyId),
-      eq(activationConnectionConsents.connectionId, connection.id))).for("share");
+      or(eq(activationConnectionConsents.connectionId, connection.id), eq(activationConnectionConsents.reservedConnectionId, connection.id)))).for("share");
     if (owned && (owned.onboardingRunId !== current.run.id || owned.subjectUserId !== current.userId || owned.status === "withdrawn"))
       throw conflict("This retained connection needs a separate current purpose renewal");
     if (!owned || owned.existingConnectionId) {

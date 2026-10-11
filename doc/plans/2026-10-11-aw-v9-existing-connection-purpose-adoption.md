@@ -35,3 +35,35 @@ versions and preserving existing company reach; they have not yet run. Full
 Native/type/browser qualification remains pending. Full preserving-access adoption,
 purpose renewal/reconnect after withdrawal, representative Safe Test, hosted
 runtime/funding, first value, full V9 and PR readiness remain open.
+
+## Qualified bounded implementation
+
+Native V2 passed all 445 cases in the three complete Original Apps, package and
+activation owner files, including the four new adoption cases and fresh allocation
+regressions. Full Shared/DB builds and server/UI typechecks passed in Types V3.
+Built Browser V3 passed all three cases: explicit new-purpose consent, explicit
+reuse with required-access refresh and the unchanged Original connection path.
+Native, types and browser recorded matching before/after Source SHA-256
+`1ea954ff706369e49e30b2a8b27bc80f55d4721de00e4712983d96969c5b91e9`
+at WIP HEAD `7fb97dbff97f2a3394c204eda77a8420f1c82f49`. Token gates V3 passed.
+This additive qualification text is the only later Source change before commit.
+
+Native V1 retained 436 passes and nine failures: the review mistook a newly inserted
+Original connection for legacy state before its reserved identity was bound. The
+owner lookup now recognizes the actual reserved connection inside the transaction;
+it neither exposes the reservation as positive evidence nor allocates again.
+Types V2 retained an exit-137 server compiler failure from memory exhaustion.
+Only 55 completed, log-proven, owned disposable browser homes were removed;
+customer state, Source and qualification logs were preserved. V3 ran sequentially
+and passed. Earlier browser runs did not start after prerequisite failure.
+
+The UI retains heading hierarchy and distinct connection region names. Read-only
+review unavailability uses a visible status; decision failures retain alerts.
+Original assertions, Native authority gates, accessibility checks and deadlines
+remain intact. Browser evidence uses explicitly scoped software responses and
+owned local fixtures; it is not live-provider, human acceptance or GA evidence.
+
+This qualifies only adoption of a current healthy personal connection with zero
+existing Agent/company reach. Existing reach is preserved and refuses this narrow
+path. Revalidation, purpose replacement, preserving-access adoption, Safe Test,
+hosted runtime/funding, first value and final whole-repository gates remain open.
