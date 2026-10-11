@@ -1337,5 +1337,41 @@
     "requiredFields": "Please fill in all required fields.",
     "passwordMinimum": "Use at least {{count}} characters for your password.",
     "passwordTooShort": "Your password must contain at least {{count}} characters."
+  },
+  "memoryMaintenance": {
+    "title": "Memory maintenance history",
+    "open": "View index-check history",
+    "boundary": "These are recorded checks of the shared-memory search index. They describe past attempts; they do not establish current readiness or the quality of the stored knowledge.",
+    "observed": "History checked at",
+    "empty": "No shared-memory index checks are recorded. Other maintenance operations are not included.",
+    "unavailable": "Current Memory maintenance history could not be checked. Reload your account or retry the read.",
+    "attempts": "Recorded index-check attempts",
+    "attempt": "Attempt {{number}}",
+    "submitted": "Submitted",
+    "finished": "Finished",
+    "records_one": "{{count}} shared record checked",
+    "records_other": "{{count}} shared records checked",
+    "reference": "Show reference",
+    "receipt": "Verification receipt",
+    "bounded": "Showing the ten newest index-check attempts. Older attempts remain with Memory.",
+    "back": "Return to Memory",
+    "outcome": {
+      "queued": "Index check queued",
+      "running": "Index check in progress",
+      "unconfirmed": "Outcome unconfirmed",
+      "review_required": "Attempt needs review",
+      "verified_index_check": "Index check recorded",
+      "verification_unavailable": "Verification unavailable",
+      "source_unavailable": "Source unavailable"
+    },
+    "explanation": {
+      "queued": "The original worker has not started this attempt.",
+      "running": "The index check is in progress. No verified result has been recorded yet.",
+      "unconfirmed": "The time limit expired without a confirmed result. This does not establish failure or authorize another attempt.",
+      "review_required": "The attempt ended without a verified index check. Review it through Memory before deciding what to do next.",
+      "verified_index_check": "Memory recorded a native index check and statistics refresh with a matching verification receipt. This is a historical fact.",
+      "verification_unavailable": "The job ended, but its matching native verification receipt could not be established. Success is not confirmed.",
+      "source_unavailable": "The original source binding is no longer available. No source details or verified result are shown."
+    }
   }
 }

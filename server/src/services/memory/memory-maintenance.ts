@@ -32,6 +32,23 @@ export async function memoryMaintenanceSources(db: Db, companyId: string, record
   return rows;
 }
 
+/** The migration-owned shared-memory index must be live, ready and valid on
+ * the original table. A GIN-looking definition alone does not prove usability. */
+async function assertNativeMemoryIndex(db: Db) {
+  const indexes = await db.execute<{ valid: boolean; ready: boolean; live: boolean; complete: boolean }>(sql`
+    select i.indisvalid as valid, i.indisready as ready, i.indislive as live,
+      (i.indpred is null and i.indnkeyatts = 1 and i.indexprs is not null) as complete
+    from pg_index i
+    join pg_class index_relation on index_relation.oid = i.indexrelid
+    join pg_namespace index_namespace on index_namespace.oid = index_relation.relnamespace
+    join pg_am method on method.oid = index_relation.relam
+    where index_namespace.nspname = 'public' and index_relation.relname = 'memory_records_search_idx'
+      and i.indrelid = 'public.memory_records'::regclass and method.amname = 'gin'
+  `);
+  if (indexes.length !== 1 || !indexes[0]!.valid || !indexes[0]!.ready || !indexes[0]!.live || !indexes[0]!.complete)
+    throw conflict("Native Memory search index is unavailable");
+}
+
 /** Pure native maintenance. All effects and the job receipt commit together. */
 export async function executeMemoryMaintenance(db: Db, job: typeof memoryJobs.$inferSelect) {
   const source = sourceSchema.parse(job.sourceRefJson);
@@ -43,11 +60,13 @@ export async function executeMemoryMaintenance(db: Db, job: typeof memoryJobs.$i
   let result: Record<string, unknown>;
   if (job.operationType === "index_refresh") {
     await reapplyMemoryDeletionMarkers(db, job.companyId);
-    const indexes = await db.execute(sql`select indexdef from pg_indexes where schemaname = 'public' and indexname = 'memory_records_search_idx'`);
-    if (!indexes.length || !String(indexes[0]?.indexdef).includes("gin")) throw conflict("Native Memory search index is unavailable");
+    await assertNativeMemoryIndex(db);
     // PostgreSQL maintains the GIN projection transactionally on each row write.
     // Refresh planner statistics after restore/maintenance; no external provider is impersonated.
     await db.execute(sql`ANALYZE memory_records`);
+    // ANALYZE holds the original relation lock until this job transaction
+    // commits. Repeat the postcondition before the atomic result/receipt.
+    await assertNativeMemoryIndex(db);
     result = { indexedRecordCount: records.length, provider: "native_postgres", nativeIndexCurrent: true };
   } else if (job.operationType === "dedupe") {
     const groups = new Map<string, typeof records>();

@@ -7,6 +7,16 @@ import {
   shouldSilenceHttpSuccessLog,
 } from "../middleware/http-log-policy.js";
 
+it("purpose-separates index-check history, account context and rejected methods", () => {
+  const url = "/api/companies/private-company/memory/experience/maintenance?expectedUserId=private-user";
+  for (const method of ["GET", "POST", "DELETE", "HEAD"]) {
+    expect(isPrivateExperienceHttpRequest(method, url)).toBe(true);
+    expect(isSecretSensitiveHttpRequest(method, url)).toBe(true);
+  }
+  expect(privateExperienceLogUrl(url)).toBe("/api/companies/:companyId/memory/experience");
+  expect(isPrivateExperienceHttpRequest("GET", "/api/companies/id/memory/experience-other")).toBe(false);
+});
+
 it("purpose-separates native run metadata and rejected requests from generic logs", () => {
   const url = "/api/companies/private-company/workflow-runs/private-run/experience?expectedUserId=private-user";
   for (const method of ["GET", "POST", "DELETE"])

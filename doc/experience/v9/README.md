@@ -18,6 +18,13 @@ See [architecture decisions](../../adr/V9-ARCHITECTURE-DECISIONS.md),
 [source readiness](../../../evals/aw-v9/readiness.json). Operator activation and
 hosted qualification remain separate from source coverage.
 
+The supporting [native Memory maintenance-history contract](contracts/native-memory-maintenance-history.json)
+adds a bounded historical M1 index-check view over the original Memory jobs and
+atomic Activity Log postconditions. It excludes material Memory changes and
+does not accept a job status as proof. General maintenance automation and full
+V9 acceptance remain open; exact-source qualification is tracked in its
+[implementation plan](../../plans/2026-10-11-aw-v9-memory-index-history.md).
+
 The [support and recovery runbook](support-readiness.md) records the confirmed
 contact destinations, original support controls, diagnostic limits and unresolved
 operating acceptance. It does not declare public support or V9 launch readiness.

@@ -1337,5 +1337,41 @@
     "requiredFields": "Udfyld alle obligatoriske felter.",
     "passwordMinimum": "Brug mindst {{count}} tegn i din adgangskode.",
     "passwordTooShort": "Din adgangskode skal indeholde mindst {{count}} tegn."
+  },
+  "memoryMaintenance": {
+    "title": "Hukommelsens vedligeholdelseshistorik",
+    "open": "Se historik for indekskontrol",
+    "boundary": "Her vises registrerede kontroller af den fælles hukommelses søgeindeks. De beskriver tidligere forsøg og fastslår hverken den aktuelle parathed eller kvaliteten af den gemte viden.",
+    "observed": "Historikken blev kontrolleret",
+    "empty": "Der er ingen registrerede indekskontroller for den fælles hukommelse. Andre vedligeholdelsesopgaver er ikke medtaget.",
+    "unavailable": "Den aktuelle vedligeholdelseshistorik kunne ikke kontrolleres. Genindlæs din konto, eller prøv at hente historikken igen.",
+    "attempts": "Registrerede forsøg på indekskontrol",
+    "attempt": "Forsøg {{number}}",
+    "submitted": "Indsendt",
+    "finished": "Afsluttet",
+    "records_one": "{{count}} fælles post kontrolleret",
+    "records_other": "{{count}} fælles poster kontrolleret",
+    "reference": "Vis reference",
+    "receipt": "Verifikationskvittering",
+    "bounded": "De ti nyeste forsøg på indekskontrol vises. Ældre forsøg bevares i hukommelsen.",
+    "back": "Tilbage til hukommelsen",
+    "outcome": {
+      "queued": "Indekskontrol i kø",
+      "running": "Indekskontrol i gang",
+      "unconfirmed": "Udfald ikke bekræftet",
+      "review_required": "Forsøget kræver gennemgang",
+      "verified_index_check": "Indekskontrol registreret",
+      "verification_unavailable": "Verifikation utilgængelig",
+      "source_unavailable": "Kilde utilgængelig"
+    },
+    "explanation": {
+      "queued": "Den oprindelige worker har ikke startet forsøget.",
+      "running": "Indekskontrollen er i gang. Der er endnu ikke registreret et verificeret resultat.",
+      "unconfirmed": "Tidsgrænsen udløb uden et bekræftet resultat. Det fastslår ikke en fejl og giver ikke tilladelse til et nyt forsøg.",
+      "review_required": "Forsøget sluttede uden en verificeret indekskontrol. Gennemgå det i hukommelsen, før du beslutter næste skridt.",
+      "verified_index_check": "Hukommelsen registrerede en kontrol af det oprindelige indeks og en opdatering af statistikken med en matchende verifikationskvittering. Det er en historisk oplysning.",
+      "verification_unavailable": "Jobbet sluttede, men den matchende oprindelige verifikationskvittering kunne ikke fastslås. Resultatet er ikke bekræftet.",
+      "source_unavailable": "Den oprindelige kildebinding er ikke længere tilgængelig. Kildedetaljer og verificeret resultat vises ikke."
+    }
   }
 }
