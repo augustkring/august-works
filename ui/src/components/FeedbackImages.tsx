@@ -52,9 +52,9 @@ function ProtectedImage({ image, companyId, principal, feedbackId, authority, in
 
 /** Separate original customer/operator API purposes. Binary responses remain
  * in component memory, with owned Blob URLs revoked on hide/owner change. */
-export function FeedbackImages({ companyId, principal, feedbackId, authority, active, readEpoch = 0, internal = false }: {
+export function FeedbackImages({ companyId, principal, feedbackId, authority, active, readEpoch = 0, internal = false, imageIds }: {
   companyId: string; principal: string; feedbackId: string; authority: V9PrivateReadAuthority;
-  active: boolean; readEpoch?: number; internal?: boolean;
+  active: boolean; readEpoch?: number; internal?: boolean; imageIds?: readonly string[];
 }) {
   const { t } = useTranslation("experience"), client = useQueryClient();
   const key = ["feedback-images", internal ? "operator" : "submitter", companyId, principal, feedbackId, authority.epoch, readEpoch];
@@ -73,13 +73,14 @@ export function FeedbackImages({ companyId, principal, feedbackId, authority, ac
   </section>;
   if (state?.status !== "success" || state.fetchStatus !== "idle" || state.isInvalidated)
     return <section aria-label={t("feedback.images.title")} aria-busy="true"><p>{t("loading")}</p></section>;
-  if (!state.data?.length) return null;
+  const listed = state.data?.filter(image => !imageIds || imageIds.includes(image.id)) ?? [];
+  if (!listed.length) return null;
   return <section className="space-y-3" aria-label={t("feedback.images.title")}>
     <h3 className="font-medium">{t("feedback.images.title")}</h3>
-    <ul className="space-y-3">{state.data.map(image => image.status === "ready"
+    <ul className="space-y-3">{listed.map(image => image.status === "ready"
       ? <ProtectedImage key={`${image.id}:${authority.epoch}`} {...{ image, companyId, principal, feedbackId, authority, internal, current }} />
       : <li key={image.id}>{t("feedback.images.unconfirmed")}</li>)}</ul>
-    {state.data.some(image => image.status !== "ready") && <Button type="button" variant="outline" className="min-h-11"
+    {listed.some(image => image.status !== "ready") && <Button type="button" variant="outline" className="min-h-11"
       onClick={() => { if (current()) void query.refetch(); }}>{t("feedback.images.check")}</Button>}
   </section>;
 }

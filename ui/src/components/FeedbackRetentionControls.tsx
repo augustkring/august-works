@@ -7,7 +7,7 @@ import { useV9PrivateReadAuthority } from "../hooks/useV9PrivateReadAuthority";
 import { Button } from "./ui/button";
 import { Input } from "./ui/input";
 import { Textarea } from "./ui/textarea";
-import { AlertDialog, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./ui/alert-dialog";
+import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from "./ui/alert-dialog";
 
 /** Current original internal operator authority only. No tenant grant or local
  * flag can authorize these C3 changes. Unknown replies retain the exact request
@@ -46,6 +46,7 @@ export function FeedbackRetentionControls({ companyId, feedbackId, principal }: 
       if (!current() || !authority.confirmed(value)) { setUncertain(true); setReview(null); return; }
       attempted.current = null; setUncertain(false); setReview(null);
       void client.invalidateQueries({ queryKey: ["feedback-retention", principal, companyId, feedbackId] });
+      void client.invalidateQueries({ queryKey: ["feedback-erasure-review", principal, companyId, feedbackId] });
     }, onError: error => {
       // Native validation/CAS conflicts have no receipt. Other failures can
       // conceal an applied command and must retain its exact original key.
@@ -83,7 +84,7 @@ export function FeedbackRetentionControls({ companyId, feedbackId, principal }: 
           {review.extensionUntil && <><p>{review.extensionUntil}</p><p>{review.extensionReason}</p></>}
         </div>}
         <AlertDialogFooter>
-          <Button type="button" variant="outline" className="min-h-11" disabled={change.isPending} onClick={() => setReview(null)}>{t("cancel")}</Button>
+          <AlertDialogCancel asChild><Button type="button" variant="outline" className="min-h-11" disabled={change.isPending} onClick={() => setReview(null)}>{t("feedback.cancel")}</Button></AlertDialogCancel>
           <Button type="button" className="min-h-11" disabled={change.isPending || !current()} onClick={() => {
             if (review && reviewEpoch.current === authority.epoch && reviewVersion.current === query.data.version && current() && !sending.current) { sending.current = true; change.mutate(review); }
           }}>{t("feedback.retentionConfirm")}</Button>

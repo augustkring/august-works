@@ -35,9 +35,9 @@ policy references, retention periods or private parser errors. The supplied
 contacts remain privacy@blentera.com, security@blentera.com and
 support@blentera.com. No email is sent by this admission path.
 
-Existing account/company deletion ownership is retained. The new image and
-retention owners are under construction and must pass current migrated Native,
-UI and original feedback/account regression checks before integration. They add
+Existing account/company deletion ownership is retained. The image and explicit retention owners have passed scoped migrated Native,
+UI and original feedback/account regression checks recorded in their dated
+plans. Integrated release and operating qualification remain open. They add
 no anonymous learning path or new tenant grant. Required current-policy and
 operating proof remains open before GA. Rollback preserves retained feedback and the previously latched local
 output-sharing policy; it does not enable Paperclip Labs sharing.
@@ -45,7 +45,8 @@ output-sharing policy; it does not enable Paperclip Labs sharing.
 ## Owner-selected retention defaults — 2026-10-11
 
 Feedback text and customer-visible follow-ups use 90 days after the case closes.
-Selected images use 30 days after upload. An open case reaches review/expiry at
+Selected images use 30 days from the immutable first accepted image submission.
+Exact request replays and delayed transport completion do not reset that period. An open case reaches review/expiry at
 12 calendar months, with a reasoned native operator extension. These are HOUSE
 defaults selected for this product, not universal legal retention requirements.
 
@@ -66,7 +67,8 @@ reasoned native case extensions and incident/legal holds. A current or indefinit
 hold blocks both case and image eligibility. Case extension does not silently
 extend image retention. Follow-ups share the case deadline so no message survives
 its original case root. Native hold/extension ownership is implemented below;
-its current source still requires complete integration and qualification. No automatic retention deletion job is activated
+its scoped checks are recorded in the dated retention execution plan. Full
+integrated and operating qualification remain open. No automatic expiry-selection job is activated
 by this implementation; no customer data was read or deleted to test it.
 
 ## Private native controls and explicit account erasure
@@ -119,3 +121,23 @@ unchanged current-account regressions. Its unchanged backend previously passed
 all 66 Native cases with the original feedback/account/SaaS files. The dated
 feedback-image plan records exact source hashes, earlier failures and fixture
 limits. These checks do not enable automatic retention deletion or GA.
+
+## Explicit expired-feedback erasure
+
+The verified original internal operator reviews current native closure/submission
+dates, configured periods, holds and exact versions, then separately confirms
+one expired case or selected image. The immutable minimal receipt survives
+subject erasure. Current operator-only history can recover the original command
+after reload; unknown replies cause protected status reads and require another
+C3 confirmation to resume the same request. Allocated PUTs without positively
+observed transport settlement refuse erasure, regardless of age or HEAD.
+
+The existing configured SaaS scheduler can finish already-approved exact-object
+receipts. It selects no customer by expiry and creates no new consent. Automatic
+expiry selection remains inactive. Scope qualification passed 79 actual Native
+cases, 119 focused cases, typing and four built-browser cases, with separate
+frozen backend/UI evidence and fixture limits in the dated plan. Native proof
+uses migrated PostgreSQL and owned disk fixtures; browser erasure responses are
+software replies and do not delete the native fixture. Original storage namespace
+persistence, operating unknown-PUT recovery, restore quarantine for a lost
+ledger and the six Privacy policy approvals remain open before GA.

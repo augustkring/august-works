@@ -1,6 +1,7 @@
 import { runtimeCatalogService } from "../runtime/catalog.js";
 import { accountDeletionService } from "./account-deletion.js";
 import { processFeedbackImageDeletion } from "../customer-feedback-images.js";
+import { processApprovedFeedbackRetentionErasure } from "../customer-feedback-retention-erasure.js";
 import { secretService } from "../secrets.js";
 import { runtimeBackupSchedule } from "../runtime/backup-schedule.js";
 import {
@@ -246,6 +247,12 @@ export function saasPlatform(
       flag: "saas_deployment_profile_v6",
       interval: 10000,
       run: () => accountDeletion.processOne(),
+    },
+    {
+      key: "approved-feedback-erasure",
+      flag: "saas_deployment_profile_v6",
+      interval: 10000,
+      run: () => processApprovedFeedbackRetentionErasure(db, storage),
     },
     {
       key: "runtime-dispatch",

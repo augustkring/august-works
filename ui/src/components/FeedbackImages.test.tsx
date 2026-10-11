@@ -16,21 +16,30 @@ const image = { id: "30000000-0000-4000-8000-000000000001", companyId: company, 
   status: "ready" as const, mediaType: "image/png" as const, byteSize: 3, createdAt: "2026-10-11T00:00:00Z", deletedAt: null };
 let client: QueryClient, root: Root, container: HTMLDivElement;
 afterEach(async () => { if (root) await act(async () => root.unmount()); client?.clear(); container?.remove(); vi.restoreAllMocks(); vi.unstubAllGlobals(); await i18n.changeLanguage("en"); });
-function Harness() { const authority = useV9PrivateReadAuthority("member");
-  return <FeedbackImages companyId={company} feedbackId={feedback} principal="member" authority={authority} active />;
+function Harness({ imageIds }: { imageIds?: readonly string[] }) { const authority = useV9PrivateReadAuthority("member");
+  return <FeedbackImages companyId={company} feedbackId={feedback} principal="member" authority={authority} active imageIds={imageIds} />;
 }
 function view() { return [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "View image")!; }
-async function mount() {
+async function mount(imageIds?: readonly string[]) {
   await i18n.changeLanguage("en");
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(["auth", "session"], v9SessionFixture("member"));
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
-  await act(async () => root.render(<QueryClientProvider client={client}><Harness /></QueryClientProvider>));
+  await act(async () => root.render(<QueryClientProvider client={client}><Harness imageIds={imageIds} /></QueryClientProvider>));
   await vi.waitFor(() => expect(view()).toBeDefined());
 }
 function urls() { const create = vi.fn(() => "blob:owned-private-image"), revoke = vi.fn();
   vi.stubGlobal("URL", class extends URL { static createObjectURL = create; static revokeObjectURL = revoke; }); return { create, revoke };
 }
+it("reuses the original protected reader for only the selected C3 image without reading other image bytes", async () => {
+  const selected = { ...image, id: "40000000-0000-4000-8000-000000000001" };
+  vi.spyOn(api, "get").mockResolvedValue([image, selected]);
+  const read = vi.spyOn(feedbackImagesApi, "read").mockResolvedValue(new Blob(["png"], { type: "image/png" }));
+  urls(); await mount([selected.id]); expect(read).not.toHaveBeenCalled();
+  expect([...container.querySelectorAll("button")].filter(button => button.textContent === "View image")).toHaveLength(1);
+  await act(async () => view().click()); await vi.waitFor(() => expect(read).toHaveBeenCalledOnce());
+  expect(read.mock.calls[0]![3].id).toBe(selected.id);
+});
 it("reads bytes only on explicit view and releases the component-owned preview on unmount", async () => {
   vi.spyOn(api, "get").mockResolvedValue([image]);
   const read = vi.spyOn(feedbackImagesApi, "read").mockResolvedValue(new Blob(["png"], { type: "image/png" }));

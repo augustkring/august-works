@@ -3355,3 +3355,5 @@ export * from "./experience-tool-ui.js";
 
 export * from "./experience-task-draft.js";
 export * from "./agent-retirement.js";
+
+export * from "./feedback-retention-erasure.js";

@@ -32,6 +32,7 @@ it("requires an explicit C3 review and sends one immutable command even on a dou
   const post = vi.spyOn(api, "post").mockImplementation(() => new Promise(resolve => { finish = resolve; }));
   await mount(); await review(); expect(post).not.toHaveBeenCalled();
   expect(document.querySelector('[role="alertdialog"]')?.textContent).toContain("Private original hold reason");
+  expect(document.querySelector('[data-slot="alert-dialog-cancel"]')?.textContent).toBe("Cancel");
   await act(async () => { button("Confirm retention change").click(); button("Confirm retention change").click(); });
   expect(post).toHaveBeenCalledTimes(1); const command = post.mock.calls[0]![1] as { expectedVersion: number; confirmRetentionChange: boolean; legalHold: object };
   expect(command).toMatchObject({ expectedVersion: 1, confirmRetentionChange: true });

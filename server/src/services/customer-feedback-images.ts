@@ -322,13 +322,14 @@ export function customerFeedbackImageService(db: Db, storage: StorageService, op
 
 /** Fixed original-object cleanup only. This function does not choose customer
  * retention deadlines and is not scheduled by this Source implementation. */
-export async function processFeedbackImageDeletion(db: Db, storage: StorageService, accountDeletionId?: string, companyId?: string) {
+export async function processFeedbackImageDeletion(db: Db, storage: StorageService, accountDeletionId?: string, companyId?: string, imageId?: string) {
   const candidate = await db.transaction(async tx => {
     await tx.execute(sql`set local statement_timeout='5s'`);
     await tx.execute(sql`set local lock_timeout='1s'`);
     const [row] = await tx.select().from(feedbackImageDeletions).where(and(isNull(feedbackImageDeletions.deletedAt),
       sql`${feedbackImageDeletions.transportSettledAt} is not null`,
       accountDeletionId ? eq(feedbackImageDeletions.accountDeletionId, accountDeletionId) : undefined,
+      imageId ? eq(feedbackImageDeletions.imageId, imageId) : undefined,
       companyId ? eq(feedbackImageDeletions.companyId, companyId) : undefined)).orderBy(feedbackImageDeletions.createdAt)
       .limit(1).for("update", { skipLocked: true });
     return row;

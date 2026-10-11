@@ -300,3 +300,5 @@ export * from "./customer_feedback_images.js";
 export * from "./customer_feedback_retention.js";
 export * from "./agent_configuration_drafts.js";
 export * from "./agent_retirements.js";
+
+export * from "./feedback_retention_erasures.js";

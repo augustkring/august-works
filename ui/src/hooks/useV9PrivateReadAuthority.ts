@@ -12,6 +12,9 @@ export function useV9PrivateReadAuthority(principal: string, allowLocalImplicit 
   const sessionCurrent = useSyncExternalStore(subscribe,
     () => hasCurrentV9Session(client, principal, identity.sessionId, allowLocalImplicit),
     () => false);
+  const sessionFailed = useSyncExternalStore(subscribe,
+    () => client.getQueryState(queryKeys.auth.session)?.status === "error",
+    () => false);
   const alive = useRef(true);
   useEffect(() => {
     alive.current = true;
@@ -35,7 +38,7 @@ export function useV9PrivateReadAuthority(principal: string, allowLocalImplicit 
     return value;
   }
   return {
-    readReady, epoch: context.current.epoch, failed: identity.failed, rechecking: identity.rechecking, canRead, read,
+    readReady, epoch: context.current.epoch, failed: identity.failed || sessionFailed, rechecking: identity.rechecking, canRead, read,
     async recheck() {
       if (!alive.current) return;
       // Retry only the original session owner. Fresh private queries are enabled

@@ -1,4 +1,4 @@
-import { useId, useRef, useState } from "react";
+import { useCallback, useId, useRef, useState } from "react";
 import {
   useInfiniteQuery,
   useMutation,
@@ -11,6 +11,7 @@ import {
   feedbackInternalStateSchema,
   feedbackTriageSchema,
   customerFeedbackSchema,
+  type FeedbackRetentionErasureCommand,
 } from "@paperclipai/shared";
 import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
 import { useV9PrivateReadAuthority } from "../hooks/useV9PrivateReadAuthority";
@@ -21,6 +22,8 @@ import { Link } from "../lib/router";
 import { Button } from "../components/ui/button";
 import { FeedbackImages } from "../components/FeedbackImages";
 import { FeedbackRetentionControls } from "../components/FeedbackRetentionControls";
+import { FeedbackRetentionErasure } from "../components/FeedbackRetentionErasure";
+import { FeedbackErasureHistory } from "../components/FeedbackErasureHistory";
 import { Textarea } from "../components/ui/textarea";
 
 function Queue({
@@ -38,6 +41,10 @@ function Queue({
       useState<(typeof feedbackInternalStateSchema.options)[number]>(
         "UNDER_REVIEW",
       );
+  const [erasureRequestedId, setErasureRequestedId] = useState<string | null>(null);
+  const [erasureAttempt, setErasureAttempt] = useState<FeedbackRetentionErasureCommand | null>(null);
+  const onCaseRequested = useCallback(() => setErasureRequestedId(selected), [selected]);
+  const onCaseNotApplied = useCallback(() => setErasureRequestedId(null), []);
   const [customerMessage, setCustomerMessage] = useState(""),
     [internalNote, setInternalNote] = useState(""),
     [linkType, setLinkType] = useState<"issue" | "duplicate">("issue"),
@@ -90,7 +97,9 @@ function Queue({
     retry: false,
   });
   const current =
-    authority.readReady && query.isSuccess &&
+    selected !== erasureRequestedId && authority.readReady && query.isSuccess &&
+    client.getQueryState(listKey)?.isInvalidated === false && client.getQueryState(listKey)?.fetchStatus === "idle" &&
+    client.getQueryState(detailKey)?.isInvalidated === false && client.getQueryState(detailKey)?.fetchStatus === "idle" &&
     !query.isFetching &&
     detail.isSuccess &&
     !detail.isFetching
@@ -157,253 +166,264 @@ function Queue({
     setKey(crypto.randomUUID());
     save.reset();
   }
-  if (authority.failed || query.isError)
-    return (
-      <div role="alert">
-        <p>{t("feedback.triageDenied")}</p>
-        <Button
-          variant="outline"
-          className="min-h-11"
-          disabled={authority.rechecking}
-          onClick={() => {
-            if (authority.canRead()) void query.refetch();
-            else void authority.recheck().catch(() => {});
-          }}
-        >
-          {t("tryAgain")}
-        </Button>
-      </div>
-    );
-  const inputsLocked = save.isPending || !!attempted.current;
-  if (!authority.readReady || query.isPending || query.isFetching)
-    return <p role="status">{t("loading")}</p>;
-  return (
-    <div className="space-y-6">
-      {!query.data?.pages[0]?.length && <p>{t("feedback.triageEmpty")}</p>}
-      {query.data?.pages.flat().map((item) => (
-        <Button
-          key={item.id}
-          variant="outline"
-          className="min-h-11"
-          disabled={inputsLocked}
-          onClick={() => {
-            if (attempted.current) return;
-            attempted.current = null;
-            setSelected(item.id);
-            setState(item.internalState);
-            setCustomerMessage("");
-            setInternalNote("");
-            setLinkId("");
-            setKey(crypto.randomUUID());
-            save.reset();
-          }}
-        >
-          {item.feedbackId} · {item.internalState}
-        </Button>
-      ))}
-      {query.hasNextPage && (
-        <Button
-          variant="outline"
-          className="min-h-11"
-          disabled={query.isFetchingNextPage}
-          onClick={() => void query.fetchNextPage()}
-        >
-          {t("feedback.older")}
-        </Button>
-      )}
-      {selected && detail.isLoading && <p role="status">{t("loading")}</p>}
-      {detail.isError && (
+  function queueContent() {
+    if (authority.failed || query.isError)
+      return (
         <div role="alert">
-          <p>{t("feedback.triageHistoryFailed")}</p>
+          <p>{t("feedback.triageDenied")}</p>
           <Button
             variant="outline"
             className="min-h-11"
-            onClick={() => void detail.refetch()}
+            disabled={authority.rechecking}
+            onClick={() => {
+              if (authority.canRead()) void query.refetch();
+              else void authority.recheck().catch(() => {});
+            }}
           >
             {t("tryAgain")}
           </Button>
         </div>
-      )}
-      {current && (
-        <form
-          className="space-y-4 rounded-lg border border-border p-4"
-          onSubmit={(event) => {
-            event.preventDefault();
-            save.mutate();
-          }}
-        >
-          <h2 className="text-lg font-semibold">{current.feedbackId}</h2>
-          <p className="whitespace-pre-wrap break-words">{current.body}</p>
-          <p className="whitespace-pre-wrap break-words">{current.goal}</p>
-          <section
-            className="space-y-3"
-            aria-label={t("feedback.triageHistory")}
+      );
+    const inputsLocked = save.isPending || !!attempted.current;
+    if (!authority.readReady || query.isPending || query.isFetching)
+      return <p role="status">{t("loading")}</p>;
+    return (
+      <div className="space-y-6">
+        {!query.data?.pages[0]?.length && <p>{t("feedback.triageEmpty")}</p>}
+        {query.data?.pages.flat().map((item) => (
+          <Button
+            key={item.id}
+            variant="outline"
+            className="min-h-11"
+            disabled={inputsLocked}
+            onClick={() => {
+              if (attempted.current) return;
+              attempted.current = null;
+              setSelected(item.id);
+              setErasureAttempt(null);
+              setState(item.internalState);
+              setCustomerMessage("");
+              setInternalNote("");
+              setLinkId("");
+              setKey(crypto.randomUUID());
+              save.reset();
+            }}
           >
-            <h3 className="font-semibold">{t("feedback.triageHistory")}</h3>
-            {detail.hasNextPage && (
+            {item.feedbackId} · {item.internalState}
+          </Button>
+        ))}
+        {query.hasNextPage && (
+          <Button
+            variant="outline"
+            className="min-h-11"
+            disabled={query.isFetchingNextPage}
+            onClick={() => void query.fetchNextPage()}
+          >
+            {t("feedback.older")}
+          </Button>
+        )}
+        {selected && detail.isLoading && <p role="status">{t("loading")}</p>}
+        {detail.isError && (
+          <div role="alert">
+            <p>{t("feedback.triageHistoryFailed")}</p>
+            <Button
+              variant="outline"
+              className="min-h-11"
+              onClick={() => void detail.refetch()}
+            >
+              {t("tryAgain")}
+            </Button>
+          </div>
+        )}
+        {current && (
+          <form
+            className="space-y-4 rounded-lg border border-border p-4"
+            onSubmit={(event) => {
+              event.preventDefault();
+              save.mutate();
+            }}
+          >
+            <h2 className="text-lg font-semibold">{current.feedbackId}</h2>
+            <p className="whitespace-pre-wrap break-words">{current.body}</p>
+            <p className="whitespace-pre-wrap break-words">{current.goal}</p>
+            <section
+              className="space-y-3"
+              aria-label={t("feedback.triageHistory")}
+            >
+              <h3 className="font-semibold">{t("feedback.triageHistory")}</h3>
+              {detail.hasNextPage && (
+                <Button
+                  type="button"
+                  variant="outline"
+                  className="min-h-11"
+                  disabled={detail.isFetchingNextPage}
+                  onClick={() => void detail.fetchNextPage()}
+                >
+                  {t("feedback.olderMessages")}
+                </Button>
+              )}
+              {detail.data?.pages
+                .slice()
+                .reverse()
+                .flatMap((page) => page.events)
+                .map((event) => (
+                  <article
+                    key={event.id}
+                    className="space-y-2 rounded-md border border-border p-3"
+                  >
+                    <p className="text-sm text-muted-foreground">
+                      {t(
+                        event.kind === "customer_follow_up"
+                          ? "feedback.customerResponse"
+                          : "feedback.productTeam",
+                      )}{" "}
+                      ·{" "}
+                      <time dateTime={event.createdAt}>
+                        {new Date(event.createdAt).toLocaleString()}
+                      </time>
+                    </p>
+                    {event.body && (
+                      <p className="whitespace-pre-wrap break-words">
+                        {event.body}
+                      </p>
+                    )}
+                    {event.internalNote && (
+                      <div className="space-y-1">
+                        <p className="text-sm font-medium">
+                          {t("feedback.internalNote")}
+                        </p>
+                        <p className="whitespace-pre-wrap break-words">
+                          {event.internalNote}
+                        </p>
+                      </div>
+                    )}
+                    {event.linkId && (
+                      <p className="break-words text-sm">
+                        {t(
+                          event.linkType === "issue"
+                            ? "feedback.linkIssue"
+                            : "feedback.linkDuplicate",
+                        )}
+                        : {event.linkId}
+                      </p>
+                    )}
+                  </article>
+                ))}
+              {!detail.data?.pages[0]?.events.length && (
+                <p>{t("feedback.noMessages")}</p>
+              )}
+            </section>
+            <label className="block space-y-2">
+              <span>{t("feedback.triageState")}</span>
+              <select
+                className="min-h-11 rounded-md border border-input bg-background px-3"
+                disabled={inputsLocked}
+                value={state}
+                onChange={(event) =>
+                  edit(() =>
+                    setState(
+                      feedbackInternalStateSchema.parse(event.target.value),
+                    ),
+                  )
+                }
+              >
+                {feedbackInternalStateSchema.options.map((option) => (
+                  <option key={option}>{option}</option>
+                ))}
+              </select>
+            </label>
+            <label className="block space-y-2">
+              <span>{t("feedback.customerMessage")}</span>
+              <Textarea
+                maxLength={10000}
+                required={state === "NEEDS_INFO"}
+                disabled={inputsLocked}
+                value={customerMessage}
+                onChange={(event) =>
+                  edit(() => setCustomerMessage(event.target.value))
+                }
+              />
+            </label>
+            <label className="block space-y-2">
+              <span>{t("feedback.internalNote")}</span>
+              <Textarea
+                maxLength={10000}
+                disabled={inputsLocked}
+                value={internalNote}
+                onChange={(event) =>
+                  edit(() => setInternalNote(event.target.value))
+                }
+              />
+            </label>
+            <label className="block space-y-2">
+              <span>{t("feedback.linkType")}</span>
+              <select
+                className="min-h-11 rounded-md border border-input bg-background px-3"
+                disabled={inputsLocked}
+                value={linkType}
+                onChange={(event) =>
+                  edit(() =>
+                    setLinkType(event.target.value as "issue" | "duplicate"),
+                  )
+                }
+              >
+                <option value="issue">{t("feedback.linkIssue")}</option>
+                <option value="duplicate">{t("feedback.linkDuplicate")}</option>
+              </select>
+            </label>
+            <label className="block space-y-2">
+              <span>{t("feedback.linkId")}</span>
+              <input
+                className="min-h-11 w-full rounded-md border border-input bg-background px-3"
+                disabled={inputsLocked}
+                value={linkId}
+                onChange={(event) => edit(() => setLinkId(event.target.value))}
+              />
+            </label>
+            {save.isError && (
+              <p role="alert">
+                {t(
+                  attempted.current
+                    ? "feedback.triageUnknown"
+                    : "feedback.triageFailed",
+                )}
+              </p>
+            )}
+            <div className="flex items-center justify-between gap-3">
               <Button
                 type="button"
                 variant="outline"
                 className="min-h-11"
-                disabled={detail.isFetchingNextPage}
-                onClick={() => void detail.fetchNextPage()}
+                disabled={inputsLocked}
+                onClick={() => setSelected(null)}
               >
-                {t("feedback.olderMessages")}
+                {t("feedback.cancel")}
               </Button>
-            )}
-            {detail.data?.pages
-              .slice()
-              .reverse()
-              .flatMap((page) => page.events)
-              .map((event) => (
-                <article
-                  key={event.id}
-                  className="space-y-2 rounded-md border border-border p-3"
-                >
-                  <p className="text-sm text-muted-foreground">
-                    {t(
-                      event.kind === "customer_follow_up"
-                        ? "feedback.customerResponse"
-                        : "feedback.productTeam",
-                    )}{" "}
-                    ·{" "}
-                    <time dateTime={event.createdAt}>
-                      {new Date(event.createdAt).toLocaleString()}
-                    </time>
-                  </p>
-                  {event.body && (
-                    <p className="whitespace-pre-wrap break-words">
-                      {event.body}
-                    </p>
-                  )}
-                  {event.internalNote && (
-                    <div className="space-y-1">
-                      <p className="text-sm font-medium">
-                        {t("feedback.internalNote")}
-                      </p>
-                      <p className="whitespace-pre-wrap break-words">
-                        {event.internalNote}
-                      </p>
-                    </div>
-                  )}
-                  {event.linkId && (
-                    <p className="break-words text-sm">
-                      {t(
-                        event.linkType === "issue"
-                          ? "feedback.linkIssue"
-                          : "feedback.linkDuplicate",
-                      )}
-                      : {event.linkId}
-                    </p>
-                  )}
-                </article>
-              ))}
-            {!detail.data?.pages[0]?.events.length && (
-              <p>{t("feedback.noMessages")}</p>
-            )}
-          </section>
-          <label className="block space-y-2">
-            <span>{t("feedback.triageState")}</span>
-            <select
-              className="min-h-11 rounded-md border border-input bg-background px-3"
-              disabled={inputsLocked}
-              value={state}
-              onChange={(event) =>
-                edit(() =>
-                  setState(
-                    feedbackInternalStateSchema.parse(event.target.value),
-                  ),
-                )
-              }
-            >
-              {feedbackInternalStateSchema.options.map((option) => (
-                <option key={option}>{option}</option>
-              ))}
-            </select>
-          </label>
-          <label className="block space-y-2">
-            <span>{t("feedback.customerMessage")}</span>
-            <Textarea
-              maxLength={10000}
-              required={state === "NEEDS_INFO"}
-              disabled={inputsLocked}
-              value={customerMessage}
-              onChange={(event) =>
-                edit(() => setCustomerMessage(event.target.value))
-              }
-            />
-          </label>
-          <label className="block space-y-2">
-            <span>{t("feedback.internalNote")}</span>
-            <Textarea
-              maxLength={10000}
-              disabled={inputsLocked}
-              value={internalNote}
-              onChange={(event) =>
-                edit(() => setInternalNote(event.target.value))
-              }
-            />
-          </label>
-          <label className="block space-y-2">
-            <span>{t("feedback.linkType")}</span>
-            <select
-              className="min-h-11 rounded-md border border-input bg-background px-3"
-              disabled={inputsLocked}
-              value={linkType}
-              onChange={(event) =>
-                edit(() =>
-                  setLinkType(event.target.value as "issue" | "duplicate"),
-                )
-              }
-            >
-              <option value="issue">{t("feedback.linkIssue")}</option>
-              <option value="duplicate">{t("feedback.linkDuplicate")}</option>
-            </select>
-          </label>
-          <label className="block space-y-2">
-            <span>{t("feedback.linkId")}</span>
-            <input
-              className="min-h-11 w-full rounded-md border border-input bg-background px-3"
-              disabled={inputsLocked}
-              value={linkId}
-              onChange={(event) => edit(() => setLinkId(event.target.value))}
-            />
-          </label>
-          {save.isError && (
-            <p role="alert">
-              {t(
-                attempted.current
-                  ? "feedback.triageUnknown"
-                  : "feedback.triageFailed",
-              )}
-            </p>
-          )}
-          <div className="flex items-center justify-between gap-3">
-            <Button
-              type="button"
-              variant="outline"
-              className="min-h-11"
-              disabled={inputsLocked}
-              onClick={() => setSelected(null)}
-            >
-              {t("feedback.cancel")}
-            </Button>
-            <Button
-              type="submit"
-              className="min-h-11"
-              disabled={save.isPending}
-            >
-              {t("feedback.applyTriage")}
-            </Button>
-          </div>
-        </form>
-      )}
-      {current && <FeedbackImages key={`${principal}:${companyId}:${current.id}:${authority.epoch}`}
-        companyId={companyId} feedbackId={current.id} principal={principal} authority={authority} active={!!current} internal />}
-      {current && <FeedbackRetentionControls key={`${principal}:${companyId}:${current.id}:${authority.epoch}`}
-        companyId={companyId} feedbackId={current.id} principal={principal} />}
-    </div>
-  );
+              <Button
+                type="submit"
+                className="min-h-11"
+                disabled={save.isPending}
+              >
+                {t("feedback.applyTriage")}
+              </Button>
+            </div>
+          </form>
+        )}
+        {current && <FeedbackImages key={`${principal}:${companyId}:${current.id}:${authority.epoch}`}
+          companyId={companyId} feedbackId={current.id} principal={principal} authority={authority} active={!!current} internal />}
+        {current && <FeedbackRetentionControls key={`${principal}:${companyId}:${current.id}:${authority.epoch}`}
+          companyId={companyId} feedbackId={current.id} principal={principal} />}
+      </div>
+    );
+  }
+  return <>
+    {queueContent()}
+    <FeedbackErasureHistory companyId={companyId} principal={principal} active={authority.readReady && query.isSuccess && !query.isFetching}
+      onOpen={item => { setSelected(item.receipt.feedbackId); setErasureAttempt(item.command);
+        setErasureRequestedId(item.receipt.target.kind === "case" ? item.receipt.feedbackId : null); }} />
+    {selected && <FeedbackRetentionErasure key={`${principal}:${companyId}:${selected}:${erasureAttempt?.requestKey ?? "new"}`} companyId={companyId}
+      feedbackId={selected} principal={principal} onCaseRequested={onCaseRequested} onCaseNotApplied={onCaseNotApplied} initialAttempt={erasureAttempt} />}
+  </>;
 }
 export function FeedbackTriage() {
   const identity = useV9CurrentAccount();
@@ -451,7 +471,7 @@ function ScopedFeedbackTriage({ identity }: { identity: ReturnType<typeof useV9C
           {t("feedback.openQueue")}
         </Button>
       </form> : !authority.failed && <p role="status">{t("loading")}</p>}
-      {identity.failed && <div role="alert" className="space-y-2">
+      {authority.failed && <div role="alert" className="space-y-2">
         <p>{t("feedback.triageDenied")}</p>
         {!companyId && <Button className="min-h-11" disabled={authority.rechecking}
           onClick={() => void authority.recheck().catch(() => {})}>{t("tryAgain")}</Button>}

@@ -1,0 +1,2 @@
+CREATE INDEX "feedback_retention_erasures_worker_idx" ON "feedback_retention_erasures" USING btree ("requested_at","id") WHERE "feedback_retention_erasures"."status"='pending';--> statement-breakpoint
+CREATE INDEX "feedback_retention_erasures_history_idx" ON "feedback_retention_erasures" USING btree ("company_id","operator_hash","status","requested_at","id");

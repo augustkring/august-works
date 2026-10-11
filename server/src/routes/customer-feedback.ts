@@ -14,6 +14,7 @@ import { configuredFeedbackImageScanner, FEEDBACK_IMAGE_MAX_BYTES } from "../ser
 import { customerFeedbackImageService } from "../services/customer-feedback-images.js";
 import type { StorageService } from "../storage/types.js";
 import { customerFeedbackRetentionService } from "../services/customer-feedback-retention.js";
+import { customerFeedbackRetentionErasureService } from "../services/customer-feedback-retention-erasure.js";
 
 export function customerFeedbackRoutes(
   db: Db,
@@ -30,6 +31,7 @@ export function customerFeedbackRoutes(
   const imageService = options.storage
     ? customerFeedbackImageService(db, options.storage, { scanner, operatorUserIds: options.operatorUserIds }) : null;
   const retention = customerFeedbackRetentionService(db, options);
+  const retentionErasure = options.storage ? customerFeedbackRetentionErasureService(db, options.storage, options) : null;
   const upload = multer({ storage: multer.memoryStorage(),
     limits: { fileSize: FEEDBACK_IMAGE_MAX_BYTES, files: 1, fields: 0, parts: 1, headerPairs: 100 } });
   // HOUSE per-process bound includes scanner, multipart buffers and decoder
@@ -75,6 +77,33 @@ export function customerFeedbackRoutes(
   router.get("/internal/customer-feedback/:companyId/:feedbackId/retention-plan", async (req, res) => {
     res.setHeader("Cache-Control", "private, no-store"); identity(req);
     res.json(await retention.plan(req.actor, z.uuid().parse(req.params.companyId), feedbackId(req)));
+  });
+  const erasurePath = "/internal/customer-feedback/:companyId/:feedbackId/retention-erasures";
+  function erasures() {
+    if (!retentionErasure) throw unprocessable("Protected feedback image storage is unavailable");
+    return retentionErasure;
+  }
+  router.get("/internal/customer-feedback/:companyId/retention-erasures", async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store"); identity(req);
+    res.json(await erasures().history(req.actor, z.uuid().toLowerCase().parse(req.params.companyId)));
+  });
+  router.get(`${erasurePath}/review`, async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store"); identity(req);
+    res.json(await erasures().review(req.actor, z.uuid().toLowerCase().parse(req.params.companyId), feedbackId(req)));
+  });
+  router.get(`${erasurePath}/:operationId`, async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store"); identity(req);
+    res.json(await erasures().get(req.actor, z.uuid().toLowerCase().parse(req.params.companyId), feedbackId(req),
+      z.uuid().toLowerCase().parse(req.params.operationId)));
+  });
+  router.get(`${erasurePath}/requests/:requestKey`, async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store"); identity(req);
+    res.json(await erasures().getRequest(req.actor, z.uuid().toLowerCase().parse(req.params.companyId), feedbackId(req),
+      z.uuid().toLowerCase().parse(req.params.requestKey)));
+  });
+  router.post(erasurePath, async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store"); identity(req);
+    res.json(await erasures().execute(req.actor, z.uuid().toLowerCase().parse(req.params.companyId), feedbackId(req), req.body));
   });
   const imageId = (req: Request) => z.uuid().toLowerCase().parse(req.params.imageId);
   const imagePath = "/companies/:companyId/customer-feedback/:feedbackId/images";

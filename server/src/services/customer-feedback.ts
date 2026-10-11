@@ -243,6 +243,26 @@ export function customerFeedbackService(
         })
         .onConflictDoNothing();
   }
+  type RetentionOwner = Pick<FeedbackRow, "id" | "createdAt" | "closedAt" | "status" | "version">;
+  async function withRetentionOwner<T>(actor: AuthorizationActor, companyId: string, id: string | null,
+    operation: (reader: Db, principal: string, row: RetentionOwner | null) => Promise<T>): Promise<T> {
+      if (actor.source === "local_implicit") throw forbidden("A verified operator session is required for retention controls");
+      return db.transaction(async tx => {
+        await tx.execute(sql`set local statement_timeout='5s'`);
+        await tx.execute(sql`set local lock_timeout='1s'`);
+        const reader = tx as unknown as Db, principal = await operator(reader, actor);
+        await tx.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, principal)).for("share");
+        const [company] = await tx.select({ id: companies.id, status: companies.status }).from(companies)
+          .where(eq(companies.id, companyId)).for("update");
+        if (!company) throw notFound("Company is unavailable");
+        const [row] = id === null ? [] : await tx.select({ id: customerFeedback.id, createdAt: customerFeedback.createdAt,
+          closedAt: customerFeedback.closedAt, status: customerFeedback.status, version: customerFeedback.version }).from(customerFeedback)
+          .where(and(eq(customerFeedback.companyId, companyId), eq(customerFeedback.id, id))).for("update");
+        const result = await operation(reader, principal, row ?? null);
+        await operator(reader, actor);
+        return result;
+      });
+  }
   return {
     /** Charge each admitted byte-processing attempt against the original
      * feedback budget in its reservation transaction. Canonical receipt
@@ -259,25 +279,15 @@ export function customerFeedbackService(
       if (row!.count > 20) throw tooManyRequests("Feedback request limit reached. Try again later.");
     },
     async withInternalRetention<T>(actor: AuthorizationActor, companyId: string, id: string,
-      operation: (reader: Db, principal: string, row: Pick<FeedbackRow, "id" | "createdAt" | "closedAt" | "status">) => Promise<T>): Promise<T> {
-      if (actor.source === "local_implicit") throw forbidden("A verified operator session is required for retention controls");
-      return db.transaction(async tx => {
-        await tx.execute(sql`set local statement_timeout='5s'`);
-        await tx.execute(sql`set local lock_timeout='1s'`);
-        const reader = tx as unknown as Db, principal = await operator(reader, actor);
-        await tx.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, principal)).for("share");
-        const [company] = await tx.select({ id: companies.id, status: companies.status }).from(companies)
-          .where(eq(companies.id, companyId)).for("update");
-        if (!company) throw notFound("Company is unavailable");
-        const [row] = await tx.select({ id: customerFeedback.id, createdAt: customerFeedback.createdAt,
-          closedAt: customerFeedback.closedAt, status: customerFeedback.status }).from(customerFeedback)
-          .where(and(eq(customerFeedback.companyId, companyId), eq(customerFeedback.id, id))).for("update");
+      operation: (reader: Db, principal: string, row: RetentionOwner) => Promise<T>): Promise<T> {
+      return withRetentionOwner(actor, companyId, id, (reader, principal, row) => {
         if (!row) throw notFound("Feedback not found");
-        const result = await operation(reader, principal, row);
-        await operator(reader, actor);
-        return result;
+        return operation(reader, principal, row);
       });
     },
+    /** Same original verified operator admission and company lock. Only minimal
+     * erasure receipts may be read/replayed after their feedback parent is gone. */
+    withInternalRetentionReceipt: withRetentionOwner,
     /** Short native transactions only: scanning and Storage calls happen
      * outside these locks, then return here to recheck original authority. */
     async withOwnedImage<T>(
