@@ -76,3 +76,11 @@ source-read and test deadlines remained enforced.
 These are scoped repair results. The current combined V9 Source still needs the
 required complete typecheck, original full tests and production build. This
 slice does not qualify unfinished V9 journeys or establish merge readiness.
+
+## Current integrated Native Codex check — 2026-10-11
+
+The complete original `server/src/services/native-runtime/native-codex-runner.integration.test.ts` passed its durable-result/session-resume case on current integrated HEAD `768c714ca3d36a3efe6715b332fb8dc838be9b60`, with unchanged public Source SHA-256 `c05196c29005c5da0268427e1e8feb0c823746c2cb5b5b6a9902f1f79c472acc` before and after. The actual isolated Native runtime admitted migrated PostgreSQL and the artifact sandbox. The original Cargo freshness command performed a real release build in 8m 58s within its original 600-second budget; setup and the case kept their original deadlines. The actual case took 3,848 ms. No test was filtered, skipped or weakened.
+
+Logs and snapshots: `/workspace/v9-integrated-native-codex-v2-*`. The first current attempt could not import unreadable Git-listed public schema Source; that prerequisite failure is retained in v1 and is not a test pass. Only public Source read permissions were repaired, without changing bytes or accessing customer inbound files. The earlier frozen full-suite timeout remains preserved.
+
+This resolves that one regression prerequisite on this integrated version. Current full typecheck, full test run, production build, unfinished V9 behavior and release review remain pending.
