@@ -95,3 +95,22 @@ This adds visibility over an existing deterministic native owner. It does not
 qualify a general M0–M4 repair engine, automatic recurrence policy, cross-domain
 external reconciliation, M3/M4 approval or operator recovery, hosted operation,
 human acceptance, or full V9 launch readiness. Those remain separate work.
+
+## Subsequent integrated type and preflight checks
+
+On 2026-10-11 the original full 35-workspace typecheck passed at integrated
+commit `d363642b09e53c3b76cb4f46483885877b6534c8`, including this scope's later
+Native catalog helper. The before/after Source SHA-256 was unchanged:
+`0d272b18175dc4223e82da5cef4b47c2a1452755dea402ffd467b89264eae86d`.
+The subsequent original `pnpm test:run` stopped in workspace preflight before
+Vitest because it recursively scanned owner-only public `server/ui-dist`.
+This is a type pass and a test-preflight failure, not a complete regression pass.
+
+The declared-workspace repair now passes the focused actual-pnpm fixture and
+the original preflight as Native test UID 1004 at integrated commit
+`df5e43a0f555d86e55a17e6e7af458e7070e08a1`. A first launcher attempt after
+isolating cached aliases could not traverse the newly created owner-only CLI
+dependency directory; only those known public owned alias directories were
+corrected. The second actual Native preflight exits zero. No customer-private
+runtime directory was inspected or chmodded. Full current tests/build/browser
+checks and full V9 source/release acceptance remain open.
