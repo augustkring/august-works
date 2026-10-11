@@ -21,7 +21,7 @@ const review: ActivationConnectionReview = { companyId, onboardingRunId: runId, 
   packageContentHash: "a".repeat(64), applicationId, applicationKey: "gmail", applicationName: "Original Gmail",
   galleryKey: "gmail", connectionMethodKey: "paperclip-read", methodHash: "b".repeat(64), providerScopes: ["https://www.googleapis.com/auth/gmail.readonly"],
   explanation: { providerName: "Gmail", resource: "https://gmailmcp.googleapis.com/mcp/v1", capabilityName: "Draft agent", providerWriteTools: [] },
-  existingConnection: null, scopeProfile: "gmail.read", grantKind: "user", deferAgentAccess: true, reviewHash: "c".repeat(64),
+  supersedesConsentId: null, existingConnection: null, scopeProfile: "gmail.read", grantKind: "user", deferAgentAccess: true, reviewHash: "c".repeat(64),
   preview: { neededNow: ["Personal account", "gmail.readonly"], why: "Prepare the original draft", usedBy: "No Agent access",
     canRead: ["Original provider scope"], canChange: ["No business changes"], notRequested: ["No deletion or spending"],
     automatic: ["No execution"], asksFirst: ["Agent actions require their own decision"] } };
@@ -100,13 +100,48 @@ it("reads Native completion after the original flow and keeps withdrawal as a se
 
 it("explains an exact existing connection reuse and refreshes onboarding only on a confirmed Native connected receipt", async () => {
   reads(); vi.mocked(activationConnectionApi.review).mockResolvedValue({ ...review,
-    existingConnection: { id: "70000000-0000-4000-8000-000000000001", name: "Saved personal Gmail", setupHash: "d".repeat(64) } });
+    supersedesConsentId: null, existingConnection: { id: "70000000-0000-4000-8000-000000000001", name: "Saved personal Gmail", setupHash: "d".repeat(64) } });
   const post = vi.spyOn(activationConnectionApi, "approve").mockImplementation(async (_c, _u, _k, command) => ({ ...receipt(command.requestKey),
     status: "connected", connectionId: "70000000-0000-4000-8000-000000000001", connectedAt: "2026-10-11T01:00:00Z" }));
   await mount(); expect(container.textContent).toContain("does not create another connection or repeat provider sign-in");
   expect(setupChanged).not.toHaveBeenCalled(); await approve();
   await vi.waitFor(() => expect(setupChanged).toHaveBeenCalledTimes(1));
   expect(post).toHaveBeenCalledTimes(1); expect(flow).not.toHaveBeenCalled();
+});
+
+it("reconnects the exact already-connected personal purpose through the Original flow without approving or allocating again", async () => {
+  const saved = { ...receipt("60000000-0000-4000-8000-000000000001"), status: "connected" as const,
+    connectionId: "70000000-0000-4000-8000-000000000001", connectedAt: "2026-10-11T01:00:00Z" };
+  reads().mockResolvedValue(saved);
+  const approve = vi.spyOn(activationConnectionApi, "approve"), allocate = vi.spyOn(activationConnectionApi, "connect");
+  await mount(); expect(flow).not.toHaveBeenCalled();
+  expect(container.textContent).toContain("the personal connection needs current validation or reconnecting");
+  await act(async () => button("activation.connectionConsent.reconnect").click());
+  expect(flow.mock.calls.at(-1)?.[0].deferredOnboarding).toMatchObject({ connectionId: saved.connectionId,
+    requestKey: saved.requestKey, principal: "initiator", methodKey: "paperclip-read" });
+  expect(approve).not.toHaveBeenCalled(); expect(allocate).not.toHaveBeenCalled();
+});
+
+it("refetches the current successor review after withdrawal and requires a separate new explicit C3 command", async () => {
+  const saved = { ...receipt("60000000-0000-4000-8000-000000000001"), status: "connected" as const,
+    connectionId: "70000000-0000-4000-8000-000000000001", connectedAt: "2026-10-11T01:00:00Z" };
+  reads().mockResolvedValue(saved);
+  const successor = { ...review, supersedesConsentId: saved.id, reviewHash: "e".repeat(64),
+    existingConnection: { id: saved.connectionId, name: "Retained personal Gmail", setupHash: "d".repeat(64) } };
+  vi.mocked(activationConnectionApi.review).mockResolvedValueOnce(review).mockResolvedValue(successor);
+  vi.spyOn(activationConnectionApi, "withdraw").mockResolvedValue({ ...saved, status: "withdrawn" });
+  const post = vi.spyOn(activationConnectionApi, "approve").mockImplementation(async (_c, _u, _k, command) => ({ ...receipt(command.requestKey),
+    id: "80000000-0000-4000-8000-000000000001", reviewHash: successor.reviewHash, status: "connected", connectionId: saved.connectionId,
+    connectedAt: saved.connectedAt }));
+  await mount(); await act(async () => button("activation.connectionConsent.withdraw").click());
+  await act(async () => (document.querySelector('[role="alertdialog"] input') as HTMLInputElement).click());
+  await act(async () => button("activation.connectionConsent.confirm").click());
+  await vi.waitFor(() => expect(container.textContent).toContain("The earlier approval stays withdrawn"));
+  expect(activationConnectionApi.review).toHaveBeenCalledTimes(2);
+  expect(post).not.toHaveBeenCalled(); expect(flow).not.toHaveBeenCalled();
+  await approve(); await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+  expect(post.mock.calls[0]![3].requestKey).not.toBe(saved.requestKey);
+  expect(post.mock.calls[0]![3].expectedReviewHash).toBe(successor.reviewHash);
 });
 
 it("changes permission explanations to Danish without translating authored purpose or changing the pending C3 command", async () => {
@@ -124,17 +159,4 @@ it("changes permission explanations to Danish without translating authored purpo
   await act(async () => button("activation.connectionConsent.confirm").click());
   await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
   expect(post.mock.calls[0]![3]).toMatchObject({ confirmConnectionAuthorization: true, expectedReviewHash: review.reviewHash });
-});
-
-it("reconnects the exact already-connected personal purpose through the Original flow without approving or allocating again", async () => {
-  const saved = { ...receipt("60000000-0000-4000-8000-000000000001"), status: "connected" as const,
-    connectionId: "70000000-0000-4000-8000-000000000001", connectedAt: "2026-10-11T01:00:00Z" };
-  reads().mockResolvedValue(saved);
-  const approve = vi.spyOn(activationConnectionApi, "approve"), allocate = vi.spyOn(activationConnectionApi, "connect");
-  await mount(); expect(flow).not.toHaveBeenCalled();
-  expect(container.textContent).toContain("the personal connection needs current validation or reconnecting");
-  await act(async () => button("activation.connectionConsent.reconnect").click());
-  expect(flow.mock.calls.at(-1)?.[0].deferredOnboarding).toMatchObject({ connectionId: saved.connectionId,
-    requestKey: saved.requestKey, principal: "initiator", methodKey: "paperclip-read" });
-  expect(approve).not.toHaveBeenCalled(); expect(allocate).not.toHaveBeenCalled();
 });

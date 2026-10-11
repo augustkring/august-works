@@ -1952,6 +1952,105 @@ const support = await getEmbeddedPostgresTestSupport();
       expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("needs_review");
       expect(await db.select().from(activationConnectionValidations).where(eq(activationConnectionValidations.connectionId, c.allocated.connectionId))).toEqual(before);
     });
+    async function withdrawCompletedPurpose(c: Awaited<ReturnType<typeof originalCompletedPersonalConnection>>, requestKey = c.command.requestKey) {
+      const [original] = await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.requestKey, requestKey));
+      await c.owner.withdraw(f.actor, f.home, requestKey, { confirmWithdrawal: true, expectedReviewHash: original!.reviewHash });
+      return original!;
+    }
+    it("records a new explicit purpose after withdrawal while preserving the original connection, credentials and terminal history", async () => {
+      const c = await originalCompletedPersonalConnection();
+      expect(c.review.supersedesConsentId).toBeNull();
+      const original = await withdrawCompletedPurpose(c);
+      const before = { connections: await db.select().from(toolConnections).where(eq(toolConnections.id, c.allocated.connectionId)),
+        grants: await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, c.allocated.connectionId)),
+        secrets: await db.select().from(companySecrets).where(eq(companySecrets.companyId, f.home)),
+        validations: await db.select().from(activationConnectionValidations).where(eq(activationConnectionValidations.purposeId, original.id)) };
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("needs_review");
+      const reviewed = await c.owner.getReview(f.actor, f.home, c.key);
+      expect(reviewed.supersedesConsentId).toBe(original.id);
+      expect(reviewed.existingConnection?.id).toBe(c.allocated.connectionId);
+      expect(reviewed.reviewHash).not.toBe(c.review.reviewHash);
+      await expect(c.owner.approve(f.actor, f.home, c.key, { ...c.command, requestKey: randomUUID() })).rejects.toMatchObject({ status: 409 });
+      const command = { ...c.command, requestKey: randomUUID(), expectedReviewHash: reviewed.reviewHash };
+      const [first, replay] = await Promise.all([c.owner.approve(f.actor, f.home, c.key, command), c.owner.approve(f.actor, f.home, c.key, command)]);
+      expect(first).toEqual(replay); expect(first.id).not.toBe(original.id);
+      expect(first).toMatchObject({ status: "connected", connectionId: c.allocated.connectionId });
+      expect(await c.owner.approve(f.actor, f.home, c.key, c.command)).toMatchObject({ id: original.id, status: "withdrawn" });
+      expect((await c.owner.getCurrentReceipt(f.actor, f.home, c.key))?.id).toBe(first.id);
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("recorded");
+      const [retained] = await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.id, original.id));
+      expect(retained).toEqual({ ...original, status: "withdrawn" });
+      const [successor] = await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.id, first.id));
+      expect(successor?.supersedesConsentId).toBe(original.id);
+      expect(await db.select().from(activationConnectionValidations).where(eq(activationConnectionValidations.purposeId, original.id))).toEqual(before.validations);
+      expect(await db.select().from(activationConnectionValidations).where(eq(activationConnectionValidations.purposeId, first.id))).toHaveLength(1);
+      expect(await db.select().from(toolConnections).where(eq(toolConnections.id, c.allocated.connectionId))).toEqual(before.connections);
+      expect(await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, c.allocated.connectionId))).toEqual(before.grants);
+      expect(await db.select().from(companySecrets).where(eq(companySecrets.companyId, f.home))).toEqual(before.secrets);
+      expect(c.connector.startAuthorization).toHaveBeenCalledTimes(1); expect(c.connector.claim).toHaveBeenCalledTimes(1);
+      await c.reconnect();
+      expect((await c.owner.getCurrentReceipt(f.actor, f.home, c.key))?.id).toBe(first.id);
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("recorded");
+      expect(await db.select().from(toolConnectionInstalls).where(eq(toolConnectionInstalls.connectionId, c.allocated.connectionId))).toEqual([]);
+      expect((await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.id, original.id)))[0]).toEqual(retained);
+    });
+    it("keeps a single current successor through repeated withdrawals instead of selecting the oldest retained approval", async () => {
+      const c = await originalCompletedPersonalConnection(); let requestKey = c.command.requestKey;
+      const retained: Array<typeof activationConnectionConsents.$inferSelect> = [];
+      for (let generation = 0; generation < 3; generation++) {
+        const original = await withdrawCompletedPurpose(c, requestKey); retained.push({ ...original, status: "withdrawn" });
+        const reviewed = await c.owner.getReview(f.actor, f.home, c.key);
+        expect(reviewed.supersedesConsentId).toBe(original.id);
+        requestKey = randomUUID();
+        const next = await c.owner.approve(f.actor, f.home, c.key, { ...c.command, requestKey, expectedReviewHash: reviewed.reviewHash });
+        expect(next.status).toBe("connected");
+        expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("recorded");
+        for (const earlier of retained) expect((await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.id, earlier.id)))[0]).toEqual(earlier);
+      }
+      expect(await db.select().from(toolConnections).where(eq(toolConnections.applicationId, c.app.id))).toHaveLength(1);
+      expect(await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.connectionId, c.allocated.connectionId))).toHaveLength(4);
+    });
+    it("refuses missing, foreign, live and already superseded Native parents without rewriting any lineage", async () => {
+      const c = await originalCompletedPersonalConnection();
+      const original = await withdrawCompletedPurpose(c), reviewed = await c.owner.getReview(f.actor, f.home, c.key);
+      const value = { ...original, id: randomUUID(), requestKey: randomUUID(), status: "approved", reservedConnectionId: null,
+        connectionId: null, connectionHash: null, connectedAt: null, supersedesConsentId: original.id,
+        existingConnectionId: c.allocated.connectionId, existingSetupHash: reviewed.existingConnection!.setupHash };
+      for (const changes of [{ supersedesConsentId: null }, { supersedesConsentId: randomUUID() }, { methodHash: "f".repeat(64) }])
+        await expect(db.insert(activationConnectionConsents).values({ ...value, ...changes })).rejects.toMatchObject({ cause: { code: "23514" } });
+      const next = await c.owner.approve(f.actor, f.home, c.key, { ...c.command, requestKey: randomUUID(), expectedReviewHash: reviewed.reviewHash });
+      await expect(db.insert(activationConnectionConsents).values({ ...value, supersedesConsentId: next.id })).rejects.toMatchObject({ cause: { code: "23514" } });
+      await withdrawCompletedPurpose(c, next.requestKey);
+      await expect(db.insert(activationConnectionConsents).values(value)).rejects.toMatchObject({ cause: { code: "23514" } });
+      await expect(db.update(activationConnectionConsents).set({ supersedesConsentId: randomUUID() }).where(eq(activationConnectionConsents.id, next.id)))
+        .rejects.toMatchObject({ cause: { code: "23514" } });
+      await expect(db.update(activationConnectionConsents).set({ status: "connected" }).where(eq(activationConnectionConsents.id, original.id)))
+        .rejects.toMatchObject({ cause: { code: "23514" } });
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("needs_review");
+      expect(await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.connectionId, c.allocated.connectionId))).toHaveLength(2);
+    });
+    it("requires a fresh explicit successor decision after Original change-setup advances the onboarding version", async () => {
+      const c = await originalCompletedPersonalConnection(), current = await c.activation.get(f.actor, f.home);
+      const reviewStep = await c.activation.command(f.actor, f.home, { operation: "continue", requestId: randomUUID(), expectedVersion: current.version });
+      await c.activation.command(f.actor, f.home, { operation: "change_setup", requestId: randomUUID(), expectedVersion: reviewStep.version });
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("needs_review");
+      const original = await withdrawCompletedPurpose(c), reviewed = await c.owner.getReview(f.actor, f.home, c.key);
+      expect(reviewed.onboardingVersion).toBeGreaterThan(original.onboardingVersion);
+      expect(reviewed.supersedesConsentId).toBe(original.id);
+      const next = await c.owner.approve(f.actor, f.home, c.key, { ...c.command, requestKey: randomUUID(), expectedReviewHash: reviewed.reviewHash });
+      expect(next).toMatchObject({ status: "connected", onboardingVersion: reviewed.onboardingVersion });
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("recorded");
+      expect((await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.id, original.id)))[0]).toEqual({ ...original, status: "withdrawn" });
+    });
+    it("does not reuse an earlier health observation as validation of a newly rotated credential after withdrawal", async () => {
+      const c = await originalCompletedPersonalConnection(), original = await withdrawCompletedPurpose(c);
+      const [grant] = await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, c.allocated.connectionId));
+      await secretService(db).rotate(grant!.credentialSecretRefs[0]!.secretId, { value: "owned-rotated-after-withdrawal", expectedLatestVersion: 1 }, { userId: f.userId });
+      await expect(c.owner.getReview(f.actor, f.home, c.key)).rejects.toMatchObject({ status: 409 });
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("needs_review");
+      expect(await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.connectionId, c.allocated.connectionId))).toEqual([{ ...original, status: "withdrawn" }]);
+      expect(c.connector.startAuthorization).toHaveBeenCalledTimes(1); expect(c.connector.claim).toHaveBeenCalledTimes(1);
+    });
     it("refuses a withdrawn original callback before the owned broker claim", async () => {
       const c = await connectionConsentFixture(true); await c.owner.approve(f.actor, f.home, c.key, c.command);
       const allocated = await c.apps.connectGalleryApp(f.home, await c.owner.getApprovedSetup(f.actor, f.home, c.command.requestKey),

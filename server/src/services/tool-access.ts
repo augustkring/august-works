@@ -13540,7 +13540,8 @@ export function toolAccessService(
 
   async function deferredOnboardingPurpose(companyId: string, connectionId: string, actor?: ActorInfo, dbClient: Db = db) {
     const [purpose] = await dbClient.select().from(activationConnectionConsents).where(and(
-      eq(activationConnectionConsents.companyId, companyId), eq(activationConnectionConsents.connectionId, connectionId))).limit(1);
+      eq(activationConnectionConsents.companyId, companyId), eq(activationConnectionConsents.connectionId, connectionId)))
+      .orderBy(sql`${activationConnectionConsents.status}='withdrawn'`, desc(activationConnectionConsents.requestedAt), desc(activationConnectionConsents.id)).limit(1);
     if (!purpose) return null;
     if (actor?.actorType !== "user" || !actor.actorId || actor.actorSource === "local_implicit")
       throw forbidden("Current initiating account is required for onboarding connection setup");

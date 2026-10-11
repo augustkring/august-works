@@ -1,5 +1,5 @@
 import { randomUUID } from "node:crypto";
-import { and, eq, ne, or } from "drizzle-orm";
+import { and, desc, eq, ne, or, sql } from "drizzle-orm";
 import { activationConnectionConsents, agentPackageVersions, companies, toolApplications, toolConnections, type Db } from "@paperclipai/db";
 import { getConnectableAppDefinition, activationConnectionConsentCommandSchema, activationConnectionConsentWithdrawalCommandSchema, activationConnectionConsentReceiptSchema, activationConnectionReviewSchema, packageReleaseSchema, v9FeatureEnabled } from "@paperclipai/shared";
 import { conflict, forbidden, notFound } from "../../errors.js";
@@ -64,14 +64,17 @@ async function source(tx: Db, actor: AuthorizationActor, companyId: string, appl
   const connection = connections[0];
   let existingConnection: { id: string; name: string; setupHash: string } | null = null;
   let existingMethodKey: string | undefined = approvedPurpose?.connectionMethodKey;
+  let supersedesConsentId = approvedPurpose?.supersedesConsentId ?? null;
   if (connection) {
     const [owned] = await tx.select().from(activationConnectionConsents).where(and(eq(activationConnectionConsents.companyId, companyId),
-      or(eq(activationConnectionConsents.connectionId, connection.id), eq(activationConnectionConsents.reservedConnectionId, connection.id)))).for("share");
-    if (owned && (owned.onboardingRunId !== current.run.id || owned.subjectUserId !== current.userId || owned.status === "withdrawn"))
+      or(eq(activationConnectionConsents.connectionId, connection.id), eq(activationConnectionConsents.reservedConnectionId, connection.id))))
+      .orderBy(sql`${activationConnectionConsents.status}='withdrawn'`, desc(activationConnectionConsents.requestedAt), desc(activationConnectionConsents.id)).limit(1).for("share");
+    if (owned && (owned.onboardingRunId !== current.run.id || owned.subjectUserId !== current.userId))
       throw conflict("This retained connection needs a separate current purpose renewal");
-    if (!owned || owned.existingConnectionId) {
+    if (owned?.status === "withdrawn") supersedesConsentId = owned.id;
+    if (!owned || owned.status === "withdrawn" || owned.existingConnectionId) {
       const setup = await readDeferredActivationSetup(tx, { companyId, applicationId: app.id, connectionId: connection.id, subjectUserId: current.userId });
-      if ((!owned && !setup) || typeof connection.config.connectionMethodKey !== "string" || connection.config.sourceTemplateKey !== galleryKey)
+      if ((!owned || owned.status === "withdrawn") && !setup || typeof connection.config.connectionMethodKey !== "string" || connection.config.sourceTemplateKey !== galleryKey)
         throw conflict("The existing personal connection needs its original access review and validation");
       const definition = getConnectableAppDefinition(galleryKey), selectedMethod = definition?.methods.find(candidate => candidate.key === connection.config.connectionMethodKey);
       if (!definition || !selectedMethod) throw conflict("The original provider method is unavailable");
@@ -83,16 +86,20 @@ async function source(tx: Db, actor: AuthorizationActor, companyId: string, appl
       // A current unchanged business purpose survives credential expiry. Its
       // original adoption pin stays immutable; only Original finish can append
       // positive proof for a new validated credential version.
-      existingConnection = { id: connection.id, name: connection.name, setupHash: owned?.existingSetupHash ?? setup!.hash };
+      existingConnection = { id: connection.id, name: connection.name,
+        setupHash: owned && owned.status !== "withdrawn" ? owned.existingSetupHash! : setup!.hash };
       existingMethodKey = connection.config.connectionMethodKey;
     }
   }
-  return { ...current, app, galleryKey, pin, existingConnection, existingMethodKey, purpose: release.manifest.purpose,
+  return { ...current, app, galleryKey, pin, existingConnection, existingMethodKey, supersedesConsentId, purpose: release.manifest.purpose,
     applicationHash: nativeSha256({ id: app.id, key: app.applicationKey, name: app.name, metadata: app.metadata, status: app.status, archivedAt: app.archivedAt?.toISOString() ?? null }) };
 }
 
 function review(current: Awaited<ReturnType<typeof source>>, method: Method) {
   const fields = {
+    // Preserve existing root-purpose hashes; a successor separately pins the
+    // exact withdrawn parent, whose old approval can never become current.
+    ...(current.supersedesConsentId ? { supersedesConsentId: current.supersedesConsentId } : {}),
     companyId: current.run.companyId, onboardingRunId: current.run.id, onboardingVersion: current.run.version,
     packageVersionId: current.pin.versionId, packageContentHash: current.pin.hash,
     applicationId: current.app.id, applicationKey: current.app.applicationKey!, applicationName: current.app.name,
@@ -112,6 +119,7 @@ function review(current: Awaited<ReturnType<typeof source>>, method: Method) {
     },
   };
   return activationConnectionReviewSchema.parse({ ...fields,
+    supersedesConsentId: current.supersedesConsentId,
     explanation: { providerName: method.providerName, resource: method.resource,
       capabilityName: current.pin.name, providerWriteTools: method.providerWriteTools },
     reviewHash: nativeSha256({ ...fields, subjectUserId: current.userId, applicationHash: current.applicationHash }) });
@@ -274,6 +282,7 @@ export function activationConnectionConsentService(db: Db, methods: Methods = to
           applicationId: current.app.id, applicationKey, applicationHash: current.applicationHash, galleryKey: current.galleryKey,
           connectionMethodKey: method.method.key, methodHash: currentReview.methodHash,
           requestKey: input.requestKey, requestHash, reviewHash: input.expectedReviewHash,
+          supersedesConsentId: current.supersedesConsentId,
           existingConnectionId: current.existingConnection?.id ?? null, existingSetupHash: current.existingConnection?.setupHash ?? null,
         }).returning();
         await logActivity(tx, { companyId, actorType: "user", actorId: current.userId,

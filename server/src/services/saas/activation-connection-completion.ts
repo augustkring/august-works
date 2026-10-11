@@ -47,10 +47,13 @@ export async function readDeferredActivationSetup(tx: Db, purpose: Pick<Purpose,
       !grant.providerTenant?.oauth?.scopes || nativeSha256([...grant.providerTenant.oauth.scopes].sort()) !== nativeSha256([...scopes].sort())) return null;
   const secretMetadata = [];
   for (const ref of grant.credentialSecretRefs) {
-    const [secret] = await tx.select({ id: companySecrets.id, version: companySecrets.latestVersion, scope: companySecrets.scope, owner: companySecrets.ownerUserId }).from(companySecrets).where(and(
+    const [secret] = await tx.select({ id: companySecrets.id, version: companySecrets.latestVersion, scope: companySecrets.scope,
+      owner: companySecrets.ownerUserId, updatedAt: companySecrets.updatedAt }).from(companySecrets).where(and(
       eq(companySecrets.companyId, purpose.companyId), eq(companySecrets.id, ref.secretId), eq(companySecrets.status, "active"), sql`${companySecrets.deletedAt} is null`)).for("share");
-    if (!secret) return null;
-    secretMetadata.push(secret);
+    // A health observation before the current secret revision cannot validate
+    // that revision merely because the connection row itself stayed unchanged.
+    if (!secret || connection.healthCheckedAt < secret.updatedAt) return null;
+    secretMetadata.push({ id: secret.id, version: secret.version, scope: secret.scope, owner: secret.owner });
   }
   if (requireProfile) {
     const [profile] = await tx.select().from(toolProfiles).where(and(eq(toolProfiles.companyId, purpose.companyId),

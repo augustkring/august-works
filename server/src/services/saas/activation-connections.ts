@@ -43,8 +43,11 @@ export async function readActivationRequiredAccess(tx: Db, actor: AuthorizationA
       .orderBy(toolConnections.id).limit(2).for("share");
     if (connections.length !== 1) { result.push({ key, status: connections.length ? "needs_review" : "not_connected", checkedAt: null }); continue; }
     const connection = connections[0]!;
+    // Historical withdrawal remains evidence of ownership, never a fallback
+    // to legacy credentials. Only the sole live successor may qualify access.
     const purposes = await tx.select().from(activationConnectionConsents).where(and(
-      eq(activationConnectionConsents.companyId, companyId), eq(activationConnectionConsents.connectionId, connection.id))).limit(2).for("share");
+      eq(activationConnectionConsents.companyId, companyId), eq(activationConnectionConsents.connectionId, connection.id)))
+      .orderBy(sql`${activationConnectionConsents.status}='withdrawn'`).limit(2).for("share");
     if (purposes.length) {
       const purpose = purposes[0]!, app = apps[0]!;
       const pin = purposeContext ? await readFirstAgentCapabilityPin(tx, purposeContext.packageVersionId) : null;
@@ -59,7 +62,7 @@ export async function readActivationRequiredAccess(tx: Db, actor: AuthorizationA
         try { methodCurrent = nativeSha256(activationConnectionMethodSource(definition, method)) === purpose.methodHash; }
         catch { /* Unsupported original profiles remain unqualified setup. */ }
       }
-      const recorded = !!methodCurrent && purposes.length === 1 && !!purposeContext && purpose.onboardingRunId === purposeContext.runId &&
+      const recorded = !!methodCurrent && purposes.filter(row => row.status !== "withdrawn").length === 1 && !!purposeContext && purpose.onboardingRunId === purposeContext.runId &&
         purpose.subjectUserId === userId && purpose.packageVersionId === purposeContext.packageVersionId &&
         purposeContext.version >= purpose.onboardingVersion && (purposeContext.step !== "access" || purposeContext.version === purpose.onboardingVersion) &&
         pin?.hash === purpose.packageContentHash && nativeSha256({ id: app.id, key: app.applicationKey, name: app.name,

@@ -400,6 +400,7 @@
         "changed": "Den gennemgåede opsætning er ændret. Træk den tidligere godkendelse af formålet tilbage, før du gennemgår en ny."
       },
       "reuseBoundary": "Denne beslutning genbruger den præcise, validerede personlige forbindelse. Den opretter ikke en ny forbindelse og gentager ikke login hos udbyderen. Agentadgang er fortsat ikke tildelt.",
+      "successorBoundary": "Dette er en ny formålsbeslutning. Den tidligere godkendelse forbliver tilbagetrukket, og dens historik og legitimationsoplysninger hos udbyderen bevares. Gennemgå det aktuelle formål, før du genbruger forbindelsen.",
       "explanation": {
         "personal": "Personligt login til {{provider}}; ressource: {{resource}}",
         "reuse": "Genbrug den præcise validerede personlige {{provider}}-forbindelse {{connection}}; ressource: {{resource}}",

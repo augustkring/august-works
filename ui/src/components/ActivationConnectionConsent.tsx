@@ -86,7 +86,8 @@ export function ActivationConnectionConsent({ companyId, principal, runId, versi
   }, onSuccess: value => {
     if (!authority.confirmed(value) || !scopeCurrent()) return;
     client.setQueryData(receiptKey, null); window.sessionStorage.removeItem(attemptKey); attempt.current = null; setUnknown(false); setDecision(null); setConfirmed(false); setSetup(false);
-    setFailure(t("activation.connectionConsent.withdrawn")); onSetupChanged();
+    setFailure(t("activation.connectionConsent.withdrawn"));
+    void client.invalidateQueries({ queryKey: reviewKey, exact: true }); onSetupChanged();
   }, onError: () => { setDecision(null); setSetup(false); setFailure(t("activation.connectionConsent.unknown")); } });
   const pending = approve.isPending || withdraw.isPending;
   async function checkReceipt() {
@@ -115,6 +116,7 @@ export function ActivationConnectionConsent({ companyId, principal, runId, versi
     </div>)}</dl> : null}
     <p>{t("activation.connectionConsent.boundary")}</p>
     {reviewed?.existingConnection ? <p>{t("activation.connectionConsent.reuseBoundary")}</p> : null}
+    {reviewed?.supersedesConsentId ? <p>{t("activation.connectionConsent.successorBoundary")}</p> : null}
     {failure ? <p role="alert">{failure}</p> : null}
     {saved ? <p role="status">{t(`activation.connectionConsent.status.${samePurpose ? saved.status === "connected" && !setupRecorded ? "needs_validation" : saved.status : "changed"}`)}</p> : null}
     <AlertDialog open={decision !== null} onOpenChange={open => { if (!open) { setDecision(null); setConfirmed(false); } }}>

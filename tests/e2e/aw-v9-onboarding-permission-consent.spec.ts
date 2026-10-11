@@ -24,7 +24,7 @@ test("eight distinct permission fields, keyboard C3, unknown receipt recovery an
       packageVersionId: id, packageContentHash: "a".repeat(64), applicationId: id, applicationKey: "gmail", applicationName: "Original Gmail",
       galleryKey: "gmail", connectionMethodKey: "paperclip-read", methodHash: "b".repeat(64), providerScopes: ["https://www.googleapis.com/auth/gmail.readonly"],
       explanation: { providerName: "Gmail", resource: "https://gmailmcp.googleapis.com/mcp/v1", capabilityName: "Draft agent", providerWriteTools: [] },
-      existingConnection: null, scopeProfile: "gmail.read", grantKind: "user", deferAgentAccess: true, reviewHash: "c".repeat(64),
+      supersedesConsentId: null, existingConnection: null, scopeProfile: "gmail.read", grantKind: "user", deferAgentAccess: true, reviewHash: "c".repeat(64),
       preview: { neededNow: ["Personal Google sign-in", "https://www.googleapis.com/auth/gmail.readonly"], why: "Prepare the original draft",
         usedBy: "Draft agent; no Agent receives access now", canRead: ["The authorized personal account"], canChange: ["No business changes authorized"],
         notRequested: ["No sending, deletion or spending"], automatic: ["No Agent execution"], asksFirst: ["Agent access needs its own review and Safe Test"] } });
@@ -102,7 +102,7 @@ test("explicit C3 reuses the exact personal connection and refreshes access with
       packageVersionId: id, packageContentHash: "a".repeat(64), applicationId: id, applicationKey: "gmail", applicationName: "Original Gmail",
       galleryKey: "gmail", connectionMethodKey: "paperclip-read", methodHash: "b".repeat(64), providerScopes: ["https://www.googleapis.com/auth/gmail.readonly"],
       explanation: { providerName: "Gmail", resource: "https://gmailmcp.googleapis.com/mcp/v1", capabilityName: "Draft agent", providerWriteTools: [] },
-      existingConnection: { id: connectionId, name: "Saved personal Gmail", setupHash: "d".repeat(64) },
+      supersedesConsentId: null, existingConnection: { id: connectionId, name: "Saved personal Gmail", setupHash: "d".repeat(64) },
       scopeProfile: "gmail.read", grantKind: "user", deferAgentAccess: true, reviewHash: "c".repeat(64),
       preview: { neededNow: ["Reuse Saved personal Gmail", "https://www.googleapis.com/auth/gmail.readonly"], why: "Prepare the original draft",
         usedBy: "Draft agent; no Agent receives access now", canRead: ["The authorized personal account"], canChange: ["No business changes authorized"],
@@ -135,6 +135,77 @@ test("explicit C3 reuses the exact personal connection and refreshes access with
     await page.getByRole("checkbox").check(); await page.getByRole("button", { name: "Confirm decision", exact: true }).click();
     await expect(page.getByRole("button", { name: "Continue", exact: true })).toBeEnabled();
     expect(approvals).toHaveLength(1); expect(providerSetup).toEqual([]);
+    await page.reload(); await expect(page.getByRole("button", { name: "Continue", exact: true })).toBeEnabled();
+    expect(approvals).toHaveLength(1); expect(providerSetup).toEqual([]);
+  } finally { expect((await request.delete(`/api/companies/${company.id}`)).ok()).toBe(true); }
+});
+
+test("withdrawal refetches the exact successor and requires new C3 without reviving history or provider setup", async ({ page, request }) => {
+  const company = await json(await request.post("/api/companies", { data: { name: "Disposable purpose successor fixture" } }));
+  try {
+    const session = await json(await request.get("/api/auth/get-session"));
+    const id = "10000000-0000-4000-8000-000000000001", connectionId = "20000000-0000-4000-8000-000000000001";
+    const { receipts: _, ...initial } = initialActivationState();
+    const value = activationViewSchema.parse({ runId: id, companyId: company.id, companyName: company.name, version: 3, status: "in_progress",
+      state: { ...initial, step: "access", intent: "Prepare one internal draft", packageVersionId: id },
+      capabilities: [{ versionId: id, name: "Draft agent", purpose: "Prepare an internal draft", requiredConnections: ["gmail"], knownLimitations: [] }],
+      requiredAccess: [{ key: "gmail", status: "needs_review", checkedAt: null }], sources: [], blockers: ["required_access_pending"],
+      firstValue: { status: "not_recorded", result: null, candidates: [], hasMore: false },
+      firstTask: { candidates: [], hasMore: false, current: null, preparationOptions: [] },
+      firstAgent: { status: "not_created", agentId: null, name: null, canPrepare: false } });
+    let review = activationConnectionReviewSchema.parse({ companyId: company.id, onboardingRunId: id, onboardingVersion: 3,
+      packageVersionId: id, packageContentHash: "a".repeat(64), applicationId: id, applicationKey: "gmail", applicationName: "Original Gmail",
+      galleryKey: "gmail", connectionMethodKey: "paperclip-read", methodHash: "b".repeat(64), providerScopes: ["https://www.googleapis.com/auth/gmail.readonly"],
+      explanation: { providerName: "Gmail", resource: "https://gmailmcp.googleapis.com/mcp/v1", capabilityName: "Draft agent", providerWriteTools: [] },
+      supersedesConsentId: null, existingConnection: { id: connectionId, name: "Saved personal Gmail", setupHash: "d".repeat(64) },
+      scopeProfile: "gmail.read", grantKind: "user", deferAgentAccess: true, reviewHash: "c".repeat(64),
+      preview: { neededNow: ["Reuse Saved personal Gmail", "https://www.googleapis.com/auth/gmail.readonly"], why: "Prepare the original draft",
+        usedBy: "Draft agent; no Agent receives access now", canRead: ["The authorized personal account"], canChange: ["No business changes authorized"],
+        notRequested: ["No sending, deletion or spending"], automatic: ["No Agent execution"], asksFirst: ["Agent access needs its own review and Safe Test"] } });
+    const original = activationConnectionConsentReceiptSchema.parse({ id, companyId: company.id, onboardingRunId: id,
+      onboardingVersion: 3, packageVersionId: id, applicationId: id, requestKey: "40000000-0000-4000-8000-000000000001",
+      reviewHash: review.reviewHash, status: "connected", connectionId, connectedAt: new Date().toISOString(), requestedAt: new Date().toISOString() });
+    let saved: ReturnType<typeof activationConnectionConsentReceiptSchema.parse> | null = original;
+    const withdrawals: Record<string, unknown>[] = [];
+    const approvals: Record<string, unknown>[] = [], providerSetup: string[] = [];
+    await page.route("**/api/auth/get-session", route => route.fulfill({ json: { ...session, session: { ...session.session, localImplicit: false } } }));
+    await page.route("**/api/saas/capabilities", route => route.fulfill({ json: { activationV9: true, onboarding: true } }));
+    await page.route(`**/api/companies/${company.id}/activation?**`, route => route.fulfill({ json: saved?.status === "connected" ? { ...value,
+      requiredAccess: [{ key: "gmail", status: "recorded", checkedAt: saved.connectedAt }], blockers: [] } : value }));
+    await page.route(`**/api/companies/${company.id}/activation/connections/gmail/review?**`, route => route.fulfill({ json: review }));
+    await page.route(`**/api/companies/${company.id}/activation/connections/gmail/consent?**`, route => {
+      if (route.request().method() === "GET") return route.fulfill({ json: saved });
+      const input = route.request().postDataJSON(); approvals.push(input);
+      expect(input).toEqual({ requestKey: expect.any(String), confirmConnectionAuthorization: true, expectedReviewHash: review.reviewHash });
+      saved = activationConnectionConsentReceiptSchema.parse({ id: "30000000-0000-4000-8000-000000000001", companyId: company.id, onboardingRunId: id, onboardingVersion: 3,
+        packageVersionId: id, applicationId: id, requestKey: input.requestKey, reviewHash: review.reviewHash,
+        status: "connected", connectionId, connectedAt: new Date().toISOString(), requestedAt: new Date().toISOString() });
+      return route.fulfill({ json: saved });
+    });
+    await page.route(`**/api/companies/${company.id}/activation/connection-consents/${original.requestKey}/withdraw?**`, route => {
+      const input = route.request().postDataJSON(); withdrawals.push(input);
+      expect(input).toEqual({ confirmWithdrawal: true, expectedReviewHash: original.reviewHash });
+      saved = null; review = activationConnectionReviewSchema.parse({ ...review, supersedesConsentId: original.id, reviewHash: "e".repeat(64) });
+      return route.fulfill({ json: { ...original, status: "withdrawn" } });
+    });
+    page.on("request", req => { if (req.method() === "POST" && /\/connect$|\/oauth\/start/.test(new URL(req.url()).pathname)) providerSetup.push(req.url()); });
+    await page.goto(`/${company.issuePrefix}/dashboard`); await expect(page.getByRole("main")).toBeVisible();
+    await page.goto("/saas/activation/8");
+    const section = page.getByRole("region", { name: "Connection permissions: Original Gmail (gmail)", exact: true });
+    await expect(section.locator("dt")).toHaveCount(8);
+    await expect(section).toContainText("does not create another connection or repeat provider sign-in");
+    await expect(page.getByRole("button", { name: "Continue", exact: true })).toBeEnabled();
+    await page.getByRole("button", { name: "Withdraw purpose approval", exact: true }).click();
+    await page.getByRole("checkbox").check(); await page.getByRole("button", { name: "Confirm decision", exact: true }).click();
+    await expect(section).toContainText("The earlier approval stays withdrawn");
+    await expect(page.getByRole("button", { name: "Continue", exact: true })).toBeDisabled();
+    expect(withdrawals).toHaveLength(1); expect(approvals).toHaveLength(0); expect(providerSetup).toEqual([]);
+    await page.reload(); await expect(section).toContainText("The earlier approval stays withdrawn");
+    expect(withdrawals).toHaveLength(1); expect(approvals).toHaveLength(0);
+    await page.getByRole("button", { name: "Review connection approval", exact: true }).click();
+    await page.getByRole("checkbox").check(); await page.getByRole("button", { name: "Confirm decision", exact: true }).click();
+    await expect(page.getByRole("button", { name: "Continue", exact: true })).toBeEnabled();
+    expect(approvals).toHaveLength(1); expect(approvals[0]!.requestKey).not.toBe(original.requestKey); expect(providerSetup).toEqual([]);
     await page.reload(); await expect(page.getByRole("button", { name: "Continue", exact: true })).toBeEnabled();
     expect(approvals).toHaveLength(1); expect(providerSetup).toEqual([]);
   } finally { expect((await request.delete(`/api/companies/${company.id}`)).ok()).toBe(true); }

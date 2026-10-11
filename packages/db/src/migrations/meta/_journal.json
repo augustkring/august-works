@@ -3305,6 +3305,13 @@
       "when": 1791750224129,
       "tag": "0473_far_umar",
       "breakpoints": true
+    },
+    {
+      "idx": 474,
+      "version": "7",
+      "when": 1791754691731,
+      "tag": "0474_open_cammi",
+      "breakpoints": true
     }
   ]
 }

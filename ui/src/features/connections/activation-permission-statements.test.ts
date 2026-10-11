@@ -9,7 +9,7 @@ const review = activationConnectionReviewSchema.parse({ companyId: id, onboardin
   packageVersionId: id, packageContentHash: "a".repeat(64), applicationId: id, applicationKey: "gmail",
   applicationName: "Gmail", galleryKey: "gmail", connectionMethodKey: "paperclip-read", methodHash: "b".repeat(64),
   providerScopes: ["https://www.googleapis.com/auth/gmail.readonly"], scopeProfile: "gmail.read", grantKind: "user",
-  deferAgentAccess: true, existingConnection: null, reviewHash: "c".repeat(64),
+  deferAgentAccess: true, supersedesConsentId: null, existingConnection: null, reviewHash: "c".repeat(64),
   explanation: { providerName: "Gmail", resource: "https://gmailmcp.googleapis.com/mcp/v1", capabilityName: "Authored capability", providerWriteTools: [] },
   preview: { neededNow: ["Original explanation"], why: "Author's exact purpose", usedBy: "Original explanation",
     canRead: ["Original explanation"], canChange: ["Original explanation"], notRequested: ["Original explanation"],
