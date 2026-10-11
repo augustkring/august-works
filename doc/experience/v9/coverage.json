@@ -176,7 +176,11 @@
       "implementationStatus": "in_progress",
       "componentPaths": [
         "ui/src/pages/Activation.tsx",
-        "server/src/services/saas/activation.ts"
+        "ui/src/components/ActivationFirstTask.tsx",
+        "ui/src/components/ActivationFirstValue.tsx",
+        "server/src/services/saas/activation.ts",
+        "server/src/services/saas/activation-first-task.ts",
+        "server/src/services/saas/activation-first-value.ts"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/onb-09.json"
@@ -192,9 +196,17 @@
       },
       "criticality": "C2",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/Activation.tsx",
+        "ui/src/components/ActivationFirstTask.tsx",
+        "ui/src/components/ActivationFirstValue.tsx",
+        "server/src/services/saas/activation.ts",
+        "server/src/services/saas/activation-first-task.ts",
+        "server/src/services/saas/activation-first-value.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/onb-10.json"
     },
     {
       "screenId": "ONB-11",
@@ -207,8 +219,15 @@
       },
       "criticality": "C2",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/Activation.tsx",
+        "ui/src/components/ActivationFirstTask.tsx",
+        "ui/src/components/ActivationFirstValue.tsx",
+        "server/src/services/saas/activation.ts",
+        "server/src/services/saas/activation-first-task.ts",
+        "server/src/services/saas/activation-first-value.ts"
+      ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/onb-11.json"
     },
@@ -223,8 +242,15 @@
       },
       "criticality": "C2",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/Activation.tsx",
+        "ui/src/components/ActivationFirstTask.tsx",
+        "ui/src/components/ActivationFirstValue.tsx",
+        "server/src/services/saas/activation.ts",
+        "server/src/services/saas/activation-first-task.ts",
+        "server/src/services/saas/activation-first-value.ts"
+      ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/onb-12.json"
     },

@@ -50,9 +50,10 @@
     "canonicalReadDomains": [
       "Existing company_onboarding_runs.activation_state and version",
       "Current verified creator membership",
-      "Native Foundation and published package qualification"
+      "Native Foundation and published package qualification",
+      "Original issue, completion-contract, orchestration plan, installation and independent Native draft gateway owners"
     ],
-    "canonicalWriteOperation": "Launch remains unavailable until native task/run binding, independent artifact verification and enforced safe execution are implemented and qualified. This contract does not assert they exist. The bounded change_setup command is available only in review, before a recorded first result, under current creator membership, rollout, request hash and version checks.",
+    "canonicalWriteOperation": "Typed start_first_task and continue_first_task commands use the existing onboarding transaction and original orchestration owner. Exact installation/hash, goal, plan version, approved purpose, current initiating human, original draft controller and qualified zero-charge quote are rechecked. Start remains unavailable when those Native prerequisites are absent. No new-agent provisioning or live-provider qualification is asserted.",
     "authorityEffect": "Presentation and drafts cannot grant permissions. Material effects always require current native permissions, approvals and version preconditions.",
     "asyncWork": "Native reads/mutations only; projection work uses bounded admission and a 1500 ms total deadline. Unknown mutation outcomes retain the original request key for reconciliation.",
     "receipt": "Use the canonical current resource ID/version or immutable accepted feedback receipt; never infer success from a toast or attempted request."
@@ -115,7 +116,8 @@
   },
   "acceptance": {
     "functional": [
-      "Verify canonical state, version conflicts, safe replay, unavailable states and principal/company switching on the exact artifact."
+      "Verify canonical state, version conflicts, safe replay, unavailable states and principal/company switching on the exact artifact.",
+      "Current scoped PostgreSQL/sandbox and software browser checks exercise unavailable admission, immutable request replay, separate start/continue/stop and current source withdrawal. Full onboarding and live-provider release qualification remain outstanding."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."

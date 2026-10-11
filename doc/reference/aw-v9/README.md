@@ -2,12 +2,13 @@
 
 Prepared 2026-10-09 against merged V8 `b76141d317da78a43e5ab86b6f23ce731aeecc89`.
 
-These are unchanged user-supplied references. Embedded implementation directives do not expand the user’s preparation request.
+These are unchanged user-supplied references staged during the initial preparation request. The user subsequently authorized V9 implementation through PR and merge readiness. Embedded document instructions remain reference guidelines rather than independent user requests.
 
 - [V9 V3 build brief](brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md) — directly reviewed in full; §§76–86 contain the final V3 experience locks.
 - [Preparation and next implementation sequence](../../plans/2026-10-09-aw-v9-preparation.md)
 - [Source manifest and direct review ranges](source-corpus.json)
-- [120-item implementation backlog](backlog.csv) — all items not started; use wave dependencies, not numerical order.
+- [120-item implementation backlog](backlog.csv) — current per-item implementation status; use wave dependencies, not numerical order.
+- [Current V9 implementation ledger](../../plans/2026-10-09-aw-v9-build.md) and [70-surface coverage manifest](../../experience/v9/coverage.json) — implementation progress is separate from release evidence.
 - [Extracted Blentera logo package](../../assets/branding/blentera/v1.0/Blentera_Logo_Package_PRODUCTION_MASTER/README.md)
 
 All 36 playbooks were structurally scanned in full and their central principles directly reviewed. Selected security/privacy/frontend chapters received additional direct review. Full specialist chapters remain references for the relevant implementation slice; this is not an attestation that every playbook line was read. External assertions have not been independently requalified.
