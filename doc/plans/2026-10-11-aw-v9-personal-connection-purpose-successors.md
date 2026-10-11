@@ -65,3 +65,21 @@ repeats the actual Original intent/discovery/material-facts/capability journey
 with fresh command identities and current versions before checking the required
 fresh purpose decision. Original production transitions and assertions remain
 unchanged. Types/browser V2 did not start. Native/types/browser V3 is pending.
+
+Native V3 passed all 456 cases in the three complete Original files against
+actual migrated PostgreSQL and the Native artifact sandbox (UID 1004, network
+none); all 426 Original cases remain present. Types V3 passed Shared/DB builds
+and complete server/UI typechecks. Browser V3 passed all four built Chromium
+cases, including actual Apps continuity, fresh C3 reuse and separate successor
+C3 after withdrawal. Browser account/capability/receipt responses are explicitly
+scoped software fixtures, not provider or human proof.
+
+All Native/type/browser before-and-after captures retain Source commit
+`4ab5eae9e8ad6f30ec2a68b0168affd38f82a2c0` and SHA-256
+`a4090b35cef9c1d490d64f66f9ab71449e5eaef4578b9661f66d1d8540df1b9b`. Focus V1's
+216 cases in eight complete files remain valid: subsequent changes affected only
+the Native callback guard, Native revision fixture and dated plan. Token gates
+V2 and combined Shared build V2 passed. Historical failed qualifications remain
+recorded above and in their logs. This is bounded personal same-run Source
+qualification; unhealthy retained login, organizational reach, full V9, final
+integrated checks, live provider, human acceptance and PR readiness remain open.
