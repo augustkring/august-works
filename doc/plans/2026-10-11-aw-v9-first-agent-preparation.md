@@ -100,3 +100,13 @@ the exact removed fixture grant before the independent withdrawal check. No
 original assertion, deadline, permission rule or provider qualification changed.
 The earlier 78 passed / 3 failed result remains failed; fresh qualification is
 required for this corrected source.
+
+## Built-browser finding — 2026-10-11
+
+The real v8 Native run passed all 81 cases in three complete original files.
+The built-browser run failed its original 60-second deadline because the
+standalone activation header had no language selector. Mount the existing
+ExperienceLanguageSelect owner in that header; language changes remain a
+display preference and cannot submit preparation. Existing language-owner,
+activation and first-agent tests plus the unchanged complete browser scenario
+are required on this corrected source. The failed browser result is retained.
