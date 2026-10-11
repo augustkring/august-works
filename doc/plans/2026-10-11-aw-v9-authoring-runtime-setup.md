@@ -1,35 +1,34 @@
 # V9 actual authoring runtime setup
 
-Read the exact actual Agent's Original current runtime qualification for new Hire
-and Custom drafts and live revision targets. Keep verified creator/company access,
-configuration and runtime/provider locks, private no-store reads and host epochs.
-Expose configuration through that same Agent's Original Advanced save flow.
-No draft save, runtime selection, read or navigation starts work, copies another
-Agent's qualification, configures credentials or certifies representative tests.
-Configuration drift invalidates Original conformance and subsequent test evidence.
+Read the exact actual Agent’s current Native runtime qualification for new Hire
+and Custom drafts and live revision targets. Verified creator/company access,
+configuration and runtime/provider locks, private no-store reads and host epochs
+remain enforced. Configuration uses that Agent’s existing Advanced save flow.
+No draft save, read or navigation starts execution, configures credentials,
+copies another Agent’s qualification or certifies a representative Safe Test.
+Configuration or profile drift withdraws runtime qualification.
 
-Source starts at inactive-preparation `e86064f96`, still under Native qualification.
-Schema, owner, UI, routes and meaningful tests are in progress. Qualification,
-Safe Test execution, native promotion and final integrated V9 remain pending.
+The saved original is rechecked after an unknown preparation response. If it
+remains unprepared, refresh the review before another explicit confirmation;
+never automatically replay creation.
 
-The inactive-preparation baseline passed 475 Native cases and server types;
-its UI types/browser checks are still running. Runtime Source is isolated in
-its own worktree and public package aliases. New tests cover unprepared versus
-actual own identity, board approval, live revision identity, foreign/stale reads,
-no writes/credential projection and runtime validation versus Safe Test.
-Checking an unprepared original after an unknown preparation response now
-refreshes its decision review before a new explicit C3; no replay is automatic.
+## Qualification
 
-The inactive-preparation baseline is now fully qualified for its bounded scope:
-475 Native cases, 53 focus cases, server/UI types and four built Chromium
-journeys. Runtime projection tests also retain explicit software conformance
-metadata through the Original internal owner and verify withdrawal on profile
-or configuration drift. That fixture tests current projection and does not
-claim real provider probes, representative execution or GA assurance.
+Source `a5331312b` passed 59 cases in seven complete focused files, all 478 cases
+in four complete Native PostgreSQL/Artifact Sandbox files (UID 1004, network
+disabled), Shared and DB builds, server and UI typechecks, token gates and four
+built Chromium journeys. All three qualification captures retained identical
+Source identity before and after execution.
 
-Shared build V1 and Focus V1 passed (59 cases in seven complete files).
-Token gates V1 passed. DB Source is byte-identical to the qualified baseline
-and its public compiled output is copied into this isolated tree; no schema
-change or new migration is required. All 60 Rust Source files are byte-identical
-before reusing the public generated Cargo target. Full Native/types/browser
-qualification of the current runtime scope remains pending.
+The DB Source and all 60 Rust Source files are byte-identical to the qualified
+preparation baseline. Public compiled artifacts and package aliases were
+isolated. No migration was added. Native runtime projection fixtures retain
+explicit software conformance metadata through the internal Native owner; they
+prove projection and drift behavior, not real provider probes. Browser account,
+capability and activation responses are explicitly scoped software fixtures.
+
+## Remaining scope
+
+Actual representative Safe Test execution, native version promotion, runtime
+provisioning, live provider qualification and final integrated V9 release
+verification remain pending. This bounded scope does not certify full V9 or GA.
