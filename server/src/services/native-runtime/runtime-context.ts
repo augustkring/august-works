@@ -250,8 +250,8 @@ export async function readNativeRuntimeAssetText(
   }));
 }
 
-async function materializeInstructionBundle(agent: RuntimeAgent, owner: NativeRuntimeAssetOwner) {
-  const exported = await agentInstructionsService().exportFiles(agent, { rejectSymlinks: true });
+async function materializeInstructionBundle(db: Db, agent: RuntimeAgent & { runtimeConfig?: unknown }, owner: NativeRuntimeAssetOwner) {
+  const exported = await agentInstructionsService(db).exportFiles(agent, { rejectSymlinks: true });
   const entryPath = safeRelativePath(exported.entryFile, "instruction entry path");
   if (!(entryPath in exported.files)) throw new Error(`configured instruction entry is missing: ${entryPath}`);
   const files = Object.entries(exported.files).map(([relativePath, content]) => ({ path: safeRelativePath(relativePath, "instruction path"), content: Buffer.from(content, "utf8"), mode: 0o444 }));
@@ -329,7 +329,7 @@ export async function resolveNativeRuntimeMcpSnapshot(input: { db: Db; agent: Pi
 
 export async function buildNativeRuntimeContext(input: { db: Db; agent: RuntimeAgent; runId: string; runtimeConfig: Record<string, unknown>; runtimeSkillEntries: PaperclipSkillEntry[] }): Promise<NativeRuntimeContextSnapshot> {
   const [instructions, skills, mcp] = await Promise.all([
-    materializeInstructionBundle(input.agent, { companyId: input.agent.companyId, runId: input.runId }),
+    materializeInstructionBundle(input.db, { ...input.agent, runtimeConfig: input.runtimeConfig }, { companyId: input.agent.companyId, runId: input.runId }),
     materializeSelectedSkills(input.runtimeConfig, input.runtimeSkillEntries, input.agent.adapterType === "paperclip_runner", { companyId: input.agent.companyId, runId: input.runId }),
     resolveNativeRuntimeMcpSnapshot({ db: input.db, agent: input.agent, runId: input.runId }),
   ]);

@@ -21,6 +21,8 @@ import {
   issueComments,
 } from "@paperclipai/db";
 import {
+  AUTHORED_AGENT_DEFINITION_KEY,
+  type AuthoredAgentDefinition,
   AGENT_DEFAULT_MAX_CONCURRENT_RUNS,
   agentRuntimeConfigSchema,
   getAgentWorkEligibility,
@@ -56,6 +58,8 @@ import {
   builtInAgentMarkersEqual,
   readBuiltInAgentMarker,
 } from "./built-in-agent-metadata.js";
+import { hasAuthoredAgentDefinition, compileAuthoredAgentDefinition } from "./agents/authored-definition.js";
+import { nativeSha256 } from "./native-runtime/canonical.js";
 import { issueThreadInteractionService } from "./issue-thread-interactions.js";
 
 function hashToken(token: string) {
@@ -86,6 +90,7 @@ type ConfigRevisionField = (typeof CONFIG_REVISION_FIELDS)[number];
 type AgentConfigSnapshot = Pick<typeof agents.$inferSelect, ConfigRevisionField>;
 
 interface RevisionMetadata {
+  id?: string;
   createdByAgentId?: string | null;
   createdByUserId?: string | null;
   source?: string;
@@ -121,6 +126,7 @@ interface ClaudeLoginContext {
 }
 
 interface UpdateAgentOptions {
+  authoredPublication?: AuthoredAgentDefinition;
   recordRevision?: RevisionMetadata;
   allowBuiltInAgentMetadata?: boolean;
   allowPendingApprovalConfigUpdate?: boolean;
@@ -705,6 +711,16 @@ export function agentService(db: Db) {
   ) {
     const existing = await getById(id);
     if (!existing) return null;
+    const installsAuthoredDefinition = isPlainRecord(data.runtimeConfig) &&
+      Object.prototype.hasOwnProperty.call(data.runtimeConfig, AUTHORED_AGENT_DEFINITION_KEY);
+    if (installsAuthoredDefinition || (hasAuthoredAgentDefinition(existing) && (hasConfigPatchFields(data) || data.permissions !== undefined))) {
+      const definition = options?.authoredPublication;
+      if (!definition || options?.recordRevision?.source !== "agent_authoring_publish" ||
+          options.recordRevision.id !== definition.revisionId || !installsAuthoredDefinition ||
+          nativeSha256(data.runtimeConfig?.[AUTHORED_AGENT_DEFINITION_KEY]) !== nativeSha256(definition) ||
+          nativeSha256(compileAuthoredAgentDefinition(definition.content, definition.revisionId, definition.candidateHash)) !== nativeSha256(definition))
+        throw conflict("Edit and publish a draft to change this identified Agent version", { code: "authored_agent_version_readonly" });
+    }
     if(data.adapterType!==undefined||data.adapterConfig!==undefined)assertSaasRemoteAdapterConfig(data.adapterType??existing.adapterType,data.adapterConfig??existing.adapterConfig);
     if (isSaasDeployment() && (data.adapterType !== undefined || data.adapterConfig !== undefined)
       && !["openclaw_gateway","hermes_gateway","http","cursor_cloud"].includes(data.adapterType ?? existing.adapterType)) {
@@ -843,6 +859,7 @@ export function agentService(db: Db) {
         const changedKeys = diffConfigSnapshot(beforeConfig, afterConfig);
         if (changedKeys.length > 0) {
           await txDb.insert(agentConfigRevisions).values({
+            ...(options?.recordRevision?.id ? { id: options.recordRevision.id } : {}),
             companyId: normalizedUpdated.companyId,
             agentId: normalizedUpdated.id,
             createdByAgentId: options?.recordRevision?.createdByAgentId ?? null,
@@ -899,6 +916,8 @@ export function agentService(db: Db) {
       const role = data.role ?? "general";
       const normalizedPermissions = normalizeAgentPermissions(data.permissions, { context: "create" });
       const runtimeConfig = normalizeRuntimeConfigForNewAgent(data.runtimeConfig);
+      if (Object.prototype.hasOwnProperty.call(runtimeConfig, AUTHORED_AGENT_DEFINITION_KEY))
+        throw conflict("An authored Agent version requires its reviewed publication", { code: "authored_agent_version_readonly" });
       const adapterType = data.adapterType ?? "process";
       const rawAdapterConfig = isPlainRecord(data.adapterConfig)
         ? await secretsSvc.normalizeAdapterConfigForPersistence(companyId, data.adapterConfig, { adapterType })
@@ -1182,6 +1201,8 @@ export function agentService(db: Db) {
     updatePermissions: async (id: string, permissions: Record<string, unknown> & { canCreateAgents: boolean }) => {
       const existing = await getById(id);
       if (!existing) return null;
+      if (hasAuthoredAgentDefinition(existing))
+        throw conflict("Edit and publish a draft to change this identified Agent version", { code: "authored_agent_version_readonly" });
       if (existing.status === "pending_approval") {
         throw conflict("Pending approval agent permissions cannot be changed before board approval", {
           code: "pending_approval_agent_config_frozen",
