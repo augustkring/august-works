@@ -6,6 +6,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { V5_FEATURE_KEYS, agentAuthoringContentSchema, agentDraftTestPacketSchema, type AgentAuthoringDraftView, type AgentDraftTestReview, type AgentDraftTestView } from "@paperclipai/shared";
 import { AgentDraftSafeTest } from "./AgentDraftSafeTest";
 import { agentAuthoringApi } from "../api/agent-authoring";
+import { ApiError } from "../api/client";
 import { instanceSettingsApi } from "../api/instanceSettings";
 import { queryKeys } from "../lib/queryKeys";
 import { v9SessionFixture } from "../hooks/v9-session.test-support";
@@ -50,6 +51,23 @@ function button(text: string) { const found = [...document.querySelectorAll<HTML
 async function click(text: string) { await act(async () => button(text).click()); }
 async function consent() { await click("Review Safe Test"); await vi.waitFor(() => expect(document.body.textContent).toContain("0.03 USD"));
   const checkbox = document.querySelector<HTMLInputElement>('[role="alertdialog"] input[type="checkbox"]')!; await act(async () => checkbox.click()); }
+it.each(["refused", "unchanged"])("withdraws the Safe Test model details and consent during a %s source recheck", async outcome => {
+  const post = vi.spyOn(agentAuthoringApi, "startTest");
+  await mount(); await consent(); expect(document.body.textContent).toContain("fixture-draft-model");
+  let resolve!: (value: AgentDraftTestReview) => void, reject!: (reason: Error) => void;
+  vi.mocked(agentAuthoringApi.testReview).mockImplementation(() => new Promise((yes, no) => { resolve = yes; reject = no; }));
+  let refresh!: Promise<void>;
+  await act(async () => { refresh = client.invalidateQueries({ queryKey: ["agent-draft-tests"] }); });
+  await vi.waitFor(() => expect(document.querySelector('[role="alertdialog"]')).toBeNull());
+  expect(document.body.textContent).not.toContain("fixture-draft-model");
+  await act(async () => { if (outcome === "refused") reject(new ApiError("Current source refused", 403, {})); else resolve(review); await refresh; });
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull(); expect(post).not.toHaveBeenCalled();
+  if (outcome === "unchanged") {
+    await vi.waitFor(() => expect(button("Review Safe Test").disabled).toBe(false)); await click("Review Safe Test");
+    expect(button("Run this test").disabled).toBe(true);
+    expect(document.querySelector<HTMLInputElement>('[role="alertdialog"] input[type="checkbox"]')!.checked).toBe(false);
+  }
+});
 it("requires current C3 cost and sharing consent before submitting only the saved candidate identity", async () => {
   const start = vi.spyOn(agentAuthoringApi, "startTest").mockImplementation(async (_c, _p, _id, input) => ({ ...result, requestId: input.requestId }));
   await mount(); await click("Review Safe Test"); expect(button("Run this test").disabled).toBe(true);

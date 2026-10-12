@@ -43,7 +43,7 @@ export function AgentDraftPreparation({ company, principal, draft, enabled, canU
       throw new Error(t("agentPreparation.changed"));
     return value;
   }), enabled: enabled && authority.writeReady && !draft.agentId && !draft.preparation, retry: false, gcTime: 0, staleTime: 0 });
-  useEffect(() => { setOpen(false); setConfirmed(false); }, [authority.epoch, draft.version, review.data?.reviewHash, enabled]);
+  useEffect(() => { setOpen(false); setConfirmed(false); }, [authority.epoch, draft.version, review.data?.reviewHash, enabled, review.isFetching, review.isError]);
   function currentReview() {
     const state = client.getQueryState(reviewKey), value = client.getQueryData<AgentDraftPreparationReview>(reviewKey);
     if (!current() || latest.current.draft.preparation || state?.status !== "success" || state.fetchStatus !== "idle" || state.isInvalidated ||
@@ -86,20 +86,21 @@ export function AgentDraftPreparation({ company, principal, draft, enabled, canU
   </section>;
   if (!enabled) return <p>{t("agentPreparation.saveFirst")}</p>;
   const pending = prepare.isPending || check.isPending;
+  const reviewed = review.isSuccess && !review.isFetching && !review.isError ? review.data : null;
   return <section className="space-y-3" aria-label={t("agentPreparation.title")}>
     <h2 className="text-lg font-semibold">{t("agentPreparation.title")}</h2>
     <p>{t("agentPreparation.boundary")}</p>
-    {review.data?.packageInstallation ? <p>{t("agentPreparation.packageConfiguration", {
-      name: review.data.packageInstallation.name, version: review.data.packageInstallation.version })}</p> : null}
+    {reviewed?.packageInstallation ? <p>{t("agentPreparation.packageConfiguration", {
+      name: reviewed.packageInstallation.name, version: reviewed.packageInstallation.version })}</p> : null}
     {review.isPending || review.isFetching ? <p role="status">{t("agentPreparation.checking")}</p> : null}
     {review.isError ? <p role="status">{t("agentPreparation.unavailable")}</p> : null}
-    {review.data ? <dl className="space-y-2"><dt className="font-medium">{t("agentPreparation.name")}</dt><dd>{review.data.name}</dd>
-      <dt className="font-medium">{t("agentPreparation.responsibility")}</dt><dd className="whitespace-pre-wrap">{review.data.outcome}</dd>
-      <dt className="font-medium">{t("agentPreparation.owner")}</dt><dd>{review.data.accountableOwner.name}</dd></dl> : null}
-    {review.data?.requiresBoardApproval ? <p>{t("agentPreparation.boardApproval")}</p> : null}
+    {reviewed ? <dl className="space-y-2"><dt className="font-medium">{t("agentPreparation.name")}</dt><dd>{reviewed.name}</dd>
+      <dt className="font-medium">{t("agentPreparation.responsibility")}</dt><dd className="whitespace-pre-wrap">{reviewed.outcome}</dd>
+      <dt className="font-medium">{t("agentPreparation.owner")}</dt><dd>{reviewed.accountableOwner.name}</dd></dl> : null}
+    {reviewed?.requiresBoardApproval ? <p>{t("agentPreparation.boardApproval")}</p> : null}
     {failure ? <p role="alert">{failure}</p> : null}
-    <AlertDialog open={open} onOpenChange={value => { setOpen(value); if (!value) setConfirmed(false); }}>
-      {review.data && !review.isFetching && !review.isError && (!unknown || attempt.current?.expectedReviewHash === review.data.reviewHash)
+    <AlertDialog open={open && !!reviewed && current()} onOpenChange={value => { setOpen(value); if (!value) setConfirmed(false); }}>
+      {reviewed && (!unknown || attempt.current?.expectedReviewHash === reviewed.reviewHash)
         ? <AlertDialogTrigger asChild><Button className="min-h-11" disabled={pending || !authority.writeReady}
           onClick={() => { try { decisionHash.current = currentReview().reviewHash; setOpen(true); setConfirmed(false); }
             catch { setFailure(t("agentPreparation.changed")); } }}>{t("agentPreparation.review")}</Button></AlertDialogTrigger> : null}

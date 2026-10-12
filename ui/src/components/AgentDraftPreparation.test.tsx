@@ -6,6 +6,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { V5_FEATURE_KEYS, agentAuthoringContentSchema, type AgentAuthoringDraftView, type AgentDraftPreparationReview } from "@paperclipai/shared";
 import { AgentDraftPreparation } from "./AgentDraftPreparation";
 import { agentAuthoringApi } from "../api/agent-authoring";
+import { ApiError } from "../api/client";
 import { instanceSettingsApi } from "../api/instanceSettings";
 import { queryKeys } from "../lib/queryKeys";
 import { v9SessionFixture } from "../hooks/v9-session.test-support";
@@ -65,6 +66,25 @@ async function approve() {
   await act(async () => checkbox!.click());
   await click("Prepare inactive agent");
 }
+it.each(["refused", "unchanged"])("withdraws preparation metadata and consent during a %s source recheck", async outcome => {
+  const post = vi.spyOn(agentAuthoringApi, "prepare");
+  await mount(); await vi.waitFor(() => expect(container.textContent).toContain("Current accountable owner"));
+  await click("Review inactive agent preparation");
+  await act(async () => document.querySelector<HTMLInputElement>('[role="alertdialog"] input[type="checkbox"]')!.click());
+  let resolve!: (value: AgentDraftPreparationReview) => void, reject!: (reason: Error) => void;
+  vi.mocked(agentAuthoringApi.preparationReview).mockImplementation(() => new Promise((yes, no) => { resolve = yes; reject = no; }));
+  let refresh!: Promise<void>;
+  await act(async () => { refresh = client.invalidateQueries({ queryKey: ["agent-draft-preparation"] }); });
+  await vi.waitFor(() => expect(document.querySelector('[role="alertdialog"]')).toBeNull());
+  expect(document.body.textContent).not.toContain("Current accountable owner");
+  await act(async () => { if (outcome === "refused") reject(new ApiError("Current source refused", 403, {})); else resolve(review); await refresh; });
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull(); expect(post).not.toHaveBeenCalled();
+  if (outcome === "unchanged") {
+    await vi.waitFor(() => expect(container.textContent).toContain("Review inactive agent preparation"));
+    await click("Review inactive agent preparation");
+    expect(document.querySelector<HTMLInputElement>('[role="alertdialog"] input[type="checkbox"]')!.checked).toBe(false);
+  }
+});
 it("requires separate explicit C3, shows the accountable owner and board gate, and accepts only the actual inactive receipt", async () => {
   const post = vi.spyOn(agentAuthoringApi, "prepare").mockResolvedValue(prepared);
   await mount();

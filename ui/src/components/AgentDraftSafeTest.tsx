@@ -54,7 +54,7 @@ export function AgentDraftSafeTest({ company, principal, draft, enabled, canUseA
         throw new Error(t("agentSafeTest.changed"));
       return value;
     }) });
-  useEffect(() => { setOpen(false); setConfirmed(false); }, [authority.epoch, enabled, scenarioIndex, review.data?.reviewHash]);
+  useEffect(() => { setOpen(false); setConfirmed(false); }, [authority.epoch, enabled, scenarioIndex, review.data?.reviewHash, review.isFetching, review.isError]);
   function currentReview() {
     const state = client.getQueryState(reviewKey), value = client.getQueryData<AgentDraftTestReview>(reviewKey);
     if (!current(true) || state?.status !== "success" || state.fetchStatus !== "idle" || state.isInvalidated || !value || value.version !== draft.version)
@@ -108,7 +108,7 @@ export function AgentDraftSafeTest({ company, principal, draft, enabled, canUseA
     {failure ? <p role="alert">{failure}</p> : null}
     {review.data && !review.isFetching && !review.isError && !unknown ? <Button className="min-h-11" disabled={pending || !authority.writeReady}
       onClick={() => { try { decisionHash.current = currentReview().reviewHash; setConfirmed(false); setOpen(true); } catch { setFailure(t("agentSafeTest.changed")); } }}>{t("agentSafeTest.review")}</Button> : null}
-    <AlertDialog open={open} onOpenChange={value => { setOpen(value); if (!value) setConfirmed(false); }}>
+    <AlertDialog open={open && !unknown && review.isSuccess && !review.isFetching && current(true)} onOpenChange={value => { setOpen(value); if (!value) setConfirmed(false); }}>
       <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{t("agentSafeTest.confirmTitle")}</AlertDialogTitle>
         <AlertDialogDescription>{t("agentSafeTest.boundary")}</AlertDialogDescription></AlertDialogHeader>
         <dl className="space-y-2"><dt>{t("agentSafeTest.candidateVersion", { version: draft.version })}</dt><dd>{draft.content?.name}</dd>
