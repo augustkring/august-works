@@ -3360,3 +3360,5 @@ export * from "./experience-task-draft.js";
 export * from "./agent-retirement.js";
 
 export * from "./feedback-retention-erasure.js";
+
+export { agentDraftTestReviewSchema, agentDraftTestCommandSchema, agentDraftTestViewSchema, agentDraftTestPacketSchema, type AgentDraftTestReview, type AgentDraftTestCommand, type AgentDraftTestView } from "./agent-authoring-tests.js";

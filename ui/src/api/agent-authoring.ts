@@ -6,6 +6,11 @@ import {
   agentDraftAdmissionSchema,
   agentDraftPreparationReviewSchema,
   agentDraftRuntimeViewSchema,
+  agentDraftTestReviewSchema,
+  agentDraftTestViewSchema,
+  agentDraftTestPacketSchema,
+  type AgentDraftTestCommand,
+  type VerificationReviewInput,
   type AgentDraftPrepare,
   type AgentDraftSave,
   type AgentAuthoringReview,
@@ -21,6 +26,22 @@ export interface AgentAuthoringOptions {
   runtimes: Array<{ id: string }>;
 }
 export const agentAuthoringApi = {
+  testVerificationPacket: async (company: string, principal: string, id: string, requestId: string, signal?: AbortSignal) =>
+    agentDraftTestPacketSchema.parse(await api.get(scope(`${root(company)}/${id}/tests/${requestId}/verification-packet`, principal), { signal, cache: "no-store" })),
+  verifyTest: async (company: string, principal: string, id: string, requestId: string, input: VerificationReviewInput) =>
+    agentDraftTestViewSchema.parse(await api.post(scope(`${root(company)}/${id}/tests/${requestId}/verify`, principal), input)),
+  testReview: async (company: string, principal: string, id: string, scenarioIndex: number, signal?: AbortSignal) =>
+    agentDraftTestReviewSchema.parse(await api.get(scope(`${root(company)}/${id}/test-review`, principal) + `&scenarioIndex=${scenarioIndex}`, { signal, cache: "no-store" })),
+  tests: async (company: string, principal: string, id: string, signal?: AbortSignal) => {
+    const response = await api.get<unknown[]>(scope(`${root(company)}/${id}/tests`, principal), { signal, cache: "no-store" });
+    return response.map(value => agentDraftTestViewSchema.parse(value));
+  },
+  testReceipt: async (company: string, principal: string, id: string, requestId: string, signal?: AbortSignal) => {
+    const response = await api.get(scope(`${root(company)}/${id}/tests/${requestId}`, principal), { signal, cache: "no-store" });
+    return response === null ? null : agentDraftTestViewSchema.parse(response);
+  },
+  startTest: async (company: string, principal: string, id: string, input: AgentDraftTestCommand) =>
+    agentDraftTestViewSchema.parse(await api.post(scope(`${root(company)}/${id}/tests`, principal), input)),
   runtime: async (company: string, principal: string, id: string, signal?: AbortSignal) =>
     agentDraftRuntimeViewSchema.parse(await api.get(scope(`${root(company)}/${id}/runtime`, principal), { signal, cache: "no-store" })),
   preparationReview: async (company: string, principal: string, id: string, signal?: AbortSignal) =>

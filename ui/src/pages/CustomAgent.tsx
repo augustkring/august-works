@@ -30,6 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { AgentDraftPreparation } from "@/components/AgentDraftPreparation";
 import { AgentDraftRuntime } from "@/components/AgentDraftRuntime";
+import { AgentDraftSafeTest } from "@/components/AgentDraftSafeTest";
 
 const labels: Record<(typeof CUSTOM_AGENT_STEPS)[number], string> = {
   outcome: "customAgent.stepOutcome",
@@ -782,7 +783,10 @@ function DraftEditor({
                 }
               />
             </label>
-            <p>{t("customAgent.testBoundary")}</p>
+            <AgentDraftSafeTest key={`test:${receipt.id}:${receipt.version}`} company={company} principal={principal} draft={receipt}
+              enabled={viewReady && enabled && !save.isPending && !discard.isPending && JSON.stringify(content) === JSON.stringify(receipt.content)}
+              canUseAuthority={() => alive.current && authority.canRead() && !securityPending.current && !reauthorizing &&
+                client.getQueryState(["agent-authoring", company, principal, id, authority.epoch])?.fetchStatus === "idle"} />
           </>
         )}
         {step === "review" && (

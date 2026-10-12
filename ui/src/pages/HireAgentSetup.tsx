@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { HireDeclaredAccess } from "@/components/HireDeclaredAccess";
 import { AgentDraftPreparation } from "@/components/AgentDraftPreparation";
 import { AgentDraftRuntime } from "@/components/AgentDraftRuntime";
+import { AgentDraftSafeTest } from "@/components/AgentDraftSafeTest";
 import { useV9AuthoringAuthority } from "@/hooks/useV9AuthoringAuthority";
 
 const labels = {
@@ -543,7 +544,10 @@ export function HireAgentSetup({
           <AgentDraftRuntime company={company} principal={principal} draft={receipt} enabled={viewReady}
             canUseAuthority={() => alive.current && authority.canRead() && !checking.current && !checkingAccess &&
               client.getQueryState(key)?.fetchStatus === "idle"} />
-          <p role="status">{t("hireSetup.testUnavailable")}</p>
+          <AgentDraftSafeTest key={`test:${receipt.id}:${receipt.version}`} company={company} principal={principal} draft={receipt}
+            enabled={viewReady && enabled && !save.isPending && !discard.isPending && JSON.stringify(content) === JSON.stringify(receipt.content)}
+            canUseAuthority={() => alive.current && authority.canRead() && !checking.current && !checkingAccess &&
+              client.getQueryState(key)?.fetchStatus === "idle"} />
         </section>
       )}
       {step === "hire_review" && (

@@ -64,7 +64,7 @@ export function orchestrationService(db: Db) {
     if (["completed", "cancelled", "failed"].includes(row.status)) throw conflict("Plan is terminal");
     if (input.action === "start") {
       const [task] = await tx.select({ harnessKind: issues.harnessKind }).from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, row.issueId)));
-      if (task?.harnessKind === "provider_conformance") throw forbidden("Provider conformance cannot start ordinary work");
+      if (["provider_conformance", "agent_safe_test"].includes(task?.harnessKind ?? "")) throw forbidden("A private qualification harness cannot start ordinary work");
       if (row.executionPrincipal && ((row.executionPrincipal.type === "user" && row.executionPrincipal.userId !== v7HumanActorId(actor)) || (row.executionPrincipal.type === "system" && actor.source !== "local_implicit"))) throw forbidden("Resume must preserve the plan's initiating human authority; cancel and review a new plan to transfer it");
       if (!["draft", "ready", "paused"].includes(row.status)) throw conflict("Plan is already started");
       if (row.budgets.maxModelCostMinor !== null) {

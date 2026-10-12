@@ -35,6 +35,8 @@ for (const kind of ["custom", "hire"] as const) {
           return route.fulfill({ json: draft });
         }
         if (path.endsWith("/options")) return route.fulfill({ json: { owners: [{ id: session.user.id, name: "Accountable owner" }], knowledge: [], runtimes: [] } });
+        if (path.endsWith("/tests")) return route.fulfill({ json: [] });
+        if (path.endsWith("/test-review")) return route.fulfill({ status: 409, json: { error: "This software fixture has no qualified model test" } });
         if (path.endsWith("/runtime")) return route.fulfill({ json: { draftId: id, companyId: company.id, version: draft.version,
           agentId: draft.preparation!.agentId, runtimeBindingId: null, configurationHash: "a".repeat(64), status: "needs_setup",
           runtimeQualified: false, safeTestQualified: false, executionStarted: false } });

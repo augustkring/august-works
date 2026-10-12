@@ -3,6 +3,7 @@ import {
   issues,
   orchestrationPlans,
   orchestrationModelReservations,
+  agentConfigurationTests,
   type Db,
 } from "@paperclipai/db";
 import {
@@ -86,6 +87,7 @@ const requestSchema = z
       "read_only_verification",
       "read_only_trajectory",
       "provider_conformance",
+      "agent_safe_test",
     ]),
     workerId: z.string().uuid().nullable().default(null),
     workerAttemptId: z.string().uuid().nullable().default(null),
@@ -182,11 +184,18 @@ export function modelReservationService(
       .where(and(eq(issues.companyId, companyId), eq(issues.id, plan.issueId)))
       .for("share");
     const conformance = purpose === "provider_conformance";
+    const authoringTest = purpose === "agent_safe_test";
+    if (authoringTest) {
+      const [test] = await tx.select().from(agentConfigurationTests).where(and(eq(agentConfigurationTests.companyId, companyId), eq(agentConfigurationTests.planId, planId)));
+      if (!test || test.createdByUserId !== userId || task?.harnessKind !== "agent_safe_test" || plan.status !== "paused" ||
+        plan.actionClass !== "internal_draft" || plan.riskClass !== "C0" || !plan.startedAt || plan.budgets.maxToolActions !== 0 || plan.executionPrincipal?.type !== "user")
+        throw forbidden("Representative tests require their original paused, tool-free candidate harness");
+    }
     if (conformance && (!task?.hiddenAt || task.harnessKind !== "provider_conformance" ||
         plan.status !== "paused" || plan.actionClass !== "internal_draft" || plan.riskClass !== "C0" ||
         !plan.startedAt || plan.budgets.maxToolActions !== 0 || plan.executionPrincipal?.type !== "user"))
       throw forbidden("Provider probes require their private paused tool-free harness");
-    if (!task || (task.hiddenAt && !conformance) || ["done", "cancelled"].includes(task.status))
+    if (!task || (task.hiddenAt && !conformance && !authoringTest) || ["done", "cancelled"].includes(task.status))
       throw forbidden("Current canonical Task required for model spend");
     await assertV7Authorization(tx, actor, companyId, "issue:mutate", {
       type: "issue",

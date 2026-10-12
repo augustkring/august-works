@@ -24,6 +24,8 @@ const service = vi.hoisted(() => ({
 vi.mock("../services/agents/authoring-drafts.js", () => ({
   agentAuthoringService: () => service,
 }));
+const tests = vi.hoisted(() => ({ review: vi.fn(), start: vi.fn(), get: vi.fn(), list: vi.fn(), packet: vi.fn(), verify: vi.fn() }));
+vi.mock("../services/agents/authoring-tests.js", () => ({ agentAuthoringTestService: () => tests }));
 const companyId = "10000000-0000-4000-8000-000000000001",
   id = "10000000-0000-4000-8000-000000000002",
   requestId = "10000000-0000-4000-8000-000000000003";
@@ -48,6 +50,24 @@ beforeEach(() => {
   vi.clearAllMocks();
 });
 describe("native authoring HTTP boundary", () => {
+  it("requires exact principal and explicit bounded-test consent without accepting model or credential overrides", async () => {
+    const path = `/api/companies/${companyId}/agent-configuration-drafts/${id}/tests`;
+    const command = { requestId, expectedVersion: 2, scenarioIndex: 0, expectedReviewHash: "a".repeat(64), confirmRepresentativeTest: true, confirmCompanyVisibleResult: true };
+    await request(app()).post(`${path}?expectedUserId=other`).send(command).expect(409);
+    await request(app()).post(`${path}?expectedUserId=author`).send({ ...command, confirmCompanyVisibleResult: false }).expect(400);
+    await request(app()).post(`${path}?expectedUserId=author`).send({ ...command, model: "injected-model" }).expect(400);
+    expect(tests.start).not.toHaveBeenCalled();
+    tests.start.mockResolvedValue({ execution: "succeeded", testQualified: false });
+    await request(app()).post(`${path}?expectedUserId=author`).send(command).expect(200).expect("Cache-Control", "private, no-store");
+    expect(tests.start).toHaveBeenCalledWith(expect.objectContaining({ userId: "author" }), companyId, id, command);
+  });
+  it("reads the original receipt after a missing response without dispatching a new test", async () => {
+    tests.get.mockResolvedValue(null);
+    await request(app()).get(`/api/companies/${companyId}/agent-configuration-drafts/${id}/tests/${requestId}?expectedUserId=author`)
+      .expect(200).expect("Cache-Control", "private, no-store");
+    expect(tests.get).toHaveBeenCalledWith(expect.objectContaining({ userId: "author" }), companyId, id, requestId);
+    expect(tests.start).not.toHaveBeenCalled();
+  });
   it("binds current runtime metadata to the private principal and never requests execution", async () => {
     const path = `/api/companies/${companyId}/agent-configuration-drafts/${id}/runtime`;
     service.runtime.mockResolvedValue({ draftId: id, status: "needs_setup", runtimeQualified: false, safeTestQualified: false });

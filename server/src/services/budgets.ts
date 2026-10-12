@@ -7,6 +7,8 @@ import {
   budgetPolicies,
   companies,
   costEvents,
+  agentConfigurationTests,
+  orchestrationModelReservations,
   projects,
 } from "@paperclipai/db";
 import type {
@@ -22,7 +24,7 @@ import type {
   BudgetThresholdType,
   BudgetWindowKind,
 } from "@paperclipai/shared";
-import { notFound, unprocessable } from "../errors.js";
+import { forbidden, notFound, unprocessable } from "../errors.js";
 import { logActivity } from "./activity-log.js";
 
 type ScopeRecord = {
@@ -143,6 +145,7 @@ async function resolveScopeRecord(db: Db, scopeType: BudgetScopeType, scopeId: s
 async function computeObservedAmount(
   db: Db,
   policy: Pick<PolicyRow, "companyId" | "scopeType" | "scopeId" | "windowKind" | "metric">,
+  excludeAgentTestPlanId?: string,
 ) {
   if (policy.metric !== "billed_cents") return 0;
 
@@ -162,7 +165,20 @@ async function computeObservedAmount(
     .from(costEvents)
     .where(and(...conditions));
 
-  return Number(row?.total ?? 0);
+  // Retained Native test debits are maximum financial exposure, not a claim
+  // about an actual provider bill. Never count both the debit and its run cost.
+  if (policy.scopeType === "project") return Number(row?.total ?? 0);
+  const scope = [eq(agentConfigurationTests.companyId, policy.companyId)];
+  if (policy.scopeType === "agent") scope.push(eq(agentConfigurationTests.agentId, policy.scopeId));
+  if (excludeAgentTestPlanId) scope.push(ne(agentConfigurationTests.planId, excludeAgentTestPlanId));
+  if (policy.windowKind === "calendar_month_utc") scope.push(gte(orchestrationModelReservations.createdAt, start), lt(orchestrationModelReservations.createdAt, end));
+  const costWindow = policy.windowKind === "calendar_month_utc" ? sql`ce.occurred_at>=${start.toISOString()}::timestamptz and ce.occurred_at<${end.toISOString()}::timestamptz` : sql`true`;
+  const [reserved] = await db.select({ total: sql<number>`coalesce(sum(greatest(0,${orchestrationModelReservations.maximumMinor} -
+    (select coalesce(sum(ce.cost_cents),0) from cost_events ce where ce.company_id=${agentConfigurationTests.companyId}
+      and ce.heartbeat_run_id=${agentConfigurationTests.runId} and ${costWindow}))),0)::double precision` })
+    .from(agentConfigurationTests).innerJoin(orchestrationModelReservations, and(eq(orchestrationModelReservations.companyId, agentConfigurationTests.companyId),
+      eq(orchestrationModelReservations.planId, agentConfigurationTests.planId), eq(orchestrationModelReservations.purpose, "agent_safe_test"))).where(and(...scope));
+  return Number(row?.total ?? 0) + Number(reserved?.total ?? 0);
 }
 
 function buildApprovalPayload(input: {
@@ -510,6 +526,16 @@ export function budgetService(db: Db, hooks: BudgetServiceHooks = {}) {
   }
 
   return {
+    // Call under the company's admission lock. An in-flight test counts its
+    // original ceiling exactly once; admission includes the new ceiling.
+    assertAgentTestModelCeiling: async (companyId: string, agentId: string, maximumMinor: number, ownPlanId?: string) => {
+      const policies = await db.select().from(budgetPolicies).where(and(eq(budgetPolicies.companyId, companyId), eq(budgetPolicies.metric, "billed_cents"),
+        eq(budgetPolicies.isActive, true), sql`((${budgetPolicies.scopeType}='company' and ${budgetPolicies.scopeId}=${companyId}::uuid) or (${budgetPolicies.scopeType}='agent' and ${budgetPolicies.scopeId}=${agentId}::uuid))`)).for("share");
+      if (policies.length > 4) throw forbidden("Complete Native model budget coverage is unavailable");
+      for (const policy of policies) if (policy.hardStopEnabled && policy.amount > 0 &&
+        await computeObservedAmount(db, policy, ownPlanId) + maximumMinor > policy.amount)
+        throw forbidden("The representative model ceiling exceeds remaining Native budget");
+    },
     // Read-only use of the original budget accounting owner. These bounds do
     // not reserve funds, resume a scope or grant authority to dispatch work.
     planningSummary: async (companyId: string, scopeType: "company" | "project", scopeId: string) => {

@@ -1,4 +1,5 @@
 import { isCompanyCapacityWait } from "./billing/capacity-admission.js";
+import { reconcileAgentDraftTest } from "./agents/authoring-test-recovery.js";
 import { governedNativeTaskRunFields } from "./ai-governance/execution-gate.js";
 import { assertSaasExecutionAdmission } from "./saas/execution-admission.js";
 import { recordEagerSkillLoading, recordSkillExecutionCompletion, reconcileSkillExecutionCompletions } from "./skill-usage.js";
@@ -19121,6 +19122,7 @@ export function heartbeatService(
       nativeControllerProcessStartedAt,
       nativeControllerLeaseExpiresAt,
     } of activeRuns) {
+      if (await reconcileAgentDraftTest(db, run)) continue;
       // Authentication timeout requires an explicit ownership resolution, not
       // repeated reattachment or a process-gone guess on subsequent sweeps.
       if (isNativeRunnerOwnershipHeld(run)) continue;

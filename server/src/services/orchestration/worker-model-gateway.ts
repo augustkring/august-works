@@ -52,6 +52,7 @@ import {
   type WorkerModelProfile,
 } from "./worker-model-profiles.js";
 import type { guardedRemoteHttpFetch } from "../remote-http-fetch.js";
+import { authoringTestRuntime } from "../agents/authoring-test-runtime.js";
 
 type BoundClaims = RuntimeToolsTokenClaims & {
   worker_model: WorkerModelBinding;
@@ -536,6 +537,8 @@ export function workerModelGateway(db: Db, options: Options) {
     });
   }
   return {
+    qualifyAuthoringTest: authoringTestRuntime(db, options, profile).qualify,
+    executeAuthoringTest: authoringTestRuntime(db, options, profile).execute,
     /** Private pre-start qualification. Editable provider configuration is a
      * selector; only the installed operator profile supplies prices/authority. */
     async qualifyDraft(tx: Db, input: { companyId: string; agentId: string; responsibleUserId: string }) {

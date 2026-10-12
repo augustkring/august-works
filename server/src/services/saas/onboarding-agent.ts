@@ -19,6 +19,7 @@ export async function createPausedOnboardingAgent(
     runtimeConfig: { heartbeat: { enabled: false } }, budgetMonthlyCents: 0,
     ...(permissions ? { permissions } : {}),
     status: company.requireBoardApprovalForNewAgents ? "pending_approval" : "paused",
+    pauseReason: company.requireBoardApprovalForNewAgents ? null : "manual",
   });
   let approvalId: string | null = null;
   if (company.requireBoardApprovalForNewAgents) {

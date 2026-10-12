@@ -48,6 +48,13 @@ export function registerNativeDraftGateway(
   else installed.delete(db);
 }
 
+/** Internal controller access only; requests cannot install a transport. */
+export function installedNativeDraftGateway(db: Db) {
+  const gateway = installed.get(db);
+  if (!gateway) throw conflict("The installed native draft controller is required");
+  return gateway;
+}
+
 /** Read-only original controller qualification before a canonical Task exists.
  * The private gateway still owns current provider, credential and tariff checks. */
 export async function qualifyNativeDraftPresence(

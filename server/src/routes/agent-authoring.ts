@@ -6,10 +6,13 @@ import {
   agentDraftSaveSchema,
   agentDraftDiscardSchema,
   agentDraftPrepareSchema,
+  agentDraftTestCommandSchema,
+  verificationReviewSchema,
 } from "@paperclipai/shared";
 import { assertBoard, assertCompanyAccess } from "./authz.js";
 import { conflict, unprocessable } from "../errors.js";
 import { agentAuthoringService } from "../services/agents/authoring-drafts.js";
+import { agentAuthoringTestService } from "../services/agents/authoring-tests.js";
 import { validate } from "../middleware/validate.js";
 
 export function agentAuthoringRoutes(db: Db) {
@@ -87,6 +90,24 @@ export function agentAuthoringRoutes(db: Db) {
   ));
   router.post(`${root}/:id/prepare`, validate(agentDraftPrepareSchema), async (req, res) => res.json(
     await service.prepare(req.actor, company(req), z.uuid().parse(req.params.id), req.body),
+  ));
+  router.get(`${root}/:id/test-review`, async (req, res) => res.json(
+    await agentAuthoringTestService(db).review(req.actor, company(req), z.uuid().parse(req.params.id), z.coerce.number().int().min(0).max(9).parse(req.query.scenarioIndex)),
+  ));
+  router.get(`${root}/:id/tests`, async (req, res) => res.json(
+    await agentAuthoringTestService(db).list(req.actor, company(req), z.uuid().parse(req.params.id)),
+  ));
+  router.get(`${root}/:id/tests/:requestId`, async (req, res) => res.json(
+    await agentAuthoringTestService(db).get(req.actor, company(req), z.uuid().parse(req.params.id), z.uuid().parse(req.params.requestId)),
+  ));
+  router.get(`${root}/:id/tests/:requestId/verification-packet`, async (req, res) => res.json(
+    await agentAuthoringTestService(db).packet(req.actor, company(req), z.uuid().parse(req.params.id), z.uuid().parse(req.params.requestId)),
+  ));
+  router.post(`${root}/:id/tests/:requestId/verify`, validate(verificationReviewSchema), async (req, res) => res.json(
+    await agentAuthoringTestService(db).verify(req.actor, company(req), z.uuid().parse(req.params.id), z.uuid().parse(req.params.requestId), req.body),
+  ));
+  router.post(`${root}/:id/tests`, validate(agentDraftTestCommandSchema), async (req, res) => res.json(
+    await agentAuthoringTestService(db).start(req.actor, company(req), z.uuid().parse(req.params.id), req.body),
   ));
   router.post(
     `${root}/:id/save`,

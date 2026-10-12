@@ -7,6 +7,7 @@ import {
   budgetPolicies,
   companies,
   costEvents,
+  agentConfigurationTests,
   createDb,
   projects,
 } from "@paperclipai/db";
@@ -30,7 +31,9 @@ function createDbStub(selectResults: SelectResult[]) {
   const selectWhere = vi.fn(async () => pendingSelects.shift() ?? []);
   const selectThen = vi.fn((resolve: (value: unknown[]) => unknown) => Promise.resolve(resolve(pendingSelects.shift() ?? [])));
   const selectOrderBy = vi.fn(async () => pendingSelects.shift() ?? []);
-  const selectFrom = vi.fn(() => ({
+  const selectFrom = vi.fn((table: unknown) => table === agentConfigurationTests ? {
+    innerJoin: () => ({ where: async () => [] }),
+  } : ({
     where: selectWhere,
     then: selectThen,
     orderBy: selectOrderBy,
