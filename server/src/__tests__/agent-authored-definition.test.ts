@@ -54,8 +54,8 @@ describe("Canonical authored Agent definition", () => {
     expect(() => compileAuthoredAgentDefinition(content, randomUUID(), "a".repeat(64)))
       .toThrow("Remove credential-shaped values");
   });
-  it("requires actual knowledge and memory mappings", () => {
+  it("requires current knowledge read authority and explicitly selected memory sources", () => {
     const content = candidate(); content.knowledgeDocumentIds = [randomUUID()]; content.memory = "approved_work_preferences";
-    expect(authoredAgentMappingBlockers(content)).toEqual(["knowledge_mapping_required", "memory_mapping_required"]);
+    expect(authoredAgentMappingBlockers(content)).toEqual(["knowledge_read_authority_required", "memory_source_selection_required"]);
   });
 });
