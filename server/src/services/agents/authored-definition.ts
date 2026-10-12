@@ -20,7 +20,7 @@ export function compileAuthoredAgentDefinition(content: AgentAuthoringContent, r
   if (blockers.length) throw conflict("The selected behavior needs its native policy mapping", { code: "authored_policy_mapping_required", blockers });
   const definition = authoredAgentDefinitionSchema.parse({ schema: "paperclip.agent-authored-definition.v1", revisionId, candidateHash,
     definitionHash: nativeSha256(saved), content: saved });
-  if (nativeSha256(sanitizeRecord(definition)) !== nativeSha256(definition))
+  if (nativeSha256(sanitizeRecord({ [AUTHORED_AGENT_DEFINITION_KEY]: definition })) !== nativeSha256({ [AUTHORED_AGENT_DEFINITION_KEY]: definition }))
     throw conflict("Remove credential-shaped values before publishing this Agent", { code: "authored_definition_redaction_required" });
   return definition;
 }

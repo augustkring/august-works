@@ -3,7 +3,7 @@ import { agentAuthoringContentSchema } from "./agent-authoring.js";
 
 /** Reserved server-managed value in the Original Agent configuration revision.
  * Drafts, model output and generic Agent PATCH requests cannot install it. */
-export const AUTHORED_AGENT_DEFINITION_KEY = "authoredAgentDefinition";
+export const AUTHORED_AGENT_DEFINITION_KEY = "agentDefinitionVersion";
 export const authoredAgentDefinitionSchema = z.strictObject({
   schema: z.literal("paperclip.agent-authored-definition.v1"),
   revisionId: z.uuid(),

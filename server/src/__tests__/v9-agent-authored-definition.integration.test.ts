@@ -32,6 +32,7 @@ const support = await getEmbeddedPostgresTestSupport();
     const agent = await install();
     const [revision] = await db.select().from(agentConfigRevisions).where(and(eq(agentConfigRevisions.companyId, f.home), eq(agentConfigRevisions.id, definition.revisionId)));
     expect(revision).toMatchObject({ agentId: agent.id, source: "agent_authoring_publish", createdByUserId: f.userId });
+    expect(revision!.afterConfig.runtimeConfig).toEqual(agent.runtimeConfig);
     expect(await readAuthoredAgentDefinition(db, agent)).toEqual(definition);
     expect(await agentInstructionsService(db).exportFiles(agent, { rejectSymlinks: true })).toEqual({ entryFile: "AGENTS.md", warnings: [], files: { "AGENTS.md": authoredAgentInstructionText(definition.content) } });
     expect(await agentInstructionsService(db).getBundle(agent)).toMatchObject({ editable: false, rootPath: null, files: [{ editable: false, virtual: true }] });
