@@ -128,10 +128,11 @@ async function render(route = "/saas/activation/3") {
   );
 }
 async function click(text: string) {
-  const button = [...document.querySelectorAll("button")].find(
-    (b) => b.textContent === text,
-  );
-  expect(button).toBeTruthy();
+  let button: HTMLButtonElement | undefined;
+  await vi.waitFor(() => {
+    button = [...document.querySelectorAll("button")].find((b) => b.textContent === text);
+    expect(button).toBeTruthy();
+  });
   await act(async () => button!.click());
 }
 async function enter(text: string) {

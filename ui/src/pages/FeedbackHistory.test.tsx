@@ -297,7 +297,7 @@ it("loads operator-only history and freezes the complete triage request across a
   );
   await click("Apply triage");
   await vi.waitFor(() =>
-    expect(document.querySelector('[role="alert"]')).toBeTruthy(),
+    expect(document.body.textContent).toContain("Triage has not been confirmed. Inputs are locked; retry sends the original update."),
   );
   const first = send.mock.calls[0]![1];
   expect(
