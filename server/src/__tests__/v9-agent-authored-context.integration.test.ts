@@ -3,6 +3,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest
 import { createDb, issues, agents, heartbeatRuns } from "@paperclipai/db";
 import { eq } from "drizzle-orm";
 import { agentAuthoringContentSchema, AUTHORED_AGENT_DEFINITION_KEY } from "@paperclipai/shared";
+import { instanceSettingsService } from "../services/instance-settings.js";
 import { agentService } from "../services/agents.js";
 import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
 import { agentRuntimeFabricService } from "../services/agent-runtime-fabric.js";
@@ -62,7 +63,13 @@ const support = await getEmbeddedPostgresTestSupport();
     const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId, status: "running" }).returning();
     const cognitiveProvider = vi.spyOn(cognitive, "cognitiveContextProvider").mockImplementation(() => { throw new Error("Persistent memory opened"); });
     const derivedProvider = vi.spyOn(derived, "derivedMemoryContextProvider").mockImplementation(() => { throw new Error("Persistent memory opened"); });
-    const result = await agentRuntimeFabricService(db).prepare({ companyId: f.home, agentId: f.presence.id, runId: run!.id, responsibleUserId: f.userId, issueId: task!.id, query: task!.title });
+    const input = { companyId: f.home, agentId: f.presence.id, runId: run!.id, responsibleUserId: f.userId, issueId: task!.id, query: task!.title };
+    // The default system Role Pack contains additional required Skills. Its
+    // obligations must block this narrower mapping rather than being dropped.
+    await expect(agentRuntimeFabricService(db).prepare(input)).rejects.toThrow("requires review before using additional Role Pack behavior");
+    const settings = instanceSettingsService(db);
+    await settings.updateExperimental({ role_packs_v5: false });
+    const result = await agentRuntimeFabricService(db).prepare(input);
     expect(result?.manifest.skills).toEqual([]); expect(result?.manifest.playbooks).toEqual([]); expect(result?.manifest.capabilities).toEqual([]);
     expect(result?.manifest.executionScope.delegatedScopes).toEqual([]);
     expect(result?.contextMarkdown).toContain(task!.description);
@@ -73,6 +80,7 @@ const support = await getEmbeddedPostgresTestSupport();
       { authoredPublication: changed, recordRevision: { id: changed.revisionId, source: "agent_authoring_publish", createdByUserId: f.userId } });
     await expect(agentRuntimeFabricService(db).prepare({ companyId: f.home, agentId: f.presence.id, runId: run!.id, responsibleUserId: f.userId, issueId: task!.id, query: task!.title }))
       .rejects.toThrow("The identified Agent version changed");
+    await settings.updateExperimental({ role_packs_v5: true });
   });
   it("fails closed on an unknown source scope instead of selecting broader context", async () => {
     const f = await seedV5Presences(db);

@@ -11,7 +11,12 @@ versions cannot acquire delegated company scopes, additional Role Pack behavior,
 Skills, Playbooks or MCP bindings under this mapping. A changed or unavailable
 identified definition fails closed. The transport remains the existing one-call
 internal-draft controller; no model-controlled grants or action dispatcher is
-introduced. Broader choices still require their specific canonical mappings.
+introduced. Broader choices still require their specific canonical mappings. In particular,
+the enabled default system Role Pack includes required Skills and therefore blocks
+this narrower definition. The positive manifest case explicitly selects the
+original no-Role-Pack feature configuration in its own throwaway database and
+also checks that the ordinary default configuration is refused. The product
+never disables that feature or removes its requirements to admit an Agent.
 
 Qualification is pending. The PostgreSQL check uses the actual context engine
 and authorized Task. Instrumented persistent-memory factories throw if opened;
