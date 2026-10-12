@@ -81,10 +81,14 @@ it("discloses the exact reviewed package configuration before confirming inactiv
   await mount({ ...review, packageInstallation: { versionId: "10000000-0000-4000-8000-000000000005", name: "Welcome package",
     version: "1.2.3", contentHash: "b".repeat(64), components: [{ key: "welcome", type: "role_pack",
       resourceId: "10000000-0000-4000-8000-000000000006", versionId: "10000000-0000-4000-8000-000000000007",
-      name: "Reviewed welcome procedures", revisionNumber: 4, contentHash: "c".repeat(64) }] } });
+      name: "Reviewed welcome procedures", revisionNumber: 4, contentHash: "c".repeat(64) }, {
+      key: "planning", type: "skill", resourceId: "10000000-0000-4000-8000-000000000008",
+      versionId: "10000000-0000-4000-8000-000000000009", name: "Required planning procedure", revisionNumber: 2, contentHash: "d".repeat(64),
+    }] } });
   await vi.waitFor(() => expect(container.textContent).toContain("Welcome package · version 1.2.3"));
   await click("Review inactive agent preparation");
   expect(document.querySelector('[role="alertdialog"]')!.textContent).toContain("Reviewed welcome procedures · 4");
+  expect(document.querySelector('[role="alertdialog"]')!.textContent).toContain("Required planning procedure · 2");
   expect(document.querySelector('[role="alertdialog"]')!.textContent).toContain("creates no app access or running work");
   expect(post).not.toHaveBeenCalled(); expect(document.querySelector<HTMLInputElement>('input[type="checkbox"]')!.checked).toBe(false);
 });

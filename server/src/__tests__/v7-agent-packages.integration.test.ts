@@ -52,6 +52,7 @@ import { registerNativeDraftGateway } from "../services/orchestration/native-dra
 import type { guardedRemoteHttpFetch } from "../services/remote-http-fetch.js";
 import { initialActivationState, createOrchestrationPlanSchema, type CreateOrchestrationPlanInput } from "@paperclipai/shared";
 import { purpose as governancePurpose, oversight as governanceOversight, reviews as governanceReviews } from "./helpers/governance-fixture.js";
+import { seedRequiredAuthoringProcedures } from "./helpers/authoring-procedures.js";
 import { billingAccounts, billingAccountCompanies, billingSubscriptions, companyOnboardingRuns,
   documents, documentRevisions, issueDocuments } from "@paperclipai/db";
 import { readinessService } from "../services/readiness/readiness-service.js";
@@ -400,6 +401,18 @@ const support = await getEmbeddedPostgresTestSupport();
         .rejects.toMatchObject({ status: 409, details: { code: "hire_package_component_unavailable" } });
       expect(await db.select().from(agents)).toEqual(beforeAgents);
       expect(await db.select().from(companyAgentPackageInstallations)).toEqual(beforeInstalls);
+    });
+    it("refuses a required Skill component that the package's exact Role Pack does not consume", async () => {
+      const procedures = await seedRequiredAuthoringProcedures(db, f.actor, f.home, f.presence.id);
+      const required = procedures[0]!, { release } = await hireFixture();
+      const [hash] = await db.execute(sql`select aw_v7_package_component_hash(${f.home}::uuid,'skill',${required.skillId}::uuid,${required.versionId}::uuid) as hash`);
+      const published = await service.publish(f.actor, { ...release, packageKey: `unbound-procedure-${randomUUID()}`,
+        components: [...release.components, { key: "required-procedure", type: "skill", sourceVersion: "1",
+          contentHash: String(hash!.hash), source: release.releaseEvidence.provenance, required: true }] });
+      const before = await db.select().from(companyAgentPackageInstallations);
+      await expect(service.resolveHireComponents(f.actor, f.home, published.id))
+        .rejects.toMatchObject({ status: 409, details: { code: "hire_package_mapping_required" } });
+      expect(await db.select().from(companyAgentPackageInstallations)).toEqual(before);
     });
     it("projects only available customer releases for Hire Agent and does not expose internal evaluation or release evidence", async () => {
       await instanceSettingsService(db).updateExperimental({ hire_agent_v9: true });

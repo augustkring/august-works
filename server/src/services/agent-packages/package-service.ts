@@ -27,6 +27,7 @@ import {
   rolePacks,
   rolePackVersions,
   companySkills,
+  companySkillVersions,
   playbookDocuments,
   type Db,
 } from "@paperclipai/db";
@@ -972,7 +973,7 @@ export function agentPackageService(
       if (published.version.release.manifest.audience !== "customer") throw notFound("Hire package unavailable");
       const native = published.version.release.components.filter(c =>
         ["role_pack", "skill", "playbook", "workflow_template", "routine_template"].includes(c.type));
-      if (native.filter(c => c.type === "role_pack").length !== 1 || native.some(c => c.required && c.type !== "role_pack"))
+      if (native.filter(c => c.type === "role_pack").length !== 1 || native.some(c => c.required && !["role_pack", "skill"].includes(c.type)))
         throw conflict("This Hire package needs its additional native component mapping", { code: "hire_package_mapping_required" });
       const component = native.find(c => c.type === "role_pack")!;
       const matches = await db.select({ resourceId: rolePacks.id, versionId: rolePackVersions.id, name: rolePacks.name,
@@ -986,9 +987,26 @@ export function agentPackageService(
       const version = await rolePackService(db).getVersion({ ...actor, ignoreInstanceAdmin: true }, companyId, match.resourceId, match.versionId);
       if (version.items.some(item => !["required_skill", "required_policy"].includes(item.type)))
         throw conflict("The Hire package needs a mapping for additional Role Pack behavior", { code: "hire_package_mapping_required" });
-      return { versionId, name: published.package.name, version: published.version.version, contentHash: published.version.contentHash,
-        components: [{ key: component.key, type: "role_pack" as const, resourceId: match.resourceId, versionId: match.versionId,
-          name: match.name, revisionNumber: match.revisionNumber, contentHash: component.contentHash }] };
+      const components: Array<{ key: string; type: "role_pack" | "skill"; resourceId: string; versionId: string;
+        name: string; revisionNumber: number; contentHash: string }> = [{ key: component.key, type: "role_pack", resourceId: match.resourceId,
+        versionId: match.versionId, name: match.name, revisionNumber: match.revisionNumber, contentHash: component.contentHash }];
+      for (const required of native.filter(c => c.required && c.type === "skill")) {
+        const matches = await db.select({ skill: companySkills, version: companySkillVersions }).from(companySkills)
+          .innerJoin(companySkillVersions, and(eq(companySkillVersions.companyId, companySkills.companyId),
+            eq(companySkillVersions.companySkillId, companySkills.id), eq(companySkillVersions.id, companySkills.activeVersionId)))
+          .where(and(eq(companySkills.companyId, companyId), eq(companySkills.lifecycleState, "active"), eq(companySkillVersions.state, "active"),
+            sql`aw_v7_package_component_hash(${companyId}::uuid,'skill',${companySkills.id},${companySkillVersions.id})=${required.contentHash}`)).limit(2);
+        if (matches.length !== 1) throw conflict("Resolve the package's exact local required procedure before preparing this Hire", {
+          code: matches.length ? "hire_package_component_ambiguous" : "hire_package_component_unavailable" });
+        const selected = matches[0]!;
+        await skillResolverService(db).authorizedVersion({ ...actor, ignoreInstanceAdmin: true }, companyId, selected.skill.id, selected.version.id);
+        if (!version.items.some(item => item.type === "required_skill" && [selected.skill.id, selected.skill.key, selected.skill.slug].includes(item.ref)
+            && (item.versionId === null || item.versionId === selected.version.id)))
+          throw conflict("The package's required procedure is not bound into its reviewed Role Pack", { code: "hire_package_mapping_required" });
+        components.push({ key: required.key, type: "skill", resourceId: selected.skill.id, versionId: selected.version.id,
+          name: selected.skill.name, revisionNumber: selected.version.revisionNumber, contentHash: required.contentHash });
+      }
+      return { versionId, name: published.package.name, version: published.version.version, contentHash: published.version.contentHash, components };
     },
     options: async (
       actor: AuthorizationActor,

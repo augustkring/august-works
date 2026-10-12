@@ -111,7 +111,9 @@ export function AgentDraftPreparation({ company, principal, draft, enabled, canU
         {review.data?.requiresBoardApproval ? <p>{t("agentPreparation.boardApproval")}</p> : null}
         {review.data?.packageInstallation ? <div className="space-y-2">
           <p>{t("agentPreparation.packageConfiguration", { name: review.data.packageInstallation.name, version: review.data.packageInstallation.version })}</p>
-          <ul>{review.data.packageInstallation.components.map(component => <li key={component.key}>{component.name} · {component.revisionNumber}</li>)}</ul>
+          <ul className="max-h-60 space-y-2 overflow-y-auto" tabIndex={0} aria-label={t("agentSafeTest.procedures")}>
+            {review.data.packageInstallation.components.map(component => <li key={component.key}>{component.name} · {component.revisionNumber}</li>)}
+          </ul>
           <p>{t("agentPreparation.packageBoundary")}</p>
         </div> : null}
         <label htmlFor={checkboxId} className="flex min-h-11 items-start gap-3"><input id={checkboxId} type="checkbox" checked={confirmed}

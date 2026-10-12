@@ -45,7 +45,10 @@ for (const kind of ["custom", "hire"] as const) {
         if (path.endsWith("/preparation-review")) return route.fulfill({ json: { draftId: id, companyId: company.id, version: 1, name: draft.content!.name,
           ...(kind === "hire" ? { packageInstallation: { versionId: packageId, name: "Research package", version: "1.0.0", contentHash: "a".repeat(64),
             components: [{ key: "research", type: "role_pack", resourceId: "10000000-0000-4000-8000-000000000011",
-              versionId: "10000000-0000-4000-8000-000000000012", name: "Reviewed research procedures", revisionNumber: 2, contentHash: "c".repeat(64) }] } } : {}),
+              versionId: "10000000-0000-4000-8000-000000000012", name: "Reviewed research procedures", revisionNumber: 2, contentHash: "c".repeat(64) }, {
+              key: "planning", type: "skill", resourceId: "10000000-0000-4000-8000-000000000013",
+              versionId: "10000000-0000-4000-8000-000000000014", name: "Required planning procedure", revisionNumber: 1, contentHash: "d".repeat(64),
+            }] } } : {}),
           outcome: draft.content!.outcome, accountableOwner: { userId: session.user.id, name: "Accountable owner" }, requiresBoardApproval: false,
           createsInactiveAgent: true, runtimeQualified: false, authorityGranted: false, executionStarted: false, reviewHash: "b".repeat(64) } });
         if (path.endsWith("/review")) return route.fulfill({ json: { draftId: id, version: draft.version, baselineCurrent: true, productionChanged: false, publishAllowed: false,
@@ -63,6 +66,7 @@ for (const kind of ["custom", "hire"] as const) {
       if (kind === "hire") {
         await expect(dialog).toContainText("Research package · version 1.0.0");
         await expect(dialog).toContainText("Reviewed research procedures · 2");
+        await expect(dialog).toContainText("Required planning procedure · 1");
         await expect(dialog).toContainText("creates no app access or running work");
         expect(writes).toBe(0);
       }

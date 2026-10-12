@@ -256,8 +256,11 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     expect((await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.companyId, f.home))).map(row => row.status)).toEqual(["completed", "completed", "completed"]);
   });
   it("publishes a Hire only with its actual package, reviewed purpose and current activation, and rebinds the Original package to that version", async () => {
-    const hired = await prepareHirePublicationFixture(db, f);
+    const hired = await prepareHirePublicationFixture(db, f, requiredProcedures[0]!);
     expect(hired.agent.status).toBe("paused");
+    expect(hired.installation.components).toEqual(expect.arrayContaining([expect.objectContaining({
+      key: "welcome-procedure", type: "skill", resourceId: requiredProcedures[0]!.skillId, versionId: requiredProcedures[0]!.versionId,
+    })]));
     f = { ...f, presence: hired.agent };
     const runtime = await configureRuntime();
     draft = await drafts().save(f.actor, f.home, hired.draft.id, { requestId: randomUUID(), expectedVersion: hired.draft.version,
