@@ -2,6 +2,7 @@ import { agentRetirementService } from "../services/agents/retirement.js";
 import { agentIdentityService } from "../services/agent-identities.js";
 import { agentService } from "../services/agents.js";
 import { agentAuthoringPublicationService } from "../services/agents/authoring-publication.js";
+import { agentAuthoringPackageSetupService } from "../services/agents/authoring-package-setup.js";
 import { buildRetainedNativeRuntimeContext, readNativeRuntimeAssetText } from "../services/native-runtime/runtime-context.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -285,7 +286,7 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
   });
   it("publishes a Hire only with its actual package, reviewed purpose and current activation, and rebinds the Original package to that version", async () => {
     requiredPlaybook = await seedApprovedAuthoringPlaybook(db, f.actor, f.home);
-    const hired = await prepareHirePublicationFixture(db, f, requiredProcedures[0]!, requiredPlaybook);
+    const hired = await prepareHirePublicationFixture(db, f, requiredProcedures[0]!, requiredPlaybook, false);
     expect(hired.agent.status).toBe("paused");
     expect(hired.installation.components).toEqual(expect.arrayContaining([expect.objectContaining({
       key: "welcome-procedure", type: "skill", resourceId: requiredProcedures[0]!.skillId, versionId: requiredProcedures[0]!.versionId,
@@ -308,8 +309,24 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     const before = await publications().review(f.actor, f.home, draft.id);
     expect(before.canPublish).toBe(false);
     expect(before.blockers.map(item => item.code)).toContain("hire_package_activation_required");
-    const active = await hired.packages.decide(f.actor, f.home, hired.installation.id, "activate", {
-      expectedVersion: hired.installation.version, reason: "Human-reviewed package activation in the Native software fixture" });
+    const setup = agentAuthoringPackageSetupService(db), blocked = await setup.review(f.actor, f.home, draft.id);
+    expect(blocked.canConfirm).toBe(false); expect(blocked.blockers).toContain("approved_purpose_required");
+    expect(blocked.purposes.map(purpose => purpose.id)).toContain(hired.useCase.id);
+    const selected = await setup.review(f.actor, f.home, draft.id, hired.useCase.id);
+    expect(selected.canConfirm).toBe(true);
+    const setupInput = { requestId: randomUUID(), expectedVersion: draft.version, expectedReviewHash: selected.reviewHash,
+      purposeId: hired.useCase.id, confirmIntendedPurpose: true, confirmPackageActivation: true };
+    const [firstSetup, repeatedSetup] = await Promise.all([setup.confirm(f.actor, f.home, draft.id, setupInput), setup.confirm(f.actor, f.home, draft.id, setupInput)]);
+    expect(firstSetup).toEqual(repeatedSetup);
+    expect(await setup.receipt(f.actor, f.home, draft.id, setupInput.requestId)).toEqual(firstSetup);
+    expect((await db.select().from(activityLog).where(and(eq(activityLog.entityId, draft.id), eq(activityLog.action, "agent_configuration.package_setup_confirmed"))))).toHaveLength(1);
+    expect(calls).toBe(1);
+    const active = await hired.packages.get(f.actor, f.home, hired.installation.id);
+    expect(active.aiUseCaseId).toBe(hired.useCase.id);
+    expect(active.version).toBe(hired.installation.version + 2);
+    const beforeSetupVersion = draft.version;
+    draft = await drafts().get(f.actor, f.home, draft.id);
+    expect(draft.version).toBe(beforeSetupVersion + 1);
     expect(active.readiness?.reasons).toEqual([]); expect(active.status).toBe("active");
     const input = await publicationCommand(), runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home));
     const first = await publications().publish(f.actor, f.home, draft.id, input);

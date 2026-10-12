@@ -17,7 +17,8 @@ import type { seedV5Presences } from "./v5-fixtures.js";
  * this fixture is not provider, business-outcome, billing-provider or GA proof. */
 export async function prepareHirePublicationFixture(db: Db, f: Awaited<ReturnType<typeof seedV5Presences>>,
   requiredProcedure?: { skillId: string; versionId: string; key: string },
-  requiredPlaybook?: { playbookId: string; revisionId: string; key: string }) {
+  requiredPlaybook?: { playbookId: string; revisionId: string; key: string },
+  configurePurpose = true) {
   await instanceSettingsService(db).updateExperimental({ free_core_commercial_v7: true,
     billing_entitlements_v6: true, billing_usage_v6: true, ai_use_cases_v7: true });
   const [account] = await db.insert(billingAccounts).values({ displayName: "Hire publication software fixture", payerUserId: f.userId }).returning();
@@ -79,8 +80,8 @@ export async function prepareHirePublicationFixture(db: Db, f: Awaited<ReturnTyp
   useCase = await governance.decide(f.actor, f.home, useCase.id, "approve", { expectedVersion: useCase.version,
     rationale: "A human reviewed this exact software-fixture internal welcome purpose" });
   const installation = (await packages.list(f.actor, f.home)).find(row => row.agentId === agent!.id)!;
-  const updated = await packages.update(f.actor, f.home, installation.id, { agentId: agent!.id, versionId: published.id,
+  const updated = configurePurpose ? await packages.update(f.actor, f.home, installation.id, { agentId: agent!.id, versionId: published.id,
     components: reviewed.packageInstallation!.components.map(({ key, resourceId, versionId }) => ({ key, resourceId, versionId })),
-    aiUseCaseId: useCase.id, expectedVersion: installation.version, approveMaterialChange: true, reason: "Bind the exact human-reviewed software-fixture purpose" });
-  return { draft, agent: agent!, release, published, installation: updated, packages };
+    aiUseCaseId: useCase.id, expectedVersion: installation.version, approveMaterialChange: true, reason: "Bind the exact human-reviewed software-fixture purpose" }) : installation;
+  return { draft, agent: agent!, release, published, installation: updated, packages, useCase };
 }

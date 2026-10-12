@@ -22,6 +22,7 @@ import { AgentDraftPreparation } from "@/components/AgentDraftPreparation";
 import { AgentDraftRuntime } from "@/components/AgentDraftRuntime";
 import { AgentDraftPublication } from "@/components/AgentDraftPublication";
 import { AgentDraftSafeTest } from "@/components/AgentDraftSafeTest";
+import { AgentDraftPackageSetup } from "@/components/AgentDraftPackageSetup";
 import { AgentDraftReview } from "@/components/AgentDraftReview";
 import { useV9AuthoringAuthority } from "@/hooks/useV9AuthoringAuthority";
 
@@ -572,6 +573,12 @@ export function HireAgentSetup({
           </p>
           <p>{t("hireSetup.reviewAccess")}</p>
           <p>{t("hireSetup.reviewApproval")}</p>
+          <AgentDraftPackageSetup key={`package-setup:${receipt.id}`} company={company} principal={principal} draft={receipt}
+            enabled={viewReady && enabled && !frozen && JSON.stringify(content) === JSON.stringify(receipt.content)}
+            canUseAuthority={() => alive.current && authority.canRead() && !checking.current && !checkingAccess &&
+              client.getQueryState(key)?.fetchStatus === "idle"}
+            onConfirmed={value => { if (!alive.current || !authority.canRead() || checking.current) return;
+              client.setQueryData(key, value); setReceipt(value); setContent(value.content); }} />
           <AgentDraftPublication key={`publication:${receipt.id}`} company={company} principal={principal} draft={receipt}
             onPublished={() => { if (alive.current && authority.canRead()) navigate(`/agents/hire/drafts/${id}/hire_receipt`); }}
               options={options.isSuccess && !options.isFetching ? options.data : null}

@@ -1797,5 +1797,25 @@
     "editDraft": "Edit a private draft",
     "checking": "Checking the published instructions…",
     "unavailable": "The published instructions are unavailable. Refresh the Agent before continuing."
+  },
+  "agentPackageSetup": {
+    "title": "Approved purpose and package setup",
+    "boundary": "Use your completed test to check the package setup. Publishing your agent is a separate step. This creates no app access or new model call.",
+    "purpose": "Approved company purpose",
+    "choose": "Choose an approved purpose",
+    "review": "Review package setup",
+    "confirmPurpose": "I confirm this approved purpose for the selected package.",
+    "confirmActivation": "I confirm activation of this package setup before agent publication.",
+    "confirm": "Confirm package setup",
+    "ready": "The current package setup is ready for publication.",
+    "reviewPurpose": "Review company AI purposes",
+    "changed": "The setup or your access changed. Review the current saved draft.",
+    "unknown": "The confirmation could not be verified. Check the original request before taking further action.",
+    "checkOriginal": "Check original setup",
+    "unavailable": "The current package setup cannot be shown.",
+    "blockers": {
+      "approved_purpose_required": "Choose a current approved company purpose for this package.",
+      "representative_test_required": "Complete the representative test and human review first."
+    }
   }
 }

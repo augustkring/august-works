@@ -1551,6 +1551,7 @@ export function agentPackageService(
       companyId: string,
       id: string,
       raw: unknown,
+      parentPublications?: Parameters<typeof logActivity>[2],
     ) => {
       const input = packageUpdateSchema.parse(raw);
       await assertV7Enabled(db, "agent_packages_v7");
@@ -1620,7 +1621,7 @@ export function agentPackageService(
           reason: input.reason,
         });
         return view(updated!);
-      });
+      }, parentPublications);
     },
   };
 }

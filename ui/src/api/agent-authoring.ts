@@ -12,6 +12,9 @@ import {
   agentDraftTestPacketSchema,
   agentDraftPublicationReviewSchema,
   agentDraftPublicationReceiptSchema,
+  agentPackageSetupReviewSchema,
+  agentPackageSetupReceiptSchema,
+  type AgentPackageSetupCommand,
   type AgentDraftPublicationCommand,
   type AgentDraftTestCommand,
   type VerificationReviewInput,
@@ -29,6 +32,15 @@ export interface AgentAuthoringOptions {
   runtimes: Array<{ id: string }>;
 }
 export const agentAuthoringApi = {
+  packageSetupReview: async (company: string, principal: string, id: string, purposeId: string | null, signal?: AbortSignal) =>
+    agentPackageSetupReviewSchema.parse(await api.get(scope(`${root(company)}/${id}/package-setup-review`, principal) +
+      (purposeId ? `&purposeId=${encodeURIComponent(purposeId)}` : ""), { signal, cache: "no-store" })),
+  packageSetupReceipt: async (company: string, principal: string, id: string, requestId: string, signal?: AbortSignal) => {
+    const value = await api.get(scope(`${root(company)}/${id}/package-setup-receipt`, principal) + `&requestId=${encodeURIComponent(requestId)}`, { signal, cache: "no-store" });
+    return value === null ? null : agentPackageSetupReceiptSchema.parse(value);
+  },
+  confirmPackageSetup: async (company: string, principal: string, id: string, command: AgentPackageSetupCommand) =>
+    agentPackageSetupReceiptSchema.parse(await api.post(scope(`${root(company)}/${id}/package-setup`, principal), command)),
   publicationReview: async (company: string, principal: string, id: string, signal?: AbortSignal) =>
     agentDraftPublicationReviewSchema.parse(await api.get(scope(`${root(company)}/${id}/publication-review`, principal), { signal, cache: "no-store" })),
   publicationReceipt: async (company: string, principal: string, id: string, requestId?: string, signal?: AbortSignal) => {

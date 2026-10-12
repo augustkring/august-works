@@ -9,12 +9,14 @@ import {
   agentDraftTestCommandSchema,
   verificationReviewSchema,
   agentDraftPublicationCommandSchema,
+  agentPackageSetupCommandSchema,
 } from "@paperclipai/shared";
 import { assertBoard, assertCompanyAccess } from "./authz.js";
 import { conflict } from "../errors.js";
 import { agentAuthoringService } from "../services/agents/authoring-drafts.js";
 import { agentAuthoringTestService } from "../services/agents/authoring-tests.js";
 import { agentAuthoringPublicationService } from "../services/agents/authoring-publication.js";
+import { agentAuthoringPackageSetupService } from "../services/agents/authoring-package-setup.js";
 import { validate } from "../middleware/validate.js";
 
 export function agentAuthoringRoutes(db: Db) {
@@ -89,6 +91,16 @@ export function agentAuthoringRoutes(db: Db) {
   ));
   router.get(`${root}/:id/runtime`, async (req, res) => res.json(
     await service.runtime(req.actor, company(req), z.uuid().parse(req.params.id)),
+  ));
+  router.get(`${root}/:id/package-setup-review`, async (req, res) => res.json(
+    await agentAuthoringPackageSetupService(db).review(req.actor, company(req), z.uuid().parse(req.params.id),
+      req.query.purposeId === undefined ? null : z.uuid().parse(req.query.purposeId)),
+  ));
+  router.get(`${root}/:id/package-setup-receipt`, async (req, res) => res.json(
+    await agentAuthoringPackageSetupService(db).receipt(req.actor, company(req), z.uuid().parse(req.params.id), z.uuid().parse(req.query.requestId)),
+  ));
+  router.post(`${root}/:id/package-setup`, validate(agentPackageSetupCommandSchema), async (req, res) => res.json(
+    await agentAuthoringPackageSetupService(db).confirm(req.actor, company(req), z.uuid().parse(req.params.id), req.body),
   ));
   router.post(`${root}/:id/prepare`, validate(agentDraftPrepareSchema), async (req, res) => res.json(
     await service.prepare(req.actor, company(req), z.uuid().parse(req.params.id), req.body),

@@ -1797,5 +1797,25 @@
     "editDraft": "Rediger en privat kladde",
     "checking": "Kontrollerer de publicerede instruktioner…",
     "unavailable": "De publicerede instruktioner er ikke tilgængelige. Genindlæs agenten, før du fortsætter."
+  },
+  "agentPackageSetup": {
+    "title": "Godkendt formål og pakkeopsætning",
+    "boundary": "Brug den gennemførte test til at kontrollere pakkeopsætningen. Publicering af agenten er et separat trin. Dette opretter hverken appadgang eller et nyt modelkald.",
+    "purpose": "Godkendt formål i virksomheden",
+    "choose": "Vælg et godkendt formål",
+    "review": "Gennemgå pakkeopsætning",
+    "confirmPurpose": "Jeg bekræfter dette godkendte formål for den valgte pakke.",
+    "confirmActivation": "Jeg bekræfter aktivering af pakkeopsætningen før publicering af agenten.",
+    "confirm": "Bekræft pakkeopsætning",
+    "ready": "Den aktuelle pakkeopsætning er klar til publicering.",
+    "reviewPurpose": "Gennemgå virksomhedens AI-formål",
+    "changed": "Opsætningen eller din adgang er ændret. Gennemgå den aktuelle gemte kladde.",
+    "unknown": "Bekræftelsen kunne ikke verificeres. Kontrollér den oprindelige anmodning, før du foretager flere handlinger.",
+    "checkOriginal": "Kontrollér oprindelig opsætning",
+    "unavailable": "Den aktuelle pakkeopsætning kan ikke vises.",
+    "blockers": {
+      "approved_purpose_required": "Vælg et aktuelt godkendt formål i virksomheden til denne pakke.",
+      "representative_test_required": "Gennemfør først den repræsentative test og den menneskelige gennemgang."
+    }
   }
 }

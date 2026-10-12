@@ -3365,3 +3365,4 @@ export * from "./feedback-retention-erasure.js";
 export { agentDraftTestReviewSchema, agentDraftTestCommandSchema, agentDraftTestViewSchema, agentDraftTestPacketSchema, type AgentDraftTestReview, type AgentDraftTestCommand, type AgentDraftTestView } from "./agent-authoring-tests.js";
 export { agentDraftPublicationCommandSchema, agentDraftPublicationReviewSchema, agentDraftPublicationReceiptSchema,
   type AgentDraftPublicationCommand, type AgentDraftPublicationReview, type AgentDraftPublicationReceipt } from "./agent-authoring-publication.js";
+export * from "./agent-authoring-package-setup.js";
