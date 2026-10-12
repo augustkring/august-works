@@ -1504,7 +1504,8 @@
     "knowledge_mapping_required": "The selected knowledge sources need their runtime mapping before publishing.",
     "memory_mapping_required": "The selected memory setting needs its runtime mapping before publishing.",
     "internal_draft_authority_required": "This version requires automatic internal drafting.",
-    "capability_mapping_required": "The selected actions need their runtime mapping before publishing."
+    "capability_mapping_required": "The selected actions need their runtime mapping before publishing.",
+    "hire_package_activation_required": "Review the selected package’s intended purpose, readiness and activation before publishing this Hire."
   },
   "authFlow": {
     "signInTitle": "Sign in to August Works",
@@ -1682,7 +1683,9 @@
       "pending_approval": "The original agent is waiting for board approval. Runtime qualification and Safe Test remain unconfirmed.",
       "needs_review": "The original agent configuration or lifecycle changed. Review it before testing or activation.",
       "unavailable": "The original prepared agent is unavailable."
-    }
+    },
+    "packageConfiguration": "Configure {{name}} · version {{version}} on the inactive Agent.",
+    "packageBoundary": "This installs the reviewed package configuration. It creates no app access or running work."
   },
   "agentRuntime": {
     "title": "Execution setup",
@@ -1785,7 +1788,8 @@
     "packageVersion": "Package version {{version}}",
     "scope": "Works in August Works. It may prepare internal drafts from the current task. Other actions, connected sources, persistent memory and delegation remain unavailable.",
     "openAgent": "Open agent",
-    "manageAgent": "Monitor or pause agent"
+    "manageAgent": "Monitor or pause agent",
+    "reviewPackage": "Review package setup"
   },
   "publishedInstructions": {
     "title": "Published instructions",

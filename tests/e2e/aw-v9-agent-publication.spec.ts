@@ -41,6 +41,7 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"]] as const) {
           expect(input).toMatchObject({ expectedVersion: draft.version, expectedReviewHash: "b".repeat(64), activate: true, confirmPublication: true, confirmActivation: true });
           expect(Object.keys(input)).toHaveLength(6);
           receipt = agentDraftPublicationReceiptSchema.parse({ companyId: company.id, draftId: id, requestId: input.requestId, agentId, revisionId: input.requestId,
+            ...(kind === "hire" ? { packageInstallation: { installationId: planId, versionId: packageId, key: "research", version: "1.0.0", contentHash: "a".repeat(64) } } : {}),
             publishedContent: draft.content!, publishedVersion: 2, publishedAt: "2026-10-12T00:00:00.000Z", activatedAtPublication: true, authorityGranted: false, executionStarted: false });
           return route.abort("failed");
         }

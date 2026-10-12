@@ -285,10 +285,12 @@ export function agentAuthoringService(db: Db) {
         eq(companyMemberships.companyId, row.companyId), eq(companyMemberships.status, "active")))
       .where(eq(authUsers.id, row.content.ownerUserId)).for("share");
     if (!accountable) throw conflict("The accountable owner is no longer available");
+    let packageInstallation = null;
     if (row.kind === "hire") {
       const capability = await hireRelease(tx, actor, row.packageVersionId!);
       if (capability.contentHash !== row.packageContentHash || capability.key !== row.packageKey)
         throw conflict("The selected capability pin changed");
+      packageInstallation = await agentPackageService(tx).resolveHireComponents(actor, row.companyId, row.packageVersionId!);
     }
     const [company] = await tx.select({ requiresBoardApproval: companies.requireBoardApprovalForNewAgents }).from(companies)
       .where(eq(companies.id, row.companyId)).for("share");
@@ -301,7 +303,7 @@ export function agentAuthoringService(db: Db) {
     const fields = { draftId: row.id, companyId: row.companyId, version: row.version, name, outcome,
       accountableOwner: { userId: accountable.userId, name: accountable.name.trim().slice(0, 200) || "Company member" },
       requiresBoardApproval: company.requiresBoardApproval, createsInactiveAgent: true as const,
-      runtimeQualified: false as const, authorityGranted: false as const, executionStarted: false as const };
+      runtimeQualified: false as const, authorityGranted: false as const, executionStarted: false as const, packageInstallation };
     return agentDraftPreparationReviewSchema.parse({ ...fields, reviewHash: nativeSha256({ ...fields,
       createdByUserId: row.createdByUserId, content: row.content, packageVersionId: row.packageVersionId, packageContentHash: row.packageContentHash }) });
   }
@@ -433,6 +435,11 @@ export function agentAuthoringService(db: Db) {
           { canCreateAgents: false, canCreateSkills: false });
         if (agent.name !== reviewed.name) throw conflict("The reviewed Agent name is no longer available; review again");
         await access(tx, actor, companyId, agent.id, true);
+        if (reviewed.packageInstallation) await agentPackageService(tx).install({ ...actor, ignoreInstanceAdmin: true }, companyId, {
+          installationRequestId: input.requestId, versionId: reviewed.packageInstallation.versionId, agentId: agent.id,
+          components: reviewed.packageInstallation.components.map(({ key, resourceId, versionId }) => ({ key, resourceId, versionId })),
+          updatePolicy: "manual",
+        }, row.packageKey!, publications);
         const [updated] = await tx.update(agentConfigurationDrafts).set({ preparedAgentId: agent.id, preparationApprovalId: approvalId,
           preparationConfigurationHash: await targetHash(tx, companyId, agent.id), preparationRequestId: input.requestId,
           preparationRequestHash: hash, preparationReviewHash: reviewed.reviewHash, version: row.version + 1, updatedAt: new Date() })

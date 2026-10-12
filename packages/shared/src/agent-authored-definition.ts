@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { agentAuthoringContentSchema } from "./agent-authoring.js";
+import { agentPublicationPackageProvenanceSchema } from "./agent-authoring-publication.js";
 
 /** Reserved server-managed value in the Original Agent configuration revision.
  * Drafts, model output and generic Agent PATCH requests cannot install it. */
@@ -14,7 +15,8 @@ export const authoredAgentDefinitionSchema = z.strictObject({
   publication: z.strictObject({ draftId: z.uuid(), draftVersion: z.number().int().positive(),
     candidateRevision: z.number().int().positive(), requestedByUserId: z.string().min(1).max(200),
     reviewHash: z.string().regex(/^[a-f0-9]{64}$/), requestHash: z.string().regex(/^[a-f0-9]{64}$/),
-    verifiedTestIds: z.array(z.uuid()).min(1).max(10), priorRevisionId: z.uuid().nullable(), activatedAtPublication: z.boolean() }).optional(),
+    verifiedTestIds: z.array(z.uuid()).min(1).max(10), priorRevisionId: z.uuid().nullable(), activatedAtPublication: z.boolean(),
+    packageInstallation: agentPublicationPackageProvenanceSchema.optional() }).optional(),
   content: agentAuthoringContentSchema,
 }).superRefine((value, context) => {
   if (Boolean(value.publication) !== (value.version !== undefined) || value.publication && !value.procedureSnapshotHash)

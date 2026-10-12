@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { agentConfigRevisions, agentConfigurationTests, agents, companies, heartbeatRuns, type Db } from "@paperclipai/db";
+import { agentConfigRevisions, agentConfigurationTests, agentPackageVersions, agents, companies, companyAgentPackageInstallations, heartbeatRuns, type Db } from "@paperclipai/db";
 import { AUTHORED_AGENT_DEFINITION_KEY, agentDraftPublicationCommandSchema, agentDraftPublicationReviewSchema,
   agentDraftPublicationReceiptSchema, authoredAgentMappingBlockers, authoredAgentDefinitionSchema,
   type AgentDraftPublicationReview } from "@paperclipai/shared";
@@ -13,6 +13,7 @@ import { resolveAuthoringProcedures } from "./authoring-procedures.js";
 import { installedNativeDraftGateway } from "../orchestration/native-draft-runtime.js";
 import { agentService } from "../agents.js";
 import { budgetService } from "../budgets.js";
+import { agentPackageService } from "../agent-packages/package-service.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
@@ -41,6 +42,19 @@ export function agentAuthoringPublicationService(db: Db) {
       .filter(blocker => !["representative_test_unqualified", "native_promotion_unqualified"].includes(blocker.code))
       .map(({ code, message }) => ({ code, message }));
     const block = (code: string, message: string) => blockers.push({ code, message });
+    let packageInstallation: typeof companyAgentPackageInstallations.$inferSelect | null = null;
+    if (row.kind === "hire") {
+      const [installed] = await tx.select().from(companyAgentPackageInstallations).where(and(
+        eq(companyAgentPackageInstallations.companyId, companyId), eq(companyAgentPackageInstallations.agentId, agentId),
+        eq(companyAgentPackageInstallations.installedVersionId, row.packageVersionId!))).for("update");
+      if (installed) {
+        await agentPackageService(tx).get({ ...actor, ignoreInstanceAdmin: true }, companyId, installed.id);
+        packageInstallation = installed;
+      }
+      const [current] = installed ? await tx.execute<{ current: boolean }>(sql`select aw_v7_package_installation_current(i) as current
+        from company_agent_package_installations i where company_id=${companyId}::uuid and id=${installed.id}::uuid`) : [];
+      if (!current?.current) block("hire_package_activation_required", "Review the selected package's purpose, readiness and activation through its Original controls");
+    }
     if (!base.baselineCurrent) block("publication_baseline_changed", "Start a fresh draft from the current active version");
     if (!["idle", "paused"].includes(agent.status) || agent.status === "paused" && agent.pauseReason !== "manual")
       block("publication_agent_not_ready", "Resolve approval, budget, error or suspension through the Agent's existing controls");
@@ -76,8 +90,8 @@ export function agentAuthoringPublicationService(db: Db) {
     const reviewHash = nativeSha256({ values, candidateHash: authoringCandidateHash(row),
       baselineHash: row.baselineHash, priorRevisionId: prior?.revisionId ?? null,
       configurationHash: current?.configurationHash ?? null, stateHash: current?.authorityHash ?? null,
-      procedureSnapshotHash: procedures?.hash ?? null, testIds: qualified?.testIds ?? [] });
-    return { row, agent, prior, qualified, current, procedures, review: agentDraftPublicationReviewSchema.parse({ ...values, reviewHash }) };
+      procedureSnapshotHash: procedures?.hash ?? null, testIds: qualified?.testIds ?? [], packageInstallation });
+    return { row, agent, prior, qualified, current, procedures, packageInstallation, review: agentDraftPublicationReviewSchema.parse({ ...values, reviewHash }) };
   }
   function receipt(companyId: string, record: typeof agentConfigRevisions.$inferSelect) {
     const definition = authoredAgentDefinitionSchema.parse((record.afterConfig.runtimeConfig as Record<string, unknown>)[AUTHORED_AGENT_DEFINITION_KEY]);
@@ -86,6 +100,11 @@ export function agentAuthoringPublicationService(db: Db) {
       requestId: record.id, agentId: record.agentId, revisionId: record.id, publishedVersion: definition.version,
       publishedAt: record.createdAt.toISOString(), activatedAtPublication: definition.publication.activatedAtPublication,
       publishedContent: definition.content,
+      ...(definition.publication.packageInstallation ? { packageInstallation: {
+        installationId: definition.publication.packageInstallation.installationId, versionId: definition.publication.packageInstallation.versionId,
+        key: definition.publication.packageInstallation.key, contentHash: definition.publication.packageInstallation.contentHash,
+        version: definition.publication.packageInstallation.releaseVersion.join("."),
+      } } : {}),
       authorityGranted: false, executionStarted: false });
   }
   return {
@@ -150,13 +169,26 @@ export function agentAuthoringPublicationService(db: Db) {
           throw conflict("The saved candidate or reviewed publication changed; review again");
         if (!state.review.canPublish || !state.current || !state.procedures || !state.qualified)
           throw conflict("Resolve every current publication blocker", { blockers: state.review.blockers });
+        const [packageVersion] = state.packageInstallation ? await tx.select().from(agentPackageVersions)
+          .where(eq(agentPackageVersions.id, state.packageInstallation.installedVersionId)) : [];
         const definition = compileAuthoredAgentDefinition(state.row.content!, input.requestId, state.qualified.candidateHash,
           state.procedures.hash, { version: state.review.nextVersion, provenance: { draftId, draftVersion: state.row.version,
             candidateRevision: state.row.candidateRevision, requestedByUserId: userId, reviewHash: state.review.reviewHash,
-            requestHash, verifiedTestIds: state.qualified.testIds, priorRevisionId: state.prior?.revisionId ?? null, activatedAtPublication: true } });
+            requestHash, verifiedTestIds: state.qualified.testIds, priorRevisionId: state.prior?.revisionId ?? null, activatedAtPublication: true,
+            ...(state.packageInstallation && packageVersion ? { packageInstallation: { installationId: state.packageInstallation.id,
+              versionId: packageVersion.id, key: state.row.packageKey!, releaseVersion: packageVersion.version.split(".") as [string, string, string],
+              contentHash: packageVersion.contentHash } } : {}) } });
         await agentService(tx).update(state.agent.id, { name: state.row.content!.name, capabilities: state.row.content!.description,
           runtimeConfig: { ...state.agent.runtimeConfig, [AUTHORED_AGENT_DEFINITION_KEY]: definition }, status: "idle", pauseReason: null },
           { authoredPublication: definition, recordRevision: { id: definition.revisionId, source: "agent_authoring_publish", createdByUserId: userId } });
+        if (state.packageInstallation) {
+          // The definition participates in the Original package authority hash.
+          // Reassess and bind that owner to the exact new version inside this C3.
+          const installed = await agentPackageService(tx).decide({ ...actor, ignoreInstanceAdmin: true }, companyId,
+            state.packageInstallation.id, "activate", { expectedVersion: state.packageInstallation.version,
+              reason: "Publish the independently verified Hire configuration" }, publications);
+          if (installed.status !== "active") throw conflict("The Hire package activation changed; review its current readiness");
+        }
         const [record] = await tx.select().from(agentConfigRevisions).where(and(eq(agentConfigRevisions.companyId, companyId), eq(agentConfigRevisions.id, input.requestId)));
         if (!record) throw conflict("The Original publication revision was not recorded");
         await logActivity(tx, { companyId, actorType: "user", actorId: userId, action: "agent_configuration.version_published",

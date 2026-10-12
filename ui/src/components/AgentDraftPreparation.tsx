@@ -89,6 +89,8 @@ export function AgentDraftPreparation({ company, principal, draft, enabled, canU
   return <section className="space-y-3" aria-label={t("agentPreparation.title")}>
     <h2 className="text-lg font-semibold">{t("agentPreparation.title")}</h2>
     <p>{t("agentPreparation.boundary")}</p>
+    {review.data?.packageInstallation ? <p>{t("agentPreparation.packageConfiguration", {
+      name: review.data.packageInstallation.name, version: review.data.packageInstallation.version })}</p> : null}
     {review.isPending || review.isFetching ? <p role="status">{t("agentPreparation.checking")}</p> : null}
     {review.isError ? <p role="status">{t("agentPreparation.unavailable")}</p> : null}
     {review.data ? <dl className="space-y-2"><dt className="font-medium">{t("agentPreparation.name")}</dt><dd>{review.data.name}</dd>
@@ -107,6 +109,11 @@ export function AgentDraftPreparation({ company, principal, draft, enabled, canU
           <dt className="font-medium">{t("agentPreparation.responsibility")}</dt><dd className="whitespace-pre-wrap">{review.data.outcome}</dd>
           <dt className="font-medium">{t("agentPreparation.owner")}</dt><dd>{review.data.accountableOwner.name}</dd></dl> : null}
         {review.data?.requiresBoardApproval ? <p>{t("agentPreparation.boardApproval")}</p> : null}
+        {review.data?.packageInstallation ? <div className="space-y-2">
+          <p>{t("agentPreparation.packageConfiguration", { name: review.data.packageInstallation.name, version: review.data.packageInstallation.version })}</p>
+          <ul>{review.data.packageInstallation.components.map(component => <li key={component.key}>{component.name} · {component.revisionNumber}</li>)}</ul>
+          <p>{t("agentPreparation.packageBoundary")}</p>
+        </div> : null}
         <label htmlFor={checkboxId} className="flex min-h-11 items-start gap-3"><input id={checkboxId} type="checkbox" checked={confirmed}
           onChange={event => setConfirmed(event.target.checked)} /><span>{t("agentPreparation.confirmation")}</span></label>
         <AlertDialogFooter><AlertDialogCancel>{t("feedback.cancel")}</AlertDialogCancel><Button className="min-h-11" disabled={!confirmed || pending || !authority.writeReady}

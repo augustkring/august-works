@@ -1,6 +1,12 @@
 import { z } from "zod";
 import { agentAuthoringContentSchema } from "./agent-authoring.js";
 const digest = z.string().regex(/^[a-f0-9]{64}$/);
+export const agentPublicationPackageSchema = z.strictObject({ installationId: z.uuid(), versionId: z.uuid(),
+  key: z.string().min(1).max(120), version: z.string().min(1).max(120), contentHash: digest });
+// A bare dotted SemVer resembles a JWT to the generic configuration redactor.
+// Preserve its exact parts in provenance without exempting arbitrary strings.
+export const agentPublicationPackageProvenanceSchema = agentPublicationPackageSchema.omit({ version: true }).extend({
+  releaseVersion: z.tuple([z.string().regex(/^[0-9]+$/), z.string().regex(/^[0-9]+$/), z.string().regex(/^[0-9]+$/)]) });
 export const agentDraftPublicationCommandSchema = z.strictObject({
   requestId: z.uuid().refine(id => id === id.toLowerCase(), "Use the canonical request ID"),
   expectedVersion: z.number().int().positive(), expectedReviewHash: digest,
@@ -25,6 +31,7 @@ export const agentDraftPublicationReceiptSchema = z.strictObject({
   companyId: z.uuid(), draftId: z.uuid(), requestId: z.uuid(), agentId: z.uuid(), revisionId: z.uuid(),
   publishedVersion: z.number().int().positive(), publishedAt: z.iso.datetime(), activatedAtPublication: z.boolean(),
   publishedContent: agentAuthoringContentSchema,
+  packageInstallation: agentPublicationPackageSchema.nullable().optional(),
   authorityGranted: z.literal(false), executionStarted: z.literal(false),
 });
 export type AgentDraftPublicationCommand = z.infer<typeof agentDraftPublicationCommandSchema>;

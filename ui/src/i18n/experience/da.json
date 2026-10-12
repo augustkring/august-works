@@ -1504,7 +1504,8 @@
     "knowledge_mapping_required": "De valgte videnskilder skal kobles til runtime før publicering.",
     "memory_mapping_required": "Den valgte hukommelsesindstilling skal kobles til runtime før publicering.",
     "internal_draft_authority_required": "Denne version kræver automatisk oprettelse af interne kladder.",
-    "capability_mapping_required": "De valgte handlinger skal kobles til runtime før publicering."
+    "capability_mapping_required": "De valgte handlinger skal kobles til runtime før publicering.",
+    "hire_package_activation_required": "Gennemgå den valgte pakkes formål, readiness og aktivering, før denne Hire publiceres."
   },
   "authFlow": {
     "signInTitle": "Log ind på August Works",
@@ -1682,7 +1683,9 @@
       "pending_approval": "Den oprindelige agent afventer bestyrelsesgodkendelse. Runtime og Safe Test er fortsat ikke bekræftet.",
       "needs_review": "Den oprindelige agents konfiguration eller livscyklus er ændret. Gennemgå den før test eller aktivering.",
       "unavailable": "Den oprindelige forberedte agent er ikke tilgængelig."
-    }
+    },
+    "packageConfiguration": "Konfigurer {{name}} · version {{version}} på den inaktive agent.",
+    "packageBoundary": "Dette installerer den gennemgåede pakkekonfiguration. Det opretter ingen appadgang eller igangværende arbejde."
   },
   "agentRuntime": {
     "title": "Opsætning til udførelse",
@@ -1785,7 +1788,8 @@
     "packageVersion": "Pakkeversion {{version}}",
     "scope": "Arbejder i August Works. Den må forberede interne kladder ud fra den aktuelle opgave. Andre handlinger, tilsluttede kilder, vedvarende hukommelse og delegering er fortsat utilgængelige.",
     "openAgent": "Åbn agent",
-    "manageAgent": "Overvåg eller pausér agent"
+    "manageAgent": "Overvåg eller pausér agent",
+    "reviewPackage": "Gennemgå pakkeopsætning"
   },
   "publishedInstructions": {
     "title": "Publicerede instruktioner",

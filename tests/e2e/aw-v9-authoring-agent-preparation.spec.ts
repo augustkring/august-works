@@ -43,6 +43,9 @@ for (const kind of ["custom", "hire"] as const) {
         if (path.endsWith("/hire-capability")) return route.fulfill({ json: { key: "research", versionId: packageId, version: "1.0.0", name: "Research draft", category: "Research",
           outcome: "Prepare an internal research draft", requiredKnowledge: [], requiredConnections: [], limits: [], actionClasses: ["internal_draft"], available: true } });
         if (path.endsWith("/preparation-review")) return route.fulfill({ json: { draftId: id, companyId: company.id, version: 1, name: draft.content!.name,
+          ...(kind === "hire" ? { packageInstallation: { versionId: packageId, name: "Research package", version: "1.0.0", contentHash: "a".repeat(64),
+            components: [{ key: "research", type: "role_pack", resourceId: "10000000-0000-4000-8000-000000000011",
+              versionId: "10000000-0000-4000-8000-000000000012", name: "Reviewed research procedures", revisionNumber: 2, contentHash: "c".repeat(64) }] } } : {}),
           outcome: draft.content!.outcome, accountableOwner: { userId: session.user.id, name: "Accountable owner" }, requiresBoardApproval: false,
           createsInactiveAgent: true, runtimeQualified: false, authorityGranted: false, executionStarted: false, reviewHash: "b".repeat(64) } });
         if (path.endsWith("/review")) return route.fulfill({ json: { draftId: id, version: draft.version, baselineCurrent: true, productionChanged: false, publishAllowed: false,
@@ -57,6 +60,12 @@ for (const kind of ["custom", "hire"] as const) {
       await expect(preparation).toContainText("Accountable owner"); expect(writes).toBe(0);
       await preparation.getByRole("button", { name: "Review inactive agent preparation", exact: true }).click();
       const dialog = page.getByRole("alertdialog");
+      if (kind === "hire") {
+        await expect(dialog).toContainText("Research package · version 1.0.0");
+        await expect(dialog).toContainText("Reviewed research procedures · 2");
+        await expect(dialog).toContainText("creates no app access or running work");
+        expect(writes).toBe(0);
+      }
       await expect(dialog.getByRole("button", { name: "Prepare inactive agent", exact: true })).toBeDisabled();
       await dialog.getByRole("checkbox").check();
       await dialog.getByRole("button", { name: "Prepare inactive agent", exact: true }).click();

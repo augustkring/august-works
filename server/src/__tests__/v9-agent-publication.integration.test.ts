@@ -32,6 +32,7 @@ import { heartbeatMemoryPayloadRetained, reapplyMemoryDeletionMarkers } from "..
 import { memoryJobService } from "../services/memory/memory-jobs.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
 import { seedRequiredAuthoringProcedures } from "./helpers/authoring-procedures.js";
+import { prepareHirePublicationFixture } from "./helpers/hire-publication.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 
 const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(40);
@@ -63,12 +64,7 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
       content: [{ type: "text", text: "Welcome to the team. This is an internal draft for review." }],
       usage: { input_tokens: excessUsage ? 1001 : 20, output_tokens: 12 } }), { status: 200, headers: { "content-type": "application/json" } });
   };
-  beforeEach(async () => {
-    await instanceSettingsService(db).updateExperimental({ saas_deployment_profile_v6: true, billing_v6: true, agent_packages_v7: true,
-      hire_agent_v9: true, enableWorkflowsV1: true, orchestration_v7: true, supervision_v7: true, readiness_engine_v7: true, verifier_v7: true });
-    f = await seedV5Presences(db);
-    requiredProcedures = await seedRequiredAuthoringProcedures(db, f.actor, f.home, f.presence.id);
-    calls = 0; duringCall = undefined; lostResponse = false; excessUsage = false;
+  async function configureRuntime() {
     const config = { provider: "aw_text_only", model: "fixture-draft-model", workerModelProfileId: randomUUID(), maxOutputTokens: 256 };
     await db.update(agents).set({ adapterType: "paperclip_runner", adapterConfig: config, status: "paused", pauseReason: "manual" }).where(eq(agents.id, f.presence.id));
     const providers = agentProviderBindingService(db), pb = await providers.create(f.actor, f.home, f.presence.id,
@@ -92,6 +88,15 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
         sourceSha, qualificationHash: "b".repeat(64), testedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 300000).toISOString() },
       qualificationEvidenceRef: "https://protected.test.invalid/qualification/safe-test-fixture", qualificationArtifactSha256: "c".repeat(64) };
     registerNativeDraftGateway(db, workerModelGateway(db, { profiles: [profile], sourceSha, protectedEvidenceOrigin: "https://protected.test.invalid", fetch: transport }));
+    return runtime;
+  }
+  beforeEach(async () => {
+    await instanceSettingsService(db).updateExperimental({ saas_deployment_profile_v6: true, billing_v6: true, agent_packages_v7: true,
+      hire_agent_v9: true, enableWorkflowsV1: true, orchestration_v7: true, supervision_v7: true, readiness_engine_v7: true, verifier_v7: true });
+    f = await seedV5Presences(db);
+    requiredProcedures = await seedRequiredAuthoringProcedures(db, f.actor, f.home, f.presence.id);
+    calls = 0; duringCall = undefined; lostResponse = false; excessUsage = false;
+    const runtime = await configureRuntime();
     const initial = await drafts().create(f.actor, f.home, { requestId: randomUUID(), agentId: f.presence.id });
     draft = await drafts().save(f.actor, f.home, initial.id, { requestId: randomUUID(), expectedVersion: initial.version, step: "test",
       content: agentAuthoringContentSchema.parse({ name: "Welcome specialist", description: "Creates internal welcome drafts", ownerUserId: f.userId,
@@ -249,5 +254,40 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
       .rejects.toMatchObject({ status: 409, details: { code: "publication_request_erased" } });
     expect((await agent()).runtimeConfig).toHaveProperty(`${AUTHORED_AGENT_DEFINITION_KEY}.revisionId`, second.revisionId);
     expect((await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.companyId, f.home))).map(row => row.status)).toEqual(["completed", "completed", "completed"]);
+  });
+  it("publishes a Hire only with its actual package, reviewed purpose and current activation, and rebinds the Original package to that version", async () => {
+    const hired = await prepareHirePublicationFixture(db, f);
+    expect(hired.agent.status).toBe("paused");
+    f = { ...f, presence: hired.agent };
+    const runtime = await configureRuntime();
+    draft = await drafts().save(f.actor, f.home, hired.draft.id, { requestId: randomUUID(), expectedVersion: hired.draft.version,
+      step: "hire_test", content: { ...hired.draft.content!, runtimeBindingId: runtime.id, scenarios: [hired.release.manifest.purpose] } });
+    await expect(db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
+      status: "running", invocationSource: "on_demand", triggerDetail: "ordinary_work" }))
+      .rejects.toMatchObject({ cause: { code: "23514", message: "package_run_activation_required" } });
+    await expect(db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
+      status: "running", invocationSource: "on_demand", triggerDetail: "agent_safe_test", contextSnapshot: {
+        agentConfigurationTestId: randomUUID(), draftId: draft.id, candidateHash: "d".repeat(64), toolsGranted: false, activatesAgent: false } }))
+      .rejects.toMatchObject({ cause: { code: "23514", message: "agent_safe_test_original_run_scope_required" } });
+    await qualify();
+    const before = await publications().review(f.actor, f.home, draft.id);
+    expect(before.canPublish).toBe(false);
+    expect(before.blockers.map(item => item.code)).toContain("hire_package_activation_required");
+    const active = await hired.packages.decide(f.actor, f.home, hired.installation.id, "activate", {
+      expectedVersion: hired.installation.version, reason: "Human-reviewed package activation in the Native software fixture" });
+    expect(active.readiness?.reasons).toEqual([]); expect(active.status).toBe("active");
+    const input = await publicationCommand(), runs = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home));
+    const first = await publications().publish(f.actor, f.home, draft.id, input);
+    expect(first.packageInstallation).toEqual({ installationId: active.id, versionId: hired.published.id,
+      key: hired.release.packageKey, version: hired.release.version, contentHash: hired.published.contentHash });
+    const installed = await hired.packages.get(f.actor, f.home, active.id);
+    expect(installed.status).toBe("active"); expect(installed.version).toBe(active.version + 1);
+    const [current] = await db.execute<{ current: boolean }>(sql`select aw_v7_package_installation_current(i) as current
+      from company_agent_package_installations i where company_id=${f.home}::uuid and id=${active.id}::uuid`);
+    expect(current!.current).toBe(true);
+    expect(await publications().publish(f.actor, f.home, draft.id, input)).toEqual(first);
+    expect((await hired.packages.get(f.actor, f.home, active.id)).version).toBe(installed.version);
+    expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home))).toEqual(runs);
+    expect(calls).toBe(1);
   });
 });

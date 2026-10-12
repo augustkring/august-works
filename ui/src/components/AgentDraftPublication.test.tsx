@@ -97,10 +97,13 @@ it("reads a previously confirmed publication again after reload instead of creat
 });
 it("reads the immutable Original receipt after rollout withdrawal without using edited draft text", async () => {
   context.receiptOnly = true;
-  const old = { ...result, publishedContent: { ...result.publishedContent, name: "Published specialist", outcome: "Earlier immutable responsibility" } };
+  const old = { ...result, publishedContent: { ...result.publishedContent, name: "Published specialist", outcome: "Earlier immutable responsibility" },
+    packageInstallation: { installationId: "10000000-0000-4000-8000-000000000011", versionId: "10000000-0000-4000-8000-000000000012",
+      key: "welcome", version: "1.0.0", contentHash: "d".repeat(64) } };
   const receipt = vi.spyOn(agentAuthoringApi, "publicationReceipt").mockResolvedValue(old), publish = vi.spyOn(agentAuthoringApi, "publish");
   await mount(review, false);
   expect(container.textContent).toContain("Published specialist"); expect(container.textContent).toContain("Earlier immutable responsibility");
+  expect(container.textContent).toContain("1.0.0");
   expect(container.textContent).not.toContain("Review publication and activation");
   expect(receipt).toHaveBeenCalledWith(draft.companyId, "author", draft.id, undefined, expect.any(AbortSignal)); expect(publish).not.toHaveBeenCalled();
 });

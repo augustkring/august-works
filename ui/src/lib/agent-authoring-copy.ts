@@ -1,6 +1,7 @@
 /** Translate fixed native readiness reasons without treating server copy as a locale. */
 const blockerKeys = new Map<string, string>([
   ["hire_release_unavailable", "authoringBlockers.hire_release_unavailable"],
+  ["hire_package_activation_required", "authoringBlockers.hire_package_activation_required"],
   ["outcome_required", "authoringBlockers.outcome_required"],
   ["identity_required", "authoringBlockers.identity_required"],
   ["instructions_required", "authoringBlockers.instructions_required"],

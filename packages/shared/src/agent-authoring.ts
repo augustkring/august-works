@@ -166,6 +166,11 @@ export const agentDraftPreparationReviewSchema = z.strictObject({
   accountableOwner: z.strictObject({ userId: z.string().min(1).max(200), name: z.string().min(1).max(200) }),
   requiresBoardApproval: z.boolean(), createsInactiveAgent: z.literal(true),
   runtimeQualified: z.literal(false), authorityGranted: z.literal(false),
+  packageInstallation: z.strictObject({ versionId: z.uuid(), name: z.string().min(1).max(200),
+    version: z.string().min(1).max(120), contentHash: z.string().regex(/^[a-f0-9]{64}$/),
+    components: z.array(z.strictObject({ key: z.string().min(1).max(120), type: z.literal("role_pack"),
+      resourceId: z.uuid(), versionId: z.uuid(), name: z.string().min(1).max(200), revisionNumber: z.number().int().positive(),
+      contentHash: z.string().regex(/^[a-f0-9]{64}$/) })).length(1) }).nullable().optional(),
   executionStarted: z.literal(false), reviewHash: z.string().regex(/^[a-f0-9]{64}$/),
 });
 export const agentDraftPrepareSchema = z.strictObject({

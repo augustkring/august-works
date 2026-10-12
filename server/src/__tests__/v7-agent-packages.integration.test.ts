@@ -79,6 +79,7 @@ import {
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
+import { rolePacks } from "@paperclipai/db";
 import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import {
@@ -334,7 +335,7 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(audit.filter((event) => event.action === "agent_configuration.draft_created")).toHaveLength(1);
       expect(audit.filter((event) => event.action === "agent_configuration.draft_saved")).toHaveLength(1);
     });
-    it("prepares a pinned Hire draft through the Original inactive Agent owner without installation or execution", async () => {
+    it("prepares a pinned Hire draft and its exact package on the Original inactive Agent without grants or execution", async () => {
       const originalFlags = await instanceSettingsService(db).getExperimental();
       try {
       await instanceSettingsService(db).updateExperimental({ free_core_commercial_v7: true, billing_entitlements_v6: true, billing_usage_v6: true });
@@ -344,13 +345,20 @@ const support = await getEmbeddedPostgresTestSupport();
       const beforeAgents = (await db.select().from(agents)).length, beforeInstalls = await db.select().from(companyAgentPackageInstallations);
       const draft = await hire.create(f.actor, f.home, { requestId: randomUUID(), packageVersionId: published.id });
       const reviewed = await hire.preparationReview(f.actor, f.home, draft.id);
+      expect(reviewed.packageInstallation).toMatchObject({ versionId: published.id, contentHash: published.contentHash,
+        components: [{ key: "internal-role", resourceId: roleId, versionId: roleVersionId }] });
       const command = { requestId: randomUUID(), expectedVersion: draft.version, expectedReviewHash: reviewed.reviewHash, confirmInactiveAgentPreparation: true as const };
       const prepared = await hire.prepare(f.actor, f.home, draft.id, command);
       expect(prepared.package?.versionId).toBe(published.id);
       expect(prepared.preparation).toMatchObject({ status: "prepared", runtimeQualified: false, authorityGranted: false, executionStarted: false });
       expect(await db.select().from(agents)).toHaveLength(beforeAgents + 1);
-      expect(await db.select().from(companyAgentPackageInstallations)).toEqual(beforeInstalls);
+      const installations = await db.select().from(companyAgentPackageInstallations).where(eq(companyAgentPackageInstallations.agentId, prepared.preparation!.agentId));
+      expect(installations).toHaveLength(1);
+      expect(installations[0]).toMatchObject({ companyId: f.home, installedVersionId: published.id, status: "configuring",
+        components: [{ key: "internal-role", resourceId: roleId, versionId: roleVersionId }], installationRequestId: command.requestId });
+      expect(await db.select().from(companyAgentPackageInstallations)).toHaveLength(beforeInstalls.length + 1);
       expect((await hire.prepare(f.actor, f.home, draft.id, command)).preparation!.agentId).toBe(prepared.preparation!.agentId);
+      expect(await db.select().from(companyAgentPackageInstallations)).toHaveLength(beforeInstalls.length + 1);
       expect((await hire.review(f.actor, f.home, draft.id)).publishAllowed).toBe(false);
       const another = await hire.create(f.actor, f.home, { requestId: randomUUID(), packageVersionId: published.id });
       const nextReview = await hire.preparationReview(f.actor, f.home, another.id);
@@ -378,6 +386,20 @@ const support = await getEmbeddedPostgresTestSupport();
       const removed = await hire.discard(f.actor, f.home, draft.id, {requestId: randomUUID(), expectedVersion: 1});
       expect(removed.content).toBeNull(); expect(removed.package?.versionId).toBe(published.id);
       await expect(hire.get({...f.actor, userId: "foreign-author", isInstanceAdmin: true}, f.home, draft.id)).rejects.toMatchObject({status: 403});
+    });
+    it("resolves Hire components only inside the selected company and refuses an archived local implementation", async () => {
+      const { published, hire } = await hireFixture();
+      const planned = await service.resolveHireComponents(f.actor, f.home, published.id);
+      expect(planned.components).toMatchObject([{ resourceId: roleId, versionId: roleVersionId }]);
+      await expect(service.resolveHireComponents(f.actor, f.guest, published.id))
+        .rejects.toMatchObject({ status: 409, details: { code: "hire_package_component_unavailable" } });
+      const draft = await hire.create(f.actor, f.home, { requestId: randomUUID(), packageVersionId: published.id });
+      const beforeAgents = await db.select().from(agents), beforeInstalls = await db.select().from(companyAgentPackageInstallations);
+      await db.update(rolePacks).set({ status: "archived" }).where(eq(rolePacks.id, roleId));
+      await expect(hire.preparationReview(f.actor, f.home, draft.id))
+        .rejects.toMatchObject({ status: 409, details: { code: "hire_package_component_unavailable" } });
+      expect(await db.select().from(agents)).toEqual(beforeAgents);
+      expect(await db.select().from(companyAgentPackageInstallations)).toEqual(beforeInstalls);
     });
     it("projects only available customer releases for Hire Agent and does not expose internal evaluation or release evidence", async () => {
       await instanceSettingsService(db).updateExperimental({ hire_agent_v9: true });

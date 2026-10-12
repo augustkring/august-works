@@ -42,13 +42,13 @@ async function render() {
       canUseAuthority={() => true} onConfirmed={confirmed} />
   </QueryClientProvider></StrictMode>));
 }
-async function mount() {
+async function mount(value = review) {
   client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   client.setQueryDefaults(queryKeys.auth.session, { gcTime: Infinity });
   client.setQueryData(queryKeys.auth.session, v9SessionFixture(context.principal));
   vi.spyOn(instanceSettingsApi, "getExperimental").mockResolvedValue({ ...Object.fromEntries(V5_FEATURE_KEYS.map(key => [key, true])),
     enableFoundationV1: true, enableContextEngineV1: true, saas_deployment_profile_v6: true, billing_v6: true, agent_packages_v7: true, hire_agent_v9: true } as never);
-  vi.spyOn(agentAuthoringApi, "preparationReview").mockResolvedValue(review);
+  vi.spyOn(agentAuthoringApi, "preparationReview").mockResolvedValue(value);
   container = document.createElement("div"); document.body.append(container); root = createRoot(container); await render();
 }
 async function click(label: string) {
@@ -75,6 +75,18 @@ it("requires separate explicit C3, shows the accountable owner and board gate, a
   expect(post).toHaveBeenCalledTimes(1);
   expect(post).toHaveBeenCalledWith(draft.companyId, "author", draft.id, expect.objectContaining({ expectedVersion: 2, expectedReviewHash: review.reviewHash, confirmInactiveAgentPreparation: true }));
   expect(sessionStorage.length).toBe(0);
+});
+it("discloses the exact reviewed package configuration before confirming inactive preparation", async () => {
+  const post = vi.spyOn(agentAuthoringApi, "prepare").mockResolvedValue(prepared);
+  await mount({ ...review, packageInstallation: { versionId: "10000000-0000-4000-8000-000000000005", name: "Welcome package",
+    version: "1.2.3", contentHash: "b".repeat(64), components: [{ key: "welcome", type: "role_pack",
+      resourceId: "10000000-0000-4000-8000-000000000006", versionId: "10000000-0000-4000-8000-000000000007",
+      name: "Reviewed welcome procedures", revisionNumber: 4, contentHash: "c".repeat(64) }] } });
+  await vi.waitFor(() => expect(container.textContent).toContain("Welcome package · version 1.2.3"));
+  await click("Review inactive agent preparation");
+  expect(document.querySelector('[role="alertdialog"]')!.textContent).toContain("Reviewed welcome procedures · 4");
+  expect(document.querySelector('[role="alertdialog"]')!.textContent).toContain("creates no app access or running work");
+  expect(post).not.toHaveBeenCalled(); expect(document.querySelector<HTMLInputElement>('input[type="checkbox"]')!.checked).toBe(false);
 });
 it("retains only command identity after an unknown reply and uses a read on reload without automatic replay", async () => {
   const post = vi.spyOn(agentAuthoringApi, "prepare").mockRejectedValue(new Error("Lost response"));

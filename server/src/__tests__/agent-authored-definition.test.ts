@@ -18,6 +18,16 @@ describe("Canonical authored Agent definition", () => {
     expect(compileAuthoredAgentDefinition({ ...content, instructions: { ...content.instructions, prohibited: "Different limits" } }, revisionId, candidateHash).definitionHash)
       .not.toBe(definition.definitionHash);
   });
+  it("preserves exact package provenance without exempting JWT-shaped strings from redaction", () => {
+    const definition = compileAuthoredAgentDefinition(candidate(), randomUUID(), "a".repeat(64), "b".repeat(64), {
+      version: 1, provenance: { draftId: randomUUID(), draftVersion: 2, candidateRevision: 1, requestedByUserId: "owner",
+        reviewHash: "c".repeat(64), requestHash: "d".repeat(64), verifiedTestIds: [randomUUID()], priorRevisionId: null,
+        activatedAtPublication: true, packageInstallation: { installationId: randomUUID(), versionId: randomUUID(), key: "welcome",
+          releaseVersion: ["1", "0", "0"], contentHash: "e".repeat(64) } } });
+    expect(definition.publication!.packageInstallation!.releaseVersion.join(".")).toBe("1.0.0");
+    expect(() => compileAuthoredAgentDefinition({ ...candidate(), internalDescription: "eyJhbGciOiJIUzI1NiJ9.payload.signature" }, randomUUID(), "a".repeat(64)))
+      .toThrow("Remove credential-shaped values");
+  });
   it.each(["none", "not_allowed", "ask_first"])("does not invent automatic internal-draft authority from %s", autonomy => {
     const content = candidate(); content.capabilities = autonomy === "none" ? [] : [{ operation: "create_internal_draft", autonomy: autonomy as "not_allowed" | "ask_first" }];
     expect(authoredAgentMappingBlockers(content)).toContain("internal_draft_authority_required");

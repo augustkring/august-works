@@ -116,7 +116,7 @@ export function AgentDraftPublication({ company, principal, draft, enabled, canU
     {showReceipt && receipt ? <>
       <p role="status">{t("agentPublication.receipt", { version: receipt.publishedVersion })}</p>
       <p className="whitespace-pre-wrap">{receipt.publishedContent.name} · {receipt.publishedContent.outcome}</p>
-      {draft.package ? <p>{t("agentPublication.packageVersion", { version: draft.package.version })}</p> : null}
+      {receipt.packageInstallation ? <p>{t("agentPublication.packageVersion", { version: receipt.packageInstallation.version })}</p> : null}
       <p>{t("agentPublication.scope")}</p>
       <div className="flex flex-wrap gap-3">
         <Button asChild variant="outline" className="min-h-11"><Link to={`/agents/${receipt.agentId}`} onClick={event => { if (!current()) event.preventDefault(); }}>{t("agentPublication.openAgent")}</Link></Button>
@@ -129,6 +129,8 @@ export function AgentDraftPublication({ company, principal, draft, enabled, canU
     {review.isError ? <p role="status">{t("agentPublication.unavailable")}</p> : null}
     {review.isSuccess && !review.isFetching && !unknown && !receipt ? <>
       {review.data.blockers.length ? <ul className="list-disc space-y-2 pl-5">{review.data.blockers.map((item, index) => <li key={index}>{t(agentAuthoringBlockerKey(item.code))}</li>)}</ul> : null}
+      {review.data.blockers.some(item => item.code === "hire_package_activation_required") ? <Button asChild variant="outline" className="min-h-11">
+        <Link to="/agents/packages">{t("agentPublication.reviewPackage")}</Link></Button> : null}
       <Button className="min-h-11" disabled={!review.data.canPublish || pending || !authority.writeReady}
         onClick={() => { try { decisionHash.current = currentReview().reviewHash; setPublication(false); setActivation(false); setOpen(true); }
           catch { setFailure(t("agentPublication.changed")); } }}>{t("agentPublication.review")}</Button>

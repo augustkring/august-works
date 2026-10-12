@@ -962,6 +962,34 @@ export function agentPackageService(
         return reviewed!;
       });
     },
+    /** Resolve equivalent immutable components only inside the selected company.
+     * Hire never borrows another tenant's implementation or creates app grants. */
+    resolveHireComponents: async (actor: AuthorizationActor, companyId: string, versionId: string) => {
+      await assertV7Enabled(db, "agent_packages_v7");
+      await access(db, { ...actor, ignoreInstanceAdmin: true }, companyId);
+      const published = await release(db, versionId);
+      available(published);
+      if (published.version.release.manifest.audience !== "customer") throw notFound("Hire package unavailable");
+      const native = published.version.release.components.filter(c =>
+        ["role_pack", "skill", "playbook", "workflow_template", "routine_template"].includes(c.type));
+      if (native.filter(c => c.type === "role_pack").length !== 1 || native.some(c => c.required && c.type !== "role_pack"))
+        throw conflict("This Hire package needs its additional native component mapping", { code: "hire_package_mapping_required" });
+      const component = native.find(c => c.type === "role_pack")!;
+      const matches = await db.select({ resourceId: rolePacks.id, versionId: rolePackVersions.id, name: rolePacks.name,
+        revisionNumber: rolePackVersions.revisionNumber }).from(rolePacks).innerJoin(rolePackVersions,
+        and(eq(rolePackVersions.companyId, rolePacks.companyId), eq(rolePackVersions.rolePackId, rolePacks.id)))
+        .where(and(eq(rolePacks.companyId, companyId), eq(rolePacks.status, "active"), eq(rolePackVersions.state, "published"),
+          sql`aw_v7_package_component_hash(${companyId}::uuid,'role_pack',${rolePacks.id},${rolePackVersions.id})=${component.contentHash}`)).limit(2);
+      if (matches.length !== 1) throw conflict("Resolve the package's exact local Role Pack before preparing this Hire", {
+        code: matches.length ? "hire_package_component_ambiguous" : "hire_package_component_unavailable" });
+      const match = matches[0]!;
+      const version = await rolePackService(db).getVersion({ ...actor, ignoreInstanceAdmin: true }, companyId, match.resourceId, match.versionId);
+      if (version.items.some(item => !["required_skill", "required_policy"].includes(item.type)))
+        throw conflict("The Hire package needs a mapping for additional Role Pack behavior", { code: "hire_package_mapping_required" });
+      return { versionId, name: published.package.name, version: published.version.version, contentHash: published.version.contentHash,
+        components: [{ key: component.key, type: "role_pack" as const, resourceId: match.resourceId, versionId: match.versionId,
+          name: match.name, revisionNumber: match.revisionNumber, contentHash: component.contentHash }] };
+    },
     options: async (
       actor: AuthorizationActor,
       companyId: string,
@@ -1306,6 +1334,7 @@ export function agentPackageService(
       companyId: string,
       raw: unknown,
       expectedPackageKey?: string,
+      parentPublications?: Parameters<typeof logActivity>[2],
     ) => {
       const input = packageInstallSchema.parse(raw);
       await assertV7Enabled(db, "agent_packages_v7");
@@ -1395,7 +1424,7 @@ export function agentPackageService(
           grantsCreated: 0,
         });
         return view(row!);
-      });
+      }, parentPublications);
     },
     list: async (actor: AuthorizationActor, companyId: string) => {
       await access(db, actor, companyId);
@@ -1436,6 +1465,7 @@ export function agentPackageService(
       id: string,
       action: "activate" | "suspend" | "uninstall",
       raw: unknown,
+      parentPublications?: Parameters<typeof logActivity>[2],
     ) => {
       const input = packageDecisionSchema.parse(raw);
       return withV7ActivityTransaction(db, async (tx, p) => {
@@ -1479,7 +1509,7 @@ export function agentPackageService(
           reason: input.reason,
         });
         return view(updated!);
-      });
+      }, parentPublications);
     },
     update: async (
       actor: AuthorizationActor,
