@@ -1,13 +1,13 @@
 import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
-import { V5_FEATURE_KEYS, agentAuthoringContentSchema, agentAuthoringDraftViewSchema, agentDraftSaveSchema, agentDraftPublicationCommandSchema, agentDraftPublicationReceiptSchema } from "../../packages/shared/src/index.ts";
+import { V5_FEATURE_KEYS, agentAuthoringContentSchema, agentAuthoringDraftViewSchema, agentDraftSaveSchema, agentDraftPublicationCommandSchema, agentDraftPublicationReceiptSchema, agentPackageSetupCommandSchema, agentPackageSetupReceiptSchema } from "../../packages/shared/src/index.ts";
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 async function json(response: APIResponse) { expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(true); return response.json(); }
 
 // Built customer hosts with explicitly scoped software API responses. Actual
 // model reservations, dispatch, documents and verification are proven separately
 // by PostgreSQL tests. This suite is not live provider or GA evidence.
-for (const [kind, locale] of [["custom", "en"], ["hire", "da"]] as const) {
+for (const [kind, locale] of [["custom", "en"], ["hire", "da"], ["hire", "en"]] as const) {
   test(`${kind} publication in ${locale} requires both confirmations and recovers its Original receipt without resending`, async ({ page, request }) => {
     const company = await json(await request.post("/api/companies", { data: { name: `Disposable ${kind} publication host` } }));
     try {
@@ -30,12 +30,25 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"]] as const) {
         }),
         createdAt: "2026-10-12T00:00:00.000Z", updatedAt: "2026-10-12T00:00:00.000Z" });
       let publishes = 0, receipt: ReturnType<typeof agentDraftPublicationReceiptSchema.parse> | null = null;
+      const purposeId = "10000000-0000-4000-8000-000000000016";
+      let setups = 0, setupReceipt: ReturnType<typeof agentPackageSetupReceiptSchema.parse> | null = null;
       await page.addInitScript(language => localStorage.setItem("aw.v9.display-locale", language), locale);
       await page.route("**/api/auth/get-session", route => route.fulfill({ json: { ...session, session: { ...session.session, localImplicit: false } } }));
       await page.route("**/api/instance/settings/experimental", route => route.fulfill({ json: flags }));
       await page.route(`**/api/companies/${company.id}/agent-configuration-drafts/**`, async route => {
         const req = route.request(), path = new URL(req.url()).pathname;
         expect(new URL(req.url()).searchParams.get("expectedUserId")).toBe(session.user.id);
+        if (path.endsWith("/package-setup") && req.method() === "POST") {
+          const input = agentPackageSetupCommandSchema.parse(req.postDataJSON()); setups++;
+          expect(input).toMatchObject({ expectedVersion: draft.version, expectedReviewHash: "c".repeat(64), purposeId,
+            confirmIntendedPurpose: true, confirmPackageActivation: true });
+          expect(Object.keys(input)).toHaveLength(6);
+          setupReceipt = agentPackageSetupReceiptSchema.parse({ companyId: company.id, draftId: id, requestId: input.requestId,
+            agentId, installationId: planId, installationVersion: 3, purposeId, purposeVersion: 1,
+            activatedAtConfirmation: true, authorityGranted: false, executionStarted: false });
+          draft = agentAuthoringDraftViewSchema.parse({ ...draft, version: draft.version + 1 });
+          return route.abort("failed");
+        }
         if (path.endsWith("/publish") && req.method() === "POST") {
           const input = agentDraftPublicationCommandSchema.parse(req.postDataJSON()); publishes++;
           expect(input).toMatchObject({ expectedVersion: draft.version, expectedReviewHash: "b".repeat(64), activate: true, confirmPublication: true, confirmActivation: true });
@@ -46,6 +59,19 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"]] as const) {
           return route.abort("failed");
         }
         expect(req.method()).toBe("GET");
+        if (path.endsWith("/package-setup-review")) {
+          const selected = new URL(req.url()).searchParams.get("purposeId") === purposeId;
+          return route.fulfill({ json: { companyId: company.id, draftId: id, version: draft.version, agentId,
+            installationId: planId, installationVersion: setupReceipt ? 3 : 1, packageName: "Research draft", packageVersion: "1.0.0",
+            intendedPurpose: "Produce a bounded welcome draft", purposes: [{ id: purposeId, version: 1, purposeVersion: 1, name: "Approved internal research" }],
+            selectedPurposeId: selected ? purposeId : null, packageCurrent: !!setupReceipt, canConfirm: selected && !setupReceipt,
+            blockers: selected ? [] : ["approved_purpose_required"], reviewHash: "c".repeat(64),
+            modelCalled: false, authorityGranted: false, executionStarted: false } });
+        }
+        if (path.endsWith("/package-setup-receipt")) {
+          expect(new URL(req.url()).searchParams.get("requestId")).toBe(setupReceipt?.requestId);
+          return route.fulfill({ json: setupReceipt });
+        }
         if (path.endsWith("/options")) return route.fulfill({ json: { owners: [{ id: session.user.id, name: "Accountable owner" }], knowledge: [], runtimes: [{ id: runtimeId }] } });
         if (path.endsWith("/hire-capability")) return route.fulfill({ json: { key: "research", versionId: packageId, version: "1.0.0", name: "Research draft", category: "Research",
           outcome: scenario, requiredKnowledge: [], requiredConnections: [], limits: [], actionClasses: ["internal_draft"], available: true } });
@@ -63,6 +89,25 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"]] as const) {
       });
       await page.goto(`/${company.issuePrefix}/dashboard`); await expect(page.getByRole("main")).toBeVisible();
       await page.goto(`/${company.issuePrefix}/agents/${kind === "custom" ? `custom/${id}/publish` : `hire/drafts/${id}/hire_review`}`);
+      if (kind === "hire") {
+        const setup = page.getByRole("region", { name: locale === "en" ? "Approved purpose and package setup" : "Godkendt formål og pakkeopsætning", exact: true });
+        const reviewSetup = setup.getByRole("button", { name: locale === "en" ? "Review package setup" : "Gennemgå pakkeopsætning", exact: true });
+        await expect(reviewSetup).toBeDisabled();
+        await setup.getByRole("combobox").selectOption(purposeId);
+        await expect(reviewSetup).toBeEnabled(); await reviewSetup.click();
+        const dialog = page.getByRole("alertdialog"), confirmSetup = dialog.getByRole("button", { name: locale === "en" ? "Confirm package setup" : "Bekræft pakkeopsætning", exact: true });
+        await expect(dialog).toContainText("Approved internal research"); await expect(confirmSetup).toBeDisabled();
+        await page.addScriptTag({ path: axePath });
+        expect(await page.evaluate(async () => (await (window as unknown as { axe: { run(scope: string): Promise<{ violations: unknown[] }> } }).axe.run('[role="alertdialog"]')).violations)).toEqual([]);
+        const consents = dialog.getByRole("checkbox"); await expect(consents).toHaveCount(2);
+        await consents.nth(0).check(); await expect(confirmSetup).toBeDisabled(); await consents.nth(1).check();
+        expect(setups).toBe(0); await confirmSetup.click();
+        const checkSetup = setup.getByRole("button", { name: locale === "en" ? "Check original setup" : "Kontrollér oprindelig opsætning", exact: true });
+        await expect(checkSetup).toBeVisible(); await page.reload(); await checkSetup.click();
+        await expect(setup).toContainText(locale === "en" ? "The current package setup is ready for publication." : "Den aktuelle pakkeopsætning er klar til publicering.");
+        await page.reload(); await expect(setup).toContainText(locale === "en" ? "The current package setup is ready for publication." : "Den aktuelle pakkeopsætning er klar til publicering.");
+        expect(setups).toBe(1);
+      }
       const region = page.getByRole("region", { name: locale === "en" ? "Publish and activate this version" : "Publicér og aktivér denne version", exact: true });
       await region.getByRole("button", { name: locale === "en" ? "Review publication and activation" : "Gennemgå publicering og aktivering", exact: true }).click();
       const dialog = page.getByRole("alertdialog"), submit = dialog.getByRole("button", { name: locale === "en" ? "Publish and activate" : "Publicér og aktivér", exact: true });
