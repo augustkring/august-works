@@ -49,7 +49,17 @@ The integrated branch now checks the actual current definition before retained
 runtime writes and binds worker inventories to the exact revision/hash/version.
 Restore/import inserts reject erased identities and snapshots of erased content;
 publication also rejects reuse of a closed identity in another company.
-Qualification of these follow-up changes is pending.
+Source `097a1a1bbb30c0a593ac3a4d4cf0fe995e52f242`, SHA-256
+`8ed906c8c3f58b199700abc4942113cb2a61167a7cb01d82fd3fbe4f847984b7`,
+passed all 49 V9 cases in six files and 73 Original model-gateway, Native-draft
+and runtime-fabric cases in three files in migrated PostgreSQL/Native sandbox.
+Own shared/DB builds and server/UI typechecks passed with frozen Source.
+The first 49-case run passed 48 and failed one new fixture's object assertion
+on the Original nullable context; replacing it with equality to the actual
+starting context preserves the complete no-write requirement. The second
+complete run also exercised successful preparation of the fresh definition.
+The earlier browser result covers the unchanged customer host scope; this
+follow-up does not claim a new full integrated-branch browser or release pass.
 
 This stage does not establish Native Hire package installation, additional
 knowledge/memory/action/delegation mappings, runtime provisioning, live provider
