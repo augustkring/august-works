@@ -66,7 +66,12 @@ export function agentAuthoringPackageSetupService(db: Db) {
       eq(activityLog.entityId, draftId), eq(activityLog.action, action), eq(activityLog.actorType, "user"),
       eq(activityLog.actorId, v7HumanActorId(actor)), sql`${activityLog.details}->>'requestId'=${requestId}`));
     if (!record || record.details?.schema !== schema) return null;
-    return { record, receipt: agentPackageSetupReceiptSchema.parse(record.details.receipt) };
+    const identity = record.details.receipt;
+    if (!identity || typeof identity !== "object" || Array.isArray(identity)) throw conflict("The original setup receipt is unavailable");
+    // These constants describe this known confirmed operation, not mutable
+    // status or caller authority. Keep sensitive-field redaction unchanged.
+    return { record, receipt: agentPackageSetupReceiptSchema.parse({ ...identity,
+      activatedAtConfirmation: true, authorityGranted: false, executionStarted: false }) };
   }
   return {
     review: async (actor: AuthorizationActor, companyId: string, draftId: string, purposeId: string | null = null) =>
@@ -122,8 +127,9 @@ export function agentAuthoringPackageSetupService(db: Db) {
           requestReceipts: [...draft.requestReceipts, { requestId: input.requestId, hash: requestHash, version: draft.version + 1 }],
         }).where(and(eq(agentConfigurationDrafts.companyId, companyId), eq(agentConfigurationDrafts.id, draftId), eq(agentConfigurationDrafts.version, draft.version))).returning({ id: agentConfigurationDrafts.id });
         if (!saved) throw conflict("The saved Hire draft changed before setup");
+        const { authorityGranted: _authority, executionStarted: _work, activatedAtConfirmation: _activation, ...identity } = receipt;
         await logActivity(tx, { companyId, actorType: "user", actorId: userId, action, entityType: "agent_configuration_draft", entityId: draftId,
-          details: { schema, requestId: input.requestId, requestHash, receipt } }, publications);
+          details: { schema, requestId: input.requestId, requestHash, receipt: identity } }, publications);
         return receipt;
       });
     },
