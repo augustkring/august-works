@@ -168,7 +168,7 @@ export const agentDraftPreparationReviewSchema = z.strictObject({
   runtimeQualified: z.literal(false), authorityGranted: z.literal(false),
   packageInstallation: z.strictObject({ versionId: z.uuid(), name: z.string().min(1).max(200),
     version: z.string().min(1).max(120), contentHash: z.string().regex(/^[a-f0-9]{64}$/),
-    components: z.array(z.strictObject({ key: z.string().min(1).max(120), type: z.enum(["role_pack", "skill", "playbook"]),
+    components: z.array(z.strictObject({ key: z.string().min(1).max(120), type: z.enum(["role_pack", "skill", "playbook", "workflow_template", "routine_template"]),
       resourceId: z.uuid(), versionId: z.uuid(), name: z.string().min(1).max(200), revisionNumber: z.number().int().positive(),
       contentHash: z.string().regex(/^[a-f0-9]{64}$/) })).min(1).max(64) }).nullable().optional(),
   executionStarted: z.literal(false), reviewHash: z.string().regex(/^[a-f0-9]{64}$/),

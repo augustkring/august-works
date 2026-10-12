@@ -50,6 +50,10 @@ for (const kind of ["custom", "hire"] as const) {
               versionId: "10000000-0000-4000-8000-000000000014", name: "Required planning procedure", revisionNumber: 1, contentHash: "d".repeat(64),
             }, { key: "welcome-playbook", type: "playbook", resourceId: "10000000-0000-4000-8000-000000000015",
               versionId: "10000000-0000-4000-8000-000000000016", name: "Approved welcome procedure", revisionNumber: 3, contentHash: "e".repeat(64),
+            }, { key: "manual-workflow", type: "workflow_template", resourceId: "10000000-0000-4000-8000-000000000017",
+              versionId: "10000000-0000-4000-8000-000000000018", name: "Existing welcome workflow", revisionNumber: 2, contentHash: "f".repeat(64),
+            }, { key: "manual-routine", type: "routine_template", resourceId: "10000000-0000-4000-8000-000000000019",
+              versionId: "10000000-0000-4000-8000-000000000020", name: "Existing welcome routine", revisionNumber: 1, contentHash: "a".repeat(64),
             }] } } : {}),
           outcome: draft.content!.outcome, accountableOwner: { userId: session.user.id, name: "Accountable owner" }, requiresBoardApproval: false,
           createsInactiveAgent: true, runtimeQualified: false, authorityGranted: false, executionStarted: false, reviewHash: "b".repeat(64) } });
@@ -70,6 +74,10 @@ for (const kind of ["custom", "hire"] as const) {
         await expect(dialog).toContainText("Reviewed research procedures · 2");
         await expect(dialog).toContainText("Required planning procedure · 1");
         await expect(dialog).toContainText("Approved welcome procedure · 3");
+        await expect(dialog).toContainText("Existing welcome workflow · 2");
+        await expect(dialog).toContainText("Existing welcome routine · 1");
+        await expect(dialog).toContainText("keep their current owners and access");
+        await expect(dialog).toContainText("does not start them or change their schedules");
         await expect(dialog).toContainText("creates no app access or running work");
         expect(writes).toBe(0);
       }

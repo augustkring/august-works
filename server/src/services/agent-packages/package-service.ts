@@ -30,6 +30,10 @@ import {
   companySkillVersions,
   playbookDocuments,
   documentRevisions,
+  workflows,
+  workflowRevisions,
+  routines,
+  routineRevisions,
   type Db,
 } from "@paperclipai/db";
 import {
@@ -60,6 +64,7 @@ import { rolePackService } from "../role-packs.js";
 import { skillResolverService } from "../skill-resolver.js";
 import { playbookService } from "../playbooks.js";
 import { playbookResolverService } from "../playbook-resolver.js";
+import { workflowService } from "../workflows/workflow-service.js";
 import { assertLearningAssetCurrent } from "../learning/learning-assets.js";
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { conflict, forbidden, notFound } from "../../errors.js";
@@ -974,7 +979,7 @@ export function agentPackageService(
       if (published.version.release.manifest.audience !== "customer") throw notFound("Hire package unavailable");
       const native = published.version.release.components.filter(c =>
         ["role_pack", "skill", "playbook", "workflow_template", "routine_template"].includes(c.type));
-      if (native.filter(c => c.type === "role_pack").length !== 1 || native.some(c => c.required && !["role_pack", "skill", "playbook"].includes(c.type)))
+      if (native.filter(c => c.type === "role_pack").length !== 1)
         throw conflict("This Hire package needs its additional native component mapping", { code: "hire_package_mapping_required" });
       const component = native.find(c => c.type === "role_pack")!;
       const matches = await db.select({ resourceId: rolePacks.id, versionId: rolePackVersions.id, name: rolePacks.name,
@@ -988,7 +993,7 @@ export function agentPackageService(
       const version = await rolePackService(db).getVersion({ ...actor, ignoreInstanceAdmin: true }, companyId, match.resourceId, match.versionId);
       if (version.items.some(item => !["required_skill", "required_playbook", "required_policy"].includes(item.type)))
         throw conflict("The Hire package needs a mapping for additional Role Pack behavior", { code: "hire_package_mapping_required" });
-      const components: Array<{ key: string; type: "role_pack" | "skill" | "playbook"; resourceId: string; versionId: string;
+      const components: Array<{ key: string; type: "role_pack" | "skill" | "playbook" | "workflow_template" | "routine_template"; resourceId: string; versionId: string;
         name: string; revisionNumber: number; contentHash: string }> = [{ key: component.key, type: "role_pack", resourceId: match.resourceId,
         versionId: match.versionId, name: match.name, revisionNumber: match.revisionNumber, contentHash: component.contentHash }];
       for (const required of native.filter(c => c.required && c.type === "skill")) {
@@ -1022,6 +1027,42 @@ export function agentPackageService(
           throw conflict("The package's required Playbook is not bound into its reviewed Role Pack", { code: "hire_package_mapping_required" });
         components.push({ key: required.key, type: "playbook", resourceId: selected.playbook.id, versionId: selected.revision.id,
           name: selected.revision.title ?? selected.playbook.key, revisionNumber: selected.revision.revisionNumber, contentHash: required.contentHash });
+      }
+      for (const required of native.filter(c => c.required && ["workflow_template", "routine_template"].includes(c.type))) {
+        await assertV7Authorization(db, { ...actor, ignoreInstanceAdmin: true }, companyId, "workflows:read");
+        if (required.type === "workflow_template") {
+          const matches = await db.select({ resourceId: workflows.id, versionId: workflowRevisions.id,
+            name: workflows.name, revisionNumber: workflowRevisions.revisionNumber }).from(workflows).innerJoin(workflowRevisions,
+            and(eq(workflowRevisions.companyId, workflows.companyId), eq(workflowRevisions.workflowId, workflows.id),
+              eq(workflowRevisions.id, workflows.publishedRevisionId)))
+            .where(and(eq(workflows.companyId, companyId), eq(workflows.status, "active"), eq(workflowRevisions.state, "published"),
+              sql`aw_v7_package_component_hash(${companyId}::uuid,'workflow_template',${workflows.id},${workflowRevisions.id})=${required.contentHash}`)).limit(2);
+          if (matches.length !== 1) throw conflict("Resolve the package's exact local published workflow before preparing this Hire", {
+            code: matches.length ? "hire_package_component_ambiguous" : "hire_package_component_unavailable" });
+          const selected = matches[0]!;
+          if (!await workflowService(db).getRevision(companyId, selected.resourceId, selected.versionId, { ...actor, ignoreInstanceAdmin: true }))
+            throw conflict("The reviewed workflow revision is unavailable", { code: "hire_package_component_unavailable" });
+          components.push({ ...selected, key: required.key, type: "workflow_template", contentHash: required.contentHash });
+        } else {
+          const matches = await db.select({ resourceId: routines.id, versionId: routineRevisions.id,
+            name: routineRevisions.title, revisionNumber: routineRevisions.revisionNumber,
+            targetKind: routines.executionTargetKind, targetRef: routines.executionTargetRef }).from(routines).innerJoin(routineRevisions,
+            and(eq(routineRevisions.companyId, routines.companyId), eq(routineRevisions.routineId, routines.id),
+              eq(routineRevisions.id, routines.latestRevisionId)))
+            .where(and(eq(routines.companyId, companyId), eq(routines.status, "active"),
+              sql`aw_v7_package_component_hash(${companyId}::uuid,'routine_template',${routines.id},${routineRevisions.id})=${required.contentHash}`)).limit(2);
+          if (matches.length !== 1) throw conflict("Resolve the package's exact local current routine before preparing this Hire", {
+            code: matches.length ? "hire_package_component_ambiguous" : "hire_package_component_unavailable" });
+          const selected = matches[0]!;
+          if (selected.targetKind === "workflow") {
+            const target = selected.targetRef ? await workflowService(db).get(companyId, selected.targetRef) : null;
+            if (!target || target.status !== "active" || !target.publishedRevisionId ||
+              !await workflowService(db).getRevision(companyId, target.id, target.publishedRevisionId, { ...actor, ignoreInstanceAdmin: true }))
+              throw conflict("The routine's current published workflow is unavailable", { code: "hire_package_component_unavailable" });
+          }
+          components.push({ resourceId: selected.resourceId, versionId: selected.versionId, name: selected.name,
+            revisionNumber: selected.revisionNumber, key: required.key, type: "routine_template", contentHash: required.contentHash });
+        }
       }
       return { versionId, name: published.package.name, version: published.version.version, contentHash: published.version.contentHash, components };
     },

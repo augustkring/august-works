@@ -287,7 +287,7 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
   });
   it("publishes a Hire only with its actual package, reviewed purpose and current activation, and rebinds the Original package to that version", async () => {
     requiredPlaybook = await seedApprovedAuthoringPlaybook(db, f.actor, f.home);
-    const hired = await prepareHirePublicationFixture(db, f, requiredProcedures[0]!, requiredPlaybook, false);
+    const hired = await prepareHirePublicationFixture(db, f, requiredProcedures[0]!, requiredPlaybook, false, true);
     expect(hired.agent.status).toBe("paused");
     expect(hired.installation.components).toEqual(expect.arrayContaining([expect.objectContaining({
       key: "welcome-procedure", type: "skill", resourceId: requiredProcedures[0]!.skillId, versionId: requiredProcedures[0]!.versionId,
@@ -295,6 +295,12 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     expect(hired.installation.components).toEqual(expect.arrayContaining([expect.objectContaining({
       key: "welcome-playbook", type: "playbook", resourceId: requiredPlaybook.playbookId, versionId: requiredPlaybook.revisionId,
     })]));
+    expect(hired.installation.components).toEqual(expect.arrayContaining([
+      expect.objectContaining({ key: "welcome-workflow", type: "workflow_template", resourceId: hired.automations!.workflow.id,
+        versionId: hired.automations!.workflow.publishedRevisionId }),
+      expect.objectContaining({ key: "welcome-routine", type: "routine_template", resourceId: hired.automations!.routine.id,
+        versionId: hired.automations!.routine.latestRevisionId }),
+    ]));
     f = { ...f, presence: hired.agent };
     const runtime = await configureRuntime();
     draft = await drafts().save(f.actor, f.home, hired.draft.id, { requestId: randomUUID(), expectedVersion: hired.draft.version,

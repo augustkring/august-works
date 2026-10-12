@@ -11,6 +11,7 @@ import { foundationService } from "../../services/foundation/foundation-service.
 import { aiGovernanceService } from "../../services/ai-governance/governance-service.js";
 import { purpose, oversight, reviews } from "./governance-fixture.js";
 import type { seedV5Presences } from "./v5-fixtures.js";
+import { seedHireAutomationComponents } from "./hire-automations.js";
 
 /** Explicit software qualification metadata, billing and reviewed deployment
  * facts. Real package, inactive Agent, Foundation and governance owners follow;
@@ -18,7 +19,7 @@ import type { seedV5Presences } from "./v5-fixtures.js";
 export async function prepareHirePublicationFixture(db: Db, f: Awaited<ReturnType<typeof seedV5Presences>>,
   requiredProcedure?: { skillId: string; versionId: string; key: string },
   requiredPlaybook?: { playbookId: string; revisionId: string; key: string },
-  configurePurpose = true) {
+  configurePurpose = true, includeAutomations = false) {
   await instanceSettingsService(db).updateExperimental({ free_core_commercial_v7: true,
     billing_entitlements_v6: true, billing_usage_v6: true, ai_use_cases_v7: true });
   const [account] = await db.insert(billingAccounts).values({ displayName: "Hire publication software fixture", payerUserId: f.userId }).returning();
@@ -41,6 +42,7 @@ export async function prepareHirePublicationFixture(db: Db, f: Awaited<ReturnTyp
   const [playbookHash] = requiredPlaybook ? await db.execute(sql`select aw_v7_package_component_hash(${f.home}::uuid,'playbook',
     ${requiredPlaybook.playbookId}::uuid,${requiredPlaybook.revisionId}::uuid) as hash`) : [];
   const evidence = { uri: "https://qualification.test.invalid/qualification/hire-software-fixture", sha256: "b".repeat(64) };
+  const automations = includeAutomations ? await seedHireAutomationComponents(db, f) : null;
   const release: PackageRelease = { packageKey: `welcome.${randomUUID()}.v1`, name: "Welcome specialist", description: "Internal welcome drafts",
     category: "internal", version: "1.0.0", releaseNotes: "Software protocol fixture",
     manifest: { purpose: "Produce a short internal welcome draft", prohibitedUses: ["Do not contact anyone"], role: "general",
@@ -51,7 +53,9 @@ export async function prepareHirePublicationFixture(db: Db, f: Awaited<ReturnTyp
       sourceRevision: "a".repeat(40), license: "MIT", commercialProductKey: "agent_package_research" },
     components: [{ key: "welcome-role", type: "role_pack", sourceVersion: "1", contentHash: String(hash!.hash), source: evidence, required: true },
       ...(requiredProcedure ? [{ key: "welcome-procedure", type: "skill" as const, sourceVersion: "1", contentHash: String(skillHash!.hash), source: evidence, required: true }] : []),
-      ...(requiredPlaybook ? [{ key: "welcome-playbook", type: "playbook" as const, sourceVersion: "1", contentHash: String(playbookHash!.hash), source: evidence, required: true }] : [])],
+      ...(requiredPlaybook ? [{ key: "welcome-playbook", type: "playbook" as const, sourceVersion: "1", contentHash: String(playbookHash!.hash), source: evidence, required: true }] : []),
+      ...(automations ? [{ key: "welcome-workflow", type: "workflow_template" as const, sourceVersion: "1", contentHash: automations.workflowHash, source: evidence, required: true },
+        { key: "welcome-routine", type: "routine_template" as const, sourceVersion: "1", contentHash: automations.routineHash, source: evidence, required: true }] : [])],
     releaseEvidence: { sbom: evidence, provenance: evidence, signature: null, scan: evidence, evaluations: evidence,
       protectedHoldout: evidence, customerDemand: evidence, sandboxQualification: null, releaseAuthorization: evidence,
       unresolvedCritical: [], evaluatedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 86400000).toISOString() } };
@@ -83,5 +87,5 @@ export async function prepareHirePublicationFixture(db: Db, f: Awaited<ReturnTyp
   const updated = configurePurpose ? await packages.update(f.actor, f.home, installation.id, { agentId: agent!.id, versionId: published.id,
     components: reviewed.packageInstallation!.components.map(({ key, resourceId, versionId }) => ({ key, resourceId, versionId })),
     aiUseCaseId: useCase.id, expectedVersion: installation.version, approveMaterialChange: true, reason: "Bind the exact human-reviewed software-fixture purpose" }) : installation;
-  return { draft, agent: agent!, release, published, installation: updated, packages, useCase };
+  return { draft, agent: agent!, release, published, installation: updated, packages, useCase, automations };
 }

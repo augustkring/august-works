@@ -115,6 +115,8 @@ export function AgentDraftPreparation({ company, principal, draft, enabled, canU
             {review.data.packageInstallation.components.map(component => <li key={component.key}>{component.name} · {component.revisionNumber}</li>)}
           </ul>
           <p>{t("agentPreparation.packageBoundary")}</p>
+          {review.data.packageInstallation.components.some(component => ["workflow_template", "routine_template"].includes(component.type))
+            ? <p>{t("agentPreparation.automationBoundary")}</p> : null}
         </div> : null}
         <label htmlFor={checkboxId} className="flex min-h-11 items-start gap-3"><input id={checkboxId} type="checkbox" checked={confirmed}
           onChange={event => setConfirmed(event.target.checked)} /><span>{t("agentPreparation.confirmation")}</span></label>

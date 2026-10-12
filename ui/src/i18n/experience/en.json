@@ -1685,6 +1685,7 @@
       "unavailable": "The original prepared agent is unavailable."
     },
     "packageConfiguration": "Configure {{name}} · version {{version}} on the inactive Agent.",
+    "automationBoundary": "These existing company workflows and routines keep their current owners and access. Preparing this agent does not start them or change their schedules.",
     "packageBoundary": "This installs the reviewed package configuration. It creates no app access or running work."
   },
   "agentRuntime": {

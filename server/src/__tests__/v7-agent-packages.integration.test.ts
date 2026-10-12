@@ -53,6 +53,8 @@ import type { guardedRemoteHttpFetch } from "../services/remote-http-fetch.js";
 import { initialActivationState, createOrchestrationPlanSchema, type CreateOrchestrationPlanInput } from "@paperclipai/shared";
 import { purpose as governancePurpose, oversight as governanceOversight, reviews as governanceReviews } from "./helpers/governance-fixture.js";
 import { seedRequiredAuthoringProcedures, seedApprovedAuthoringPlaybook } from "./helpers/authoring-procedures.js";
+import { seedHireAutomationComponents } from "./helpers/hire-automations.js";
+import { workflows, routines, workflowRuns, routineRuns } from "@paperclipai/db";
 import { billingAccounts, billingAccountCompanies, billingSubscriptions, companyOnboardingRuns,
   documents, documentRevisions, issueDocuments } from "@paperclipai/db";
 import { readinessService } from "../services/readiness/readiness-service.js";
@@ -425,6 +427,38 @@ const support = await getEmbeddedPostgresTestSupport();
       await expect(service.resolveHireComponents(f.actor, f.home, published.id))
         .rejects.toMatchObject({ status: 409, details: { code: "hire_package_mapping_required" } });
       expect(await db.select().from(companyAgentPackageInstallations)).toEqual(before);
+    });
+    it("pins exact current local automation components without starting them and refuses paused or ambiguous sources", async () => {
+      const { release } = await hireFixture(), automation = await seedHireAutomationComponents(db, f);
+      const published = await service.publish(f.actor, { ...release, packageKey: `automation-components-${randomUUID()}`,
+        components: [...release.components,
+          { key: "manual-workflow", type: "workflow_template", sourceVersion: "1", contentHash: automation.workflowHash,
+            source: release.releaseEvidence.provenance, required: true },
+          { key: "manual-routine", type: "routine_template", sourceVersion: "1", contentHash: automation.routineHash,
+            source: release.releaseEvidence.provenance, required: true }] });
+      const beforeWorkflows = await db.select().from(workflowRuns), beforeRoutines = await db.select().from(routineRuns);
+      const planned = await service.resolveHireComponents(f.actor, f.home, published.id);
+      expect(planned.components).toEqual(expect.arrayContaining([
+        expect.objectContaining({ type: "workflow_template", resourceId: automation.workflow.id, versionId: automation.workflow.publishedRevisionId }),
+        expect.objectContaining({ type: "routine_template", resourceId: automation.routine.id, versionId: automation.routine.latestRevisionId }),
+      ]));
+      // An equivalent other-company graph must not become a candidate or make
+      // this company's exact local match ambiguous.
+      await seedHireAutomationComponents(db, { ...f, home: f.guest });
+      expect((await service.resolveHireComponents(f.actor, f.home, published.id)).components).toEqual(planned.components);
+      await db.update(workflows).set({ status: "paused" }).where(eq(workflows.id, automation.workflow.id));
+      await expect(service.resolveHireComponents(f.actor, f.home, published.id))
+        .rejects.toMatchObject({ status: 409, details: { code: "hire_package_component_unavailable" } });
+      await db.update(workflows).set({ status: "active" }).where(eq(workflows.id, automation.workflow.id));
+      await db.update(routines).set({ status: "paused" }).where(eq(routines.id, automation.routine.id));
+      await expect(service.resolveHireComponents(f.actor, f.home, published.id))
+        .rejects.toMatchObject({ status: 409, details: { code: "hire_package_component_unavailable" } });
+      await db.update(routines).set({ status: "active" }).where(eq(routines.id, automation.routine.id));
+      await seedHireAutomationComponents(db, f);
+      await expect(service.resolveHireComponents(f.actor, f.home, published.id))
+        .rejects.toMatchObject({ status: 409, details: { code: "hire_package_component_ambiguous" } });
+      expect(await db.select().from(workflowRuns)).toEqual(beforeWorkflows);
+      expect(await db.select().from(routineRuns)).toEqual(beforeRoutines);
     });
     it("projects only available customer releases for Hire Agent and does not expose internal evaluation or release evidence", async () => {
       await instanceSettingsService(db).updateExperimental({ hire_agent_v9: true });

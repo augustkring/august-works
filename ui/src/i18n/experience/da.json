@@ -1685,6 +1685,7 @@
       "unavailable": "Den oprindelige forberedte agent er ikke tilgængelig."
     },
     "packageConfiguration": "Konfigurer {{name}} · version {{version}} på den inaktive agent.",
+    "automationBoundary": "Disse eksisterende workflows og rutiner i virksomheden beholder deres nuværende ejere og adgang. Opsætningen af agenten starter dem ikke og ændrer ikke deres tidsplaner.",
     "packageBoundary": "Dette installerer den gennemgåede pakkekonfiguration. Det opretter ingen appadgang eller igangværende arbejde."
   },
   "agentRuntime": {
