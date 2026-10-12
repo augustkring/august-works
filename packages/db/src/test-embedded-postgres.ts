@@ -308,6 +308,7 @@ export async function startEmbeddedPostgresTestDatabase(
           fallbackMessage: "embedded Postgres startup failed",
         }).message
       }`,
+      { cause: error },
     );
   }
 }

@@ -55,9 +55,13 @@ describeEmbeddedPostgres("built-in agent unique marker migration", () => {
       new URL(`./migrations/${entry.tag}.sql`, import.meta.url), join(folder, `${entry.tag}.sql`));
     const database = await startEmbeddedPostgresTestDatabase("paperclip-built-in-unique-marker-", {
       beforeMigrations: async connectionString => {
+        // Drizzle owns its JSON serializers. Keep the raw seed connection
+        // separate so sql.json retains PostgreSQL's plain-object encoding.
+        const historical = postgres(connectionString, { max: 1 });
+        try { await migrate(drizzle(historical), { migrationsFolder: folder }); }
+        finally { await historical.end(); }
         const sql = postgres(connectionString, { max: 1 });
         try {
-          await migrate(drizzle(sql), { migrationsFolder: folder });
           const [missing] = await sql<{ name: string | null }[]>`SELECT to_regclass(${UNIQUE_INDEX})::text AS name`;
           expect(missing!.name).toBeNull();
           await sql`
