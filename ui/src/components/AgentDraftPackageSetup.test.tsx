@@ -89,3 +89,20 @@ it("returns an explicitly rejected setup to current review without treating it a
   expect(container.textContent).not.toContain("Check original setup"); expect(post).toHaveBeenCalledTimes(1);
   expect(confirmed).not.toHaveBeenCalled();
 });
+it.each(["refused", "unchanged"])("withdraws the open setup dialog and its consent during a %s source recheck", async outcome => {
+  const post = vi.spyOn(agentAuthoringApi, "confirmPackageSetup");
+  await mount(); await consent();
+  let resolve!: (value: AgentPackageSetupReview) => void, reject!: (reason: Error) => void;
+  vi.mocked(agentAuthoringApi.packageSetupReview).mockImplementation(() => new Promise((yes, no) => { resolve = yes; reject = no; }));
+  let refresh!: Promise<void>;
+  await act(async () => { refresh = client.invalidateQueries({ queryKey: ["agent-package-setup"] }); });
+  await vi.waitFor(() => expect(document.querySelector('[role="alertdialog"]')).toBeNull());
+  expect(document.body.textContent).not.toContain("Approved internal welcome");
+  await act(async () => { if (outcome === "refused") reject(new ApiError("Current source refused", 403, {})); else resolve(review); await refresh; });
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull(); expect(post).not.toHaveBeenCalled();
+  if (outcome === "unchanged") {
+    await vi.waitFor(() => expect(button("Review package setup").disabled).toBe(false));
+    await click("Review package setup"); expect(button("Confirm package setup").disabled).toBe(true);
+    expect([...document.querySelectorAll<HTMLInputElement>('[role="alertdialog"] input[type="checkbox"]')].every(input => !input.checked)).toBe(true);
+  }
+});

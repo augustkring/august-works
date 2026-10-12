@@ -67,7 +67,7 @@ export function AgentDraftPublication({ company, principal, draft, enabled, canU
       if (historical.data && receiptIdentity === null) setReceiptIdentity(historical.data.requestId);
     }
   }, [receiptOnly, historical.isSuccess, historical.isFetching, historical.data, authority.epoch, unknown]);
-  useEffect(() => { setOpen(false); setPublication(false); setActivation(false); }, [authority.epoch, enabled, draft.version, review.data?.reviewHash]);
+  useEffect(() => { setOpen(false); setPublication(false); setActivation(false); }, [authority.epoch, enabled, draft.version, review.data?.reviewHash, review.isFetching, review.isError]);
   function currentReview() {
     const state = client.getQueryState(reviewKey), value = client.getQueryData<AgentDraftPublicationReview>(reviewKey);
     if (!current(true) || state?.status !== "success" || state.fetchStatus !== "idle" || state.isInvalidated || !value ||
@@ -135,7 +135,7 @@ export function AgentDraftPublication({ company, principal, draft, enabled, canU
         onClick={() => { try { decisionHash.current = currentReview().reviewHash; setPublication(false); setActivation(false); setOpen(true); }
           catch { setFailure(t("agentPublication.changed")); } }}>{t("agentPublication.review")}</Button>
     </> : null}
-    <AlertDialog open={open} onOpenChange={value => { setOpen(value); if (!value) { setPublication(false); setActivation(false); } }}>
+    <AlertDialog open={open && !unknown && !receiptOnly && !receipt && review.isSuccess && !review.isFetching && current(true)} onOpenChange={value => { setOpen(value); if (!value) { setPublication(false); setActivation(false); } }}>
       <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{t("agentPublication.confirmTitle")}</AlertDialogTitle>
         <AlertDialogDescription>{t("agentPublication.boundary")}</AlertDialogDescription></AlertDialogHeader>
         <dl className="max-h-60 space-y-2 overflow-y-auto" tabIndex={0} aria-label={t("agentPublication.changes")}>

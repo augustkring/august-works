@@ -12,8 +12,16 @@ type checks and 11 built browser cases. Exact runtime Source is
 [checkpoint](2026-10-12-aw-v9-hire-purpose-setup.md) and
 [implementation ledger](2026-10-09-aw-v9-build.md).
 
-Required workflow/routine component mapping is implemented in a separate owned
-qualification branch. It has not yet passed its full checks or been integrated.
+Required workflow/routine component mapping is now qualified and integrated.
+It passed 360 actual PostgreSQL/Native cases, shared/DB builds, server/UI types
+and 11 built browser cases. The integrated backend/schema/Native trees match
+qualified Source `0e30e6997156920dcdaa56a4cd9509cefb04772e` exactly. See the
+[automation component checkpoint](2026-10-12-aw-v9-hire-automation-components.md).
+
+Confirmation dialogs now withdraw cached private review details during source
+rechecks and discard prior consent. Focused regression checks cover a refused
+read and an unchanged successful read. Final integrated UI verification is in
+progress; full V9 remains incomplete.
 
 ## Open implementation and merge requirements
 

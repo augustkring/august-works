@@ -7,6 +7,7 @@ import { afterEach, expect, it, vi } from "vitest";
 import { V5_FEATURE_KEYS, agentAuthoringContentSchema, type AgentAuthoringDraftView, type AgentDraftPublicationReview, type AgentDraftPublicationReceipt } from "@paperclipai/shared";
 import { AgentDraftPublication } from "./AgentDraftPublication";
 import { agentAuthoringApi } from "../api/agent-authoring";
+import { ApiError } from "../api/client";
 import { instanceSettingsApi } from "../api/instanceSettings";
 import { queryKeys } from "../lib/queryKeys";
 import { v9SessionFixture } from "../hooks/v9-session.test-support";
@@ -128,4 +129,22 @@ it("keeps a known receipt identity during refetch and never substitutes a later 
   expect(get.mock.calls.slice(before).length).toBeGreaterThan(0);
   expect(get.mock.calls.slice(before).every(call => call[3] === result.requestId)).toBe(true);
   expect(publish).not.toHaveBeenCalled();
+});
+it.each(["refused", "unchanged"])("withdraws the open publication dialog and its consent during a %s source recheck", async outcome => {
+  const post = vi.spyOn(agentAuthoringApi, "publish");
+  await mount(); await consent();
+  expect(document.body.textContent).toContain("Old published responsibility");
+  let resolve!: (value: AgentDraftPublicationReview) => void, reject!: (reason: Error) => void;
+  vi.mocked(agentAuthoringApi.publicationReview).mockImplementation(() => new Promise((yes, no) => { resolve = yes; reject = no; }));
+  let refresh!: Promise<void>;
+  await act(async () => { refresh = client.invalidateQueries({ queryKey: ["agent-draft-publication"] }); });
+  await vi.waitFor(() => expect(document.querySelector('[role="alertdialog"]')).toBeNull());
+  expect(document.body.textContent).not.toContain("Old published responsibility");
+  await act(async () => { if (outcome === "refused") reject(new ApiError("Current source refused", 403, {})); else resolve(review); await refresh; });
+  expect(document.querySelector('[role="alertdialog"]')).toBeNull(); expect(post).not.toHaveBeenCalled();
+  if (outcome === "unchanged") {
+    await vi.waitFor(() => expect(button("Review publication and activation").disabled).toBe(false));
+    await click("Review publication and activation"); expect(button("Publish and activate").disabled).toBe(true);
+    expect([...document.querySelectorAll<HTMLInputElement>('[role="alertdialog"] input[type="checkbox"]')].every(input => !input.checked)).toBe(true);
+  }
 });

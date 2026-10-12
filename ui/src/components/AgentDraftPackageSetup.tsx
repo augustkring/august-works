@@ -46,7 +46,7 @@ export function AgentDraftPackageSetup({ company, principal, draft, enabled, can
     return value;
   }), enabled: enabled && authority.writeReady && draft.kind === "hire" && !!draft.preparation && !unknown,
     retry: false, gcTime: 0, staleTime: 0 });
-  useEffect(() => { setOpen(false); setPurposeConsent(false); setActivationConsent(false); }, [authority.epoch, enabled, draft.version, review.data?.reviewHash, purposeId]);
+  useEffect(() => { setOpen(false); setPurposeConsent(false); setActivationConsent(false); }, [authority.epoch, enabled, draft.version, review.data?.reviewHash, purposeId, review.isFetching, review.isError]);
   function currentReview() {
     const state = client.getQueryState(reviewKey), value = client.getQueryData<AgentPackageSetupReview>(reviewKey);
     if (!current() || state?.status !== "success" || state.fetchStatus !== "idle" || state.isInvalidated ||
@@ -116,7 +116,7 @@ export function AgentDraftPackageSetup({ company, principal, draft, enabled, can
         onClick={() => { try { decisionHash.current = currentReview().reviewHash; setPurposeConsent(false); setActivationConsent(false); setOpen(true); }
           catch { setFailure(t("agentPackageSetup.changed")); } }}>{t("agentPackageSetup.review")}</Button>
     </> : null}
-    <AlertDialog open={open} onOpenChange={setOpen}>
+    <AlertDialog open={open && !unknown && review.isSuccess && !review.isFetching && current()} onOpenChange={setOpen}>
       <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{t("agentPackageSetup.review")}</AlertDialogTitle>
         <AlertDialogDescription>{t("agentPackageSetup.boundary")}</AlertDialogDescription></AlertDialogHeader>
         <p>{review.data?.packageName} · {review.data?.packageVersion}</p>
