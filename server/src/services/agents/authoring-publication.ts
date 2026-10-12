@@ -129,7 +129,7 @@ export function agentAuthoringPublicationService(db: Db) {
             eq(agentConfigurationTests.requestId, input.requestId))).limit(1);
         if (testRequest) throw conflict("The request identity belongs to a representative test");
         const [erased] = await tx.execute<{ present: boolean }>(sql`select exists(select 1 from memory_deletion_markers
-          where company_id=${companyId}::uuid and kind='source' and key=${`agent-authored-revision-erasure:v1:${input.requestId}`}) as present`);
+          where kind='source' and key=${`agent-authored-revision-erasure:v1:${input.requestId}`}) as present`);
         if (erased?.present) throw conflict("The publication request identity was erased", { code: "publication_request_erased" });
         const [scope] = await tx.select({ companyId: agentConfigRevisions.companyId, agentId: agentConfigRevisions.agentId,
           source: agentConfigRevisions.source, createdByUserId: agentConfigRevisions.createdByUserId }).from(agentConfigRevisions)

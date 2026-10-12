@@ -1,5 +1,6 @@
 import { createHash } from "node:crypto";
 import { assertAuthoredProceduresCurrent } from "../agents/authoring-procedures.js";
+import { assertAuthoredAgentManifestCurrent } from "../agents/authored-definition.js";
 import { and, eq, or } from "drizzle-orm";
 import {
   agents,
@@ -246,6 +247,7 @@ export function workerModelGateway(db: Db, options: Options) {
       ))
     )
       throw forbidden("Worker execution ownership changed");
+    await assertAuthoredAgentManifestCurrent(tx, agent, manifest.manifest.agentDefinitionVersion);
     const procedures = await assertAuthoredProceduresCurrent(tx, agent, claims.responsible_user_id!);
     if (procedures && nativeSha256(manifest.manifest.skills.map(pin => `${pin.skillId}@${pin.versionId}`).sort()) !==
         nativeSha256(procedures.skills.map(pin => `${pin.skillId}@${pin.versionId}`).sort()))

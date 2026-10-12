@@ -222,7 +222,14 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     const next = await drafts().create(f.actor, f.home, { requestId: randomUUID(), agentId: f.presence.id });
     draft = await drafts().save(f.actor, f.home, next.id, { requestId: randomUUID(), expectedVersion: next.version, step: "test", content: { ...next.content!, internalDescription: "Next tested version" } });
     await qualify(); const second = await publish();
+    const [original] = await db.select().from(agentConfigRevisions).where(eq(agentConfigRevisions.id, first.revisionId));
     await db.delete(agentConfigRevisions).where(and(eq(agentConfigRevisions.companyId, f.home), eq(agentConfigRevisions.id, first.revisionId)));
+    await expect(db.insert(agentConfigRevisions).values(original!))
+      .rejects.toMatchObject({ cause: { code: "23514", message: "agent_authored_revision_erased" } });
+    await expect(db.insert(agentConfigRevisions).values({ ...original!, id: randomUUID() }))
+      .rejects.toMatchObject({ cause: { code: "23514", message: "agent_authored_revision_erased" } });
+    await expect(db.insert(agentConfigRevisions).values({ ...original!, companyId: f.guest, beforeConfig: {}, afterConfig: {} }))
+      .rejects.toMatchObject({ cause: { code: "23514", message: "agent_authored_revision_erased" } });
     const [history] = await db.select().from(agentConfigRevisions).where(eq(agentConfigRevisions.id, second.revisionId));
     expect(history!.beforeConfig).toEqual({ payloadDeleted: true, revisionId: first.revisionId });
     // A changed or cleared snapshot without the exact C7 receipt still fails.

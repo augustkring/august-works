@@ -27,7 +27,7 @@ import {
   type NativeRuntimeContextSnapshot,
 } from "../../vendor/paperclip-runner/index.js";
 import { resolvePaperclipInstanceRoot } from "../../home-paths.js";
-import { readAuthoredAgentDefinition } from "../agents/authored-definition.js";
+import { assertAuthoredAgentSnapshotCurrent, readAuthoredAgentDefinition } from "../agents/authored-definition.js";
 import { resolveAuthoringProcedures } from "../agents/authoring-procedures.js";
 import { agentInstructionsService } from "../agent-instructions.js";
 import { toolAccessService } from "../tool-access.js";
@@ -363,7 +363,7 @@ export async function buildNativeRuntimeContext(input: { db: Db; agent: RuntimeA
 export async function buildRetainedNativeRuntimeContext(input: Parameters<typeof buildNativeRuntimeContext>[0]) {
   return withRetainedNativeRuntimeAssets({ db: input.db, companyId: input.agent.companyId, agentId: input.agent.id, runId: input.runId },
     async db => {
-      const authored = await readAuthoredAgentDefinition(db, input.agent);
+      const authored = await assertAuthoredAgentSnapshotCurrent(db, input.agent);
       if (authored) await db.update(heartbeatRuns).set({ contextSnapshot: sql`coalesce(${heartbeatRuns.contextSnapshot}, '{}'::jsonb) || ${JSON.stringify({ agentDefinitionVersion: {
         revisionId: authored.revisionId, definitionHash: authored.definitionHash,
         ...(authored.procedureSnapshotHash ? { procedureSnapshotHash: authored.procedureSnapshotHash } : {}),

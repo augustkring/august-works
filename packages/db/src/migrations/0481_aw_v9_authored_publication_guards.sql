@@ -30,6 +30,24 @@ END $$;
 CREATE TRIGGER aw_agent_authored_revision_immutable BEFORE UPDATE ON agent_config_revisions
  FOR EACH ROW EXECUTE FUNCTION aw_agent_authored_revision_immutable();
 --> statement-breakpoint
+-- Restore and import use the same Original owner. An erased identity must not
+-- resurrect its content or be reused for an unrelated publication.
+CREATE FUNCTION aw_agent_authored_revision_restore_guard() RETURNS trigger LANGUAGE plpgsql AS $$
+BEGIN
+ IF EXISTS(SELECT 1 FROM memory_deletion_markers m WHERE m.kind='source' AND (
+   m.key='agent-authored-revision-erasure:v1:'||NEW.id::text
+   OR (m.company_id=NEW.company_id AND m.key IN (
+     'agent-authored-revision-erasure:v1:'||(NEW.before_config #>> '{runtimeConfig,agentDefinitionVersion,revisionId}'),
+     'agent-authored-revision-erasure:v1:'||(NEW.after_config #>> '{runtimeConfig,agentDefinitionVersion,revisionId}')
+   )))) THEN
+  RAISE EXCEPTION 'agent_authored_revision_erased' USING ERRCODE='23514';
+ END IF;
+ RETURN NEW;
+END $$;
+--> statement-breakpoint
+CREATE TRIGGER aw_agent_authored_revision_restore_guard BEFORE INSERT ON agent_config_revisions
+ FOR EACH ROW EXECUTE FUNCTION aw_agent_authored_revision_restore_guard();
+--> statement-breakpoint
 CREATE FUNCTION aw_agent_authored_version_current() RETURNS trigger LANGUAGE plpgsql AS $$
 DECLARE definition jsonb; prior jsonb; recorded jsonb;
 BEGIN

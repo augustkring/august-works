@@ -1,17 +1,19 @@
 import { randomUUID } from "node:crypto";
+import { stat } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
 import { agents, companySkills, companySkillVersions, createDb, heartbeatRuns, issues } from "@paperclipai/db";
 import { agentAuthoringContentSchema, AUTHORED_AGENT_DEFINITION_KEY } from "@paperclipai/shared";
 import { resolveAuthoringProcedures } from "../services/agents/authoring-procedures.js";
-import { compileAuthoredAgentDefinition } from "../services/agents/authored-definition.js";
+import { assertAuthoredAgentManifestCurrent, compileAuthoredAgentDefinition } from "../services/agents/authored-definition.js";
 import { agentService } from "../services/agents.js";
 import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
 import { agentRuntimeFabricService } from "../services/agent-runtime-fabric.js";
 import { discoverNativeCapabilities } from "../services/native-provider-conformance.js";
 import { makeProviderCapabilitySnapshot, providerConformanceRequirements } from "../services/provider-capabilities.js";
 import { hashContextPolicySnapshot } from "../services/context/context-manifest.js";
-import { buildNativeRuntimeContext, readNativeRuntimeAssetText } from "../services/native-runtime/runtime-context.js";
+import { buildNativeRuntimeContext, buildRetainedNativeRuntimeContext, readNativeRuntimeAssetText } from "../services/native-runtime/runtime-context.js";
+import { nativeRuntimeAssetsRoot } from "../services/native-runtime/runtime-asset-retention.js";
 import { seedRequiredAuthoringProcedures } from "./helpers/authoring-procedures.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
@@ -49,7 +51,17 @@ const support = await getEmbeddedPostgresTestSupport();
     const [task] = await db.insert(issues).values({ companyId: f.home, title: "Draft the internal welcome",
       description: "Only current approved Task input", assigneeAgentId: agent.id }).returning();
     const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: agent.id, responsibleUserId: f.userId, status: "running" }).returning();
-    return { f, pins, procedures, agent, config, run: run!, task: task!, execution: { ...input(f), runId: run!.id, issueId: task!.id, query: task!.title } };
+    return { f, pins, procedures, definition, agent, config, run: run!, task: task!, execution: { ...input(f), runId: run!.id, issueId: task!.id, query: task!.title } };
+  }
+  async function replaceVersion(f: Awaited<ReturnType<typeof installed>>) {
+    // Exercise the existing trusted internal publication owner. Customer C3
+    // separately blocks replacing a version while its work is in flight.
+    const definition = compileAuthoredAgentDefinition({ ...f.definition.content,
+      instructions: { ...f.definition.content.instructions, purpose: "Use the new tested definition" } }, randomUUID(), "b".repeat(64), f.procedures.hash);
+    const agent = (await agentService(db).update(f.agent.id,
+      { runtimeConfig: { ...f.agent.runtimeConfig, [AUTHORED_AGENT_DEFINITION_KEY]: definition } },
+      { authoredPublication: definition, recordRevision: { id: definition.revisionId, source: "agent_authoring_publish", createdByUserId: f.f.userId } }))!;
+    return { agent, definition };
   }
   it("refuses missing required procedures without installing a catalog or disabling the Role Pack", async () => {
     const f = await seedV5Presences(db);
@@ -77,6 +89,37 @@ const support = await getEmbeddedPostgresTestSupport();
     await expect(agentRuntimeFabricService(db).prepare(f.execution)).rejects.toMatchObject({ status: 409 });
     await expect(buildNativeRuntimeContext({ db, agent: f.agent, runId: f.run.id, runtimeConfig: f.config, runtimeSkillEntries: [] }))
       .rejects.toMatchObject({ status: 409 });
+  });
+  it("refuses a missing or superseded worker definition pin even when required procedures stay identical", async () => {
+    const f = await installed(), prepared = await agentRuntimeFabricService(db).prepare(f.execution);
+    const pin = prepared!.manifest.agentDefinitionVersion;
+    expect(pin).toMatchObject({ revisionId: f.definition.revisionId, definitionHash: f.definition.definitionHash,
+      procedureSnapshotHash: f.procedures.hash });
+    await expect(assertAuthoredAgentManifestCurrent(db, f.agent, pin)).resolves.toBeUndefined();
+    await expect(assertAuthoredAgentManifestCurrent(db, f.agent, undefined)).rejects.toMatchObject({ status: 409 });
+    await expect(assertAuthoredAgentManifestCurrent(db, f.agent, { ...pin!, definitionHash: "c".repeat(64) }))
+      .rejects.toMatchObject({ status: 409 });
+    const next = await replaceVersion(f);
+    expect(next.definition.procedureSnapshotHash).toBe(pin!.procedureSnapshotHash);
+    await expect(assertAuthoredAgentManifestCurrent(db, next.agent, pin)).rejects.toMatchObject({ status: 409 });
+    await expect(assertAuthoredAgentManifestCurrent(db, f.agent, pin)).rejects.toMatchObject({ status: 409 });
+  });
+  it("rejects a cached definition before writing retained runtime copies and accepts the actual current version", async () => {
+    const f = await installed(), next = await replaceVersion(f);
+    const root = nativeRuntimeAssetsRoot({ companyId: f.f.home, runId: f.run.id });
+    await expect(stat(root)).rejects.toMatchObject({ code: "ENOENT" });
+    await expect(buildRetainedNativeRuntimeContext({ db, agent: { ...f.agent, runtimeConfig: {} }, runId: f.run.id, runtimeConfig: f.config, runtimeSkillEntries: [] }))
+      .rejects.toMatchObject({ status: 409, details: { code: "authored_agent_version_changed" } });
+    await expect(buildRetainedNativeRuntimeContext({ db, agent: f.agent, runId: f.run.id, runtimeConfig: f.config, runtimeSkillEntries: [] }))
+      .rejects.toMatchObject({ status: 409, details: { code: "authored_agent_version_changed" } });
+    await expect(stat(root)).rejects.toMatchObject({ code: "ENOENT" });
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, f.run.id));
+    expect(run!.contextSnapshot).not.toHaveProperty("agentDefinitionVersion");
+    const context = await buildRetainedNativeRuntimeContext({ db, agent: next.agent, runId: f.run.id, runtimeConfig: f.config, runtimeSkillEntries: [] });
+    const [retained] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, f.run.id));
+    expect(retained!.contextSnapshot).toHaveProperty("agentDefinitionVersion.revisionId", next.definition.revisionId);
+    const files = await readNativeRuntimeAssetText(context.instructions.bundle, 64000, { companyId: f.f.home, runId: f.run.id });
+    expect(files[0]!.text).toContain("Use the new tested definition");
   });
   it("does not load unrelated optional catalog procedures", async () => {
     const f = await installed();

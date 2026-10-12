@@ -1,8 +1,8 @@
 import { and, eq } from "drizzle-orm";
-import { agentConfigRevisions, type Db } from "@paperclipai/db";
+import { agentConfigRevisions, agents, type Db } from "@paperclipai/db";
 import { AUTHORED_AGENT_DEFINITION_KEY, agentAuthoringContentSchema,
   authoredAgentDefinitionSchema, authoredAgentMappingBlockers, type AgentAuthoringContent } from "@paperclipai/shared";
-import type { AuthoredAgentDefinition } from "@paperclipai/shared";
+import type { AgentExecutionManifest, AuthoredAgentDefinition } from "@paperclipai/shared";
 import { sanitizeRecord } from "../../redaction.js";
 import { conflict } from "../../errors.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
@@ -44,6 +44,29 @@ export async function readAuthoredAgentDefinition(db: Db | undefined, agent: Aut
       definition.definitionHash !== nativeSha256(definition.content) || authoredAgentMappingBlockers(definition.content).length)
     throw conflict("The exact authored Agent revision is unavailable or changed");
   return definition;
+}
+
+/** A retained runtime must consume the current Original version, including
+ * when its caller still holds a snapshot from before the first publication. */
+export async function assertAuthoredAgentSnapshotCurrent(db: Db, agent: AuthoredRuntimeAgent) {
+  const [current] = await db.select({ id: agents.id, companyId: agents.companyId, runtimeConfig: agents.runtimeConfig })
+    .from(agents).where(and(eq(agents.companyId, agent.companyId), eq(agents.id, agent.id)));
+  if (!current || nativeSha256(config(current.runtimeConfig)[AUTHORED_AGENT_DEFINITION_KEY] ?? null) !==
+      nativeSha256(config(agent.runtimeConfig)[AUTHORED_AGENT_DEFINITION_KEY] ?? null))
+    throw conflict("The retained runtime's Agent version changed", { code: "authored_agent_version_changed" });
+  return readAuthoredAgentDefinition(db, current);
+}
+
+/** The worker inventory is an exact version pin, not permission to substitute
+ * a newer definition with the same procedures. */
+export async function assertAuthoredAgentManifestCurrent(db: Db, agent: AuthoredRuntimeAgent,
+  pin: AgentExecutionManifest["agentDefinitionVersion"]) {
+  const current = await assertAuthoredAgentSnapshotCurrent(db, agent);
+  const expected = current ? { revisionId: current.revisionId, definitionHash: current.definitionHash,
+    ...(current.procedureSnapshotHash ? { procedureSnapshotHash: current.procedureSnapshotHash } : {}),
+    ...(current.version ? { version: current.version } : {}) } : null;
+  if (nativeSha256(pin ?? null) !== nativeSha256(expected))
+    throw conflict("The worker inventory's Agent version changed", { code: "authored_agent_version_changed" });
 }
 export function authoredAgentInstructionText(content: AgentAuthoringContent) {
   return `# Agent: ${content.name}\n\n${authoringCandidateInstructions(content)}\n`;
