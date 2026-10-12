@@ -920,7 +920,7 @@
   },
   "agentMonitorTitle": "Monitor {{name}}",
   "agentMonitorUnavailable": "The current agent state could not be checked. Reload to check your access and the latest state.",
-  "agentMonitorBoundary": "This shows recorded scheduling and run status. A successful run does not confirm that its business result is correct. Pause, resume and configuration controls are available in Advanced.",
+  "agentMonitorBoundary": "This shows recorded scheduling and run status. A successful run does not confirm that its business result is correct. Use Pause agent to stop new work; check existing work separately.",
   "agentMonitorState": "Current scheduling state",
   "agentMonitorObserved": "Checked at",
   "agentMonitorLastRun": "Last recorded run activity:",
@@ -1610,7 +1610,7 @@
     }
   },
   "agentMonitorPausedWorkBoundary": "Pause stops new autonomous work and preserves the agent configuration and history. Check existing work separately.",
-  "agentMonitorPauseCancelPolicy": "Pause in Advanced requests cancellation of active native runs. A paused status alone does not confirm that a remote process stopped or that its task finished.",
+  "agentMonitorPauseCancelPolicy": "Choose whether admitted work may finish or cancellation is requested. A paused status alone does not confirm that a remote process stopped or that its task finished.",
   "agentMonitorPausedWork": {
     "none": "No pending native runs were recorded at this check. This does not confirm that remote work has stopped.",
     "pending_one": "{{count}} pending native run remains. Review its original run controls.",
@@ -1823,5 +1823,18 @@
       "approved_purpose_required": "Choose a current approved company purpose for this package.",
       "representative_test_required": "Complete the representative test and human review first."
     }
+  },
+  "agentPauseCustomer": {
+    "title": "Pause agent",
+    "action": "Pause agent",
+    "confirm": "Pause {{name}}?",
+    "boundary": "New work will stop. Choose what happens to work already admitted. Completed actions remain; an unknown outcome still needs reconciliation.",
+    "drain": "Let work in progress finish. Queued work remains held.",
+    "cancel": "Request cancellation of work in progress. Stopping may take time.",
+    "accepted": "The pause is recorded. Check current work to see whether stopping is complete.",
+    "unknown": "The pause reply is unconfirmed. Check the original receipt; do not send another pause.",
+    "check": "Check original pause",
+    "changed": "The agent or access changed. Review the current pause decision.",
+    "unavailable": "Pause controls are unavailable with current access."
   }
 }

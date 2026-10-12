@@ -920,7 +920,7 @@
   },
   "agentMonitorTitle": "Overvåg {{name}}",
   "agentMonitorUnavailable": "Agentens aktuelle tilstand kunne ikke kontrolleres. Genindlæs for at kontrollere adgang og seneste tilstand.",
-  "agentMonitorBoundary": "Her vises registreret planlægnings- og kørselsstatus. En vellykket kørsel bekræfter ikke, at forretningsresultatet er korrekt. Pause, genoptagelse og konfiguration findes i Avanceret.",
+  "agentMonitorBoundary": "Her vises registreret planlægning og kørselsstatus. En vellykket kørsel bekræfter ikke, at forretningsresultatet er korrekt. Sæt agenten på pause for at blokere nyt arbejde; kontrollér eksisterende arbejde særskilt.",
   "agentMonitorState": "Aktuel planlægningstilstand",
   "agentMonitorObserved": "Kontrolleret",
   "agentMonitorLastRun": "Senest registrerede kørselsaktivitet:",
@@ -1610,7 +1610,7 @@
     }
   },
   "agentMonitorPausedWorkBoundary": "Pause stopper nyt selvstændigt arbejde og bevarer agentens opsætning og historik. Kontrollér igangværende arbejde særskilt.",
-  "agentMonitorPauseCancelPolicy": "Pause i Avanceret anmoder om at annullere aktive native kørsler. Pauset status bekræfter ikke i sig selv, at en ekstern proces er stoppet, eller at dens opgave er afsluttet.",
+  "agentMonitorPauseCancelPolicy": "Vælg, om godkendt arbejde må afslutte, eller om der skal anmodes om annullering. Pausestatus bekræfter ikke i sig selv, at en ekstern proces er stoppet, eller at dens opgave er afsluttet.",
   "agentMonitorPausedWork": {
     "none": "Ingen ventende native kørsler blev registreret ved denne kontrol. Det bekræfter ikke, at eksternt arbejde er stoppet.",
     "pending_one": "{{count}} ventende native kørsel er tilbage. Gennemgå dens oprindelige kontrolfunktioner.",
@@ -1823,5 +1823,18 @@
       "approved_purpose_required": "Vælg et aktuelt godkendt formål i virksomheden til denne pakke.",
       "representative_test_required": "Gennemfør først den repræsentative test og den menneskelige gennemgang."
     }
+  },
+  "agentPauseCustomer": {
+    "title": "Sæt agent på pause",
+    "action": "Sæt agent på pause",
+    "confirm": "Sæt {{name}} på pause?",
+    "boundary": "Nyt arbejde bliver blokeret. Vælg, hvad der skal ske med allerede godkendt arbejde. Afsluttede handlinger består; ukendte udfald skal stadig afklares.",
+    "drain": "Lad igangværende arbejde afslutte. Arbejde i kø bliver holdt tilbage.",
+    "cancel": "Anmod om at annullere igangværende arbejde. Det kan tage tid at stoppe.",
+    "accepted": "Pausen er registreret. Kontrollér aktuelt arbejde for at se, om det er stoppet.",
+    "unknown": "Svaret på pausen er ubekræftet. Kontrollér den oprindelige kvittering; send ikke en ny pause.",
+    "check": "Kontrollér oprindelig pause",
+    "changed": "Agenten eller adgangen er ændret. Gennemgå den aktuelle pausebeslutning.",
+    "unavailable": "Pausehandlingen er ikke tilgængelig med den aktuelle adgang."
   }
 }

@@ -9,6 +9,7 @@ import { useV9AuthoringAuthority } from "@/hooks/useV9AuthoringAuthority";
 import { useTranslation } from "@/i18n";
 import { Link } from "@/lib/router";
 import { Button } from "./ui/button";
+import { AgentPause } from "./AgentPause";
 import { AlertDialog, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle } from "./ui/alert-dialog";
 
@@ -122,6 +123,7 @@ export function AgentDraftPublication({ company, principal, draft, enabled, canU
         <Button asChild variant="outline" className="min-h-11"><Link to={`/agents/${receipt.agentId}`} onClick={event => { if (!current()) event.preventDefault(); }}>{t("agentPublication.openAgent")}</Link></Button>
         <Button asChild variant="outline" className="min-h-11"><Link to={`/agents/${receipt.agentId}/monitor`} onClick={event => { if (!current()) event.preventDefault(); }}>{t("agentPublication.manageAgent")}</Link></Button>
       </div>
+      <AgentPause company={company} principal={principal} agentId={receipt.agentId} enabled={current()} />
     </> : null}
     {receiptOnly && !showReceipt && !unknown ? <p role="status">{historical.isFetching ? t("agentSafeTest.checking") : historical.isError || receiptIdentity !== null ? t("agentPublication.unavailable") : t("hireSetup.noReceipt")}</p> : null}
     {unknown ? <Button className="min-h-11" variant="outline" disabled={pending} onClick={() => check.mutate()}>{t("agentPublication.checkOriginal")}</Button> : null}

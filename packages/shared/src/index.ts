@@ -3366,3 +3366,5 @@ export { agentDraftTestReviewSchema, agentDraftTestCommandSchema, agentDraftTest
 export { agentDraftPublicationCommandSchema, agentDraftPublicationReviewSchema, agentDraftPublicationReceiptSchema,
   type AgentDraftPublicationCommand, type AgentDraftPublicationReview, type AgentDraftPublicationReceipt } from "./agent-authoring-publication.js";
 export * from "./agent-authoring-package-setup.js";
+
+export * from "./agent-pause.js";

@@ -29196,7 +29196,10 @@ export function heartbeatService(
     agentId: string,
     reason = "Cancelled due to agent pause",
     errorCode = "cancelled",
+    expectedRunIds?: readonly string[],
   ) {
+    // Never expand a confirmed run set to work admitted after resume.
+    if (expectedRunIds?.length === 0) return 0;
     const agent = await getAgent(agentId);
     const runs = await db
       .select()
@@ -29205,6 +29208,7 @@ export function heartbeatService(
         and(
           eq(heartbeatRuns.agentId, agentId),
           inArray(heartbeatRuns.status, [...CANCELLABLE_HEARTBEAT_RUN_STATUSES]),
+          expectedRunIds ? inArray(heartbeatRuns.id, [...expectedRunIds]) : undefined,
         ),
       );
 
@@ -29829,8 +29833,8 @@ export function heartbeatService(
      * agent pause route. For non-pause cancellations use cancelRun, or call the internal
      * cancelActiveForAgentInternal(agentId, reason, errorCode) with an explicit errorCode.
      */
-    cancelActiveForAgent: (agentId: string, reason?: string) =>
-      cancelActiveForAgentInternal(agentId, reason, "agent_paused"),
+    cancelActiveForAgent: (agentId: string, reason?: string, expectedRunIds?: readonly string[]) =>
+      cancelActiveForAgentInternal(agentId, reason, "agent_paused", expectedRunIds),
 
     cancelInvocationsForAgents: (agentIds: string[], reason: string) =>
       cancelInvocationsForAgentsInternal(agentIds, reason),

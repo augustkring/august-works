@@ -53,9 +53,14 @@ test("customer agent monitor follows native state and keeps business verificatio
     await expect(
       page.getByText("A successful run does not confirm", { exact: false }),
     ).toBeVisible();
-    await json(
-      await request.post(`/api/agents/${agent.id}/pause`, { data: {} }),
-    );
+    const pause = page.getByRole("button", { name: "Pause agent", exact: true });
+    await expect(pause).toBeVisible(); await pause.focus(); await page.keyboard.press("Enter");
+    const decision = page.getByRole("alertdialog"); await expect(decision).toBeVisible();
+    await expect(decision.getByRole("button", { name: "Pause agent", exact: true })).toBeDisabled();
+    await decision.getByRole("radio", { name: "Let work in progress finish. Queued work remains held.", exact: true }).check();
+    await decision.getByRole("button", { name: "Pause agent", exact: true }).click();
+    await expect(page.getByText("The pause is recorded. Check current work to see whether stopping is complete.", { exact: true })).toBeVisible();
+    expect((await json(await request.get(`/api/agents/${agent.id}`))).status).toBe("paused");
     await page.reload();
     await expect(
       page.getByText("Paused — new autonomous work is blocked", {

@@ -6,6 +6,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import type { AgentMonitor as View } from "@paperclipai/shared";
 import { agentMonitorApi } from "../api/agent-monitor";
+import { agentPauseApi } from "../api/agent-pause";
 import { AgentMonitor } from "./AgentMonitor";
 import "../i18n";
 import { queryKeys } from "../lib/queryKeys";
@@ -55,6 +56,7 @@ afterEach(async () => {
   client?.clear();
   container?.remove();
   vi.restoreAllMocks();
+  sessionStorage.clear();
 });
 async function mount(principal = "owner") {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
@@ -94,6 +96,24 @@ it("shows native status and bounded history without treating success as business
   expect(container.querySelector("a")?.getAttribute("href")).toContain(
     "/agents/agent/runs/run",
   );
+});
+it("preserves the accepted pause receipt through a private monitor recheck", async () => {
+  let release!: (view: View) => void;
+  const current: View = { ...data, nativeStatus: "idle", lifecycle: "active", pauseReason: null };
+  vi.spyOn(agentMonitorApi, "get").mockResolvedValueOnce(current).mockImplementationOnce(() => new Promise(done => { release = done; }));
+  vi.spyOn(agentPauseApi, "review").mockResolvedValue({ companyId: "company", agentId: "agent", name: data.name, nativeStatus: "idle", sourceToken: "a".repeat(64), canPause: true });
+  const pause = vi.spyOn(agentPauseApi, "pause").mockImplementation(async (_company, _principal, _agent, command) => ({
+    companyId: "company", agentId: "agent", requestId: command.requestId, pendingWork: command.pendingWork, acceptedAt: "2026-10-12T00:00:00Z", admissionClosedAtAcceptance: true, workSettled: false }));
+  await mount();
+  const button = (scope: Element, label: string) => [...scope.querySelectorAll("button")].find(item => item.textContent === label)!;
+  await vi.waitFor(() => expect(button(container, "Pause agent")).toBeTruthy()); await act(async () => button(container, "Pause agent").click());
+  const dialog = document.querySelector('[role="alertdialog"]')!;
+  await act(async () => dialog.querySelector<HTMLInputElement>('input[value="drain"]')!.click()); await act(async () => button(dialog, "Pause agent").click());
+  await vi.waitFor(() => expect(release).toBeTypeOf("function"));
+  expect(container.textContent).not.toContain("Monitor Native agent"); expect(container.textContent).not.toContain("The pause is recorded");
+  await act(async () => release({ ...data, pauseReason: "manual" }));
+  await vi.waitFor(() => expect(container.textContent).toContain("The pause is recorded"));
+  expect(container.textContent).toContain("Paused — new autonomous work is blocked"); expect(pause).toHaveBeenCalledTimes(1);
 });
 it("hides prior private metadata during source-loss rechecking and rejects late old responses", async () => {
   let release!: (data: View) => void;
@@ -212,6 +232,6 @@ it.each([
   vi.spyOn(agentMonitorApi, "get").mockResolvedValue({ ...data, pausedWork });
   await mount();
   await vi.waitFor(() => expect(container.textContent).toContain(message));
-  expect(container.textContent).toContain("requests cancellation");
+  expect(container.textContent).toContain("Choose whether admitted work may finish or cancellation is requested.");
   expect(container.textContent).toContain("does not confirm that a remote process stopped");
 });

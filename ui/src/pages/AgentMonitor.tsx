@@ -10,6 +10,7 @@ import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
 import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
 import { Button } from "../components/ui/button";
 import { AgentRetirementLink } from "../components/AgentRetirementLink";
+import { AgentPause } from "../components/AgentPause";
 
 export function AgentMonitorEntry() {
   const feature = useV9FeatureEnabled("progressive_shell_v9");
@@ -112,14 +113,20 @@ export function AgentMonitor({
   }, [query.isError, authority.failed]);
   if (query.isError || authority.failed)
     return (
+      <section ref={main} className="space-y-6">
+      <AgentPause key="pause-controls" company={company} principal={principal} agentId={agentId} enabled={false} />
       <div ref={alert} role="alert" tabIndex={-1} className="space-y-4">
         <p>{t("agentMonitorUnavailable")}</p>
         <Button className="min-h-11" onClick={() => void (authority.readReady ? query.refetch() : authority.recheck())}>
           {t("tryAgain")}
         </Button>
       </div>
+      </section>
     );
-  if (!current) return <p role="status">{t("loading")}</p>;
+  if (!current) return <section ref={main} className="space-y-6">
+    <AgentPause key="pause-controls" company={company} principal={principal} agentId={agentId} enabled={false} />
+    <p role="status">{t("loading")}</p>
+  </section>;
   const view = query.data!;
   return (
     <section ref={main} className="space-y-6">
@@ -128,6 +135,7 @@ export function AgentMonitor({
       </h1>
       <p className="text-muted-foreground">{t("agentMonitorBoundary")}</p>
       <AgentRetirementLink company={company} principal={principal} agentId={agentId} />
+      <AgentPause key="pause-controls" company={company} principal={principal} agentId={agentId} enabled={current} />
       <section
         aria-label={t("agentMonitorState")}
         className="space-y-2 rounded-lg border border-border p-4"
