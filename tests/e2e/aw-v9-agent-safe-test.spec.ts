@@ -104,7 +104,8 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"], ["hire", "en"]] 
         await expect(select).toBeEnabled(); await select.focus(); await select.press("Enter");
         await expect(setup).toContainText(locale === "en" ? "Save the candidate before Safe Test" : "Gem kandidaten før Safe Test");
         expect(saves).toBe(0); expect(starts).toBe(0); expect(reviews).toBe(0);
-        await expect(region).toContainText(locale === "en" ? "Save the candidate and scenario before testing" : "Gem kandidaten og scenariet før testen");
+        await expect(page.getByRole("main")).toContainText(locale === "en" ? "Save the candidate and scenario before testing" : "Gem kandidaten og scenariet før testen");
+        await expect(page.getByRole("button", { name: locale === "en" ? "Review Safe Test" : "Gennemgå Safe Test", exact: true })).toHaveCount(0);
         const save = page.getByRole("button", { name: locale === "en" ? "Save candidate and stay here" : "Gem kandidaten og bliv her", exact: true });
         await save.focus(); await save.press("Enter");
         await expect(setup).toContainText(locale === "en" ? "selected in the saved candidate" : "valgt i den gemte kandidat");
