@@ -1,3 +1,4 @@
+import { selectedApprovedMemorySchema } from "./agent-approved-memory.js";
 import { selectedApprovedKnowledgeSchema } from "./agent-approved-knowledge.js";
 import { z } from "zod";
 import { agentAuthoringContentSchema } from "./agent-authoring.js";
@@ -28,6 +29,7 @@ export const agentDraftPublicationReviewSchema = z.strictObject({
   activate: z.literal(true), canPublish: z.boolean(),
   blockers: z.array(z.strictObject({ code: z.string().min(1).max(100), message: z.string().min(1).max(2000) })).max(50),
   requiredProcedures: z.array(z.strictObject({ name: z.string().min(1).max(200), skillId: z.uuid(), versionId: z.uuid() })).max(32),
+  selectedMemory: z.array(selectedApprovedMemorySchema).max(16).optional(),
   selectedKnowledge: z.array(selectedApprovedKnowledgeSchema).max(30).optional(),
   requiredPlaybooks: z.array(z.strictObject({ playbookId: z.uuid(), revisionId: z.uuid(),
     name: z.string().min(1).max(200), bodyHash: digest })).max(32).optional(),

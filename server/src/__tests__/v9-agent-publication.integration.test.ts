@@ -1,3 +1,5 @@
+import { seedApprovedAuthoringPreference } from "./helpers/authoring-memory.js";
+import { memoryService } from "../services/memory/memory-service.js";
 import { foundationService } from "../services/foundation/foundation-service.js";
 import { agentRetirementService } from "../services/agents/retirement.js";
 import { agentIdentityService } from "../services/agent-identities.js";
@@ -193,6 +195,27 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     await db.delete(documents).where(eq(documents.id, approved.documentId));
     await memoryJobService(db).tick({ limit: 20 }); await memoryJobService(db).tick({ limit: 20 });
     await expect(readNativeRuntimeAssetText(runtime.instructions.bundle, 128000, { companyId: f.home, runId: run!.id })).rejects.toThrow();
+    expect(calls).toBe(1);
+  });
+  it("publishes the exact approved preference without new grants and closes its erased-source runtime", async () => {
+    const preference = await seedApprovedAuthoringPreference(db,f.home,f.presence.id,f.userId);
+    draft = await drafts().save(f.actor,f.home,draft.id,{ requestId: randomUUID(),expectedVersion:draft.version,step:"test",
+      content:{ ...draft.content!,memory:"approved_work_preferences",memoryRecordIds:[preference.id] } });
+    const reviewed = await service().review(f.actor,f.home,draft.id,0);
+    expect(reviewed.selectedMemory).toEqual([expect.objectContaining({ recordId:preference.id,expiresAt:expect.any(String) })]);
+    expect(JSON.stringify(reviewed)).not.toContain(preference.body);
+    await qualify();
+    const grants = await db.select().from(principalPermissionGrants).where(eq(principalPermissionGrants.companyId,f.home));
+    const receipt = await publish(),current = await agent(); expect(receipt.authorityGranted).toBe(false);
+    expect(await db.select().from(principalPermissionGrants).where(eq(principalPermissionGrants.companyId,f.home))).toEqual(grants);
+    const [run] = await db.insert(heartbeatRuns).values({ companyId:f.home,agentId:current.id,responsibleUserId:f.userId,status:"running" }).returning();
+    const runtime = await buildRetainedNativeRuntimeContext({ db,agent:current,runId:run!.id,runtimeConfig:current.adapterConfig,runtimeSkillEntries:[] });
+    expect((await readNativeRuntimeAssetText(runtime.instructions.bundle,128000,{ companyId:f.home,runId:run!.id }))
+      .some(file=>file.text.includes(preference.body))).toBe(true);
+    await memoryService(db).forget(f.home,preference.id,{ principal:{ type:"user",userId:f.userId } });
+    expect(await heartbeatMemoryPayloadRetained(db,f.home,run!.id)).toBe(false);
+    await memoryJobService(db).tick({ limit:20 }); await memoryJobService(db).tick({ limit:20 });
+    await expect(readNativeRuntimeAssetText(runtime.instructions.bundle,128000,{ companyId:f.home,runId:run!.id })).rejects.toThrow();
     expect(calls).toBe(1);
   });
   it("rolls back publication when current authority is withdrawn by the final audit write", async () => {

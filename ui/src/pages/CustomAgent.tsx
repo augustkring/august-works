@@ -230,7 +230,7 @@ function DraftEditor({
   id: string;
   enabled: boolean;
 }) {
-  const { t } = useTranslation("experience");
+  const { t, i18n } = useTranslation("experience");
   const navigate = useNavigate(),
     { screen } = useParams(),
     client = useQueryClient();
@@ -458,7 +458,8 @@ function DraftEditor({
     key: K,
     value: AgentAuthoringContent[K],
   ) {
-    setContent((current) => current && { ...current, [key]: value });
+    setContent((current) => current && { ...current, [key]: value,
+      ...(key === "memory" && value !== "approved_work_preferences" && current.memoryRecordIds?.length ? { memoryRecordIds: [] } : {}) });
     setSaved(false);
     setValidationFields([]);
   }
@@ -740,6 +741,22 @@ function DraftEditor({
               </select>
             </label>
             <p>{t("customAgent.memoryBoundary")}</p>
+            {content.memory === "approved_work_preferences" && <fieldset className="space-y-2">
+              <legend>{t("customAgent.approvedPreferences")}</legend>
+              {!options.data?.preferences?.length && <p>{t("customAgent.noApprovedPreferences")}</p>}
+              {options.data?.preferences?.map(source => <label key={source.id} className="flex min-h-11 items-center gap-3">
+                <input type="checkbox" checked={content.memoryRecordIds?.includes(source.id) ?? false}
+                  onChange={event => change("memoryRecordIds", event.target.checked
+                    ? [...(content.memoryRecordIds ?? []), source.id] : (content.memoryRecordIds ?? []).filter(id => id !== source.id))} />
+                <span>{t("customAgent.preferenceSource", { title: source.title, sensitivity: source.sensitivity })}
+                  <span className="block">{t("customAgent.preferenceExpires", { time: new Intl.DateTimeFormat(i18n.resolvedLanguage ?? "en",
+                    { dateStyle: "medium", timeStyle: "short" }).format(new Date(source.expiresAt)) })}</span>
+                </span>
+              </label>)}
+            </fieldset>}
+            {content.memory !== "none" && <Link className="inline-flex min-h-11 items-center underline"
+              to={content.memory === "approved_work_preferences" ? "/memory" : "/foundation"}>
+              {t("customAgent.manageMemorySources")}</Link>}
           </>
         )}
         {step === "collaboration" && (

@@ -1436,7 +1436,7 @@
     "noPersonalization": "Ingen vedvarende personalisering",
     "rememberPreferences": "Husk godkendte arbejdspræferencer og kontekst",
     "companyKnowledge": "Brug godkendt virksomhedsviden",
-    "memoryBoundary": "Dette er foreslåede indstillinger. Opbevaring, rettelse, nulstilling og sletning skal afklares før udgivelse.",
+    "memoryBoundary": "Kun de præcist valgte, menneskeligt godkendte virksomhedskilder kan bruges. Indstillingen giver hverken skriveret til Memory eller adgang til privat agenthukommelse. Rettelse, nulstilling og sletning sker hos den eksisterende kildeejer. En ændret, tilbagekaldt eller udløbet kilde kræver en ny test og udgivelse.",
     "delegationBoundary": "Ingen delegering er konfigureret. Delegering kræver kvalificerede regler, annullering og verifikation.",
     "runtimeBoundary": "En aktuel tilknytning kvalificerer ikke udkastets ændrede adfærd. Ændringer af kørselsmiljøet kræver ny evaluering.",
     "runtimeSelection": "Valg af kørselsmiljø",
@@ -1484,6 +1484,11 @@
     "sourceCount": "{{count}} valgte godkendte kilder",
     "draftDetails": "hele udkastet",
     "invalidFields": "Gennemgå {{fields}}, før du gemmer. Fjern ugyldig tekst, forkort lange felter, og kontrollér de foreslåede tilladelser.",
+    "approvedPreferences": "Godkendte arbejdspræferencer",
+    "noApprovedPreferences": "Ingen aktuelle, menneskeligt godkendte arbejdspræferencer for virksomheden med afgrænset levetid er tilgængelige.",
+    "preferenceSource": "{{title}} · Menneskeligt godkendt arbejdspræference · {{sensitivity}}",
+    "manageMemorySources": "Gennemse, ret eller slet disse kilder",
+    "preferenceExpires": "Udløber {{time}}",
     "selectedApprovedSource": "{{title}} · Godkendt revision {{revision}} · {{sensitivity}}"
   },
   "authoringBlockers": {
@@ -1507,7 +1512,9 @@
     "internal_draft_authority_required": "Denne version kræver automatisk oprettelse af interne kladder.",
     "capability_mapping_required": "De valgte handlinger skal kobles til runtime før publicering.",
     "hire_package_activation_required": "Gennemgå den valgte pakkes formål, readiness og aktivering, før denne Hire publiceres.",
-    "knowledge_read_authority_required": "Vælg Læs godkendt viden → Kan gøre automatisk for de valgte godkendte kilder. Udgivelse kontrollerer stadig agentens og den ansvarlige persons aktuelle læseadgang."
+    "knowledge_read_authority_required": "Vælg Læs godkendt viden → Kan gøre automatisk for de valgte godkendte kilder. Udgivelse kontrollerer stadig agentens og den ansvarlige persons aktuelle læseadgang.",
+    "memory_source_selection_required": "Vælg de præcise, aktuelle godkendte kilder til denne Memory-indstilling.",
+    "memory_policy_mismatch": "Fjern de valgte præferencer, før du vælger en anden Memory-indstilling."
   },
   "authFlow": {
     "signInTitle": "Log ind på August Works",

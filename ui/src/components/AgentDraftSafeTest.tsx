@@ -1,3 +1,4 @@
+import { AgentSelectedMemory } from "./AgentSelectedMemory";
 import { AgentSelectedKnowledge } from "./AgentSelectedKnowledge";
 import { useEffect, useId, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -120,7 +121,7 @@ export function AgentDraftSafeTest({ company, principal, draft, enabled, canUseA
             <dt>{t("agentSafeTest.procedures")}</dt><dd><ul className="max-h-40 overflow-y-auto" tabIndex={0} aria-label={t("agentSafeTest.procedures")}>
               {review.data.requiredProcedures?.map(procedure => <li key={procedure.skillId}>{procedure.name}</li>)}
               {review.data.requiredPlaybooks?.map(procedure => <li key={procedure.playbookId}>{procedure.name}</li>)}
-            </ul></dd></> : null}<AgentSelectedKnowledge sources={review.data?.selectedKnowledge} /></dl>
+            </ul></dd></> : null}<AgentSelectedKnowledge sources={review.data?.selectedKnowledge} /><AgentSelectedMemory sources={review.data?.selectedMemory} /></dl>
         <p>{t("agentSafeTest.modelDisclosure")}</p>
         <p>{t("agentSafeTest.sharedResult")}</p>
         <label htmlFor={checkboxId} className="flex min-h-11 items-start gap-3"><input id={checkboxId} type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />

@@ -7,7 +7,7 @@
     "admin",
     "security_admin"
   ],
-  "customerOutcome": "Propose a memory purpose without creating memory or changing retention/correction policy.",
+  "customerOutcome": "Select exact approved work preferences or approved company knowledge with clear lifetime, correction and deletion scope.",
   "entryConditions": [
     "Current verified authenticated company membership and native agents:create or target agents:configure authority; instance-admin status does not bypass membership.",
     "Draft belongs to the current creator; editing an existing agent requires current native read and configure authority.",
@@ -17,11 +17,11 @@
   "exitConditions": [
     "Only a canonical accepted draft ID/version permits a saved claim.",
     "Draft saving never changes production agent configuration, grants, runtime or scheduled work.",
-    "Testing, effective native policy mapping, publish and active monitoring remain unqualified; no success evidence is manufactured."
+    "The selected read-only mapping requires current admission, explicit Agent read access, active membership, bounded lifetime, a representative test and independent human verification. Other mappings remain blocked."
   ],
   "content": {
     "h1": "Memory",
-    "supportingCopy": "Propose a memory purpose without creating memory or changing retention/correction policy.",
+    "supportingCopy": "Only selected human-approved company preferences can be used. Selection grants no access or Memory writes. Changed, withdrawn or expired records require a new test and publication.",
     "customerTerms": [
       "Company",
       "Work",
@@ -31,7 +31,9 @@
     ],
     "displayedState": [
       "Native draft version, section and explicit draft status",
-      "Saved-draft blockers are distinct from unsaved local proposals and executed outcomes"
+      "Saved-draft blockers are distinct from unsaved local proposals and executed outcomes",
+      "Current human-approved company preference title, sensitivity and expiry; private Agent memory is excluded.",
+      "Independent test/publication confirmations identify the exact retained versions."
     ]
   },
   "inputs": [
@@ -44,6 +46,16 @@
       "help": "This is customer data and cannot confer native authority.",
       "validation": "packages/shared/src/agent-authoring.ts strict schema; current native references checked server-side",
       "autofillOrPrefill": "Saved creator-owned native draft; existing agent name/description only, no credentials/effective instruction import"
+    },
+    {
+      "id": "memoryRecordIds",
+      "label": "Approved work preferences",
+      "dataType": "Optional bounded list of exact native Memory record UUIDs",
+      "required": false,
+      "default": "No selection",
+      "help": "Select only current human-approved company preferences needed for this responsibility.",
+      "validation": "At most 16 unique records; current company scope, human verification, expiry, active membership and explicit read grant.",
+      "autofillOrPrefill": "Existing saved creator-owned selection; no default records or private Agent memory."
     }
   ],
   "actions": {
@@ -54,7 +66,8 @@
     "secondary": [
       "Save & exit after canonical acknowledgement",
       "Back/section navigation saves the current valid draft",
-      "Retry the exact same request after unknown acknowledgement; reload the saved draft explicitly on baseline conflict"
+      "Retry the exact same request after unknown acknowledgement; reload the saved draft explicitly on baseline conflict",
+      "Review, correct or delete selected records through the existing Memory or Foundation pages with their own authority controls"
     ],
     "destructiveOrIrreversible": [
       "Discard draft removes authored content but never pauses/retires the target production agent"
@@ -64,10 +77,11 @@
     "canonicalReadDomains": [
       "agent_configuration_drafts (first-class unpublished configuration owner)",
       "Native agent configuration baseline, current company membership and permissions",
-      "Approved native Foundation revisions and existing presence runtime bindings"
+      "Approved native Foundation revisions and existing presence runtime bindings",
+      "Original Memory records, enabled bindings, explicit principal read grants and Context Memory roots"
     ],
     "canonicalWriteOperation": "Creator-scoped agent configuration create/save/discard with request hash, row version, database scope/version fences, native audit and post-commit publication",
-    "authorityEffect": "No grants, agent mutation, external messages, runtime provisioning or work execution. Native publication mapping and representative execution are unqualified.",
+    "authorityEffect": "Draft saving changes only the draft. The qualified read-only mapping consumes selected approved records without Memory writes, private scope, tool grants or automatic extraction. Separate publication uses the Original tested version owner.",
     "asyncWork": "Bounded native references and 25-row native timestamp/ID pagination; unknown acknowledgements retain immutable client request bodies/keys. V9 account observation rechecks on return inside the ordinary 30-second freshness window, without restarting reads for nested observers. Same-turn QueryClient fetch guards and authority epochs fence Native transport and late acknowledgements.",
     "receipt": "Current creator-owned canonical draft ID/version; never an inferred active version or first-value receipt."
   },
@@ -129,7 +143,8 @@
   },
   "acceptance": {
     "functional": [
-      "Verify canonical state, version conflicts, safe replay, unavailable states and principal/company switching on the exact artifact."
+      "Verify canonical state, version conflicts, safe replay, unavailable states and principal/company switching on the exact artifact.",
+      "Current selected-record, runtime-copy erasure, model-debit retention, publication and EN/DA browser tests pass in the approved preference checkpoint; other mappings and release acceptance remain pending."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."

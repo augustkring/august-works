@@ -75,6 +75,13 @@ export function AgentDraftReview({ draft, options, unsavedChanges, baselineCurre
         {Object.entries(operations).map(([operation, label]) => row(label,
           t(autonomy[content.capabilities.find(item => item.operation === operation)?.autonomy ?? "not_allowed"])))}
         {row("customAgent.stepMemory", t(memory[content.memory]))}
+        {!!content.memoryRecordIds?.length && <div className="space-y-1">
+          <dt className="font-medium">{t("customAgent.approvedPreferences")}</dt>
+          <dd><ul className="list-disc space-y-2 pl-5">{content.memoryRecordIds.map(id => {
+            const source = options?.preferences?.find(item => item.id === id);
+            return <li key={id}>{source ? t("customAgent.preferenceSource", { title: source.title, sensitivity: source.sensitivity }) : t("hireSetup.sourceUnavailable")}</li>;
+          })}</ul></dd>
+        </div>}
         {row("customAgent.delegation", t("customAgent.none"))}
         {row("customAgent.runtimeSelection", t(runtime ? "customAgent.currentRuntime" : "agentDraftReview.runtimeUnconfirmed"))}
         {row("customAgent.audience", t("customAgent.inApp"))}

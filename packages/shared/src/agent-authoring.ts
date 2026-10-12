@@ -96,6 +96,9 @@ const storedAgentAuthoringContentSchema = z
         "Choose each capability once",
       )
       .default([]),
+    // Optional preserves the hashes of pre-existing definitions without this field.
+    memoryRecordIds: z.array(z.uuid()).max(16).refine(ids => new Set(ids).size === ids.length,
+      "Choose each approved preference once").optional(),
     memory: z
       .enum(["none", "approved_work_preferences", "approved_company_knowledge"])
       .default("none"),

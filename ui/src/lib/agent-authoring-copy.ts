@@ -17,6 +17,8 @@ const blockerKeys = new Map<string, string>([
   ["publication_runtime_changed", "authoringBlockers.publication_runtime_changed"],
   ["knowledge_read_authority_required", "authoringBlockers.knowledge_read_authority_required"],
   ["knowledge_mapping_required", "authoringBlockers.knowledge_mapping_required"],
+  ["memory_source_selection_required", "authoringBlockers.memory_source_selection_required"],
+  ["memory_policy_mismatch", "authoringBlockers.memory_policy_mismatch"],
   ["memory_mapping_required", "authoringBlockers.memory_mapping_required"],
   ["internal_draft_authority_required", "authoringBlockers.internal_draft_authority_required"],
   ["capability_mapping_required", "authoringBlockers.capability_mapping_required"],

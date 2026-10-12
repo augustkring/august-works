@@ -8,7 +8,10 @@ PR #38 is a draft and must not merge yet.
 The recovered customer pause and selected approved public/internal knowledge mappings
 are now qualified. See the [recovery checkpoint](2026-10-12-aw-v9-environment-recovery.md)
 and [knowledge checkpoint](2026-10-12-aw-v9-selected-knowledge-checkpoint.md).
-Preference Memory and new runtime provisioning/live staging remain open.
+Approved company preference Memory now has explicit source selection, a bounded
+lifetime, current access, test/publication identity and Original dependent-copy
+erasure. See the [Memory checkpoint](2026-10-12-aw-v9-approved-preference-memory-checkpoint.md).
+Private/other Memory mappings and new runtime provisioning/live staging remain open.
 
 
 Current runtime selection, in-place Hire candidate saving and feedback-opening

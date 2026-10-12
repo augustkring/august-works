@@ -1,3 +1,4 @@
+import { authoringMemoryEvidence } from "./authoring-memory-evidence.js";
 import { and, eq } from "drizzle-orm";
 import { agentConfigurationTests, agentExecutionManifests, agentExecutionManifestItems, agentIdentities, agents, heartbeatRuns, type Db } from "@paperclipai/db";
 import { agentExecutionManifestSchema } from "@paperclipai/shared";
@@ -13,7 +14,7 @@ import { forbidden } from "../../errors.js";
  * this records no execution authorization or outcome qualification. */
 export async function retainAuthoringProcedureSources(db: Db, testId: string,
   current: Awaited<ReturnType<ReturnType<typeof authoringTestRuntime>["qualify"]>>) {
-  if (!current.procedures.skills.length && !current.procedures.playbooks.length && !current.procedures.knowledge.length && !current.procedures.snapshot.rolePack?.pins.length) return;
+  if (!current.procedures.skills.length && !current.procedures.playbooks.length && !current.procedures.memory.length && !current.procedures.knowledge.length && !current.procedures.snapshot.rolePack?.pins.length) return;
   const [test] = await db.select().from(agentConfigurationTests).where(eq(agentConfigurationTests.id, testId));
   const [run] = test ? await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, test.companyId),
     eq(heartbeatRuns.agentId, test.agentId), eq(heartbeatRuns.id, test.runId))) : [];
@@ -31,7 +32,7 @@ export async function retainAuthoringProcedureSources(db: Db, testId: string,
     sourceScope: "task_only", includeFoundation: false, sensitivityCeiling: "internal" });
   if (!context.packet.manifest) throw forbidden("The procedure test requires its Original Context Source owner");
   let contextId = context.packet.manifest.id;
-  if (current.procedures.knowledge.length) {
+  if (current.procedures.knowledge.length || current.procedures.memory.length) {
     const evidence: EvidenceItem[] = current.procedures.knowledge.map(pin => ({
       id: `foundation:${pin.foundationDocumentId}:${pin.revisionId}:whole`, companyId: test.companyId,
       sourceClass: "foundation", sourceProvider: "august_works_foundation", sourceType: "foundation_document_revision",
@@ -41,6 +42,7 @@ export async function retainAuthoringProcedureSources(db: Db, testId: string,
       trustLevel: "high", citation: { label: pin.title, href: `/foundation/${pin.foundationDocumentId}` },
       metadata: { foundationDocumentId: pin.foundationDocumentId, documentId: pin.documentId, bodyHash: pin.bodyHash, readOnly: true },
     }));
+    evidence.push(...authoringMemoryEvidence(test.companyId, current.procedures.memory));
     const retained = await contextManifestService(db).create({ companyId: test.companyId, agentId: test.agentId,
       runId: test.runId, responsibleUserId: test.createdByUserId, query: "Exact selected knowledge for representative test",
       policySnapshot: { intent: "agent_safe_test", selectedKnowledgeHash: current.procedures.hash, grantsAuthority: false },
@@ -72,7 +74,7 @@ export async function retainAuthoringProcedureSources(db: Db, testId: string,
   const items = [
     ...current.procedures.skills.map(pin => ({ type: "skill", ref: pin.skillId, versionRef: pin.versionId })),
     ...current.procedures.playbooks.map(pin => ({ type: "playbook", ref: pin.playbookId, versionRef: pin.revisionId })),
-    ...(current.procedures.knowledge.length ? [{ type: "company_scope", ref: test.companyId, versionRef: contextId }] : []),
+    ...(current.procedures.knowledge.length || current.procedures.memory.length ? [{ type: "company_scope", ref: test.companyId, versionRef: contextId }] : []),
   ];
   if (items.length) await db.insert(agentExecutionManifestItems).values(items.map(pin => ({ ...pin, companyId: test.companyId, manifestId: record!.id })));
 }

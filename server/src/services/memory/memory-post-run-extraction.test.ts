@@ -1,3 +1,6 @@
+import { compileAuthoredAgentDefinition } from "../agents/authored-definition.js";
+import { agentService } from "../agents.js";
+import { agentAuthoringContentSchema, AUTHORED_AGENT_DEFINITION_KEY } from "@paperclipai/shared";
 import { createHash, randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
@@ -194,6 +197,16 @@ describePg("Memory post-run extraction", () => {
     };
   }
 
+  it("keeps an Original readonly authored version from automatically writing organizational Memory", async () => {
+    const seeded = await seed();
+    const definition = compileAuthoredAgentDefinition(agentAuthoringContentSchema.parse({ name: "Readonly preference consumer",
+      ownerUserId: seeded.userId, capabilities: [{ operation: "create_internal_draft", autonomy: "automatic" }] }), randomUUID(), "a".repeat(64));
+    await agentService(db).update(seeded.agent.id, { runtimeConfig: { [AUTHORED_AGENT_DEFINITION_KEY]: definition } },
+      { authoredPublication: definition, recordRevision: { id: definition.revisionId, source: "agent_authoring_publish", createdByUserId: seeded.userId } });
+    expect(await memoryPostRunExtractionService(db).extract(seeded.run)).toMatchObject({ persisted: 0, skipped: 1,
+      skipReasons: { authored_memory_write_denied: 1 } });
+    expect(await db.select().from(memoryRecords).where(eq(memoryRecords.companyId, seeded.companyId))).toEqual([]);
+  });
   it("creates one evidence-backed pending candidate and replays idempotently", async () => {
     const seeded = await seed();
     const svc = memoryPostRunExtractionService(db);

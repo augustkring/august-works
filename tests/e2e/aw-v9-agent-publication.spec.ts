@@ -23,6 +23,7 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"], ["hire", "en"]] 
         ...(kind === "hire" ? { package: { key: "research", versionId: packageId, version: "1.0.0", contentHash: "a".repeat(64) } } : {}),
         preparation: { agentId, name: "Saved specialist", approvalId: null, status: "prepared", runtimeQualified: false, authorityGranted: false, executionStarted: false },
         content: agentAuthoringContentSchema.parse({ name: "Saved specialist", outcome: scenario, ownerUserId: session.user.id, runtimeBindingId: runtimeId, scenarios: [scenario],
+          memory: "approved_work_preferences", memoryRecordIds: ["10000000-0000-4000-8000-000000000034"],
           description: "A bounded company draft specialist", internalDescription: "Saved internal review context",
           instructions: { purpose: "Produce a bounded welcome draft", responsibilities: "Draft one internal response", prohibited: "Never send externally",
             missingInformation: "Ask for missing material facts", escalation: "Ask the accountable owner", communication: "<img src=x onerror=alert(1)>" },
@@ -72,12 +73,13 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"], ["hire", "en"]] 
           expect(new URL(req.url()).searchParams.get("requestId")).toBe(setupReceipt?.requestId);
           return route.fulfill({ json: setupReceipt });
         }
-        if (path.endsWith("/options")) return route.fulfill({ json: { owners: [{ id: session.user.id, name: "Accountable owner" }], knowledge: [], runtimes: [{ id: runtimeId }] } });
+        if (path.endsWith("/options")) return route.fulfill({ json: { owners: [{ id: session.user.id, name: "Accountable owner" }], knowledge: [], preferences: [{ id: "10000000-0000-4000-8000-000000000034", title: "Approved concise work", version: "2026-10-12T12:00:00Z", expiresAt: "2026-10-13T12:00:00Z", sensitivity: "internal" }], runtimes: [{ id: runtimeId }] } });
         if (path.endsWith("/hire-capability")) return route.fulfill({ json: { key: "research", versionId: packageId, version: "1.0.0", name: "Research draft", category: "Research",
           outcome: scenario, requiredKnowledge: [], requiredConnections: [], limits: [], actionClasses: ["internal_draft"], available: true } });
         if (path.endsWith("/publication-review")) return route.fulfill({ json: { companyId: company.id, draftId: id, version: draft.version, agentId,
           previousVersion: 1, nextVersion: 2, before: { ...draft.content, outcome: "Old active responsibility" }, after: draft.content,
-          activate: true, canPublish: true, blockers: [], selectedKnowledge: [{ foundationDocumentId: "10000000-0000-4000-8000-000000000031", documentId: "10000000-0000-4000-8000-000000000032",
+          activate: true, canPublish: true, blockers: [], selectedMemory: [{ recordId: "10000000-0000-4000-8000-000000000034", version: "2026-10-12T12:00:00Z", title: "Approved concise work",
+            bodyHash: "a".repeat(64), sensitivity: "internal", expiresAt: "2026-10-13T12:00:00Z", validFrom: null, validUntil: null }], selectedKnowledge: [{ foundationDocumentId: "10000000-0000-4000-8000-000000000031", documentId: "10000000-0000-4000-8000-000000000032",
             revisionId: "10000000-0000-4000-8000-000000000033", revisionNumber: 7, title: "Approved Aster company facts",
             bodyHash: "a".repeat(64), sensitivity: "internal", validFrom: null, validUntil: null }], requiredProcedures: [{ name: "Required security procedure", skillId: "10000000-0000-4000-8000-000000000012", versionId: "10000000-0000-4000-8000-000000000013" }],
           requiredPlaybooks: [{ playbookId: "10000000-0000-4000-8000-000000000014", revisionId: "10000000-0000-4000-8000-000000000015", name: "Approved welcome procedure", bodyHash: "e".repeat(64) }],
@@ -117,6 +119,9 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"], ["hire", "en"]] 
       await expect(dialog).toContainText("Approved welcome procedure");
       await expect(dialog).toContainText(locale === "en" ? "Approved revision 7" : "Godkendt revision 7");
       await expect(dialog).toContainText("Approved Aster company facts");
+      await expect(dialog).toContainText("Approved concise work");
+      await expect(dialog).toContainText(locale === "en" ? "Expires" : "Udløber");
+      await expect(dialog).toContainText(locale === "en" ? "grants no Memory writes" : "skriveret til Memory");
       await expect(dialog).toContainText("Old active responsibility"); await expect(dialog).toContainText("Accountable owner");
       for (const value of [draft.content!.description, draft.content!.internalDescription, ...Object.values(draft.content!.instructions)]) await expect(dialog).toContainText(value);
       await expect(dialog.locator("img")).toHaveCount(0); expect(publishes).toBe(0);

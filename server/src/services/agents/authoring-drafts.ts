@@ -1,3 +1,4 @@
+import { memoryService } from "../memory/memory-service.js";
 import { and, desc, eq, gte, isNotNull, notInArray, sql } from "drizzle-orm";
 import {
   agentConfigurationDrafts,
@@ -349,6 +350,15 @@ export function agentAuthoringService(db: Db) {
           { code: "draft_knowledge_unavailable" },
         );
     }
+    for (const id of content.memoryRecordIds ?? []) {
+      const current = await memoryService(tx).get(companyId, id,
+        { principal: { type: "user", userId: v5HumanActorId(actor) } });
+      const source = current?.record;
+      if (!source || source.scopeType !== "company" || source.memoryType !== "preference" || source.reviewState !== "accepted" ||
+        source.verificationState !== "human_verified" || source.retentionState !== "active" || source.revokedAt || source.supersededByRecordId ||
+        !source.expiresAt || new Date(source.expiresAt).getTime() <= Date.now())
+        throw unprocessable("Selected approved work preferences are unavailable; review their source", { code: "draft_memory_unavailable" });
+    }
     if (content.runtimeBindingId) {
       const [binding] = await tx
         .select({ id: agentPresenceRuntimeBindings.id })
@@ -608,6 +618,14 @@ export function agentAuthoringService(db: Db) {
             throw error;
         }
       }
+      const preferenceRecords = (await instanceSettingsService(db).getExperimental()).enableCollectiveMemoryV1
+        ? await memoryService(db).listReviewable(companyId, { reviewState: "accepted", memoryType: "preference", limit: 50 },
+          { principal: { type: "user", userId: v5HumanActorId(actor) } }) : [];
+      const preferences = preferenceRecords.filter(source => source.scopeType === "company" && source.verificationState === "human_verified" &&
+        source.retentionState === "active" && !source.revokedAt && !source.supersededByRecordId && source.expiresAt && source.expiresAt.getTime() > Date.now() &&
+        (!source.validFrom || source.validFrom.getTime() <= Date.now()) && (!source.validUntil || source.validUntil.getTime() > Date.now()) &&
+        ["public", "internal"].includes(source.sensitivityLabel)).slice(0, 16).map(source => ({ id: source.id,
+          title: source.title ?? "Approved work preference", version: source.updatedAt.toISOString(), expiresAt: source.expiresAt!.toISOString(), sensitivity: source.sensitivityLabel }));
       const runtimes = agentId
         ? await db
             .select({ id: agentPresenceRuntimeBindings.id })
@@ -622,7 +640,7 @@ export function agentAuthoringService(db: Db) {
             .limit(1)
         : [];
       await access(db, actor, companyId, agentId);
-      return { owners, knowledge, runtimes };
+      return { owners, knowledge, preferences, runtimes };
     },
     create: async (
       actor: AuthorizationActor,

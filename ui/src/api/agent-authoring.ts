@@ -29,6 +29,7 @@ const scope = (path: string, principal: string) =>
 export interface AgentAuthoringOptions {
   owners: Array<{ id: string; name: string }>;
   knowledge: Array<{ id: string; title: string; sensitivity: string; revision?: number }>;
+  preferences?: Array<{ id: string; title: string; version: string; expiresAt: string; sensitivity: string }>;
   runtimes: Array<{ id: string }>;
 }
 export const agentAuthoringApi = {

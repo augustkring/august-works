@@ -21,7 +21,7 @@ export const authoredAgentDefinitionSchema = z.strictObject({
 }).superRefine((value, context) => {
   if (Boolean(value.publication) !== (value.version !== undefined) || value.publication && !value.procedureSnapshotHash)
     context.addIssue({ code: "custom", message: "A customer publication needs its version, reviewed provenance and procedural mapping" });
-  if (value.content.knowledgeDocumentIds.length && !value.procedureSnapshotHash)
+  if ((value.content.knowledgeDocumentIds.length || value.content.memory !== "none") && !value.procedureSnapshotHash)
     context.addIssue({ code: "custom", message: "Selected knowledge needs its exact retained Source snapshot" });
 });
 export type AuthoredAgentDefinition = z.infer<typeof authoredAgentDefinitionSchema>;
@@ -32,7 +32,11 @@ export function authoredAgentMappingBlockers(content: z.infer<typeof agentAuthor
   const blockers: string[] = [];
   if (content.knowledgeDocumentIds.length && !content.capabilities.some(c => c.operation === "read_approved_knowledge" && c.autonomy === "automatic"))
     blockers.push("knowledge_read_authority_required");
-  if (content.memory !== "none") blockers.push("memory_mapping_required");
+  if (content.memory === "approved_work_preferences" && !content.memoryRecordIds?.length ||
+    content.memory === "approved_company_knowledge" && !content.knowledgeDocumentIds.length)
+    blockers.push("memory_source_selection_required");
+  if (content.memory !== "approved_work_preferences" && content.memoryRecordIds?.length)
+    blockers.push("memory_policy_mismatch");
   if (!content.capabilities.some(c => c.operation === "create_internal_draft" && c.autonomy === "automatic"))
     blockers.push("internal_draft_authority_required");
   if (content.capabilities.some(c => c.autonomy !== "not_allowed" &&

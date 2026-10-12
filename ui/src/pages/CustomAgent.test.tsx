@@ -415,3 +415,28 @@ it("announces invalid draft fields in the selected language and allows correctio
   await vi.waitFor(() => expect(save).toHaveBeenCalledOnce());
   expect(save.mock.calls[0]![3].content.name).toBe("Corrected native name");
 });
+
+it("saves only explicitly selected approved preference IDs without invoking tools or Memory writes", async () => {
+  const preferenceId = "10000000-0000-4000-8000-000000000031";
+  vi.spyOn(agentAuthoringApi, "get").mockResolvedValue(draft);
+  const save = vi.spyOn(agentAuthoringApi,"save").mockImplementation(async (_company,_principal,_id,input) =>
+    ({ ...draft, version: 2, content: input.content, step: input.step }));
+  await mount();
+  vi.mocked(agentAuthoringApi.options).mockResolvedValue({ owners: [{ id: "author", name: "Accountable author" }], knowledge: [], runtimes: [],
+    preferences: [{ id: preferenceId, title: "Approved concise work", sensitivity: "internal", version: "2026-10-12T12:00:00Z", expiresAt: "2026-10-13T12:00:00Z" }] });
+  await act(async () => { await client.invalidateQueries({ queryKey: ["agent-authoring-options"] }); });
+  await click("Memory");
+  await vi.waitFor(() => expect(container.querySelector("select")).toBeTruthy());
+  save.mockClear();
+  const select = container.querySelector("select")!;
+  await act(async () => { select.value="approved_work_preferences"; select.dispatchEvent(new Event("change",{ bubbles:true })); });
+  await vi.waitFor(() => expect(container.textContent).toContain("Approved concise work"));
+  expect(container.textContent).toContain("grants no Memory writes");
+  expect(container.textContent).toContain("Expires");
+  const checkbox = container.querySelector('input[type="checkbox"]') as HTMLInputElement;
+  expect(checkbox.checked).toBe(false);
+  await act(async () => checkbox.click()); await click("Continue");
+  await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+  expect(save.mock.calls[0]![3].content).toMatchObject({ memory:"approved_work_preferences", memoryRecordIds:[preferenceId] });
+  expect(JSON.stringify(save.mock.calls[0]![3])).not.toContain("Approved concise work");
+});

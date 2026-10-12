@@ -1,3 +1,4 @@
+import { AgentSelectedMemory } from "./AgentSelectedMemory";
 import { AgentSelectedKnowledge } from "./AgentSelectedKnowledge";
 import { useEffect, useId, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -157,7 +158,7 @@ export function AgentDraftPublication({ company, principal, draft, enabled, canU
             {review.data?.requiredProcedures.map(item => <li key={item.skillId}>{item.name}</li>)}
             {review.data?.requiredPlaybooks?.map(item => <li key={item.playbookId}>{item.name}</li>)}
           </ul></dd>
-          <AgentSelectedKnowledge sources={review.data?.selectedKnowledge} />
+          <AgentSelectedKnowledge sources={review.data?.selectedKnowledge} /><AgentSelectedMemory sources={review.data?.selectedMemory} />
         </dl>
         <label htmlFor={`${label}-publication`} className="flex min-h-11 items-start gap-3"><input id={`${label}-publication`} type="checkbox" checked={publication} onChange={event => setPublication(event.target.checked)} /><span>{t("agentPublication.confirmPublication")}</span></label>
         <label htmlFor={`${label}-activation`} className="flex min-h-11 items-start gap-3"><input id={`${label}-activation`} type="checkbox" checked={activation} onChange={event => setActivation(event.target.checked)} /><span>{t("agentPublication.confirmActivation")}</span></label>

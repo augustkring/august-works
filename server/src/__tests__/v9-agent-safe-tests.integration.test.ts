@@ -1,3 +1,5 @@
+import { seedApprovedAuthoringPreference } from "./helpers/authoring-memory.js";
+import { memoryService } from "../services/memory/memory-service.js";
 import { grantAuthoringKnowledgeReadFixture } from "./helpers/authoring-procedures.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -48,7 +50,8 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
   const transport: typeof guardedRemoteHttpFetch = async (url, init) => {
     calls++; expect(String(url)).toBe("https://api.anthropic.com/v1/messages"); expect(init.redirect).toBe("manual");
     expect(new Headers(init.headers).get("x-api-key")).toBe(`private-safe-test-key-${f.presence.id}`);
-    const body = JSON.parse(String(init.body)); expect(body.tools).toBeUndefined(); expect(body.stream).toBe(false);
+    const body = JSON.parse(String(init.body));
+    if (selectedPreferenceBody) expect(String(init.body)).toContain(selectedPreferenceBody); expect(body.tools).toBeUndefined(); expect(body.stream).toBe(false);
     if (selectedKnowledgeBody) {
       expect(body.messages[0].content[0].text).toContain(selectedKnowledgeBody);
       expect(body.messages[0].content[0].text).not.toContain("Unselected private company facts");
@@ -71,6 +74,7 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     await instanceSettingsService(db).updateExperimental({ saas_deployment_profile_v6: true, billing_v6: true, agent_packages_v7: true,
       hire_agent_v9: true, enableWorkflowsV1: true, orchestration_v7: true, supervision_v7: true, readiness_engine_v7: true, verifier_v7: true });
     f = await seedV5Presences(db);
+    selectedPreferenceBody = null;
     requiredProcedures = await seedRequiredAuthoringProcedures(db, f.actor, f.home, f.presence.id);
     calls = 0; duringCall = undefined; lostResponse = false; excessUsage = false;
     const config = { provider: "aw_text_only", model: "fixture-draft-model", workerModelProfileId: randomUUID(), maxOutputTokens: 256 };
@@ -111,6 +115,15 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
       confirmRepresentativeTest: true, confirmCompanyVisibleResult: true };
   }
   async function execute() { const input = await command(); return { input, result: await service().start(f.actor, f.home, draft.id, input) }; }
+  let selectedPreferenceBody: string | null = null;
+  async function selectPreference() {
+    const preference = await seedApprovedAuthoringPreference(db, f.home, f.presence.id, f.userId);
+    selectedPreferenceBody = preference.body;
+    draft = await drafts().save(f.actor, f.home, draft.id, { requestId: randomUUID(), expectedVersion: draft.version, step: "test",
+      content: { ...draft.content!, memory: "approved_work_preferences", memoryRecordIds: [preference.id],
+        capabilities: [{ operation: "create_internal_draft", autonomy: "automatic" }] } });
+    return preference;
+  }
   async function selectKnowledge() {
     const owner = foundationService(db), actor = { principal: { type: "user" as const, userId: f.userId } };
     selectedKnowledgeBody = "The selected company is named Aster";
@@ -296,6 +309,19 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     expect(result).toMatchObject({ execution: "failed", runtimeCurrent: false, testQualified: false, result: null });
     expect((await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, result.planId)))[0]!.status).toBe("completed");
     expect(calls).toBe(1);
+  });
+  it("uses only the selected approved preference through the actual bounded test controller", async () => {
+    await selectPreference(); const { result } = await execute();
+    expect(result).toMatchObject({ execution: "succeeded", runtimeCurrent: true, testQualified: false }); expect(calls).toBe(1);
+    expect((await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId,result.planId)))[0]!.status).toBe("completed");
+  });
+  it("withholds a late result after preference withdrawal while retaining the completed debit", async () => {
+    const preference = await selectPreference();
+    duringCall = async () => { await memoryService(db).revoke(f.home, preference.id, { reason: "Human withdrew the preference" },
+      { principal: { type: "user", userId: f.userId } }); };
+    const { result } = await execute();
+    expect(result).toMatchObject({ execution: "failed", runtimeCurrent: false, testQualified: false, result: null }); expect(calls).toBe(1);
+    expect((await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId,result.planId)))[0]!.status).toBe("completed");
   });
   it("consumes only selected approved knowledge through the Original controller with a synthetic provider response", async () => {
     await selectKnowledge(); const { result } = await execute();

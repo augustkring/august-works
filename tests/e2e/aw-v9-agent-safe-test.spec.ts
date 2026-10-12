@@ -23,6 +23,7 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"], ["hire", "en"]] 
         ...(kind === "hire" ? { package: { key: "research", versionId: packageId, version: "1.0.0", contentHash: "a".repeat(64) } } : {}),
         preparation: { agentId, name: "Saved specialist", approvalId: null, status: "prepared", runtimeQualified: false, authorityGranted: false, executionStarted: false },
         content: agentAuthoringContentSchema.parse({ name: "Saved specialist", outcome: scenario, ownerUserId: session.user.id, runtimeBindingId: kind === "hire" ? null : runtimeId, scenarios: [scenario],
+          memory: "approved_work_preferences", memoryRecordIds: ["10000000-0000-4000-8000-000000000034"],
           description: "A bounded company draft specialist", internalDescription: "Saved internal review context",
           instructions: { purpose: "Produce a bounded welcome draft", responsibilities: "Draft one internal response", prohibited: "Never send externally",
             missingInformation: "Ask for missing material facts", escalation: "Ask the accountable owner", communication: "<img src=x onerror=alert(1)>" },
@@ -65,7 +66,7 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"], ["hire", "en"]] 
           installationId: planId, installationVersion: 1, packageName: "Research draft", packageVersion: "1.0.0",
           intendedPurpose: scenario, purposes: [], selectedPurposeId: null, packageCurrent: false, canConfirm: false,
           blockers: ["approved_purpose_required"], reviewHash: "c".repeat(64), modelCalled: false, authorityGranted: false, executionStarted: false } });
-        if (path.endsWith("/options")) return route.fulfill({ json: { owners: [{ id: session.user.id, name: "Accountable owner" }], knowledge: [], runtimes: [{ id: runtimeId }] } });
+        if (path.endsWith("/options")) return route.fulfill({ json: { owners: [{ id: session.user.id, name: "Accountable owner" }], knowledge: [], preferences: [{ id: "10000000-0000-4000-8000-000000000034", title: "Approved concise work", version: "2026-10-12T12:00:00Z", expiresAt: "2026-10-13T12:00:00Z", sensitivity: "internal" }], runtimes: [{ id: runtimeId }] } });
         if (path.endsWith("/hire-capability")) return route.fulfill({ json: { key: "research", versionId: packageId, version: "1.0.0", name: "Research draft", category: "Research",
           outcome: scenario, requiredKnowledge: [], requiredConnections: [], limits: [], actionClasses: ["internal_draft"], available: true } });
         if (path.endsWith("/runtime")) return route.fulfill({ json: { draftId: id, companyId: company.id, version: draft.version, agentId, runtimeBindingId: runtimeId,
@@ -74,7 +75,8 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"], ["hire", "en"]] 
           return route.fulfill({ status: 422, json: { error: "Select and save this candidate’s runtime before testing" } });
         if (path.endsWith("/test-review")) return route.fulfill({ json: { companyId: company.id, draftId: id, version: draft.version, agentId, scenarioIndex: 0, scenario,
           runtimeBindingId: runtimeId, configurationHash: "a".repeat(64), candidateHash: "c".repeat(64), maximumCostMinor: 3, currency: "USD", provider: "anthropic", model: "software-host-model",
-          procedureSnapshotHash: "f".repeat(64), selectedKnowledge: [{ foundationDocumentId: "10000000-0000-4000-8000-000000000031", documentId: "10000000-0000-4000-8000-000000000032",
+          procedureSnapshotHash: "f".repeat(64), selectedMemory: [{ recordId: "10000000-0000-4000-8000-000000000034", version: "2026-10-12T12:00:00Z", title: "Approved concise work",
+            bodyHash: "a".repeat(64), sensitivity: "internal", expiresAt: "2026-10-13T12:00:00Z", validFrom: null, validUntil: null }], selectedKnowledge: [{ foundationDocumentId: "10000000-0000-4000-8000-000000000031", documentId: "10000000-0000-4000-8000-000000000032",
             revisionId: "10000000-0000-4000-8000-000000000033", revisionNumber: 7, title: "Approved Aster company facts",
             bodyHash: "a".repeat(64), sensitivity: "internal", validFrom: null, validUntil: null }], requiredProcedures: [{ skillId: "10000000-0000-4000-8000-000000000021", versionId: "10000000-0000-4000-8000-000000000022", name: "Required security procedure", bodyHash: "f".repeat(64) }],
           requiredPlaybooks: [{ playbookId: "10000000-0000-4000-8000-000000000023", revisionId: "10000000-0000-4000-8000-000000000024", name: "Approved welcome procedure", bodyHash: "e".repeat(64) }],
@@ -121,6 +123,9 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"], ["hire", "en"]] 
       await expect(dialog.getByText("Approved welcome procedure", { exact: true })).toBeVisible();
       await expect(dialog).toContainText(locale === "en" ? "Approved revision 7" : "Godkendt revision 7");
       await expect(dialog).toContainText("Approved Aster company facts");
+      await expect(dialog).toContainText("Approved concise work");
+      await expect(dialog).toContainText(locale === "en" ? "Expires" : "Udløber");
+      await expect(dialog).toContainText(locale === "en" ? "grants no Memory writes" : "skriveret til Memory");
       await page.addScriptTag({ path: axePath });
       expect(await page.evaluate(async () => (await (window as unknown as { axe: { run(scope: string): Promise<{ violations: unknown[] }> } }).axe.run('[role="alertdialog"]')).violations)).toEqual([]);
       await dialog.getByRole("checkbox").check(); await run.click();

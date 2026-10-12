@@ -1,3 +1,5 @@
+import { seedApprovedAuthoringPreference } from "./helpers/authoring-memory.js";
+import { memoryService } from "../services/memory/memory-service.js";
 import { grantAuthoringKnowledgeReadFixture } from "./helpers/authoring-procedures.js";
 import { randomUUID } from "node:crypto";
 import { stat } from "node:fs/promises";
@@ -30,7 +32,7 @@ const support = await getEmbeddedPostgresTestSupport();
     db = createDb(database.connectionString); await enableV5ForTest(db); }, 60000);
   afterAll(async () => { await database?.cleanup(); }, 30000);
   const input = (f: Awaited<ReturnType<typeof seedV5Presences>>) => ({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId });
-  async function installed(withPlaybook = false, withKnowledge = false) {
+  async function installed(withPlaybook = false, withKnowledge = false, withMemory = false) {
     const f = await seedV5Presences(db), pins = await seedRequiredAuthoringProcedures(db, f.actor, f.home, f.presence.id);
     const playbook = withPlaybook ? await seedApprovedAuthoringPlaybook(db, f.actor, f.home) : null;
     if (playbook) {
@@ -46,6 +48,7 @@ const support = await getEmbeddedPostgresTestSupport();
       await owner.submitForReview(f.home, draft.id, draft.latestRevisionId!, actor); knowledge = await owner.approve(f.home, draft.id, draft.latestRevisionId!, actor);
       await grantAuthoringKnowledgeReadFixture(db, f.home, f.presence.id, f.userId);
     }
+    const preference = withMemory ? await seedApprovedAuthoringPreference(db, f.home, f.presence.id, f.userId) : null;
     const config = { provider: "aw_text_only", model: "fixture-model", workerModelProfileId: randomUUID(), maxOutputTokens: 256 };
     await db.update(agents).set({ adapterType: "paperclip_runner", adapterConfig: config, status: "paused", pauseReason: "manual" }).where(eq(agents.id, f.presence.id));
     const providers = agentProviderBindingService(db);
@@ -59,6 +62,7 @@ const support = await getEmbeddedPostgresTestSupport();
       { configurationHash: hashContextPolicySnapshot({ adapterType: "paperclip_runner", adapterConfig: config }),
         runtimeId: runtime.id, profileRef: runtime.providerProfileRef, bindingId: binding.id, accountingComplete: true });
     const content = agentAuthoringContentSchema.parse({ name: "Welcome specialist", description: "Creates internal drafts", outcome: "Draft an internal welcome",
+      ...(preference ? { memory: "approved_work_preferences", memoryRecordIds: [preference.id] } : {}),
       ownerUserId: f.userId, knowledgeDocumentIds: knowledge ? [knowledge.id] : [],
       capabilities: [{ operation: "create_internal_draft", autonomy: "automatic" }, ...(knowledge ? [{ operation: "read_approved_knowledge", autonomy: "automatic" }] : [])],
       instructions: { purpose: "Welcome teammates", responsibilities: "Write a welcome", prohibited: "Do not contact anyone",
@@ -71,7 +75,7 @@ const support = await getEmbeddedPostgresTestSupport();
     const [task] = await db.insert(issues).values({ companyId: f.home, title: "Draft the internal welcome",
       description: "Only current approved Task input", assigneeAgentId: agent.id }).returning();
     const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: agent.id, responsibleUserId: f.userId, status: "running" }).returning();
-    return { f, pins, playbook, knowledge, procedures, definition, agent, config, run: run!, task: task!, execution: { ...input(f), runId: run!.id, issueId: task!.id, query: task!.title } };
+    return { f, pins, playbook, knowledge, preference, procedures, definition, agent, config, run: run!, task: task!, execution: { ...input(f), runId: run!.id, issueId: task!.id, query: task!.title } };
   }
   async function replaceVersion(f: Awaited<ReturnType<typeof installed>>) {
     // Exercise the existing trusted internal publication owner. Customer C3
@@ -206,6 +210,21 @@ const support = await getEmbeddedPostgresTestSupport();
     const files = await readNativeRuntimeAssetText(retained.instructions.bundle, 64000, { companyId: other.f.home, runId: other.run.id });
     expect(files.find(file => file.path === retained.instructions.entryPath)!.text).toContain(other.playbook!.body);
     expect(await heartbeatMemoryPayloadRetained(db, other.f.home, other.run.id)).toBe(true);
+  });
+  it("retains exact approved preference roots before copying their body and physically erases only their consumer", async () => {
+    const f = await installed(false,false,true), other = await installed(false,false,true);
+    const build = (value: typeof f) => buildRetainedNativeRuntimeContext({ db, agent: value.agent, runId: value.run.id, runtimeConfig: value.config, runtimeSkillEntries: [] });
+    const runtime = await build(f), retained = await build(other);
+    expect((await readNativeRuntimeAssetText(runtime.instructions.bundle, 128000, { companyId: f.f.home, runId: f.run.id }))
+      .some(file => file.text.includes(f.preference!.body))).toBe(true);
+    expect(runtime.mcp.bindingId).toBeNull();
+    await memoryService(db).forget(f.f.home, f.preference!.id, { principal: { type: "user", userId: f.f.userId } });
+    expect(await heartbeatMemoryPayloadRetained(db, f.f.home, f.run.id)).toBe(false);
+    await memoryJobService(db).tick({ limit: 20 }); await memoryJobService(db).tick({ limit: 20 });
+    await expect(readNativeRuntimeAssetText(runtime.instructions.bundle, 128000, { companyId: f.f.home, runId: f.run.id })).rejects.toThrow();
+    expect(await heartbeatMemoryPayloadRetained(db, other.f.home, other.run.id)).toBe(true);
+    expect((await readNativeRuntimeAssetText(retained.instructions.bundle, 128000, { companyId: other.f.home, runId: other.run.id }))
+      .some(file => file.text.includes(other.preference!.body))).toBe(true);
   });
   it("loads only pinned approved knowledge into the actual read-only runtime envelope", async () => {
     const f = await installed(false, true);

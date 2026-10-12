@@ -1436,7 +1436,7 @@
     "noPersonalization": "No persistent personalization",
     "rememberPreferences": "Remember approved work preferences and context",
     "companyKnowledge": "Use approved company knowledge",
-    "memoryBoundary": "These are proposed settings. Retention, correction, reset and deletion scope must be confirmed before publication.",
+    "memoryBoundary": "Only the exact selected, human-approved company sources can be used. This policy grants no Memory writes or access to private agent memory. Correction, reset and deletion use the existing source owner. A changed, withdrawn or expired source requires a new test and publication.",
     "delegationBoundary": "No delegation is configured. Delegation remains unavailable until a bounded policy, cancellation and verification are qualified.",
     "runtimeBoundary": "A current binding does not qualify the draft's changed behavior. Runtime changes require fresh evaluation.",
     "runtimeSelection": "Runtime selection",
@@ -1484,6 +1484,11 @@
     "sourceCount": "{{count}} approved source selections",
     "draftDetails": "the complete draft",
     "invalidFields": "Review {{fields}} before saving. Remove malformed text, shorten long entries and check the proposed permissions.",
+    "approvedPreferences": "Approved work preferences",
+    "noApprovedPreferences": "No current human-approved company preferences with a bounded lifetime are available.",
+    "preferenceSource": "{{title}} · Human-approved company preference · {{sensitivity}}",
+    "manageMemorySources": "Review, correct or delete these sources",
+    "preferenceExpires": "Expires {{time}}",
     "selectedApprovedSource": "{{title}} · Approved revision {{revision}} · {{sensitivity}}"
   },
   "authoringBlockers": {
@@ -1507,7 +1512,9 @@
     "internal_draft_authority_required": "This version requires automatic internal drafting.",
     "capability_mapping_required": "The selected actions need their runtime mapping before publishing.",
     "hire_package_activation_required": "Review the selected package’s intended purpose, readiness and activation before publishing this Hire.",
-    "knowledge_read_authority_required": "For the selected approved sources, choose Read approved knowledge → Can do automatically. Publication still checks the agent’s and responsible person’s current read access."
+    "knowledge_read_authority_required": "For the selected approved sources, choose Read approved knowledge → Can do automatically. Publication still checks the agent’s and responsible person’s current read access.",
+    "memory_source_selection_required": "Select the exact current approved sources for this Memory policy.",
+    "memory_policy_mismatch": "Clear the selected preferences before choosing a different Memory policy."
   },
   "authFlow": {
     "signInTitle": "Sign in to August Works",
