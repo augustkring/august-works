@@ -9,6 +9,11 @@ on:
       - 'ui/src/**'
       - 'doc/reference/aw-v9/brief/**'
       - 'scripts/check-aw-v9-coverage.mjs'
+      - 'scripts/e2e-shard.mjs'
+      - 'scripts/__tests__/e2e-shard.test.mjs'
+      - 'tests/e2e/aw-v9-storybook.*'
+      - 'ui/storybook/**'
+      - 'ui/.storybook/**'
       - '.github/workflows/aw-v9-coverage.yml'
   workflow_dispatch:
 permissions:
@@ -22,3 +27,32 @@ jobs:
         with:
           node-version: '24'
       - run: node scripts/check-aw-v9-coverage.mjs
+  components:
+    name: V9 component accessibility
+    runs-on: ubuntu-24.04
+    timeout-minutes: 25
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+      - uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          run_install: false
+      - run: pnpm install --frozen-lockfile --ignore-scripts
+      - run: pnpm run preflight:workspace-links
+      - run: pnpm --filter @paperclipai/plugin-sdk ensure-build-deps
+      - run: pnpm exec playwright install --with-deps chromium
+      - run: pnpm build-storybook
+      - run: pnpm exec playwright test --config tests/e2e/aw-v9-storybook.config.ts tests/e2e/aw-v9-storybook.spec.ts
+      - name: Retain component failure evidence
+        if: failure()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: v9-component-browser-results
+          path: test-results/v9-storybook/
+          retention-days: 14
+          if-no-files-found: ignore
