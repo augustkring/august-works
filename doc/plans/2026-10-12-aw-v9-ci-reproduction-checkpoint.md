@@ -33,3 +33,12 @@ that locator. It also checks focus. It retains the keyboard interaction and the
 visible-field assertion. The retention and maintenance disclosures use the same
 targeted keyboard action. All three built-app artifact/Memory browser cases
 pass locally after this repair. Current remote CI is still required.
+
+The next head `fc68a6bf585b3eb1e6b6f77fb8426be41fff3ea8` passes all 35
+workspace type checks locally and in the remote contracts job. That remote job
+then stops before the SaaS tests because Public ECR rejects its PostgreSQL image
+download with `toomanyrequests: Data limit exceeded`. Docker Hub supplies the
+same image successfully in the recovered environment. Its reported digest is
+exactly `sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722`.
+The workflow now uses that reference with the same immutable digest. It retains
+the actual database dump/restore tests and every contract gate.
