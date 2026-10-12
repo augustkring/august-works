@@ -17,6 +17,7 @@ describe("unpublished agent authoring contracts", () => {
       blockers: [{ code: "native_promotion_unqualified", message: "Review publication separately", step: "publish" }],
       test: { status: "qualified", message: "Current human verification", scenariosVerified: 2 }, publishAllowed: false };
     expect(agentAuthoringReviewSchema.safeParse(review).success).toBe(true);
+    expect(agentAuthoringReviewSchema.safeParse({ ...review, blockers: [], publishAllowed: true }).success).toBe(true);
     for (const changed of [{ publishAllowed: true }, { productionChanged: true }, { test: { ...review.test, scenariosVerified: undefined } },
       { test: { ...review.test, scenariosVerified: 11 } }, { test: { ...review.test, status: "unqualified" } }])
       expect(agentAuthoringReviewSchema.safeParse({ ...review, ...changed }).success).toBe(false);

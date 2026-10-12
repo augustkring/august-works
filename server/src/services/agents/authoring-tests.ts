@@ -104,7 +104,8 @@ export function agentAuthoringTestService(db: Db) {
         const row = rows.find(value => value.scenarioIndex === index);
         if (!row || !(await view(tx, actor, row)).testQualified) return null;
       }
-      return { scenariosVerified: rows.length };
+      return { scenariosVerified: rows.length, testIds: rows.map(row => row.id),
+        candidateHash: authoringCandidateHash(draft), configurationHash: rows[0]!.configurationHash };
     },
     packet: async (actor: AuthorizationActor, companyId: string, draftId: string, requestId: string) => {
       const row = await exactTest(actor, companyId, draftId, requestId);

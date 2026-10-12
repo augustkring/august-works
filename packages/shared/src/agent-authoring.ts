@@ -293,8 +293,10 @@ export const agentAuthoringReviewSchema = z.strictObject({
   blockers: z.array(z.strictObject({ code: z.string().min(1).max(100), message: z.string().min(1).max(2000), step: z.enum(CUSTOM_AGENT_STEPS) })).max(50),
   test: z.strictObject({ status: z.enum(["unqualified", "qualified"]), message: z.string().min(1).max(2000),
     scenariosVerified: z.number().int().min(1).max(10).optional() }),
-  publishAllowed: z.literal(false),
+  publishAllowed: z.boolean(),
 }).superRefine((review, context) => {
+  if (review.publishAllowed && (review.blockers.length > 0 || !review.baselineCurrent || review.test.status !== "qualified"))
+    context.addIssue({ code: "custom", path: ["publishAllowed"], message: "Publication needs a current baseline, verified candidate and no blockers" });
   if ((review.test.status === "qualified") !== (review.test.scenariosVerified !== undefined))
     context.addIssue({ code: "custom", path: ["test"], message: "Qualified review requires the verified saved scenario count" });
 });

@@ -1495,7 +1495,16 @@
     "runtime_required": "A currently qualified runtime is required before testing",
     "representative_test_unqualified": "Representative execution and independently verified results for this draft are not qualified yet",
     "native_promotion_unqualified": "Publishing this structured configuration through a qualified native policy mapping is not available yet",
-    "unavailable": "This saved draft is not ready. Reload its current review before continuing."
+    "unavailable": "This saved draft is not ready. Reload its current review before continuing.",
+    "publication_baseline_changed": "The active version changed. Create a fresh draft from the current version.",
+    "publication_agent_not_ready": "Resolve the agent’s approval, budget, error or suspension before publishing.",
+    "publication_work_in_flight": "Wait for the agent’s current work to finish before changing version.",
+    "publication_native_guards_missing": "Version protection must be available before publishing.",
+    "publication_runtime_changed": "Review the current runtime, required procedures and remaining budget again.",
+    "knowledge_mapping_required": "The selected knowledge sources need their runtime mapping before publishing.",
+    "memory_mapping_required": "The selected memory setting needs its runtime mapping before publishing.",
+    "internal_draft_authority_required": "This version requires automatic internal drafting.",
+    "capability_mapping_required": "The selected actions need their runtime mapping before publishing."
   },
   "authFlow": {
     "signInTitle": "Sign in to August Works",
@@ -1756,5 +1765,26 @@
     "cancelDetail": "Cancel pending work through the normal stop process. A cancellation request does not prove that a remote process has stopped.",
     "back": "Back",
     "confirm": "Pause agent"
+  },
+  "agentPublication": {
+    "title": "Publish and activate this version",
+    "boundary": "Replace the active version with this saved, independently verified candidate. Future work may use the existing model and budget. Publication makes no model call, starts no work and grants no new access.",
+    "changed": "The candidate or current access changed. Review again.",
+    "unknown": "The publication outcome is unresolved. Check the original receipt before making another request.",
+    "receipt": "Version {{version}} was published and activated. No work was started.",
+    "checkOriginal": "Check original publication",
+    "unavailable": "Publication could not be checked.",
+    "review": "Review publication and activation",
+    "confirmTitle": "Confirm this version change",
+    "changes": "Reviewed version changes",
+    "versions": "Active version {{before}} → version {{after}}",
+    "perCallCost": "Maximum cost per future model call",
+    "confirmPublication": "I confirm publishing this saved and verified version.",
+    "confirmActivation": "I confirm replacing the active version for future work under the existing budget and access.",
+    "publish": "Publish and activate",
+    "packageVersion": "Package version {{version}}",
+    "scope": "Works in August Works. It may prepare internal drafts from the current task. Other actions, connected sources, persistent memory and delegation remain unavailable.",
+    "openAgent": "Open agent",
+    "manageAgent": "Monitor or pause agent"
   }
 }

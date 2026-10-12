@@ -41,6 +41,7 @@ import { instanceSettingsService } from "../instance-settings.js";
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { readBuiltInAgentMarker } from "../built-in-agent-metadata.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { agentPackageService } from "../agent-packages/package-service.js";
 import { packageReleaseBlockers } from "../agent-packages/package-policy.js";
@@ -50,6 +51,7 @@ import { createPausedOnboardingAgent } from "../saas/onboarding-agent.js";
 import { deduplicateAgentName } from "../agents.js";
 import { agentProviderBindingService } from "../agent-provider-bindings.js";
 import { agentAuthoringTestService } from "./authoring-tests.js";
+import { readAuthoredAgentDefinition } from "./authored-definition.js";
 import {
   approvedFoundationView,
   foundationService,
@@ -368,6 +370,9 @@ export function agentAuthoringService(db: Db) {
     }
   }
   const service = {
+    /** Internal publication owner uses the same verified creator/configuration
+     * write admission and locked Original draft; never exposed as an HTTP DTO. */
+    publicationCandidate: async (actor: AuthorizationActor, companyId: string, id: string) => read(db, actor, companyId, id, true),
     runtime: async (actor: AuthorizationActor, companyId: string, id: string) => db.transaction(async rawTx => {
       const tx = rawTx as unknown as Db;
       v5HumanActorId(actor);
@@ -661,12 +666,13 @@ export function agentAuthoringService(db: Db) {
         if (count >= 100)
           throw tooManyRequests("Daily agent draft creation limit reached");
         let identity = { name: "", description: "" };
+        let publishedContent: AgentAuthoringContent | null = null;
         const capability = input.packageVersionId
           ? await hireRelease(tx, actor, input.packageVersionId)
           : null;
         if (input.agentId) {
           const [target] = await tx
-            .select({ name: agents.name, description: agents.capabilities })
+            .select({ id: agents.id, companyId: agents.companyId, runtimeConfig: agents.runtimeConfig, name: agents.name, description: agents.capabilities })
             .from(agents)
             .where(
               and(
@@ -678,6 +684,7 @@ export function agentAuthoringService(db: Db) {
             name: target?.name ?? "",
             description: target?.description?.slice(0, 1000) ?? "",
           };
+          if (target) publishedContent = (await readAuthoredAgentDefinition(tx, target))?.content ?? null;
         }
         const [row] = await tx
           .insert(agentConfigurationDrafts)
@@ -696,6 +703,7 @@ export function agentAuthoringService(db: Db) {
             content: agentAuthoringContentSchema.parse({
               ...identity,
               ownerUserId: userId,
+              ...(publishedContent ?? {}),
               ...(capability
                 ? {
                     name: capability.name,
@@ -1113,14 +1121,19 @@ export function agentAuthoringService(db: Db) {
     },
     review: async (actor: AuthorizationActor, companyId: string, id: string): Promise<AgentAuthoringReview> => db.transaction(async raw => {
       const tx = raw as unknown as Db;
+      await lockAnalyticalCompany(tx, companyId);
       await lockMemoryPrivacy(tx, companyId);
       await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, companyId)).for("update");
       const base = await agentAuthoringService(tx).reviewContent(actor, companyId, id);
       const qualified = await agentAuthoringTestService(db).readinessInTransaction(tx, actor, companyId, id, base.version);
-      return agentAuthoringReviewSchema.parse(qualified ? { ...base,
-        blockers: base.blockers.filter(blocker => blocker.code !== "representative_test_unqualified"),
-        test: { status: "qualified", message: "Every saved representative scenario has current independent human verification", scenariosVerified: qualified.scenariosVerified },
-      } : base);
+      if (qualified) {
+        const { agentAuthoringPublicationService } = await import("./authoring-publication.js");
+        const publication = await agentAuthoringPublicationService(db).reviewInTransaction(tx, actor, companyId, id);
+        return agentAuthoringReviewSchema.parse({ ...base, publishAllowed: publication.canPublish,
+          blockers: publication.blockers.map(blocker => ({ ...blocker, step: "publish" })),
+          test: { status: "qualified", message: "Every saved representative scenario has current independent human verification", scenariosVerified: qualified.scenariosVerified } });
+      }
+      return agentAuthoringReviewSchema.parse(base);
     }),
   };
   return service;

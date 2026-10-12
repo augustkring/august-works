@@ -72,6 +72,11 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"]] as const) {
           evidence: [{ ref: "document:original:revision", type: "task_document", sourceId: "10000000-0000-4000-8000-000000000010", sourceVersion: "10000000-0000-4000-8000-000000000011", hash: "f".repeat(64) }],
           deterministicFailures: [], liveAttempts: 0, riskClass: "C0", policy: { independentRequired: true, humanRequired: true, workerSelfCertification: false } } });
         if (outcome && path.endsWith(`/tests/${outcome.requestId}`)) return route.fulfill({ json: outcome });
+        if (path.endsWith("/publication-review")) return route.fulfill({ json: { companyId: company.id, draftId: id, version: draft.version, agentId,
+          previousVersion: null, nextVersion: 1, before: null, after: draft.content, activate: true, canPublish: false,
+          blockers: [{ code: "capability_mapping_required", message: "Publication remains a separate action in this Safe Test host fixture" }],
+          requiredProcedures: [], maximumPerModelCallMinor: null, currency: "USD", provider: null, model: null, runtimeBindingId: runtimeId,
+          reviewHash: "f".repeat(64), modelCalled: false, authorityGranted: false, executionStarted: false } });
         if (path.endsWith("/review")) return route.fulfill({ json: { draftId: id, version: draft.version, baselineCurrent: true, productionChanged: false, publishAllowed: false,
           blockers: [{ code: "native_promotion_unqualified", message: "Promotion is separate", step: "review" }],
           test: outcome?.testQualified ? { status: "qualified", message: "Current verified scenario", scenariosVerified: 1 } : { status: "unqualified", message: "No qualified test" } } });

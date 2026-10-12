@@ -362,7 +362,15 @@ export async function buildNativeRuntimeContext(input: { db: Db; agent: RuntimeA
 /** Production publication uses the native run owner and keeps C7 excluded until all copies exist. */
 export async function buildRetainedNativeRuntimeContext(input: Parameters<typeof buildNativeRuntimeContext>[0]) {
   return withRetainedNativeRuntimeAssets({ db: input.db, companyId: input.agent.companyId, agentId: input.agent.id, runId: input.runId },
-    db => buildNativeRuntimeContext({ ...input, db }));
+    async db => {
+      const authored = await readAuthoredAgentDefinition(db, input.agent);
+      if (authored) await db.update(heartbeatRuns).set({ contextSnapshot: sql`coalesce(${heartbeatRuns.contextSnapshot}, '{}'::jsonb) || ${JSON.stringify({ agentDefinitionVersion: {
+        revisionId: authored.revisionId, definitionHash: authored.definitionHash,
+        ...(authored.procedureSnapshotHash ? { procedureSnapshotHash: authored.procedureSnapshotHash } : {}),
+        ...(authored.version ? { version: authored.version } : {}),
+      } })}::jsonb` }).where(and(eq(heartbeatRuns.companyId, input.agent.companyId), eq(heartbeatRuns.agentId, input.agent.id), eq(heartbeatRuns.id, input.runId)));
+      return buildNativeRuntimeContext({ ...input, db });
+    });
 }
 
 /** Both original runtime context and connector preparation share the native

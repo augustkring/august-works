@@ -10,7 +10,15 @@ export const authoredAgentDefinitionSchema = z.strictObject({
   candidateHash: z.string().regex(/^[a-f0-9]{64}$/),
   definitionHash: z.string().regex(/^[a-f0-9]{64}$/),
   procedureSnapshotHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
+  version: z.number().int().positive().optional(),
+  publication: z.strictObject({ draftId: z.uuid(), draftVersion: z.number().int().positive(),
+    candidateRevision: z.number().int().positive(), requestedByUserId: z.string().min(1).max(200),
+    reviewHash: z.string().regex(/^[a-f0-9]{64}$/), requestHash: z.string().regex(/^[a-f0-9]{64}$/),
+    verifiedTestIds: z.array(z.uuid()).min(1).max(10), priorRevisionId: z.uuid().nullable(), activatedAtPublication: z.boolean() }).optional(),
   content: agentAuthoringContentSchema,
+}).superRefine((value, context) => {
+  if (Boolean(value.publication) !== (value.version !== undefined) || value.publication && !value.procedureSnapshotHash)
+    context.addIssue({ code: "custom", message: "A customer publication needs its version, reviewed provenance and procedural mapping" });
 });
 export type AuthoredAgentDefinition = z.infer<typeof authoredAgentDefinitionSchema>;
 

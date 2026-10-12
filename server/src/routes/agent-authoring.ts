@@ -8,11 +8,13 @@ import {
   agentDraftPrepareSchema,
   agentDraftTestCommandSchema,
   verificationReviewSchema,
+  agentDraftPublicationCommandSchema,
 } from "@paperclipai/shared";
 import { assertBoard, assertCompanyAccess } from "./authz.js";
-import { conflict, unprocessable } from "../errors.js";
+import { conflict } from "../errors.js";
 import { agentAuthoringService } from "../services/agents/authoring-drafts.js";
 import { agentAuthoringTestService } from "../services/agents/authoring-tests.js";
+import { agentAuthoringPublicationService } from "../services/agents/authoring-publication.js";
 import { validate } from "../middleware/validate.js";
 
 export function agentAuthoringRoutes(db: Db) {
@@ -153,20 +155,17 @@ export function agentAuthoringRoutes(db: Db) {
       ),
     ),
   );
-  router.post(`${root}/:id/publish`, async (req) => {
-    const review = await service.review(
-      req.actor,
-      company(req),
-      z.uuid().parse(req.params.id),
-    );
-    throw unprocessable(
-      "Agent publishing is blocked by current qualification",
-      {
-        code: "draft_publish_unqualified",
-        version: review.version,
-        blockers: review.blockers,
-      },
-    );
-  });
+  router.get(`${root}/:id/publication-review`, async (req, res) => res.json(
+    await agentAuthoringPublicationService(db).review(req.actor, company(req), z.uuid().parse(req.params.id)),
+  ));
+  router.get(`${root}/:id/publications/:requestId`, async (req, res) => res.json(
+    await agentAuthoringPublicationService(db).receipt(req.actor, company(req), z.uuid().parse(req.params.id), z.uuid().parse(req.params.requestId)),
+  ));
+  router.get(`${root}/:id/publications`, async (req, res) => res.json(
+    await agentAuthoringPublicationService(db).receipt(req.actor, company(req), z.uuid().parse(req.params.id)),
+  ));
+  router.post(`${root}/:id/publish`, validate(agentDraftPublicationCommandSchema), async (req, res) => res.json(
+    await agentAuthoringPublicationService(db).publish(req.actor, company(req), z.uuid().parse(req.params.id), req.body),
+  ));
   return router;
 }

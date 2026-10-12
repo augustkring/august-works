@@ -30,6 +30,7 @@ import { Input } from "@/components/ui/input";
 import { Textarea } from "@/components/ui/textarea";
 import { AgentDraftPreparation } from "@/components/AgentDraftPreparation";
 import { AgentDraftRuntime } from "@/components/AgentDraftRuntime";
+import { AgentDraftPublication } from "@/components/AgentDraftPublication";
 import { AgentDraftSafeTest } from "@/components/AgentDraftSafeTest";
 import { AgentDraftReview } from "@/components/AgentDraftReview";
 
@@ -813,8 +814,11 @@ function DraftEditor({
         )}
         {step === "publish" && (
           <>
-            <p>{t("customAgent.publishBoundary")}</p>
-            <Button className="min-h-11" disabled>{t("customAgent.publishAgent")}</Button>
+            <AgentDraftPublication key={`publication:${receipt.id}`} company={company} principal={principal} draft={receipt}
+              options={options.isSuccess && !options.isFetching ? options.data : null}
+              enabled={viewReady && enabled && !save.isPending && !discard.isPending && JSON.stringify(content) === JSON.stringify(receipt.content)}
+              canUseAuthority={() => alive.current && authority.canRead() && !securityPending.current && !reauthorizing &&
+                client.getQueryState(["agent-authoring", company, principal, id, authority.epoch])?.fetchStatus === "idle"} />
           </>
         )}
         {step === "monitor" && (

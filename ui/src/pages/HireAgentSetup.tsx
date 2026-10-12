@@ -20,6 +20,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { HireDeclaredAccess } from "@/components/HireDeclaredAccess";
 import { AgentDraftPreparation } from "@/components/AgentDraftPreparation";
 import { AgentDraftRuntime } from "@/components/AgentDraftRuntime";
+import { AgentDraftPublication } from "@/components/AgentDraftPublication";
 import { AgentDraftSafeTest } from "@/components/AgentDraftSafeTest";
 import { AgentDraftReview } from "@/components/AgentDraftReview";
 import { useV9AuthoringAuthority } from "@/hooks/useV9AuthoringAuthority";
@@ -571,12 +572,21 @@ export function HireAgentSetup({
           </p>
           <p>{t("hireSetup.reviewAccess")}</p>
           <p>{t("hireSetup.reviewApproval")}</p>
+          <AgentDraftPublication key={`publication:${receipt.id}`} company={company} principal={principal} draft={receipt}
+            onPublished={() => { if (alive.current && authority.canRead()) navigate(`/agents/hire/drafts/${id}/hire_receipt`); }}
+              options={options.isSuccess && !options.isFetching ? options.data : null}
+            enabled={viewReady && enabled && !frozen && JSON.stringify(content) === JSON.stringify(receipt.content)}
+            canUseAuthority={() => alive.current && authority.canRead() && !checking.current && !checkingAccess &&
+              client.getQueryState(key)?.fetchStatus === "idle"} />
         </section>
       )}
       {step === "hire_receipt" && (
         <section className="space-y-3" aria-labelledby="hire-receipt">
-          <h2 id="hire-receipt" className="text-lg font-semibold">{t("hireSetup.noReceipt")}</h2>
-          <p>{t("hireSetup.notActivated")}</p>
+          <h2 id="hire-receipt" className="text-lg font-semibold">{t("hireSetup.stepReceipt")}</h2>
+          <AgentDraftPublication receiptOnly company={company} principal={principal} draft={receipt}
+            options={options.isSuccess && !options.isFetching ? options.data : null}
+            enabled={viewReady && !frozen}
+            canUseAuthority={() => alive.current && authority.canRead() && !checking.current && !checkingAccess && client.getQueryState(key)?.fetchStatus === "idle"} />
         </section>
       )}
       {["hire_test", "hire_review", "hire_receipt"].includes(step) && (
@@ -605,9 +615,7 @@ export function HireAgentSetup({
           disabled={!enabled || frozen}
           onClick={() => persist("/agents/hire")}
         >{t("hireSetup.saveExit")}</Button>
-        {step === "hire_review" ? (
-          <Button className="min-h-11" disabled>{t("hireSetup.hire")}</Button>
-        ) : next ? (
+        {step === "hire_review" ? null : next ? (
           <Button
             className="min-h-11"
             disabled={

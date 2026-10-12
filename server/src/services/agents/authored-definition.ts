@@ -2,6 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { agentConfigRevisions, type Db } from "@paperclipai/db";
 import { AUTHORED_AGENT_DEFINITION_KEY, agentAuthoringContentSchema,
   authoredAgentDefinitionSchema, authoredAgentMappingBlockers, type AgentAuthoringContent } from "@paperclipai/shared";
+import type { AuthoredAgentDefinition } from "@paperclipai/shared";
 import { sanitizeRecord } from "../../redaction.js";
 import { conflict } from "../../errors.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
@@ -14,12 +15,14 @@ function config(value: unknown): Record<string, unknown> {
 export function hasAuthoredAgentDefinition(agent: AuthoredRuntimeAgent) {
   return Object.prototype.hasOwnProperty.call(config(agent.runtimeConfig), AUTHORED_AGENT_DEFINITION_KEY);
 }
-export function compileAuthoredAgentDefinition(content: AgentAuthoringContent, revisionId: string, candidateHash: string, procedureSnapshotHash?: string) {
+export function compileAuthoredAgentDefinition(content: AgentAuthoringContent, revisionId: string, candidateHash: string, procedureSnapshotHash?: string,
+  publication?: { version: number; provenance: NonNullable<AuthoredAgentDefinition["publication"]> }) {
   const saved = agentAuthoringContentSchema.parse(content);
   const blockers = authoredAgentMappingBlockers(saved);
   if (blockers.length) throw conflict("The selected behavior needs its native policy mapping", { code: "authored_policy_mapping_required", blockers });
   const definition = authoredAgentDefinitionSchema.parse({ schema: "paperclip.agent-authored-definition.v1", revisionId, candidateHash,
-    definitionHash: nativeSha256(saved), content: saved, ...(procedureSnapshotHash ? { procedureSnapshotHash } : {}) });
+    definitionHash: nativeSha256(saved), content: saved, ...(procedureSnapshotHash ? { procedureSnapshotHash } : {}),
+    ...(publication ? { version: publication.version, publication: publication.provenance } : {}) });
   if (nativeSha256(sanitizeRecord({ [AUTHORED_AGENT_DEFINITION_KEY]: definition })) !== nativeSha256({ [AUTHORED_AGENT_DEFINITION_KEY]: definition }))
     throw conflict("Remove credential-shaped values before publishing this Agent", { code: "authored_definition_redaction_required" });
   return definition;

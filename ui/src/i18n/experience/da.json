@@ -1495,7 +1495,16 @@
     "runtime_required": "Et aktuelt kvalificeret kørselsmiljø kræves før test.",
     "representative_test_unqualified": "Repræsentativ kørsel og uafhængigt verificerede resultater er endnu ikke kvalificeret for dette udkast.",
     "native_promotion_unqualified": "Udgivelse af denne strukturerede konfiguration gennem kvalificerede Native-regler er endnu ikke tilgængelig.",
-    "unavailable": "Det gemte udkast er ikke klar. Genindlæs den aktuelle gennemgang, før du fortsætter."
+    "unavailable": "Det gemte udkast er ikke klar. Genindlæs den aktuelle gennemgang, før du fortsætter.",
+    "publication_baseline_changed": "Den aktive version er ændret. Opret en ny kladde fra den aktuelle version.",
+    "publication_agent_not_ready": "Afklar agentens godkendelse, budget, fejl eller suspension før publicering.",
+    "publication_work_in_flight": "Vent på, at agentens igangværende arbejde afsluttes, før versionen ændres.",
+    "publication_native_guards_missing": "Versionsbeskyttelsen skal være tilgængelig før publicering.",
+    "publication_runtime_changed": "Gennemgå den aktuelle runtime, de obligatoriske procedurer og det resterende budget igen.",
+    "knowledge_mapping_required": "De valgte videnskilder skal kobles til runtime før publicering.",
+    "memory_mapping_required": "Den valgte hukommelsesindstilling skal kobles til runtime før publicering.",
+    "internal_draft_authority_required": "Denne version kræver automatisk oprettelse af interne kladder.",
+    "capability_mapping_required": "De valgte handlinger skal kobles til runtime før publicering."
   },
   "authFlow": {
     "signInTitle": "Log ind på August Works",
@@ -1756,5 +1765,26 @@
     "cancelDetail": "Annullér ventende arbejde gennem den normale stopproces. En anmodning om annullering beviser ikke, at en fjernproces er stoppet.",
     "back": "Tilbage",
     "confirm": "Sæt agent på pause"
+  },
+  "agentPublication": {
+    "title": "Publicér og aktivér denne version",
+    "boundary": "Erstat den aktive version med denne gemte og uafhængigt verificerede kandidat. Fremtidigt arbejde kan bruge den eksisterende model og det eksisterende budget. Publiceringen kalder ingen model, starter intet arbejde og giver ingen ny adgang.",
+    "changed": "Kandidaten eller den aktuelle adgang er ændret. Gennemgå igen.",
+    "unknown": "Publiceringens udfald er uafklaret. Tjek den oprindelige kvittering før en ny anmodning.",
+    "receipt": "Version {{version}} blev publiceret og aktiveret. Intet arbejde blev startet.",
+    "checkOriginal": "Tjek oprindelig publicering",
+    "unavailable": "Publiceringen kunne ikke kontrolleres.",
+    "review": "Gennemgå publicering og aktivering",
+    "confirmTitle": "Bekræft dette versionsskifte",
+    "changes": "Gennemgåede versionsændringer",
+    "versions": "Aktiv version {{before}} → version {{after}}",
+    "perCallCost": "Maksimal pris pr. fremtidigt modelkald",
+    "confirmPublication": "Jeg bekræfter publicering af denne gemte og verificerede version.",
+    "confirmActivation": "Jeg bekræfter at erstatte den aktive version til fremtidigt arbejde med det eksisterende budget og den eksisterende adgang.",
+    "publish": "Publicér og aktivér",
+    "packageVersion": "Pakkeversion {{version}}",
+    "scope": "Arbejder i August Works. Den må forberede interne kladder ud fra den aktuelle opgave. Andre handlinger, tilsluttede kilder, vedvarende hukommelse og delegering er fortsat utilgængelige.",
+    "openAgent": "Åbn agent",
+    "manageAgent": "Overvåg eller pausér agent"
   }
 }

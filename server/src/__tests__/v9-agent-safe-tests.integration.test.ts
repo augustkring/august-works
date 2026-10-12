@@ -126,6 +126,7 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     expect(readiness.test).toMatchObject({ status: "qualified", scenariosVerified: 1 });
     expect(readiness.blockers.map(blocker => blocker.code)).not.toContain("representative_test_unqualified");
     expect(readiness).toMatchObject({ publishAllowed: false, productionChanged: false });
+    expect(readiness.blockers.map(blocker => blocker.code)).toContain("internal_draft_authority_required");
     expect((await db.select().from(verificationRuns).where(eq(verificationRuns.planId, result.planId)))[0]).toMatchObject({ reviewerType: "human", reviewerId: f.userId });
   });
   it("preserves a tested candidate through navigation while fencing unversioned behavior changes", async () => {
