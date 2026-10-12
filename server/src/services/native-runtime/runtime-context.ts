@@ -27,6 +27,7 @@ import {
   type NativeRuntimeContextSnapshot,
 } from "../../vendor/paperclip-runner/index.js";
 import { resolvePaperclipInstanceRoot } from "../../home-paths.js";
+import { readAuthoredAgentDefinition } from "../agents/authored-definition.js";
 import { agentInstructionsService } from "../agent-instructions.js";
 import { toolAccessService } from "../tool-access.js";
 import { filterResolvedGitHubConnectionsForRun } from "../git-credentials.js";
@@ -328,11 +329,16 @@ export async function resolveNativeRuntimeMcpSnapshot(input: { db: Db; agent: Pi
 }
 
 export async function buildNativeRuntimeContext(input: { db: Db; agent: RuntimeAgent; runId: string; runtimeConfig: Record<string, unknown>; runtimeSkillEntries: PaperclipSkillEntry[] }): Promise<NativeRuntimeContextSnapshot> {
+  const authored = await readAuthoredAgentDefinition(input.db, input.agent);
+  if (authored && resolvePaperclipDesiredSkillNames(input.runtimeConfig, input.runtimeSkillEntries).some(key => key !== PAPERCLIP_OPERATIONAL_SKILL_KEY))
+    throw new Error("Authored Agent version has no additional Skill authority");
   const [instructions, skills, mcp] = await Promise.all([
     materializeInstructionBundle(input.db, input.agent, { companyId: input.agent.companyId, runId: input.runId }),
     materializeSelectedSkills(input.runtimeConfig, input.runtimeSkillEntries, input.agent.adapterType === "paperclip_runner", { companyId: input.agent.companyId, runId: input.runId }),
     resolveNativeRuntimeMcpSnapshot({ db: input.db, agent: input.agent, runId: input.runId }),
   ]);
+  if (authored && (skills.length || mcp.bindingId !== null))
+    throw new Error("Authored Agent version has no executable Skill or MCP authority");
   const snapshot = { prompt: { revision: PAPERCLIP_EXECUTION_PROMPT_REVISION, text: PAPERCLIP_EXECUTION_PROMPT, digest: nativeRuntimePromptDigest() }, instructions, skills, mcp };
   return parseNativeRuntimeContext({ ...snapshot, aggregateDigest: canonicalNativeRuntimeContextDigest(snapshot) });
 }

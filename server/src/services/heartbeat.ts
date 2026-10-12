@@ -481,6 +481,7 @@ import {
   instanceSettingsService,
   resolveWorktreeRunExecutionActivation,
 } from "./instance-settings.js";
+import { readAuthoredAgentDefinition } from "./agents/authored-definition.js";
 import { assembleFreshNativeGovernedContext } from "./context/context-runtime.js";
 import {
   evaluateExecutionAllowlist,
@@ -21297,6 +21298,9 @@ export function heartbeatService(
           selectedEnvironmentForConfig?.driver ?? "local",
         );
       const internalTextDraft = agent.adapterType === "paperclip_runner" && parseObject(agent.adapterConfig).provider === "aw_text_only";
+      const authoredDefinition = await readAuthoredAgentDefinition(db, agent);
+      if (authoredDefinition && !internalTextDraft)
+        throw forbidden("This authored version requires its mapped native draft transport");
       if (internalTextDraft && agent.runtimeConfig?.aiConnection)
         throw forbidden("Internal drafts use the installed private controller grant, not a CLI AI binding");
       const aiBinding = !internalTextDraft && agent.runtimeConfig?.aiConnection ? aiConnectionBindingSchema.parse(agent.runtimeConfig.aiConnection) : undefined;
@@ -23544,6 +23548,7 @@ export function heartbeatService(
                   experimentalInstanceSettings.enableContextEngineV1 === true,
                 foundationEnabled:
                   experimentalInstanceSettings.enableFoundationV1 === true,
+                ...(authoredDefinition ? { sourceScope: "task_only" as const } : {}),
                 companyId: agent.companyId,
                 agentId: agent.id,
                 responsibleUserId: run.responsibleUserId ?? responsibleUserId,

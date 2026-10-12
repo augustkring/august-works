@@ -95,6 +95,8 @@ export interface AssembleContextInput {
   query: string;
   intent?: string | null;
   includeFoundation?: boolean;
+  /** Server-owned narrowing for an instruction-only authored Agent. */
+  sourceScope?: "task_only";
   sensitivityCeiling?: EvidenceSensitivity;
   asOf?: Date;
   budget?: ContextBudget;
@@ -665,6 +667,8 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
 
   return {
     assemble: async (rawInput: AssembleContextInput): Promise<ContextAssemblyResult> => {
+      if (rawInput.sourceScope !== undefined && rawInput.sourceScope !== "task_only")
+        throw unprocessable("Unknown context source scope");
       const query = rawInput.query.trim();
       if (!query) throw unprocessable("Context query is required");
       const totalDeadlineMs = rawInput.totalDeadlineMs ?? DEFAULT_CONTEXT_TOTAL_DEADLINE_MS;
@@ -705,11 +709,11 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
 
       const providers = options.providers ?? [
         ...(input.issueId ? [taskProvider(db)] : []),
-        ...(input.includeFoundation === false ? [] : [foundationProvider(db)]),
-        memoryContextProvider(db),
-        cognitiveContextProvider(db),
-        derivedMemoryContextProvider(db),
-        ...defaultConnectedKnowledgeContextProviders(db, input),
+        ...(input.sourceScope === "task_only" ? [] : [
+          ...(input.includeFoundation === false ? [] : [foundationProvider(db)]),
+          memoryContextProvider(db), cognitiveContextProvider(db), derivedMemoryContextProvider(db),
+          ...defaultConnectedKnowledgeContextProviders(db, input),
+        ]),
       ];
       const providerResult = await runContextProviders(providers, input, deadlineAt);
       const eligibility = filterEligibleEvidence(dedupeEvidence(providerResult.evidence), {
@@ -747,7 +751,8 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
               key: provider.key,
               requirement: provider.requirement,
             })),
-            includeFoundation: input.includeFoundation !== false,
+            includeFoundation: input.sourceScope !== "task_only" && input.includeFoundation !== false,
+            ...(input.sourceScope === "task_only" ? { sourceScope: "task_only" } : {}),
             intent: input.intent ?? null,
             subjectRefs: [...new Set(input.subjectRefs ?? [])].sort(),
             asOf: asOf.toISOString(),
