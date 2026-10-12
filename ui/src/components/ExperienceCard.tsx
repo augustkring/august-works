@@ -16,7 +16,9 @@ export function ExperienceCard({
     card.kind === "maintenance";
   const unknownMaintenance =
     maintenance && card.evidence.includes("unknown_outcome");
-  const title = maintenance
+  const runtimeRecovery = card.source.domain === "runtime_cell" && card.kind === "recovery";
+  const runtimeCapacity = runtimeRecovery && card.evidence.includes("runtime_capacity_review");
+  const title = runtimeRecovery ? t(runtimeCapacity ? "runtimeRecovery.capacityTitle" : "runtimeRecovery.title") : maintenance
     ? t(
         unknownMaintenance
           ? "maintenanceUnknownTitle"
@@ -31,12 +33,12 @@ export function ExperienceCard({
       <Heading className="font-medium text-foreground">{title}</Heading>
       {card.whyYou && (
         <p className="text-sm text-foreground">
-          {maintenance ? t("maintenanceAttentionWhy") : card.whyYou}
+          {runtimeRecovery ? t("runtimeRecovery.why") : maintenance ? t("maintenanceAttentionWhy") : card.whyYou}
         </p>
       )}
       {card.consequence && (
         <p className="text-sm text-muted-foreground">
-          {maintenance
+          {runtimeRecovery ? t("runtimeRecovery.consequence") : maintenance
             ? t(
                 unknownMaintenance
                   ? "maintenanceUnknownConsequence"
@@ -49,7 +51,7 @@ export function ExperienceCard({
         <ul className="text-sm text-muted-foreground">
           {card.evidence.map((item, i) => (
             <li key={i}>
-              {card.source.domain === "task"
+              {runtimeRecovery ? t("runtimeRecovery.evidence") : card.source.domain === "task"
                 ? t(`taskStatus.${item}`, { defaultValue: item })
                 : maintenance
                   ? t("maintenanceAttentionEvidence")

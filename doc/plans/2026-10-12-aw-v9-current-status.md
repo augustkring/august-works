@@ -21,6 +21,11 @@ PostgreSQL/disk/dump and inherited restore checks pass. See the
 Unknown remote PUT quiescence, deletion-horizon completeness and remaining privacy
 qualification stay open.
 
+Current runtime degradation/capacity findings now appear in Needs You for the
+Original runtime manager, with source/role rechecks and navigation-only recovery.
+See the [runtime recovery checkpoint](2026-10-12-aw-v9-runtime-recovery-checkpoint.md).
+Workflow recovery, actual provisioning and staged live configuration remain open.
+
 
 Current runtime selection, in-place Hire candidate saving and feedback-opening
 source checks pass 80 focused UI cases, UI types and six built-browser cases.

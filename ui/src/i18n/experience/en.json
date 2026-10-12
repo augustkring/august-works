@@ -1845,5 +1845,12 @@
     "check": "Check original pause",
     "changed": "The agent or access changed. Review the current pause decision.",
     "unavailable": "Pause controls are unavailable with current access."
+  },
+  "runtimeRecovery": {
+    "title": "Review runtime recovery",
+    "capacityTitle": "Review runtime capacity",
+    "why": "You manage this company's runtime.",
+    "consequence": "Open the existing recovery controls to review the current state. This card does not restart work or change configuration.",
+    "evidence": "Current runtime state needs a manager review."
   }
 }

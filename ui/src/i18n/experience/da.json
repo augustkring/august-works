@@ -1845,5 +1845,12 @@
     "check": "Kontrollér oprindelig pause",
     "changed": "Agenten eller adgangen er ændret. Gennemgå den aktuelle pausebeslutning.",
     "unavailable": "Pausehandlingen er ikke tilgængelig med den aktuelle adgang."
+  },
+  "runtimeRecovery": {
+    "title": "Gennemgå runtime-recovery",
+    "capacityTitle": "Gennemgå runtimekapacitet",
+    "why": "Du administrerer virksomhedens runtime.",
+    "consequence": "Åbn de eksisterende recovery-kontroller for at gennemgå den aktuelle tilstand. Kortet genstarter ikke arbejde og ændrer ikke konfiguration.",
+    "evidence": "Den aktuelle runtimetilstand kræver en administrators gennemgang."
   }
 }
