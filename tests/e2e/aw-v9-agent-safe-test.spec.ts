@@ -55,6 +55,10 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"]] as const) {
           outcome = { ...outcome!, verification: "pass", testQualified: true }; return route.fulfill({ json: outcome });
         }
         expect(req.method()).toBe("GET");
+        if (path.endsWith("/package-setup-review")) return route.fulfill({ json: { companyId: company.id, draftId: id, version: draft.version, agentId,
+          installationId: planId, installationVersion: 1, packageName: "Research draft", packageVersion: "1.0.0",
+          intendedPurpose: scenario, purposes: [], selectedPurposeId: null, packageCurrent: false, canConfirm: false,
+          blockers: ["approved_purpose_required"], reviewHash: "c".repeat(64), modelCalled: false, authorityGranted: false, executionStarted: false } });
         if (path.endsWith("/options")) return route.fulfill({ json: { owners: [{ id: session.user.id, name: "Accountable owner" }], knowledge: [], runtimes: [{ id: runtimeId }] } });
         if (path.endsWith("/hire-capability")) return route.fulfill({ json: { key: "research", versionId: packageId, version: "1.0.0", name: "Research draft", category: "Research",
           outcome: scenario, requiredKnowledge: [], requiredConnections: [], limits: [], actionClasses: ["internal_draft"], available: true } });

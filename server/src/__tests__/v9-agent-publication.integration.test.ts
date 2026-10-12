@@ -3,6 +3,7 @@ import { agentIdentityService } from "../services/agent-identities.js";
 import { agentService } from "../services/agents.js";
 import { agentAuthoringPublicationService } from "../services/agents/authoring-publication.js";
 import { agentAuthoringPackageSetupService } from "../services/agents/authoring-package-setup.js";
+import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
 import { buildRetainedNativeRuntimeContext, readNativeRuntimeAssetText } from "../services/native-runtime/runtime-context.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
@@ -312,10 +313,48 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     const setup = agentAuthoringPackageSetupService(db), blocked = await setup.review(f.actor, f.home, draft.id);
     expect(blocked.canConfirm).toBe(false); expect(blocked.blockers).toContain("approved_purpose_required");
     expect(blocked.purposes.map(purpose => purpose.id)).toContain(hired.useCase.id);
-    const selected = await setup.review(f.actor, f.home, draft.id, hired.useCase.id);
+    let selected = await setup.review(f.actor, f.home, draft.id, hired.useCase.id);
     expect(selected.canConfirm).toBe(true);
-    const setupInput = { requestId: randomUUID(), expectedVersion: draft.version, expectedReviewHash: selected.reviewHash,
+    let setupInput = { requestId: randomUUID(), expectedVersion: draft.version, expectedReviewHash: selected.reviewHash,
       purposeId: hired.useCase.id, confirmIntendedPurpose: true, confirmPackageActivation: true };
+    // Current authorization is required even after this exact review was read.
+    await db.update(companyMemberships).set({ status: "inactive" }).where(and(eq(companyMemberships.companyId, f.home),
+      eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, f.userId)));
+    try { await expect(setup.confirm(f.actor, f.home, draft.id, setupInput)).rejects.toMatchObject({ status: 403 }); }
+    finally { await db.update(companyMemberships).set({ status: "active" }).where(and(eq(companyMemberships.companyId, f.home),
+      eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, f.userId))); }
+    const governance = aiGovernanceService(db);
+    const suspended = await governance.decide(f.actor, f.home, hired.useCase.id, "suspend", {
+      expectedVersion: hired.useCase.version, rationale: "Human withdrew the reviewed purpose before setup" });
+    expect((await setup.review(f.actor, f.home, draft.id, hired.useCase.id)).canConfirm).toBe(false);
+    await expect(setup.confirm(f.actor, f.home, draft.id, setupInput)).rejects.toMatchObject({ status: 409 });
+    expect((await hired.packages.get(f.actor, f.home, hired.installation.id)).version).toBe(hired.installation.version);
+    await governance.decide(f.actor, f.home, hired.useCase.id, "approve", {
+      expectedVersion: suspended.version, rationale: "Human separately reviewed and approved the original intended purpose again" });
+    await expect(setup.confirm(f.actor, f.home, draft.id, setupInput)).rejects.toMatchObject({ status: 409 });
+    selected = await setup.review(f.actor, f.home, draft.id, hired.useCase.id);
+    setupInput = { ...setupInput, expectedReviewHash: selected.reviewHash };
+    // Fail the last audit write in the actual disposable PostgreSQL database.
+    // Original package update, activation, draft save and all earlier events
+    // must roll back together; this is not a mocked transaction assertion.
+    const beforeSetup = await hired.packages.get(f.actor, f.home, hired.installation.id);
+    const beforeDraft = await drafts().get(f.actor, f.home, draft.id);
+    const beforeEvents = await db.select().from(activityLog).where(eq(activityLog.companyId, f.home));
+    await db.execute(sql`create function aw_v9_fixture_setup_audit_failure() returns trigger language plpgsql as $body$
+      begin if new.action='agent_configuration.package_setup_confirmed' then
+        raise exception 'fixture_setup_commit_failure'; end if; return new; end $body$`);
+    await db.execute(sql`create trigger aw_v9_fixture_setup_audit_failure before insert on activity_log
+      for each row execute function aw_v9_fixture_setup_audit_failure()`);
+    try { await expect(setup.confirm(f.actor, f.home, draft.id, setupInput)).rejects.toMatchObject({ cause: { code: "P0001" } }); }
+    finally {
+      await db.execute(sql`drop trigger aw_v9_fixture_setup_audit_failure on activity_log`);
+      await db.execute(sql`drop function aw_v9_fixture_setup_audit_failure()`);
+    }
+    expect(await hired.packages.get(f.actor, f.home, hired.installation.id)).toEqual(beforeSetup);
+    expect(await drafts().get(f.actor, f.home, draft.id)).toEqual(beforeDraft);
+    expect(await db.select().from(activityLog).where(eq(activityLog.companyId, f.home))).toEqual(beforeEvents);
+    expect(await setup.receipt(f.actor, f.home, draft.id, setupInput.requestId)).toBeNull();
+    expect(calls).toBe(1);
     const [firstSetup, repeatedSetup] = await Promise.all([setup.confirm(f.actor, f.home, draft.id, setupInput), setup.confirm(f.actor, f.home, draft.id, setupInput)]);
     expect(firstSetup).toEqual(repeatedSetup);
     expect(await setup.receipt(f.actor, f.home, draft.id, setupInput.requestId)).toEqual(firstSetup);

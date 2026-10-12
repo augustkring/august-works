@@ -103,7 +103,9 @@ export function agentAuthoringPublicationService(db: Db) {
       publishedContent: definition.content,
       ...(definition.publication.packageInstallation ? { packageInstallation: {
         installationId: definition.publication.packageInstallation.installationId, versionId: definition.publication.packageInstallation.versionId,
-        key: definition.publication.packageInstallation.key, contentHash: definition.publication.packageInstallation.contentHash,
+        key: "keyParts" in definition.publication.packageInstallation
+          ? definition.publication.packageInstallation.keyParts.join(".") : definition.publication.packageInstallation.key,
+        contentHash: definition.publication.packageInstallation.contentHash,
         version: definition.publication.packageInstallation.releaseVersion.join("."),
       } } : {}),
       authorityGranted: false, executionStarted: false });
@@ -177,7 +179,7 @@ export function agentAuthoringPublicationService(db: Db) {
             candidateRevision: state.row.candidateRevision, requestedByUserId: userId, reviewHash: state.review.reviewHash,
             requestHash, verifiedTestIds: state.qualified.testIds, priorRevisionId: state.prior?.revisionId ?? null, activatedAtPublication: true,
             ...(state.packageInstallation && packageVersion ? { packageInstallation: { installationId: state.packageInstallation.id,
-              versionId: packageVersion.id, key: state.row.packageKey!, releaseVersion: packageVersion.version.split(".") as [string, string, string],
+              versionId: packageVersion.id, keyParts: state.row.packageKey!.split("."), releaseVersion: packageVersion.version.split(".") as [string, string, string],
               contentHash: packageVersion.contentHash } } : {}) } });
         await agentService(tx).update(state.agent.id, { name: state.row.content!.name, capabilities: state.row.content!.description,
           runtimeConfig: { ...state.agent.runtimeConfig, [AUTHORED_AGENT_DEFINITION_KEY]: definition }, status: "idle", pauseReason: null },

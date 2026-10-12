@@ -41,7 +41,7 @@ export async function prepareHirePublicationFixture(db: Db, f: Awaited<ReturnTyp
   const [playbookHash] = requiredPlaybook ? await db.execute(sql`select aw_v7_package_component_hash(${f.home}::uuid,'playbook',
     ${requiredPlaybook.playbookId}::uuid,${requiredPlaybook.revisionId}::uuid) as hash`) : [];
   const evidence = { uri: "https://qualification.test.invalid/qualification/hire-software-fixture", sha256: "b".repeat(64) };
-  const release: PackageRelease = { packageKey: `welcome-${randomUUID()}`, name: "Welcome specialist", description: "Internal welcome drafts",
+  const release: PackageRelease = { packageKey: `welcome.${randomUUID()}.v1`, name: "Welcome specialist", description: "Internal welcome drafts",
     category: "internal", version: "1.0.0", releaseNotes: "Software protocol fixture",
     manifest: { purpose: "Produce a short internal welcome draft", prohibitedUses: ["Do not contact anyone"], role: "general",
       audience: "customer", maximumRisk: "C1", actionClasses: ["internal_draft"], requiredKnowledge: [], requiredConnections: [],
