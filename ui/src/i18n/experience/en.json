@@ -1692,6 +1692,7 @@
     }
   },
   "agentSafeTest": {
+    "procedures": "Required procedures used in this test",
     "title": "Representative Safe Test",
     "boundary": "The saved candidate produces one internal text draft using its configured model. The test has no tools and does not activate the agent. A successful call still requires separate human review.",
     "prepareFirst": "No representative result exists. Prepare an inactive agent and configure its runtime before testing.",

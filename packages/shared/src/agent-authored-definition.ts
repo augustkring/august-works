@@ -9,6 +9,7 @@ export const authoredAgentDefinitionSchema = z.strictObject({
   revisionId: z.uuid(),
   candidateHash: z.string().regex(/^[a-f0-9]{64}$/),
   definitionHash: z.string().regex(/^[a-f0-9]{64}$/),
+  procedureSnapshotHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   content: agentAuthoringContentSchema,
 });
 export type AuthoredAgentDefinition = z.infer<typeof authoredAgentDefinitionSchema>;

@@ -114,7 +114,11 @@ export function AgentDraftSafeTest({ company, principal, draft, enabled, canUseA
         <dl className="space-y-2"><dt>{t("agentSafeTest.candidateVersion", { version: draft.version })}</dt><dd>{draft.content?.name}</dd>
           <dt>{t("agentSafeTest.model")}</dt><dd>Anthropic · {review.data?.model}</dd>
           <dt>{t("agentSafeTest.scenario")}</dt><dd className="whitespace-pre-wrap">{review.data?.scenario}</dd>
-          <dt>{t("agentSafeTest.maximumCost")}</dt><dd>{review.data ? `${(review.data.maximumCostMinor / 100).toFixed(2)} USD` : ""}</dd></dl>
+          <dt>{t("agentSafeTest.maximumCost")}</dt><dd>{review.data ? `${(review.data.maximumCostMinor / 100).toFixed(2)} USD` : ""}</dd>
+          {review.data?.requiredProcedures?.length ? <>
+            <dt>{t("agentSafeTest.procedures")}</dt><dd><ul className="max-h-40 overflow-y-auto" tabIndex={0} aria-label={t("agentSafeTest.procedures")}>
+              {review.data.requiredProcedures.map(procedure => <li key={procedure.skillId}>{procedure.name}</li>)}
+            </ul></dd></> : null}</dl>
         <p>{t("agentSafeTest.modelDisclosure")}</p>
         <p>{t("agentSafeTest.sharedResult")}</p>
         <label htmlFor={checkboxId} className="flex min-h-11 items-start gap-3"><input id={checkboxId} type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />

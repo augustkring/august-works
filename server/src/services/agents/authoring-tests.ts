@@ -6,6 +6,7 @@ import type { AuthorizationActor } from "../authorization.js";
 import { v7HumanActorId } from "../v7-authorization.js";
 import { agentAuthoringService } from "./authoring-drafts.js";
 import { authoringCandidateHash, representativeCompletionContract } from "./authoring-test-candidate.js";
+import { retainAuthoringProcedureSources } from "./authoring-procedure-retention.js";
 import { installedNativeDraftGateway } from "../orchestration/native-draft-runtime.js";
 import { writeOrchestrationContract } from "../orchestration/orchestration-contracts.js";
 import { verificationService } from "../supervision/verification-service.js";
@@ -28,6 +29,8 @@ export function agentAuthoringTestService(db: Db) {
     const current = await installedNativeDraftGateway(db).qualifyAuthoringTest(tx, { companyId, draftId, responsibleUserId, scenarioIndex });
     const review = { companyId, draftId, version: current.draft.version, agentId: current.agentId, scenarioIndex, scenario: current.scenario,
       runtimeBindingId: current.provider.runtime.id, configurationHash: current.configurationHash, candidateHash: current.candidateHash,
+      procedureSnapshotHash: current.procedures.hash, requiredProcedures: current.procedures.skills.map(pin => ({
+        skillId: pin.skillId, versionId: pin.versionId, name: pin.name, bodyHash: pin.bodyHash })),
       maximumCostMinor: current.quote.maximumMinor, currency: "USD" as const, provider: current.p.tariff.provider, model: current.p.tariff.model, transport: "server-text-only-v1" as const,
       toolsGranted: false as const, activatesAgent: false as const, companyVisibleResult: true as const };
     return { current, review: agentDraftTestReviewSchema.parse({ ...review, reviewHash: nativeSha256({ ...review, authorityHash: current.authorityHash }) }) };
@@ -168,6 +171,7 @@ export function agentAuthoringTestService(db: Db) {
           agentId, runId: run!.id, planId: plan!.id, runtimeBindingId: current.provider.runtime.id, providerBindingId: current.provider.provider.id,
           candidateHash: current.candidateHash, configurationHash: current.configurationHash, authorityHash: current.authorityHash,
           reviewHash: review.reviewHash, maximumCostMinor: review.maximumCostMinor }).returning();
+        await retainAuthoringProcedureSources(tx, row!.id, current);
         await logActivity(tx, { companyId, actorType: "user", actorId: userId, agentId, runId: run!.id,
           action: "agent_configuration.test_requested", entityType: "agent_configuration_test", entityId: testId,
           details: { draftId, version: current.draft.version, scenarioIndex: input.scenarioIndex, maximumCostMinor: current.quote.maximumMinor,

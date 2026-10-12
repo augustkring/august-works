@@ -28,6 +28,7 @@ import {
 } from "../../vendor/paperclip-runner/index.js";
 import { resolvePaperclipInstanceRoot } from "../../home-paths.js";
 import { readAuthoredAgentDefinition } from "../agents/authored-definition.js";
+import { resolveAuthoringProcedures } from "../agents/authoring-procedures.js";
 import { agentInstructionsService } from "../agent-instructions.js";
 import { toolAccessService } from "../tool-access.js";
 import { filterResolvedGitHubConnectionsForRun } from "../git-credentials.js";
@@ -330,14 +331,29 @@ export async function resolveNativeRuntimeMcpSnapshot(input: { db: Db; agent: Pi
 
 export async function buildNativeRuntimeContext(input: { db: Db; agent: RuntimeAgent; runId: string; runtimeConfig: Record<string, unknown>; runtimeSkillEntries: PaperclipSkillEntry[] }): Promise<NativeRuntimeContextSnapshot> {
   const authored = await readAuthoredAgentDefinition(input.db, input.agent);
-  if (authored && resolvePaperclipDesiredSkillNames(input.runtimeConfig, input.runtimeSkillEntries).some(key => key !== PAPERCLIP_OPERATIONAL_SKILL_KEY))
+  let procedures: Awaited<ReturnType<typeof resolveAuthoringProcedures>> | null = null;
+  if (authored?.procedureSnapshotHash) {
+    const [run] = await input.db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.agent.companyId),
+      eq(heartbeatRuns.agentId, input.agent.id), eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.status, "running")));
+    if (!run?.responsibleUserId) throw new Error("The identified procedural version requires its current native run principal");
+    procedures = await resolveAuthoringProcedures(input.db, { companyId: input.agent.companyId,
+      agentId: input.agent.id, responsibleUserId: run.responsibleUserId });
+    if (procedures.hash !== authored.procedureSnapshotHash)
+      throw new Error("The identified Agent's procedures changed; test and publish a fresh version");
+  }
+  if (authored && resolvePaperclipDesiredSkillNames(input.runtimeConfig, input.runtimeSkillEntries).some(key =>
+    key !== PAPERCLIP_OPERATIONAL_SKILL_KEY && !procedures?.skills.some(pin => pin.key === key)))
     throw new Error("Authored Agent version has no additional Skill authority");
   const [instructions, skills, mcp] = await Promise.all([
     materializeInstructionBundle(input.db, input.agent, { companyId: input.agent.companyId, runId: input.runId }),
-    materializeSelectedSkills(input.runtimeConfig, input.runtimeSkillEntries, input.agent.adapterType === "paperclip_runner", { companyId: input.agent.companyId, runId: input.runId }),
+    procedures ? Promise.all(procedures.skills.map(async pin => ({ key: pin.key,
+      runtimeName: safeRelativePath(pin.key, "required procedure runtime name"), versionId: pin.versionId,
+      bundle: await materializeAsset([{ path: "SKILL.md", content: Buffer.from(pin.body, "utf8"), mode: 0o444 }],
+        { companyId: input.agent.companyId, runId: input.runId }) })))
+      : materializeSelectedSkills(input.runtimeConfig, input.runtimeSkillEntries, input.agent.adapterType === "paperclip_runner", { companyId: input.agent.companyId, runId: input.runId }),
     resolveNativeRuntimeMcpSnapshot({ db: input.db, agent: input.agent, runId: input.runId }),
   ]);
-  if (authored && (skills.length || mcp.bindingId !== null))
+  if (authored && ((!procedures && skills.length) || mcp.bindingId !== null))
     throw new Error("Authored Agent version has no executable Skill or MCP authority");
   const snapshot = { prompt: { revision: PAPERCLIP_EXECUTION_PROMPT_REVISION, text: PAPERCLIP_EXECUTION_PROMPT, digest: nativeRuntimePromptDigest() }, instructions, skills, mcp };
   return parseNativeRuntimeContext({ ...snapshot, aggregateDigest: canonicalNativeRuntimeContextDigest(snapshot) });

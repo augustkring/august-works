@@ -4,6 +4,7 @@ import { agentConfigurationDrafts, agentConfigurationTests, agents, companies, c
 import type { AuthorizationActor } from "../authorization.js";
 import { agentAuthoringService } from "./authoring-drafts.js";
 import { authoringCandidateHash, authoringCandidateInstructions } from "./authoring-test-candidate.js";
+import { resolveAuthoringProcedures } from "./authoring-procedures.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { resolvePaperclipRunnerProviderProfile } from "../native-runtime/provider-profile.js";
 import { agentProviderBindingService } from "../agent-provider-bindings.js";
@@ -81,10 +82,12 @@ export function authoringTestRuntime(db: Db, options: Options, profile: (company
       .where(and(eq(companySecrets.companyId, input.companyId), eq(companySecrets.id, ref.secretId))) : [];
     if (selection.attribution.method !== "api_key" || !credential || credential.secret.status !== "active" || credential.version.revokedAt || ["disabled", "destroyed"].includes(credential.version.status))
       throw forbidden("The candidate's encrypted model grant is no longer current");
+    const procedures = await resolveAuthoringProcedures(tx, { companyId: input.companyId, agentId, responsibleUserId: input.responsibleUserId });
     const candidateHash = authoringCandidateHash(draft), configurationHash = nativeSha256({ name: agent.name, role: agent.role, title: agent.title,
-      capabilities: agent.capabilities, adapterType: agent.adapterType, adapterConfig: agent.adapterConfig, runtimeConfig: agent.runtimeConfig, permissions: agent.permissions });
+      capabilities: agent.capabilities, adapterType: agent.adapterType, adapterConfig: agent.adapterConfig, runtimeConfig: agent.runtimeConfig, permissions: agent.permissions,
+      procedureSnapshotHash: procedures.hash });
     const request = { model: p.tariff.model, maxOutputTokens: Math.min(8192, selected.maxOutputTokens), system,
-      evidence: `${authoringCandidateInstructions(draft.content)}\n\nRepresentative scenario\n${scenario}` };
+      evidence: `${authoringCandidateInstructions(draft.content)}\n\n${procedures.markdown}\n\nRepresentative scenario\n${scenario}` };
     if (readOnlyModelEnvelopeBytes(request) > p.maximumEnvelopeBytes) throw forbidden("The saved candidate exceeds its qualified model envelope");
     const quote = quoteModelReservation({ tariff: p.tariff, sourceSha: options.sourceSha, inputTokensUpperBound: p.inputTokensUpperBound, maxOutputTokens: request.maxOutputTokens });
     const [retained] = input.retainedTestId || input.runId ? await tx.select().from(agentConfigurationTests).where(and(eq(agentConfigurationTests.companyId, input.companyId),
@@ -109,7 +112,7 @@ export function authoringTestRuntime(db: Db, options: Options, profile: (company
         throw forbidden("Current saved test authority is required");
     }
     return { actor, draft, agentId, provider, p, selection, credentialSha256: credential.version.valueSha256,
-      scenario, candidateHash, configurationHash, authorityHash, quote, request };
+      scenario, candidateHash, configurationHash, authorityHash, quote, request, procedures };
   }
 
   async function execute(id: string) {

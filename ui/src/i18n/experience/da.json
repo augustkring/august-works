@@ -1692,6 +1692,7 @@
     }
   },
   "agentSafeTest": {
+    "procedures": "Obligatoriske procedurer i denne test",
     "title": "Repræsentativ Safe Test",
     "boundary": "Den gemte kandidat laver ét internt tekstudkast med sin konfigurerede model. Testen har ingen værktøjer og aktiverer ikke agenten. Et gennemført modelkald kræver stadig særskilt menneskelig vurdering.",
     "prepareFirst": "Der findes intet repræsentativt resultat endnu. Opret en inaktiv agent, og konfigurer dens runtime før testen.",

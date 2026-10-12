@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { agentConfigurationDrafts, agentConfigurationTests, agents, authUsers, billingAccounts, billingAccountCompanies, companyMemberships, createDb, heartbeatRuns, orchestrationPlans, orchestrationModelReservations, orchestrationWorkers, toolInvocations, verificationRuns } from "@paperclipai/db";
+import { agentConfigurationDrafts, agentConfigurationTests, agents, authUsers, billingAccounts, billingAccountCompanies, companyMemberships, companySkills, companySkillVersions, createDb, heartbeatRuns, orchestrationPlans, orchestrationModelReservations, orchestrationWorkers, toolInvocations, verificationRuns } from "@paperclipai/db";
 import { agentAuthoringContentSchema, type AgentAuthoringDraftView, type AgentDraftTestCommand, type VerificationReviewInput } from "@paperclipai/shared";
 import { agentAuthoringService } from "../services/agents/authoring-drafts.js";
 import { agentAuthoringTestService } from "../services/agents/authoring-tests.js";
@@ -23,13 +23,17 @@ import { orchestrationService } from "../services/orchestration/orchestration-se
 import { budgetService } from "../services/budgets.js";
 import { heartbeatService } from "../services/heartbeat.js";
 import { reconcileAgentDraftTest } from "../services/agents/authoring-test-recovery.js";
+import { heartbeatMemoryPayloadRetained, reapplyMemoryDeletionMarkers } from "../services/memory/memory-privacy.js";
+import { memoryJobService } from "../services/memory/memory-jobs.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
+import { seedRequiredAuthoringProcedures } from "./helpers/authoring-procedures.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 
 const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(40);
 (support.supported ? describe : describe.skip)("Representative candidate tests with Native evidence and human review", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>, home: string;
   let f: Awaited<ReturnType<typeof seedV5Presences>>, draft: AgentAuthoringDraftView, profile: WorkerModelProfile, calls: number;
+  let requiredProcedures: Awaited<ReturnType<typeof seedRequiredAuthoringProcedures>>;
   let duringCall: (() => Promise<void>) | undefined, lostResponse: boolean, excessUsage: boolean;
   const service = () => agentAuthoringTestService(db), drafts = () => agentAuthoringService(db);
   beforeAll(async () => {
@@ -42,6 +46,7 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     calls++; expect(String(url)).toBe("https://api.anthropic.com/v1/messages"); expect(init.redirect).toBe("manual");
     expect(new Headers(init.headers).get("x-api-key")).toBe(`private-safe-test-key-${f.presence.id}`);
     const body = JSON.parse(String(init.body)); expect(body.tools).toBeUndefined(); expect(body.stream).toBe(false);
+    for (const procedure of requiredProcedures) expect(body.messages[0].content[0].text).toContain(procedure.body);
     expect(String(init.body)).toContain("Produce a short internal welcome draft"); expect(String(init.body)).toContain("Do not contact anyone");
     const [test] = await db.select().from(agentConfigurationTests).where(eq(agentConfigurationTests.companyId, f.home))
       .orderBy(desc(agentConfigurationTests.createdAt), desc(agentConfigurationTests.id)).limit(1);
@@ -56,7 +61,9 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
   beforeEach(async () => {
     await instanceSettingsService(db).updateExperimental({ saas_deployment_profile_v6: true, billing_v6: true, agent_packages_v7: true,
       hire_agent_v9: true, enableWorkflowsV1: true, orchestration_v7: true, supervision_v7: true, readiness_engine_v7: true, verifier_v7: true });
-    f = await seedV5Presences(db); calls = 0; duringCall = undefined; lostResponse = false; excessUsage = false;
+    f = await seedV5Presences(db);
+    requiredProcedures = await seedRequiredAuthoringProcedures(db, f.actor, f.home, f.presence.id);
+    calls = 0; duringCall = undefined; lostResponse = false; excessUsage = false;
     const config = { provider: "aw_text_only", model: "fixture-draft-model", workerModelProfileId: randomUUID(), maxOutputTokens: 256 };
     await db.update(agents).set({ adapterType: "paperclip_runner", adapterConfig: config, status: "paused", pauseReason: "manual" }).where(eq(agents.id, f.presence.id));
     const providers = agentProviderBindingService(db), pb = await providers.create(f.actor, f.home, f.presence.id,
@@ -248,6 +255,36 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
       body: "A human edited this result after generation", createdByUserId: f.userId });
     expect(await service().get(f.actor, f.home, draft.id, input.requestId)).toMatchObject({ resultCurrent: false, verification: "not_reviewed", testQualified: false });
     expect((await drafts().review(f.actor, f.home, draft.id)).test.status).toBe("unqualified");
+  });
+  it("withdraws human test qualification after an actual required procedure is revoked", async () => {
+    const { input } = await execute();
+    expect((await service().verify(f.actor, f.home, draft.id, input.requestId, await reviewInput(input.requestId))).testQualified).toBe(true);
+    await db.update(companySkills).set({ lifecycleState: "revoked" }).where(eq(companySkills.id, requiredProcedures[0]!.skillId));
+    expect(await service().get(f.actor, f.home, draft.id, input.requestId)).toMatchObject({ runtimeCurrent: false, testQualified: false });
+    expect((await drafts().review(f.actor, f.home, draft.id)).test.status).toBe("unqualified");
+    await expect(service().review(f.actor, f.home, draft.id, 0)).rejects.toMatchObject({ status: 409 });
+    expect(calls).toBe(1);
+  });
+  it("withholds a late output after procedure withdrawal while keeping the actual completed debit", async () => {
+    duringCall = async () => { await db.update(companySkills).set({ lifecycleState: "revoked" }).where(eq(companySkills.id, requiredProcedures[0]!.skillId)); };
+    const { result } = await execute();
+    expect(result).toMatchObject({ execution: "failed", runtimeCurrent: false, testQualified: false, result: null });
+    expect((await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, result.planId)))[0]!.status).toBe("completed");
+    expect(calls).toBe(1);
+  });
+  it("erases actual test copies through the Original Skill Source tombstone while retaining the financial debit", async () => {
+    const { result } = await execute(), pin = requiredProcedures[0]!;
+    expect(await heartbeatMemoryPayloadRetained(db, f.home, result.runId)).toBe(true);
+    await db.update(companySkills).set({ lifecycleState: "revoked", activeVersionId: null, currentVersionId: null, headVersionId: null })
+      .where(eq(companySkills.id, pin.skillId));
+    await db.delete(companySkillVersions).where(eq(companySkillVersions.id, pin.versionId));
+    expect(await heartbeatMemoryPayloadRetained(db, f.home, result.runId)).toBe(false);
+    await reapplyMemoryDeletionMarkers(db, f.home);
+    await memoryJobService(db).tick({ limit: 10 });
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, result.runId));
+    expect(run!.resultJson).toBeNull();
+    expect((await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, result.planId)))[0]!.status).toBe("completed");
+    expect(calls).toBe(1);
   });
   it("refuses cross-company, noncreator and revoked-account access without extra model effects", async () => {
     const { input } = await execute(), other = await seedV5Presences(db);

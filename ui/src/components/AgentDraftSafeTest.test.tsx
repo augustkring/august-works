@@ -20,6 +20,8 @@ const draft: AgentAuthoringDraftView = { id: "10000000-0000-4000-8000-0000000000
   createdAt: "2026-10-12T00:00:00.000Z", updatedAt: "2026-10-12T00:00:00.000Z" };
 const review: AgentDraftTestReview = { companyId: draft.companyId, draftId: draft.id, version: draft.version, agentId: draft.agentId!, scenarioIndex: 0,
   scenario: draft.content!.scenarios[0]!, runtimeBindingId: "10000000-0000-4000-8000-000000000004", configurationHash: "a".repeat(64), candidateHash: "b".repeat(64),
+  procedureSnapshotHash: "d".repeat(64), requiredProcedures: [{ skillId: "10000000-0000-4000-8000-000000000009",
+    versionId: "10000000-0000-4000-8000-000000000010", name: "Required security procedure", bodyHash: "e".repeat(64) }],
   maximumCostMinor: 3, currency: "USD", provider: "anthropic", model: "fixture-draft-model", transport: "server-text-only-v1", toolsGranted: false, activatesAgent: false, companyVisibleResult: true, reviewHash: "c".repeat(64) };
 const result: AgentDraftTestView = { id: "10000000-0000-4000-8000-000000000005", companyId: draft.companyId, draftId: draft.id, version: draft.version,
   requestId: "10000000-0000-4000-8000-000000000006", scenarioIndex: 0, scenario: review.scenario, agentId: draft.agentId!, runId: "10000000-0000-4000-8000-000000000007",
@@ -49,6 +51,8 @@ async function consent() { await click("Review Safe Test"); await vi.waitFor(() 
 it("requires current C3 cost and sharing consent before submitting only the saved candidate identity", async () => {
   const start = vi.spyOn(agentAuthoringApi, "startTest").mockImplementation(async (_c, _p, _id, input) => ({ ...result, requestId: input.requestId }));
   await mount(); await click("Review Safe Test"); expect(button("Run this test").disabled).toBe(true);
+  expect(document.body.textContent).toContain("Required security procedure");
+  expect(document.body.textContent).not.toContain(review.requiredProcedures![0]!.versionId);
   expect(document.body.textContent).toContain("authorized company members"); expect(start).not.toHaveBeenCalled();
   const checkbox = document.querySelector<HTMLInputElement>('[role="alertdialog"] input[type="checkbox"]')!; await act(async () => checkbox.click()); await click("Run this test");
   await vi.waitFor(() => expect(start).toHaveBeenCalledTimes(1));

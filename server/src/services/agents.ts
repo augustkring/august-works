@@ -718,7 +718,7 @@ export function agentService(db: Db) {
       if (!definition || options?.recordRevision?.source !== "agent_authoring_publish" ||
           options.recordRevision.id !== definition.revisionId || !installsAuthoredDefinition ||
           nativeSha256(data.runtimeConfig?.[AUTHORED_AGENT_DEFINITION_KEY]) !== nativeSha256(definition) ||
-          nativeSha256(compileAuthoredAgentDefinition(definition.content, definition.revisionId, definition.candidateHash)) !== nativeSha256(definition))
+          nativeSha256(compileAuthoredAgentDefinition(definition.content, definition.revisionId, definition.candidateHash, definition.procedureSnapshotHash)) !== nativeSha256(definition))
         throw conflict("Edit and publish a draft to change this identified Agent version", { code: "authored_agent_version_readonly" });
     }
     if(data.adapterType!==undefined||data.adapterConfig!==undefined)assertSaasRemoteAdapterConfig(data.adapterType??existing.adapterType,data.adapterConfig??existing.adapterConfig);

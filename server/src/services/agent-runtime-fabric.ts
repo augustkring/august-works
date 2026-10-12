@@ -9,6 +9,7 @@ import { agentIdentities, agents, companies, heartbeatRuns, issues, contextManif
 import { agentExecutionManifestSchema, createExecutionScopeRequestSchema, v5FeatureEnabled, type AgentExecutionScope } from "@paperclipai/shared";
 import type { z } from "zod";
 import { readAuthoredAgentDefinition } from "./agents/authored-definition.js";
+import { resolveAuthoringProcedures } from "./agents/authoring-procedures.js";
 import { conflict, forbidden, notFound,unprocessable } from "../errors.js";
 import type { AuthorizationActor } from "./authorization.js";
 import { assertV5Authorization, assertV5Enabled, v5HumanActorId } from "./v5-authorization.js";
@@ -146,7 +147,13 @@ export function agentRuntimeFabricService(db: Db) {
       const provider = await agentProviderBindingService(db).assertRuntime(input.companyId, input.agentId);
       const providers = [{ companyId: input.companyId, agentId: input.agentId, providerBindingId: provider.provider.id, profileRef: provider.runtime.providerProfileRef, snapshotHash: provider.provider.capabilitySnapshot!.hash, isolationMode: provider.provider.isolationMode as "isolated_per_presence" | "shared_trusted_runtime" }, ...(scoped?.scopes.filter((s) => s.companyId !== input.companyId).map((s) => ({ companyId: s.companyId, agentId: s.presence.id, providerBindingId: s.provider.provider.id, profileRef: s.provider.runtime.providerProfileRef, snapshotHash: s.provider.provider.capabilitySnapshot!.hash, isolationMode: s.provider.provider.isolationMode as "isolated_per_presence" | "shared_trusted_runtime" })) ?? [])];
       const rolePack = v5FeatureEnabled(flags, "role_packs_v5") ? await rolePackService(db).resolve(actor, input.companyId, input.agentId,undefined,"task") : null;
-      if (authored && rolePack?.items.some(item => item.type !== "required_policy"))
+      if (authored?.procedureSnapshotHash && !input.responsibleUserId)
+        throw forbidden("The identified procedural version requires its accountable execution principal");
+      const procedures = authored?.procedureSnapshotHash ? await resolveAuthoringProcedures(db, {
+        companyId: input.companyId, agentId: input.agentId, responsibleUserId: input.responsibleUserId! }) : null;
+      if (procedures && procedures.hash !== authored!.procedureSnapshotHash)
+        throw conflict("The identified Agent's procedures changed; test and publish a fresh version");
+      if (authored && !procedures && rolePack?.items.some(item => item.type !== "required_policy"))
         throw conflict("This authored version requires review before using additional Role Pack behavior");
       const [test] = input.issueId ? await db.select().from(companySkillTestRuns).where(and(eq(companySkillTestRuns.companyId, input.companyId), eq(companySkillTestRuns.agentId, input.agentId), eq(companySkillTestRuns.issueId, input.issueId))).limit(1) : [];
       if (test?.deletedAt) throw conflict("This Skill test was deleted");
@@ -158,10 +165,13 @@ export function agentRuntimeFabricService(db: Db) {
       // resolver inputs, so negative controls can observe real non-selection.
       if (test) query = test.inputSnapshot.slice(0, 500);
       if (!v5FeatureEnabled(flags, "skill_resolver_v5") && rolePack?.items.some((item) => item.type === "required_skill")) throw conflict("This Role Pack requires the Skill resolver runtime");
-      const resolvedSkills = !authored && !stored && v5FeatureEnabled(flags, "skill_resolver_v5") ? await skillResolverService(db).resolve(actor, input.companyId, query, test?.evaluationContext ? [] : rolePack?.items ?? [], test ? { skillId: test.skillId, versionId: test.skillVersionId } : undefined,"task") : { skills: stored?.manifest.skills ?? [], estimatedTokens: stored?.manifest.inventoryEstimatedTokens ?? 0, warnings: [] };
+      const resolvedSkills = procedures ? { skills: procedures.skills.map(pin => ({ skillId: pin.skillId, versionId: pin.versionId,
+        key: pin.key, name: pin.name, selection: "required" as const, loadPoint: "always" as const,
+        estimatedDescriptorTokens: Math.ceil(Buffer.byteLength(pin.key + pin.name, "utf8") / 4) })), estimatedTokens: 0, warnings: [] as string[] }
+        : !authored && !stored && v5FeatureEnabled(flags, "skill_resolver_v5") ? await skillResolverService(db).resolve(actor, input.companyId, query, test?.evaluationContext ? [] : rolePack?.items ?? [], test ? { skillId: test.skillId, versionId: test.skillVersionId } : undefined,"task") : { skills: stored?.manifest.skills ?? [], estimatedTokens: stored?.manifest.inventoryEstimatedTokens ?? 0, warnings: [] };
       const resolvedPlaybooks = !authored && !stored && v5FeatureEnabled(flags, "playbooks_v5") ? await playbookResolverService(db).resolve(actor, input.companyId, query, rolePack?.items ?? [],"task") : { pins: stored?.manifest.playbooks ?? [], warnings: [] as string[] };
       if (!v5FeatureEnabled(flags, "playbooks_v5") && rolePack?.items.some((item) => item.type === "required_playbook")) throw conflict("This Role Pack requires the Playbook runtime");
-      if (authored && (resolvedSkills.skills.length || resolvedPlaybooks.pins.length))
+      if (authored && ((!procedures && resolvedSkills.skills.length) || resolvedPlaybooks.pins.length))
         throw conflict("The existing run contains behavior outside this authored version");
       const capabilities = authored ? [] : await capabilityResolverService(db).search(actor, input.companyId, "");
       const context = await freshContext(actor, scope, query, input.runId, input.issueId, Boolean(authored));
@@ -189,7 +199,7 @@ export function agentRuntimeFabricService(db: Db) {
         if (tokens > 2000) throw conflict("Required capabilities exceed the bounded runtime inventory; split this Role Pack");
       }
       const policyHash = hashContextPolicySnapshot({ scope, policies, providers, capabilities,
-        ...(authored ? { agentDefinitionVersion: { revisionId: authored.revisionId, definitionHash: authored.definitionHash } } : {}) });
+        ...(authored ? { agentDefinitionVersion: { revisionId: authored.revisionId, definitionHash: authored.definitionHash, ...(procedures ? { procedureSnapshotHash: procedures.hash } : {}) } } : {}) });
       if (authored && stored && stored.manifest.executionPolicy.policySnapshotHash !== policyHash)
         throw conflict("The identified Agent version changed; start a new execution");
       const manifest = stored?.manifest ?? agentExecutionManifestSchema.parse({ schemaVersion: 5, runId: input.runId, companyId: input.companyId, agentId: input.agentId, agentIdentityId: local.identity.id, homeCompanyId: local.identity.homeCompanyId, responsibleUserId: input.responsibleUserId, executionScope: scope, rolePack: rolePack ? { systemKey: rolePack.systemKey, systemVersion: rolePack.systemVersion, pins: rolePack.pins } : null, contextManifests: context.refs, skills: resolvedSkills.skills, playbooks: resolvedPlaybooks.pins, capabilities, providers, executionPolicy: { deterministicPreference: true, policies, approvalRefs: [], restrictions: ["Every action requires current local authority", "Guest evidence retains source-company classification", "Provider-local tools do not grant platform permissions"], policySnapshotHash: policyHash }, inventoryEstimatedTokens: resolvedSkills.estimatedTokens, warnings: [...resolvedSkills.warnings, ...resolvedPlaybooks.warnings, ...context.warnings].slice(0, 64) });

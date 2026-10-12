@@ -62,6 +62,7 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"]] as const) {
           configurationHash: "a".repeat(64), status: "qualified", runtimeQualified: true, safeTestQualified: false, executionStarted: false } });
         if (path.endsWith("/test-review")) return route.fulfill({ json: { companyId: company.id, draftId: id, version: draft.version, agentId, scenarioIndex: 0, scenario,
           runtimeBindingId: runtimeId, configurationHash: "a".repeat(64), candidateHash: "c".repeat(64), maximumCostMinor: 3, currency: "USD", provider: "anthropic", model: "software-host-model",
+          procedureSnapshotHash: "f".repeat(64), requiredProcedures: [{ skillId: "10000000-0000-4000-8000-000000000021", versionId: "10000000-0000-4000-8000-000000000022", name: "Required security procedure", bodyHash: "f".repeat(64) }],
           transport: "server-text-only-v1", toolsGranted: false, activatesAgent: false, companyVisibleResult: true, reviewHash: "b".repeat(64) } });
         if (path.endsWith("/tests")) return route.fulfill({ json: outcome ? [outcome] : [] });
         if (path.endsWith("/verification-packet")) return route.fulfill({ json: { planId, planVersion: 1, workerId: null, issueId: "10000000-0000-4000-8000-000000000008",
@@ -82,6 +83,8 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"]] as const) {
       await region.getByRole("button", { name: locale === "en" ? "Review Safe Test" : "Gennemgå Safe Test", exact: true }).click();
       const dialog = page.getByRole("alertdialog"), run = dialog.getByRole("button", { name: locale === "en" ? "Run this test" : "Kør denne test", exact: true });
       await expect(run).toBeDisabled(); await expect(dialog).toContainText("0.03 USD"); await expect(dialog).toContainText("Anthropic · software-host-model"); expect(starts).toBe(0);
+      await expect(dialog.getByText("Required security procedure", { exact: true })).toBeVisible();
+      await expect(dialog.getByText(locale === "en" ? "Required procedures used in this test" : "Obligatoriske procedurer i denne test", { exact: true })).toBeVisible();
       await page.addScriptTag({ path: axePath });
       expect(await page.evaluate(async () => (await (window as unknown as { axe: { run(scope: string): Promise<{ violations: unknown[] }> } }).axe.run('[role="alertdialog"]')).violations)).toEqual([]);
       await dialog.getByRole("checkbox").check(); await run.click();

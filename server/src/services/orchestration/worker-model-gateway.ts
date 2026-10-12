@@ -1,4 +1,5 @@
 import { createHash } from "node:crypto";
+import { assertAuthoredProceduresCurrent } from "../agents/authoring-procedures.js";
 import { and, eq, or } from "drizzle-orm";
 import {
   agents,
@@ -245,6 +246,10 @@ export function workerModelGateway(db: Db, options: Options) {
       ))
     )
       throw forbidden("Worker execution ownership changed");
+    const procedures = await assertAuthoredProceduresCurrent(tx, agent, claims.responsible_user_id!);
+    if (procedures && nativeSha256(manifest.manifest.skills.map(pin => `${pin.skillId}@${pin.versionId}`).sort()) !==
+        nativeSha256(procedures.skills.map(pin => `${pin.skillId}@${pin.versionId}`).sort()))
+      throw forbidden("The worker inventory does not contain the exact identified procedures");
     const taskScope = {
       type: "issue" as const,
       companyId: claims.company_id,
@@ -553,6 +558,7 @@ export function workerModelGateway(db: Db, options: Options) {
           !["idle", "running"].includes(presence.agent.status) || presence.agent.adapterType !== "paperclip_runner" ||
           presence.agent.runtimeConfig?.aiConnection)
         throw forbidden("Internal drafts require their current native presence");
+      await assertAuthoredProceduresCurrent(tx, presence.agent, input.responsibleUserId);
       const selected = resolvePaperclipRunnerProviderProfile(presence.agent.adapterConfig);
       if (selected.provider !== "aw_text_only" || selected.workerModelProfileId !== p.id ||
           selected.model !== p.tariff.model || selected.maxOutputTokens > p.maxOutputTokens)
