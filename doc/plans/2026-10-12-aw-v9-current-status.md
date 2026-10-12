@@ -18,10 +18,16 @@ and 11 built browser cases. The integrated backend/schema/Native trees match
 qualified Source `0e30e6997156920dcdaa56a4cd9509cefb04772e` exactly. See the
 [automation component checkpoint](2026-10-12-aw-v9-hire-automation-components.md).
 
-Confirmation dialogs now withdraw cached private review details during source
-rechecks and discard prior consent. Focused regression checks cover a refused
-read and an unchanged successful read. Final integrated UI verification is in
-progress; full V9 remains incomplete.
+All four confirmation dialogs withdraw cached private review details during
+source rechecks and discard prior consent. Thirty focused checks and eleven
+built-browser cases passed; current UI types passed. The backend/schema/Native
+trees remain identical to the qualified 360-case Source. See the
+[confirmation checkpoint](2026-10-12-aw-v9-confirmation-source-fences.md).
+
+GitHub CI on the preceding published head found notification-delivery timing,
+workspace UI expectations, migration-replay and OpenAPI coverage failures. Those
+are open regression fixes; the previous policy/shard mismatch is fixed. Complete
+V9 and merge readiness remain unestablished.
 
 ## Open implementation and merge requirements
 
