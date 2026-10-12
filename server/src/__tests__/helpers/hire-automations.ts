@@ -1,4 +1,5 @@
-import { sql, type Db } from "@paperclipai/db";
+import type { Db } from "@paperclipai/db";
+import { sql } from "drizzle-orm";
 import { createRoutineSchema } from "@paperclipai/shared";
 import { workflowService } from "../../services/workflows/workflow-service.js";
 import { routineService } from "../../services/routines.js";
