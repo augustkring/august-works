@@ -25,9 +25,11 @@ trees remain identical to the qualified 360-case Source. See the
 [confirmation checkpoint](2026-10-12-aw-v9-confirmation-source-fences.md).
 
 GitHub CI on the preceding published head found notification-delivery timing,
-workspace UI expectations, migration-replay and OpenAPI coverage failures. Those
-are open regression fixes; the previous policy/shard mismatch is fixed. Complete
-V9 and merge readiness remain unestablished.
+workspace UI expectations, migration-replay and OpenAPI coverage failures. The
+targeted fixes now pass 30 actual database cases, 20 OpenAPI cases, 20 affected
+UI cases, shared/DB builds and server/UI types. Their new GitHub CI run remains
+pending. The previous policy/shard mismatch is fixed. Complete V9 and merge
+readiness remain unestablished.
 
 ## Open implementation and merge requirements
 
