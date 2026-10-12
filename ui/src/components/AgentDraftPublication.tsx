@@ -22,6 +22,7 @@ export function AgentDraftPublication({ company, principal, draft, enabled, canU
   const attempt = useRef<AgentDraftPublicationCommand | null>(null), decisionHash = useRef<string | null>(null);
   const [unknown, setUnknown] = useState(false), [open, setOpen] = useState(false), [publication, setPublication] = useState(false), [activation, setActivation] = useState(false);
   const [receipt, setReceipt] = useState<AgentDraftPublicationReceipt | null>(null), [failure, setFailure] = useState<string | null>(null);
+  const [receiptIdentity, setReceiptIdentity] = useState<string | null>(null);
   const agentId = draft.agentId ?? draft.preparation?.agentId ?? null;
   // Recovery belongs to the Original command, including after a saved draft
   // version changes. Only its identity is read; it is never automatically sent.
@@ -33,11 +34,11 @@ export function AgentDraftPublication({ company, principal, draft, enabled, canU
       value.draft.createdByUserId === principal && value.draft.version === draft.version;
   }
   useEffect(() => {
-    alive.current = true; attempt.current = null; setUnknown(false); setReceipt(null); setFailure(null);
+    alive.current = true; attempt.current = null; setUnknown(false); setReceipt(null); setReceiptIdentity(null); setFailure(null);
     try {
       const stored = sessionStorage.getItem(storageKey);
       if (stored) { const parsed = agentDraftPublicationCommandSchema.safeParse(JSON.parse(stored));
-        if (parsed.success) { attempt.current = parsed.data; setUnknown(true); } }
+        if (parsed.success) { attempt.current = parsed.data; setReceiptIdentity(parsed.data.requestId); setUnknown(true); } }
     } catch { /* A stored identity grants no authority. */ }
     return () => { alive.current = false; };
   }, [storageKey]);
@@ -50,17 +51,21 @@ export function AgentDraftPublication({ company, principal, draft, enabled, canU
         throw new Error(t("agentPublication.changed"));
       return value;
     }) });
-  const historical = useQuery({ queryKey: ["agent-draft-publication-receipt", company, principal, authority.epoch, draft.id],
+  const historical = useQuery({ queryKey: ["agent-draft-publication-receipt", company, principal, authority.epoch, draft.id, receiptIdentity],
     enabled: receiptOnly && enabled && authority.readReady && !!agentId && !unknown,
     retry: false, gcTime: 0, staleTime: 0, queryFn: ({ signal }) => authority.read(async () => {
       if (!current()) throw new Error(t("agentPublication.changed"));
-      const value = await agentAuthoringApi.publicationReceipt(company, principal, draft.id, undefined, signal);
-      if (!current() || value && (value.companyId !== company || value.draftId !== draft.id || value.agentId !== agentId))
+      const value = await agentAuthoringApi.publicationReceipt(company, principal, draft.id, receiptIdentity ?? undefined, signal);
+      if (!current() || value && (value.companyId !== company || value.draftId !== draft.id || value.agentId !== agentId ||
+          receiptIdentity !== null && value.requestId !== receiptIdentity))
         throw new Error(t("agentPublication.changed"));
       return value;
     }) });
   useEffect(() => {
-    if (receiptOnly && !unknown && historical.isSuccess && !historical.isFetching && current()) setReceipt(historical.data);
+    if (receiptOnly && !unknown && historical.isSuccess && !historical.isFetching && current()) {
+      setReceipt(historical.data);
+      if (historical.data && receiptIdentity === null) setReceiptIdentity(historical.data.requestId);
+    }
   }, [receiptOnly, historical.isSuccess, historical.isFetching, historical.data, authority.epoch, unknown]);
   useEffect(() => { setOpen(false); setPublication(false); setActivation(false); }, [authority.epoch, enabled, draft.version, review.data?.reviewHash]);
   function currentReview() {
@@ -73,7 +78,7 @@ export function AgentDraftPublication({ company, principal, draft, enabled, canU
     if (!current() || value.companyId !== company || value.draftId !== draft.id || value.agentId !== agentId || value.requestId !== attempt.current?.requestId)
       throw new Error(t("agentPublication.changed"));
     // Keep the Original command identity for authoritative receipt recovery on reload.
-    attempt.current = null; setUnknown(false); setOpen(false); setPublication(false); setActivation(false); setFailure(null); setReceipt(value);
+    attempt.current = null; setUnknown(false); setOpen(false); setPublication(false); setActivation(false); setFailure(null); setReceiptIdentity(value.requestId); setReceipt(value);
     for (const prefix of ["agents", "agent", "agent-authoring-review", "hire-agent-review"])
       void client.invalidateQueries({ queryKey: [prefix, company] });
     if (!receiptOnly && current()) onPublished?.(value);
@@ -100,6 +105,7 @@ export function AgentDraftPublication({ company, principal, draft, enabled, canU
   if (!enabled) return <p>{t("agentSafeTest.saveFirst")}</p>;
   if (!authority.readReady || !current()) return <p role="status">{t("agentSafeTest.checking")}</p>;
   const pending = publish.isPending || check.isPending;
+  const showReceipt = receipt && (!receiptOnly || historical.isSuccess && !historical.isFetching && historical.data?.requestId === receipt.requestId);
   const change = (key: string, before: string | undefined, after: string | undefined) => <div key={key}>
     <dt>{t(key)}</dt><dd className="whitespace-pre-wrap break-words">{before || t("customAgent.notSet")} → {after || t("customAgent.notSet")}</dd>
   </div>;
@@ -107,7 +113,7 @@ export function AgentDraftPublication({ company, principal, draft, enabled, canU
     <h2 className="text-lg font-semibold">{t("agentPublication.title")}</h2>
     <p>{t("agentPublication.boundary")}</p>
     {failure ? <p role="alert">{failure}</p> : null}
-    {receipt ? <>
+    {showReceipt && receipt ? <>
       <p role="status">{t("agentPublication.receipt", { version: receipt.publishedVersion })}</p>
       <p className="whitespace-pre-wrap">{receipt.publishedContent.name} · {receipt.publishedContent.outcome}</p>
       {draft.package ? <p>{t("agentPublication.packageVersion", { version: draft.package.version })}</p> : null}
@@ -117,7 +123,7 @@ export function AgentDraftPublication({ company, principal, draft, enabled, canU
         <Button asChild variant="outline" className="min-h-11"><Link to={`/agents/${receipt.agentId}/monitor`} onClick={event => { if (!current()) event.preventDefault(); }}>{t("agentPublication.manageAgent")}</Link></Button>
       </div>
     </> : null}
-    {receiptOnly && !receipt && !unknown ? <p role="status">{historical.isFetching ? t("agentSafeTest.checking") : historical.isError ? t("agentPublication.unavailable") : t("hireSetup.noReceipt")}</p> : null}
+    {receiptOnly && !showReceipt && !unknown ? <p role="status">{historical.isFetching ? t("agentSafeTest.checking") : historical.isError || receiptIdentity !== null ? t("agentPublication.unavailable") : t("hireSetup.noReceipt")}</p> : null}
     {unknown ? <Button className="min-h-11" variant="outline" disabled={pending} onClick={() => check.mutate()}>{t("agentPublication.checkOriginal")}</Button> : null}
     {review.isFetching ? <p role="status">{t("agentSafeTest.checking")}</p> : null}
     {review.isError ? <p role="status">{t("agentPublication.unavailable")}</p> : null}

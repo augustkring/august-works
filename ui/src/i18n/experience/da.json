@@ -1786,5 +1786,12 @@
     "scope": "Arbejder i August Works. Den må forberede interne kladder ud fra den aktuelle opgave. Andre handlinger, tilsluttede kilder, vedvarende hukommelse og delegering er fortsat utilgængelige.",
     "openAgent": "Åbn agent",
     "manageAgent": "Overvåg eller pausér agent"
+  },
+  "publishedInstructions": {
+    "title": "Publicerede instruktioner",
+    "boundary": "Publicerede instruktioner kan kun læses. Rediger en privat kladde og test den før publicering; den aktive version fortsætter imens.",
+    "editDraft": "Rediger en privat kladde",
+    "checking": "Kontrollerer de publicerede instruktioner…",
+    "unavailable": "De publicerede instruktioner er ikke tilgængelige. Genindlæs agenten, før du fortsætter."
   }
 }

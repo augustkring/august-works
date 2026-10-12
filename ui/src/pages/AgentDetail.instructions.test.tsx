@@ -7,6 +7,8 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Agent, AgentInstructionsBundle, AgentInstructionsFileDetail, AgentInstructionsFileSummary } from "@paperclipai/shared";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { PromptsTab } from "./AgentDetail";
+import { PromptsTab as ProductionPromptsTab } from "./AgentDetail.production";
+import { MemoryRouter } from "react-router-dom";
 
 const mockAgentsApi = vi.hoisted(() => ({
   instructionsBundle: vi.fn(),
@@ -257,6 +259,7 @@ describe("PromptsTab instruction editor", () => {
     bundle: AgentInstructionsBundle,
     details: Record<string, AgentInstructionsFileDetail>,
     props: Partial<ComponentProps<typeof PromptsTab>> = {},
+    Component: typeof PromptsTab = PromptsTab,
   ) {
     mockAgentsApi.instructionsBundle.mockResolvedValue(bundle);
     mockAgentsApi.instructionsFile.mockImplementation(async (_agentId: string, path: string) => {
@@ -268,8 +271,8 @@ describe("PromptsTab instruction editor", () => {
     root = createRoot(container);
     await act(async () => {
       root?.render(
-        <QueryClientProvider client={queryClient}>
-          <PromptsTab
+        <MemoryRouter><QueryClientProvider client={queryClient}>
+          <Component
             agent={props.agent ?? makeAgent()}
             companyId={props.companyId ?? "company-1"}
             onDirtyChange={props.onDirtyChange ?? vi.fn()}
@@ -277,7 +280,7 @@ describe("PromptsTab instruction editor", () => {
             onCancelActionChange={props.onCancelActionChange ?? vi.fn()}
             onSavingChange={props.onSavingChange ?? vi.fn()}
           />
-        </QueryClientProvider>,
+        </QueryClientProvider></MemoryRouter>,
       );
     });
     await flushReact();
@@ -289,6 +292,24 @@ describe("PromptsTab instruction editor", () => {
     });
     await flushReact();
   }
+
+  it.each([["classic", PromptsTab], ["production", ProductionPromptsTab]] as const)(
+    "%s displays the Original published instructions read-only and opens the existing private draft builder",
+    async (_variant, Component) => {
+      const summary = makeSummary("AGENTS.md", "AGENTS.md", { editable: false, virtual: true });
+      await renderPromptsTab(makeBundle("AGENTS.md", [summary], { editable: false }),
+        { "AGENTS.md": makeDetail(summary, "Published responsibility and limits") },
+        { agent: makeAgent({ runtimeConfig: { agentDefinitionVersion: { revisionId: "published-revision" } } }) }, Component);
+      await vi.waitFor(() => expect(container.textContent).toContain("Published responsibility and limits"));
+      expect(container.textContent).toContain("the active version stays in place");
+      expect(container.querySelector<HTMLAnchorElement>("a")!.getAttribute("href")).toContain("/agents/custom?agentId=agent-1");
+      expect(markdownEditorRenderMock).not.toHaveBeenCalled();
+      expect(saveAction).toBeNull();
+      expect(mockAgentsApi.updateInstructionsBundle).not.toHaveBeenCalled();
+      expect(mockAgentsApi.saveInstructionsFile).not.toHaveBeenCalled();
+      expect(mockAgentsApi.deleteInstructionsFile).not.toHaveBeenCalled();
+    },
+  );
 
   it("uses server markdown metadata for extensionless files and saves MarkdownEditor drafts", async () => {
     const summary = makeSummary("AGENTS", "AGENTS", {

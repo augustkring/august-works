@@ -104,3 +104,21 @@ it("reads the immutable Original receipt after rollout withdrawal without using 
   expect(container.textContent).not.toContain("Review publication and activation");
   expect(receipt).toHaveBeenCalledWith(draft.companyId, "author", draft.id, undefined, expect.any(AbortSignal)); expect(publish).not.toHaveBeenCalled();
 });
+it("keeps a known receipt identity during refetch and never substitutes a later publication after Source withdrawal", async () => {
+  context.receiptOnly = true;
+  const get = vi.spyOn(agentAuthoringApi, "publicationReceipt").mockResolvedValue(result);
+  const publish = vi.spyOn(agentAuthoringApi, "publish");
+  await mount(review, false);
+  await vi.waitFor(() => expect(get).toHaveBeenCalledWith(draft.companyId, "author", draft.id, result.requestId, expect.any(AbortSignal)));
+  const before = get.mock.calls.length;
+  get.mockImplementation(async (_company, _principal, _draft, id) => id === result.requestId ? null : {
+    ...result, requestId: "10000000-0000-4000-8000-000000000013", publishedVersion: 3,
+    publishedContent: { ...result.publishedContent, name: "Later different publication" },
+  });
+  await act(async () => { await client.invalidateQueries({ queryKey: ["agent-draft-publication-receipt"] }); });
+  await vi.waitFor(() => expect(container.textContent).not.toContain("Version 2 was published and activated"));
+  expect(container.textContent).not.toContain("Later different publication");
+  expect(get.mock.calls.slice(before).length).toBeGreaterThan(0);
+  expect(get.mock.calls.slice(before).every(call => call[3] === result.requestId)).toBe(true);
+  expect(publish).not.toHaveBeenCalled();
+});

@@ -1786,5 +1786,12 @@
     "scope": "Works in August Works. It may prepare internal drafts from the current task. Other actions, connected sources, persistent memory and delegation remain unavailable.",
     "openAgent": "Open agent",
     "manageAgent": "Monitor or pause agent"
+  },
+  "publishedInstructions": {
+    "title": "Published instructions",
+    "boundary": "Published instructions are read-only. Edit a private draft and test it before publishing; the active version stays in place.",
+    "editDraft": "Edit a private draft",
+    "checking": "Checking the published instructions…",
+    "unavailable": "The published instructions are unavailable. Refresh the Agent before continuing."
   }
 }
