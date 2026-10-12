@@ -269,7 +269,7 @@ it("requires preview and an explicit download without including step content or 
   await vi.waitFor(() =>
     expect(document.querySelector('[role="dialog"]')).toBeNull(),
   );
-  expect(document.activeElement).toBe(opener);
+  await vi.waitFor(() => expect(document.activeElement).toBe(opener));
 });
 
 it("withdraws the open support preview during native authority recheck and does not restore it from a late response", async () => {

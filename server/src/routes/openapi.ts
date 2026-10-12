@@ -1298,15 +1298,18 @@ function registerCurrentRoute(input: {
   summary: string;
   query?: z.ZodTypeAny;
   body?: z.ZodTypeAny;
+  headers?: z.ZodTypeAny;
+  bodyContent?: Record<string, { schema: unknown }>;
   responses?: Record<string, OpenApiResponse>;
 }) {
   const params = paramsSchemaFromPath(input.path);
   const request =
-    params || input.query || input.body
+    params || input.query || input.body || input.headers || input.bodyContent
       ? {
           ...(params ? { params } : {}),
           ...(input.query ? { query: input.query } : {}),
-          ...(input.body ? { body: jsonBody(input.body) } : {}),
+          ...(input.headers ? { headers: input.headers } : {}),
+          ...(input.bodyContent ? { body: { required: true, content: input.bodyContent } } : input.body ? { body: jsonBody(input.body) } : {}),
         }
       : undefined;
   registry.registerPath({
@@ -12127,11 +12130,12 @@ registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/runs/{ru
 for (const operation of v9ApiPaths) {
   registerCurrentRoute({
     method: operation.method, path: operation.path, tags: ["V9"],
-    summary: operation.summary, query: operation.query, body: operation.body,
+    summary: operation.summary, query: operation.query, body: operation.body, headers: operation.headers, bodyContent: operation.bodyContent,
     responses: {
       ...(operation.successStatus ? { [operation.successStatus]: {
         ...r.ok(operation.result),
-        ...(operation.privateResponse ? { headers: { "Cache-Control": { schema: { type: "string", enum: ["private, no-store"] } } } } : {}),
+        ...(operation.responseContent ? { content: operation.responseContent } : {}),
+        ...(operation.privateResponse ? { headers: { "Cache-Control": { schema: { type: "string", enum: [operation.cacheControl ?? "private, no-store"] } } } } : {}),
       } } : {}),
       400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound,
       409: { description: "Current account, native source, original request or expected version changed" },

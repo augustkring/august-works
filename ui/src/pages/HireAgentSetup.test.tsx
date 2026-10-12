@@ -309,6 +309,7 @@ it.each(["hire_test", "hire_review", "hire_receipt"])(
   async (step) => {
     vi.spyOn(agentAuthoringApi, "get").mockResolvedValue(draft);
     const create = vi.spyOn(agentAuthoringApi, "create");
+    const publish = vi.spyOn(agentAuthoringApi, "publish");
     await mount(step);
     await vi.waitFor(() =>
       expect(container.textContent).toContain("independently verified"),
@@ -321,15 +322,12 @@ it.each(["hire_test", "hire_review", "hire_receipt"])(
         )!.disabled,
       ).toBe(true);
     }
-    if (step === "hire_review")
-      expect(
-        [...container.querySelectorAll("button")].find(
-          (button) => button.textContent === "Hire agent",
-        )!.disabled,
-      ).toBe(true);
-    if (step === "hire_receipt")
-      expect(container.textContent).toContain("No agent has been activated");
+    if (step === "hire_review" || step === "hire_receipt") {
+      expect(container.textContent).toContain("Prepare an inactive agent");
+      expect([...container.querySelectorAll("button")].some(button => button.textContent === "Publish and activate")).toBe(false);
+    }
     expect(create).not.toHaveBeenCalled();
+    expect(publish).not.toHaveBeenCalled();
   },
 );
 it("hides a private setup through the account recheck and resumes its unsaved name only after a fresh owner read", async () => {
@@ -401,6 +399,6 @@ it("translates current native blockers while keeping representative testing and 
   await act(async () => { await i18n.changeLanguage("da"); });
   expect(container.textContent).toContain("Repræsentativ kørsel og uafhængigt verificerede resultater");
   expect(container.textContent).not.toContain("independently verified");
-  const hire = Array.from(container.querySelectorAll("button")).find((button) => button.textContent === "Ansæt agent");
-  expect(hire).toBeDefined(); expect(hire!.disabled).toBe(true);
+  expect(container.textContent).toContain("Opret en inaktiv agent");
+  expect(Array.from(container.querySelectorAll("button")).some(button => button.textContent === "Publicér og aktivér")).toBe(false);
 });

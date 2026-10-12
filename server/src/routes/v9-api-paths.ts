@@ -1,5 +1,13 @@
 import { z } from "zod";
 import {
+  agentDraftPublicationReviewSchema, agentDraftPublicationCommandSchema, agentDraftPublicationReceiptSchema,
+  agentPackageSetupReviewSchema, agentPackageSetupCommandSchema, agentPackageSetupReceiptSchema,
+  activationConnectionReviewSchema, activationConnectionConsentCommandSchema,
+  activationConnectionConsentWithdrawalCommandSchema, activationConnectionConsentReceiptSchema,
+  feedbackImageSchema, feedbackImagesSchema, feedbackRetentionViewSchema, feedbackRetentionCommandSchema,
+  feedbackRetentionErasureReviewSchema, feedbackRetentionErasureCommandSchema,
+  feedbackRetentionErasureReceiptSchema, feedbackRetentionErasureHistorySchema,
+  memoryMaintenanceHistorySchema, experienceMeasuresSchema,
   customerFeedbackPolicySchema,
   customerSupportHistorySchema,
   maintenanceHistorySchema,
@@ -53,15 +61,19 @@ import {
 
 /** Current mounted contracts. Listing an operation confers no rollout or execution qualification. */
 export interface V9ApiOperation {
-  method: "get" | "post";
+  method: "get" | "post" | "delete";
   path: string;
   summary: string;
   auth: "public" | "board" | "operator";
   query?: z.ZodType;
   body?: z.ZodType;
+  headers?: z.ZodType;
+  bodyContent?: Record<string, { schema: unknown }>;
+  responseContent?: Record<string, { schema: unknown }>;
   result?: z.ZodType;
   successStatus?: 200 | 201;
   privateResponse?: boolean;
+  cacheControl?: "no-store" | "private, no-store";
   unavailable?: boolean;
   overloaded?: boolean;
   rateLimited?: boolean;
@@ -106,6 +118,26 @@ const write = (
   privateResponse: true,
 });
 export const v9ApiPaths: V9ApiOperation[] = [
+  read(`${company}/experience/analytics`, "Read bounded native experience measures without private payloads", experienceMeasuresSchema,
+    z.strictObject({ expectedUserId: z.string().min(1).max(300) })),
+  read(`${company}/memory/experience/maintenance`, "Read original memory maintenance history without asserting current deletion completion", memoryMaintenanceHistorySchema),
+  { ...read(`${company}/issues/create-receipts/{idempotencyKey}`, "Read the current actor's original task creation receipt without creating a task"), cacheControl: "no-store" },
+  { ...read(`${company}/projects/create-receipts/{idempotencyKey}`, "Read the current actor's original project creation receipt without creating a project"), cacheControl: "no-store" },
+  read(`${company}/activation/connections/{applicationKey}/review`, "Review the original current connection scope without granting access", activationConnectionReviewSchema,
+    account.extend({ methodKey: z.string().min(1).max(120).optional() })),
+  { ...write(`${company}/activation/connections/{applicationKey}/consent`, "Confirm the exact original connection scope; OAuth and grants remain separate owners",
+    activationConnectionConsentCommandSchema, activationConnectionConsentReceiptSchema), query: account.extend({ methodKey: z.string().min(1).max(120).optional() }) },
+  read(`${company}/activation/connections/{applicationKey}/consent`, "Read the original current connection consent", activationConnectionConsentReceiptSchema.nullable()),
+  read(`${company}/activation/connection-consents/{requestKey}`, "Read one original connection consent without renewing its allocation", activationConnectionConsentReceiptSchema),
+  write(`${company}/activation/connection-consents/{requestKey}/withdraw`, "Withdraw the original consent without reversing unknown external effects", activationConnectionConsentWithdrawalCommandSchema, activationConnectionConsentReceiptSchema),
+  write(`${company}/activation/connection-consents/{requestKey}/connect`, "Continue the original consent through its native connection owner; do not infer OAuth or Agent access",
+    z.strictObject({ confirmProviderSetup: z.literal(true) }), undefined, 201),
+  read(`${drafts}/{id}/package-setup-review`, "Review current approved purpose and tested package setup without effects", agentPackageSetupReviewSchema, account.extend({ purposeId: z.uuid().optional() })),
+  read(`${drafts}/{id}/package-setup-receipt`, "Read the exact original package setup receipt without replay", agentPackageSetupReceiptSchema.nullable(), account.extend({ requestId: z.uuid() })),
+  write(`${drafts}/{id}/package-setup`, "Confirm the exact approved purpose and atomic package activation without publishing the Agent", agentPackageSetupCommandSchema, agentPackageSetupReceiptSchema),
+  read(`${drafts}/{id}/publication-review`, "Review the current saved candidate, independent verification and activation blockers", agentDraftPublicationReviewSchema),
+  read(`${drafts}/{id}/publications`, "Read the owned draft's latest original publication", agentDraftPublicationReceiptSchema.nullable()),
+  read(`${drafts}/{id}/publications/{requestId}`, "Read the exact owned publication without substituting a later version", agentDraftPublicationReceiptSchema.nullable()),
   read(`${company}/experience/support-access`, "Read bounded native V6 support approval history without granting or asserting current support authorization", customerSupportHistorySchema, z.strictObject({ expectedUserId: z.string().min(1).max(300) })),
   read(`${company}/agent-package-installations/{installationId}/experience/maintenance`, "Read bounded original native M2 maintenance receipts separately from current activation state", maintenanceHistorySchema, z.strictObject({ expectedUserId: z.string().min(1).max(300) })),
   read(`${company}/workflows/{workflowId}/experience/publication`, "Review an exact native internal draft and its original successful internal test without material business qualification", workflowPublicationReviewSchema, account),
@@ -265,16 +297,8 @@ export const v9ApiPaths: V9ApiOperation[] = [
     "Recheck the immutable pinned native package independently of new-write admission",
     hireAgentCapabilityStatusSchema,
   ),
-  {
-    method: "post",
-    path: `${drafts}/{id}/publish`,
-    summary:
-      "Reject unqualified agent publication; no successful publication response exists",
-    query: account,
-    auth: "board",
-    privateResponse: true,
-    blocked: true,
-  },
+  { ...write(`${drafts}/{id}/publish`, "Publish and activate only the exact current independently verified candidate through its original version owner",
+    agentDraftPublicationCommandSchema, agentDraftPublicationReceiptSchema), unavailable: true },
   {
     method: "get",
     path: "/api/customer-feedback/policy",
@@ -313,6 +337,26 @@ export const v9ApiPaths: V9ApiOperation[] = [
     feedbackFollowUpSchema,
     customerFeedbackSchema,
   ),
+  read(`${feedback}/{feedbackId}/images`, "Read the author's bounded native image receipts", feedbackImagesSchema),
+  read(`${feedback}/{feedbackId}/images/requests/{requestKey}`, "Read the original image request without uploading again", feedbackImageSchema.nullable()),
+  { ...write(`${feedback}/{feedbackId}/images`, "Admit one scanned image under the original native request and privacy budget", z.strictObject({}), feedbackImageSchema, 201),
+    body: undefined, headers: z.object({ "X-AW-Feedback-Request-Key": z.uuid() }),
+    bodyContent: { "multipart/form-data": { schema: { type: "object", required: ["file"], additionalProperties: false,
+      properties: { file: { type: "string", format: "binary", maxLength: 10485760 } } } } }, unavailable: true, rateLimited: true },
+  { ...read(`${feedback}/{feedbackId}/images/{imageId}`, "Read an authorized processed image without original metadata"),
+    responseContent: Object.fromEntries(["image/png", "image/jpeg", "image/webp"].map(type => [type, { schema: { type: "string", format: "binary" } }])) },
+  { ...read(`${feedback}/{feedbackId}/images/{imageId}`, "Withdraw the author's exact native image", feedbackImageSchema), method: "delete" },
+  { ...read(`${internal}/{feedbackId}/images`, "Read bounded operator image receipts", feedbackImagesSchema), auth: "operator" },
+  { ...read(`${internal}/{feedbackId}/images/{imageId}`, "Read one processed image after current operator admission"), auth: "operator",
+    responseContent: Object.fromEntries(["image/png", "image/jpeg", "image/webp"].map(type => [type, { schema: { type: "string", format: "binary" } }])) },
+  { ...read(`${internal}/{feedbackId}/retention`, "Read current native retention controls and holds", feedbackRetentionViewSchema), auth: "operator" },
+  { ...write(`${internal}/{feedbackId}/retention`, "Confirm versioned native retention controls without automatic erasure", feedbackRetentionCommandSchema, feedbackRetentionViewSchema), auth: "operator" },
+  { ...read(`${internal}/{feedbackId}/retention-plan`, "Read current due dates and holds without starting deletion"), auth: "operator" },
+  { ...read(`${internal}/retention-erasures`, "Read bounded original native erasure requests and receipts", feedbackRetentionErasureHistorySchema), auth: "operator" },
+  { ...read(`${internal}/{feedbackId}/retention-erasures/review`, "Review exact native erasure targets, eligibility and holds", feedbackRetentionErasureReviewSchema), auth: "operator" },
+  { ...read(`${internal}/{feedbackId}/retention-erasures/{operationId}`, "Read one original erasure receipt without claiming an unknown remote result", feedbackRetentionErasureReceiptSchema), auth: "operator" },
+  { ...read(`${internal}/{feedbackId}/retention-erasures/requests/{requestKey}`, "Read the exact original erasure request without repeating it", feedbackRetentionErasureReceiptSchema.nullable()), auth: "operator" },
+  { ...write(`${internal}/{feedbackId}/retention-erasures`, "Confirm a fixed native erasure target after fresh current review", feedbackRetentionErasureCommandSchema, feedbackRetentionErasureReceiptSchema), auth: "operator", unavailable: true },
   {
     ...read(
       internal,

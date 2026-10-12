@@ -477,6 +477,13 @@ async function applyPendingMigrationsManually(
 
       await runInTransaction(sql, async () => {
         for (const statement of splitMigrationStatements(migrationContent)) {
+          // PostgreSQL checks pending deferred trigger events before treating
+          // CREATE INDEX IF NOT EXISTS as a no-op. During journal repair, a
+          // preceding idempotent backfill can queue such events. Preserve the
+          // explicit IF NOT EXISTS semantics without disabling those guards.
+          const normalized = statement.replace(/^\s*--.*$/gm, "").replace(/\s+/g, " ").trim();
+          if (/^CREATE (?:UNIQUE )?INDEX IF NOT EXISTS "/i.test(normalized) &&
+              await migrationStatementAlreadyApplied(sql, statement)) continue;
           await sql.unsafe(statement);
         }
 

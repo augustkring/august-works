@@ -35,7 +35,7 @@ suite("V9 notification delivery through the original encrypted outbox", () => {
     const notifications = notificationService(db, email);
     const id = (await email.enqueue({ companyId: run.companyId, userId, purpose, recipient,
       subject: "A task has an update", message: "Sign in to review it", actionPath: `/${run.companyId}/issues`, dedupeKey: randomUUID(),
-      expiresAt: new Date(Date.now() + 86400000) }))!;
+      expiresAt: new Date(Date.now() + 86400000), notBefore: new Date(Date.now() - 1000) }))!;
     return { userId, recipient, companyId: run.companyId, mail, email, notifications, id };
   }
 

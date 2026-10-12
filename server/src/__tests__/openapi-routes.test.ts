@@ -18,6 +18,7 @@ const apiPrefixes: Record<string, string> = {
   "customer-support.ts": "/api",
   "maintenance-history.ts": "/api",
   "experience.ts": "/api",
+  "experience-measures.ts": "/api",
   "business-events.ts": "/api",
   "business-metrics.ts": "/api",
   "business-forecasting.ts": "/api",
@@ -907,6 +908,24 @@ describe("openapi routes", () => {
     expect(body.responses[422]).toBeDefined();
   });
 
+  it("documents current V9 setup, image transport and retention consent without inventing effects", () => {
+    const spec = buildOpenApiSpec() as any, root = "/api/companies/{companyId}";
+    const setup = spec.paths[`${root}/agent-configuration-drafts/{id}/package-setup`].post;
+    expect(setup.requestBody.content["application/json"].schema.properties.confirmIntendedPurpose.enum).toEqual([true]);
+    expect(setup.requestBody.content["application/json"].schema.properties.confirmPackageActivation.enum).toEqual([true]);
+    expect(setup.responses[200].content["application/json"].schema.properties.executionStarted.enum).toEqual([false]);
+    const image = spec.paths[`${root}/customer-feedback/{feedbackId}/images`].post;
+    expect(image.parameters).toContainEqual(expect.objectContaining({ name: "X-AW-Feedback-Request-Key", in: "header", required: true }));
+    expect(image.requestBody.content["multipart/form-data"].schema.properties.file.format).toBe("binary");
+    const readImage = spec.paths[`${root}/customer-feedback/{feedbackId}/images/{imageId}`].get;
+    expect(Object.keys(readImage.responses[200].content)).toEqual(["image/png", "image/jpeg", "image/webp"]);
+    const erase = spec.paths["/api/internal/customer-feedback/{companyId}/{feedbackId}/retention-erasures"].post;
+    expect(erase["x-paperclip-authorization"]).toMatchObject({ configuredOperator: true, noCompanyAdminBypass: true });
+    expect(erase.requestBody.content["application/json"].schema.properties.confirmErasure.enum).toEqual([true]);
+    const connect = spec.paths[`${root}/activation/connection-consents/{requestKey}/connect`].post;
+    expect(connect.requestBody.content["application/json"].schema.properties.confirmProviderSetup.enum).toEqual([true]);
+    expect(connect.responses[201]).toBeDefined(); expect(connect.responses[200]).toBeUndefined();
+  });
   it("covers the mounted server routes exactly", () => {
     const {
       routes: actualRoutes,
@@ -970,7 +989,12 @@ describe("openapi routes", () => {
     const publish = spec.paths[`${root}/agent-configuration-drafts/{id}/publish`].post;
     expect(publish.security).toEqual(board);
     expect(publish.responses[422]).toBeDefined();
-    expect(publish.responses[200]).toBeUndefined();
+    expect(publish.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    const publicationCommand = publish.requestBody.content["application/json"].schema;
+    expect(publicationCommand.additionalProperties).toBe(false);
+    expect(publicationCommand.properties.confirmPublication.enum).toEqual([true]);
+    expect(publicationCommand.properties.confirmActivation.enum).toEqual([true]);
+    expect(publicationCommand.required).toContain("expectedReviewHash");
     expect(publish.responses[201]).toBeUndefined();
     const triage = spec.paths["/api/internal/customer-feedback/{companyId}/{feedbackId}/triage"].post;
     expect(triage.security).toEqual(board);
