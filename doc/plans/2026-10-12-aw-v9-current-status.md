@@ -13,6 +13,14 @@ lifetime, current access, test/publication identity and Original dependent-copy
 erasure. See the [Memory checkpoint](2026-10-12-aw-v9-approved-preference-memory-checkpoint.md).
 Private/other Memory mappings and new runtime provisioning/live staging remain open.
 
+Feedback erasure identities now survive company purge and are reapplied from the
+existing independently signed ledger before a restored database can leave quarantine.
+Local temporary image copies also follow physical deletion. Actual pre-upgrade,
+PostgreSQL/disk/dump and inherited restore checks pass. See the
+[feedback restore checkpoint](2026-10-12-aw-v9-feedback-restore-checkpoint.md).
+Unknown remote PUT quiescence, deletion-horizon completeness and remaining privacy
+qualification stay open.
+
 
 Current runtime selection, in-place Hire candidate saving and feedback-opening
 source checks pass 80 focused UI cases, UI types and six built-browser cases.

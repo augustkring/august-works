@@ -3,10 +3,12 @@ import {
   accountDeletionOperations,
   authUsers,
   companySecrets,
+  customerFeedbackDeletionMarkers,
   applyPendingMigrations,
   type Db,
 } from "@paperclipai/db";
 import { and, eq } from "drizzle-orm";
+import { z } from "zod";
 import { eraseAccountAccess } from "./account-deletion.js";
 import { purgeCompanyContent } from "./company-purge.js";
 import { reapplyMemoryDeletionMarkers } from "../memory/memory-privacy.js";
@@ -18,6 +20,7 @@ export interface RestoreDeletionLedger {
   companies: { company_id: string }[];
   analyticalSources: { company_id: string; input_type: "issue" | "project" | "goal" | "document" | "document_revision"; input_ref: string; suppressed_at: string }[];
   businessEvents: { company_id: string; source_ref: string; suppressed_at: string }[];
+  feedback: { subject_id: string; company_id: string; feedback_id: string; target_kind: "case" | "image"; erased_at: string }[];
   identityHomes?: { id: string; home_company_id: string }[];
   users?: { id: string; user_id: string; created_at: string }[];
   memory: {
@@ -38,6 +41,12 @@ export async function prepareRestoredQuarantine(
   // V8. Absence cannot establish that no post-backup projection was suppressed.
   if (!Array.isArray(ledger.businessEvents) || !Array.isArray(ledger.analyticalSources))
     throw Error("V8-aware event and analytical-source deletion ledger required");
+  if (!Array.isArray(ledger.feedback))
+    throw Error("V9-aware feedback deletion ledger required");
+  const feedbackMarkers = z.array(z.strictObject({ subject_id: z.uuid().toLowerCase(), company_id: z.uuid().toLowerCase(),
+    feedback_id: z.uuid().toLowerCase(), target_kind: z.enum(["case", "image"]), erased_at: z.iso.datetime({ offset: true }) })
+    .refine(row => row.target_kind !== "case" || row.subject_id === row.feedback_id, "Feedback case erasure identity is invalid"))
+    .max(100000).parse(ledger.feedback);
   const target = new URL(connectionString);
   if (
     !["127.0.0.1", "localhost", "[::1]"].includes(target.hostname) ||
@@ -81,6 +90,37 @@ export async function prepareRestoredQuarantine(
     await tx.execute(
       sql`insert into instance_settings(singleton_key,general,experimental) values('default',jsonb_build_object('awV6RestoreQuarantine',jsonb_build_object('restoredAt',now(),'admission','blocked')),'{}'::jsonb) on conflict(singleton_key) do update set general=instance_settings.general||excluded.general,experimental='{}'::jsonb,updated_at=now()`,
     );
+  });
+  // These identities came from the current independently authenticated ledger,
+  // not the archive being restored. Import before removing old private bodies.
+  // The database remains quarantined through both phases and after completion.
+  await db.transaction(async tx => {
+    for (const marker of feedbackMarkers) {
+      await tx.insert(customerFeedbackDeletionMarkers).values({ subjectId: marker.subject_id, companyId: marker.company_id,
+        feedbackId: marker.feedback_id, targetKind: marker.target_kind, erasedAt: new Date(marker.erased_at) })
+        .onConflictDoNothing();
+      const [retained] = await tx.select().from(customerFeedbackDeletionMarkers)
+        .where(eq(customerFeedbackDeletionMarkers.subjectId, marker.subject_id));
+      if (!retained || retained.companyId !== marker.company_id || retained.feedbackId !== marker.feedback_id || retained.targetKind !== marker.target_kind)
+        throw Error("Conflicting feedback erasure identity in restore ledger");
+    }
+    await tx.execute(sql`delete from customer_feedback f using customer_feedback_deletion_markers m
+      where m.target_kind='case' and f.id=m.subject_id`);
+    // Individual images retain their Original allocated key until the native
+    // deletion worker confirms the same provider namespace and physical absence.
+    // Closing their read state is distinct from confirming physical erasure.
+    await tx.execute(sql`insert into feedback_image_deletions(image_id,company_id,object_key,storage_scope_id,transport_settled_at)
+      select i.id,i.company_id,i.object_key,i.storage_scope_id,i.transport_settled_at from customer_feedback_images i
+      where i.object_key is not null and i.status<>'deleted' and exists(
+        select 1 from customer_feedback_deletion_markers m where m.subject_id=i.id or (m.target_kind='case' and m.subject_id=i.feedback_id))
+      on conflict(image_id) do nothing`);
+    const mismatched = await tx.execute(sql`select i.id from customer_feedback_images i join feedback_image_deletions d on d.image_id=i.id
+      where exists(select 1 from customer_feedback_deletion_markers m where m.subject_id=i.id or (m.target_kind='case' and m.subject_id=i.feedback_id))
+      and (d.company_id<>i.company_id or d.object_key is distinct from i.object_key or d.storage_scope_id is distinct from i.storage_scope_id) limit 1`);
+    if (mismatched.length) throw Error("Conflicting original feedback image allocation during restore");
+    await tx.execute(sql`update customer_feedback_images i set status='deleting'
+      where i.status not in ('deleting','deleted') and exists(
+        select 1 from customer_feedback_deletion_markers m where m.subject_id=i.id or (m.target_kind='case' and m.subject_id=i.feedback_id))`);
   });
   // Replay explicit, authoritative rehomes. Never choose a different tenant as a new home automatically.
   const deletedCompanies = new Set(

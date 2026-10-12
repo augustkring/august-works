@@ -296,6 +296,7 @@ export { managementReviewSnapshots, managementReviewSourceLinks, managementRevie
 export { adaptivePlanningProposals } from "./adaptive_planning.js";
 
 export * from "./customer_feedback.js";
+export * from "./customer_feedback_deletion_markers.js";
 export * from "./customer_feedback_images.js";
 export * from "./customer_feedback_retention.js";
 export * from "./agent_configuration_drafts.js";

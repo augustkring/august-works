@@ -9,7 +9,7 @@ const base = {
   exportedAt: new Date(now).toISOString(),
   companies: [{ company_id: "00000000-0000-4000-8000-000000000001" }],
   memory: [],
-  businessEvents: [], analyticalSources: [],
+  businessEvents: [], analyticalSources: [], feedback: [],
 };
 function sign(value) {
   const payload = JSON.stringify(value);
@@ -20,6 +20,25 @@ function sign(value) {
       .digest("hex"),
   };
 }
+test("V9 restore requires exact bounded authenticated feedback erasure identities", () => {
+  const marker = { subject_id: "00000000-0000-4000-8000-000000000002", company_id: base.companies[0].company_id,
+    feedback_id: "00000000-0000-4000-8000-000000000002", target_kind: "case", erased_at: base.exportedAt };
+  const valid = { ...base, feedback: [marker] };
+  assert.deepEqual(authenticateDeletionLedger(sign(valid), key, "staging", now), valid);
+  const { feedback, ...legacy } = base;
+  for (const invalid of [legacy, { ...base, feedback: {} },
+    { ...base, feedback: [{ ...marker, subject_id: "invalid" }] },
+    { ...base, feedback: [{ ...marker, company_id: "invalid" }] },
+    { ...base, feedback: [{ ...marker, feedback_id: "invalid" }] },
+    { ...base, feedback: [{ ...marker, target_kind: "other" }] },
+    { ...base, feedback: [{ ...marker, subject_id: base.companies[0].company_id }] },
+    { ...base, feedback: [{ ...marker, erased_at: "invalid" }] },
+    { ...base, feedback: [{ ...marker, erased_at: new Date(now + 1).toISOString() }] },
+    { ...base, feedback: Array(100001).fill(marker) },
+  ]) assert.throws(() => authenticateDeletionLedger(sign(invalid), key, "staging", now));
+  assert.deepEqual(authenticateDeletionLedger(sign({ ...base, feedback: [{ ...marker, target_kind: "image",
+    feedback_id: base.companies[0].company_id }] }), key, "staging", now).feedback[0].target_kind, "image");
+});
 test("restore rejects forged, stale, cross-environment and invalid-date ledgers", () => {
   assert.deepEqual(
     authenticateDeletionLedger(sign(base), key, "staging", now),

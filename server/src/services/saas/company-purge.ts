@@ -12,6 +12,8 @@ import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 const retained = new Set([
   "companies",
   "feedback_image_deletions",
+  "feedback_retention_erasures",
+  "customer_feedback_deletion_markers",
   "company_deletion_operations",
   "billing_account_companies",
   "billing_subscriptions",

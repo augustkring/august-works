@@ -5,7 +5,10 @@ import { join } from "node:path";
 import { eq, sql } from "drizzle-orm";
 import { beforeAll, afterAll, beforeEach, afterEach, describe, expect, it } from "vitest";
 import { createDb, closeRegisteredClients, companies, authUsers, customerFeedback, customerFeedbackAccess,
-  customerFeedbackEvents, customerFeedbackImages, feedbackRetentionErasures, feedbackImageDeletions, activityLog, companyMemberships } from "@paperclipai/db";
+  customerFeedbackEvents, customerFeedbackImages, feedbackRetentionErasures, feedbackImageDeletions, activityLog, companyMemberships,
+  customerFeedbackDeletionMarkers, applyPendingMigrations } from "@paperclipai/db";
+import { prepareRestoredQuarantine, assertDatabaseRestoreAdmission } from "../services/saas/quarantine.js";
+import { purgeCompanyContent } from "../services/saas/company-purge.js";
 import { customerFeedbackRetentionErasureService, processApprovedFeedbackRetentionErasure } from "../services/customer-feedback-retention-erasure.js";
 import express from "express";
 import request from "supertest";
@@ -20,7 +23,7 @@ import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } fro
 
 // Owned historical INSERTs, original native clock and actual disk provider.
 // These fixtures represent already-normalized historical objects; they do not
-// claim malware scanning or restore qualification for a lost erasure ledger.
+// claim malware scanning or qualification of the hosted archive transport.
 describe("native explicit feedback retention erasure", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>;
   let companyId: string, operatorId: string, directory: string, storage: StorageService;
@@ -187,6 +190,90 @@ describe("native explicit feedback retention erasure", () => {
     await expect(db.insert(customerFeedbackImages).values({ id: image.id, companyId, feedbackId: other, requestKey: randomUUID(),
       requestHash: hash("restore"), mediaType: "image/png", leaseToken: randomUUID(), leaseExpiresAt: new Date(Date.now() + 120000) }))
       .rejects.toMatchObject({ cause: expect.objectContaining({ code: "23514" }) });
+  });
+  it("reapplies a fresh feedback ledger to an older isolated database without the newer request receipts", async () => {
+    const erasedCase = await historicalCase(), imageCase = await historicalCase(), retainedCase = await historicalCase(), unsettledCase = await historicalCase();
+    const erasedCaseImage = await historicalImage(erasedCase), erasedImage = await historicalImage(imageCase), retainedImage = await historicalImage(retainedCase);
+    const unsettledImage = await historicalImage(unsettledCase, 35, false);
+    const [company] = await db.select().from(companies).where(eq(companies.id, companyId));
+    const cases = await db.select().from(customerFeedback).where(eq(customerFeedback.companyId, companyId));
+    const images = await db.select().from(customerFeedbackImages).where(eq(customerFeedbackImages.companyId, companyId));
+    // The actual fixture PUT fulfilled, but this earlier snapshot lacks its
+    // native acknowledgement. Record the observed completion only in the
+    // current source before its later approved erasure, never in the archive.
+    await db.update(customerFeedbackImages).set({ transportSettledAt: sql`clock_timestamp()` })
+      .where(eq(customerFeedbackImages.id, unsettledImage.id));
+    await db.update(customerFeedbackImages).set({ status: "ready" }).where(eq(customerFeedbackImages.id, unsettledImage.id));
+    await owner().execute(actor(), companyId, erasedCase, await command(erasedCase));
+    await owner().execute(actor(), companyId, imageCase, await command(imageCase, { kind: "image", imageId: erasedImage.id }));
+    await owner().execute(actor(), companyId, unsettledCase, await command(unsettledCase, { kind: "image", imageId: unsettledImage.id }));
+    const markers = await db.select().from(customerFeedbackDeletionMarkers).where(eq(customerFeedbackDeletionMarkers.companyId, companyId));
+    expect(markers.map(row => row.subjectId).sort()).toEqual([erasedCase, erasedCaseImage.id, erasedImage.id, unsettledImage.id].sort());
+    const feedback = markers.map(row => ({ subject_id: row.subjectId, company_id: row.companyId, feedback_id: row.feedbackId,
+      target_kind: row.targetKind, erased_at: row.erasedAt.toISOString() }));
+    expect(JSON.stringify(feedback)).not.toContain("OWNED-PRIVATE-HISTORICAL-FEEDBACK");
+    const name = `aw_restore_${randomUUID().replaceAll("-", "")}`, target = new URL(database.connectionString);
+    target.pathname = `/${name}`;
+    await db.execute(sql`create database ${sql.identifier(name)}`);
+    const restored = createDb(target.toString());
+    try {
+      await applyPendingMigrations(target.toString());
+      await restored.insert(companies).values(company!);
+      await restored.insert(customerFeedback).values(cases);
+      // Hydrate an exact earlier native snapshot before any application starts,
+      // as archive restoration does. This isolated fixture tests the quarantine
+      // owner and current guard, not the independently qualified dump transport.
+      await restored.execute(sql`alter table customer_feedback_images disable trigger user`);
+      try { await restored.insert(customerFeedbackImages).values(images); }
+      finally { await restored.execute(sql`alter table customer_feedback_images enable trigger user`); }
+      expect(await restored.select().from(feedbackRetentionErasures)).toEqual([]);
+      const ledger = { companies: [], memory: [], businessEvents: [], analyticalSources: [], feedback };
+      await prepareRestoredQuarantine(restored, target.toString(), ledger);
+      await prepareRestoredQuarantine(restored, target.toString(), ledger);
+      await expect(assertDatabaseRestoreAdmission(restored)).rejects.toThrow("remains quarantined");
+      expect((await restored.select().from(customerFeedback)).map(row => row.id).sort()).toEqual([imageCase, retainedCase, unsettledCase].sort());
+      expect((await restored.select().from(customerFeedbackImages)).map(row => ({ id: row.id, status: row.status })))
+        .toEqual(expect.arrayContaining([{ id: erasedImage.id, status: "deleting" }, { id: retainedImage.id, status: "ready" },
+          { id: unsettledImage.id, status: "deleting" }]));
+      expect(await restored.select().from(customerFeedbackImages)).toHaveLength(3);
+      await processFeedbackImageDeletion(restored, storage, undefined, companyId, erasedImage.id);
+      expect((await restored.select().from(customerFeedbackImages).where(eq(customerFeedbackImages.id, erasedImage.id)))[0]!.status).toBe("deleted");
+      expect(await processFeedbackImageDeletion(restored, storage, undefined, companyId, unsettledImage.id)).toBe(false);
+      const [unsettledReceipt] = await restored.select().from(feedbackImageDeletions).where(eq(feedbackImageDeletions.imageId, unsettledImage.id));
+      expect(unsettledReceipt!.transportSettledAt).toBeNull();
+      expect(unsettledReceipt!.deletedAt).toBeNull();
+      expect((await restored.select().from(customerFeedbackDeletionMarkers))).toHaveLength(4);
+      await expect(restored.insert(customerFeedback).values(cases.find(row => row.id === erasedCase)!))
+        .rejects.toMatchObject({ cause: expect.objectContaining({ code: "23514" }) });
+      const [otherCompany] = await restored.insert(companies).values({ name: "Owned independent restore tenant", issuePrefix: `R${randomUUID().slice(0, 6)}` }).returning();
+      await expect(restored.insert(customerFeedback).values({ ...cases.find(row => row.id === erasedCase)!, companyId: otherCompany!.id }))
+        .rejects.toMatchObject({ cause: expect.objectContaining({ code: "23514" }) });
+      await expect(restored.insert(customerFeedbackImages).values({ id: erasedImage.id, companyId, feedbackId: retainedCase,
+        requestKey: randomUUID(), requestHash: hash("owned restore reuse"), mediaType: "image/png", leaseToken: randomUUID(),
+        leaseExpiresAt: new Date(Date.now() + 120000) })).rejects.toMatchObject({ cause: expect.objectContaining({ code: "23514" }) });
+      await expect(restored.update(customerFeedbackDeletionMarkers).set({ feedbackId: retainedCase })
+        .where(eq(customerFeedbackDeletionMarkers.subjectId, erasedImage.id)))
+        .rejects.toMatchObject({ cause: expect.objectContaining({ code: "23514" }) });
+      await expect(restored.delete(customerFeedbackDeletionMarkers).where(eq(customerFeedbackDeletionMarkers.subjectId, erasedImage.id)))
+        .rejects.toMatchObject({ cause: expect.objectContaining({ code: "23514" }) });
+      expect(await storage.headObject(companyId, erasedCaseImage.objectKey)).toEqual({ exists: false });
+      expect(await storage.headObject(companyId, erasedImage.objectKey)).toEqual({ exists: false });
+      expect(await storage.headObject(companyId, retainedImage.objectKey)).toMatchObject({ exists: true });
+    } finally {
+      await restored.$client.end({ timeout: 1 });
+      await db.execute(sql`drop database ${sql.identifier(name)} with (force)`);
+    }
+  });
+  it("retains minimal original erasure identities and request receipts during company content purge", async () => {
+    const id = await historicalCase(), image = await historicalImage(id);
+    const receipt = await owner().execute(actor(), companyId, id, await command(id));
+    const another = await historicalCase();
+    await purgeCompanyContent(db, companyId);
+    expect(await db.select().from(customerFeedback).where(eq(customerFeedback.companyId, companyId))).toEqual([]);
+    expect((await records()).map(row => row.id)).toEqual([receipt.id]);
+    const markers = await db.select().from(customerFeedbackDeletionMarkers).where(eq(customerFeedbackDeletionMarkers.companyId, companyId));
+    expect(markers.map(row => row.subjectId).sort()).toEqual([id, image.id, another].sort());
+    expect(JSON.stringify(markers)).not.toContain("OWNED-PRIVATE-HISTORICAL-FEEDBACK");
   });
   it("makes the original immutable command discoverable only in its verified operator's company history", async () => {
     const id = await historicalCase(), input = await command(id), result = await owner().execute(actor(), companyId, id, input);
