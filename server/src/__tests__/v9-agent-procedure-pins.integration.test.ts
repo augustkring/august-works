@@ -114,7 +114,7 @@ const support = await getEmbeddedPostgresTestSupport();
       .rejects.toMatchObject({ status: 409, details: { code: "authored_agent_version_changed" } });
     await expect(stat(root)).rejects.toMatchObject({ code: "ENOENT" });
     const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, f.run.id));
-    expect(run!.contextSnapshot).not.toHaveProperty("agentDefinitionVersion");
+    expect(run!.contextSnapshot).toEqual(f.run.contextSnapshot);
     const context = await buildRetainedNativeRuntimeContext({ db, agent: next.agent, runId: f.run.id, runtimeConfig: f.config, runtimeSkillEntries: [] });
     const [retained] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, f.run.id));
     expect(retained!.contextSnapshot).toHaveProperty("agentDefinitionVersion.revisionId", next.definition.revisionId);
