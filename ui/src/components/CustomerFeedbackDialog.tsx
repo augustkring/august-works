@@ -67,6 +67,7 @@ function FeedbackForm({
     client.getQueryState(queryKeys.instance.experimentalSettings)?.fetchStatus === "idle" &&
     client.getQueryState(queryKeys.instance.experimentalSettings)?.isInvalidated === false &&
     client.getQueryData<{ customer_feedback_v9?: boolean }>(queryKeys.instance.experimentalSettings)?.customer_feedback_v9 === true;
+  const contextReady = accountReady && canUseContext();
   const [open, setOpen] = useState(false),
     [category, setCategory] =
       useState<CreateCustomerFeedback["category"]>("BUG");
@@ -81,7 +82,7 @@ function FeedbackForm({
   const [requestKey, setRequestKey] = useState(() => crypto.randomUUID());
   const imagePolicy = useQuery({
     queryKey: ["customer-feedback-image-policy", companyId, principal, authorityEpoch],
-    enabled: open && accountReady, retry: false, staleTime: 0, gcTime: 0,
+    enabled: open && contextReady, retry: false, staleTime: 0, gcTime: 0,
     queryFn: async ({ signal }) => customerFeedbackPolicySchema.parse(
       await api.get("/customer-feedback/policy", { signal, cache: "no-store" })),
   });
@@ -145,12 +146,13 @@ function FeedbackForm({
       return receipt;
     },
   });
-  const confirmed = accountReady && canUseContext() && send.data
+  const confirmed = contextReady && send.data
     ? send.data.epoch === current.current.epoch ? send.data.receipt
       : original.isSuccess && !original.isFetching ? original.data : null
     : null;
   function show(event?: Event) {
-    if (!canUseContext()) return;
+    // Opening the public contact frame starts no work. Private draft and
+    // receipt contents remain withheld until the current source is confirmed.
     returnFocus.current =
       event instanceof CustomEvent &&
       event.detail?.returnFocus === "global_feedback"
@@ -178,10 +180,11 @@ function FeedbackForm({
     setOpen(true);
   }
   useEffect(() => {
-    if (open && !accountReady) errorFocus.current?.focus();
-    else if (open && accountReady && (send.isError || original.isError)) errorFocus.current?.focus();
+    if (open && !contextReady) errorFocus.current?.focus();
+    else if (open && contextReady && (send.isError || original.isError)) errorFocus.current?.focus();
     else if (open && confirmed) receiptFocus.current?.focus();
-  }, [open, accountReady, send.isError, original.isError, confirmed?.id]);
+    else if (open && contextReady && !attempted.current) categoryInput.current?.focus();
+  }, [open, contextReady, send.isError, original.isError, confirmed?.id]);
   useEffect(() => {
     document.addEventListener("paperclip:open-feedback", show);
     return () => document.removeEventListener("paperclip:open-feedback", show);
@@ -221,7 +224,8 @@ function FeedbackForm({
           className="max-h-dvh overflow-y-auto"
           onOpenAutoFocus={(event) => {
             event.preventDefault();
-            if (confirmed) receiptFocus.current?.focus();
+            if (!contextReady) errorFocus.current?.focus();
+            else if (confirmed) receiptFocus.current?.focus();
             else categoryInput.current?.focus();
           }}
           onCloseAutoFocus={(event) => {
@@ -254,7 +258,7 @@ function FeedbackForm({
               {t("feedback.privacy")}
             </a>
           </div>
-          {!accountReady ? (
+          {!contextReady ? (
             <p ref={errorFocus} tabIndex={-1} role={accountFailed ? "alert" : "status"}>{t(accountFailed ? "feedback.historyFailed" : "loading")}</p>
           ) : confirmed ? (
             <div

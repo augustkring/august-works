@@ -392,3 +392,22 @@ it("keeps one focused canonical receipt status while protected image metadata is
   expect(document.querySelector('[aria-busy="true"]')).not.toBeNull();
   await act(async () => finish([]));
 });
+
+it("opens a public feedback frame during an immediate session recheck and restores the same account draft only after confirmation", async () => {
+  const post = vi.spyOn(customerFeedbackApi, "create");
+  await mount(); await enter("PRIVATE-UNSENT-OPEN-FEEDBACK"); await click("Cancel");
+  let resolve!: (value: object) => void, pending!: Promise<unknown>;
+  await act(async () => {
+    pending = client.fetchQuery({ queryKey: queryKeys.auth.session, queryFn: () => new Promise<object>(done => { resolve = done; }) });
+    document.dispatchEvent(new Event("paperclip:open-feedback"));
+  });
+  await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeTruthy());
+  expect(document.querySelector("textarea")).toBeNull();
+  expect(document.body.textContent).not.toContain("PRIVATE-UNSENT-OPEN-FEEDBACK");
+  expect(document.querySelector('a[href="mailto:security@blentera.com"]')).toBeTruthy();
+  expect(post).not.toHaveBeenCalled();
+  await act(async () => { resolve(v9SessionFixture(identityState.principal)); await pending; });
+  await vi.waitFor(() => expect(document.querySelector("textarea")?.value).toBe("PRIVATE-UNSENT-OPEN-FEEDBACK"));
+  expect(document.activeElement).toBe(document.querySelector("select"));
+  expect(post).not.toHaveBeenCalled();
+});
