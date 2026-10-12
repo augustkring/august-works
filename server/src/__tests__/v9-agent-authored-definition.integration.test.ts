@@ -1,8 +1,9 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { agents, agentConfigRevisions, createDb } from "@paperclipai/db";
+import { agents, agentConfigRevisions, heartbeatRuns, createDb } from "@paperclipai/db";
 import { agentAuthoringContentSchema, AUTHORED_AGENT_DEFINITION_KEY, type AuthoredAgentDefinition } from "@paperclipai/shared";
+import { buildNativeRuntimeContext, readNativeRuntimeAssetText } from "../services/native-runtime/runtime-context.js";
 import { agentService } from "../services/agents.js";
 import { agentInstructionsService } from "../services/agent-instructions.js";
 import { compileAuthoredAgentDefinition, readAuthoredAgentDefinition, authoredAgentInstructionText } from "../services/agents/authored-definition.js";
@@ -38,6 +39,17 @@ const support = await getEmbeddedPostgresTestSupport();
     expect(await agentInstructionsService(db).getBundle(agent)).toMatchObject({ editable: false, rootPath: null, files: [{ editable: false, virtual: true }] });
     expect(await agentInstructionsService(db).readFile(agent, "AGENTS.md")).toMatchObject({ content: authoredAgentInstructionText(definition.content), editable: false });
     expect(agent.status).toBe("paused");
+  });
+  it("materializes the Agent revision when the effective adapter config has no definition field", async () => {
+    const agent = await install();
+    const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: agent.id, responsibleUserId: f.userId, status: "running" }).returning();
+    const runtime = await buildNativeRuntimeContext({ db, agent, runId: run!.id,
+      runtimeConfig: { provider: "aw_text_only", model: "fixture-model" }, runtimeSkillEntries: [] });
+    expect(runtime.instructions.entryPath).toBe("AGENTS.md");
+    expect(await readNativeRuntimeAssetText(runtime.instructions.bundle, 64000, { companyId: f.home, runId: run!.id }))
+      .toEqual([{ path: "AGENTS.md", text: authoredAgentInstructionText(definition.content) }]);
+    expect(runtime.mcp.bindingId).toBeNull();
+    expect(runtime.skills).toEqual([]);
   });
   it("retains the identified old definition when another revision is installed", async () => {
     const oldAgent = await install();

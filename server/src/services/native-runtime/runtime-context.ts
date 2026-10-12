@@ -33,7 +33,7 @@ import { filterResolvedGitHubConnectionsForRun } from "../git-credentials.js";
 
 const MAX_ASSET_FILES = 10_000;
 const MAX_ASSET_BYTES = 64 * 1024 * 1024;
-type RuntimeAgent = { id: string; companyId: string; name: string; adapterType?: string | null; adapterConfig: unknown };
+type RuntimeAgent = { id: string; companyId: string; name: string; adapterType?: string | null; adapterConfig: unknown; runtimeConfig?: unknown };
 type AssetFile = { path: string; content: Buffer; mode: number };
 
 const sha256 = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
@@ -329,7 +329,7 @@ export async function resolveNativeRuntimeMcpSnapshot(input: { db: Db; agent: Pi
 
 export async function buildNativeRuntimeContext(input: { db: Db; agent: RuntimeAgent; runId: string; runtimeConfig: Record<string, unknown>; runtimeSkillEntries: PaperclipSkillEntry[] }): Promise<NativeRuntimeContextSnapshot> {
   const [instructions, skills, mcp] = await Promise.all([
-    materializeInstructionBundle(input.db, { ...input.agent, runtimeConfig: input.runtimeConfig }, { companyId: input.agent.companyId, runId: input.runId }),
+    materializeInstructionBundle(input.db, input.agent, { companyId: input.agent.companyId, runId: input.runId }),
     materializeSelectedSkills(input.runtimeConfig, input.runtimeSkillEntries, input.agent.adapterType === "paperclip_runner", { companyId: input.agent.companyId, runId: input.runId }),
     resolveNativeRuntimeMcpSnapshot({ db: input.db, agent: input.agent, runId: input.runId }),
   ]);
