@@ -3340,6 +3340,20 @@
       "when": 1791765531878,
       "tag": "0478_condemned_bloodstorm",
       "breakpoints": true
+    },
+    {
+      "idx": 479,
+      "version": "7",
+      "when": 1791769328706,
+      "tag": "0479_lethal_stellaris",
+      "breakpoints": true
+    },
+    {
+      "idx": 480,
+      "version": "7",
+      "when": 1791771295395,
+      "tag": "0480_gray_wrecker",
+      "breakpoints": true
     }
   ]
 }

@@ -48,6 +48,8 @@ export const agentConfigurationDrafts = pgTable(
     preparationRequestHash: text("preparation_request_hash"),
     preparationReviewHash: text("preparation_review_hash"),
     version: integer("version").notNull().default(1),
+    // Material candidate revisions are independent from accepted save versions.
+    candidateRevision: integer("candidate_revision").notNull().default(1),
     status: text("status")
       .$type<"draft" | "discarded">()
       .notNull()
@@ -101,6 +103,7 @@ export const agentConfigurationDrafts = pgTable(
       "agent_configuration_drafts_version_check",
       sql`${table.version}>0`,
     ),
+    candidateRevision: check("agent_configuration_drafts_candidate_revision_check", sql`${table.candidateRevision}>0`),
     state: check(
       "agent_configuration_drafts_state_check",
       sql`(${table.status}='draft' and ${table.content} is not null) or (${table.status}='discarded' and ${table.content} is null)`,

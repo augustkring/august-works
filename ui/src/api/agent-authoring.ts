@@ -1,6 +1,7 @@
 import {
   agentAuthoringDraftPageSchema,
   agentAuthoringDraftViewSchema,
+  agentAuthoringReviewSchema,
   hireAgentCatalogSchema,
   hireAgentCapabilityStatusSchema,
   agentDraftAdmissionSchema,
@@ -13,7 +14,6 @@ import {
   type VerificationReviewInput,
   type AgentDraftPrepare,
   type AgentDraftSave,
-  type AgentAuthoringReview,
 } from "@paperclipai/shared";
 import { api } from "./client";
 const root = (company: string) =>
@@ -155,14 +155,14 @@ export const agentAuthoringApi = {
     agentAuthoringDraftViewSchema.parse(
       await api.post(scope(`${root(company)}/${id}/discard`, principal), input),
     ),
-  review: (
+  review: async (
     company: string,
     principal: string,
     id: string,
     signal?: AbortSignal,
   ) =>
-    api.get<AgentAuthoringReview>(
+    agentAuthoringReviewSchema.parse(await api.get(
       scope(`${root(company)}/${id}/review`, principal),
       { signal, cache: "no-store" },
-    ),
+    )),
 };

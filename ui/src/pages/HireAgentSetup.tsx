@@ -21,6 +21,7 @@ import { HireDeclaredAccess } from "@/components/HireDeclaredAccess";
 import { AgentDraftPreparation } from "@/components/AgentDraftPreparation";
 import { AgentDraftRuntime } from "@/components/AgentDraftRuntime";
 import { AgentDraftSafeTest } from "@/components/AgentDraftSafeTest";
+import { AgentDraftReview } from "@/components/AgentDraftReview";
 import { useV9AuthoringAuthority } from "@/hooks/useV9AuthoringAuthority";
 
 const labels = {
@@ -553,6 +554,9 @@ export function HireAgentSetup({
       {step === "hire_review" && (
         <section className="space-y-3" aria-labelledby="hire-review">
           <h2 id="hire-review" className="text-lg font-semibold">{t("hireSetup.saved")}</h2>
+          <AgentDraftReview draft={receipt} options={options.isSuccess && !options.isFetching ? options.data : null}
+            unsavedChanges={JSON.stringify(content) !== JSON.stringify(receipt.content)}
+            baselineCurrent={review.isSuccess && !review.isFetching && review.data.version === receipt.version ? review.data.baselineCurrent : null} />
           <p>{t("hireSetup.ownerLabel")}{" "}{scopeName ?? t("hireSetup.ownerUnconfirmed")}</p>
           <p>{t("hireSetup.knowledgeScope")}{" "}{" "}
             {receipt.content.knowledgeDocumentIds.length === 0
@@ -583,11 +587,11 @@ export function HireAgentSetup({
             <p role="alert">{t("hireSetup.reviewFailed")}</p>
           )}
           {review.data && (
-            <ul>
+            <><p role="status">{review.data.test.status === "qualified" ? t("agentSafeTest.allScenariosVerified") : t("agentSafeTest.notQualified")}</p><ul>
               {review.data.blockers.map((blocker) => (
                 <li key={blocker.code}>{t(agentAuthoringBlockerKey(blocker.code))}</li>
               ))}
-            </ul>
+            </ul></>
           )}
           {review.isError && (
             <Button className="min-h-11" onClick={() => void review.refetch()}>{t("hireSetup.recheckSetup")}</Button>
@@ -612,7 +616,11 @@ export function HireAgentSetup({
               capability.data?.available !== true ||
               options.isError ||
               options.isPending ||
-              step === "hire_test"
+              (step === "hire_test" && (
+                !review.isSuccess || review.isFetching || review.data.draftId !== receipt.id ||
+                review.data.version !== receipt.version || review.data.test.status !== "qualified" ||
+                JSON.stringify(content) !== JSON.stringify(receipt.content)
+              ))
             }
             onClick={() => persist(`/agents/hire/drafts/${id}/${next}`, next)}
           >{t("hireSetup.continue")}</Button>

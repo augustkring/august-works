@@ -1,4 +1,14 @@
 {
+  "agentDraftReview": {
+    "scenarioNumber": "Representative scenario {{number}}",
+    "removeScenario": "Remove scenario {{number}}",
+    "addScenario": "Add representative scenario",
+    "savedVersion": "Saved candidate, version {{version}}",
+    "proposedSettings": "Review the saved settings below. Publication checks effective permissions and activation separately.",
+    "unsavedChanges": "You have unsaved changes. This review shows the saved candidate; save your changes before testing or publication.",
+    "baselineChanged": "The active configuration changed after this draft was created. Review a fresh revision before publishing.",
+    "runtimeUnconfirmed": "The selected runtime could not be confirmed. Check the current runtime before proceeding."
+  },
   "home": "Home",
   "ask": "Ask August",
   "needsYou": "Needs You",
@@ -1714,6 +1724,7 @@
     "prohibitedOutcomes": "Confirm each prohibited outcome is absent",
     "evidenceConfirmation": "I compared this output with the saved scenario and use the current evidence to support my judgements.",
     "humanApproval": "I approve this reviewed test result. This does not publish or activate the agent.",
+    "allScenariosVerified": "Every saved representative scenario passed independent human verification. Publication is reviewed separately.",
     "reviewDecision": "Review decision",
     "chooseDecision": "Choose a decision",
     "rationale": "Reason for your decision (at least 20 characters)",

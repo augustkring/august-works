@@ -23,6 +23,7 @@ import {
   agentDraftPreparationReviewSchema,
   agentDraftPrepareSchema,
   agentDraftRuntimeViewSchema,
+  agentAuthoringReviewSchema,
   type AgentDraftRuntimeView,
   CUSTOM_AGENT_STEPS,
   HIRE_AGENT_STEPS,
@@ -48,6 +49,7 @@ import { logActivity } from "../activity-log.js";
 import { createPausedOnboardingAgent } from "../saas/onboarding-agent.js";
 import { deduplicateAgentName } from "../agents.js";
 import { agentProviderBindingService } from "../agent-provider-bindings.js";
+import { agentAuthoringTestService } from "./authoring-tests.js";
 import {
   approvedFoundationView,
   foundationService,
@@ -365,7 +367,7 @@ export function agentAuthoringService(db: Db) {
         });
     }
   }
-  return {
+  const service = {
     runtime: async (actor: AuthorizationActor, companyId: string, id: string) => db.transaction(async rawTx => {
       const tx = rawTx as unknown as Db;
       v5HumanActorId(actor);
@@ -900,16 +902,19 @@ export function agentAuthoringService(db: Db) {
           input.content,
         );
         await access(tx, actor, companyId, row.agentId, true);
+        const contentChanged = nativeSha256(input.content) !== nativeSha256(row.content);
+        const nextVersion = row.version + 1;
         const [updated] = await tx
           .update(agentConfigurationDrafts)
           .set({
             content: input.content,
             step: input.step,
-            version: row.version + 1,
+            version: nextVersion,
+            candidateRevision: row.candidateRevision + (contentChanged ? 1 : 0),
             updatedAt: new Date(),
             requestReceipts: [
               ...row.requestReceipts,
-              { requestId: input.requestId, hash, version: row.version + 1 },
+              { requestId: input.requestId, hash, version: nextVersion },
             ].slice(-32),
           })
           .where(eq(agentConfigurationDrafts.id, id))
@@ -966,6 +971,7 @@ export function agentAuthoringService(db: Db) {
             content: null,
             status: "discarded",
             version: row.version + 1,
+            candidateRevision: row.candidateRevision + (row.content === null ? 0 : 1),
             updatedAt: new Date(),
             requestReceipts: [
               ...row.requestReceipts,
@@ -990,7 +996,9 @@ export function agentAuthoringService(db: Db) {
         return view(updated!, tx);
       });
     },
-    review: async (
+    // Content readiness is also used by test admission. It must never read test
+    // qualification through that admission path or recurse into model authority.
+    reviewContent: async (
       actor: AuthorizationActor,
       companyId: string,
       id: string,
@@ -1103,5 +1111,17 @@ export function agentAuthoringService(db: Db) {
         publishAllowed: false,
       };
     },
+    review: async (actor: AuthorizationActor, companyId: string, id: string): Promise<AgentAuthoringReview> => db.transaction(async raw => {
+      const tx = raw as unknown as Db;
+      await lockMemoryPrivacy(tx, companyId);
+      await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, companyId)).for("update");
+      const base = await agentAuthoringService(tx).reviewContent(actor, companyId, id);
+      const qualified = await agentAuthoringTestService(db).readinessInTransaction(tx, actor, companyId, id, base.version);
+      return agentAuthoringReviewSchema.parse(qualified ? { ...base,
+        blockers: base.blockers.filter(blocker => blocker.code !== "representative_test_unqualified"),
+        test: { status: "qualified", message: "Every saved representative scenario has current independent human verification", scenariosVerified: qualified.scenariosVerified },
+      } : base);
+    }),
   };
+  return service;
 }

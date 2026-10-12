@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useTranslation } from "@/i18n";
 import { agentAuthoringBlockerKey } from "@/lib/agent-authoring-copy";
 import {
@@ -31,6 +31,7 @@ import { Textarea } from "@/components/ui/textarea";
 import { AgentDraftPreparation } from "@/components/AgentDraftPreparation";
 import { AgentDraftRuntime } from "@/components/AgentDraftRuntime";
 import { AgentDraftSafeTest } from "@/components/AgentDraftSafeTest";
+import { AgentDraftReview } from "@/components/AgentDraftReview";
 
 const labels: Record<(typeof CUSTOM_AGENT_STEPS)[number], string> = {
   outcome: "customAgent.stepOutcome",
@@ -232,6 +233,7 @@ function DraftEditor({
   const navigate = useNavigate(),
     { screen } = useParams(),
     client = useQueryClient();
+  const scenarioFieldId = useId();
   const authority = useV9AuthoringAuthority(company, principal);
   const parsed = customAgentStepSchema.safeParse(screen),
     step = parsed.success ? parsed.data : "outcome";
@@ -774,15 +776,27 @@ function DraftEditor({
         )}
         {step === "test" && (
           <>
-            <label className="block space-y-2">{t("customAgent.scenario")}<Textarea
-                {...validationProps("customAgent.scenario")}
-                value={content.scenarios[0] ?? ""}
-                maxLength={2000}
-                onChange={(e) =>
-                  change("scenarios", e.target.value ? [e.target.value] : [])
-                }
-              />
-            </label>
+            {(content.scenarios.length ? content.scenarios : [""]).map((scenario, index) => (
+              <div key={index} className="space-y-2">
+                <label className="block" htmlFor={`${scenarioFieldId}-${index}`}>
+                  {index === 0 ? t("customAgent.scenario") : t("agentDraftReview.scenarioNumber", { number: index + 1 })}
+                </label>
+                  <Textarea id={`${scenarioFieldId}-${index}`} {...validationProps("customAgent.scenario")} value={scenario} maxLength={2000}
+                    onChange={event => {
+                      const scenarios = [...content.scenarios];
+                      scenarios[index] = event.target.value;
+                      change("scenarios", scenarios.length === 1 && !scenarios[0] ? [] : scenarios);
+                    }} />
+                {content.scenarios.length > 1 && <Button className="min-h-11" variant="outline" type="button"
+                  onClick={() => change("scenarios", content.scenarios.filter((_, position) => position !== index))}>
+                  {t("agentDraftReview.removeScenario", { number: index + 1 })}
+                </Button>}
+              </div>
+            ))}
+            <Button className="min-h-11" variant="outline" type="button" disabled={content.scenarios.length >= 10}
+              onClick={() => change("scenarios", [...(content.scenarios.length ? content.scenarios : [""]), ""])}>
+              {t("agentDraftReview.addScenario")}
+            </Button>
             <AgentDraftSafeTest key={`test:${receipt.id}:${receipt.version}`} company={company} principal={principal} draft={receipt}
               enabled={viewReady && enabled && !save.isPending && !discard.isPending && JSON.stringify(content) === JSON.stringify(receipt.content)}
               canUseAuthority={() => alive.current && authority.canRead() && !securityPending.current && !reauthorizing &&
@@ -792,32 +806,9 @@ function DraftEditor({
         {step === "review" && (
           <>
             <h2 className="text-lg font-semibold">{t("customAgent.checkAgent")}</h2>
-            <dl className="space-y-2">
-              <dt>{t("customAgent.name")}</dt>
-              <dd>{content.name || t("customAgent.notSet")}</dd>
-              <dt>{t("customAgent.responsibility")}</dt>
-              <dd className="whitespace-pre-wrap">
-                {content.outcome || t("customAgent.notSet")}
-              </dd>
-              <dt>{t("customAgent.stepInstructions")}</dt>
-              <dd className="whitespace-pre-wrap">
-                {content.instructions.responsibilities || t("customAgent.notSet")}
-              </dd>
-              <dt>{t("customAgent.sources")}</dt>
-              <dd>
-                {t("customAgent.sourceCount", { count: content.knowledgeDocumentIds.length })}
-              </dd>
-              <dt>{t("customAgent.stepMemory")}</dt>
-              <dd>
-                {content.memory === "none"
-                  ? t("customAgent.noPersonalization")
-                  : t("customAgent.proposedContext")}
-              </dd>
-              <dt>{t("customAgent.delegation")}</dt>
-              <dd>{t("customAgent.none")}</dd>
-              <dt>{t("customAgent.audience")}</dt>
-              <dd>{t("customAgent.inApp")}</dd>
-            </dl>
+            <AgentDraftReview draft={receipt} options={options.isSuccess && !options.isFetching ? options.data : null}
+              unsavedChanges={JSON.stringify(content) !== JSON.stringify(receipt.content)}
+              baselineCurrent={review.isSuccess && !review.isFetching && review.data.version === receipt.version ? review.data.baselineCurrent : null} />
           </>
         )}
         {step === "publish" && (
@@ -848,6 +839,7 @@ function DraftEditor({
       {review.data && (
         <section aria-label={t("customAgent.readiness")} className="space-y-2">
           <h2 className="text-lg font-semibold">{t("customAgent.blockers")}</h2>
+          {review.data.test.status === "qualified" ? <p role="status">{t("agentSafeTest.allScenariosVerified")}</p> : null}
           <ul className="list-disc space-y-2 pl-5">
             {review.data.blockers.map((blocker) => (
               <li key={blocker.code}>{t(agentAuthoringBlockerKey(blocker.code))}</li>

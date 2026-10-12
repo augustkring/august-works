@@ -10,10 +10,10 @@ export function representativeCompletionContract(scenario: string) {
 }
 
 export function authoringCandidateHash(draft: {
-  id: string; companyId: string; version: number; content: AgentAuthoringContent | null;
+  id: string; companyId: string; version: number; candidateRevision?: number; content: AgentAuthoringContent | null;
   packageVersionId: string | null; packageContentHash: string | null;
 }) {
-  return nativeSha256({ id: draft.id, companyId: draft.companyId, version: draft.version,
+  return nativeSha256({ id: draft.id, companyId: draft.companyId, version: draft.candidateRevision ?? draft.version,
     content: draft.content, packageVersionId: draft.packageVersionId, packageContentHash: draft.packageContentHash });
 }
 

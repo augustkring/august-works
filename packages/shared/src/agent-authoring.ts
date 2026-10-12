@@ -288,16 +288,14 @@ export type HireAgentCapability = z.infer<typeof hireAgentCapabilitySchema>;
 export const hireAgentCapabilityStatusSchema = hireAgentCapabilitySchema.extend(
   { available: z.boolean() },
 );
-export interface AgentAuthoringReview {
-  draftId: string;
-  version: number;
-  productionChanged: false;
-  baselineCurrent: boolean;
-  blockers: Array<{
-    code: string;
-    message: string;
-    step: (typeof CUSTOM_AGENT_STEPS)[number];
-  }>;
-  test: { status: "unqualified"; message: string };
-  publishAllowed: false;
-}
+export const agentAuthoringReviewSchema = z.strictObject({
+  draftId: z.uuid(), version: z.number().int().positive(), productionChanged: z.literal(false), baselineCurrent: z.boolean(),
+  blockers: z.array(z.strictObject({ code: z.string().min(1).max(100), message: z.string().min(1).max(2000), step: z.enum(CUSTOM_AGENT_STEPS) })).max(50),
+  test: z.strictObject({ status: z.enum(["unqualified", "qualified"]), message: z.string().min(1).max(2000),
+    scenariosVerified: z.number().int().min(1).max(10).optional() }),
+  publishAllowed: z.literal(false),
+}).superRefine((review, context) => {
+  if ((review.test.status === "qualified") !== (review.test.scenariosVerified !== undefined))
+    context.addIssue({ code: "custom", path: ["test"], message: "Qualified review requires the verified saved scenario count" });
+});
+export type AgentAuthoringReview = z.infer<typeof agentAuthoringReviewSchema>;

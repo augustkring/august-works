@@ -62,11 +62,17 @@ export function AgentDraftSafeTest({ company, principal, draft, enabled, canUseA
     return value;
   }
   function accept(value: AgentDraftTestView) {
-    if (!current() || value.companyId !== company || value.draftId !== draft.id || value.version !== draft.version || value.agentId !== agentId || value.requestId !== attempt.current?.requestId)
+    if (!current() || value.companyId !== company || value.draftId !== draft.id || value.version > draft.version || value.agentId !== agentId || value.requestId !== attempt.current?.requestId)
       throw new Error(t("agentSafeTest.changed"));
     sessionStorage.removeItem(storageKey); attempt.current = null; setUnknown(false); setOpen(false); setConfirmed(false); setFailure(null);
     client.setQueryData<AgentDraftTestView[]>(historyKey, previous => [value, ...(previous ?? []).filter(item => item.id !== value.id)]);
     void client.invalidateQueries({ queryKey: reviewKey, exact: true });
+    refreshReadiness();
+  }
+  function refreshReadiness() {
+    if (!current()) return;
+    for (const prefix of ["agent-authoring-review", "hire-agent-review"])
+      void client.invalidateQueries({ queryKey: [prefix, company, principal, draft.id] });
   }
   const run = useMutation({ mutationFn: async () => {
     if (attempt.current || unknown) throw new Error(t("agentSafeTest.unknown"));
@@ -118,10 +124,10 @@ export function AgentDraftSafeTest({ company, principal, draft, enabled, canUseA
       </AlertDialogContent>
     </AlertDialog>
     {unknown ? <Button className="min-h-11" variant="outline" disabled={pending} onClick={() => check.mutate()}>{t("agentSafeTest.checkOriginal")}</Button> : null}
-    <Button className="min-h-11" variant="outline" disabled={pending || history.isFetching} onClick={() => void history.refetch()}>{t("agentSafeTest.refresh")}</Button>
+    <Button className="min-h-11" variant="outline" disabled={pending || history.isFetching} onClick={() => { void history.refetch(); refreshReadiness(); }}>{t("agentSafeTest.refresh")}</Button>
     {history.isError ? <p role="alert">{t("agentSafeTest.changed")}</p> : null}
     {!history.isFetching && !history.isError ? history.data?.map(value => <AgentDraftTestResult key={`${value.id}:${authority.epoch}`} value={value} company={company} principal={principal} draftId={draft.id}
-      canUseAuthority={() => current() && !pending && !history.isFetching} onChanged={() => { void history.refetch(); }} />) : null}
+      canUseAuthority={() => current() && !pending && !history.isFetching} onChanged={() => { void history.refetch(); refreshReadiness(); }} />) : null}
   </section>;
 }
 

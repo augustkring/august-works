@@ -3,7 +3,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { and, eq, sql } from "drizzle-orm";
+import { and, desc, eq, sql } from "drizzle-orm";
 import { agentConfigurationDrafts, agentConfigurationTests, agents, authUsers, billingAccounts, billingAccountCompanies, companyMemberships, createDb, heartbeatRuns, orchestrationPlans, orchestrationModelReservations, orchestrationWorkers, toolInvocations, verificationRuns } from "@paperclipai/db";
 import { agentAuthoringContentSchema, type AgentAuthoringDraftView, type AgentDraftTestCommand, type VerificationReviewInput } from "@paperclipai/shared";
 import { agentAuthoringService } from "../services/agents/authoring-drafts.js";
@@ -43,7 +43,8 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     expect(new Headers(init.headers).get("x-api-key")).toBe(`private-safe-test-key-${f.presence.id}`);
     const body = JSON.parse(String(init.body)); expect(body.tools).toBeUndefined(); expect(body.stream).toBe(false);
     expect(String(init.body)).toContain("Produce a short internal welcome draft"); expect(String(init.body)).toContain("Do not contact anyone");
-    const [test] = await db.select().from(agentConfigurationTests).where(eq(agentConfigurationTests.companyId, f.home));
+    const [test] = await db.select().from(agentConfigurationTests).where(eq(agentConfigurationTests.companyId, f.home))
+      .orderBy(desc(agentConfigurationTests.createdAt), desc(agentConfigurationTests.id)).limit(1);
     const [debit] = await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, test!.planId));
     expect(debit).toMatchObject({ purpose: "agent_safe_test", status: "dispatched", maximumMinor: 3, workerId: null, workerAttemptId: null });
     if (duringCall) await duringCall();
@@ -114,7 +115,63 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     expect(await db.select().from(toolInvocations).where(eq(toolInvocations.companyId, f.home))).toEqual([]);
     const verified = await service().verify(f.actor, f.home, draft.id, input.requestId, await reviewInput(input.requestId));
     expect(verified).toMatchObject({ verification: "pass", testQualified: true });
+    const readiness = await drafts().review(f.actor, f.home, draft.id);
+    expect(readiness.test).toMatchObject({ status: "qualified", scenariosVerified: 1 });
+    expect(readiness.blockers.map(blocker => blocker.code)).not.toContain("representative_test_unqualified");
+    expect(readiness).toMatchObject({ publishAllowed: false, productionChanged: false });
     expect((await db.select().from(verificationRuns).where(eq(verificationRuns.planId, result.planId)))[0]).toMatchObject({ reviewerType: "human", reviewerId: f.userId });
+  });
+  it("preserves a tested candidate through navigation while fencing unversioned behavior changes", async () => {
+    const { input } = await execute();
+    await service().verify(f.actor, f.home, draft.id, input.requestId, await reviewInput(input.requestId));
+    const request = { requestId: randomUUID(), expectedVersion: draft.version, step: "review" as const, content: draft.content! };
+    const saved = await drafts().save(f.actor, f.home, draft.id, request);
+    expect(saved).toMatchObject({ version: draft.version + 1, step: "review", content: draft.content });
+    expect(await drafts().save(f.actor, f.home, draft.id, request)).toEqual(saved);
+    expect((await drafts().review(f.actor, f.home, draft.id)).test.status).toBe("qualified");
+    const [row] = await db.select().from(agentConfigurationDrafts).where(eq(agentConfigurationDrafts.id, draft.id));
+    await expect(db.update(agentConfigurationDrafts).set({ content: { ...row!.content!, outcome: "Changed behavior without its candidate version" }, version: row!.version + 1 })
+      .where(eq(agentConfigurationDrafts.id, draft.id))).rejects.toMatchObject({ cause: { code: "23514", message: "agent_configuration_draft_candidate_conflict" } });
+    expect((await drafts().review(f.actor, f.home, draft.id)).test.status).toBe("qualified"); expect(calls).toBe(1);
+    const changed = await drafts().save(f.actor, f.home, draft.id, { ...request, requestId: randomUUID(), expectedVersion: saved.version,
+      content: { ...saved.content!, outcome: "A changed bounded internal responsibility" } });
+    const restored = await drafts().save(f.actor, f.home, draft.id, { ...request, requestId: randomUUID(), expectedVersion: changed.version });
+    expect(restored.content).toEqual(saved.content);
+    expect((await drafts().review(f.actor, f.home, draft.id)).test.status).toBe("unqualified");
+  });
+  it("preserves one admitted model execution when only navigation changes during inference", async () => {
+    const originalVersion = draft.version;
+    duringCall = async () => { draft = await drafts().save(f.actor, f.home, draft.id, {
+      requestId: randomUUID(), expectedVersion: draft.version, step: "review", content: draft.content!,
+    }); };
+    const { input, result } = await execute();
+    expect(draft.version).toBe(originalVersion + 1);
+    expect(result).toMatchObject({ version: originalVersion, candidateCurrent: true, runtimeCurrent: true, resultCurrent: true, execution: "succeeded" });
+    await service().verify(f.actor, f.home, draft.id, input.requestId, await reviewInput(input.requestId));
+    expect((await drafts().review(f.actor, f.home, draft.id)).test.status).toBe("qualified");
+    expect(calls).toBe(1);
+    expect((await db.select().from(orchestrationModelReservations))[0]!.status).toBe("completed");
+  });
+  it("does not reuse an older passing test when the latest attempt is unresolved", async () => {
+    const first = await execute();
+    await service().verify(f.actor, f.home, draft.id, first.input.requestId, await reviewInput(first.input.requestId));
+    expect((await drafts().review(f.actor, f.home, draft.id)).test.status).toBe("qualified");
+    lostResponse = true; const second = await execute(); expect(second.result.execution).toBe("unknown");
+    expect((await drafts().review(f.actor, f.home, draft.id)).test.status).toBe("unqualified"); expect(calls).toBe(2);
+  });
+  it("requires current human verification of every saved scenario before clearing the test blocker", async () => {
+    draft = await drafts().save(f.actor, f.home, draft.id, { requestId: randomUUID(), expectedVersion: draft.version, step: "test",
+      content: { ...draft.content!, scenarios: [...draft.content!.scenarios, "Write an internal welcome draft for a remote teammate"] } });
+    const first = await execute();
+    await service().verify(f.actor, f.home, draft.id, first.input.requestId, await reviewInput(first.input.requestId));
+    expect((await drafts().review(f.actor, f.home, draft.id)).test.status).toBe("unqualified");
+    const secondReview = await service().review(f.actor, f.home, draft.id, 1), second = { ...first.input, requestId: randomUUID(), scenarioIndex: 1, expectedReviewHash: secondReview.reviewHash };
+    expect((await service().start(f.actor, f.home, draft.id, second)).testQualified).toBe(false);
+    await service().verify(f.actor, f.home, draft.id, second.requestId, await reviewInput(second.requestId));
+    expect((await drafts().review(f.actor, f.home, draft.id)).test).toMatchObject({ status: "qualified", scenariosVerified: 2 });
+    draft = await drafts().save(f.actor, f.home, draft.id, { requestId: randomUUID(), expectedVersion: draft.version, step: "review",
+      content: { ...draft.content!, outcome: "A changed saved responsibility must be tested again" } });
+    expect((await drafts().review(f.actor, f.home, draft.id)).test.status).toBe("unqualified"); expect(calls).toBe(2);
   });
   it("cannot pass without the canonical explicit human approval even with satisfied criteria", async () => {
     const { input } = await execute();
@@ -190,6 +247,7 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     await documentService(db).upsertIssueDocument({ issueId: plan!.issueId, key: "representative-draft", title: "Changed output", format: "markdown", baseRevisionId: original!.latestRevisionId,
       body: "A human edited this result after generation", createdByUserId: f.userId });
     expect(await service().get(f.actor, f.home, draft.id, input.requestId)).toMatchObject({ resultCurrent: false, verification: "not_reviewed", testQualified: false });
+    expect((await drafts().review(f.actor, f.home, draft.id)).test.status).toBe("unqualified");
   });
   it("refuses cross-company, noncreator and revoked-account access without extra model effects", async () => {
     const { input } = await execute(), other = await seedV5Presences(db);

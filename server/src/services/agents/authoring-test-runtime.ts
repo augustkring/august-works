@@ -45,7 +45,7 @@ export function authoringTestRuntime(db: Db, options: Options, profile: (company
     if (!agentId || !draft.content.runtimeBindingId) throw conflict("Prepare and configure this candidate's own runtime before testing");
     const scenario = draft.content.scenarios[input.scenarioIndex]?.trim();
     if (!scenario || scenario.length < 10) throw conflict("Describe the saved representative scenario in at least ten characters");
-    const readiness = await agentAuthoringService(tx).review(actor, input.companyId, input.draftId);
+    const readiness = await agentAuthoringService(tx).reviewContent(actor, input.companyId, input.draftId);
     if (readiness.blockers.some(blocker => !["representative_test_unqualified", "native_promotion_unqualified"].includes(blocker.code))) throw conflict("Complete the saved candidate before testing");
     if (draft.content.knowledgeDocumentIds.length || draft.content.memory !== "none" || draft.content.capabilities.some(capability =>
       capability.autonomy !== "not_allowed" && capability.operation !== "create_internal_draft"))

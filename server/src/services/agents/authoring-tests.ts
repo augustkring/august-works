@@ -38,7 +38,7 @@ export function agentAuthoringTestService(db: Db) {
     const [plan] = await tx.select().from(orchestrationPlans).where(and(eq(orchestrationPlans.companyId, row.companyId), eq(orchestrationPlans.id, row.planId)));
     if (!run || !plan || plan.erasedAt || run.responsibleUserId !== row.createdByUserId || run.contextSnapshot?.agentConfigurationTestId !== row.id)
       throw notFound("Original representative test is unavailable");
-    const candidateCurrent = draft.status === "draft" && draft.version === row.draftVersion && authoringCandidateHash(draft) === row.candidateHash;
+    const candidateCurrent = draft.status === "draft" && draft.candidateRevision === (row.candidateRevision ?? row.draftVersion) && authoringCandidateHash(draft) === row.candidateHash;
     let runtimeCurrent = false;
     if (candidateCurrent) {
       try {
@@ -83,6 +83,26 @@ export function agentAuthoringTestService(db: Db) {
     return row;
   }
   return {
+    /** Internal read projection. The caller retains the privacy/company locks;
+     * the installed model controller is still resolved through the root Db.
+     * Latest evidence for every saved scenario must pass; an older success
+     * cannot hide a later failed or unresolved test. This grants no authority. */
+    readinessInTransaction: async (tx: Db, actor: AuthorizationActor, companyId: string, draftId: string, expectedVersion: number) => {
+      const draft = await read(tx, actor, companyId, draftId);
+      await tx.select({ id: agentConfigurationDrafts.id }).from(agentConfigurationDrafts)
+        .where(and(eq(agentConfigurationDrafts.companyId, companyId), eq(agentConfigurationDrafts.id, draftId))).for("share");
+      if (draft.status !== "draft" || draft.version !== expectedVersion || !draft.content?.scenarios.length) return null;
+      const rows = await tx.selectDistinctOn([agentConfigurationTests.scenarioIndex]).from(agentConfigurationTests)
+        .where(and(eq(agentConfigurationTests.companyId, companyId), eq(agentConfigurationTests.draftId, draftId),
+          eq(agentConfigurationTests.createdByUserId, v7HumanActorId(actor)), eq(agentConfigurationTests.candidateHash, authoringCandidateHash(draft))))
+        .orderBy(agentConfigurationTests.scenarioIndex, desc(agentConfigurationTests.createdAt), desc(agentConfigurationTests.id));
+      if (rows.length !== draft.content.scenarios.length) return null;
+      for (let index = 0; index < draft.content.scenarios.length; index++) {
+        const row = rows.find(value => value.scenarioIndex === index);
+        if (!row || !(await view(tx, actor, row)).testQualified) return null;
+      }
+      return { scenariosVerified: rows.length };
+    },
     packet: async (actor: AuthorizationActor, companyId: string, draftId: string, requestId: string) => {
       const row = await exactTest(actor, companyId, draftId, requestId);
       const value = await view(db, actor, row);
@@ -144,7 +164,7 @@ export function agentAuthoringTestService(db: Db) {
           invocationSource: "on_demand", triggerDetail: "agent_safe_test", contextSnapshot: { agentConfigurationTestId: testId, draftId, candidateHash: current.candidateHash,
             toolsGranted: false, activatesAgent: false } }).returning();
         const [row] = await tx.insert(agentConfigurationTests).values({ id: testId, companyId, draftId, createdByUserId: userId,
-          requestId: input.requestId, requestHash, draftVersion: current.draft.version, scenarioIndex: input.scenarioIndex,
+          requestId: input.requestId, requestHash, draftVersion: current.draft.version, candidateRevision: current.draft.candidateRevision, scenarioIndex: input.scenarioIndex,
           agentId, runId: run!.id, planId: plan!.id, runtimeBindingId: current.provider.runtime.id, providerBindingId: current.provider.provider.id,
           candidateHash: current.candidateHash, configurationHash: current.configurationHash, authorityHash: current.authorityHash,
           reviewHash: review.reviewHash, maximumCostMinor: review.maximumCostMinor }).returning();

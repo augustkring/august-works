@@ -15,7 +15,9 @@ export const agentConfigurationTests = pgTable("agent_configuration_tests", {
   draftId: uuid("draft_id").notNull(),
   createdByUserId: text("created_by_user_id").notNull(),
   requestId: uuid("request_id").notNull(), requestHash: text("request_hash").notNull(),
-  draftVersion: integer("draft_version").notNull(), scenarioIndex: integer("scenario_index").notNull(),
+  draftVersion: integer("draft_version").notNull(),
+  // Older immutable correlations retain their historical draftVersion pin.
+  candidateRevision: integer("candidate_revision"), scenarioIndex: integer("scenario_index").notNull(),
   agentId: uuid("agent_id").notNull(), runId: uuid("run_id").notNull(), planId: uuid("plan_id").notNull(),
   runtimeBindingId: uuid("runtime_binding_id").notNull(), providerBindingId: uuid("provider_binding_id").notNull(),
   candidateHash: text("candidate_hash").notNull(), configurationHash: text("configuration_hash").notNull(),
@@ -28,6 +30,7 @@ export const agentConfigurationTests = pgTable("agent_configuration_tests", {
   agent: foreignKey({ columns: [table.companyId, table.agentId], foreignColumns: [agents.companyId, agents.id] }),
   runTarget: foreignKey({ columns: [table.companyId, table.agentId, table.runId], foreignColumns: [heartbeatRuns.companyId, heartbeatRuns.agentId, heartbeatRuns.id] }),
   plan: foreignKey({ columns: [table.companyId, table.planId], foreignColumns: [orchestrationPlans.companyId, orchestrationPlans.id] }),
+  candidateRevision: check("agent_configuration_tests_candidate_revision_check", sql`${table.candidateRevision} is null or ${table.candidateRevision}>0`),
   counters: check("agent_configuration_tests_counter_check", sql`${table.draftVersion}>0 and ${table.scenarioIndex} between 0 and 9 and ${table.maximumCostMinor} between 0 and 1000000`),
   hashes: check("agent_configuration_tests_hash_check", sql`${table.requestHash} ~ '^[a-f0-9]{64}$' and ${table.candidateHash} ~ '^[a-f0-9]{64}$' and ${table.configurationHash} ~ '^[a-f0-9]{64}$' and ${table.authorityHash} ~ '^[a-f0-9]{64}$' and ${table.reviewHash} ~ '^[a-f0-9]{64}$'`),
 }));

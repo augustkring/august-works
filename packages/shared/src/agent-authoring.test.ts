@@ -8,9 +8,19 @@ import {
   hireAgentCapabilitySchema,
   hireAgentDeclaredAccessSchema,
   agentDraftRuntimeViewSchema,
+  agentAuthoringReviewSchema,
 } from "./agent-authoring.js";
 
 describe("unpublished agent authoring contracts", () => {
+  it("keeps independently verified scenarios separate from publication and production effects", () => {
+    const review = { draftId: "10000000-0000-4000-8000-000000000001", version: 3, productionChanged: false, baselineCurrent: true,
+      blockers: [{ code: "native_promotion_unqualified", message: "Review publication separately", step: "publish" }],
+      test: { status: "qualified", message: "Current human verification", scenariosVerified: 2 }, publishAllowed: false };
+    expect(agentAuthoringReviewSchema.safeParse(review).success).toBe(true);
+    for (const changed of [{ publishAllowed: true }, { productionChanged: true }, { test: { ...review.test, scenariosVerified: undefined } },
+      { test: { ...review.test, scenariosVerified: 11 } }, { test: { ...review.test, status: "unqualified" } }])
+      expect(agentAuthoringReviewSchema.safeParse({ ...review, ...changed }).success).toBe(false);
+  });
   it("keeps runtime qualification tied to an actual identity and rejects claimed Safe Test or execution success", () => {
     const observation = { draftId: "10000000-0000-4000-8000-000000000001", companyId: "10000000-0000-4000-8000-000000000002", version: 2,
       agentId: "10000000-0000-4000-8000-000000000003", runtimeBindingId: "10000000-0000-4000-8000-000000000004", configurationHash: "a".repeat(64),

@@ -21,6 +21,7 @@ import {
   agentDraftTestPacketSchema,
   verificationReviewSchema,
   agentDraftAdmissionSchema,
+  agentAuthoringReviewSchema,
   agentAuthoringDraftViewSchema,
   agentAuthoringDraftPageSchema,
   hireAgentCatalogSchema,
@@ -256,7 +257,8 @@ export const v9ApiPaths: V9ApiOperation[] = [
   ),
   read(
     `${drafts}/{id}/review`,
-    "Read current proposal blockers; representative testing and publication remain unqualified",
+    "Read current candidate blockers and human verification for every saved scenario; publication is a separate decision",
+    agentAuthoringReviewSchema,
   ),
   read(
     `${drafts}/{id}/hire-capability`,

@@ -1,4 +1,14 @@
 {
+  "agentDraftReview": {
+    "scenarioNumber": "Repræsentativt scenarie {{number}}",
+    "removeScenario": "Fjern scenarie {{number}}",
+    "addScenario": "Tilføj repræsentativt scenarie",
+    "savedVersion": "Gemt kandidat, version {{version}}",
+    "proposedSettings": "Gennemgå de gemte indstillinger nedenfor. Publicering kontrollerer effektive tilladelser og aktivering særskilt.",
+    "unsavedChanges": "Du har ugemte ændringer. Denne gennemgang viser den gemte kandidat; gem ændringerne før test eller publicering.",
+    "baselineChanged": "Den aktive konfiguration er ændret, siden denne kladde blev oprettet. Gennemgå en ny revision før publicering.",
+    "runtimeUnconfirmed": "Den valgte runtime kunne ikke bekræftes. Kontroller den aktuelle runtime, før du fortsætter."
+  },
   "home": "Hjem",
   "ask": "Spørg August",
   "needsYou": "Kræver dig",
@@ -1714,6 +1724,7 @@
     "prohibitedOutcomes": "Bekræft at hvert forbudt udfald er fraværende",
     "evidenceConfirmation": "Jeg har sammenlignet resultatet med det gemte scenarie og bruger den aktuelle dokumentation som grundlag for mine vurderinger.",
     "humanApproval": "Jeg godkender dette vurderede testresultat. Det udgiver eller aktiverer ikke agenten.",
+    "allScenariosVerified": "Alle gemte repræsentative scenarier har bestået uafhængig menneskelig verifikation. Udgivelse vurderes særskilt.",
     "reviewDecision": "Vurdering",
     "chooseDecision": "Vælg en vurdering",
     "rationale": "Begrundelse for din vurdering (mindst 20 tegn)",
