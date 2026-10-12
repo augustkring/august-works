@@ -402,3 +402,36 @@ it("translates current native blockers while keeping representative testing and 
   expect(container.textContent).toContain("Opret en inaktiv agent");
   expect(Array.from(container.querySelectorAll("button")).some(button => button.textContent === "Publicér og aktivér")).toBe(false);
 });
+
+it("saves the selected actual Agent runtime in the original candidate without leaving Safe Test or starting work", async () => {
+  const agentId = "10000000-0000-4000-8000-000000000010", runtimeBindingId = "10000000-0000-4000-8000-000000000011";
+  const prepared: AgentAuthoringDraftView = { ...draft, step: "hire_test", preparation: {
+    agentId, name: draft.content!.name, approvalId: null, status: "prepared",
+    runtimeQualified: false, authorityGranted: false, executionStarted: false,
+  } };
+  vi.spyOn(agentAuthoringApi, "get").mockResolvedValue(prepared);
+  vi.spyOn(agentAuthoringApi, "runtime").mockImplementation(async () => ({
+    companyId: company, draftId: id, agentId, version: prepared.version, runtimeBindingId,
+    configurationHash: "b".repeat(64), status: "qualified", runtimeQualified: true, safeTestQualified: false, executionStarted: false,
+  }));
+  vi.spyOn(agentAuthoringApi, "preparationReview").mockRejectedValue(new Error("Already prepared"));
+  vi.spyOn(agentAuthoringApi, "testReview").mockRejectedValue(new Error("Saved candidate required"));
+  vi.spyOn(agentAuthoringApi, "tests").mockResolvedValue([]);
+  const start = vi.spyOn(agentAuthoringApi, "startTest"), publish = vi.spyOn(agentAuthoringApi, "publish");
+  const save = vi.spyOn(agentAuthoringApi, "save").mockImplementation(async (_company, _principal, _id, input) => {
+    prepared.version += 1; prepared.content = input.content;
+    return { ...prepared };
+  });
+  await mount("hire_test");
+  await vi.waitFor(() => expect(container.textContent).toContain("Use this agent’s validated runtime"));
+  await click("Use this agent’s validated runtime");
+  expect(save).not.toHaveBeenCalled(); expect(start).not.toHaveBeenCalled();
+  await click("Save candidate and stay here");
+  await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(1));
+  expect(save.mock.calls[0]!.slice(0, 3)).toEqual([company, "author", id]);
+  expect(save.mock.calls[0]![3]).toEqual({ requestId: expect.any(String), expectedVersion: 1, step: "hire_test",
+    content: { ...draft.content!, runtimeBindingId } });
+  await vi.waitFor(() => expect(container.textContent).toContain("This runtime is selected in the saved candidate"));
+  expect(container.textContent).not.toContain("Saved Hire setups destination");
+  expect(start).not.toHaveBeenCalled(); expect(publish).not.toHaveBeenCalled();
+});

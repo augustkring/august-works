@@ -754,6 +754,12 @@ function DraftEditor({
               onConfirmed={value => { if (!alive.current || !authority.canRead() || securityPending.current) return;
                 client.setQueryData(["agent-authoring", company, principal, id, authority.epoch], value); setReceipt(value); setContent(value.content); }} />
             <AgentDraftRuntime company={company} principal={principal} draft={receipt} enabled={viewReady}
+              selectedRuntimeBindingId={content.runtimeBindingId} selectionEnabled={!locked}
+              onSelectRuntime={bindingId => {
+                if (!viewReady || locked || !authority.canWrite() || securityPending.current ||
+                  client.getQueryState(["agent-authoring", company, principal, id, authority.epoch])?.fetchStatus !== "idle") return;
+                change("runtimeBindingId", bindingId);
+              }}
               canUseAuthority={() => alive.current && authority.canRead() && !securityPending.current && !reauthorizing} />
             <p>{t("customAgent.runtimeBoundary")}</p>
             <label className="block space-y-2">{t("customAgent.runtimeSelection")}<select

@@ -1689,6 +1689,11 @@
     "packageBoundary": "This installs the reviewed package configuration. It creates no app access or running work."
   },
   "agentRuntime": {
+    "select": "Use this agent’s validated runtime",
+    "selected": "This runtime is selected in the saved candidate. Safe Test checks its current validation again before execution.",
+    "saveSelection": "Runtime selected. Save the candidate before Safe Test. This selection has not changed the running agent.",
+    "save": "Save candidate and stay here",
+    "refresh": "Recheck execution setup",
     "title": "Execution setup",
     "checking": "Checking this agent’s current execution setup…",
     "unavailable": "Current execution setup is unavailable. Refresh the original draft before continuing.",

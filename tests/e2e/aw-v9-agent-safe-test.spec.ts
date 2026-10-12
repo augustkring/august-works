@@ -7,7 +7,7 @@ async function json(response: APIResponse) { expect(response.ok(), `${response.s
 // Built customer hosts with explicitly scoped software API responses. Actual
 // model reservations, dispatch, documents and verification are proven separately
 // by PostgreSQL tests. This suite is not live provider or GA evidence.
-for (const [kind, locale] of [["custom", "en"], ["hire", "da"]] as const) {
+for (const [kind, locale] of [["custom", "en"], ["hire", "da"], ["hire", "en"]] as const) {
   test(`${kind} Safe Test in ${locale} confirms disclosure and recovers its original outcome before human review`, async ({ page, request }) => {
     const company = await json(await request.post("/api/companies", { data: { name: `Disposable ${kind} Safe Test host` } }));
     try {
@@ -22,7 +22,7 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"]] as const) {
         step: kind === "custom" ? "test" : "hire_test", baselineHash: null,
         ...(kind === "hire" ? { package: { key: "research", versionId: packageId, version: "1.0.0", contentHash: "a".repeat(64) } } : {}),
         preparation: { agentId, name: "Saved specialist", approvalId: null, status: "prepared", runtimeQualified: false, authorityGranted: false, executionStarted: false },
-        content: agentAuthoringContentSchema.parse({ name: "Saved specialist", outcome: scenario, ownerUserId: session.user.id, runtimeBindingId: runtimeId, scenarios: [scenario],
+        content: agentAuthoringContentSchema.parse({ name: "Saved specialist", outcome: scenario, ownerUserId: session.user.id, runtimeBindingId: kind === "hire" ? null : runtimeId, scenarios: [scenario],
           description: "A bounded company draft specialist", internalDescription: "Saved internal review context",
           instructions: { purpose: "Produce a bounded welcome draft", responsibilities: "Draft one internal response", prohibited: "Never send externally",
             missingInformation: "Ask for missing material facts", escalation: "Ask the accountable owner", communication: "<img src=x onerror=alert(1)>" },
@@ -38,13 +38,19 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"]] as const) {
         expect(new URL(req.url()).searchParams.get("expectedUserId")).toBe(session.user.id);
         if (path.endsWith("/save") && req.method() === "POST") {
           const input = agentDraftSaveSchema.parse(req.postDataJSON());
-          expect(input.expectedVersion).toBe(draft.version); expect(input.content).toEqual(draft.content); saves++;
-          draft = { ...draft, step: input.step, version: draft.version + 1 }; return route.fulfill({ json: draft });
+          expect(input.expectedVersion).toBe(draft.version);
+          if (kind === "hire" && saves === 0) {
+            expect(input.step).toBe("hire_test");
+            expect(input.content).toEqual({ ...draft.content, runtimeBindingId: runtimeId });
+          } else expect(input.content).toEqual(draft.content);
+          saves++;
+          draft = { ...draft, content: input.content, step: input.step, version: draft.version + 1 }; return route.fulfill({ json: draft });
         }
         if (path.endsWith("/tests") && req.method() === "POST") {
           const input = agentDraftTestCommandSchema.parse(req.postDataJSON()); starts++;
-          expect(input).toMatchObject({ expectedVersion: 1, scenarioIndex: 0, expectedReviewHash: "b".repeat(64), confirmRepresentativeTest: true, confirmCompanyVisibleResult: true });
-          outcome = agentDraftTestViewSchema.parse({ id: "10000000-0000-4000-8000-000000000006", companyId: company.id, draftId: id, version: 1,
+          expect(input).toMatchObject({ expectedVersion: kind === "hire" ? 2 : 1, scenarioIndex: 0, expectedReviewHash: "b".repeat(64), confirmRepresentativeTest: true, confirmCompanyVisibleResult: true });
+          expect(draft.content!.runtimeBindingId).toBe(runtimeId);
+          outcome = agentDraftTestViewSchema.parse({ id: "10000000-0000-4000-8000-000000000006", companyId: company.id, draftId: id, version: draft.version,
             requestId: input.requestId, scenarioIndex: 0, scenario, agentId, runId: "10000000-0000-4000-8000-000000000007", planId,
             candidateCurrent: true, runtimeCurrent: true, resultCurrent: true, execution: "succeeded", verification: "not_reviewed", testQualified: false,
             toolsGranted: false, activatesAgent: false, result: "Software host fixture: an internal welcome draft.", maximumCostMinor: 3, currency: "USD", createdAt: "2026-10-12T00:00:00.000Z" });
@@ -64,6 +70,8 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"]] as const) {
           outcome: scenario, requiredKnowledge: [], requiredConnections: [], limits: [], actionClasses: ["internal_draft"], available: true } });
         if (path.endsWith("/runtime")) return route.fulfill({ json: { draftId: id, companyId: company.id, version: draft.version, agentId, runtimeBindingId: runtimeId,
           configurationHash: "a".repeat(64), status: "qualified", runtimeQualified: true, safeTestQualified: false, executionStarted: false } });
+        if (path.endsWith("/test-review") && !draft.content!.runtimeBindingId)
+          return route.fulfill({ status: 422, json: { error: "Select and save this candidate’s runtime before testing" } });
         if (path.endsWith("/test-review")) return route.fulfill({ json: { companyId: company.id, draftId: id, version: draft.version, agentId, scenarioIndex: 0, scenario,
           runtimeBindingId: runtimeId, configurationHash: "a".repeat(64), candidateHash: "c".repeat(64), maximumCostMinor: 3, currency: "USD", provider: "anthropic", model: "software-host-model",
           procedureSnapshotHash: "f".repeat(64), requiredProcedures: [{ skillId: "10000000-0000-4000-8000-000000000021", versionId: "10000000-0000-4000-8000-000000000022", name: "Required security procedure", bodyHash: "f".repeat(64) }],
@@ -90,6 +98,18 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"]] as const) {
       await page.goto(`/${company.issuePrefix}/dashboard`); await expect(page.getByRole("main")).toBeVisible();
       await page.goto(`/${company.issuePrefix}/agents/${kind === "custom" ? `custom/${id}/test` : `hire/drafts/${id}/hire_test`}`);
       const region = page.getByRole("region", { name: locale === "en" ? "Representative Safe Test" : "Repræsentativ Safe Test", exact: true });
+      if (kind === "hire") {
+        const setup = page.getByRole("region", { name: locale === "en" ? "Execution setup" : "Opsætning til udførelse", exact: true });
+        const select = setup.getByRole("button", { name: locale === "en" ? "Use this agent’s validated runtime" : "Brug denne agents validerede runtime", exact: true });
+        await expect(select).toBeEnabled(); await select.focus(); await select.press("Enter");
+        await expect(setup).toContainText(locale === "en" ? "Save the candidate before Safe Test" : "Gem kandidaten før Safe Test");
+        expect(saves).toBe(0); expect(starts).toBe(0); expect(reviews).toBe(0);
+        await expect(region).toContainText(locale === "en" ? "Save the candidate and scenario before testing" : "Gem kandidaten og scenariet før testen");
+        const save = page.getByRole("button", { name: locale === "en" ? "Save candidate and stay here" : "Gem kandidaten og bliv her", exact: true });
+        await save.focus(); await save.press("Enter");
+        await expect(setup).toContainText(locale === "en" ? "selected in the saved candidate" : "valgt i den gemte kandidat");
+        expect(saves).toBe(1); expect(starts).toBe(0); expect(draft.version).toBe(2);
+      }
       await region.getByRole("button", { name: locale === "en" ? "Review Safe Test" : "Gennemgå Safe Test", exact: true }).click();
       const dialog = page.getByRole("alertdialog"), run = dialog.getByRole("button", { name: locale === "en" ? "Run this test" : "Kør denne test", exact: true });
       await expect(run).toBeDisabled(); await expect(dialog).toContainText("0.03 USD"); await expect(dialog).toContainText("Anthropic · software-host-model"); expect(starts).toBe(0);
@@ -110,7 +130,7 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"]] as const) {
       await expect(region).toContainText(locale === "en" ? "passed human verification" : "bestået menneskelig verifikation"); expect(starts).toBe(1); expect(reviews).toBe(1);
       await page.getByRole("button", { name: locale === "en" ? "Continue" : "Fortsæt", exact: true }).click();
       await expect(page.getByRole("main")).toContainText(locale === "en" ? "Every saved representative scenario passed" : "Alle gemte repræsentative scenarier har bestået");
-      const savedReview = page.getByRole("region", { name: locale === "en" ? "Saved candidate, version 2" : "Gemt kandidat, version 2", exact: true });
+      const savedReview = page.getByRole("region", { name: locale === "en" ? `Saved candidate, version ${kind === "hire" ? 3 : 2}` : `Gemt kandidat, version ${kind === "hire" ? 3 : 2}`, exact: true });
       await expect(savedReview).toContainText("Accountable owner");
       await expect(savedReview).toContainText("Saved specialist");
       await expect(savedReview).toContainText(scenario);
@@ -122,7 +142,7 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"]] as const) {
       await expect(savedReview.getByRole("list").last().getByRole("listitem")).toHaveCount(1);
       await page.addScriptTag({ path: axePath });
       expect(await page.evaluate(async () => (await (window as unknown as { axe: { run(scope: string): Promise<{ violations: unknown[] }> } }).axe.run('main')).violations)).toEqual([]);
-      expect(saves).toBe(1); expect(draft.version).toBe(2); expect(starts).toBe(1); expect(reviews).toBe(1);
+      expect(saves).toBe(kind === "hire" ? 2 : 1); expect(draft.version).toBe(kind === "hire" ? 3 : 2); expect(starts).toBe(1); expect(reviews).toBe(1);
       if (kind === "custom") {
         await page.getByRole("navigation", { name: "Agent authoring sections", exact: true }).getByRole("button", { name: "Test", exact: true }).click();
         await page.getByRole("button", { name: "Add representative scenario", exact: true }).click();

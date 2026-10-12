@@ -545,8 +545,17 @@ export function HireAgentSetup({
               client.setQueryData(key, value); setReceipt(value); setContent(value.content); }} />
           <p>{t("hireSetup.expected")}{" "}{receipt.content.outcome}</p>
           <AgentDraftRuntime company={company} principal={principal} draft={receipt} enabled={viewReady}
+            selectedRuntimeBindingId={content.runtimeBindingId} selectionEnabled={enabled && !frozen}
+            onSelectRuntime={bindingId => {
+              if (!viewReady || !enabled || frozen || !authority.canWrite() || checking.current ||
+                client.getQueryState(key)?.fetchStatus !== "idle") return;
+              setContent({ ...content, runtimeBindingId: bindingId });
+            }}
             canUseAuthority={() => alive.current && authority.canRead() && !checking.current && !checkingAccess &&
               client.getQueryState(key)?.fetchStatus === "idle"} />
+          {JSON.stringify(content) !== JSON.stringify(receipt.content) ?
+            <Button className="min-h-11" disabled={!enabled || frozen || !authority.writeReady}
+              onClick={() => persist(`/agents/hire/drafts/${id}/hire_test`, "hire_test")}>{t("agentRuntime.save")}</Button> : null}
           <AgentDraftSafeTest key={`test:${receipt.id}:${receipt.version}`} company={company} principal={principal} draft={receipt}
             enabled={viewReady && enabled && !save.isPending && !discard.isPending && JSON.stringify(content) === JSON.stringify(receipt.content)}
             canUseAuthority={() => alive.current && authority.canRead() && !checking.current && !checkingAccess &&

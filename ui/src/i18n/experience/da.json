@@ -1689,6 +1689,11 @@
     "packageBoundary": "Dette installerer den gennemgåede pakkekonfiguration. Det opretter ingen appadgang eller igangværende arbejde."
   },
   "agentRuntime": {
+    "select": "Brug denne agents validerede runtime",
+    "selected": "Denne runtime er valgt i den gemte kandidat. Safe Test kontrollerer dens aktuelle validering igen før udførelse.",
+    "saveSelection": "Runtime valgt. Gem kandidaten før Safe Test. Valget har ikke ændret den aktive agent.",
+    "save": "Gem kandidaten og bliv her",
+    "refresh": "Kontrollér opsætningen igen",
     "title": "Opsætning til udførelse",
     "checking": "Kontrollerer denne agents aktuelle opsætning…",
     "unavailable": "Den aktuelle opsætning er utilgængelig. Genindlæs det oprindelige udkast, før du fortsætter.",
