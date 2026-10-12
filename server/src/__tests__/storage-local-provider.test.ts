@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import os from "node:os";
 import path from "node:path";
 import { promises as fs } from "node:fs";
+import { Readable } from "node:stream";
 import { createLocalDiskStorageProvider } from "../storage/local-disk-provider.js";
 import { createStorageService } from "../storage/service.js";
 
@@ -60,6 +61,61 @@ describe("local disk storage provider", () => {
 
     expect(fetchedBody.toString("utf8")).toBe("2345");
     expect(fetched.contentLength).toBe(4);
+  });
+
+  it("removes partial private bytes after a source stream fails and preserves the existing object", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-storage-"));
+    tempRoots.push(root);
+    const provider = createLocalDiskStorageProvider(root), objectKey = "company-1/private/image.png";
+    const committed = Buffer.from("previous accepted image");
+    await provider.putObject({ objectKey, body: committed, contentType: "image/png", contentLength: committed.length });
+    const source = Readable.from((async function* () {
+      yield Buffer.from("partial private image bytes");
+      throw new Error("source interrupted");
+    })());
+    await expect(provider.putObject({ objectKey, body: source, contentType: "image/png", contentLength: 100 }))
+      .rejects.toThrow("source interrupted");
+    expect(await fs.readdir(path.join(root, "company-1/private"))).toEqual(["image.png"]);
+    expect(await fs.readFile(path.join(root, objectKey))).toEqual(committed);
+    expect((await fs.stat(path.join(root, objectKey))).mode & 0o077).toBe(0);
+  });
+
+  it("removes its temporary copy when atomic publication fails without deleting the destination", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-storage-"));
+    tempRoots.push(root);
+    const objectKey = "company-1/private/image.png", destination = path.join(root, objectKey);
+    await fs.mkdir(destination, { recursive: true });
+    await fs.writeFile(path.join(destination, "keep.txt"), "existing destination");
+    await expect(createLocalDiskStorageProvider(root).putObject({ objectKey, body: Buffer.from("private image"),
+      contentType: "image/png", contentLength: 13 })).rejects.toThrow();
+    expect(await fs.readdir(path.dirname(destination))).toEqual(["image.png"]);
+    expect(await fs.readFile(path.join(destination, "keep.txt"), "utf8")).toBe("existing destination");
+  });
+
+  it("erases interrupted and legacy temporary copies for the exact object even when its final file is absent", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-storage-"));
+    tempRoots.push(root);
+    const directory = path.join(root, "company-1/private");
+    await fs.mkdir(directory, { recursive: true });
+    for (const name of ["image.png.tmp-interrupted", "image.png.tmp-1791844090374-legacy", "image.png2.tmp-unrelated"])
+      await fs.writeFile(path.join(directory, name), "private copy");
+    const service = createStorageService(createLocalDiskStorageProvider(root));
+    await service.deleteObject("company-1", "company-1/private/image.png");
+    await service.deleteObject("company-1", "company-1/private/image.png");
+    expect(await fs.readdir(directory)).toEqual(["image.png2.tmp-unrelated"]);
+    expect(await fs.readFile(path.join(directory, "image.png2.tmp-unrelated"), "utf8")).toBe("private copy");
+  });
+
+  it("refuses deletion acknowledgement when a temporary copy cannot be removed", async () => {
+    const root = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-storage-"));
+    tempRoots.push(root);
+    const service = createStorageService(createLocalDiskStorageProvider(root));
+    const stored = await service.putFile({ companyId: "company-1", namespace: "feedback-images/feedback/image",
+      originalFilename: "image.png", contentType: "image/png", body: Buffer.from("private image") });
+    await fs.mkdir(path.join(root, `${stored.objectKey}.tmp-blocked`));
+    await expect(service.deleteObject("company-1", stored.objectKey)).rejects.toThrow();
+    expect(await service.headObject("company-1", stored.objectKey)).toMatchObject({ exists: true });
+    expect((await fs.stat(path.join(root, `${stored.objectKey}.tmp-blocked`))).isDirectory()).toBe(true);
   });
 
   it("blocks cross-company object access", async () => {
