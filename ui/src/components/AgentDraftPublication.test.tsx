@@ -22,6 +22,8 @@ const draft: AgentAuthoringDraftView = { id: "10000000-0000-4000-8000-0000000000
 const review: AgentDraftPublicationReview = { companyId: draft.companyId, draftId: draft.id, version: draft.version, agentId: draft.agentId!,
   previousVersion: 1, nextVersion: 2, before: { ...draft.content!, outcome: "Old published responsibility" }, after: draft.content!,
   activate: true, canPublish: true, blockers: [], requiredProcedures: [{ skillId: "10000000-0000-4000-8000-000000000009", versionId: "10000000-0000-4000-8000-000000000010", name: "Required security procedure" }],
+  requiredPlaybooks: [{ playbookId: "10000000-0000-4000-8000-000000000011", revisionId: "10000000-0000-4000-8000-000000000012",
+    name: "Approved welcome procedure", bodyHash: "f".repeat(64) }],
   maximumPerModelCallMinor: 3, currency: "USD", provider: "anthropic", model: "fixture-draft-model", runtimeBindingId: null, reviewHash: "c".repeat(64), modelCalled: false, authorityGranted: false, executionStarted: false };
 const result: AgentDraftPublicationReceipt = { companyId: draft.companyId, draftId: draft.id, requestId: "10000000-0000-4000-8000-000000000006", agentId: draft.agentId!,
   revisionId: "10000000-0000-4000-8000-000000000006", publishedContent: draft.content!, publishedVersion: 2, publishedAt: "2026-10-12T00:00:00.000Z", activatedAtPublication: true, authorityGranted: false, executionStarted: false };
@@ -50,6 +52,8 @@ async function consent() {
 it("requires separate publication and activation consent against the saved version and current exact review", async () => {
   const publish = vi.spyOn(agentAuthoringApi, "publish").mockImplementation(async (_c, _p, _id, input) => ({ ...result, requestId: input.requestId, revisionId: input.requestId }));
   await mount(); await click("Review publication and activation"); expect(button("Publish and activate").disabled).toBe(true);
+  expect(document.body.textContent).toContain("Approved welcome procedure");
+  expect(publish).not.toHaveBeenCalled();
   expect(document.body.textContent).toContain("Old published responsibility"); expect(document.body.textContent).toContain("Responsible author");
   expect(document.body.textContent).toContain("Required security procedure"); expect(document.body.textContent).not.toContain(review.requiredProcedures[0]!.versionId);
   const checkboxes = document.querySelectorAll<HTMLInputElement>('[role="alertdialog"] input[type="checkbox"]');

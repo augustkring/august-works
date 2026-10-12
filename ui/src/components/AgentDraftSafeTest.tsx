@@ -115,9 +115,10 @@ export function AgentDraftSafeTest({ company, principal, draft, enabled, canUseA
           <dt>{t("agentSafeTest.model")}</dt><dd>Anthropic · {review.data?.model}</dd>
           <dt>{t("agentSafeTest.scenario")}</dt><dd className="whitespace-pre-wrap">{review.data?.scenario}</dd>
           <dt>{t("agentSafeTest.maximumCost")}</dt><dd>{review.data ? `${(review.data.maximumCostMinor / 100).toFixed(2)} USD` : ""}</dd>
-          {review.data?.requiredProcedures?.length ? <>
+          {review.data?.requiredProcedures?.length || review.data?.requiredPlaybooks?.length ? <>
             <dt>{t("agentSafeTest.procedures")}</dt><dd><ul className="max-h-40 overflow-y-auto" tabIndex={0} aria-label={t("agentSafeTest.procedures")}>
-              {review.data.requiredProcedures.map(procedure => <li key={procedure.skillId}>{procedure.name}</li>)}
+              {review.data.requiredProcedures?.map(procedure => <li key={procedure.skillId}>{procedure.name}</li>)}
+              {review.data.requiredPlaybooks?.map(procedure => <li key={procedure.playbookId}>{procedure.name}</li>)}
             </ul></dd></> : null}</dl>
         <p>{t("agentSafeTest.modelDisclosure")}</p>
         <p>{t("agentSafeTest.sharedResult")}</p>

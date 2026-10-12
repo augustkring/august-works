@@ -11,7 +11,7 @@ import { forbidden } from "../../errors.js";
  * this records no execution authorization or outcome qualification. */
 export async function retainAuthoringProcedureSources(db: Db, testId: string,
   current: Awaited<ReturnType<ReturnType<typeof authoringTestRuntime>["qualify"]>>) {
-  if (!current.procedures.skills.length && !current.procedures.snapshot.rolePack?.pins.length) return;
+  if (!current.procedures.skills.length && !current.procedures.playbooks.length && !current.procedures.snapshot.rolePack?.pins.length) return;
   const [test] = await db.select().from(agentConfigurationTests).where(eq(agentConfigurationTests.id, testId));
   const [run] = test ? await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, test.companyId),
     eq(heartbeatRuns.agentId, test.agentId), eq(heartbeatRuns.id, test.runId))) : [];
@@ -39,7 +39,7 @@ export async function retainAuthoringProcedureSources(db: Db, testId: string,
     contextManifests: [{ companyId: test.companyId, contextManifestId: context.packet.manifest.id }],
     skills: current.procedures.skills.map(pin => ({ skillId: pin.skillId, versionId: pin.versionId, key: pin.key, name: pin.name,
       selection: "required", loadPoint: "always", estimatedDescriptorTokens: Math.ceil(Buffer.byteLength(pin.key + pin.name, "utf8") / 4) })),
-    playbooks: [], capabilities: [],
+    playbooks: current.procedures.playbooks.map(pin => ({ playbookId: pin.playbookId, revisionId: pin.revisionId, required: true })), capabilities: [],
     providers: [{ companyId: test.companyId, agentId: test.agentId, providerBindingId: current.provider.provider.id,
       profileRef: current.provider.runtime.providerProfileRef, snapshotHash: current.provider.provider.capabilitySnapshotHash,
       isolationMode: current.provider.provider.isolationMode }],
@@ -49,6 +49,9 @@ export async function retainAuthoringProcedureSources(db: Db, testId: string,
   const [record] = await db.insert(agentExecutionManifests).values({ companyId: test.companyId, runId: test.runId,
     agentId: test.agentId, agentIdentityId: presence.identity.id, contextManifestId: context.packet.manifest.id,
     manifest, hash: nativeSha256(manifest), policySnapshotHash: policyHash }).returning();
-  if (current.procedures.skills.length) await db.insert(agentExecutionManifestItems).values(current.procedures.skills.map(pin => ({ companyId: test.companyId,
-    manifestId: record!.id, type: "skill", ref: pin.skillId, versionRef: pin.versionId })));
+  const items = [
+    ...current.procedures.skills.map(pin => ({ type: "skill", ref: pin.skillId, versionRef: pin.versionId })),
+    ...current.procedures.playbooks.map(pin => ({ type: "playbook", ref: pin.playbookId, versionRef: pin.revisionId })),
+  ];
+  if (items.length) await db.insert(agentExecutionManifestItems).values(items.map(pin => ({ ...pin, companyId: test.companyId, manifestId: record!.id })));
 }

@@ -84,6 +84,7 @@ export function agentAuthoringPublicationService(db: Db) {
       previousVersion: prior?.version ?? null, nextVersion: (prior?.version ?? 0) + 1,
       before: prior?.content ?? null, after: row.content, activate: true as const, canPublish: blockers.length === 0,
       blockers, requiredProcedures: procedures?.skills.map(({ name, skillId, versionId }) => ({ name, skillId, versionId })) ?? [],
+      ...(procedures?.playbooks.length ? { requiredPlaybooks: procedures.playbooks.map(({ body, key, ...pin }) => pin) } : {}),
       maximumPerModelCallMinor: current?.quote.maximumMinor ?? null, currency: "USD" as const,
       provider: current?.p.tariff.provider ?? null, model: current?.p.tariff.model ?? null,
       runtimeBindingId: row.content.runtimeBindingId, modelCalled: false as const, authorityGranted: false as const, executionStarted: false as const };

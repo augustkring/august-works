@@ -31,6 +31,7 @@ export function agentAuthoringTestService(db: Db) {
       runtimeBindingId: current.provider.runtime.id, configurationHash: current.configurationHash, candidateHash: current.candidateHash,
       procedureSnapshotHash: current.procedures.hash, requiredProcedures: current.procedures.skills.map(pin => ({
         skillId: pin.skillId, versionId: pin.versionId, name: pin.name, bodyHash: pin.bodyHash })),
+      ...(current.procedures.playbooks.length ? { requiredPlaybooks: current.procedures.playbooks.map(({ body, key, ...pin }) => pin) } : {}),
       maximumCostMinor: current.quote.maximumMinor, currency: "USD" as const, provider: current.p.tariff.provider, model: current.p.tariff.model, transport: "server-text-only-v1" as const,
       toolsGranted: false as const, activatesAgent: false as const, companyVisibleResult: true as const };
     return { current, review: agentDraftTestReviewSchema.parse({ ...review, reviewHash: nativeSha256({ ...review, authorityHash: current.authorityHash }) }) };
@@ -102,7 +103,15 @@ export function agentAuthoringTestService(db: Db) {
       if (rows.length !== draft.content.scenarios.length) return null;
       for (let index = 0; index < draft.content.scenarios.length; index++) {
         const row = rows.find(value => value.scenarioIndex === index);
-        if (!row || !(await view(tx, actor, row)).testQualified) return null;
+        if (!row) return null;
+        try {
+          if (!(await view(tx, actor, row)).testQualified) return null;
+        } catch (error) {
+          // A closed Original test is missing evidence for this still-owned
+          // saved candidate. Current principal/access failures remain errors.
+          if (error instanceof HttpError && error.status === 404) return null;
+          throw error;
+        }
       }
       return { scenariosVerified: rows.length, testIds: rows.map(row => row.id),
         candidateHash: authoringCandidateHash(draft), configurationHash: rows[0]!.configurationHash };

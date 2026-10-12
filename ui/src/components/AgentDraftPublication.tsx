@@ -150,7 +150,10 @@ export function AgentDraftPublication({ company, principal, draft, enabled, canU
             change(`customAgent.${key}`, review.data?.before?.instructions[key], review.data?.after.instructions[key]))}
           <dt>{t("agentSafeTest.model")}</dt><dd>{review.data?.provider} · {review.data?.model}</dd>
           <dt>{t("agentPublication.perCallCost")}</dt><dd>{review.data?.maximumPerModelCallMinor === null || !review.data ? t("customAgent.notSet") : `${(review.data.maximumPerModelCallMinor / 100).toFixed(2)} USD`}</dd>
-          <dt>{t("agentSafeTest.procedures")}</dt><dd><ul>{review.data?.requiredProcedures.map(item => <li key={item.skillId}>{item.name}</li>)}</ul></dd>
+          <dt>{t("agentSafeTest.procedures")}</dt><dd><ul className="max-h-40 overflow-y-auto" tabIndex={0} aria-label={t("agentSafeTest.procedures")}>
+            {review.data?.requiredProcedures.map(item => <li key={item.skillId}>{item.name}</li>)}
+            {review.data?.requiredPlaybooks?.map(item => <li key={item.playbookId}>{item.name}</li>)}
+          </ul></dd>
         </dl>
         <label htmlFor={`${label}-publication`} className="flex min-h-11 items-start gap-3"><input id={`${label}-publication`} type="checkbox" checked={publication} onChange={event => setPublication(event.target.checked)} /><span>{t("agentPublication.confirmPublication")}</span></label>
         <label htmlFor={`${label}-activation`} className="flex min-h-11 items-start gap-3"><input id={`${label}-activation`} type="checkbox" checked={activation} onChange={event => setActivation(event.target.checked)} /><span>{t("agentPublication.confirmActivation")}</span></label>

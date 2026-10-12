@@ -252,6 +252,9 @@ export function workerModelGateway(db: Db, options: Options) {
     if (procedures && nativeSha256(manifest.manifest.skills.map(pin => `${pin.skillId}@${pin.versionId}`).sort()) !==
         nativeSha256(procedures.skills.map(pin => `${pin.skillId}@${pin.versionId}`).sort()))
       throw forbidden("The worker inventory does not contain the exact identified procedures");
+    if (procedures && nativeSha256(manifest.manifest.playbooks.map(pin => `${pin.playbookId}@${pin.revisionId}`).sort()) !==
+        nativeSha256(procedures.playbooks.map(pin => `${pin.playbookId}@${pin.revisionId}`).sort()))
+      throw forbidden("The worker inventory does not contain the exact identified Playbooks");
     const taskScope = {
       type: "issue" as const,
       companyId: claims.company_id,

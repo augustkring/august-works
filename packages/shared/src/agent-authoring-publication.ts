@@ -19,6 +19,8 @@ export const agentDraftPublicationReviewSchema = z.strictObject({
   activate: z.literal(true), canPublish: z.boolean(),
   blockers: z.array(z.strictObject({ code: z.string().min(1).max(100), message: z.string().min(1).max(2000) })).max(50),
   requiredProcedures: z.array(z.strictObject({ name: z.string().min(1).max(200), skillId: z.uuid(), versionId: z.uuid() })).max(32),
+  requiredPlaybooks: z.array(z.strictObject({ playbookId: z.uuid(), revisionId: z.uuid(),
+    name: z.string().min(1).max(200), bodyHash: digest })).max(32).optional(),
   maximumPerModelCallMinor: z.number().int().nonnegative().nullable(), currency: z.literal("USD"),
   provider: z.literal("anthropic").nullable(), model: z.string().min(1).max(200).nullable(),
   runtimeBindingId: z.uuid().nullable(), reviewHash: digest,

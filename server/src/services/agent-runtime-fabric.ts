@@ -169,9 +169,10 @@ export function agentRuntimeFabricService(db: Db) {
         key: pin.key, name: pin.name, selection: "required" as const, loadPoint: "always" as const,
         estimatedDescriptorTokens: Math.ceil(Buffer.byteLength(pin.key + pin.name, "utf8") / 4) })), estimatedTokens: 0, warnings: [] as string[] }
         : !authored && !stored && v5FeatureEnabled(flags, "skill_resolver_v5") ? await skillResolverService(db).resolve(actor, input.companyId, query, test?.evaluationContext ? [] : rolePack?.items ?? [], test ? { skillId: test.skillId, versionId: test.skillVersionId } : undefined,"task") : { skills: stored?.manifest.skills ?? [], estimatedTokens: stored?.manifest.inventoryEstimatedTokens ?? 0, warnings: [] };
-      const resolvedPlaybooks = !authored && !stored && v5FeatureEnabled(flags, "playbooks_v5") ? await playbookResolverService(db).resolve(actor, input.companyId, query, rolePack?.items ?? [],"task") : { pins: stored?.manifest.playbooks ?? [], warnings: [] as string[] };
+      const resolvedPlaybooks = procedures ? { pins: procedures.playbooks.map(pin => ({ playbookId: pin.playbookId, revisionId: pin.revisionId, required: true })), warnings: [] as string[] }
+        : !authored && !stored && v5FeatureEnabled(flags, "playbooks_v5") ? await playbookResolverService(db).resolve(actor, input.companyId, query, rolePack?.items ?? [],"task") : { pins: stored?.manifest.playbooks ?? [], warnings: [] as string[] };
       if (!v5FeatureEnabled(flags, "playbooks_v5") && rolePack?.items.some((item) => item.type === "required_playbook")) throw conflict("This Role Pack requires the Playbook runtime");
-      if (authored && ((!procedures && resolvedSkills.skills.length) || resolvedPlaybooks.pins.length))
+      if (authored && !procedures && (resolvedSkills.skills.length || resolvedPlaybooks.pins.length))
         throw conflict("The existing run contains behavior outside this authored version");
       const capabilities = authored ? [] : await capabilityResolverService(db).search(actor, input.companyId, "");
       const context = await freshContext(actor, scope, query, input.runId, input.issueId, Boolean(authored));

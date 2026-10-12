@@ -9,7 +9,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { agentConfigRevisions, agentExecutionManifests, memoryJobs, activityLog, agentConfigurationDrafts, agentConfigurationTests, agents, authUsers, billingAccounts, billingAccountCompanies, companyMemberships, companySkills, companySkillVersions, createDb, heartbeatRuns, orchestrationPlans, orchestrationModelReservations, orchestrationWorkers, toolInvocations, verificationRuns } from "@paperclipai/db";
+import { agentConfigRevisions, agentExecutionManifests, memoryJobs, activityLog, agentConfigurationDrafts, agentConfigurationTests, agents, authUsers, billingAccounts, billingAccountCompanies, companyMemberships, companySkills, companySkillVersions, createDb, documents, heartbeatRuns, orchestrationPlans, orchestrationModelReservations, orchestrationWorkers, toolInvocations, verificationRuns } from "@paperclipai/db";
 import { agentAuthoringContentSchema, type AgentAuthoringDraftView, type AgentDraftTestCommand, AUTHORED_AGENT_DEFINITION_KEY, agentDraftPublicationCommandSchema, type AgentDraftPublicationCommand, type VerificationReviewInput } from "@paperclipai/shared";
 import { agentAuthoringService } from "../services/agents/authoring-drafts.js";
 import { agentAuthoringTestService } from "../services/agents/authoring-tests.js";
@@ -31,7 +31,7 @@ import { reconcileAgentDraftTest } from "../services/agents/authoring-test-recov
 import { heartbeatMemoryPayloadRetained, reapplyMemoryDeletionMarkers } from "../services/memory/memory-privacy.js";
 import { memoryJobService } from "../services/memory/memory-jobs.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
-import { seedRequiredAuthoringProcedures } from "./helpers/authoring-procedures.js";
+import { seedRequiredAuthoringProcedures, seedApprovedAuthoringPlaybook, bindAuthoringPlaybook, grantAuthoringPlaybookReadFixture } from "./helpers/authoring-procedures.js";
 import { prepareHirePublicationFixture } from "./helpers/hire-publication.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 
@@ -40,6 +40,7 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>, home: string;
   let f: Awaited<ReturnType<typeof seedV5Presences>>, draft: AgentAuthoringDraftView, profile: WorkerModelProfile, calls: number;
   let requiredProcedures: Awaited<ReturnType<typeof seedRequiredAuthoringProcedures>>;
+  let requiredPlaybook: Awaited<ReturnType<typeof seedApprovedAuthoringPlaybook>> | undefined;
   let duringCall: (() => Promise<void>) | undefined, lostResponse: boolean, excessUsage: boolean;
   const service = () => agentAuthoringTestService(db), drafts = () => agentAuthoringService(db);
   beforeAll(async () => {
@@ -53,6 +54,7 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     expect(new Headers(init.headers).get("x-api-key")).toBe(`private-safe-test-key-${f.presence.id}`);
     const body = JSON.parse(String(init.body)); expect(body.tools).toBeUndefined(); expect(body.stream).toBe(false);
     for (const procedure of requiredProcedures) expect(body.messages[0].content[0].text).toContain(procedure.body);
+    if (requiredPlaybook) expect(body.messages[0].content[0].text).toContain(requiredPlaybook.body);
     expect(String(init.body)).toContain("Produce a short internal welcome draft"); expect(String(init.body)).toContain("Do not contact anyone");
     const [test] = await db.select().from(agentConfigurationTests).where(eq(agentConfigurationTests.companyId, f.home))
       .orderBy(desc(agentConfigurationTests.createdAt), desc(agentConfigurationTests.id)).limit(1);
@@ -95,7 +97,7 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
       hire_agent_v9: true, enableWorkflowsV1: true, orchestration_v7: true, supervision_v7: true, readiness_engine_v7: true, verifier_v7: true });
     f = await seedV5Presences(db);
     requiredProcedures = await seedRequiredAuthoringProcedures(db, f.actor, f.home, f.presence.id);
-    calls = 0; duringCall = undefined; lostResponse = false; excessUsage = false;
+    calls = 0; duringCall = undefined; lostResponse = false; excessUsage = false; requiredPlaybook = undefined;
     const runtime = await configureRuntime();
     const initial = await drafts().create(f.actor, f.home, { requestId: randomUUID(), agentId: f.presence.id });
     draft = await drafts().save(f.actor, f.home, initial.id, { requestId: randomUUID(), expectedVersion: initial.version, step: "test",
@@ -108,6 +110,8 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     const reviewed = await service().review(f.actor, f.home, draft.id, 0);
     expect(reviewed).toMatchObject({ maximumCostMinor: 3, currency: "USD", companyVisibleResult: true, toolsGranted: false, activatesAgent: false });
     expect(JSON.stringify(reviewed)).not.toContain("private-safe-test-key");
+    if (requiredPlaybook) expect(reviewed.requiredPlaybooks).toEqual([{ playbookId: requiredPlaybook.playbookId,
+      revisionId: requiredPlaybook.revisionId, name: requiredPlaybook.name, bodyHash: expect.any(String) }]);
     return { requestId: randomUUID(), expectedVersion: draft.version, scenarioIndex: 0, expectedReviewHash: reviewed.reviewHash,
       confirmRepresentativeTest: true, confirmCompanyVisibleResult: true };
   }
@@ -131,6 +135,8 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     const reviewed = await publications().review(f.actor, f.home, draft.id);
     expect(reviewed.blockers).toEqual([]);
     expect(reviewed).toMatchObject({ canPublish: true, activate: true, modelCalled: false, authorityGranted: false, executionStarted: false, maximumPerModelCallMinor: 3 });
+    if (requiredPlaybook) expect(reviewed.requiredPlaybooks).toEqual([{ playbookId: requiredPlaybook.playbookId,
+      revisionId: requiredPlaybook.revisionId, name: requiredPlaybook.name, bodyHash: expect.any(String) }]);
     return { requestId: randomUUID(), expectedVersion: draft.version, expectedReviewHash: reviewed.reviewHash,
       activate: true, confirmPublication: true, confirmActivation: true };
   }
@@ -255,11 +261,37 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     expect((await agent()).runtimeConfig).toHaveProperty(`${AUTHORED_AGENT_DEFINITION_KEY}.revisionId`, second.revisionId);
     expect((await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.companyId, f.home))).map(row => row.status)).toEqual(["completed", "completed", "completed"]);
   });
+  it("closes an erased Playbook's actual Safe Test copies while preserving its completed financial reservation", async () => {
+    requiredPlaybook = await seedApprovedAuthoringPlaybook(db, f.actor, f.home);
+    await bindAuthoringPlaybook(db, f.actor, f.home, f.presence.id, requiredPlaybook);
+    await grantAuthoringPlaybookReadFixture(db, f.home, f.presence.id);
+    const tested = await qualify();
+    const [manifest] = await db.select().from(agentExecutionManifests).where(eq(agentExecutionManifests.runId, tested.runId));
+    expect(manifest!.manifest.playbooks).toEqual([{ playbookId: requiredPlaybook.playbookId, revisionId: requiredPlaybook.revisionId, required: true }]);
+    const financial = async () => (await db.select().from(orchestrationModelReservations)
+      .where(eq(orchestrationModelReservations.companyId, f.home))).map(({ id, status, maximumMinor, quote, usage }) => ({ id, status, maximumMinor, quote, usage }));
+    const before = await financial();
+    expect(before).toEqual([expect.objectContaining({ status: "completed", maximumMinor: 3, usage: { inputTokens: 20, outputTokens: 12 } })]);
+    await db.delete(documents).where(eq(documents.id, requiredPlaybook.documentId));
+    expect(await heartbeatMemoryPayloadRetained(db, f.home, tested.runId)).toBe(false);
+    await memoryJobService(db).tick({ limit: 20 }); await memoryJobService(db).tick({ limit: 20 });
+    expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, tested.runId)))[0]!.resultJson).toBeNull();
+    expect(await financial()).toEqual(before); expect(calls).toBe(1);
+    const reviewed = await publications().review(f.actor, f.home, draft.id);
+    expect(reviewed.canPublish).toBe(false);
+    expect(reviewed.blockers).toEqual(expect.arrayContaining([expect.objectContaining({ code: "representative_test_unqualified" })]));
+    await expect(publications().publish(f.actor, f.home, draft.id, { requestId: randomUUID(), expectedVersion: draft.version,
+      expectedReviewHash: "a".repeat(64), activate: true, confirmPublication: true, confirmActivation: true })).rejects.toMatchObject({ status: 409 });
+  });
   it("publishes a Hire only with its actual package, reviewed purpose and current activation, and rebinds the Original package to that version", async () => {
-    const hired = await prepareHirePublicationFixture(db, f, requiredProcedures[0]!);
+    requiredPlaybook = await seedApprovedAuthoringPlaybook(db, f.actor, f.home);
+    const hired = await prepareHirePublicationFixture(db, f, requiredProcedures[0]!, requiredPlaybook);
     expect(hired.agent.status).toBe("paused");
     expect(hired.installation.components).toEqual(expect.arrayContaining([expect.objectContaining({
       key: "welcome-procedure", type: "skill", resourceId: requiredProcedures[0]!.skillId, versionId: requiredProcedures[0]!.versionId,
+    })]));
+    expect(hired.installation.components).toEqual(expect.arrayContaining([expect.objectContaining({
+      key: "welcome-playbook", type: "playbook", resourceId: requiredPlaybook.playbookId, versionId: requiredPlaybook.revisionId,
     })]));
     f = { ...f, presence: hired.agent };
     const runtime = await configureRuntime();

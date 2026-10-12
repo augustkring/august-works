@@ -4,6 +4,8 @@ import type { AuthorizationActor } from "../authorization.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { rolePackService } from "../role-packs.js";
 import { skillResolverService } from "../skill-resolver.js";
+import { playbookResolverService } from "../playbook-resolver.js";
+import { playbookService } from "../playbooks.js";
 import { learningAssetRoots } from "../learning/learning-assets.js";
 import { assertLearnedAssetAnalyticalSources } from "../learning/learning-analytical-sources.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
@@ -22,7 +24,7 @@ export async function resolveAuthoringProcedures(db: Db, input: {
     agentId: input.agentId, onBehalfOfUserId: input.responsibleUserId, ignoreInstanceAdmin: true };
   const rolePack = v5FeatureEnabled(flags, "role_packs_v5")
     ? await rolePackService(db).resolve(actor, input.companyId, input.agentId) : null;
-  if (rolePack?.items.some(item => !["required_skill", "required_policy"].includes(item.type)))
+  if (rolePack?.items.some(item => !["required_skill", "required_playbook", "required_policy"].includes(item.type)))
     throw conflict("This text-only candidate needs a mapping for its additional Role Pack behavior");
   for (const pin of rolePack?.pins ?? []) {
     const analytical = await assertLearnedAssetAnalyticalSources(db, input.companyId, "role_pack_version", pin.versionId, actor);
@@ -61,12 +63,35 @@ export async function resolveAuthoringProcedures(db: Db, input: {
       (!requirement.versionId || skill.versionId === requirement.versionId)))
       throw conflict(`Required procedure is not exactly mapped: ${requirement.ref}`);
   }
+  const playbookRequirements = rolePack?.items.filter(item => item.type === "required_playbook") ?? [];
+  if (playbookRequirements.length && !v5FeatureEnabled(flags, "playbooks_v5"))
+    throw conflict("The candidate's required procedures need the current Playbook resolver");
+  const resolvedPlaybooks = await playbookResolverService(db).resolve(actor, input.companyId, "",
+    playbookRequirements.map(item => ({ ...item, loadPoint: "always" as const })));
+  const playbooks: Array<{ playbookId: string; revisionId: string; key: string; name: string; bodyHash: string; body: string }> = [];
+  for (const pin of resolvedPlaybooks.pins) {
+    if (playbooks.some(item => item.playbookId === pin.playbookId && item.revisionId === pin.revisionId)) continue;
+    const row = await playbookService(db).runtimeRevision(actor, input.companyId, pin.playbookId, pin.revisionId);
+    const analytical = await assertLearnedAssetAnalyticalSources(db, input.companyId, "document_revision", pin.revisionId, actor);
+    const roots = await learningAssetRoots(db, input.companyId, "document_revision", pin.revisionId, undefined, actor);
+    if (analytical.cycles.length || roots.length)
+      throw conflict("A learned Playbook requires its source-context mapping");
+    const body = row.revision.body;
+    if (!body.trim()) throw conflict("The exact required Playbook has no approved body");
+    const size = Buffer.byteLength(body, "utf8"); bytes += size;
+    if (size > 32000 || bytes > 128000 || playbooks.length + skills.length >= 32)
+      throw conflict("Required procedures exceed the bounded text-only instruction envelope");
+    playbooks.push({ playbookId: row.id, revisionId: row.revision.id, key: row.key,
+      name: row.revision.title ?? row.key, bodyHash: nativeSha256(body), body });
+  }
   const snapshot = { mapping: "required-role-procedures-text-only-v1", rolePack,
-    skills: skills.map(({ body, ...pin }) => pin) };
+    skills: skills.map(({ body, ...pin }) => pin),
+    ...(playbooks.length ? { playbooks: playbooks.map(({ body, ...pin }) => pin) } : {}) };
   const markdown = ["Required procedural instructions (no permission or tool grants)",
     ...(rolePack?.items.filter(item => item.type === "required_policy").map(item => `Execution policy: ${item.ref}`) ?? []),
-    ...skills.map(skill => `### ${skill.name}\n${skill.body}`)].join("\n\n");
-  return { snapshot, hash: nativeSha256(snapshot), skills, markdown };
+    ...skills.map(skill => `### ${skill.name}\n${skill.body}`),
+    ...playbooks.map(playbook => `### ${playbook.name}\n${playbook.body}`)].join("\n\n");
+  return { snapshot, hash: nativeSha256(snapshot), skills, playbooks, markdown };
 }
 
 /** Rechecked by the model broker before debit, dispatch and result admission.

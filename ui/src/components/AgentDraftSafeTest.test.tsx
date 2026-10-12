@@ -22,6 +22,8 @@ const review: AgentDraftTestReview = { companyId: draft.companyId, draftId: draf
   scenario: draft.content!.scenarios[0]!, runtimeBindingId: "10000000-0000-4000-8000-000000000004", configurationHash: "a".repeat(64), candidateHash: "b".repeat(64),
   procedureSnapshotHash: "d".repeat(64), requiredProcedures: [{ skillId: "10000000-0000-4000-8000-000000000009",
     versionId: "10000000-0000-4000-8000-000000000010", name: "Required security procedure", bodyHash: "e".repeat(64) }],
+  requiredPlaybooks: [{ playbookId: "10000000-0000-4000-8000-000000000011", revisionId: "10000000-0000-4000-8000-000000000012",
+    name: "Approved welcome procedure", bodyHash: "f".repeat(64) }],
   maximumCostMinor: 3, currency: "USD", provider: "anthropic", model: "fixture-draft-model", transport: "server-text-only-v1", toolsGranted: false, activatesAgent: false, companyVisibleResult: true, reviewHash: "c".repeat(64) };
 const result: AgentDraftTestView = { id: "10000000-0000-4000-8000-000000000005", companyId: draft.companyId, draftId: draft.id, version: draft.version,
   requestId: "10000000-0000-4000-8000-000000000006", scenarioIndex: 0, scenario: review.scenario, agentId: draft.agentId!, runId: "10000000-0000-4000-8000-000000000007",
@@ -52,6 +54,7 @@ it("requires current C3 cost and sharing consent before submitting only the save
   const start = vi.spyOn(agentAuthoringApi, "startTest").mockImplementation(async (_c, _p, _id, input) => ({ ...result, requestId: input.requestId }));
   await mount(); await click("Review Safe Test"); expect(button("Run this test").disabled).toBe(true);
   expect(document.body.textContent).toContain("Required security procedure");
+  expect(document.body.textContent).toContain("Approved welcome procedure");
   expect(document.body.textContent).not.toContain(review.requiredProcedures![0]!.versionId);
   expect(document.body.textContent).toContain("authorized company members"); expect(start).not.toHaveBeenCalled();
   const checkbox = document.querySelector<HTMLInputElement>('[role="alertdialog"] input[type="checkbox"]')!; await act(async () => checkbox.click()); await click("Run this test");

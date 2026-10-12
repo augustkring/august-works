@@ -48,6 +48,8 @@ for (const kind of ["custom", "hire"] as const) {
               versionId: "10000000-0000-4000-8000-000000000012", name: "Reviewed research procedures", revisionNumber: 2, contentHash: "c".repeat(64) }, {
               key: "planning", type: "skill", resourceId: "10000000-0000-4000-8000-000000000013",
               versionId: "10000000-0000-4000-8000-000000000014", name: "Required planning procedure", revisionNumber: 1, contentHash: "d".repeat(64),
+            }, { key: "welcome-playbook", type: "playbook", resourceId: "10000000-0000-4000-8000-000000000015",
+              versionId: "10000000-0000-4000-8000-000000000016", name: "Approved welcome procedure", revisionNumber: 3, contentHash: "e".repeat(64),
             }] } } : {}),
           outcome: draft.content!.outcome, accountableOwner: { userId: session.user.id, name: "Accountable owner" }, requiresBoardApproval: false,
           createsInactiveAgent: true, runtimeQualified: false, authorityGranted: false, executionStarted: false, reviewHash: "b".repeat(64) } });
@@ -67,6 +69,7 @@ for (const kind of ["custom", "hire"] as const) {
         await expect(dialog).toContainText("Research package · version 1.0.0");
         await expect(dialog).toContainText("Reviewed research procedures · 2");
         await expect(dialog).toContainText("Required planning procedure · 1");
+        await expect(dialog).toContainText("Approved welcome procedure · 3");
         await expect(dialog).toContainText("creates no app access or running work");
         expect(writes).toBe(0);
       }

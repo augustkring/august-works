@@ -52,7 +52,7 @@ import { registerNativeDraftGateway } from "../services/orchestration/native-dra
 import type { guardedRemoteHttpFetch } from "../services/remote-http-fetch.js";
 import { initialActivationState, createOrchestrationPlanSchema, type CreateOrchestrationPlanInput } from "@paperclipai/shared";
 import { purpose as governancePurpose, oversight as governanceOversight, reviews as governanceReviews } from "./helpers/governance-fixture.js";
-import { seedRequiredAuthoringProcedures } from "./helpers/authoring-procedures.js";
+import { seedRequiredAuthoringProcedures, seedApprovedAuthoringPlaybook } from "./helpers/authoring-procedures.js";
 import { billingAccounts, billingAccountCompanies, billingSubscriptions, companyOnboardingRuns,
   documents, documentRevisions, issueDocuments } from "@paperclipai/db";
 import { readinessService } from "../services/readiness/readiness-service.js";
@@ -408,6 +408,18 @@ const support = await getEmbeddedPostgresTestSupport();
       const [hash] = await db.execute(sql`select aw_v7_package_component_hash(${f.home}::uuid,'skill',${required.skillId}::uuid,${required.versionId}::uuid) as hash`);
       const published = await service.publish(f.actor, { ...release, packageKey: `unbound-procedure-${randomUUID()}`,
         components: [...release.components, { key: "required-procedure", type: "skill", sourceVersion: "1",
+          contentHash: String(hash!.hash), source: release.releaseEvidence.provenance, required: true }] });
+      const before = await db.select().from(companyAgentPackageInstallations);
+      await expect(service.resolveHireComponents(f.actor, f.home, published.id))
+        .rejects.toMatchObject({ status: 409, details: { code: "hire_package_mapping_required" } });
+      expect(await db.select().from(companyAgentPackageInstallations)).toEqual(before);
+    });
+    it("refuses a required Playbook component outside the package's reviewed Role Pack", async () => {
+      const required = await seedApprovedAuthoringPlaybook(db, f.actor, f.home), { release } = await hireFixture();
+      const [hash] = await db.execute(sql`select aw_v7_package_component_hash(${f.home}::uuid,'playbook',
+        ${required.playbookId}::uuid,${required.revisionId}::uuid) as hash`);
+      const published = await service.publish(f.actor, { ...release, packageKey: `unbound-playbook-${randomUUID()}`,
+        components: [...release.components, { key: "required-playbook", type: "playbook", sourceVersion: "1",
           contentHash: String(hash!.hash), source: release.releaseEvidence.provenance, required: true }] });
       const before = await db.select().from(companyAgentPackageInstallations);
       await expect(service.resolveHireComponents(f.actor, f.home, published.id))

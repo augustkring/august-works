@@ -29,6 +29,7 @@ import {
   companySkills,
   companySkillVersions,
   playbookDocuments,
+  documentRevisions,
   type Db,
 } from "@paperclipai/db";
 import {
@@ -973,7 +974,7 @@ export function agentPackageService(
       if (published.version.release.manifest.audience !== "customer") throw notFound("Hire package unavailable");
       const native = published.version.release.components.filter(c =>
         ["role_pack", "skill", "playbook", "workflow_template", "routine_template"].includes(c.type));
-      if (native.filter(c => c.type === "role_pack").length !== 1 || native.some(c => c.required && !["role_pack", "skill"].includes(c.type)))
+      if (native.filter(c => c.type === "role_pack").length !== 1 || native.some(c => c.required && !["role_pack", "skill", "playbook"].includes(c.type)))
         throw conflict("This Hire package needs its additional native component mapping", { code: "hire_package_mapping_required" });
       const component = native.find(c => c.type === "role_pack")!;
       const matches = await db.select({ resourceId: rolePacks.id, versionId: rolePackVersions.id, name: rolePacks.name,
@@ -985,9 +986,9 @@ export function agentPackageService(
         code: matches.length ? "hire_package_component_ambiguous" : "hire_package_component_unavailable" });
       const match = matches[0]!;
       const version = await rolePackService(db).getVersion({ ...actor, ignoreInstanceAdmin: true }, companyId, match.resourceId, match.versionId);
-      if (version.items.some(item => !["required_skill", "required_policy"].includes(item.type)))
+      if (version.items.some(item => !["required_skill", "required_playbook", "required_policy"].includes(item.type)))
         throw conflict("The Hire package needs a mapping for additional Role Pack behavior", { code: "hire_package_mapping_required" });
-      const components: Array<{ key: string; type: "role_pack" | "skill"; resourceId: string; versionId: string;
+      const components: Array<{ key: string; type: "role_pack" | "skill" | "playbook"; resourceId: string; versionId: string;
         name: string; revisionNumber: number; contentHash: string }> = [{ key: component.key, type: "role_pack", resourceId: match.resourceId,
         versionId: match.versionId, name: match.name, revisionNumber: match.revisionNumber, contentHash: component.contentHash }];
       for (const required of native.filter(c => c.required && c.type === "skill")) {
@@ -1005,6 +1006,22 @@ export function agentPackageService(
           throw conflict("The package's required procedure is not bound into its reviewed Role Pack", { code: "hire_package_mapping_required" });
         components.push({ key: required.key, type: "skill", resourceId: selected.skill.id, versionId: selected.version.id,
           name: selected.skill.name, revisionNumber: selected.version.revisionNumber, contentHash: required.contentHash });
+      }
+      for (const required of native.filter(c => c.required && c.type === "playbook")) {
+        const matches = await db.select({ playbook: playbookDocuments, revision: documentRevisions }).from(playbookDocuments)
+          .innerJoin(documentRevisions, and(eq(documentRevisions.companyId, playbookDocuments.companyId),
+            eq(documentRevisions.documentId, playbookDocuments.documentId), eq(documentRevisions.id, playbookDocuments.approvedRevisionId)))
+          .where(and(eq(playbookDocuments.companyId, companyId),
+            sql`aw_v7_package_component_hash(${companyId}::uuid,'playbook',${playbookDocuments.id},${documentRevisions.id})=${required.contentHash}`)).limit(2);
+        if (matches.length !== 1) throw conflict("Resolve the package's exact local approved Playbook before preparing this Hire", {
+          code: matches.length ? "hire_package_component_ambiguous" : "hire_package_component_unavailable" });
+        const selected = matches[0]!;
+        await playbookService(db).runtimeRevision({ ...actor, ignoreInstanceAdmin: true }, companyId, selected.playbook.id, selected.revision.id);
+        if (!version.items.some(item => item.type === "required_playbook" && [selected.playbook.id, selected.playbook.key].includes(item.ref)
+            && (item.versionId === null || item.versionId === selected.revision.id)))
+          throw conflict("The package's required Playbook is not bound into its reviewed Role Pack", { code: "hire_package_mapping_required" });
+        components.push({ key: required.key, type: "playbook", resourceId: selected.playbook.id, versionId: selected.revision.id,
+          name: selected.revision.title ?? selected.playbook.key, revisionNumber: selected.revision.revisionNumber, contentHash: required.contentHash });
       }
       return { versionId, name: published.package.name, version: published.version.version, contentHash: published.version.contentHash, components };
     },
