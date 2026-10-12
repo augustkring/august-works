@@ -19,8 +19,10 @@ test("reviews an artifact through keyboard controls and exports and erases Memor
   try {
     await page.goto(`/${company.issuePrefix}/automation-artifacts`);
     await expect(page.getByRole("heading", { name: "Automation Artifacts", exact: true })).toBeVisible();
-    const disclosure = page.getByText("Create candidate", { exact: true }).first();
-    await disclosure.focus(); await page.keyboard.press("Enter");
+    const disclosure = page.locator("summary").filter({ hasText: /^Create candidate$/ });
+    await expect(disclosure).toBeVisible();
+    await disclosure.press("Enter");
+    await expect(disclosure).toBeFocused();
     await expect(page.getByLabel("Artifact definition JSON")).toBeVisible();
     await page.getByRole("button", { name: "Create candidate", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Copy value", exact: true })).toBeVisible();
@@ -57,14 +59,14 @@ test("reviews an artifact through keyboard controls and exports and erases Memor
     const exported = JSON.parse(await readFile((await download.path())!, "utf8"));
     expect(exported.companyId).toBe(company.id);
     expect(exported.records).toMatchObject([{ id: recordId, content: "Deterministic browser fixture content" }]);
-    const retention = page.getByText("Retention policy", { exact: true });
-    await retention.focus(); await page.keyboard.press("Enter");
+    const retention = page.locator("summary").filter({ hasText: /^Retention policy$/ });
+    await retention.press("Enter");
     await page.getByLabel("Maximum age in days").fill("90");
     await page.getByRole("button", { name: "Apply retention policy", exact: true }).click();
     await expect(page.getByRole("status").filter({ hasText: "Retention policy saved." })).toBeVisible();
     expect(await json(await request.get(`${base}/memory/retention-policy`))).toMatchObject({ maxAgeDays: 90 });
-    const maintenance = page.getByText("Memory maintenance", { exact: true });
-    await maintenance.focus(); await page.keyboard.press("Enter");
+    const maintenance = page.locator("summary").filter({ hasText: /^Memory maintenance$/ });
+    await maintenance.press("Enter");
     await page.getByRole("combobox", { name: "Operation", exact: true }).selectOption("index_refresh");
     await page.getByLabel("V4 browser privacy record", { exact: true }).check();
     await page.getByRole("button", { name: "Queue maintenance", exact: true }).click();
