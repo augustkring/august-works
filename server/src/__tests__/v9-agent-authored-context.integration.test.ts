@@ -2,10 +2,13 @@ import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { createDb, issues, agents, heartbeatRuns } from "@paperclipai/db";
 import { eq } from "drizzle-orm";
-import { agentAuthoringContentSchema, AUTHORED_AGENT_DEFINITION_KEY, PROVIDER_CAPABILITY_FEATURES } from "@paperclipai/shared";
+import { agentAuthoringContentSchema, AUTHORED_AGENT_DEFINITION_KEY } from "@paperclipai/shared";
 import { agentService } from "../services/agents.js";
 import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
 import { agentRuntimeFabricService } from "../services/agent-runtime-fabric.js";
+import { discoverNativeCapabilities } from "../services/native-provider-conformance.js";
+import { makeProviderCapabilitySnapshot, providerConformanceRequirements } from "../services/provider-capabilities.js";
+import { hashContextPolicySnapshot } from "../services/context/context-manifest.js";
 import { compileAuthoredAgentDefinition } from "../services/agents/authored-definition.js";
 import * as cognitive from "../services/memory/cognitive-context.js";
 import * as derived from "../services/memory/derived-context.js";
@@ -38,12 +41,16 @@ const support = await getEmbeddedPostgresTestSupport();
   });
   it("keeps the task boundary in the actual V5 runtime manifest", async () => {
     const f = await seedV5Presences(db), providers = agentProviderBindingService(db);
-    await db.update(agents).set({ adapterType: "paperclip_runner", adapterConfig: { provider: "aw_text_only", model: "fixture-model" }, status: "paused", pauseReason: "manual" }).where(eq(agents.id, f.presence.id));
+    const config = { provider: "aw_text_only", model: "fixture-model", workerModelProfileId: randomUUID(), maxOutputTokens: 256 };
+    await db.update(agents).set({ adapterType: "paperclip_runner", adapterConfig: config, status: "paused", pauseReason: "manual" }).where(eq(agents.id, f.presence.id));
     const binding = await providers.create(f.actor, f.home, f.presence.id, { providerType: "paperclip_native", providerAgentRef: f.presence.id, providerEndpointRef: null, isolationMode: "isolated_per_presence" });
-    await providers.attach(f.actor, f.home, f.presence.id, { providerBindingId: binding.id, providerProfileRef: f.presence.id });
-    await providers.recordDiscovery(f.home, f.presence.id, { provider: "paperclip_native", version: "software-fixture",
-      features: Object.fromEntries(PROVIDER_CAPABILITY_FEATURES.map(key => [key, false])) as Record<(typeof PROVIDER_CAPABILITY_FEATURES)[number], boolean>,
-      skills: [], tools: [], discoveredAt: new Date().toISOString() }, { connect: true, identity: true, start: true, stream: true, wait: true, cancel: true, memoryScoping: true });
+    const runtime = await providers.attach(f.actor, f.home, f.presence.id, { providerBindingId: binding.id, providerProfileRef: f.presence.id });
+    const snapshot = makeProviderCapabilitySnapshot(await discoverNativeCapabilities({ companyId: f.home, adapterType: "paperclip_runner", config }));
+    // Actual metadata writer with a software fixture; no live provider claim.
+    await providers.recordDiscovery(f.home, f.presence.id, snapshot,
+      Object.fromEntries(providerConformanceRequirements(snapshot, binding.isolationMode).map(check => [check, true])),
+      { configurationHash: hashContextPolicySnapshot({ adapterType: "paperclip_runner", adapterConfig: config }), runtimeId: runtime.id,
+        profileRef: runtime.providerProfileRef, bindingId: binding.id, accountingComplete: true });
     const content = agentAuthoringContentSchema.parse({ name: "Welcome specialist", description: "Creates internal welcome drafts", outcome: "Draft an internal welcome",
       ownerUserId: f.userId, capabilities: [{ operation: "create_internal_draft", autonomy: "automatic" }],
       instructions: { purpose: "Welcome teammates", responsibilities: "Write a welcome", prohibited: "Do not contact anyone", missingInformation: "Ask the owner", escalation: "Ask when uncertain" } });
