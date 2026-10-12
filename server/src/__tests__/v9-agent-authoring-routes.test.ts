@@ -26,6 +26,8 @@ vi.mock("../services/agents/authoring-drafts.js", () => ({
 }));
 const tests = vi.hoisted(() => ({ review: vi.fn(), start: vi.fn(), get: vi.fn(), list: vi.fn(), packet: vi.fn(), verify: vi.fn() }));
 vi.mock("../services/agents/authoring-tests.js", () => ({ agentAuthoringTestService: () => tests }));
+const publications = vi.hoisted(() => ({ review: vi.fn(), publish: vi.fn(), receipt: vi.fn() }));
+vi.mock("../services/agents/authoring-publication.js", () => ({ agentAuthoringPublicationService: () => publications }));
 const companyId = "10000000-0000-4000-8000-000000000001",
   id = "10000000-0000-4000-8000-000000000002",
   requestId = "10000000-0000-4000-8000-000000000003";
@@ -213,30 +215,26 @@ describe("native authoring HTTP boundary", () => {
     expect(service.create).not.toHaveBeenCalled();
     expect(service.save).not.toHaveBeenCalled();
   });
-  it("keeps publish closed on native readiness and never treats a draft save as activation", async () => {
-    service.review.mockResolvedValue({
-      draftId: id,
-      version: 2,
-      productionChanged: false,
-      baselineCurrent: true,
-      blockers: [
-        {
-          code: "representative_test_unqualified",
-          message: "No qualified test",
-          step: "test",
-        },
-      ],
-      test: { status: "unqualified", message: "No result" },
-      publishAllowed: false,
-    });
-    const response = await request(app())
-      .post(
-        `/api/companies/${companyId}/agent-configuration-drafts/${id}/publish?expectedUserId=author`,
-      )
-      .send({ approve: true })
-      .expect(422);
-    expect(response.body.details.code).toBe("draft_publish_unqualified");
+  it("rejects legacy approve-only publication and omitted consent before calling the version owner", async () => {
+    const path = `/api/companies/${companyId}/agent-configuration-drafts/${id}/publish`;
+    const command = { requestId, expectedVersion: 2, expectedReviewHash: "a".repeat(64),
+      activate: true, confirmPublication: true, confirmActivation: true };
+    await request(app()).post(`${path}?expectedUserId=author`).send({ approve: true }).expect(400);
+    for (const key of ["confirmPublication", "confirmActivation"])
+      await request(app()).post(`${path}?expectedUserId=author`).send({ ...command, [key]: false }).expect(400);
+    await request(app()).post(`${path}?expectedUserId=author`).send({ ...command, model: "injected-model" }).expect(400);
+    await request(app()).post(`${path}?expectedUserId=other`).send(command).expect(409);
+    expect(publications.publish).not.toHaveBeenCalled();
     expect(service.create).not.toHaveBeenCalled();
     expect(service.save).not.toHaveBeenCalled();
+  });
+  it("sends a scoped explicit publication to the native version owner without using draft save as activation", async () => {
+    const command = { requestId, expectedVersion: 2, expectedReviewHash: "a".repeat(64),
+      activate: true, confirmPublication: true, confirmActivation: true };
+    publications.publish.mockResolvedValue({ requestId, revisionId: requestId });
+    await request(app()).post(`/api/companies/${companyId}/agent-configuration-drafts/${id}/publish?expectedUserId=author`)
+      .send(command).expect(200).expect("Cache-Control", "private, no-store");
+    expect(publications.publish).toHaveBeenCalledWith(expect.objectContaining({ userId: "author" }), companyId, id, command);
+    expect(service.create).not.toHaveBeenCalled(); expect(service.save).not.toHaveBeenCalled(); expect(tests.start).not.toHaveBeenCalled();
   });
 });
