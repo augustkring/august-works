@@ -1483,7 +1483,8 @@
     "sourceVersion": "{{title}} · Læs godkendt version · {{sensitivity}}",
     "sourceCount": "{{count}} valgte godkendte kilder",
     "draftDetails": "hele udkastet",
-    "invalidFields": "Gennemgå {{fields}}, før du gemmer. Fjern ugyldig tekst, forkort lange felter, og kontrollér de foreslåede tilladelser."
+    "invalidFields": "Gennemgå {{fields}}, før du gemmer. Fjern ugyldig tekst, forkort lange felter, og kontrollér de foreslåede tilladelser.",
+    "selectedApprovedSource": "{{title}} · Godkendt revision {{revision}} · {{sensitivity}}"
   },
   "authoringBlockers": {
     "hire_release_unavailable": "Den valgte kapabilitetsversion er ikke tilgængelig. Vælg en aktuelt kvalificeret kapabilitet.",
@@ -1505,7 +1506,8 @@
     "memory_mapping_required": "Den valgte hukommelsesindstilling skal kobles til runtime før publicering.",
     "internal_draft_authority_required": "Denne version kræver automatisk oprettelse af interne kladder.",
     "capability_mapping_required": "De valgte handlinger skal kobles til runtime før publicering.",
-    "hire_package_activation_required": "Gennemgå den valgte pakkes formål, readiness og aktivering, før denne Hire publiceres."
+    "hire_package_activation_required": "Gennemgå den valgte pakkes formål, readiness og aktivering, før denne Hire publiceres.",
+    "knowledge_read_authority_required": "Vælg Læs godkendt viden → Kan gøre automatisk for de valgte godkendte kilder. Udgivelse kontrollerer stadig agentens og den ansvarlige persons aktuelle læseadgang."
   },
   "authFlow": {
     "signInTitle": "Log ind på August Works",

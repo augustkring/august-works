@@ -21,6 +21,8 @@ export const authoredAgentDefinitionSchema = z.strictObject({
 }).superRefine((value, context) => {
   if (Boolean(value.publication) !== (value.version !== undefined) || value.publication && !value.procedureSnapshotHash)
     context.addIssue({ code: "custom", message: "A customer publication needs its version, reviewed provenance and procedural mapping" });
+  if (value.content.knowledgeDocumentIds.length && !value.procedureSnapshotHash)
+    context.addIssue({ code: "custom", message: "Selected knowledge needs its exact retained Source snapshot" });
 });
 export type AuthoredAgentDefinition = z.infer<typeof authoredAgentDefinitionSchema>;
 
@@ -28,12 +30,13 @@ export type AuthoredAgentDefinition = z.infer<typeof authoredAgentDefinitionSche
  * remain drafts until their canonical runtime policy is implemented. */
 export function authoredAgentMappingBlockers(content: z.infer<typeof agentAuthoringContentSchema>) {
   const blockers: string[] = [];
-  if (content.knowledgeDocumentIds.length) blockers.push("knowledge_mapping_required");
+  if (content.knowledgeDocumentIds.length && !content.capabilities.some(c => c.operation === "read_approved_knowledge" && c.autonomy === "automatic"))
+    blockers.push("knowledge_read_authority_required");
   if (content.memory !== "none") blockers.push("memory_mapping_required");
   if (!content.capabilities.some(c => c.operation === "create_internal_draft" && c.autonomy === "automatic"))
     blockers.push("internal_draft_authority_required");
   if (content.capabilities.some(c => c.autonomy !== "not_allowed" &&
-    !(c.operation === "create_internal_draft" && c.autonomy === "automatic")))
+    !(["create_internal_draft", "read_approved_knowledge"].includes(c.operation) && c.autonomy === "automatic")))
     blockers.push("capability_mapping_required");
   return blockers;
 }

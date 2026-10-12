@@ -1,3 +1,4 @@
+import { selectedApprovedKnowledgeSchema } from "./agent-approved-knowledge.js";
 import { z } from "zod";
 import { orchestrationCompletionSchema } from "./orchestration.js";
 
@@ -14,6 +15,7 @@ export const agentDraftTestReviewSchema = z.strictObject({
   procedureSnapshotHash: digest.optional(),
   requiredProcedures: z.array(z.strictObject({ skillId: z.uuid(), versionId: z.uuid(),
     name: z.string().min(1).max(200), bodyHash: digest })).max(32).optional(),
+  selectedKnowledge: z.array(selectedApprovedKnowledgeSchema).max(30).optional(),
   requiredPlaybooks: z.array(z.strictObject({ playbookId: z.uuid(), revisionId: z.uuid(),
     name: z.string().min(1).max(200), bodyHash: digest })).max(32).optional(),
   maximumCostMinor: z.number().int().min(0).max(1000000),

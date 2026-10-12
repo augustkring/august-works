@@ -1,5 +1,6 @@
+import { agentProviderBindingService } from "../agent-provider-bindings.js";
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { agentConfigRevisions, agentConfigurationTests, agentPackageVersions, agents, companies, companyAgentPackageInstallations, heartbeatRuns, type Db } from "@paperclipai/db";
+import { agentConfigRevisions, agentConfigurationTests, agentPackageVersions, companyMemberships, agents, companies, companyAgentPackageInstallations, heartbeatRuns, type Db } from "@paperclipai/db";
 import { AUTHORED_AGENT_DEFINITION_KEY, agentDraftPublicationCommandSchema, agentDraftPublicationReviewSchema,
   agentDraftPublicationReceiptSchema, authoredAgentMappingBlockers, authoredAgentDefinitionSchema,
   type AgentDraftPublicationReview } from "@paperclipai/shared";
@@ -70,7 +71,7 @@ export function agentAuthoringPublicationService(db: Db) {
     let current: Awaited<ReturnType<ReturnType<typeof installedNativeDraftGateway>["qualifyAuthoringTest"]>> | null = null;
     let procedures: Awaited<ReturnType<typeof resolveAuthoringProcedures>> | null = null;
     try {
-      procedures = await resolveAuthoringProcedures(tx, { companyId, agentId, responsibleUserId: row.createdByUserId });
+      procedures = await resolveAuthoringProcedures(tx, { companyId, agentId, responsibleUserId: row.createdByUserId, knowledgeContent: row.content });
       if (!mappingBlockers.length) compileAuthoredAgentDefinition(row.content, "00000000-0000-4000-8000-000000000000", authoringCandidateHash(row), procedures.hash);
       if (qualified) current = await installedNativeDraftGateway(db).qualifyAuthoringTest(tx, { companyId, draftId,
         responsibleUserId: row.createdByUserId, scenarioIndex: 0, retainedTestId: qualified.testIds[0]! });
@@ -84,6 +85,7 @@ export function agentAuthoringPublicationService(db: Db) {
       previousVersion: prior?.version ?? null, nextVersion: (prior?.version ?? 0) + 1,
       before: prior?.content ?? null, after: row.content, activate: true as const, canPublish: blockers.length === 0,
       blockers, requiredProcedures: procedures?.skills.map(({ name, skillId, versionId }) => ({ name, skillId, versionId })) ?? [],
+      ...(procedures?.knowledge.length ? { selectedKnowledge: procedures.knowledge.map(({ body, ...pin }) => pin) } : {}),
       ...(procedures?.playbooks.length ? { requiredPlaybooks: procedures.playbooks.map(({ body, key, ...pin }) => pin) } : {}),
       maximumPerModelCallMinor: current?.quote.maximumMinor ?? null, currency: "USD" as const,
       provider: current?.p.tariff.provider ?? null, model: current?.p.tariff.model ?? null,
@@ -197,6 +199,23 @@ export function agentAuthoringPublicationService(db: Db) {
         await logActivity(tx, { companyId, actorType: "user", actorId: userId, action: "agent_configuration.version_published",
           entityType: "agent", entityId: state.agent.id, details: { draftId, revisionId: record.id,
             publishedVersion: definition.version, activated: true, authorityGranted: false, executionStarted: false } }, publications);
+        // Recheck current authority after the final write. A trigger or late
+        // withdrawal must roll back this activation and its Original receipt.
+        const finalDraft = await agentAuthoringService(tx).publicationCandidate(actor, companyId, draftId);
+        await assertV5Authorization(tx, { ...actor, ignoreInstanceAdmin: true }, companyId, "agent:wake", { type: "agent", companyId, agentId: state.agent.id });
+        const [owner] = await tx.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+          eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+          eq(companyMemberships.principalId, state.row.content!.ownerUserId!), eq(companyMemberships.status, "active")));
+        await agentProviderBindingService(tx).assertRuntime(companyId, state.agent.id);
+        await budgetService(tx).assertAgentTestModelCeiling(companyId, state.agent.id, state.current.quote.maximumMinor);
+        const [finalAgent] = await tx.select().from(agents).where(and(eq(agents.companyId, companyId), eq(agents.id, state.agent.id)));
+        if (!finalAgent || finalAgent.status !== "idle" || finalAgent.pauseReason ||
+          (await readAuthoredAgentDefinition(tx, finalAgent))?.revisionId !== definition.revisionId)
+          throw conflict("The published Agent's current admission changed");
+        const finalProcedures = await resolveAuthoringProcedures(tx, { companyId, agentId: state.agent.id,
+          responsibleUserId: userId, knowledgeContent: state.row.content! });
+        if (!owner || finalDraft.version !== state.row.version || nativeSha256(finalDraft.content) !== nativeSha256(state.row.content) ||
+          finalProcedures.hash !== state.procedures.hash) throw conflict("The reviewed publication authority or selected sources changed");
         return receipt(companyId, record);
       });
     },

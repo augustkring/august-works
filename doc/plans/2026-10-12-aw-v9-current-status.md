@@ -5,6 +5,12 @@ PR #38 is a draft and must not merge yet.
 
 ## Latest integrated checkpoint
 
+The recovered customer pause and selected approved public/internal knowledge mappings
+are now qualified. See the [recovery checkpoint](2026-10-12-aw-v9-environment-recovery.md)
+and [knowledge checkpoint](2026-10-12-aw-v9-selected-knowledge-checkpoint.md).
+Preference Memory and new runtime provisioning/live staging remain open.
+
+
 Current runtime selection, in-place Hire candidate saving and feedback-opening
 source checks pass 80 focused UI cases, UI types and six built-browser cases.
 The historical marker migration now passes its real pre-index upgrade through

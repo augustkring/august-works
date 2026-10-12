@@ -68,7 +68,7 @@ export function AgentDraftReview({ draft, options, unsavedChanges, baselineCurre
           <dd>{content.knowledgeDocumentIds.length ? <ul className="list-disc space-y-2 pl-5">
             {content.knowledgeDocumentIds.map(id => {
               const source = options?.knowledge.find(item => item.id === id);
-              return <li key={id}>{source ? t("customAgent.sourceVersion", { title: source.title, sensitivity: source.sensitivity }) : t("hireSetup.sourceUnavailable")}</li>;
+              return <li key={id}>{source ? t(source.revision ? "customAgent.selectedApprovedSource" : "customAgent.sourceVersion", { title: source.title, sensitivity: source.sensitivity, revision: source.revision }) : t("hireSetup.sourceUnavailable")}</li>;
             })}
           </ul> : t("customAgent.none")}</dd>
         </div>

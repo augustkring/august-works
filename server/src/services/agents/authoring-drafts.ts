@@ -1,4 +1,4 @@
-import { and, desc, eq, gte, sql } from "drizzle-orm";
+import { and, desc, eq, gte, isNotNull, notInArray, sql } from "drizzle-orm";
 import {
   agentConfigurationDrafts,
   agents,
@@ -570,7 +570,8 @@ export function agentAuthoringService(db: Db) {
         .where(
           and(
             eq(foundationDocuments.companyId, companyId),
-            eq(foundationDocuments.status, "approved"),
+            isNotNull(foundationDocuments.approvedRevisionId),
+            notInArray(foundationDocuments.status, ["archived", "superseded"]),
           ),
         )
         .orderBy(desc(foundationDocuments.updatedAt))
@@ -579,6 +580,7 @@ export function agentAuthoringService(db: Db) {
         id: string;
         title: string;
         sensitivity: string;
+        revision: number;
       }> = [];
       for (const { id } of ids) {
         try {
@@ -588,14 +590,15 @@ export function agentAuthoringService(db: Db) {
             }),
             approved = document && approvedFoundationView(document);
           if (
-            approved &&
+            approved && ["public", "internal"].includes(approved.sensitivity) &&
+            (!approved.validFrom || approved.validFrom.getTime() <= Date.now()) &&
             (!approved.validUntil ||
               new Date(approved.validUntil).getTime() > Date.now())
           )
             knowledge.push({
               id,
               title: approved.title ?? "Approved company source",
-              sensitivity: approved.sensitivity,
+              sensitivity: approved.sensitivity, revision: approved.latestRevisionNumber!,
             });
         } catch (error) {
           if (

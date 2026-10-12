@@ -117,7 +117,7 @@ export async function assertAnalyticalContextPayloadAccess(db:Db,companyId:strin
    const {accessService}=await import("./access.js"),access=await accessService(tx).decide({actor,enforceResponsibleUserIntersection:true,action:"foundation:read",resource:{type:"company",companyId}});
    if(!access.allowed)throw forbidden("The learned Foundation Context is no longer authorized");
    const {assertLearnedAssetAnalyticalSources}=await import("./learning/learning-analytical-sources.js");
-   for(const item of foundation){const ref=/^foundation:\/\/[a-f0-9-]{36}\/([a-f0-9-]{36})\/\d+$/i.exec(item.ref);if(!ref||performance.now()>deadline)throw forbidden("The exact learned Foundation Context is unavailable");await assertLearnedAssetAnalyticalSources(tx,companyId,"document_revision",ref[1]!,actor,readScope);}
+   for(const item of foundation){const ref=/^foundation:\/\/[a-f0-9-]{36}\/([a-f0-9-]{36})\/(?:\d+|whole)$/i.exec(item.ref);if(!ref||performance.now()>deadline)throw forbidden("The exact learned Foundation Context is unavailable");await assertLearnedAssetAnalyticalSources(tx,companyId,"document_revision",ref[1]!,actor,readScope);}
   }
   for(const root of roots){
    if(!root.pins.length||root.expiresAt.getTime()<=Date.now())throw forbidden("The analytical conversation requires current source review");

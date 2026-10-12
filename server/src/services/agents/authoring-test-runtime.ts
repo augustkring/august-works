@@ -48,9 +48,9 @@ export function authoringTestRuntime(db: Db, options: Options, profile: (company
     if (!scenario || scenario.length < 10) throw conflict("Describe the saved representative scenario in at least ten characters");
     const readiness = await agentAuthoringService(tx).reviewContent(actor, input.companyId, input.draftId);
     if (readiness.blockers.some(blocker => !["representative_test_unqualified", "native_promotion_unqualified"].includes(blocker.code))) throw conflict("Complete the saved candidate before testing");
-    if (draft.content.knowledgeDocumentIds.length || draft.content.memory !== "none" || draft.content.capabilities.some(capability =>
-      capability.autonomy !== "not_allowed" && capability.operation !== "create_internal_draft"))
-      throw conflict("This qualified test transport supports internal drafts without knowledge, tools or persistent memory");
+    if (draft.content.memory !== "none" || draft.content.capabilities.some(capability =>
+      capability.autonomy !== "not_allowed" && (!["create_internal_draft", "read_approved_knowledge"].includes(capability.operation) || capability.autonomy !== "automatic")))
+      throw conflict("This qualified test transport supports internal drafts and selected read-only approved knowledge without tools or persistent memory");
     await assertV7Authorization(tx, actor, input.companyId, "agent:wake", { type: "agent", companyId: input.companyId, agentId });
     const [agent] = await tx.select().from(agents).where(and(eq(agents.companyId, input.companyId), eq(agents.id, agentId))).for("share");
     if (!agent || !["idle", "paused"].includes(agent.status) || (agent.status === "paused" && agent.pauseReason !== "manual" && !(input.retainedTestId && agent.pauseReason === "budget")) ||
@@ -82,7 +82,7 @@ export function authoringTestRuntime(db: Db, options: Options, profile: (company
       .where(and(eq(companySecrets.companyId, input.companyId), eq(companySecrets.id, ref.secretId))) : [];
     if (selection.attribution.method !== "api_key" || !credential || credential.secret.status !== "active" || credential.version.revokedAt || ["disabled", "destroyed"].includes(credential.version.status))
       throw forbidden("The candidate's encrypted model grant is no longer current");
-    const procedures = await resolveAuthoringProcedures(tx, { companyId: input.companyId, agentId, responsibleUserId: input.responsibleUserId });
+    const procedures = await resolveAuthoringProcedures(tx, { companyId: input.companyId, agentId, responsibleUserId: input.responsibleUserId, knowledgeContent: draft.content });
     const candidateHash = authoringCandidateHash(draft), configurationHash = nativeSha256({ name: agent.name, role: agent.role, title: agent.title,
       capabilities: agent.capabilities, adapterType: agent.adapterType, adapterConfig: agent.adapterConfig, runtimeConfig: agent.runtimeConfig, permissions: agent.permissions,
       procedureSnapshotHash: procedures.hash });

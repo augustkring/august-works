@@ -1483,7 +1483,8 @@
     "sourceVersion": "{{title}} · Read approved version · {{sensitivity}}",
     "sourceCount": "{{count}} approved source selections",
     "draftDetails": "the complete draft",
-    "invalidFields": "Review {{fields}} before saving. Remove malformed text, shorten long entries and check the proposed permissions."
+    "invalidFields": "Review {{fields}} before saving. Remove malformed text, shorten long entries and check the proposed permissions.",
+    "selectedApprovedSource": "{{title}} · Approved revision {{revision}} · {{sensitivity}}"
   },
   "authoringBlockers": {
     "hire_release_unavailable": "The selected capability version is unavailable; choose a currently qualified capability",
@@ -1505,7 +1506,8 @@
     "memory_mapping_required": "The selected memory setting needs its runtime mapping before publishing.",
     "internal_draft_authority_required": "This version requires automatic internal drafting.",
     "capability_mapping_required": "The selected actions need their runtime mapping before publishing.",
-    "hire_package_activation_required": "Review the selected package’s intended purpose, readiness and activation before publishing this Hire."
+    "hire_package_activation_required": "Review the selected package’s intended purpose, readiness and activation before publishing this Hire.",
+    "knowledge_read_authority_required": "For the selected approved sources, choose Read approved knowledge → Can do automatically. Publication still checks the agent’s and responsible person’s current read access."
   },
   "authFlow": {
     "signInTitle": "Sign in to August Works",

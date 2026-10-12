@@ -1,5 +1,6 @@
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
+import { accessService } from "../../services/access.js";
 import { createPlaybookSchema } from "@paperclipai/shared";
 import { companySkills, companySkillVersions, companyMemberships, principalPermissionGrants, type Db } from "@paperclipai/db";
 import type { AuthorizationActor } from "../../services/authorization.js";
@@ -59,4 +60,15 @@ export async function seedRequiredAuthoringProcedures(db: Db, actor: Authorizati
     pins.push({ skillId: skill!.id, versionId: version!.id, key: skill!.key, body });
   }
   return pins;
+}
+/** Actual membership/grant owner; a grant row alone is not current access. */
+export async function grantAuthoringKnowledgeReadFixture(db: Db, companyId: string, agentId: string, userId: string) {
+  const owner = accessService(db);
+  await owner.setPrincipalPermission(companyId, "agent", agentId, "foundation:read", true, userId);
+  const [human] = await db.select().from(companyMemberships).where(and(eq(companyMemberships.companyId, companyId),
+    eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, userId)));
+  await owner.setPrincipalPermission(companyId, "user", userId, "foundation:read", true, userId);
+  // This fixture retains the existing human role. The grant owner defaults a
+  // newly enabled membership to member; verification still needs its real owner.
+  if (human) await owner.ensureMembership(companyId, "user", userId, human.membershipRole, human.status);
 }

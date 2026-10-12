@@ -31,6 +31,7 @@ export function agentAuthoringTestService(db: Db) {
       runtimeBindingId: current.provider.runtime.id, configurationHash: current.configurationHash, candidateHash: current.candidateHash,
       procedureSnapshotHash: current.procedures.hash, requiredProcedures: current.procedures.skills.map(pin => ({
         skillId: pin.skillId, versionId: pin.versionId, name: pin.name, bodyHash: pin.bodyHash })),
+      ...(current.procedures.knowledge.length ? { selectedKnowledge: current.procedures.knowledge.map(({ body, ...pin }) => pin) } : {}),
       ...(current.procedures.playbooks.length ? { requiredPlaybooks: current.procedures.playbooks.map(({ body, key, ...pin }) => pin) } : {}),
       maximumCostMinor: current.quote.maximumMinor, currency: "USD" as const, provider: current.p.tariff.provider, model: current.p.tariff.model, transport: "server-text-only-v1" as const,
       toolsGranted: false as const, activatesAgent: false as const, companyVisibleResult: true as const };

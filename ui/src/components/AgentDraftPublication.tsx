@@ -1,3 +1,4 @@
+import { AgentSelectedKnowledge } from "./AgentSelectedKnowledge";
 import { useEffect, useId, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { agentDraftPublicationCommandSchema, type AgentAuthoringDraftView, type AgentDraftPublicationCommand,
@@ -138,7 +139,7 @@ export function AgentDraftPublication({ company, principal, draft, enabled, canU
           catch { setFailure(t("agentPublication.changed")); } }}>{t("agentPublication.review")}</Button>
     </> : null}
     <AlertDialog open={open && !unknown && !receiptOnly && !receipt && review.isSuccess && !review.isFetching && current(true)} onOpenChange={value => { setOpen(value); if (!value) { setPublication(false); setActivation(false); } }}>
-      <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{t("agentPublication.confirmTitle")}</AlertDialogTitle>
+      <AlertDialogContent className="max-h-(--sz-85vh) overflow-y-auto"><AlertDialogHeader><AlertDialogTitle>{t("agentPublication.confirmTitle")}</AlertDialogTitle>
         <AlertDialogDescription>{t("agentPublication.boundary")}</AlertDialogDescription></AlertDialogHeader>
         <dl className="max-h-60 space-y-2 overflow-y-auto" tabIndex={0} aria-label={t("agentPublication.changes")}>
           <dt>{t("agentPublication.versions", { before: review.data?.previousVersion ?? 0, after: review.data?.nextVersion ?? 1 })}</dt><dd>{review.data?.after.name}</dd>
@@ -156,6 +157,7 @@ export function AgentDraftPublication({ company, principal, draft, enabled, canU
             {review.data?.requiredProcedures.map(item => <li key={item.skillId}>{item.name}</li>)}
             {review.data?.requiredPlaybooks?.map(item => <li key={item.playbookId}>{item.name}</li>)}
           </ul></dd>
+          <AgentSelectedKnowledge sources={review.data?.selectedKnowledge} />
         </dl>
         <label htmlFor={`${label}-publication`} className="flex min-h-11 items-start gap-3"><input id={`${label}-publication`} type="checkbox" checked={publication} onChange={event => setPublication(event.target.checked)} /><span>{t("agentPublication.confirmPublication")}</span></label>
         <label htmlFor={`${label}-activation`} className="flex min-h-11 items-start gap-3"><input id={`${label}-activation`} type="checkbox" checked={activation} onChange={event => setActivation(event.target.checked)} /><span>{t("agentPublication.confirmActivation")}</span></label>

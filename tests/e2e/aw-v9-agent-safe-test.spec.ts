@@ -74,7 +74,9 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"], ["hire", "en"]] 
           return route.fulfill({ status: 422, json: { error: "Select and save this candidate’s runtime before testing" } });
         if (path.endsWith("/test-review")) return route.fulfill({ json: { companyId: company.id, draftId: id, version: draft.version, agentId, scenarioIndex: 0, scenario,
           runtimeBindingId: runtimeId, configurationHash: "a".repeat(64), candidateHash: "c".repeat(64), maximumCostMinor: 3, currency: "USD", provider: "anthropic", model: "software-host-model",
-          procedureSnapshotHash: "f".repeat(64), requiredProcedures: [{ skillId: "10000000-0000-4000-8000-000000000021", versionId: "10000000-0000-4000-8000-000000000022", name: "Required security procedure", bodyHash: "f".repeat(64) }],
+          procedureSnapshotHash: "f".repeat(64), selectedKnowledge: [{ foundationDocumentId: "10000000-0000-4000-8000-000000000031", documentId: "10000000-0000-4000-8000-000000000032",
+            revisionId: "10000000-0000-4000-8000-000000000033", revisionNumber: 7, title: "Approved Aster company facts",
+            bodyHash: "a".repeat(64), sensitivity: "internal", validFrom: null, validUntil: null }], requiredProcedures: [{ skillId: "10000000-0000-4000-8000-000000000021", versionId: "10000000-0000-4000-8000-000000000022", name: "Required security procedure", bodyHash: "f".repeat(64) }],
           requiredPlaybooks: [{ playbookId: "10000000-0000-4000-8000-000000000023", revisionId: "10000000-0000-4000-8000-000000000024", name: "Approved welcome procedure", bodyHash: "e".repeat(64) }],
           transport: "server-text-only-v1", toolsGranted: false, activatesAgent: false, companyVisibleResult: true, reviewHash: "b".repeat(64) } });
         if (path.endsWith("/tests")) return route.fulfill({ json: outcome ? [outcome] : [] });
@@ -117,6 +119,8 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"], ["hire", "en"]] 
       await expect(dialog.getByText("Required security procedure", { exact: true })).toBeVisible();
       await expect(dialog.getByText(locale === "en" ? "Required procedures used in this test" : "Obligatoriske procedurer i denne test", { exact: true })).toBeVisible();
       await expect(dialog.getByText("Approved welcome procedure", { exact: true })).toBeVisible();
+      await expect(dialog).toContainText(locale === "en" ? "Approved revision 7" : "Godkendt revision 7");
+      await expect(dialog).toContainText("Approved Aster company facts");
       await page.addScriptTag({ path: axePath });
       expect(await page.evaluate(async () => (await (window as unknown as { axe: { run(scope: string): Promise<{ violations: unknown[] }> } }).axe.run('[role="alertdialog"]')).violations)).toEqual([]);
       await dialog.getByRole("checkbox").check(); await run.click();

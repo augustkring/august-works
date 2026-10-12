@@ -77,7 +77,9 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"], ["hire", "en"]] 
           outcome: scenario, requiredKnowledge: [], requiredConnections: [], limits: [], actionClasses: ["internal_draft"], available: true } });
         if (path.endsWith("/publication-review")) return route.fulfill({ json: { companyId: company.id, draftId: id, version: draft.version, agentId,
           previousVersion: 1, nextVersion: 2, before: { ...draft.content, outcome: "Old active responsibility" }, after: draft.content,
-          activate: true, canPublish: true, blockers: [], requiredProcedures: [{ name: "Required security procedure", skillId: "10000000-0000-4000-8000-000000000012", versionId: "10000000-0000-4000-8000-000000000013" }],
+          activate: true, canPublish: true, blockers: [], selectedKnowledge: [{ foundationDocumentId: "10000000-0000-4000-8000-000000000031", documentId: "10000000-0000-4000-8000-000000000032",
+            revisionId: "10000000-0000-4000-8000-000000000033", revisionNumber: 7, title: "Approved Aster company facts",
+            bodyHash: "a".repeat(64), sensitivity: "internal", validFrom: null, validUntil: null }], requiredProcedures: [{ name: "Required security procedure", skillId: "10000000-0000-4000-8000-000000000012", versionId: "10000000-0000-4000-8000-000000000013" }],
           requiredPlaybooks: [{ playbookId: "10000000-0000-4000-8000-000000000014", revisionId: "10000000-0000-4000-8000-000000000015", name: "Approved welcome procedure", bodyHash: "e".repeat(64) }],
           maximumPerModelCallMinor: 3, currency: "USD", provider: "anthropic", model: "software-host-model", runtimeBindingId: runtimeId, reviewHash: "b".repeat(64),
           modelCalled: false, authorityGranted: false, executionStarted: false } });
@@ -113,6 +115,8 @@ for (const [kind, locale] of [["custom", "en"], ["hire", "da"], ["hire", "en"]] 
       const dialog = page.getByRole("alertdialog"), submit = dialog.getByRole("button", { name: locale === "en" ? "Publish and activate" : "Publicér og aktivér", exact: true });
       await expect(submit).toBeDisabled(); await expect(dialog).toContainText("0.03 USD"); await expect(dialog).toContainText("Required security procedure");
       await expect(dialog).toContainText("Approved welcome procedure");
+      await expect(dialog).toContainText(locale === "en" ? "Approved revision 7" : "Godkendt revision 7");
+      await expect(dialog).toContainText("Approved Aster company facts");
       await expect(dialog).toContainText("Old active responsibility"); await expect(dialog).toContainText("Accountable owner");
       for (const value of [draft.content!.description, draft.content!.internalDescription, ...Object.values(draft.content!.instructions)]) await expect(dialog).toContainText(value);
       await expect(dialog.locator("img")).toHaveCount(0); expect(publishes).toBe(0);

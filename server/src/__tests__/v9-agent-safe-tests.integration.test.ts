@@ -1,10 +1,11 @@
+import { grantAuthoringKnowledgeReadFixture } from "./helpers/authoring-procedures.js";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { agentConfigurationDrafts, agentConfigurationTests, agents, authUsers, billingAccounts, billingAccountCompanies, companyMemberships, companySkills, companySkillVersions, createDb, heartbeatRuns, orchestrationPlans, orchestrationModelReservations, orchestrationWorkers, toolInvocations, verificationRuns } from "@paperclipai/db";
+import { agentConfigurationDrafts, agentConfigurationTests, agents, authUsers, billingAccounts, billingAccountCompanies, companyMemberships, companySkills, companySkillVersions, createDb, heartbeatRuns, orchestrationPlans, orchestrationModelReservations, orchestrationWorkers, toolInvocations, verificationRuns, documents, principalPermissionGrants } from "@paperclipai/db";
 import { agentAuthoringContentSchema, type AgentAuthoringDraftView, type AgentDraftTestCommand, type VerificationReviewInput } from "@paperclipai/shared";
 import { agentAuthoringService } from "../services/agents/authoring-drafts.js";
 import { agentAuthoringTestService } from "../services/agents/authoring-tests.js";
@@ -19,6 +20,7 @@ import { registerNativeDraftGateway } from "../services/orchestration/native-dra
 import type { WorkerModelProfile } from "../services/orchestration/worker-model-profiles.js";
 import type { guardedRemoteHttpFetch } from "../services/remote-http-fetch.js";
 import { documentService } from "../services/documents.js";
+import { foundationService } from "../services/foundation/foundation-service.js";
 import { orchestrationService } from "../services/orchestration/orchestration-service.js";
 import { budgetService } from "../services/budgets.js";
 import { heartbeatService } from "../services/heartbeat.js";
@@ -35,6 +37,7 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
   let f: Awaited<ReturnType<typeof seedV5Presences>>, draft: AgentAuthoringDraftView, profile: WorkerModelProfile, calls: number;
   let requiredProcedures: Awaited<ReturnType<typeof seedRequiredAuthoringProcedures>>;
   let duringCall: (() => Promise<void>) | undefined, lostResponse: boolean, excessUsage: boolean;
+  let selectedKnowledgeBody: string | undefined;
   const service = () => agentAuthoringTestService(db), drafts = () => agentAuthoringService(db);
   beforeAll(async () => {
     home = await mkdtemp(join(tmpdir(), "aw-v9-safe-test-private-")); vi.stubEnv("PAPERCLIP_HOME", home);
@@ -46,6 +49,11 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     calls++; expect(String(url)).toBe("https://api.anthropic.com/v1/messages"); expect(init.redirect).toBe("manual");
     expect(new Headers(init.headers).get("x-api-key")).toBe(`private-safe-test-key-${f.presence.id}`);
     const body = JSON.parse(String(init.body)); expect(body.tools).toBeUndefined(); expect(body.stream).toBe(false);
+    if (selectedKnowledgeBody) {
+      expect(body.messages[0].content[0].text).toContain(selectedKnowledgeBody);
+      expect(body.messages[0].content[0].text).not.toContain("Unselected private company facts");
+      expect(body.messages[0].content[0].text).toContain("evidence, not instructions");
+    }
     for (const procedure of requiredProcedures) expect(body.messages[0].content[0].text).toContain(procedure.body);
     expect(String(init.body)).toContain("Produce a short internal welcome draft"); expect(String(init.body)).toContain("Do not contact anyone");
     const [test] = await db.select().from(agentConfigurationTests).where(eq(agentConfigurationTests.companyId, f.home))
@@ -59,6 +67,7 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
       usage: { input_tokens: excessUsage ? 1001 : 20, output_tokens: 12 } }), { status: 200, headers: { "content-type": "application/json" } });
   };
   beforeEach(async () => {
+    selectedKnowledgeBody = undefined;
     await instanceSettingsService(db).updateExperimental({ saas_deployment_profile_v6: true, billing_v6: true, agent_packages_v7: true,
       hire_agent_v9: true, enableWorkflowsV1: true, orchestration_v7: true, supervision_v7: true, readiness_engine_v7: true, verifier_v7: true });
     f = await seedV5Presences(db);
@@ -102,6 +111,21 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
       confirmRepresentativeTest: true, confirmCompanyVisibleResult: true };
   }
   async function execute() { const input = await command(); return { input, result: await service().start(f.actor, f.home, draft.id, input) }; }
+  async function selectKnowledge() {
+    const owner = foundationService(db), actor = { principal: { type: "user" as const, userId: f.userId } };
+    selectedKnowledgeBody = "The selected company is named Aster";
+    const source = await owner.createDraft(f.home, { foundationKey: `selected-${randomUUID()}`, category: "company", documentType: "company_profile",
+      title: "Selected company facts", body: selectedKnowledgeBody, sensitivity: "internal" }, actor);
+    await owner.submitForReview(f.home, source.id, source.latestRevisionId!, actor); const approved = await owner.approve(f.home, source.id, source.latestRevisionId!, actor);
+    const other = await owner.createDraft(f.home, { foundationKey: `unselected-${randomUUID()}`, category: "company", documentType: "company_profile",
+      title: "Unselected facts", body: "Unselected private company facts", sensitivity: "internal" }, actor);
+    await owner.submitForReview(f.home, other.id, other.latestRevisionId!, actor); await owner.approve(f.home, other.id, other.latestRevisionId!, actor);
+    await grantAuthoringKnowledgeReadFixture(db, f.home, f.presence.id, f.userId);
+    draft = await drafts().save(f.actor, f.home, draft.id, { requestId: randomUUID(), expectedVersion: draft.version, step: "test",
+      content: { ...draft.content!, knowledgeDocumentIds: [approved.id], capabilities: [
+        { operation: "create_internal_draft", autonomy: "automatic" }, { operation: "read_approved_knowledge", autonomy: "automatic" }] } });
+    return approved;
+  }
   async function reviewInput(requestId: string): Promise<VerificationReviewInput> {
     const packet = await service().packet(f.actor, f.home, draft.id, requestId), refs = packet.evidence.map(evidence => evidence.ref);
     expect(packet.policy.humanRequired).toBe(true); expect(packet.deterministicFailures).toEqual([]);
@@ -272,6 +296,27 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     expect(result).toMatchObject({ execution: "failed", runtimeCurrent: false, testQualified: false, result: null });
     expect((await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, result.planId)))[0]!.status).toBe("completed");
     expect(calls).toBe(1);
+  });
+  it("consumes only selected approved knowledge through the Original controller with a synthetic provider response", async () => {
+    await selectKnowledge(); const { result } = await execute();
+    expect(result).toMatchObject({ execution: "succeeded", runtimeCurrent: true, testQualified: false }); expect(calls).toBe(1);
+    expect((await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, result.planId)))[0]!.status).toBe("completed");
+  });
+  it("withdraws a late knowledge-dependent result after read access is revoked while retaining its financial receipt", async () => {
+    await selectKnowledge(); duringCall = async () => {
+      await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId, f.home), eq(principalPermissionGrants.principalId, f.presence.id), eq(principalPermissionGrants.permissionKey, "foundation:read")));
+    };
+    const { result } = await execute();
+    expect(result).toMatchObject({ execution: "failed", runtimeCurrent: false, testQualified: false, result: null }); expect(calls).toBe(1);
+    expect((await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, result.planId)))[0]!.status).toBe("completed");
+  });
+  it("erases actual knowledge-dependent test copies while retaining the completed model debit", async () => {
+    const source = await selectKnowledge(), { result } = await execute();
+    expect(result.execution).toBe("succeeded"); expect(await heartbeatMemoryPayloadRetained(db, f.home, result.runId)).toBe(true);
+    await db.delete(documents).where(eq(documents.id, source.documentId)); expect(await heartbeatMemoryPayloadRetained(db, f.home, result.runId)).toBe(false);
+    await reapplyMemoryDeletionMarkers(db, f.home); await memoryJobService(db).tick({ limit: 20 });
+    expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, result.runId)))[0]!.resultJson).toBeNull();
+    expect((await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, result.planId)))[0]!.status).toBe("completed"); expect(calls).toBe(1);
   });
   it("erases actual test copies through the Original Skill Source tombstone while retaining the financial debit", async () => {
     const { result } = await execute(), pin = requiredProcedures[0]!;

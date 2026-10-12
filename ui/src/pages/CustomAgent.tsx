@@ -664,7 +664,7 @@ function DraftEditor({
                     )
                   }
                 />
-                {t("customAgent.sourceVersion", { title: source.title, sensitivity: source.sensitivity })}
+                {t(source.revision ? "customAgent.selectedApprovedSource" : "customAgent.sourceVersion", { title: source.title, sensitivity: source.sensitivity, revision: source.revision })}
               </label>
             ))}
             <Link

@@ -1,3 +1,4 @@
+import { foundationService } from "../services/foundation/foundation-service.js";
 import { agentRetirementService } from "../services/agents/retirement.js";
 import { agentIdentityService } from "../services/agent-identities.js";
 import { agentService } from "../services/agents.js";
@@ -11,7 +12,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { agentConfigRevisions, agentExecutionManifests, memoryJobs, activityLog, agentConfigurationDrafts, agentConfigurationTests, agents, authUsers, billingAccounts, billingAccountCompanies, companyMemberships, companySkills, companySkillVersions, createDb, documents, heartbeatRuns, orchestrationPlans, orchestrationModelReservations, orchestrationWorkers, toolInvocations, verificationRuns } from "@paperclipai/db";
+import { agentConfigRevisions, agentExecutionManifests, memoryJobs, activityLog, agentConfigurationDrafts, agentConfigurationTests, agents, authUsers, billingAccounts, billingAccountCompanies, companyMemberships, companySkills, companySkillVersions, principalPermissionGrants, createDb, documents, heartbeatRuns, orchestrationPlans, orchestrationModelReservations, orchestrationWorkers, toolInvocations, verificationRuns } from "@paperclipai/db";
 import { agentAuthoringContentSchema, type AgentAuthoringDraftView, type AgentDraftTestCommand, AUTHORED_AGENT_DEFINITION_KEY, agentDraftPublicationCommandSchema, type AgentDraftPublicationCommand, type VerificationReviewInput } from "@paperclipai/shared";
 import { agentAuthoringService } from "../services/agents/authoring-drafts.js";
 import { agentAuthoringTestService } from "../services/agents/authoring-tests.js";
@@ -33,7 +34,7 @@ import { reconcileAgentDraftTest } from "../services/agents/authoring-test-recov
 import { heartbeatMemoryPayloadRetained, reapplyMemoryDeletionMarkers } from "../services/memory/memory-privacy.js";
 import { memoryJobService } from "../services/memory/memory-jobs.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
-import { seedRequiredAuthoringProcedures, seedApprovedAuthoringPlaybook, bindAuthoringPlaybook, grantAuthoringPlaybookReadFixture } from "./helpers/authoring-procedures.js";
+import { grantAuthoringKnowledgeReadFixture, seedRequiredAuthoringProcedures, seedApprovedAuthoringPlaybook, bindAuthoringPlaybook, grantAuthoringPlaybookReadFixture } from "./helpers/authoring-procedures.js";
 import { prepareHirePublicationFixture } from "./helpers/hire-publication.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 
@@ -161,6 +162,59 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     await instanceSettingsService(db).updateExperimental({ hire_agent_v9: false });
     expect(await publications().receipt(f.actor, f.home, draft.id, input.requestId)).toEqual(first);
     await expect(publications().publish(f.actor, f.home, draft.id, input)).rejects.toMatchObject({ status: 404 });
+  });
+  it("publishes selected approved evidence without granting access and withdraws it after an actual read revocation", async () => {
+    const owner = foundationService(db), actor = { principal: { type: "user" as const, userId: f.userId } };
+    const source = await owner.createDraft(f.home, { foundationKey: `selected-${randomUUID()}`, category: "company",
+      documentType: "company_profile", title: "Selected company facts", body: "Use the approved Aster company name", sensitivity: "internal" }, actor);
+    await owner.submitForReview(f.home, source.id, source.latestRevisionId!, actor);
+    const approved = await owner.approve(f.home, source.id, source.latestRevisionId!, actor);
+    await grantAuthoringKnowledgeReadFixture(db, f.home, f.presence.id, f.userId);
+    draft = await drafts().save(f.actor, f.home, draft.id, { requestId: randomUUID(), expectedVersion: draft.version, step: "test",
+      content: { ...draft.content!, knowledgeDocumentIds: [approved.id], capabilities: [
+        { operation: "create_internal_draft", autonomy: "automatic" }, { operation: "read_approved_knowledge", autonomy: "automatic" }] } });
+    const selectedReview = await service().review(f.actor, f.home, draft.id, 0);
+    expect(selectedReview.selectedKnowledge).toEqual([expect.objectContaining({ foundationDocumentId: approved.id,
+      revisionId: approved.approvedRevisionId, revisionNumber: approved.latestRevisionNumber, title: approved.title })]);
+    expect(JSON.stringify(selectedReview)).not.toContain(approved.body);
+    await qualify();
+    const grants = await db.select().from(principalPermissionGrants).where(eq(principalPermissionGrants.companyId, f.home));
+    const receipt = await publish(), current = await agent();
+    expect(receipt.authorityGranted).toBe(false);
+    expect(await db.select().from(principalPermissionGrants).where(eq(principalPermissionGrants.companyId, f.home))).toEqual(grants);
+    const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: current.id, responsibleUserId: f.userId, status: "running" }).returning();
+    const build = () => buildRetainedNativeRuntimeContext({ db, agent: current, runId: run!.id, runtimeConfig: current.adapterConfig, runtimeSkillEntries: [] });
+    const runtime = await build();
+    expect((await readNativeRuntimeAssetText(runtime.instructions.bundle, 128000, { companyId: f.home, runId: run!.id }))
+      .some(file => file.text.includes(approved.body))).toBe(true);
+    await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId, f.home),
+      eq(principalPermissionGrants.principalId, f.presence.id), eq(principalPermissionGrants.permissionKey, "foundation:read")));
+    await expect(build()).rejects.toMatchObject({ status: 403 });
+    await db.delete(documents).where(eq(documents.id, approved.documentId));
+    await memoryJobService(db).tick({ limit: 20 }); await memoryJobService(db).tick({ limit: 20 });
+    await expect(readNativeRuntimeAssetText(runtime.instructions.bundle, 128000, { companyId: f.home, runId: run!.id })).rejects.toThrow();
+    expect(calls).toBe(1);
+  });
+  it("rolls back publication when current authority is withdrawn by the final audit write", async () => {
+    await qualify(); const input = await publicationCommand(), before = await agent();
+    await db.execute(sql`create function aw_v9_fixture_publish_late_withdrawal() returns trigger language plpgsql as $body$
+      begin if new.action='agent_configuration.version_published' then
+        delete from principal_permission_grants where company_id=new.company_id and principal_type='user'
+          and principal_id=new.actor_id and permission_key='agents:configure';
+      end if; return new; end $body$`);
+    await db.execute(sql`create trigger aw_v9_fixture_publish_late_withdrawal after insert on activity_log
+      for each row execute function aw_v9_fixture_publish_late_withdrawal()`);
+    try { await expect(publications().publish(f.actor, f.home, draft.id, input)).rejects.toMatchObject({ status: 403 }); }
+    finally {
+      await db.execute(sql`drop trigger aw_v9_fixture_publish_late_withdrawal on activity_log`);
+      await db.execute(sql`drop function aw_v9_fixture_publish_late_withdrawal()`);
+    }
+    expect((await agent()).runtimeConfig).toEqual(before.runtimeConfig);
+    expect((await agent()).status).toBe(before.status);
+    expect(await db.select().from(agentConfigRevisions).where(eq(agentConfigRevisions.id,input.requestId))).toEqual([]);
+    expect(await db.select().from(activityLog).where(and(eq(activityLog.companyId,f.home),eq(activityLog.action,"agent_configuration.version_published")))).toEqual([]);
+    expect(await publications().publish(f.actor,f.home,draft.id,input)).toMatchObject({ requestId: input.requestId });
+    expect(calls).toBe(1);
   });
   it("requires independent verification, both confirmations and an exact current review", async () => {
     await execute();

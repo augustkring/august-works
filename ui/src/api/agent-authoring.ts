@@ -28,7 +28,7 @@ const scope = (path: string, principal: string) =>
   `${path}?expectedUserId=${encodeURIComponent(principal)}`;
 export interface AgentAuthoringOptions {
   owners: Array<{ id: string; name: string }>;
-  knowledge: Array<{ id: string; title: string; sensitivity: string }>;
+  knowledge: Array<{ id: string; title: string; sensitivity: string; revision?: number }>;
   runtimes: Array<{ id: string }>;
 }
 export const agentAuthoringApi = {

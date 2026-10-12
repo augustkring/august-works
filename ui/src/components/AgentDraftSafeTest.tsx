@@ -1,3 +1,4 @@
+import { AgentSelectedKnowledge } from "./AgentSelectedKnowledge";
 import { useEffect, useId, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { agentDraftTestCommandSchema, verificationReviewSchema, type AgentAuthoringDraftView, type AgentDraftTestCommand, type AgentDraftTestReview, type AgentDraftTestView, type VerificationPacket } from "@paperclipai/shared";
@@ -109,7 +110,7 @@ export function AgentDraftSafeTest({ company, principal, draft, enabled, canUseA
     {review.data && !review.isFetching && !review.isError && !unknown ? <Button className="min-h-11" disabled={pending || !authority.writeReady}
       onClick={() => { try { decisionHash.current = currentReview().reviewHash; setConfirmed(false); setOpen(true); } catch { setFailure(t("agentSafeTest.changed")); } }}>{t("agentSafeTest.review")}</Button> : null}
     <AlertDialog open={open && !unknown && review.isSuccess && !review.isFetching && current(true)} onOpenChange={value => { setOpen(value); if (!value) setConfirmed(false); }}>
-      <AlertDialogContent><AlertDialogHeader><AlertDialogTitle>{t("agentSafeTest.confirmTitle")}</AlertDialogTitle>
+      <AlertDialogContent className="max-h-(--sz-85vh) overflow-y-auto"><AlertDialogHeader><AlertDialogTitle>{t("agentSafeTest.confirmTitle")}</AlertDialogTitle>
         <AlertDialogDescription>{t("agentSafeTest.boundary")}</AlertDialogDescription></AlertDialogHeader>
         <dl className="space-y-2"><dt>{t("agentSafeTest.candidateVersion", { version: draft.version })}</dt><dd>{draft.content?.name}</dd>
           <dt>{t("agentSafeTest.model")}</dt><dd>Anthropic · {review.data?.model}</dd>
@@ -119,7 +120,7 @@ export function AgentDraftSafeTest({ company, principal, draft, enabled, canUseA
             <dt>{t("agentSafeTest.procedures")}</dt><dd><ul className="max-h-40 overflow-y-auto" tabIndex={0} aria-label={t("agentSafeTest.procedures")}>
               {review.data.requiredProcedures?.map(procedure => <li key={procedure.skillId}>{procedure.name}</li>)}
               {review.data.requiredPlaybooks?.map(procedure => <li key={procedure.playbookId}>{procedure.name}</li>)}
-            </ul></dd></> : null}</dl>
+            </ul></dd></> : null}<AgentSelectedKnowledge sources={review.data?.selectedKnowledge} /></dl>
         <p>{t("agentSafeTest.modelDisclosure")}</p>
         <p>{t("agentSafeTest.sharedResult")}</p>
         <label htmlFor={checkboxId} className="flex min-h-11 items-start gap-3"><input id={checkboxId} type="checkbox" checked={confirmed} onChange={event => setConfirmed(event.target.checked)} />

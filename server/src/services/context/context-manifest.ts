@@ -228,7 +228,7 @@ export function contextManifestService(db: Db) {
         for (const { decision } of input.selected) {
           const evidence = decision.evidence;
           if (evidence.sourceProvider !== "august_works_foundation") continue;
-          const ref = /^foundation:\/\/[a-f0-9-]{36}\/([a-f0-9-]{36})\/\d+$/i.exec(evidence.sourceRef);
+          const ref = /^foundation:\/\/[a-f0-9-]{36}\/([a-f0-9-]{36})\/(?:\d+|whole)$/i.exec(evidence.sourceRef);
           if (!ref || evidence.sourceVersion !== ref[1]) throw unprocessable("Foundation Context requires its pinned canonical revision");
           learnedAssets.push({type:"document_revision",id:ref[1]!});
           for (const root of await learningAssetRoots(tx as unknown as Db, input.companyId, "document_revision", ref[1]!, purpose,sourceActor,"task")) {
