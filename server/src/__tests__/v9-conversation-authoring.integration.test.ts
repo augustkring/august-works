@@ -5,6 +5,8 @@ import { agents, authUsers, companyMemberships, createDb, heartbeatRuns, issues,
 import { conversationAuthoringService } from "../services/experience/conversation-authoring.js";
 import { workflowAuthoringToolsService } from "../services/workflows/workflow-authoring-tools.js";
 import { workflowService } from "../services/workflows/workflow-service.js";
+import { lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
+import { ExperienceOverloadError } from "../services/experience/projection.js";
 import { issueService } from "../services/issues.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
@@ -39,6 +41,20 @@ describe("Current conversation previews use actual Original authoring revisions"
   async function draft(name = "Weekly review proposal") {
     return (await tools().create(context(), { name, description: "PRIVATE draft description", idempotencyKey: randomUUID() })).workflow;
   }
+  it("refuses an already aborted private read without returning proposal data", async () => {
+    await draft(); const controller = new AbortController(); controller.abort();
+    await expect(conversationAuthoringService(db).get(f.actor, f.home, conversation.id, controller.signal)).rejects.toBeInstanceOf(ExperienceOverloadError);
+    expect((await view()).proposals).toHaveLength(1);
+  });
+  it("bounds a real privacy-lock wait and releases read admission after the failed query settles", async () => {
+    await draft(); let release!: () => void, locked!: () => void;
+    const ready = new Promise<void>(resolve => { locked = resolve; }), gate = new Promise<void>(resolve => { release = resolve; });
+    const holder = db.transaction(async rawTx => { await lockMemoryPrivacy(rawTx as unknown as typeof db, f.home); locked(); await gate; });
+    await ready;
+    try { await expect(view()).rejects.toBeInstanceOf(ExperienceOverloadError); }
+    finally { release(); await holder; }
+    expect((await view()).proposals).toHaveLength(1);
+  });
   it("shows the exact saved Original workflow version and excludes prompt/configuration bodies", async () => {
     const workflow = await draft(), initial = await view();
     expect(initial).toMatchObject({ conversationId: conversation.id, agentId: f.presence.id, generation: 0, modelCalled: false, hasMore: false,

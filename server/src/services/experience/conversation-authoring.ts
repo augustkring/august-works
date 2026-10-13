@@ -7,6 +7,8 @@ import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { assertAnalyticalContextPayloadAccess } from "../analytical-context-authority.js";
 import { workflowService } from "../workflows/workflow-service.js";
 import { workflowNodeRegistryService } from "../workflows/workflow-node-registry.js";
+import { ExperienceOverloadError } from "./projection.js";
+import { withExperienceAdmission } from "./admission.js";
 import { projectWorkflowRevisionFlow } from "./workflow-flow.js";
 import { workflowComparison } from "./workflow-comparison.js";
 import { forbidden, notFound, conflict } from "../../errors.js";
@@ -32,8 +34,10 @@ export function conversationAuthoringService(db: Db) {
     return { conversation, userId, current };
   }
   return {
-    get: (actor: AuthorizationActor, companyId: string, conversationId: string) => db.transaction(async rawTx => {
-      const tx = rawTx as unknown as Db; await lockMemoryPrivacy(tx, companyId);
+    get: (actor: AuthorizationActor, companyId: string, conversationId: string, signal?: AbortSignal) => withExperienceAdmission(async (currentSignal, remainingMs) => db.transaction(async rawTx => {
+      const tx = rawTx as unknown as Db;
+      await tx.execute(sql`select set_config('statement_timeout', ${String(remainingMs()) + 'ms'}, true), set_config('lock_timeout', '1000ms', true)`);
+      currentSignal.throwIfAborted(); await lockMemoryPrivacy(tx, companyId);
       const initial = await owner(tx, actor, companyId, conversationId);
       // The Original revision's author/run relation establishes provenance.
       // Current conversation generation and responsible user exclude earlier
@@ -52,6 +56,7 @@ export function conversationAuthoringService(db: Db) {
       const triggerTypes = new Set(registry.filter(node => node.category === "trigger").map(node => node.type));
       const proposals = [];
       for (const candidate of candidates.slice(0, 10)) {
+        currentSignal.throwIfAborted();
         // Match the Original mutation's privacy -> workflow lock order. Keep
         // the current name/version pointers stable through final read checks.
         const [ownedWorkflow] = await tx.select({ id: workflows.id }).from(workflows)
@@ -74,13 +79,24 @@ export function conversationAuthoringService(db: Db) {
             : detail.draftRevisionId ? "changed" as const : "superseded" as const,
           stepCount: revision.graph.nodes.length - triggerCount, triggerCount, preview: authoredFlow.flow, comparison, href: `/workflows/${detail.id}` });
       }
+      currentSignal.throwIfAborted();
       const final = await owner(tx, actor, companyId, conversationId);
+      currentSignal.throwIfAborted();
       if (final.conversation.conversationAgentId !== initial.conversation.conversationAgentId ||
         final.conversation.conversationSessionGeneration !== initial.conversation.conversationSessionGeneration)
         throw conflict("The current conversation changed; reload its saved proposals");
       return conversationAuthoringViewSchema.parse({ companyId, conversationId, agentId: initial.conversation.conversationAgentId,
         generation: initial.conversation.conversationSessionGeneration, observedAt: new Date().toISOString(), hasMore: candidates.length > 10,
         proposals, modelCalled: false });
-    }),
+    }).catch(error => {
+      let cause: unknown = error;
+      for (let depth = 0; depth < 4 && cause && typeof cause === "object"; depth++) {
+        const failure = cause as { code?: unknown; cause?: unknown };
+        if (failure.code === "55P03" || failure.code === "57014")
+          throw new ExperienceOverloadError("The current conversation read could not complete within its budget");
+        cause = failure.cause;
+      }
+      throw error;
+    }), { signal }),
   };
 }
