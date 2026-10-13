@@ -1969,5 +1969,21 @@
     },
     "saveDraft": "Save the current agent changes before reviewing provisioning.",
     "capacityUse": "Uses one runtime slot from your existing allowance."
+  },
+  "conversationAuthoring": {
+    "title": "Saved conversation proposals",
+    "boundary": "These proposals were saved in this conversation. Open the current workflow to review its full steps and changes. Publishing remains a separate governed action.",
+    "unavailable": "Current saved proposals are unavailable. Refresh after resolving access or the underlying source.",
+    "checking": "Checking the current saved proposals…",
+    "empty": "No saved workflow proposal is recorded for this conversation session. A suggested link alone does not confirm a saved draft.",
+    "version": "Proposed version {{version}} · {{steps}} steps · {{triggers}} triggers",
+    "review": "Review the current workflow",
+    "more": "More saved proposals exist. Open Workflows to inspect the complete authorized list.",
+    "state": {
+      "draft": "This proposed version is the current saved draft.",
+      "changed": "The current draft has changed since this proposed version. Review the current version.",
+      "published": "This proposed version is currently published.",
+      "superseded": "This proposed version is historical. Review the workflow’s current state."
+    }
   }
 }

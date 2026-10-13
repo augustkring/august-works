@@ -1,7 +1,7 @@
 {
   "screenId": "TOOL-CARD",
   "journeyId": "chat",
-  "routeOrSurface": "Native task chat / assistant-ui aw_experience_card display renderer",
+  "routeOrSurface": "Native task chat / assistant-ui aw_experience_card display renderer; /chats/:agentId saved conversation workflow proposals",
   "targetExperienceProfiles": [
     "member",
     "manager",
@@ -12,7 +12,8 @@
   "entryConditions": [
     "Effective action_cards_v9 admission and selected company match; renderer request schema version 1 passes strict bounded validation.",
     "The current account must settle and an uncached original Native Experience read must succeed.",
-    "The referenced unique card, domain, resource ID and exact version must match the current fresh Native view."
+    "The referenced unique card, domain, resource ID and exact version must match the current fresh Native view.",
+    "Saved proposals require current verified human, owned non-retired conversation, issue/agent/workflow and analytical-source read authority, with private no-store responses and immediate Source-epoch suppression."
   ],
   "exitConditions": [
     "Render text and canonical navigation from the Native current card only.",
@@ -20,7 +21,7 @@
   ],
   "content": {
     "h1": "Native current card title at its existing heading level",
-    "supportingCopy": "Loading the current card… / This card could not be verified. Open Home or Needs You to review the current information.",
+    "supportingCopy": "Loading the current card\u2026 / This card could not be verified. Open Home or Needs You to review the current information.",
     "customerTerms": [
       "Work",
       "Home",
@@ -28,7 +29,10 @@
     ],
     "displayedState": [
       "Native current summary, consequence and evidence.",
-      "Tool input/result prose, arbitrary HTML, effect controls and invented completion are never shown."
+      "Tool input/result prose, arbitrary HTML, effect controls and invented completion are never shown.",
+      "Owned current conversation proposals are derived from actual Original workflow revisions and heartbeat run provenance, responsible user and session generation; arbitrary model-authored links are not admitted.",
+      "A saved workflow proposal shows its actual authored revision, trigger/step counts, current draft/publication references and a fixed Original workflow review link. A later user edit is explicitly distinguished from the authored version.",
+      "Workflow proposals omit prompt, description, graph/configuration and credential bodies. Opening them never invokes a model, publishes, activates or creates another task."
     ]
   },
   "inputs": [],
@@ -74,7 +78,7 @@
     "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
     "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
     "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
-    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
+    "targetSize": "Custom frequent and primary controls target at least 44 \u00d7 44 CSS px.",
     "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
     "reducedMotion": "No essential animated transition or moving progress indicator.",
     "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
@@ -109,7 +113,8 @@
   },
   "acceptance": {
     "functional": [
-      "Verify exact Native source/version, fresh current read, source changes, absence/duplicates, feature denial, current auth rechecks and both task chat adapters."
+      "Verify exact Native source/version, fresh current read, source changes, absence/duplicates, feature denial, current auth rechecks and both task chat adapters.",
+      "Run v9-conversation-authoring.integration.test.ts, the private client/widget suites and aw-v9-conversation-authoring.spec.ts; confirm original revision provenance, old-generation/retired-chat denial, late authority withdrawal rollback, multilingual mobile accessibility and no model/workflow writes on opening."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."

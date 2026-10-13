@@ -1969,5 +1969,21 @@
     },
     "saveDraft": "Gem de aktuelle agentændringer, før du gennemgår provisioneringen.",
     "capacityUse": "Bruger én runtime-plads fra jeres nuværende kapacitet."
+  },
+  "conversationAuthoring": {
+    "title": "Gemte forslag fra samtalen",
+    "boundary": "Disse forslag er gemt i denne samtale. Åbn det aktuelle workflow for at gennemgå alle trin og ændringer. Publicering er fortsat en separat styret handling.",
+    "unavailable": "De aktuelle gemte forslag er utilgængelige. Opdatér efter at have afklaret adgang eller den underliggende kilde.",
+    "checking": "Kontrollerer de aktuelle gemte forslag…",
+    "empty": "Der er ikke registreret et gemt workflow-forslag for denne samtalesession. Et foreslået link bekræfter ikke i sig selv en gemt kladde.",
+    "version": "Foreslået version {{version}} · {{steps}} trin · {{triggers}} udløsere",
+    "review": "Gennemgå det aktuelle workflow",
+    "more": "Der findes flere gemte forslag. Åbn Workflows for at se den fulde liste, du har adgang til.",
+    "state": {
+      "draft": "Denne foreslåede version er den aktuelle gemte kladde.",
+      "changed": "Den aktuelle kladde er ændret siden denne foreslåede version. Gennemgå den aktuelle version.",
+      "published": "Denne foreslåede version er aktuelt publiceret.",
+      "superseded": "Denne foreslåede version er historisk. Gennemgå workflowets aktuelle tilstand."
+    }
   }
 }

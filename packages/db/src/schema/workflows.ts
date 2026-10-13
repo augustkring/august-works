@@ -325,6 +325,11 @@ export const workflowRevisions = pgTable(
       table.workflowId,
       table.state,
     ),
+    companyAuthoringRunIdx: index("workflow_revisions_company_authoring_run_idx").on(
+      table.companyId,
+      table.createdByRunId,
+      table.createdAt,
+    ),
     oneDraftUq: uniqueIndex("workflow_revisions_one_draft_uq")
       .on(table.workflowId)
       .where(sql`${table.state} = 'draft'`),

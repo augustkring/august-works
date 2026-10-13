@@ -1,0 +1,1 @@
+CREATE INDEX "workflow_revisions_company_authoring_run_idx" ON "workflow_revisions" USING btree ("company_id","created_by_run_id","created_at");

@@ -27,7 +27,7 @@ import {
   unprocessable,
 } from "../../errors.js";
 import { isUniqueViolation } from "../../db-errors.js";
-import { authorizationService } from "../authorization.js";
+import { assertWorkflowAuthoringAuthority } from "./workflow-authoring-authority.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { workflowNodeRegistryService } from "./workflow-node-registry.js";
 import { workflowService } from "./workflow-service.js";
@@ -87,6 +87,7 @@ function authoringActor(context: WorkflowAuthoringContext) {
   return {
     principal: { type: "agent" as const, agentId: context.agentId },
     runId: context.runId,
+    workflowAuthoring: true,
   };
 }
 
@@ -196,7 +197,6 @@ function applyNodeUpdates(
 export function workflowAuthoringToolsService(db: Db) {
   const workflows = workflowService(db);
   const registry = workflowNodeRegistryService(db);
-  const authorization = authorizationService(db);
   const settings = instanceSettingsService(db);
 
   async function assertEnabled(): Promise<void> {
@@ -265,23 +265,7 @@ export function workflowAuthoringToolsService(db: Db) {
     context: WorkflowAuthoringContext,
     action: "workflows:edit" | "workflows:publish",
   ) {
-    const decision = await authorization.decide({
-      actor: {
-        type: "agent",
-        agentId: context.agentId,
-        companyId: context.companyId,
-        runId: context.runId,
-      },
-      action,
-      resource: { type: "company", companyId: context.companyId },
-    });
-    if (!decision.allowed) {
-      throw forbidden(decision.explanation, {
-        code: "permission_denied",
-        permission: action,
-        reason: decision.reason,
-      });
-    }
+    await assertWorkflowAuthoringAuthority(db, context, action);
   }
 
   async function loadEditable(

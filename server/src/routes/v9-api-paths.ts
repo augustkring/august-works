@@ -1,5 +1,6 @@
 import { z } from "zod";
 import {
+  conversationAuthoringViewSchema,
   agentManagedRuntimeSetupCatalogSchema, agentManagedRuntimeSetupCommandSchema, agentManagedRuntimeSetupReviewSchema,
   agentManagedRuntimeSetupReviewInputSchema, agentManagedRuntimeSetupReceiptSchema,
   agentRuntimeCandidateCreateSchema, agentRuntimeCandidateCatalogSchema, agentRuntimeCandidateViewSchema,
@@ -124,6 +125,7 @@ const write = (
   privateResponse: true,
 });
 export const v9ApiPaths: V9ApiOperation[] = [
+  read(`${company}/conversations/{conversationId}/authoring`, "Read current canonical workflow proposals saved by this owned conversation's Original authoring runs", conversationAuthoringViewSchema),
   read(`${company}/experience/analytics`, "Read bounded native experience measures without private payloads", experienceMeasuresSchema,
     z.strictObject({ expectedUserId: z.string().min(1).max(300) })),
   read(`${company}/memory/experience/maintenance`, "Read original memory maintenance history or one exact job without asserting current deletion completion", memoryMaintenanceHistorySchema, memoryMaintenanceHistoryQuerySchema),

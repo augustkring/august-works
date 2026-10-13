@@ -53,11 +53,15 @@ import { customerWorkflowLaunchReady } from "./workflow-customer-launch.js";
 import { enqueueWorkflowRunInTransaction, resolveWorkflowExecutionRevision } from "./workflow-executor.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 
+import { assertWorkflowAuthoringAuthority } from "./workflow-authoring-authority.js";
+
 type WorkflowDb = Db;
 
 export interface WorkflowMutationActor {
   principal: ExecutionPrincipal;
   runId?: string | null;
+  /** Internal Original AI draft path; never accepted from request bodies. */
+  workflowAuthoring?: boolean;
 }
 
 function actorFields(actor: WorkflowMutationActor) {
@@ -464,6 +468,10 @@ export function workflowService(db: Db) {
         const txDb = tx as unknown as Db;
         await lockAnalyticalCompany(txDb,companyId);await lockMemoryPrivacy(txDb, companyId);
         await assertActorCompanyScope(txDb, companyId, actor);
+        if (actor.workflowAuthoring) {
+          if (actor.principal.type !== "agent" || !actor.runId) throw forbidden("Current authoring run is required");
+          await assertWorkflowAuthoringAuthority(txDb, { companyId, agentId: actor.principal.agentId, runId: actor.runId }, "workflows:edit");
+        }
         await assertSaasDomainAdmission(txDb, companyId, "workflows.use");
         await assertProjectReference(txDb, companyId, input.projectId);
         const now = new Date();
@@ -500,6 +508,8 @@ export function workflowService(db: Db) {
           .where(and(eq(workflows.companyId, companyId), eq(workflows.id, workflow!.id)));
         const detail = await getDetail(txDb, companyId, workflow!.id,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
         if (!detail) throw new Error("Workflow disappeared after creation");
+        if (actor.workflowAuthoring && actor.principal.type === "agent" && actor.runId)
+          await assertWorkflowAuthoringAuthority(txDb, { companyId, agentId: actor.principal.agentId, runId: actor.runId }, "workflows:edit");
         return detail;
       });
     },
@@ -517,6 +527,10 @@ export function workflowService(db: Db) {
         const txDb = tx as unknown as Db;
         await lockAnalyticalCompany(txDb,companyId);await lockMemoryPrivacy(txDb, companyId);
         await assertActorCompanyScope(txDb, companyId, actor);
+        if (actor.workflowAuthoring) {
+          if (actor.principal.type !== "agent" || !actor.runId) throw forbidden("Current authoring run is required");
+          await assertWorkflowAuthoringAuthority(txDb, { companyId, agentId: actor.principal.agentId, runId: actor.runId }, "workflows:edit");
+        }
         await assertSaasDomainAdmission(txDb, companyId, "workflows.use");
         const workflow = await lockWorkflow(tx, companyId, workflowId);
         if (!workflow) throw notFound("Workflow not found");
@@ -539,6 +553,8 @@ export function workflowService(db: Db) {
         ) {
           const detail = await getDetail(txDb, companyId, workflowId,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
           if (!detail) throw new Error("Workflow disappeared after no-op update");
+          if (actor.workflowAuthoring && actor.principal.type === "agent" && actor.runId)
+            await assertWorkflowAuthoringAuthority(txDb, { companyId, agentId: actor.principal.agentId, runId: actor.runId }, "workflows:edit");
           return detail;
         }
         const now = new Date();
@@ -568,6 +584,8 @@ export function workflowService(db: Db) {
           .where(and(eq(workflows.companyId, companyId), eq(workflows.id, workflowId)));
         const detail = await getDetail(txDb, companyId, workflowId,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
         if (!detail) throw new Error("Workflow disappeared after draft update");
+        if (actor.workflowAuthoring && actor.principal.type === "agent" && actor.runId)
+          await assertWorkflowAuthoringAuthority(txDb, { companyId, agentId: actor.principal.agentId, runId: actor.runId }, "workflows:edit");
         return detail;
       });
     },

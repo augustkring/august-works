@@ -12,12 +12,15 @@ import { queryKeys } from "@/lib/queryKeys";
 import { useParams } from "@/lib/router";
 import { agentRouteRef } from "@/lib/utils";
 import { TaskDetailSurface } from "./IssueDetail";
+import { ConversationAuthoringProposals } from "@/components/ConversationAuthoringProposals";
+import { useV9FeatureEnabled } from "@/hooks/useV9FeatureEnabled";
 import type { Issue } from "@paperclipai/shared";
 
 export function AgentChat() {
   const { agentRef = "" } = useParams<{ agentRef: string }>();
   const { selectedCompanyId } = useCompany();
   const { enabled, loaded } = useAgentChatEnabled();
+  const authoringExperience = useV9FeatureEnabled("ambient_commands_v9");
   const client = useQueryClient();
   const agents = useQuery({
     queryKey: queryKeys.agents.list(selectedCompanyId!),
@@ -120,9 +123,13 @@ export function AgentChat() {
       <p className="text-sm text-muted-foreground">Loading conversation…</p>
     );
   return (
-    <TaskDetailSurface
+    <><TaskDetailSurface
       key={`${surface.owner}:${surface.version}`}
       conversation={{ agent, issue: chat.data ?? null, ensureIssue, refreshConversation }}
     />
+      {authoringExperience.enabled && !authoringExperience.query.isFetching && selectedCompanyId && userId && chat.data &&
+        <ConversationAuthoringProposals key={`${surface.owner}:${surface.version}`} company={selectedCompanyId} principal={userId}
+          conversation={chat.data.id} agent={agent.id} generation={chat.data.conversationSessionGeneration ?? 0} />}
+    </>
   );
 }

@@ -3396,6 +3396,13 @@
       "when": 1791873487071,
       "tag": "0486_awesome_logan",
       "breakpoints": true
+    },
+    {
+      "idx": 487,
+      "version": "7",
+      "when": 1791885177166,
+      "tag": "0487_famous_gambit",
+      "breakpoints": true
     }
   ]
 }
