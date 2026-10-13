@@ -45,12 +45,14 @@ import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
 import { enqueueSupervisionStop } from "../supervision/supervision-outbox.js";
 import { modelReservationService, quoteModelReservation } from "./model-reservations.js";
 import { resolvePaperclipRunnerProviderProfile } from "../native-runtime/provider-profile.js";
+import { hashContextPolicySnapshot } from "../context/context-manifest.js";
 import {
   anthropicReadOnlyCall,
   readOnlyModelEnvelopeBytes,
 } from "./read-only-model-transport.js";
 import {
   assertWorkerModelProfileCurrent,
+  selectWorkerModelProfile,
   type WorkerModelProfile,
 } from "./worker-model-profiles.js";
 import type { guardedRemoteHttpFetch } from "../remote-http-fetch.js";
@@ -71,19 +73,9 @@ type Options = {
  * remain closed at orchestration admission: exposing this consumer does not
  * qualify their undisclosed model calls or their physical sandbox. */
 export function workerModelGateway(db: Db, options: Options) {
-  function profile(companyId: string, agentId: string) {
-    const matches = options.profiles.filter(
-      (p) => p.companyId === companyId && p.workerAgentId === agentId,
-    );
-    if (matches.length !== 1)
-      throw forbidden(
-        "No unique worker model transport qualification is configured",
-      );
-    return assertWorkerModelProfileCurrent(
-      matches[0]!,
-      options.sourceSha,
-      options.protectedEvidenceOrigin,
-    );
+  function profile(companyId: string, agentId: string, profileId?: string, configurationHash?: string) {
+    return selectWorkerModelProfile(options.profiles, { companyId, agentId, profileId, configurationHash,
+      sourceSha: options.sourceSha, protectedEvidenceOrigin: options.protectedEvidenceOrigin });
   }
   async function current(tx: Db, claims: BoundClaims) {
     const now = new Date(),
@@ -91,7 +83,6 @@ export function workerModelGateway(db: Db, options: Options) {
     if (claims.scope !== "worker_model" || claims.exp * 1000 <= now.getTime())
       throw forbidden("Current run-scoped worker model capability required");
     await assertV7Enabled(tx, "orchestration_v7");
-    const p = profile(claims.company_id, claims.sub);
     const actor: AuthorizationActor = {
       type: "board",
       source: "session",
@@ -213,6 +204,15 @@ export function workerModelGateway(db: Db, options: Options) {
       .where(
         and(eq(agents.companyId, claims.company_id), eq(agents.id, claims.sub)),
       );
+    if (!agent) throw forbidden("The original Native draft Agent is required");
+    const selected = agent.adapterType === "paperclip_runner" ? resolvePaperclipRunnerProviderProfile(agent.adapterConfig) : null;
+    // Earlier admitted Native workers have a configuration pin instead of an
+    // aw_text_only selector. Match that exact pin; an alternative never becomes
+    // an implicit default. Existing runtime/manifest guards remain authoritative.
+    const p = profile(claims.company_id, claims.sub, selected?.provider === "aw_text_only" ? selected.workerModelProfileId : undefined,
+      hashContextPolicySnapshot({ adapterType: agent.adapterType, adapterConfig: agent.adapterConfig }));
+    if (selected?.provider === "aw_text_only" && (selected.model !== p.tariff.model || selected.maxOutputTokens > p.maxOutputTokens))
+      throw forbidden("The selected draft model or output ceiling changed");
     const [company] = await tx
       .select({ status: companies.status })
       .from(companies)
@@ -553,7 +553,6 @@ export function workerModelGateway(db: Db, options: Options) {
      * selector; only the installed operator profile supplies prices/authority. */
     async qualifyDraft(tx: Db, input: { companyId: string; agentId: string; responsibleUserId: string }) {
       await assertV7Enabled(tx, "orchestration_v7");
-      const p = profile(input.companyId, input.agentId);
       await assertV7Authorization(tx, { type: "board", source: "session", userId: input.responsibleUserId }, input.companyId, "company_scope:read");
       const [presence] = await tx.select({ agent: agents, identity: agentIdentities, company: companies }).from(agents)
         .innerJoin(agentIdentities, eq(agentIdentities.id, agents.agentIdentityId))
@@ -565,6 +564,8 @@ export function workerModelGateway(db: Db, options: Options) {
         throw forbidden("Internal drafts require their current native presence");
       await assertAuthoredProceduresCurrent(tx, presence.agent, input.responsibleUserId);
       const selected = resolvePaperclipRunnerProviderProfile(presence.agent.adapterConfig);
+      if (selected.provider !== "aw_text_only") throw forbidden("The installed text transport is required");
+      const p = profile(input.companyId, input.agentId, selected.workerModelProfileId);
       if (selected.provider !== "aw_text_only" || selected.workerModelProfileId !== p.id ||
           selected.model !== p.tariff.model || selected.maxOutputTokens > p.maxOutputTokens)
         throw forbidden("The draft presence does not select its exact qualified transport");
@@ -668,7 +669,7 @@ export function workerModelGateway(db: Db, options: Options) {
           i.purpose === "worker_model" &&
           i.companyId === claims.company_id &&
           i.planId === bound.worker_model.planId
-            ? profile(claims.company_id, claims.sub).tariff
+            ? assertWorkerModelProfileCurrent(state.profile, options.sourceSha, options.protectedEvidenceOrigin).tariff
             : null,
         currentAuthority: async (tx) =>
           (await current(tx, bound)).authorityHash,

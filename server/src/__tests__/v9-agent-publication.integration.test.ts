@@ -94,7 +94,7 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
       tariff: { provider: "anthropic", model: config.model, currency: "USD", fixedMinor: 3, inputMinorPerMillion: 0, outputMinorPerMillion: 0,
         sourceSha, qualificationHash: "b".repeat(64), testedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 300000).toISOString() },
       qualificationEvidenceRef: "https://protected.test.invalid/qualification/safe-test-fixture", qualificationArtifactSha256: "c".repeat(64) };
-    registerNativeDraftGateway(db, workerModelGateway(db, { profiles: [profile], sourceSha, protectedEvidenceOrigin: "https://protected.test.invalid", fetch: transport }));
+    registerNativeDraftGateway(db, workerModelGateway(db, { profiles: [profile, { ...profile, id: randomUUID(), qualifiedConfigurationHash: "f".repeat(64), tariff: { ...profile.tariff, model: "unselected-alternative-model" } }], sourceSha, protectedEvidenceOrigin: "https://protected.test.invalid", fetch: transport }));
     return runtime;
   }
   beforeEach(async () => {

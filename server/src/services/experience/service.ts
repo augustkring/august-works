@@ -1,4 +1,5 @@
 import { readCoreMaintenance } from "./core-maintenance.js";
+import { readMemoryMaintenanceAttention } from "./memory-maintenance-attention.js";
 import { readConnectorRecovery } from "./connector-recovery.js";
 import { readWorkflowRecovery } from "./workflow-recovery.js";
 import { readPackageMaintenanceAttention } from "./maintenance-attention.js";
@@ -425,6 +426,9 @@ export function experienceService(db: Db) {
               ...(v9FeatureEnabled(flags, "maintenance_autopilot_v9") && v7FeatureEnabled(flags, "core_stewards_v7") && v7FeatureEnabled(flags, "readiness_engine_v7")
                 ? [{ domain: "core-maintenance", read: (signal: AbortSignal) => readCoreMaintenance(db, actor, companyId, signal) }]
                 : []),
+              ...(v9FeatureEnabled(flags, "maintenance_autopilot_v9") && flags.enableCollectiveMemoryV1
+                ? [{ domain: "memory-maintenance", read: (signal: AbortSignal) => readMemoryMaintenanceAttention(db, actor, companyId, signal) }]
+                : []),
               ...(v9FeatureEnabled(flags, "maintenance_autopilot_v9")
                 ? [{ domain: "connector-recovery", read: (signal: AbortSignal) => readConnectorRecovery(db, actor, companyId, signal) }]
                 : []),
@@ -568,7 +572,7 @@ export function experienceService(db: Db) {
           // for a resource that has since become private or changed.
           const markPartial = (
             domain: string,
-            reason: "denied" | "source_stale",
+            reason: "denied" | "source_stale" | "more_items_available",
           ) => {
             const dependency = result.dependencies.find(
               (entry) => entry.domain === domain,
@@ -710,6 +714,25 @@ export function experienceService(db: Db) {
                 })
               ).allowed,
             );
+          }
+          if (result.needsYou.some(card => card.source.domain === "memory_job")) {
+            try {
+              const reread = await readMemoryMaintenanceAttention(db, actor, companyId, admittedSignal);
+              const current = new Map(reread.needsYou.map(card => [card.id, card]));
+              result.needsYou = result.needsYou.flatMap(card => {
+                if (card.source.domain !== "memory_job") return [card];
+                const source = current.get(card.id);
+                if (!source || source.source.version !== card.source.version) {
+                  markPartial("memory-maintenance", "source_stale"); return [];
+                }
+                return [source];
+              });
+              if (reread.coverage) markPartial("memory-maintenance", reread.coverage.reason);
+            } catch (error) {
+              admittedSignal.throwIfAborted();
+              result.needsYou = result.needsYou.filter(card => card.source.domain !== "memory_job");
+              markPartial("memory-maintenance", "denied");
+            }
           }
           if (result.needsYou.some(card => card.source.domain === "readiness" && card.kind === "maintenance")) {
             try {

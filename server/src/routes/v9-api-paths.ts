@@ -7,7 +7,7 @@ import {
   feedbackImageSchema, feedbackImagesSchema, feedbackRetentionViewSchema, feedbackRetentionCommandSchema,
   feedbackRetentionErasureReviewSchema, feedbackRetentionErasureCommandSchema,
   feedbackRetentionErasureReceiptSchema, feedbackRetentionErasureHistorySchema,
-  memoryMaintenanceHistorySchema, experienceMeasuresSchema,
+  memoryMaintenanceHistorySchema, memoryMaintenanceHistoryQuerySchema, experienceMeasuresSchema,
   customerFeedbackPolicySchema,
   customerSupportHistorySchema,
   maintenanceHistorySchema,
@@ -122,7 +122,7 @@ const write = (
 export const v9ApiPaths: V9ApiOperation[] = [
   read(`${company}/experience/analytics`, "Read bounded native experience measures without private payloads", experienceMeasuresSchema,
     z.strictObject({ expectedUserId: z.string().min(1).max(300) })),
-  read(`${company}/memory/experience/maintenance`, "Read original memory maintenance history without asserting current deletion completion", memoryMaintenanceHistorySchema),
+  read(`${company}/memory/experience/maintenance`, "Read original memory maintenance history or one exact job without asserting current deletion completion", memoryMaintenanceHistorySchema, memoryMaintenanceHistoryQuerySchema),
   { ...read(`${company}/issues/create-receipts/{idempotencyKey}`, "Read the current actor's original task creation receipt without creating a task"), cacheControl: "no-store" },
   { ...read(`${company}/projects/create-receipts/{idempotencyKey}`, "Read the current actor's original project creation receipt without creating a project"), cacheControl: "no-store" },
   read(`${company}/activation/connections/{applicationKey}/review`, "Review the original current connection scope without granting access", activationConnectionReviewSchema,

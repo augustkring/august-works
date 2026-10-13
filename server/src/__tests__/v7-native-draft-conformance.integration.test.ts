@@ -101,6 +101,10 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
 
   it("bootstraps through the actual operator service without fixture conformance and holds cancellation liability", async () => {
     await expect(agentProviderBindingService(db).assertRuntime(f.home, f.presence.id)).rejects.toThrow();
+    // A prepared alternative is not an authority source for the active selector.
+    // The actual Original qualification probes must still use the selected profile.
+    profiles.push({ ...profiles[0]!, id: randomUUID(), qualifiedConfigurationHash: "f".repeat(64),
+      tariff: { ...profiles[0]!.tariff, model: "unselected-alternative-model" } });
     const result = await test();
     expect(result).toMatchObject({ failure: null, spentCents: null, reservedMinor: 12, unknownCharges: 1,
       checks: { connect: true, identity: true, start: true, stream: true, wait: true, cancel: true, memoryScoping: true } });

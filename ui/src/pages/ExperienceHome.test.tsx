@@ -57,6 +57,23 @@ const model = {
   watch: [],
 };
 describe("Home state truth", () => {
+  it("preserves a keyboard gesture on a global utility when the first projection finishes", async () => {
+    let resolve!: (value: typeof model) => void;
+    vi.spyOn(experienceApi, "home").mockImplementation(() => new Promise(done => { resolve = done; }));
+    await mount();
+    await vi.waitFor(() => expect(resolve).toBeTypeOf("function"));
+    const utilities = document.createElement("div"), feedback = document.createElement("button");
+    feedback.textContent = "Feedback"; utilities.append(feedback); document.body.append(utilities);
+    const opening = vi.fn(); feedback.addEventListener("keydown", opening);
+    try {
+      feedback.focus(); expect(document.activeElement).toBe(feedback);
+      await act(async () => resolve(model));
+      await vi.waitFor(() => expect(container.querySelector("h1")).not.toBeNull());
+      expect(document.activeElement).toBe(feedback);
+      document.activeElement?.dispatchEvent(new KeyboardEvent("keydown", { key: "Enter", bubbles: true }));
+      expect(opening).toHaveBeenCalledOnce();
+    } finally { utilities.remove(); }
+  });
   it("does not describe an observed native page boundary as an outage or a complete empty queue", async () => {
     vi.spyOn(experienceApi, "home").mockResolvedValue({
       ...model,

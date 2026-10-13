@@ -20,7 +20,7 @@ import { budgetService } from "./budgets.js";
 import { withV7ActivityTransaction, logActivity } from "./v7-mutations.js";
 import { writeOrchestrationContract } from "./orchestration/orchestration-contracts.js";
 import { modelReservationService } from "./orchestration/model-reservations.js";
-import { assertWorkerModelProfileCurrent, type WorkerModelProfile } from "./orchestration/worker-model-profiles.js";
+import { assertWorkerModelProfileCurrent, selectWorkerModelProfile, type WorkerModelProfile } from "./orchestration/worker-model-profiles.js";
 import { anthropicReadOnlyCall, readOnlyModelEnvelopeBytes } from "./orchestration/read-only-model-transport.js";
 import { guardedRemoteHttpFetch } from "./remote-http-fetch.js";
 
@@ -58,11 +58,15 @@ export function nativeDraftConformanceService(db: Db, options: Options) {
       let reservedMinor = 0, failure: string | null = null;
 
       async function target(cid: string, aid: string) {
-        const profiles = options.profiles.filter(p => p.companyId === cid && p.workerAgentId === aid);
-        if (profiles.length !== 1) throw forbidden("A unique installed draft qualification profile is required");
-        const p = assertWorkerModelProfileCurrent(profiles[0]!, options.sourceSha, options.protectedEvidenceOrigin);
         await assertV7Authorization(db, actor, cid, "agents:configure", { type: "agent", companyId: cid, agentId: aid });
         await assertV7Authorization(db, actor, cid, "agent:wake", { type: "agent", companyId: cid, agentId: aid });
+        const [configured] = await db.select({ adapterConfig: agents.adapterConfig }).from(agents)
+          .where(and(eq(agents.companyId, cid), eq(agents.id, aid)));
+        if (!configured) throw conflict("The exact Native presence is required");
+        const selected = resolvePaperclipRunnerProviderProfile(configured.adapterConfig);
+        if (selected.provider !== "aw_text_only") throw forbidden("The installed text transport is required");
+        const p = selectWorkerModelProfile(options.profiles, { companyId: cid, agentId: aid, profileId: selected.workerModelProfileId,
+          sourceSha: options.sourceSha, protectedEvidenceOrigin: options.protectedEvidenceOrigin });
         const advertised = await providerDiscoveryService(db).discover(actor, cid, aid);
         if (advertised.capabilitySnapshotHash !== p.providerSnapshotHash) throw conflict("Draft capability profile changed before qualification");
         const initial = await bindings.getForPresence(actor, cid, aid);

@@ -16,7 +16,7 @@ import { instanceSettingsService } from "../instance-settings.js";
 import { v9FeatureEnabled } from "@paperclipai/shared";
 import { modelReservationService, quoteModelReservation } from "../orchestration/model-reservations.js";
 import { anthropicReadOnlyCall, readOnlyModelEnvelopeBytes } from "../orchestration/read-only-model-transport.js";
-import type { WorkerModelProfile } from "../orchestration/worker-model-profiles.js";
+import { assertWorkerModelProfileCurrent, type WorkerModelProfile } from "../orchestration/worker-model-profiles.js";
 import type { guardedRemoteHttpFetch } from "../remote-http-fetch.js";
 import { documentService } from "../documents.js";
 import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
@@ -29,7 +29,7 @@ const system = "Produce one internal draft for the saved candidate's representat
 
 /** Private installed controller. The model and HTTP caller cannot choose a
  * credential, endpoint, tariff, qualification profile or instruction override. */
-export function authoringTestRuntime(db: Db, options: Options, profile: (companyId: string, agentId: string) => WorkerModelProfile) {
+export function authoringTestRuntime(db: Db, options: Options, profile: (companyId: string, agentId: string, profileId: string) => WorkerModelProfile) {
   async function qualify(tx: Db, input: Input) {
     const actor: AuthorizationActor = { type: "board", source: "session", userId: input.responsibleUserId, ignoreInstanceAdmin: true };
     await assertV7Enabled(tx, "orchestration_v7");
@@ -60,13 +60,14 @@ export function authoringTestRuntime(db: Db, options: Options, profile: (company
       inArray(heartbeatRuns.status, ["queued", "scheduled_retry", "running"]), ...(input.runId ? [ne(heartbeatRuns.id, input.runId)] : []))).limit(1);
     if (otherRun) throw conflict("Wait for existing work to settle before testing this candidate");
     let p: WorkerModelProfile;
-    try { p = profile(input.companyId, agentId); }
+    const selected = resolvePaperclipRunnerProviderProfile(agent.adapterConfig);
+    if (selected.provider !== "aw_text_only") throw forbidden("The candidate must select the installed text-only transport");
+    try { p = profile(input.companyId, agentId, selected.workerModelProfileId); }
     catch (error) {
       if (error instanceof Error && error.message === "read_only_model_qualification_unavailable")
         throw conflict("The candidate's model qualification is no longer current");
       throw error;
     }
-    const selected = resolvePaperclipRunnerProviderProfile(agent.adapterConfig);
     if (selected.provider !== "aw_text_only" || selected.workerModelProfileId !== p.id || selected.model !== p.tariff.model || selected.maxOutputTokens > p.maxOutputTokens)
       throw forbidden("The candidate must select its own installed text-only transport");
     const provider = await agentProviderBindingService(tx).assertRuntime(input.companyId, agentId);
@@ -122,8 +123,10 @@ export function authoringTestRuntime(db: Db, options: Options, profile: (company
       scenarioIndex: test.scenarioIndex, runId: test.runId };
     const controller = new AbortController(), timeout = setTimeout(() => controller.abort(), 20000);
     let reservationId: string | null = null, dispatched = false, outcomeRecorded = false;
+    let tariffProfile: WorkerModelProfile | null = null;
     const broker = modelReservationService(db, { sourceSha: options.sourceSha,
-      qualifiedTariff: async () => profile(test.companyId, test.agentId).tariff,
+      qualifiedTariff: async () => tariffProfile
+        ? assertWorkerModelProfileCurrent(tariffProfile, options.sourceSha, options.protectedEvidenceOrigin).tariff : null,
       currentAuthority: async (tx, actor, scope) => {
         if (actor.type !== "board" || actor.userId !== test.createdByUserId || scope.companyId !== test.companyId || scope.planId !== test.planId ||
           scope.purpose !== "agent_safe_test" || scope.workerId || scope.workerAttemptId) throw forbidden("The original test's model authority is required");
@@ -131,6 +134,7 @@ export function authoringTestRuntime(db: Db, options: Options, profile: (company
       } });
     try {
       const state = await qualify(db, input);
+      tariffProfile = state.p;
       const reservation = await broker.reserve(state.actor, { companyId: test.companyId, planId: test.planId, expectedPlanVersion: 1,
         purpose: "agent_safe_test", idempotencyKey: `agent-safe-test:${test.id}`, inputHash: nativeSha256(state.request), authorityHash: state.authorityHash,
         inputTokensUpperBound: state.p.inputTokensUpperBound, maxOutputTokens: state.request.maxOutputTokens });

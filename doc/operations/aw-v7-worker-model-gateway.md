@@ -9,7 +9,13 @@ operation; there is no customer endpoint that mints arbitrary worker capabilitie
 
 An operator may configure the paired `AW_WORKER_MODEL_PROFILES_PATH` and
 `AW_WORKER_MODEL_PROFILES_SHA256`. The absolute, owner-only file contains at most
-100 strict profiles, unique by company/presence and profile ID. A profile pins an
+100 strict profiles, unique by company/presence/configuration hash and globally
+unique profile ID. Multiple distinct qualification pins may be installed for
+one presence. The current canonical configuration selects its exact profile;
+Native workers with an earlier configuration-only pin match that exact hash.
+An unselected alternative is never a default or another presence’s authority.
+Installing an alternative does not change a live binding or save/publish a
+runtime candidate. A profile pins an
 installed native provider binding, immutable provider snapshot, configuration,
 existing encrypted AI Connection grant, exact Anthropic Messages model/contract,
 whole-request byte and input-token ceilings, maximum output tokens, source SHA,

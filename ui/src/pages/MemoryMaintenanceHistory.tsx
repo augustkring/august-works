@@ -1,7 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { Link } from "../lib/router";
+import { Link, useSearchParams } from "../lib/router";
+import { memoryMaintenanceHistoryQuerySchema } from "@paperclipai/shared";
 import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
 import { useV9PrivateReadAuthority } from "../hooks/useV9PrivateReadAuthority";
 import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
@@ -15,7 +16,10 @@ export function MemoryMaintenanceHistoryEntry() {
   const identity = useV9CurrentAccount();
   const { selectedCompanyId } = useCompany();
   const { t } = useTranslation("experience");
+  const [params] = useSearchParams();
   const principal = identity.localImplicit ? "local-board" : identity.userId;
+  const selected = memoryMaintenanceHistoryQuerySchema.safeParse({ expectedUserId: principal ?? "unavailable",
+    ...(params.has("jobId") ? { jobId: params.get("jobId") } : {}) });
   const authority = useV9PrivateReadAuthority(principal ?? "", identity.localImplicit);
   if (feature.query.isError || identity.failed)
     return <div role="alert" className="space-y-4">
@@ -30,10 +34,12 @@ export function MemoryMaintenanceHistoryEntry() {
   if (!feature.enabled || !feature.query.data?.enableCollectiveMemoryV1 || !principal)
     return <p role="alert">{t("memoryMaintenance.unavailable")}</p>;
   if (!selectedCompanyId) return <p role="status">{t("selectCompany")}</p>;
-  return <MemoryMaintenanceHistory key={`${selectedCompanyId}:${principal}`} company={selectedCompanyId} principal={principal} />;
+  if (!selected.success) return <p role="alert">{t("memoryMaintenance.unavailable")}</p>;
+  return <MemoryMaintenanceHistory key={`${selectedCompanyId}:${principal}:${selected.data.jobId ?? "history"}`} company={selectedCompanyId}
+    principal={principal} jobId={selected.data.jobId} />;
 }
 
-export function MemoryMaintenanceHistory({ company, principal }: { company: string; principal: string }) {
+export function MemoryMaintenanceHistory({ company, principal, jobId }: { company: string; principal: string; jobId?: string }) {
   const { t, i18n } = useTranslation("experience");
   const client = useQueryClient();
   const authority = useV9PrivateReadAuthority(principal, principal === "local-board");
@@ -44,8 +50,8 @@ export function MemoryMaintenanceHistory({ company, principal }: { company: stri
   const restoreFocus = useRef<"heading" | "back" | { reference: string } | null>(null);
   const prefix = ["memory-maintenance-history", company, principal];
   const query = useQuery({
-    queryKey: [...prefix, authority.epoch, sourceEpoch],
-    queryFn: ({ signal }) => authority.read(() => memoryMaintenanceHistoryApi.get(company, principal, signal)),
+    queryKey: [...prefix, jobId ?? "history", authority.epoch, sourceEpoch],
+    queryFn: ({ signal }) => authority.read(() => memoryMaintenanceHistoryApi.get(company, principal, signal, jobId)),
     enabled: authority.readReady, retry: false, gcTime: 0, staleTime: 0,
     refetchOnWindowFocus: true,
     refetchInterval: () => document.visibilityState === "visible" ? 15000 : false,

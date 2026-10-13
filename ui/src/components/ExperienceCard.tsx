@@ -17,15 +17,17 @@ export function ExperienceCard({
   const unknownMaintenance =
     maintenance && card.evidence.includes("unknown_outcome");
   const coreMaintenance = card.source.domain === "readiness" && card.kind === "maintenance";
+  const memoryMaintenance = card.source.domain === "memory_job" && card.kind === "maintenance";
   const runtimeRecovery = card.source.domain === "runtime_cell" && card.kind === "recovery";
   const connectorRecovery = card.source.domain === "connection" && card.kind === "recovery";
   const personalConnector = connectorRecovery && card.evidence.includes("connector_personal_access_review");
   const connectorAccess = connectorRecovery && (personalConnector || card.evidence.includes("connector_access_review"));
   const workflowRecovery = card.source.domain === "workflow" && card.kind === "recovery";
   const runtimeCapacity = runtimeRecovery && card.evidence.includes("runtime_capacity_review");
-  const cardNamespace = coreMaintenance ? "coreMaintenance" : connectorRecovery ? "connectorRecovery" : workflowRecovery ? "workflowRecovery" : runtimeRecovery ? "runtimeRecovery" : null;
+  const cardNamespace = coreMaintenance ? "coreMaintenance" : memoryMaintenance ? "memoryMaintenanceAttention" : connectorRecovery ? "connectorRecovery" : workflowRecovery ? "workflowRecovery" : runtimeRecovery ? "runtimeRecovery" : null;
   function evidenceText(item: string) {
     if (coreMaintenance) return t("coreMaintenance.evidence");
+    if (memoryMaintenance) return t("memoryMaintenanceAttention.evidence");
     if (connectorRecovery) return t(connectorAccess ? "connectorRecovery.accessEvidence" : "connectorRecovery.evidence");
     if (workflowRecovery) return t(["workflow_live_run", "workflow_test_run", "workflow_failed", "workflow_recovering", "workflow_waiting"].includes(item) ? `workflowRecovery.${item}` : "workflowRecovery.evidence");
     if (runtimeRecovery) return t("runtimeRecovery.evidence");

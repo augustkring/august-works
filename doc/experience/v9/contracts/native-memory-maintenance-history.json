@@ -2,19 +2,50 @@
   "screenId": "NATIVE-MEMORY-MAINTENANCE-HISTORY",
   "supports": "MAINTENANCE-HISTORY",
   "routeOrSurface": "/memory/maintenance",
-  "sourceSections": ["30.1", "30.2", "30.3", "31", "32", "52.4"],
+  "sourceSections": [
+    "30.1",
+    "30.2",
+    "30.3",
+    "31",
+    "32",
+    "52.4"
+  ],
   "status": "in_progress",
-  "canonicalReadOwners": ["memory_jobs", "activity_log", "Memory privacy serialization", "Current native company and Memory owner admission"],
+  "canonicalReadOwners": [
+    "memory_jobs",
+    "activity_log",
+    "Memory privacy serialization",
+    "Current native company and Memory owner admission"
+  ],
   "canonicalWriteOperation": "None",
   "class": "M1",
-  "entryConditions": ["Current original human/local-board session", "Effective maintenance_autopilot_v9 dependencies and shared Memory enabled", "Current company read plus original Memory owner/administrator authority"],
-  "content": ["Ten newest original native index-check attempts with has-more", "Historical queued, running, unconfirmed, needs-review, verified, missing-verification and unavailable-source outcomes", "Native submitted/finished times, bounded attempt number and optional original verification receipt"],
-  "prohibitedContent": ["Record IDs", "Record content", "Requester identity", "Private errors", "Raw source/result JSON", "Provider or credential configuration"],
+  "entryConditions": [
+    "Current original human/local-board session",
+    "Effective maintenance_autopilot_v9 dependencies and shared Memory enabled",
+    "Current company read plus original Memory owner/administrator authority"
+  ],
+  "content": [
+    "Ten newest original native index-check attempts with has-more",
+    "Historical queued, running, unconfirmed, needs-review, verified, missing-verification and unavailable-source outcomes",
+    "Native submitted/finished times, bounded attempt number and optional original verification receipt",
+    "An optional validated jobId opens that exact Original index job, including older jobs outside the ten newest rows. Absent or foreign-company observations return no entry."
+  ],
+  "prohibitedContent": [
+    "Record IDs",
+    "Record content",
+    "Requester identity",
+    "Private errors",
+    "Raw source/result JSON",
+    "Provider or credential configuration"
+  ],
   "successCondition": "The original worker checks the original table's live/ready/valid nonpartial single-expression GIN index before and after statistics refresh. Exactly one original native receipt must match requester, times, record count and strict native_postgres/nativeIndexCurrent result. A job status alone is insufficient.",
   "recovery": "Retry only the current authorized read. Unconfirmed execution never authorizes a new attempt. Source erasure hides old verification and count.",
   "sessionBoundary": "Use the original current-session cache and private-read epoch before dispatch and acknowledgement; pending checks and changed sessions suppress older results.",
   "privacy": "Private no-store JSON and normalized private HTTP namespace including rejected methods and failures; no new event or content collection.",
   "accessibility": "Single layout main landmark, initial H1 focus, safe error focus, named list, semantic times, keyboard disclosures, preserved reference/back focus on refresh, token touch targets and no animation.",
-  "localization": ["en", "da"],
+  "localization": [
+    "en",
+    "da"
+  ],
   "acceptance": "14 actual Native cases, 31 focused cases and the actual built original-worker/browser software case pass; current combined full types/regression, assistive-technology and human qualification remain pending. No general M0–M4 or launch acceptance."
 }

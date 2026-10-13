@@ -25,7 +25,7 @@ const resultSchema = z.strictObject({
 
 /** Projection over original jobs and their atomic Activity Log postconditions.
  * No new ledger, executor, repair, permission, or claim of current readiness. */
-export async function readMemoryMaintenanceHistory(db: Db, actor: AuthorizationActor, companyId: string) {
+export async function readMemoryMaintenanceHistory(db: Db, actor: AuthorizationActor, companyId: string, jobId?: string) {
   const human = v5HumanActorId(actor);
   const current = { ...actor, isInstanceAdmin: false, ignoreInstanceAdmin: true };
   const memoryActor: MemoryMutationActor = { principal: actor.source === "local_implicit"
@@ -53,6 +53,7 @@ export async function readMemoryMaintenanceHistory(db: Db, actor: AuthorizationA
     const jobs = await tx.select().from(memoryJobs).where(and(
       eq(memoryJobs.companyId, companyId), eq(memoryJobs.operationType, "index_refresh"),
       sql`${memoryJobs.jobKey} like 'maintenance:v1:%'`,
+      ...(jobId ? [eq(memoryJobs.id, jobId)] : []),
     )).orderBy(desc(memoryJobs.submittedAt), desc(memoryJobs.id)).limit(11).for("share");
     const ids = jobs.slice(0, 10).map((job) => job.id);
     // Eleven jobs and at most two receipts per job; duplicate bindings fail closed.

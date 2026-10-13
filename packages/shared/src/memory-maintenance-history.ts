@@ -1,5 +1,9 @@
 import { z } from "zod";
 
+export const memoryMaintenanceHistoryQuerySchema = z.strictObject({
+  expectedUserId: z.string().min(1).max(300), jobId: z.uuid().optional(),
+});
+
 /** Only historical native index checks are M1. A successful job alone is not
  * a verified postcondition, and this projection never authorizes another job. */
 export const memoryMaintenanceHistorySchema = z.strictObject({

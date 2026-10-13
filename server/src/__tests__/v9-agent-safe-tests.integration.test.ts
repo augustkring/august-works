@@ -99,7 +99,7 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
       tariff: { provider: "anthropic", model: config.model, currency: "USD", fixedMinor: 3, inputMinorPerMillion: 0, outputMinorPerMillion: 0,
         sourceSha, qualificationHash: "b".repeat(64), testedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 300000).toISOString() },
       qualificationEvidenceRef: "https://protected.test.invalid/qualification/safe-test-fixture", qualificationArtifactSha256: "c".repeat(64) };
-    registerNativeDraftGateway(db, workerModelGateway(db, { profiles: [profile], sourceSha, protectedEvidenceOrigin: "https://protected.test.invalid", fetch: transport }));
+    registerNativeDraftGateway(db, workerModelGateway(db, { profiles: [profile, { ...profile, id: randomUUID(), qualifiedConfigurationHash: "f".repeat(64), tariff: { ...profile.tariff, model: "unselected-alternative-model" } }], sourceSha, protectedEvidenceOrigin: "https://protected.test.invalid", fetch: transport }));
     const initial = await drafts().create(f.actor, f.home, { requestId: randomUUID(), agentId: f.presence.id });
     draft = await drafts().save(f.actor, f.home, initial.id, { requestId: randomUUID(), expectedVersion: initial.version, step: "test",
       content: agentAuthoringContentSchema.parse({ name: "Welcome specialist", description: "Creates internal welcome drafts", ownerUserId: f.userId,
@@ -253,7 +253,7 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
       profile = { ...profile, workerAgentId: agentId, providerBindingId: pb.id, providerSnapshotHash: snapshot.hash,
         providerProfileRef: runtime.providerProfileRef, qualifiedConfigurationHash: hashContextPolicySnapshot({ adapterType: "paperclip_runner", adapterConfig: config }),
         binding: { provider: "anthropic", method: "api_key", mode: "shared", ...connection } };
-      registerNativeDraftGateway(db, workerModelGateway(db, { profiles: [profile], sourceSha, protectedEvidenceOrigin: "https://protected.test.invalid", fetch: transport }));
+      registerNativeDraftGateway(db, workerModelGateway(db, { profiles: [profile, { ...profile, id: randomUUID(), qualifiedConfigurationHash: "f".repeat(64), tariff: { ...profile.tariff, model: "unselected-alternative-model" } }], sourceSha, protectedEvidenceOrigin: "https://protected.test.invalid", fetch: transport }));
       draft = await drafts().save(f.actor, f.home, draft.id, { requestId: randomUUID(), expectedVersion: draft.version, step: "test", content: { ...draft.content!, runtimeBindingId: runtime.id } });
       const { input, result } = await execute(); expect(result).toMatchObject({ agentId, execution: "succeeded", testQualified: false });
       expect((await service().verify(f.actor, f.home, draft.id, input.requestId, await reviewInput(input.requestId))).testQualified).toBe(true);

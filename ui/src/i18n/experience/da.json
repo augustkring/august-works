@@ -47,7 +47,12 @@
   "domain": {
     "tasks": "Arbejde",
     "attention": "Kræver dig",
-    "maintenance": "Vedligeholdelse"
+    "maintenance": "Vedligeholdelse",
+    "core-maintenance": "Arbejdskontroller",
+    "connector-recovery": "Appforbindelser",
+    "workflow-recovery": "Automatiseringer",
+    "runtime-recovery": "Agenternes tilgængelighed",
+    "memory-maintenance": "Kontrol af vidensindekset"
   },
   "nav": {
     "home": "Hjem",
@@ -1899,5 +1904,11 @@
     "why": "De åbne fund stammer fra dine egne kontroller.",
     "consequence": "Gennemgå den aktuelle kilde, før du stoler på resultatet. Brug de eksisterende kontroller til at tjekke eller godkende arbejdet.",
     "evidence": "Dine kontroller har åbne fund, der kræver gennemgang."
+  },
+  "memoryMaintenanceAttention": {
+    "title": "Gennemgå en ubekræftet kontrol af vidensindekset",
+    "why": "Du administrerer virksomhedens godkendte hukommelse.",
+    "consequence": "Den oprindelige indekskontrol har ingen gyldig kørselsreservation. Gennemgå dens oprindelige status før et nyt forsøg.",
+    "evidence": "Resultatet er ubekræftet. Det betyder ikke, at kontrollen er stoppet eller mislykkedes."
   }
 }
