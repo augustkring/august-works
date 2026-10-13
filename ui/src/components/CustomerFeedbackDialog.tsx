@@ -7,6 +7,7 @@ import {
   feedbackCategorySchema,
   customerFeedbackPolicySchema,
   type CreateCustomerFeedback,
+  type CustomerFeedback,
 } from "@paperclipai/shared";
 import { useLocation, Link } from "../lib/router";
 import {
@@ -94,6 +95,8 @@ function FeedbackForm({
     imageAttempt.current = null;
   }, [authorityEpoch]);
   const attempted = useRef<CreateCustomerFeedback | null>(null);
+  const hadUnknownAcceptance = useRef(false), receiptReadInFlight = useRef(false);
+  const [recovered, setRecovered] = useState<{ receipt: CustomerFeedback; epoch: number; attachmentsUnconfirmed: boolean } | null>(null);
   const trigger = useRef<HTMLButtonElement>(null),
     categoryInput = useRef<HTMLSelectElement>(null),
     returnFocus = useRef<HTMLElement | null>(null),
@@ -127,29 +130,57 @@ function FeedbackForm({
     },
     retry: false,
     onError: (error) => {
-      if (isRejectedFeedbackRequest(error)) {
+      if (isRejectedFeedbackRequest(error) && !hadUnknownAcceptance.current) {
         attempted.current = null;
         imageAttempt.current = null;
         setRequestKey(crypto.randomUUID());
-      }
+      } else if (attempted.current) hadUnknownAcceptance.current = true;
     },
     onSettled: () => { sending.current = false; },
   });
+  const known = send.data ?? recovered;
+  const requestLookup = useQuery({
+    queryKey: ["customer-feedback-request-receipt", companyId, principal, requestKey, current.current.epoch],
+    enabled: false, retry: false, gcTime: 0, staleTime: 0,
+    queryFn: async ({ signal }) => {
+      if (!canUseContext()) throw new Error("Feedback receipt is unavailable");
+      const epoch = current.current.epoch;
+      const value = await customerFeedbackApi.requestReceipt(companyId, principal, requestKey, signal);
+      signal.throwIfAborted();
+      if (!canUseContext() || current.current.epoch !== epoch) throw new Error("Feedback access changed");
+      return { ...value, epoch };
+    },
+  });
   const original = useQuery({
-    queryKey: ["customer-feedback-receipt", companyId, principal, send.data?.receipt.id, current.current.epoch],
-    enabled: open && accountReady && !!send.data && send.data.epoch !== current.current.epoch,
+    queryKey: ["customer-feedback-receipt", companyId, principal, known?.receipt.id, current.current.epoch],
+    enabled: open && accountReady && !!known && known.epoch !== current.current.epoch,
     retry: false, gcTime: 0, staleTime: 0,
     queryFn: async ({ signal }) => {
-      if (!canUseContext() || !send.data) throw new Error("Feedback receipt is unavailable");
-      const receipt = await customerFeedbackApi.get(companyId, principal, send.data.receipt.id, signal);
+      if (!canUseContext() || !known) throw new Error("Feedback receipt is unavailable");
+      const receipt = await customerFeedbackApi.get(companyId, principal, known.receipt.id, signal);
       signal.throwIfAborted();
       return receipt;
     },
   });
-  const confirmed = contextReady && send.data
-    ? send.data.epoch === current.current.epoch ? send.data.receipt
+  const confirmed = contextReady && known
+    ? known.epoch === current.current.epoch ? known.receipt
       : original.isSuccess && !original.isFetching ? original.data : null
     : null;
+  function clearUnsentDraft() {
+    setCategory("BUG"); setBody(""); setGoal(""); setBlocksWork(false);
+    setOmitName(false); setIncludeDiagnostics(false);
+    attempted.current = null; imageAttempt.current = null;
+    hadUnknownAcceptance.current = false; selectedImages.change([]);
+  }
+  const clearedReceipt = useRef<string | null>(null);
+  useEffect(() => {
+    // A stale/unknown acknowledgement is not a receipt. Keep its original
+    // request until current Source confirms it; then release local draft data
+    // and preview URLs while keeping the canonical receipt view available.
+    if (!confirmed || clearedReceipt.current === confirmed.id) return;
+    clearedReceipt.current = confirmed.id;
+    clearUnsentDraft();
+  }, [confirmed?.id]);
   function show(event?: Event) {
     // Opening the public contact frame starts no work. Private draft and
     // receipt contents remain withheld until the current source is confirmed.
@@ -269,7 +300,7 @@ function FeedbackForm({
             >
               <p>{t("feedback.received")}</p>
               <p>{confirmed.feedbackId}</p>
-              {send.data?.attachmentsUnconfirmed && <p>{t("feedback.images.submissionUnconfirmed")}</p>}
+              {known?.attachmentsUnconfirmed && <p>{t("feedback.images.submissionUnconfirmed")}</p>}
               <FeedbackImages companyId={companyId} principal={principal} feedbackId={confirmed.id}
                 authority={privateAuthority} active={!!confirmed} />
               <Link
@@ -284,22 +315,15 @@ function FeedbackForm({
                 className="min-h-11"
                 onClick={() => {
                   setOpen(false);
-                  setBody("");
-                  setGoal("");
-                  setBlocksWork(false);
-                  setOmitName(false);
-                  setIncludeDiagnostics(false);
-                  attempted.current = null;
-                  imageAttempt.current = null;
-                  selectedImages.change([]);
+                  clearUnsentDraft();
                   setRequestKey(crypto.randomUUID());
-                  send.reset();
+                  setRecovered(null); send.reset();
                 }}
               >
                 {t("feedback.close")}
               </Button>
             </div>
-          ) : send.data ? (
+          ) : known ? (
             <div className="space-y-3">
               <p ref={errorFocus} tabIndex={-1} role={original.isError ? "alert" : "status"}>
                 {t(original.isError ? "feedback.receiptUnconfirmed" : "loading")}
@@ -314,7 +338,7 @@ function FeedbackForm({
               className="space-y-4"
               onSubmit={(event) => {
                 event.preventDefault();
-                if (context && canUseContext() && !sending.current) {
+                if (context && canUseContext() && !sending.current && !receiptReadInFlight.current) {
                   sending.current = true;
                   imageAttempt.current ??= Object.freeze([...selectedImages.images]);
                   attempted.current ??= {
@@ -455,7 +479,23 @@ function FeedbackForm({
                   )}
                 </p>
               )}
-              <div className="flex items-center justify-between gap-3">
+              {send.isError && attempted.current && <div className="space-y-3">
+                <Button type="button" variant="outline" className="min-h-11"
+                  disabled={requestLookup.isFetching || send.isPending}
+                  onClick={async () => {
+                    if (!canUseContext() || !attempted.current || sending.current || receiptReadInFlight.current) return;
+                    receiptReadInFlight.current = true;
+                    try {
+                      const result = await requestLookup.refetch();
+                      if (!result.data || !canUseContext() || result.data.epoch !== current.current.epoch || result.data.requestKey !== requestKey) return;
+                      if (result.data.receipt) setRecovered({ receipt: result.data.receipt, epoch: result.data.epoch,
+                        attachmentsUnconfirmed: (imageAttempt.current?.length ?? 0) > 0 });
+                    } finally { receiptReadInFlight.current = false; }
+                  }}>{t(requestLookup.isFetching ? "feedback.checkingRequest" : "feedback.checkRequest")}</Button>
+                {requestLookup.isError && <p role="status">{t("feedback.requestReadFailed")}</p>}
+                {requestLookup.isSuccess && requestLookup.data.receipt === null && <p role="status">{t("feedback.requestNotObserved")}</p>}
+              </div>}
+              <div className="flex flex-wrap items-center justify-between gap-3">
                 <Button
                   type="button"
                   variant="outline"
@@ -464,10 +504,19 @@ function FeedbackForm({
                 >
                   {t("feedback.cancel")}
                 </Button>
+                {(body || goal || category !== "BUG" || blocksWork || omitName || includeDiagnostics || selectedImages.images.length > 0) &&
+                <Button type="button" variant="outline" className="min-h-11" disabled={inputsLocked}
+                  onClick={() => {
+                    // A local discard cannot cancel or forget a request whose
+                    // acceptance is unknown, even before React disables it.
+                    if (sending.current || receiptReadInFlight.current || attempted.current) return;
+                    clearUnsentDraft(); setRequestKey(crypto.randomUUID());
+                    send.reset(); setOpen(false);
+                  }}>{t("feedback.discard")}</Button>}
                 <Button
                   type="submit"
-                  className="min-h-11"
-                  disabled={send.isPending || !body.trim()}
+                  className="ml-auto min-h-11"
+                  disabled={send.isPending || requestLookup.isFetching || !body.trim()}
                 >
                   {t(send.isPending ? "feedback.sending" : "feedback.send")}
                 </Button>

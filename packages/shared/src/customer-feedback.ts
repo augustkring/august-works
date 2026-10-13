@@ -247,6 +247,11 @@ export const customerFeedbackSchema = z.strictObject({
     )
     .max(100),
 });
+/** A missing observation does not establish rejection or effect quiescence. */
+export const customerFeedbackRequestReceiptSchema = z.strictObject({
+  requestKey: z.uuid(), receipt: customerFeedbackSchema.nullable(),
+});
+export type CustomerFeedbackRequestReceipt = z.infer<typeof customerFeedbackRequestReceiptSchema>;
 export type CreateCustomerFeedback = z.infer<
   typeof createCustomerFeedbackSchema
 >;

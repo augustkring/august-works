@@ -205,6 +205,10 @@ export function customerFeedbackRoutes(
       ),
     );
   });
+  router.get("/companies/:companyId/customer-feedback/requests/:requestKey", async (req, res) => {
+    res.setHeader("Cache-Control", "private, no-store");
+    res.json(await service.requestReceipt(req.actor, context(req), z.uuid().parse(req.params.requestKey)));
+  });
   router.get(
     "/companies/:companyId/customer-feedback/:feedbackId",
     async (req, res) => {

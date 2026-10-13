@@ -16,7 +16,7 @@
   ],
   "exitConditions": [
     "A validated Native acknowledgement from the current account epoch or a fresh current-authorized GET of its original ID confirms acceptance. A late acknowledgement remains concealed until the original read succeeds.",
-    "Closing preserves the current in-memory form while mounted. A confirmed new report resets it; company/account withdrawal unmounts it."
+    "Cancel or close preserves the current in-memory draft while mounted. Explicit Discard clears an unsent or definitely rejected local draft; an in-flight or unknown accepted request cannot be discarded. A current canonical receipt immediately releases local text/category/choices and image preview URLs while preserving receipt/history access."
   ],
   "content": {
     "h1": "Share feedback (named native dialog; the enclosing page retains its heading)",
@@ -103,17 +103,22 @@
     },
     "secondary": [
       "Cancel or close preserves the mounted draft and restores the invoking control.",
+      "Discard clears only the local unsent draft. It makes no Native feedback deletion or image PUT, is withheld when no draft exists, and cannot cancel or forget an unconfirmed submitted request.",
+      "Check receipt reads the Original current-principal/company request slot without resending. A missing observation remains unknown and never changes the frozen retry key/body. A later definite refusal cannot release an earlier unknown request.",
       "Retry an unconfirmed submission with its exact original key and payload; a canonical validation refusal allows correction with a new key.",
       "View accepted feedback through My feedback; use separate confirmed support/security/privacy mailto links without prefilled report data.",
       "Check feedback receipt reads the original committed feedback after an unconfirmed account recheck; Share feedback in the command palette opens this same empty form without submitting or filling body/context."
     ],
-    "destructiveOrIrreversible": []
+    "destructiveOrIrreversible": [
+      "Explicit Discard removes locally entered unsent data; the server case/history remains with its Original owner."
+    ]
   },
   "systemWork": {
     "canonicalReadDomains": [
       "Current identity and selected company",
       "Customer Feedback submission policy",
-      "Startup-owned strict references for all six Privacy policy purposes; declared references remain execution-unqualified and cannot enable GA."
+      "Startup-owned strict references for all six Privacy policy purposes; declared references remain execution-unqualified and cannot enable GA.",
+      "Original actor-owned feedback access/request slot, read through current Native membership and protected case ownership; lookup performs no submission, upload or activity mutation."
     ],
     "canonicalWriteOperation": "POST canonical Customer Feedback with immutable body/goal and explicit disclosure choices, company membership, durable request key and abuse limit.",
     "authorityEffect": "Only the canonical feedback owner can accept a submission. No tool/provider/agent effect or permission expansion is caused by feedback content.",
@@ -143,7 +148,7 @@
     "focusAfterSuccess": "Accepted receipt receives focus; Close returns to the invoking control.",
     "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
     "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
-    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
+    "targetSize": "Custom frequent and primary controls target at least 44 \u00d7 44 CSS px.",
     "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
     "reducedMotion": "No essential animated transition or moving progress indicator.",
     "screenReaderNotes": "Named dialog with category-specific labels, associated disclosure/diagnostic help, fixed error/status and native modal focus containment. The parent retains its main landmark."
@@ -181,6 +186,8 @@
   "acceptance": {
     "functional": [
       "Verify submit/replay/concurrent requests, lost-ACK immutable context, canonical refusal/correction, scope withdrawal, new-work rollout, retained private history and separate support/security/privacy destinations on the exact artifact.",
+      "Verify temporary close preserves text/category, keyboard Discard clears them without a Native submission, an unknown acceptance refuses Discard/replays only the original request, and current canonical acceptance releases local image preview URLs.",
+      "Lose the acknowledgement after an actual committed submission and recover its canonical receipt by read only; preserve privacy across foreign accounts/companies and late Source withdrawal.",
       "Protected image/scanner, qualified diagnostics, durable reload draft/reconciliation, retention/DSR/legal hold and complete closure remain pending."
     ],
     "accessibility": [

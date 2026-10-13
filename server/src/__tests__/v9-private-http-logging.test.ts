@@ -142,6 +142,7 @@ describe("V9 private HTTP purpose", () => {
       "/api/internal/customer-feedback/private-company/private-record/triage",
     ],
     ["GET", "/api/internal/customer-feedback/private-company/private-record"],
+    ["GET", "/api/companies/private-company/customer-feedback/requests/private-request?expectedUserId=private-principal"],
     [
       "GET",
       "/api/companies/private-company/experience/commands?q=private-command",

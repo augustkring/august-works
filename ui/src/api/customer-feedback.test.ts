@@ -79,3 +79,15 @@ it("rejects a follow-up receipt for another report", async () => {
     }),
   ).rejects.toThrow("Feedback context changed");
 });
+
+it("reads only the original request with a private no-store current-principal request", async () => {
+  const get = vi.spyOn(api, "get").mockResolvedValue({ requestKey: id(3), receipt: null });
+  const signal = new AbortController().signal;
+  expect(await customerFeedbackApi.requestReceipt(id(1), "member", id(3), signal)).toEqual({ requestKey: id(3), receipt: null });
+  expect(get).toHaveBeenCalledExactlyOnceWith(`/companies/${id(1)}/customer-feedback/requests/${id(3)}?expectedUserId=member`, { signal, cache: "no-store" });
+});
+it.each(["request", "company"])("rejects a recovered receipt with a different %s identity", async kind => {
+  vi.spyOn(api, "get").mockResolvedValue({ requestKey: kind === "request" ? id(4) : id(3),
+    receipt: kind === "company" ? { ...data, companyId: id(4) } : data });
+  await expect(customerFeedbackApi.requestReceipt(id(1), "member", id(3))).rejects.toThrow();
+});

@@ -18,6 +18,7 @@ import {
   customerFeedbackSchema,
   feedbackFollowUpSchema,
   feedbackInternalDetailSchema,
+  customerFeedbackRequestReceiptSchema,
   feedbackTriageSchema,
   FEEDBACK_CUSTOMER_STATUS,
   FEEDBACK_CONTEXT_FEATURE_IDS,
@@ -564,6 +565,32 @@ export function customerFeedbackService(
       );
       await access(db, actor, companyId);
       return results;
+    },
+    /** Read the Original actor-owned request slot. Absence can precede a late
+     * commit and never authorizes changing the pending key or repeating work. */
+    async requestReceipt(actor: AuthorizationActor, companyId: string, rawKey: string) {
+      const requestKey = customerFeedbackRequestReceiptSchema.shape.requestKey.parse(rawKey).toLowerCase();
+      return db.transaction(async tx => {
+        await tx.execute(sql`set local statement_timeout='5s'`);
+        await tx.execute(sql`set local lock_timeout='1s'`);
+        const reader = tx as unknown as Db, principal = await access(reader, actor, companyId, true);
+        const [link] = await tx.select({ feedbackId: customerFeedbackAccess.feedbackId }).from(customerFeedbackAccess)
+          .where(and(eq(customerFeedbackAccess.companyId, companyId), eq(customerFeedbackAccess.userId, principal),
+            eq(customerFeedbackAccess.requestKey, requestKey)));
+        let value: Awaited<ReturnType<typeof receipt>> | null = null;
+        if (link) {
+          // Lock the case before its child access slot, matching erasure's
+          // parent-first order; re-resolve the exact slot after that lock.
+          const row = await owned(reader, companyId, principal, link.feedbackId, true);
+          const [retained] = await tx.select({ feedbackId: customerFeedbackAccess.feedbackId }).from(customerFeedbackAccess)
+            .where(and(eq(customerFeedbackAccess.companyId, companyId), eq(customerFeedbackAccess.userId, principal),
+              eq(customerFeedbackAccess.requestKey, requestKey), eq(customerFeedbackAccess.feedbackId, row.id))).for("share");
+          if (!retained) throw notFound("Feedback request is unavailable");
+          value = await receipt(reader, row);
+        }
+        await access(reader, actor, companyId, true);
+        return customerFeedbackRequestReceiptSchema.parse({ requestKey, receipt: value });
+      });
     },
     async get(actor: AuthorizationActor, companyId: string, id: string) {
       const principal = await access(db, actor, companyId);

@@ -88,7 +88,7 @@ V9-086,2327,Time-to-first-outcome funnel,not_started
 V9-087,2329,interruption/attention telemetry,not_started
 V9-088,2331,maintenance/support effort telemetry,not_started
 V9-089,2333,optional PostHog adapter + DPA/privacy feature gate,not_started
-V9-090,2335,onboarding exploratory usability pilot harness + confirmatory-validation preregistration,not_started
+V9-090,2335,onboarding exploratory usability pilot harness + confirmatory-validation preregistration,in_progress
 V9-091,2337,Slack-only employee journey E2E,not_started
 V9-092,2339,manager decision/insight journey E2E,not_started
 V9-093,2341,AI admin advanced setup journey E2E,not_started

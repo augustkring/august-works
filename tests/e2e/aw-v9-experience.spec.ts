@@ -206,6 +206,23 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
       await expect(dialog.locator(`a[href="mailto:${address}"]`)).toHaveCount(
         1,
       );
+    const localDraft = "Disposable unsent browser draft for explicit discard";
+    await dialog.getByRole("textbox").first().fill(localDraft);
+    await dialog.getByRole("combobox").selectOption("IDEA");
+    await dialog.getByRole("button", { name: "Cancel", exact: true }).click();
+    await expect(trigger).toBeFocused(); await trigger.click();
+    await expect(dialog.getByRole("textbox").first()).toHaveValue(localDraft);
+    await expect(dialog.getByRole("combobox")).toHaveValue("IDEA");
+    await page.setViewportSize({ width: 390, height: 844 });
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    const discard = dialog.getByRole("button", { name: "Discard draft", exact: true });
+    await discard.focus(); await page.keyboard.press("Enter");
+    await expect(dialog).toHaveCount(0);
+    expect(await json(await request.get(`${base}/customer-feedback?expectedUserId=local-board`))).toEqual([]);
+    await trigger.click();
+    await expect(dialog.getByRole("textbox").first()).toHaveValue("");
+    await expect(dialog.getByRole("combobox")).toHaveValue("BUG");
+    await page.setViewportSize({ width: 1280, height: 720 });
     await dialog.getByRole("textbox").first().fill(body);
     await expect(
       dialog.getByRole("checkbox", { name: /diagnostic/i }),
@@ -231,6 +248,10 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
     await expect(dialog.getByRole("textbox").first()).toHaveValue(body);
     await expect(dialog.getByRole("textbox").first()).toBeDisabled();
     await expect(dialog.getByRole("combobox")).toBeDisabled();
+    await dialog.getByRole("button", { name: "Check if received", exact: true }).click();
+    await expect(dialog.getByText(/cannot confirm receipt yet/)).toBeVisible();
+    expect(payloads).toHaveLength(1);
+    await expect(dialog.getByRole("button", { name: "Discard draft", exact: true })).toBeDisabled();
     await expect(dialog.getByRole("alert")).toContainText(
       "retry sends the same request",
     );
@@ -749,5 +770,42 @@ test("V9 workflow review keeps active and draft revisions separate and preserves
         Object.keys(enabled).map((key) => [key, original[key]]),
       ),
     });
+  }
+});
+
+
+test("feedback recovers an actually committed lost acknowledgement by reading its Original request", async ({ page, request }) => {
+  const original = await json(await request.get("/api/instance/settings/experimental"));
+  const company = await json(await request.post("/api/companies", { data: { name: "Disposable committed feedback receipt fixture" } }));
+  let posts = 0, committedId = "", requestKey = "";
+  try {
+    await json(await request.patch("/api/instance/settings/experimental", { data: {
+      experience_projection_v9: true, progressive_shell_v9: true, home_v9: true, customer_feedback_v9: true,
+    } }));
+    await page.route(`**/api/companies/${company.id}/customer-feedback?*`, async route => {
+      if (route.request().method() !== "POST") return route.continue();
+      posts++; requestKey = route.request().postDataJSON().idempotencyKey;
+      const response = await route.fetch(); expect(response.status()).toBe(201);
+      committedId = (await response.json()).id;
+      await route.abort("failed");
+    });
+    await page.goto(`/${company.issuePrefix}/dashboard`);
+    const trigger = page.locator('[aria-label="Global utilities"]').getByRole("button", { name: "Feedback", exact: true });
+    await trigger.click(); const dialog = page.getByRole("dialog");
+    await dialog.getByRole("textbox").first().fill("Synthetic browser report whose canonical response is deliberately lost.");
+    await dialog.getByRole("button", { name: "Send feedback", exact: true }).click();
+    await expect(dialog.getByRole("alert")).toContainText("retry sends the same request");
+    expect(posts).toBe(1); expect(committedId).toBeTruthy();
+    const response = page.waitForResponse(value => new URL(value.url()).pathname.endsWith(`/customer-feedback/requests/${requestKey}`));
+    await dialog.getByRole("button", { name: "Check if received", exact: true }).click();
+    expect((await response).headers()["cache-control"]).toBe("private, no-store");
+    await expect(dialog.getByText("Thanks — feedback received", { exact: true })).toBeVisible();
+    await expect(dialog.getByText("AWF-" + committedId.replaceAll("-", "").toUpperCase(), { exact: true })).toBeVisible();
+    expect(posts).toBe(1);
+    const history = await json(await request.get(`/api/companies/${company.id}/customer-feedback?expectedUserId=local-board`));
+    expect(history).toHaveLength(1); expect(history[0].id).toBe(committedId);
+  } finally {
+    await json(await request.patch("/api/instance/settings/experimental", { data: original }));
+    await json(await request.delete(`/api/companies/${company.id}`));
   }
 });

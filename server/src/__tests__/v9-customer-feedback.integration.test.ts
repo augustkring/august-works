@@ -298,6 +298,25 @@ const support = await getEmbeddedPostgresTestSupport();
         );
       await request(app()).post(url).send(input()).expect(403);
     });
+    it("reads an original actor-owned request without replay, exposes no foreign slot and preserves reads on rollout rollback", async () => {
+      const payload = input(), url = `/api/companies/${companyId}/customer-feedback`,
+        lookup = `${url}/requests/${payload.idempotencyKey}`;
+      const absent = await request(app()).get(lookup).expect(200);
+      expect(absent.body).toEqual({ requestKey: payload.idempotencyKey, receipt: null });
+      const accepted = await request(app()).post(url).send(payload).expect(201);
+      const before = await db.select().from(activityLog).where(eq(activityLog.companyId, companyId));
+      await instanceSettingsService(db).updateExperimental({ customer_feedback_v9: false });
+      const recovered = await request(app()).get(`${lookup}?expectedUserId=${userId}`).expect(200);
+      expect(recovered.headers["cache-control"]).toBe("private, no-store");
+      expect(recovered.body).toEqual({ requestKey: payload.idempotencyKey, receipt: accepted.body });
+      expect((await request(app(otherUser)).get(lookup).expect(200)).body).toEqual({ requestKey: payload.idempotencyKey, receipt: null });
+      await request(app()).get(`${lookup}?expectedUserId=${otherUser}`).expect(409);
+      await request(app()).get(`/api/companies/${foreignId}/customer-feedback/requests/${payload.idempotencyKey}`).expect(403);
+      expect(await db.select().from(activityLog).where(eq(activityLog.companyId, companyId))).toEqual(before);
+      expect(await db.select().from(customerFeedback).where(eq(customerFeedback.companyId, companyId))).toHaveLength(1);
+      await db.update(companyMemberships).set({ status: "inactive" }).where(and(eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalId, userId)));
+      await request(app()).get(lookup).expect(403);
+    });
     it("keeps customer history private even from another company member", async () => {
       const response = await request(app())
         .post(`/api/companies/${companyId}/customer-feedback`)

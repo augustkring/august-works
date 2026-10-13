@@ -350,7 +350,7 @@ async function selectImage() {
   await act(async () => input.dispatchEvent(new Event("change", { bubbles: true })));
 }
 it("sends explicitly selected images only after the canonical feedback receipt and preserves the original send on a double click", async () => {
-  const { image } = selectedImagePolicy(); let finish!: (value: typeof accepted) => void;
+  const { image, revoke } = selectedImagePolicy(); let finish!: (value: typeof accepted) => void;
   const post = vi.spyOn(customerFeedbackApi, "create").mockImplementation(() => new Promise(resolve => { finish = resolve; }));
   const upload = vi.spyOn(feedbackImagesApi, "upload").mockResolvedValue({ ...image, status: "ready", mediaType: "image/png" });
   await mount(); await enter(accepted.body); await selectImage();
@@ -367,6 +367,7 @@ it("sends explicitly selected images only after the canonical feedback receipt a
   expect(upload.mock.calls[0]!.slice(0, 3)).toEqual([accepted.companyId, identityState.principal, accepted.id]);
   expect(upload.mock.calls[0]![4]).toBeInstanceOf(File);
   await vi.waitFor(() => expect(document.body.textContent).toContain(accepted.feedbackId));
+  expect(revoke).toHaveBeenCalledExactlyOnceWith("blob:owned-selected-input");
 });
 it("keeps a received case after an unknown image reply and checks its status without repeating the upload", async () => {
   selectedImagePolicy(); const post = vi.spyOn(customerFeedbackApi, "create").mockResolvedValue(accepted);
@@ -411,4 +412,68 @@ it("opens a public feedback frame during an immediate session recheck and restor
   await vi.waitFor(() => expect(document.querySelector("textarea")?.value).toBe("PRIVATE-UNSENT-OPEN-FEEDBACK"));
   expect(document.activeElement).toBe(document.querySelector("select"));
   expect(post).not.toHaveBeenCalled();
+});
+
+
+it.each(["en", "da"])("explicitly discards only an unsent local feedback draft in %s", async language => {
+  const save = vi.spyOn(customerFeedbackApi, "create");
+  await mount(); await act(async () => i18n.changeLanguage(language)); await enter("An unsent private local draft");
+  const category = document.querySelector("select")!;
+  await act(async () => { category.value = "IMPROVEMENT"; category.dispatchEvent(new Event("change", { bubbles: true })); });
+  await click(language === "en" ? "Discard draft" : "Kassér kladde");
+  expect(document.querySelector('[role="dialog"]')).toBeNull();
+  await click("Feedback");
+  expect(document.querySelector("textarea")!.value).toBe("");
+  expect(document.querySelector("select")!.value).toBe("BUG");
+  expect(save).not.toHaveBeenCalled();
+});
+it("refuses local discard after an unknown feedback acceptance and retains the original retry", async () => {
+  const save = vi.spyOn(customerFeedbackApi, "create").mockRejectedValueOnce(new Error("Unknown acknowledgement"))
+    .mockResolvedValueOnce(accepted);
+  await mount(); await enter(accepted.body); await click("Send feedback");
+  await vi.waitFor(() => expect(document.querySelector('[role="alert"]')?.textContent).toContain("could not be confirmed"));
+  const discard = [...document.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Discard draft")!;
+  expect(discard.disabled).toBe(true);
+  await act(async () => { discard.disabled = false; discard.click(); });
+  expect(document.querySelector("textarea")!.value).toBe(accepted.body);
+  await click("Send feedback"); await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+  expect(save.mock.calls[1]).toEqual(save.mock.calls[0]);
+});
+
+it("checks an unknown original request without replaying feedback and shows only its canonical receipt", async () => {
+  const save = vi.spyOn(customerFeedbackApi, "create").mockRejectedValue(new Error("Lost reply"));
+  const check = vi.spyOn(customerFeedbackApi, "requestReceipt").mockImplementation(async (_company, _principal, requestKey) => ({ requestKey, receipt: accepted }));
+  await mount(); await enter(accepted.body); await click("Send feedback");
+  await vi.waitFor(() => expect(document.querySelector('[role="alert"]')?.textContent).toContain("could not be confirmed"));
+  expect(check).not.toHaveBeenCalled(); await click("Check if received");
+  await vi.waitFor(() => expect(document.body.textContent).toContain(accepted.feedbackId));
+  expect(check).toHaveBeenCalledExactlyOnceWith(accepted.companyId, identityState.principal, save.mock.calls[0]![2].idempotencyKey, expect.any(AbortSignal));
+  expect(save).toHaveBeenCalledOnce(); expect(document.querySelector("textarea")).toBeNull();
+});
+it("keeps an unobserved original request unknown and retains it across a later definite refusal", async () => {
+  const save = vi.spyOn(customerFeedbackApi, "create").mockRejectedValueOnce(new Error("Lost reply"))
+    .mockRejectedValueOnce(new ApiError("Current payload refused", 400, null)).mockResolvedValueOnce(accepted);
+  vi.spyOn(customerFeedbackApi, "requestReceipt").mockImplementation(async (_company, _principal, requestKey) => ({ requestKey, receipt: null }));
+  await mount(); await enter(accepted.body); await click("Send feedback");
+  await vi.waitFor(() => expect(document.querySelector('[role="alert"]')?.textContent).toContain("could not be confirmed"));
+  await click("Check if received"); await vi.waitFor(() => expect(document.body.textContent).toContain("cannot confirm receipt yet"));
+  expect(save).toHaveBeenCalledOnce(); await click("Send feedback");
+  await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(2));
+  expect(document.querySelector("textarea")!.disabled).toBe(true); expect(document.querySelector("textarea")!.value).toBe(accepted.body);
+  await click("Send feedback"); await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(3));
+  expect(save.mock.calls[2]).toEqual(save.mock.calls[0]);
+});
+
+it("withdraws a late original-request receipt when the current session changes before React observes it", async () => {
+  vi.spyOn(customerFeedbackApi, "create").mockRejectedValue(new Error("Lost reply"));
+  let resolve!: (value: { requestKey: string; receipt: typeof accepted }) => void, key = "";
+  const check = vi.spyOn(customerFeedbackApi, "requestReceipt").mockImplementation((_company, _principal, requestKey) => {
+    key = requestKey; return new Promise(done => { resolve = done; });
+  });
+  await mount(); await enter(accepted.body); await click("Send feedback");
+  await vi.waitFor(() => expect(document.querySelector('[role="alert"]')?.textContent).toContain("could not be confirmed"));
+  await click("Check if received"); await vi.waitFor(() => expect(check).toHaveBeenCalledOnce());
+  await act(async () => { client.setQueryData(queryKeys.auth.session, v9SessionFixture("different-person")); resolve({ requestKey: key, receipt: accepted }); });
+  expect(document.body.textContent).not.toContain(accepted.feedbackId);
+  expect(document.querySelector("textarea")).toBeNull();
 });

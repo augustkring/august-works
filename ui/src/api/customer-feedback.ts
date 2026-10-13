@@ -1,6 +1,7 @@
 import {
   customerFeedbackSchema,
   customerFeedbackListSchema,
+  customerFeedbackRequestReceiptSchema,
   type CreateCustomerFeedback,
 } from "@paperclipai/shared";
 import { api, ApiError } from "./client";
@@ -55,6 +56,17 @@ export const customerFeedbackApi = {
     )
       throw new Error("Feedback context changed");
     return results;
+  },
+  requestReceipt: async (companyId: string, principal: string, rawKey: string, signal?: AbortSignal) => {
+    const requestKey = customerFeedbackRequestReceiptSchema.shape.requestKey.parse(rawKey).toLowerCase();
+    const company = customerFeedbackSchema.shape.companyId.parse(companyId).toLowerCase();
+    const result = customerFeedbackRequestReceiptSchema.parse(await api.get(
+      `/companies/${company}/customer-feedback/requests/${requestKey}?expectedUserId=${encodeURIComponent(principal)}`,
+      { signal, cache: "no-store" },
+    ));
+    if (result.requestKey.toLowerCase() !== requestKey) throw new Error("Feedback request context changed");
+    if (result.receipt) receipt(result.receipt, company);
+    return result;
   },
   get: async (
     companyId: string,
