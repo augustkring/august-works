@@ -36,6 +36,13 @@ export const conversationAuthoringViewSchema = z.strictObject({
   hasMoreTasks: z.boolean().optional(),
   savedRoutines: z.array(conversationSavedRoutineSchema).max(10).optional(),
   hasMoreRoutines: z.boolean().optional(),
+  savedFoundationProposals: z.array(z.strictObject({
+    kind:z.literal("foundation_proposal"),id:z.uuid(),foundationDocumentId:z.uuid(),title:z.string().max(240),
+    baseRevisionId:z.uuid(),currentRevisionId:z.uuid(),status:z.enum(["pending","accepted","rejected","superseded"]),href:z.string(),
+  }).superRefine((value,ctx)=>{
+    if(value.href!==`/foundation/${value.foundationDocumentId}`)ctx.addIssue({code:"custom",message:"Use the Original Foundation reference"});
+  })).max(10).optional(),
+  hasMoreFoundationProposals:z.boolean().optional(),
   proposals: z.array(z.strictObject({
     kind: z.literal("workflow"), id: z.uuid(), name: z.string().min(1).max(200),
     authoredRevisionId: z.uuid(), authoredRevisionNumber: z.number().int().positive(),
@@ -67,6 +74,9 @@ export const conversationAuthoringViewSchema = z.strictObject({
     ctx.addIssue({ code: "custom", path: ["savedTasks"], message: "Return distinct Original tasks" });
   if ((value.savedTasks === undefined) !== (value.hasMoreTasks === undefined))
     ctx.addIssue({ code: "custom", path: ["savedTasks"], message: "Task coverage requires the actual bounded owner result" });
+  if((value.savedFoundationProposals===undefined)!==(value.hasMoreFoundationProposals===undefined)||value.savedFoundationProposals&&
+    new Set(value.savedFoundationProposals.map(p=>p.id)).size!==value.savedFoundationProposals.length)
+    ctx.addIssue({code:"custom",path:["savedFoundationProposals"],message:"Foundation coverage requires distinct Original saved records"});
   if ((value.savedRoutines === undefined) !== (value.hasMoreRoutines === undefined) || value.savedRoutines &&
     new Set(value.savedRoutines.map(p => p.id)).size !== value.savedRoutines.length)
     ctx.addIssue({ code: "custom", path: ["savedRoutines"], message: "Routine coverage requires distinct Original saved records" });

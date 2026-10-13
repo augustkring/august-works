@@ -1,6 +1,7 @@
+import { assertFoundationConversationSource, FOUNDATION_CONVERSATION_SOURCE } from "../foundation-authoring-source.js";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
-import { heartbeatRuns, issues, routineRevisions, routines, workflows, type Db } from "@paperclipai/db";
+import { foundationChangeProposals, foundationDocuments, documents, heartbeatRuns, issues, routineRevisions, routines, workflows, type Db } from "@paperclipai/db";
 import { conversationAuthoringViewSchema } from "@paperclipai/shared";
 import { authorizationService, type AuthorizationActor } from "../authorization.js";
 import { assertV5Authorization, v5HumanActorId } from "../v5-authorization.js";
@@ -174,6 +175,37 @@ export function conversationAuthoringService(db: Db) {
       };
       const savedRoutines = [];
       for (const candidate of routineCandidates.slice(0, 10)) savedRoutines.push(await readRoutine(candidate));
+      const foundationCandidates=await tx.execute<{id:string;run_id:string}>(sql`
+        select p.id,h.id as run_id from foundation_change_proposals p join heartbeat_runs h
+          on h.company_id=p.company_id and h.id=p.conversation_source_run_id
+        where p.company_id=${companyId}::uuid and p.source_type=${FOUNDATION_CONVERSATION_SOURCE}
+          and p.proposed_by_agent_id=${initial.conversation.conversationAgentId}::uuid
+          and p.conversation_responsible_user_id=${initial.userId} and h.agent_id=${initial.conversation.conversationAgentId}::uuid
+          and h.responsible_user_id=${initial.userId}
+          and (h.native_issue_id=${conversationId}::uuid or(h.native_issue_id is null and coalesce(h.context_snapshot->>'issueId',h.context_snapshot->>'taskId')=${conversationId}))
+          and coalesce(h.context_snapshot->>'conversationSessionGeneration','0')=${String(initial.conversation.conversationSessionGeneration)}
+        order by p.created_at desc,p.id desc limit 11`);
+      const readFoundation=async(candidate:{id:string;run_id:string})=>{
+        currentSignal.throwIfAborted();
+        const [origin]=await tx.select({id:heartbeatRuns.id}).from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId,companyId),
+          eq(heartbeatRuns.id,candidate.run_id),eq(heartbeatRuns.agentId,initial.conversation.conversationAgentId!),
+          eq(heartbeatRuns.responsibleUserId,initial.userId),
+          sql`coalesce(${heartbeatRuns.contextSnapshot}->>'conversationSessionGeneration','0')=${String(initial.conversation.conversationSessionGeneration)}`)).for("share");
+        const [proposal]=await tx.select().from(foundationChangeProposals).where(and(eq(foundationChangeProposals.companyId,companyId),
+          eq(foundationChangeProposals.id,candidate.id),eq(foundationChangeProposals.conversationSourceRunId,candidate.run_id),
+          eq(foundationChangeProposals.conversationResponsibleUserId,initial.userId))).for("share");
+        if(!origin||!proposal||!proposal.baseRevisionId)throw conflict("The saved Foundation proposal provenance changed");
+        await assertFoundationConversationSource(tx,proposal,initial.current);
+        const [target]=await tx.select({id:foundationDocuments.id,title:documents.title,revisionId:documents.latestRevisionId}).from(foundationDocuments)
+          .innerJoin(documents,and(eq(documents.companyId,foundationDocuments.companyId),eq(documents.id,foundationDocuments.documentId)))
+          .where(and(eq(foundationDocuments.companyId,companyId),eq(foundationDocuments.id,proposal.foundationDocumentId))).for("share");
+        if(!target?.revisionId)throw conflict("The Original Foundation document changed");
+        await assertFoundationConversationSource(tx,proposal,initial.current);
+        return {kind:"foundation_proposal" as const,id:proposal.id,foundationDocumentId:target.id,title:target.title??"",
+          baseRevisionId:proposal.baseRevisionId,currentRevisionId:target.revisionId,status:proposal.status,href:`/foundation/${target.id}`};
+      };
+      const savedFoundationProposals=[];
+      for(const candidate of foundationCandidates.slice(0,10))savedFoundationProposals.push(await readFoundation(candidate));
       currentSignal.throwIfAborted();
       const final = await owner(tx, actor, companyId, conversationId);
       currentSignal.throwIfAborted();
@@ -183,9 +215,10 @@ export function conversationAuthoringService(db: Db) {
       if (candidates.length) await assertV5Authorization(tx, final.current, companyId, "workflows:read");
       for (const candidate of tasks.slice(0, 10)) await readTask(candidate);
       for (const candidate of routineCandidates.slice(0, 10)) await readRoutine(candidate);
+      for(const candidate of foundationCandidates.slice(0,10))await readFoundation(candidate);
       return conversationAuthoringViewSchema.parse({ companyId, conversationId, agentId: initial.conversation.conversationAgentId,
         generation: initial.conversation.conversationSessionGeneration, observedAt: new Date().toISOString(), hasMore: candidates.length > 10,
-        proposals, savedTasks, hasMoreTasks: tasks.length > 10, savedRoutines, hasMoreRoutines: routineCandidates.length > 10, modelCalled: false });
+        proposals, savedTasks, hasMoreTasks: tasks.length > 10, savedRoutines, hasMoreRoutines: routineCandidates.length > 10, savedFoundationProposals,hasMoreFoundationProposals:foundationCandidates.length>10, modelCalled: false });
     }).catch(error => {
       let cause: unknown = error;
       for (let depth = 0; depth < 4 && cause && typeof cause === "object"; depth++) {

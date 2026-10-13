@@ -1,3 +1,5 @@
+import { foundationService } from "../services/foundation/foundation-service.js";
+import { foundationChangeProposals, principalPermissionGrants } from "@paperclipai/db";
 import { routines } from "@paperclipai/db";
 import { routineService } from "../services/routines.js";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
@@ -88,6 +90,22 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
   await expect(routineService(db,{sourceActor:board}).get(routine!.id)).rejects.toMatchObject({status:403});
   await expect(assertAnalyticalContextPayloadAccess(db,companyId,board,{issueId:task!.id})).rejects.toMatchObject({status:403});
   await expect(assertAnalyticalContextPayloadAccess(db,companyId,board,{runId:execution!.id})).rejects.toMatchObject({status:403});
+  expect(await db.select().from(memoryDeletionMarkers).where(eq(memoryDeletionMarkers.companyId,companyId))).toEqual([]);
+ });
+
+ it("withdraws an accepted Foundation revision when its actual analytical authoring input becomes hidden",async()=>{
+  const f=await fixture();await f.capture();await db.update(authUsers).set({emailVerified:true}).where(eq(authUsers.id,userId));
+  await db.insert(principalPermissionGrants).values({companyId,principalType:"user",principalId:userId,permissionKey:"foundation:read"});
+  const actor={type:"board" as const,source:"session" as const,userId},mutation={principal:{type:"user" as const,userId}},owner=foundationService(db);
+  const draft=await owner.createDraft(companyId,{foundationKey:"analytical-proposal",title:"Native Foundation",body:"Prior body",
+    category:"governance",documentType:"policy",ownerUserId:userId},mutation);
+  const [proposal]=await db.insert(foundationChangeProposals).values({companyId,foundationDocumentId:draft.id,sourceType:"conversation_authoring",
+    sourceId:runId,conversationSourceRunId:runId,conversationResponsibleUserId:userId,proposedByAgentId:agentId,
+    baseRevisionId:draft.latestRevisionId,proposedBody:"PRIVATE analytical proposal",reason:"PRIVATE analytical reason",status:"pending"}).returning();
+  const accepted=await owner.acceptProposal(companyId,draft.id,proposal!.id,mutation);
+  await expect(owner.get(companyId,draft.id,actor)).resolves.toMatchObject({latestRevisionId:accepted.foundation.latestRevisionId});
+  await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,f.sourceId));
+  await expect(owner.get(companyId,draft.id,actor)).rejects.toMatchObject({status:403});
   expect(await db.select().from(memoryDeletionMarkers).where(eq(memoryDeletionMarkers.companyId,companyId))).toEqual([]);
  });
 

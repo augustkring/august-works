@@ -5,7 +5,7 @@ import { agentExecutionManifests,providerTraceRecords, memoryDeletionMarkers, me
   heartbeatRuns, heartbeatRunEvents, agentWakeupRequests, issues, issueComments, issueDocuments, documents, documentRevisions,
   nativeRunResults, workAssessments, statusDecisions, nativeRunFinalizations, completionContracts, issueWorkProducts, agentTaskSessions, agentRuntimeState,
   workflowRuns, workflowStepRuns, workflowWaits, workflowRunReviews, workflowOptimizerEvaluations, workflowOptimizerObservations, automationArtifacts, automationArtifactVersions, type Db } from "@paperclipai/db";
-import { routines, routineRevisions, routineTriggers, routineDocuments, routineRuns, companySecretBindings } from "@paperclipai/db";
+import { foundationChangeProposals, foundationSections, routines, routineRevisions, routineTriggers, routineDocuments, routineRuns, companySecretBindings } from "@paperclipai/db";
 import { eraseAnalyticalSourcesUnderMemory } from "../analytical-source-erasure.js";
 import { eraseBusinessEventObjectUnderMemory } from "../business-event-payload-erasure.js";
 import { conflict } from "../../errors.js";
@@ -145,6 +145,26 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
   if (!affected.length && !contextRoots.length && !sourceAssets?.runIds?.length&&!sourceAssets?.skillVersionIds?.length) return;
   const children = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), sql`not (${heartbeatMemoryPayloadVisible()})`));
   const childIds = children.map((child) => child.id);
+  const sourceFoundationProposals = childIds.length ? await db.select({ id: foundationChangeProposals.id }).from(foundationChangeProposals).where(and(
+    eq(foundationChangeProposals.companyId,companyId),inArray(foundationChangeProposals.conversationSourceRunId,childIds),
+  )) : [];
+  if (sourceFoundationProposals.length) {
+    const ids=sourceFoundationProposals.map(row=>row.id);
+    await db.update(foundationChangeProposals).set({ proposedBody:"",changeSummary:null,reason:null,updatedAt:now })
+      .where(and(eq(foundationChangeProposals.companyId,companyId),inArray(foundationChangeProposals.id,ids)));
+    await db.update(activityLog).set({details:{payloadDeleted:true}}).where(and(eq(activityLog.companyId,companyId),
+      eq(activityLog.entityType,"foundation_change_proposal"),inArray(activityLog.entityId,ids)));
+    const copied=await db.select({id:documentRevisions.id,documentId:documentRevisions.documentId}).from(documentRevisions).where(and(
+      eq(documentRevisions.companyId,companyId),sql`${documentRevisions.conversationFoundationProposalIds} ?| ARRAY[${sql.join(ids.map(id=>sql`${id}`),sql`, `)}]::text[]`,
+    ));
+    if(copied.length){
+      const revisions=copied.map(row=>row.id),docIds=[...new Set(copied.map(row=>row.documentId))];
+      await db.update(documentRevisions).set({title:null,body:"",changeSummary:null}).where(and(eq(documentRevisions.companyId,companyId),inArray(documentRevisions.id,revisions)));
+      await db.update(foundationSections).set({headingPath:[],body:"",tokenCount:0}).where(and(eq(foundationSections.companyId,companyId),inArray(foundationSections.documentRevisionId,revisions)));
+      await db.update(documents).set({title:null,latestBody:"",updatedAt:now}).where(and(eq(documents.companyId,companyId),inArray(documents.id,docIds),inArray(documents.latestRevisionId,revisions)));
+      await eraseAnalyticalSourcesUnderMemory(db,companyId,"document",docIds,now);
+    }
+  }
   const sourceRoutines = childIds.length ? await db.select({ id: routines.id }).from(routines).where(and(
     eq(routines.companyId, companyId), eq(routines.originKind, "conversation_draft"), inArray(routines.originId, childIds),
   )) : [];

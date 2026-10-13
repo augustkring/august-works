@@ -52,3 +52,14 @@ it.each(["wrong_version", "incomplete", "extra_payload"])("refuses an invalid fl
     preview: mismatch === "extra_payload" ? { ...preview, prompt: "PRIVATE" } : preview }] });
   await expect(getConversationAuthoring(id(1), "author", id(2), id(3), 1)).rejects.toThrow();
 });
+
+it.each(["foreign_href","body_copy","missing_coverage","duplicate"])("rejects invalid Foundation proposal references: %s",async failure=>{
+  const proposal={kind:"foundation_proposal",id:id(11),foundationDocumentId:id(12),title:"Actual Foundation policy",
+    baseRevisionId:id(13),currentRevisionId:id(13),status:"pending",href:`/foundation/${id(12)}`};
+  vi.spyOn(api,"get").mockResolvedValue({...result,
+    savedFoundationProposals:failure==="duplicate"?[proposal,proposal]:[{...proposal,
+      ...(failure==="foreign_href"?{href:`/foundation/${id(14)}`}:{ }),
+      ...(failure==="body_copy"?{proposedBody:"PRIVATE"}:{ })}],
+    ...(failure==="missing_coverage"?{}:{hasMoreFoundationProposals:false})});
+  await expect(getConversationAuthoring(id(1),"author",id(2),id(3),1)).rejects.toThrow();
+});

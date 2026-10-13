@@ -2016,7 +2016,18 @@
       "paused": "The current routine is paused.",
       "archived": "The current routine is archived."
     },
-    "workflowEmpty": "No saved workflow proposal is recorded for this conversation session. A suggested link alone does not confirm a saved draft."
+    "workflowEmpty": "No saved workflow proposal is recorded for this conversation session. A suggested link alone does not confirm a saved draft.",
+    "foundationTitle": "Saved Foundation proposals",
+    "foundationCoverageUnavailable": "Saved Foundation proposal coverage is unavailable from this server.",
+    "foundationChanged": "The Foundation revision has changed since this proposal was saved.",
+    "reviewFoundation": "Review the Foundation proposal",
+    "moreFoundationProposals": "More saved Foundation proposals are available in the Original Foundation review.",
+    "foundationStatus": {
+      "pending": "The proposal is saved and awaits Human review. Canonical Foundation content has not changed.",
+      "accepted": "The proposal was accepted into a Foundation draft. Approval remains a separate decision.",
+      "rejected": "The proposal was rejected.",
+      "superseded": "The proposal was superseded."
+    }
   },
   "loadingView": "Loading view…",
   "announcement": {

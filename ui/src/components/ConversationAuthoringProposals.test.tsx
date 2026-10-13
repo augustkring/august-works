@@ -103,3 +103,20 @@ it("shows an unconfigured routine and a Human revision without declaring a run o
   await act(async () => { await i18n.changeLanguage("da"); });
   expect(container.textContent).toContain("Der er ikke valgt et kørselsmål");
 });
+
+it("shows pending Foundation review in English and Danish and hides it on source changes",async()=>{
+  const snapshot:ConversationAuthoringView={...data,proposals:[],savedTasks:[],hasMoreTasks:false,savedRoutines:[],hasMoreRoutines:false,
+    savedFoundationProposals:[{kind:"foundation_proposal",id:id(11),foundationDocumentId:id(12),title:"Saved policy proposal",
+      baseRevisionId:id(13),currentRevisionId:id(14),status:"pending",href:`/foundation/${id(12)}`}],hasMoreFoundationProposals:false};
+  const get=vi.spyOn(authoring,"getConversationAuthoring").mockResolvedValue(snapshot);
+  await mount();await vi.waitFor(()=>expect(container.textContent).toContain("Saved policy proposal"));
+  expect(container.textContent).toContain("awaits Human review");expect(container.textContent).toContain("revision has changed");
+  expect(container.querySelector("a")?.getAttribute("href")).toBe(`/foundation/${id(12)}`);
+  expect(container.querySelectorAll("button")).toHaveLength(0);
+  await act(async()=>{await i18n.changeLanguage("da");});
+  expect(container.textContent).toContain("afventer gennemgang");
+  let release!:(value:ConversationAuthoringView)=>void;get.mockImplementationOnce(()=>new Promise(resolve=>{release=resolve;}));
+  await act(async()=>live({companyId:id(1),type:"activity.logged",payload:{entityType:"foundation_change_proposal",entityId:id(11),action:"foundation.proposal_rejected"}}));
+  expect(container.textContent).not.toContain("Saved policy proposal");expect(container.querySelectorAll("a")).toHaveLength(0);
+  await act(async()=>release({...snapshot,savedFoundationProposals:[]}));
+});

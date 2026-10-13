@@ -3417,6 +3417,20 @@
       "when": 1791901507270,
       "tag": "0489_glossy_manta",
       "breakpoints": true
+    },
+    {
+      "idx": 490,
+      "version": "7",
+      "when": 1791909080898,
+      "tag": "0490_shiny_prodigy",
+      "breakpoints": true
+    },
+    {
+      "idx": 491,
+      "version": "7",
+      "when": 1791909971642,
+      "tag": "0491_graceful_lorna_dane",
+      "breakpoints": true
     }
   ]
 }

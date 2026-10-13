@@ -2016,7 +2016,18 @@
       "paused": "Den aktuelle rutine er sat på pause.",
       "archived": "Den aktuelle rutine er arkiveret."
     },
-    "workflowEmpty": "Der er ikke registreret et gemt workflow-forslag for denne samtalesession. Et foreslået link bekræfter ikke i sig selv en gemt kladde."
+    "workflowEmpty": "Der er ikke registreret et gemt workflow-forslag for denne samtalesession. Et foreslået link bekræfter ikke i sig selv en gemt kladde.",
+    "foundationTitle": "Gemte Foundation-forslag",
+    "foundationCoverageUnavailable": "Denne server kan ikke vise dækning af gemte Foundation-forslag.",
+    "foundationChanged": "Foundation-versionen er ændret, siden forslaget blev gemt.",
+    "reviewFoundation": "Gennemgå Foundation-forslaget",
+    "moreFoundationProposals": "Flere gemte Foundation-forslag kan gennemgås i Foundation.",
+    "foundationStatus": {
+      "pending": "Forslaget er gemt og afventer gennemgang. Det kanoniske Foundation-indhold er ikke ændret.",
+      "accepted": "Forslaget er accepteret som et Foundation-udkast. Godkendelse er en separat beslutning.",
+      "rejected": "Forslaget er afvist.",
+      "superseded": "Forslaget er erstattet."
+    }
   },
   "loadingView": "Indlæser visning…",
   "announcement": {

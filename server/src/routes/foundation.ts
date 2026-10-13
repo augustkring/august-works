@@ -25,6 +25,11 @@ import {
   getActorInfo,
 } from "./authz.js";
 
+function publicFoundationProposal<T extends { conversationSourceRunId?: unknown; conversationResponsibleUserId?: unknown }>(row: T) {
+  const { conversationSourceRunId: _source, conversationResponsibleUserId: _requester, ...view } = row;
+  return view;
+}
+
 export function foundationRoutes(db: Db) {
   const router = Router();
   const svc = foundationService(db);
@@ -388,7 +393,7 @@ export function foundationRoutes(db: Db) {
         res.status(404).json({ error: "Foundation document not found" });
         return;
       }
-      res.json(await svc.listProposals(companyId, foundation.id,req.actor));
+      res.json((await svc.listProposals(companyId, foundation.id,req.actor)).map(publicFoundationProposal));
     },
   );
 
@@ -419,7 +424,7 @@ export function foundationRoutes(db: Db) {
           baseRevisionId: proposal.baseRevisionId,
         },
       });
-      res.status(201).json(proposal);
+      res.status(201).json(publicFoundationProposal(proposal));
     },
   );
 
@@ -446,7 +451,7 @@ export function foundationRoutes(db: Db) {
           revisionId: result.foundation.latestRevisionId,
         },
       });
-      res.json(result);
+      res.json({ ...result, proposal: publicFoundationProposal(result.proposal) });
     },
   );
 
@@ -470,7 +475,7 @@ export function foundationRoutes(db: Db) {
         entityId: proposal.id,
         details: { foundationDocumentId: proposal.foundationDocumentId },
       });
-      res.json(proposal);
+      res.json(publicFoundationProposal(proposal));
     },
   );
 

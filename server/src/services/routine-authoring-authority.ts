@@ -21,7 +21,8 @@ export async function assertRoutineConversationDraftEntry(db: Db, companyId: str
   if (conversation?.agentId) throw forbidden("Use the conversation routine draft action; a Human configures and enables the saved routine");
 }
 
-export async function assertConversationRoutineAuthoring(db: Db, context: { companyId: string; agentId: string; runId: string }) {
+export async function assertConversationRoutineAuthoring(db: Db, context: { companyId: string; agentId: string; runId: string },
+  requiredAction: "tasks:assign" | "foundation:propose" = "tasks:assign") {
   if (!v9FeatureEnabled(await instanceSettingsService(db).getExperimental(), "ambient_commands_v9"))
     throw notFound("Conversation authoring is not enabled");
   const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, context.companyId),
@@ -35,7 +36,7 @@ export async function assertConversationRoutineAuthoring(db: Db, context: { comp
     throw forbidden("Current verified user and Agent admission are required");
   const human = { type: "board" as const, source: "session" as const, userId: run.responsibleUserId,
     ignoreInstanceAdmin: true, isInstanceAdmin: false };
-  await assertV5Authorization(db, human, context.companyId, "tasks:assign");
+  await assertV5Authorization(db, human, context.companyId, requiredAction);
   const conversationId = run.nativeIssueId ?? run.contextSnapshot?.issueId ?? run.contextSnapshot?.taskId;
   if (typeof conversationId !== "string" || !z.uuid().safeParse(conversationId).success) throw forbidden("A current conversation is required");
   const [conversation] = await db.select().from(issues).where(and(eq(issues.companyId, context.companyId), eq(issues.id, conversationId))).for("share");
@@ -53,9 +54,9 @@ export async function assertConversationRoutineAuthoring(db: Db, context: { comp
     throw forbidden("The current conversation run changed");
   const actor = { type: "agent" as const, source: "agent_jwt" as const, companyId: context.companyId,
     agentId: context.agentId, runId: run.id, onBehalfOfUserId: run.responsibleUserId };
-  const access = await authorizationService(db).decide({ actor, action: "tasks:assign", resource: { type: "company", companyId: context.companyId },
+  const access = await authorizationService(db).decide({ actor, action: requiredAction, resource: { type: "company", companyId: context.companyId },
     enforceResponsibleUserIntersection: true });
-  if (!access.allowed) throw forbidden("Current routine authoring authority is required");
+  if (!access.allowed) throw forbidden("Current conversation draft authority is required", { reason: access.reason, explanation: access.explanation });
   await assertAnalyticalContextPayloadAccess(db, context.companyId, actor, { runId: run.id });
   await assertAnalyticalContextPayloadAccess(db, context.companyId, actor, { issueId: conversation.id });
   return { run, conversation, responsibleUserId: run.responsibleUserId };

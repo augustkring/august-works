@@ -184,6 +184,8 @@ import { extendApprovedExecutionWaitDeadline } from "./approved-execution-wait.j
 import { instanceSettingsService } from "./instance-settings.js";
 import { memoryAgentToolsService } from "./memory/memory-agent-tools.js";
 import { workflowAuthoringToolsService } from "./workflows/workflow-authoring-tools.js";
+import { foundationAuthoringToolsService } from "./foundation-authoring-tools.js";
+import { foundationAuthoringProposeInputJsonSchema } from "@paperclipai/shared";
 import { routineAuthoringToolsService } from "./routine-authoring-tools.js";
 import { routineAuthoringCreateInputJsonSchema, v9FeatureEnabled } from "@paperclipai/shared";
 
@@ -1025,6 +1027,13 @@ const BUILTIN_TOOLS: ToolGatewayDescriptor[] = [
     risk: "write",
   },
   {
+    name: "paperclip-self:propose_foundation_change",
+    displayName: "Propose a Foundation change",
+    description: "Save a proposed change against the exact approved Foundation revision for Human review. This cannot accept or approve the change or alter canonical Foundation content.",
+    parametersSchema: foundationAuthoringProposeInputJsonSchema,
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "write",
+  },
+  {
     name: "paperclip-self:create_routine_draft",
     displayName: "Create routine draft",
     description: "Save a typed routine intent for human review in the current conversation. The draft is inactive and has no execution target or schedule. Open its Original editor to configure and enable it.",
@@ -1406,6 +1415,7 @@ export function createToolGatewayService(
       sharedMemory: experimental.enableCollectiveMemoryV1 === true,
       privateMemory: experimental.enablePrivateAgentMemoryV1 === true,
       routineAuthoring: v9FeatureEnabled(experimental, "ambient_commands_v9"),
+      foundationAuthoring: experimental.enableFoundationV1 === true && v9FeatureEnabled(experimental, "ambient_commands_v9"),
       workflowAuthoring:
         experimental.enableWorkflowsV1 === true &&
         experimental.enableWorkflowBuilderV1 === true &&
@@ -1423,6 +1433,7 @@ export function createToolGatewayService(
     const flags = await selfToolFeatureFlags();
     return tools.filter((tool) => {
       if (tool.name === "paperclip-self:create_routine_draft") return flags.routineAuthoring;
+      if (tool.name === "paperclip-self:propose_foundation_change") return flags.foundationAuthoring;
       if (isMemorySelfToolName(tool.name)) {
         if (tool.name === "paperclip-self:share_memory") {
           return flags.sharedMemory && flags.privateMemory;
@@ -3354,6 +3365,17 @@ export function createToolGatewayService(
         content: JSON.stringify({ issue, planDocument: planDocument ?? null }),
         data: { issue, planDocument: planDocument ?? null },
       };
+    }
+
+    if (tool.name === "paperclip-self:propose_foundation_change") {
+      if (!session.agentId || !session.runId) throw new ToolGatewayHttpError(403,"Foundation authoring requires a current Agent run","foundation_authoring_run_required");
+      try {
+        const data=await foundationAuthoringToolsService(db).propose({companyId:session.companyId,agentId:session.agentId,runId:session.runId},parameters);
+        return {content:JSON.stringify(data),data};
+      } catch(error) {
+        if(error instanceof HttpError)throw new ToolGatewayHttpError(error.status,error.message,"foundation_authoring_rejected");
+        throw error;
+      }
     }
 
     if (tool.name === "paperclip-self:create_routine_draft") {

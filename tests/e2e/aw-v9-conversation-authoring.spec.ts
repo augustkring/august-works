@@ -40,7 +40,9 @@ test("conversation previews a saved workflow version without publishing or calli
           status: "backlog", statusVersion: 0, executionStarted: false, href: `/issues/${id(4)}` }], hasMoreTasks: false,
         savedRoutines: [{ kind: "routine", id: id(5), title: "Saved weekly routine", authoredRevisionId: id(6), authoredRevisionNumber: 1,
           currentRevisionId: id(6), currentRevisionNumber: 1, status: "paused", executionConfigured: false,
-          triggerCount: 0, enabledTriggerCount: 0, href: `/routines/${id(5)}` }], hasMoreRoutines: false } });
+          triggerCount: 0, enabledTriggerCount: 0, href: `/routines/${id(5)}` }], hasMoreRoutines: false,
+        savedFoundationProposals:[{kind:"foundation_proposal",id:id(7),foundationDocumentId:id(8),title:"Saved Foundation policy proposal",
+          baseRevisionId:id(9),currentRevisionId:id(9),status:"pending",href:`/foundation/${id(8)}`}],hasMoreFoundationProposals:false } });
     });
     await page.route(`**/api/companies/${company.id}/workflows/**`, route => {
       if (route.request().method() !== "GET") writes++;
@@ -63,6 +65,9 @@ test("conversation previews a saved workflow version without publishing or calli
     await expect(preview).toContainText("Saved weekly routine");
     await expect(preview).toContainText("no execution target is configured");
     await expect(preview.getByRole("link", { name: "Review the current routine", exact: true })).toHaveAttribute("href", `/${company.issuePrefix}/routines/${id(5)}`);
+    await expect(preview).toContainText("Saved Foundation policy proposal");
+    await expect(preview).toContainText("awaits Human review");
+    await expect(preview.getByRole("link",{name:"Review the Foundation proposal",exact:true})).toHaveAttribute("href",`/${company.issuePrefix}/foundation/${id(8)}`);
     const beforeLanguage = reads;
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole("combobox", { name: "Language", exact: true }).selectOption("da");
@@ -70,6 +75,8 @@ test("conversation previews a saved workflow version without publishing or calli
     await expect(page.getByRole("region", { name: "Gemte forslag fra samtalen", exact: true })).toContainText("Foreslået version 2");
     await expect(page.getByRole("region", { name: "Gemte forslag fra samtalen", exact: true })).toContainText("ikke registreret en kørselsstart");
     await expect(page.getByRole("region", { name: "Gemte forslag fra samtalen", exact: true })).toContainText("Der er ikke valgt et kørselsmål");
+    await expect(page.getByRole("region",{name:"Gemte forslag fra samtalen",exact:true})).toContainText("afventer gennemgang");
+    await expect(page.getByRole("link",{name:"Gennemgå Foundation-forslaget",exact:true})).toHaveAttribute("href",`/${company.issuePrefix}/foundation/${id(8)}`);
     expect(reads).toBe(beforeLanguage); expect(writes).toBe(0);
     await page.addScriptTag({ path: axePath });
     expect(await page.evaluate(async () => (await (window as unknown as { axe: { run(scope: string): Promise<{ violations: unknown[] }> } }).axe.run('[aria-label="Gemte forslag fra samtalen"]')).violations)).toEqual([]);
