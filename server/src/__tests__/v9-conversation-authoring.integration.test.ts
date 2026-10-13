@@ -1,13 +1,14 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { agents, authUsers, companyMemberships, createDb, heartbeatRuns, issues, principalPermissionGrants, workflowRevisions } from "@paperclipai/db";
+import { agents, authUsers, companyMemberships, createDb, heartbeatRuns, issues, memoryDeletionMarkers, principalPermissionGrants, workflowRevisions } from "@paperclipai/db";
 import { conversationAuthoringService } from "../services/experience/conversation-authoring.js";
 import { workflowAuthoringToolsService } from "../services/workflows/workflow-authoring-tools.js";
 import { workflowService } from "../services/workflows/workflow-service.js";
 import { lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
 import { ExperienceOverloadError } from "../services/experience/projection.js";
 import { issueService } from "../services/issues.js";
+import { PaperclipRunnerToolAuthority } from "../services/native-runtime/paperclip-runner-tool-authority.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
@@ -41,6 +42,72 @@ describe("Current conversation previews use actual Original authoring revisions"
   async function draft(name = "Weekly review proposal") {
     return (await tools().create(context(), { name, description: "PRIVATE draft description", idempotencyKey: randomUUID() })).workflow;
   }
+  async function saveTask() {
+    await db.update(heartbeatRuns).set({ runtimeMode: "native", nativeIssueId: conversation.id }).where(eq(heartbeatRuns.id, run.id));
+    await db.update(issues).set({ executionRunId: run.id }).where(eq(issues.id, conversation.id));
+    const enqueueWakeup = vi.fn();
+    const authority = new PaperclipRunnerToolAuthority(db, { companyId: f.home, agentId: f.presence.id,
+      issueId: conversation.id, runId: run.id, enqueueWakeup });
+    const call = { tool: "create_task", callId: "saved-task", arguments: { idempotencyKey: randomUUID(),
+      title: "Saved research task", description: "PRIVATE description", initialPlan: "PRIVATE research plan", status: "backlog" } };
+    const receipt = await authority.execute(call) as { task: { id: string } };
+    return { authority, call, receipt, enqueueWakeup };
+  }
+  it("previews a real Native saved backlog task without starting or repeating its mutation", async () => {
+    const saved = await saveTask();
+    const initial = await view();
+    expect(initial).toMatchObject({ proposals: [], hasMoreTasks: false, savedTasks: [{ kind: "task", id: saved.receipt.task.id,
+      title: "Saved research task", titleTruncated: false, status: "backlog", executionStarted: false,
+      href: `/issues/${saved.receipt.task.id}` }] });
+    expect(JSON.stringify(initial)).not.toMatch(/PRIVATE|initialPlan|originRun|responsibleUser|contextSnapshot/);
+    expect(saved.enqueueWakeup).not.toHaveBeenCalled();
+    expect(await view()).toEqual({ ...initial, observedAt: expect.any(String) });
+    await expect(saved.authority.execute({ ...saved.call, callId: "retry" })).resolves.toEqual(saved.receipt);
+    expect(await db.select().from(issues).where(eq(issues.companyId, f.home))).toHaveLength(2);
+    expect(saved.enqueueWakeup).not.toHaveBeenCalled();
+  });
+  it("keeps task read independent of workflow access and reads the actual current status", async () => {
+    const saved = await saveTask();
+    await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId, f.home),
+      eq(principalPermissionGrants.principalId, f.userId), eq(principalPermissionGrants.permissionKey, "workflows:read")));
+    const current = await issueService(db).update(saved.receipt.task.id, { title: "Current task name", status: "in_review" });
+    await db.update(issues).set({ startedAt: new Date() }).where(eq(issues.id, saved.receipt.task.id));
+    expect((await view()).savedTasks).toEqual([expect.objectContaining({ title: "Current task name", status: "in_review",
+      statusVersion: current!.statusVersion, executionStarted: true })]);
+  });
+  it("excludes arbitrary task references, hidden tasks and pre-reset work", async () => {
+    await issueService(db).create(f.home, { title: "Model-claimed task", createdByAgentId: f.presence.id });
+    expect((await view()).savedTasks).toEqual([]);
+    const saved = await saveTask();
+    await db.update(issues).set({ hiddenAt: new Date() }).where(eq(issues.id, saved.receipt.task.id));
+    expect((await view()).savedTasks).toEqual([]);
+    await db.update(issues).set({ hiddenAt: null }).where(eq(issues.id, saved.receipt.task.id));
+    await db.update(issues).set({ conversationSessionGeneration: 1 }).where(eq(issues.id, conversation.id));
+    expect((await view()).savedTasks).toEqual([]);
+  });
+  it("withholds a saved task when its actual originating run's source has been erased", async () => {
+    await saveTask();
+    await db.insert(memoryDeletionMarkers).values({ companyId: f.home, kind: "source",
+      key: `memory-run-source-erasure:v1:${run.id}` });
+    await expect(view()).rejects.toMatchObject({ status: 403, details: { code: "analytical_source_access_lost" } });
+  });
+  it("requires the actual Original mutation receipt in addition to matching run provenance", async () => {
+    await saveTask();
+    await issueService(db).create(f.home, { title: "Fabricated receipt claim", createdByAgentId: f.presence.id,
+      originKind: "manual", originRunId: run.id, originId: `paperclip-runner:create-task:${conversation.id}:fabricated` });
+    expect((await view()).savedTasks?.map(task => task.title)).toEqual(["Saved research task"]);
+    await db.update(heartbeatRuns).set({ resultJson: null }).where(eq(heartbeatRuns.id, run.id));
+    expect((await view()).savedTasks).toEqual([]);
+  });
+  it("returns ten distinct actual saved tasks with explicit remaining coverage", async () => {
+    const saved = await saveTask();
+    for (let i = 0; i < 10; i++) await saved.authority.execute({ ...saved.call, callId: `next-${i}`,
+      arguments: { ...saved.call.arguments, idempotencyKey: randomUUID(), title: `Saved task ${i}` } });
+    const current = await view();
+    expect(current.savedTasks).toHaveLength(10); expect(current.hasMoreTasks).toBe(true);
+    expect(new Set(current.savedTasks!.map(task => task.id)).size).toBe(10);
+    expect(saved.enqueueWakeup).not.toHaveBeenCalled();
+  });
   it("refuses an already aborted private read without returning proposal data", async () => {
     await draft(); const controller = new AbortController(); controller.abort();
     await expect(conversationAuthoringService(db).get(f.actor, f.home, conversation.id, controller.signal)).rejects.toBeInstanceOf(ExperienceOverloadError);

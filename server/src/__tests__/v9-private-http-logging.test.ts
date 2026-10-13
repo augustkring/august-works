@@ -12,6 +12,9 @@ import {
 
 describe("V9 private HTTP purpose", () => {
   it.each([
+    ["GET", "/api/companies/private-company/conversations/private-record/authoring?expectedUserId=private-principal"],
+    ["POST", "/api/companies/private-company/conversations/private-record/authoring?expectedUserId=private-principal"],
+    ["GET", "/api/companies//conversations/private-record/authoring?expectedUserId=private-principal"],
     ["POST", "/api/companies/private-company/issues?awExperienceDraft=task&expectedActorId=user%3Aprivate-principal"],
     ["GET", "/api/companies/private-company/issues/create-receipts/private-record?expectedActorId=user%3Aprivate-principal"],
     ["PATCH", "/api/issues/private-record?awExperienceDraft=task&expectedActorId=user%3Aprivate-principal"],

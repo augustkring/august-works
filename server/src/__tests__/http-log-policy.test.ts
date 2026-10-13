@@ -249,3 +249,13 @@ it("purpose-separates activation measures and rejected account-bearing requests 
   }
   expect(isPrivateExperienceHttpRequest("GET", "/api/companies/id/experience/analytics-other")).toBe(false);
 });
+
+it("keeps saved conversation proposal context private, including rejected methods", () => {
+  const url = "/api/companies/private-company/conversations/private-record/authoring?expectedUserId=private-principal";
+  for (const method of ["GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"]) {
+    expect(isPrivateExperienceHttpRequest(method, url)).toBe(true);
+    expect(isSecretSensitiveHttpRequest(method, url)).toBe(true);
+  }
+  expect(privateExperienceLogUrl(url)).toBe("/api/companies/:companyId/conversations/:conversationId/authoring");
+  expect(isPrivateExperienceHttpRequest("GET", "/api/companies/id/conversations/id/authoring-other")).toBe(false);
+});

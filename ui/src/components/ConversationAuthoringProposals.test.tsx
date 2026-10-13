@@ -72,3 +72,21 @@ it("reports an empty recorded set without treating a model's suggested link as a
   await mount(); await vi.waitFor(() => expect(container.textContent).toContain("suggested link alone"));
   expect(container.querySelectorAll("a")).toHaveLength(0);
 });
+
+it("shows current saved task state in both languages and suppresses it immediately on task changes", async () => {
+  const get = vi.spyOn(authoring, "getConversationAuthoring").mockResolvedValue({ ...data, proposals: [], hasMoreTasks: false,
+    savedTasks: [{ kind: "task", id: id(7), title: "Saved for later research", titleTruncated: false,
+      status: "backlog", statusVersion: 1, executionStarted: false, href: `/issues/${id(7)}` }] });
+  await mount(); await vi.waitFor(() => expect(container.textContent).toContain("Saved for later research"));
+  expect(container.textContent).toContain("no recorded execution start");
+  expect(container.querySelector("a")?.getAttribute("href")).toBe(`/issues/${id(7)}`);
+  expect(container.querySelectorAll("button")).toHaveLength(0);
+  await act(async () => { await i18n.changeLanguage("da"); });
+  expect(container.textContent).toContain("ikke registreret en kørselsstart");
+  let release!: (value: ConversationAuthoringView) => void;
+  get.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+  await act(async () => live({ companyId: id(1), type: "activity.logged", payload: { entityType: "issue", entityId: id(7), action: "issue.updated" } }));
+  expect(container.textContent).not.toContain("Saved for later research");
+  expect(container.querySelectorAll("a")).toHaveLength(0);
+  await act(async () => release({ ...data, proposals: [], savedTasks: [], hasMoreTasks: false }));
+});

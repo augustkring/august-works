@@ -1972,10 +1972,10 @@
   },
   "conversationAuthoring": {
     "title": "Saved conversation proposals",
-    "boundary": "These proposals were saved in this conversation. Open the current workflow to review its full steps and changes. Publishing remains a separate governed action.",
+    "boundary": "These results were saved in this conversation. Review workflows before publishing. Saved tasks already exist; opening their current details does not start or repeat work.",
     "unavailable": "Current saved proposals are unavailable. Refresh after resolving access or the underlying source.",
     "checking": "Checking the current saved proposals…",
-    "empty": "No saved workflow proposal is recorded for this conversation session. A suggested link alone does not confirm a saved draft.",
+    "empty": "No saved workflow or task is recorded for this conversation session. A suggested link alone does not confirm a saved result.",
     "version": "Proposed version {{version}} · {{steps}} steps · {{triggers}} triggers",
     "review": "Review the current workflow",
     "more": "More saved proposals exist. Open Workflows to inspect the complete authorized list.",
@@ -1987,7 +1987,22 @@
     },
     "preview": "Inspect this proposed version",
     "comparison": "Changes in the current draft since this proposal",
-    "changeCounts": "{{added}} added · {{changed}} changed · {{removed}} removed flow steps"
+    "changeCounts": "{{added}} added · {{changed}} changed · {{removed}} removed flow steps",
+    "tasksTitle": "Saved tasks",
+    "taskCoverageUnavailable": "Saved task coverage is unavailable from this server.",
+    "taskExecutionRecorded": "The task owner records an execution start. Check its current details for the result.",
+    "taskExecutionNotRecorded": "The task owner has no recorded execution start. Saving a task does not confirm completed work.",
+    "reviewTask": "Review the current task",
+    "moreTasks": "More saved tasks exist. Open Work to inspect the complete authorized list.",
+    "taskStatus": {
+      "backlog": "Saved for later",
+      "todo": "Ready to start",
+      "in_progress": "Work in progress",
+      "in_review": "Awaiting review",
+      "done": "Completed",
+      "blocked": "Blocked",
+      "cancelled": "Cancelled"
+    }
   },
   "loadingView": "Loading view…"
 }

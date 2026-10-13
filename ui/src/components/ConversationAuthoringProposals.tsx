@@ -35,7 +35,7 @@ export function ConversationAuthoringProposals({ company, principal, conversatio
     const action = typeof event.payload.action === "string" ? event.payload.action : "";
     const conversationChanged = event.payload.entityType === "issue" && event.payload.entityId === conversation;
     const authoringRunChanged = event.payload.agentId === agent && /heartbeat|tool_invocation/.test(`${event.type}:${action}`);
-    if (/workflow|permission|membership|erased|deleted|withdraw|conversation/i.test(`${event.payload.entityType}:${action}`) ||
+    if (/workflow|issue|permission|membership|erased|deleted|withdraw|conversation/i.test(`${event.payload.entityType}:${action}`) ||
       event.type === "analytical.context.access_lost" || conversationChanged || authoringRunChanged) {
       source.current++; setSourceEpoch(source.current);
       void client.cancelQueries({ queryKey: prefix });
@@ -50,7 +50,7 @@ export function ConversationAuthoringProposals({ company, principal, conversatio
     {query.isError ? <div className="space-y-2"><p role="status">{t("conversationAuthoring.unavailable")}</p>
       <Button variant="outline" className="min-h-11" onClick={() => { if (current()) void query.refetch(); }}>{t("tryAgain")}</Button></div>
       : !fresh ? <p role="status">{t("conversationAuthoring.checking")}</p>
-      : query.data.proposals.length === 0 ? <p role="status">{t("conversationAuthoring.empty")}</p>
+      : query.data.proposals.length === 0 && !query.data.savedTasks?.length ? <p role="status">{t("conversationAuthoring.empty")}</p>
       : <ul className="space-y-3">{query.data.proposals.map(proposal => <li key={proposal.id} className="space-y-2 rounded-md border p-3">
         <h3 className="font-semibold">{proposal.name}</h3>
         <p>{t("conversationAuthoring.version", { version: proposal.authoredRevisionNumber, steps: proposal.stepCount, triggers: proposal.triggerCount })}</p>
@@ -59,5 +59,16 @@ export function ConversationAuthoringProposals({ company, principal, conversatio
         <Link className="inline-flex min-h-11 items-center underline" to={proposal.href}>{t("conversationAuthoring.review")}</Link>
       </li>)}</ul>}
     {fresh && query.data.hasMore && <p role="status">{t("conversationAuthoring.more")}</p>}
+    {fresh && query.data.savedTasks === undefined && <p role="status">{t("conversationAuthoring.taskCoverageUnavailable")}</p>}
+    {fresh && !!query.data.savedTasks?.length && <div className="space-y-3">
+      <h3 className="font-semibold">{t("conversationAuthoring.tasksTitle")}</h3>
+      <ul className="space-y-3">{query.data.savedTasks.map(task => <li key={task.id} className="space-y-2 rounded-md border p-3">
+        <h4 className="font-semibold">{task.title}{task.titleTruncated && "…"}</h4>
+        <p>{t(`conversationAuthoring.taskStatus.${task.status}`)}</p>
+        <p>{t(task.executionStarted ? "conversationAuthoring.taskExecutionRecorded" : "conversationAuthoring.taskExecutionNotRecorded")}</p>
+        <Link className="inline-flex min-h-11 items-center underline" to={task.href}>{t("conversationAuthoring.reviewTask")}</Link>
+      </li>)}</ul>
+    </div>}
+    {fresh && query.data.hasMoreTasks && <p role="status">{t("conversationAuthoring.moreTasks")}</p>}
   </section>;
 }

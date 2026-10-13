@@ -24,6 +24,17 @@ it("rejects private extra fields and arbitrary model-provided destinations", asy
   await expect(getConversationAuthoring(id(1), "author", id(2), id(3), 1)).rejects.toThrow();
 });
 
+it.each(["foreign_href", "body_copy", "missing_coverage", "duplicate"])("rejects invalid saved task references: %s", async failure => {
+  const task = { kind: "task", id: id(7), title: "Actual saved task", titleTruncated: false,
+    status: "backlog", statusVersion: 1, executionStarted: false, href: `/issues/${id(7)}` };
+  vi.spyOn(api, "get").mockResolvedValue({ ...result,
+    savedTasks: failure === "duplicate" ? [task, task] : [{ ...task,
+      ...(failure === "foreign_href" ? { href: `/issues/${id(8)}` } : {}),
+      ...(failure === "body_copy" ? { description: "PRIVATE" } : {}) }],
+    ...(failure === "missing_coverage" ? {} : { hasMoreTasks: false }) });
+  await expect(getConversationAuthoring(id(1), "author", id(2), id(3), 1)).rejects.toThrow();
+});
+
 it.each(["wrong_version", "incomplete", "extra_payload"])("refuses an invalid flow preview: %s", async mismatch => {
   const preview = { id: id(5), version: mismatch === "wrong_version" ? 2 : 1, coverage: "complete", steps: [] };
   vi.spyOn(api, "get").mockResolvedValue({ ...result, proposals: [{ kind: "workflow", id: id(4), name: "Actual draft",

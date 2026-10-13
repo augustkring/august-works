@@ -689,6 +689,7 @@ export class PaperclipRunnerToolAuthority {
       }
     }
     this.binding.authoritySignal?.throwIfAborted();
+    this.#assertConversationGeneration(row);
     await assertAnalyticalContextPayloadAccess(this.db,this.binding.companyId,{type:"agent",source:"agent_jwt",companyId:this.binding.companyId,agentId:this.binding.agentId,runId:this.binding.runId,onBehalfOfUserId:row.run.responsibleUserId},{issueId:this.binding.issueId});
     return row;
   }
@@ -1494,6 +1495,11 @@ export class PaperclipRunnerToolAuthority {
           ),
         ) as unknown;
         this.binding.authoritySignal?.throwIfAborted();
+        const [currentIssue] = await tx.select().from(issues).where(and(
+          eq(issues.companyId, this.binding.companyId), eq(issues.id, this.binding.issueId),
+        ));
+        if (!currentIssue) throw new Error("paperclip_runner_tool_binding_not_authorized");
+        this.#assertConversationGeneration({ issue: currentIssue, run: context.run });
         receipts[idempotencyKey] = {
           operationId,
           input,
@@ -1512,6 +1518,15 @@ export class PaperclipRunnerToolAuthority {
         throw error;
       }
     });
+  }
+
+  #assertConversationGeneration(context: { issue: typeof issues.$inferSelect; run: typeof heartbeatRuns.$inferSelect }) {
+    if (!context.issue.conversationAgentId && !context.issue.conversationRetiredAt) return;
+    const generation = context.run.contextSnapshot?.conversationSessionGeneration ?? 0;
+    if (context.issue.conversationRetiredAt || !Number.isSafeInteger(generation) ||
+      generation !== context.issue.conversationSessionGeneration) {
+      throw new Error("paperclip_runner_conversation_generation_changed");
+    }
   }
 
   async #lockAuthorizedMutationContext(tx: Db): Promise<{
@@ -1566,6 +1581,7 @@ export class PaperclipRunnerToolAuthority {
     }
     if (bounded) await assertNativeToolPlanCurrent(tx, this.binding, true);
     this.binding.authoritySignal?.throwIfAborted();
+    this.#assertConversationGeneration(context);
     return context;
   }
 

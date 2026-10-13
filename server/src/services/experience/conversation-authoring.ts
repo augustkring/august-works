@@ -1,5 +1,6 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
-import { issues, workflows, type Db } from "@paperclipai/db";
+import { z } from "zod";
+import { heartbeatRuns, issues, workflows, type Db } from "@paperclipai/db";
 import { conversationAuthoringViewSchema } from "@paperclipai/shared";
 import { authorizationService, type AuthorizationActor } from "../authorization.js";
 import { assertV5Authorization, v5HumanActorId } from "../v5-authorization.js";
@@ -30,7 +31,6 @@ export function conversationAuthoringService(db: Db) {
       assigneeAgentId: conversation.assigneeAgentId, assigneeUserId: conversation.assigneeUserId } });
     if (!readable.allowed) throw forbidden("Current conversation read authority is required");
     await assertAnalyticalContextPayloadAccess(tx, companyId, current, { issueId: conversation.id });
-    await assertV5Authorization(tx, current, companyId, "workflows:read");
     return { conversation, userId, current };
   }
   return {
@@ -53,6 +53,7 @@ export function conversationAuthoringService(db: Db) {
           order by r.workflow_id,r.revision_number desc,r.id desc
         ) owned order by created_at desc,revision_id desc limit 11`);
       const workflowOwner = workflowService(tx), registry = workflowNodeRegistryService(tx).list();
+      if (candidates.length) await assertV5Authorization(tx, initial.current, companyId, "workflows:read");
       const triggerTypes = new Set(registry.filter(node => node.category === "trigger").map(node => node.type));
       const proposals = [];
       for (const candidate of candidates.slice(0, 10)) {
@@ -79,15 +80,71 @@ export function conversationAuthoringService(db: Db) {
             : detail.draftRevisionId ? "changed" as const : "superseded" as const,
           stepCount: revision.graph.nodes.length - triggerCount, triggerCount, preview: authoredFlow.flow, comparison, href: `/workflows/${detail.id}` });
       }
+      // Original Native create_task writes provenance atomically with its
+      // mutation receipt. Neither model prose nor an arbitrary task link is
+      // a saved result. Match the exact current conversation/run generation.
+      const tasks = await tx.execute<{ id: string; run_id: string }>(sql`
+        select t.id,h.id as run_id from issues t join heartbeat_runs h
+          on h.company_id=t.company_id and h.id::text=t.origin_run_id
+        where t.company_id=${companyId}::uuid and t.created_by_agent_id=${initial.conversation.conversationAgentId}::uuid
+          and t.origin_kind='manual' and t.origin_id like ${`paperclip-runner:create-task:${conversationId}:%`}
+          and h.runtime_mode='native' and h.native_issue_id=${conversationId}::uuid
+          and h.agent_id=${initial.conversation.conversationAgentId}::uuid and h.responsible_user_id=${initial.userId}
+          and coalesce(h.context_snapshot->>'conversationSessionGeneration','0')=${String(initial.conversation.conversationSessionGeneration)}
+          and h.result_json->'semanticToolReceipts'->substr(t.origin_id,length(${`paperclip-runner:create-task:${conversationId}:`})+1)->>'operationId'='create_task'
+          and h.result_json->'semanticToolReceipts'->substr(t.origin_id,length(${`paperclip-runner:create-task:${conversationId}:`})+1)->'result'->'task'->>'id'=t.id::text
+          and t.conversation_agent_id is null and t.conversation_retired_at is null and t.hidden_at is null
+        order by t.created_at desc,t.id desc limit 11`);
+      const savedTasks = [];
+      const readTask = async (candidate: { id: string; run_id: string }) => {
+        currentSignal.throwIfAborted();
+        const [origin] = await tx.select({ id: heartbeatRuns.id, receipts: heartbeatRuns.resultJson }).from(heartbeatRuns).where(and(
+          eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, candidate.run_id),
+          eq(heartbeatRuns.agentId, initial.conversation.conversationAgentId!), eq(heartbeatRuns.responsibleUserId, initial.userId),
+          eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.nativeIssueId, conversationId),
+          sql`coalesce(${heartbeatRuns.contextSnapshot}->>'conversationSessionGeneration','0')=${String(initial.conversation.conversationSessionGeneration)}`,
+        )).for("share");
+        if (!origin) throw conflict("The saved task's conversation provenance changed");
+        const [task] = await tx.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, candidate.id),
+          isNull(issues.hiddenAt), isNull(issues.conversationAgentId), isNull(issues.conversationRetiredAt),
+          eq(issues.createdByAgentId, initial.conversation.conversationAgentId!), eq(issues.originKind, "manual"),
+          sql`${issues.originId} like ${`paperclip-runner:create-task:${conversationId}:%`}`,
+          eq(issues.originRunId, candidate.run_id))).for("share");
+        if (!task) throw conflict("The saved conversation task changed; refresh its current owner");
+        const receiptKey = task.originId!.slice(`paperclip-runner:create-task:${conversationId}:`.length);
+        const receipts = origin.receipts?.semanticToolReceipts;
+        const receipt = receipts && typeof receipts === "object" && !Array.isArray(receipts)
+          ? (receipts as Record<string, unknown>)[receiptKey] : undefined;
+        if (!z.object({ operationId: z.literal("create_task"), result: z.object({ task: z.object({ id: z.literal(task.id) }) }) }).safeParse(receipt).success)
+          throw conflict("The Original saved task receipt is unavailable");
+        const access = await authorizationService(tx).decide({ actor: initial.current, action: "issue:read", resource: {
+          type: "issue", companyId, issueId: task.id, projectId: task.projectId, parentIssueId: task.parentId,
+          status: task.status, assigneeAgentId: task.assigneeAgentId, assigneeUserId: task.assigneeUserId,
+        } });
+        if (!access.allowed) throw forbidden("Current saved task read authority is required");
+        // The new projection inherits both the created task and originating
+        // run's current source authority; it stores no copied task body.
+        await assertAnalyticalContextPayloadAccess(tx, companyId, initial.current, { runId: candidate.run_id });
+        await assertAnalyticalContextPayloadAccess(tx, companyId, initial.current, { issueId: task.id });
+        return task;
+      };
+      for (const candidate of tasks.slice(0, 10)) {
+        const task = await readTask(candidate);
+        savedTasks.push({ kind: "task" as const, id: task.id, title: task.title.slice(0, 400), titleTruncated: task.title.length > 400,
+          status: task.status, statusVersion: task.statusVersion,
+          executionStarted: !!(task.startedAt || task.executionRunId), href: `/issues/${task.id}` });
+      }
       currentSignal.throwIfAborted();
       const final = await owner(tx, actor, companyId, conversationId);
       currentSignal.throwIfAborted();
       if (final.conversation.conversationAgentId !== initial.conversation.conversationAgentId ||
         final.conversation.conversationSessionGeneration !== initial.conversation.conversationSessionGeneration)
         throw conflict("The current conversation changed; reload its saved proposals");
+      if (candidates.length) await assertV5Authorization(tx, final.current, companyId, "workflows:read");
+      for (const candidate of tasks.slice(0, 10)) await readTask(candidate);
       return conversationAuthoringViewSchema.parse({ companyId, conversationId, agentId: initial.conversation.conversationAgentId,
         generation: initial.conversation.conversationSessionGeneration, observedAt: new Date().toISOString(), hasMore: candidates.length > 10,
-        proposals, modelCalled: false });
+        proposals, savedTasks, hasMoreTasks: tasks.length > 10, modelCalled: false });
     }).catch(error => {
       let cause: unknown = error;
       for (let depth = 0; depth < 4 && cause && typeof cause === "object"; depth++) {

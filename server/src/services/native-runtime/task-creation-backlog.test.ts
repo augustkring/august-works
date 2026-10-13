@@ -1,6 +1,6 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { activityLog, agents, companies, createDb, heartbeatRuns, issues } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { documentService } from "../documents.js";
@@ -64,5 +64,54 @@ describe("runner backlog task creation", () => {
     await expect(f.authority.execute({ tool: "create_task", callId: "invalid", arguments: { idempotencyKey: "invalid", title: "Invalid", status } })).rejects.toThrow();
     expect(await db.select().from(issues).where(eq(issues.companyId, f.companyId))).toHaveLength(1);
     expect(f.enqueueWakeup).not.toHaveBeenCalled();
+  });
+
+  it("refuses a retained Native create command after the conversation generation changes", async () => {
+    const f = await fixture(true);
+    await db.update(issues).set({ conversationSessionGeneration: 1 }).where(eq(issues.id, f.issueId));
+    await expect(f.authority.execute({ tool: "create_task", callId: "old-session", arguments: {
+      idempotencyKey: "old-session", title: "Stale session task", status: "backlog",
+    } })).rejects.toThrow("paperclip_runner_conversation_generation_changed");
+    expect(await db.select().from(issues).where(eq(issues.companyId, f.companyId))).toHaveLength(1);
+    expect(f.enqueueWakeup).not.toHaveBeenCalled();
+  });
+
+  it("refuses replay of an actual saved receipt after resetting its conversation", async () => {
+    const f = await fixture(true), call = { tool: "create_task", callId: "saved", arguments: {
+      idempotencyKey: "saved", title: "Saved task", status: "backlog",
+    } };
+    await f.authority.execute(call);
+    await db.update(issues).set({ conversationSessionGeneration: 1 }).where(eq(issues.id, f.issueId));
+    await expect(f.authority.execute({ ...call, callId: "replay" })).rejects.toThrow("paperclip_runner_conversation_generation_changed");
+    expect(await db.select().from(issues).where(eq(issues.companyId, f.companyId))).toHaveLength(2);
+    expect(f.enqueueWakeup).not.toHaveBeenCalled();
+  });
+
+  it("rolls back the task and receipt when its conversation resets after the real task insert", async () => {
+    const f = await fixture(true);
+    await db.execute(sql`create function aw_v9_test_reset_native_task_source() returns trigger language plpgsql as $$
+      begin
+        if NEW.origin_id like 'paperclip-runner:create-task:%' then
+          update issues set conversation_session_generation=conversation_session_generation+1
+            where company_id=NEW.company_id and id=(select native_issue_id from heartbeat_runs where id::text=NEW.origin_run_id);
+        end if;
+        return NEW;
+      end $$`);
+    await db.execute(sql`create trigger aw_v9_test_native_task_late_reset after insert on issues
+      for each row execute function aw_v9_test_reset_native_task_source()`);
+    try {
+      await expect(f.authority.execute({ tool: "create_task", callId: "late-reset", arguments: {
+        idempotencyKey: "late-reset", title: "Late reset task", status: "backlog",
+      } })).rejects.toThrow("paperclip_runner_conversation_generation_changed");
+      expect(await db.select().from(issues).where(eq(issues.companyId, f.companyId))).toEqual([
+        expect.objectContaining({ id: f.issueId, conversationSessionGeneration: 0 }),
+      ]);
+      expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, f.runId)))[0]?.resultJson).toBeNull();
+      expect(await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.companyId), eq(activityLog.action, "issue.created")))).toEqual([]);
+      expect(f.enqueueWakeup).not.toHaveBeenCalled();
+    } finally {
+      await db.execute(sql`drop trigger aw_v9_test_native_task_late_reset on issues`);
+      await db.execute(sql`drop function aw_v9_test_reset_native_task_source()`);
+    }
   });
 });

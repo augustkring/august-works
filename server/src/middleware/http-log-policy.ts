@@ -62,6 +62,7 @@ export function isPrivateExperienceHttpRequest(method: string | undefined, url: 
     || /^\/api\/projects(?:\/|$)/i.test(pathname)
     || /^\/api\/(?:companies\/(?:[^/]*\/)*customer-feedback|internal\/customer-feedback)(?:\/|$)/i.test(pathname)
     || /^\/api\/(?:saas\/)?companies\/[^/]*\/(?:activation|onboarding)(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/[^/]*\/conversations\/[^/]*\/authoring(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/experience\/commands(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/experience\/company(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/experience\/analytics(?:\/|$)/i.test(pathname)
@@ -83,6 +84,7 @@ export function privateExperienceLogUrl(url: string): string {
   if (/\/agent-configuration-drafts(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/agent-configuration-drafts/:operation";
   if (/^\/api\/companies\/[^/]*\/(?:activation|onboarding)(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/activation-or-onboarding/:operation";
   if (/^\/api\/saas\/companies\//i.test(pathname)) return "/api/saas/companies/:companyId/activation-or-onboarding/:operation";
+  if (/\/conversations\/[^/]*\/authoring(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/conversations/:conversationId/authoring";
   if (/\/experience\/commands(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/commands";
   if (/\/experience\/company(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/company";
   if (/\/experience\/analytics(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/analytics";

@@ -34,7 +34,8 @@
       "Oversized, duplicate, cyclic or dangling topology is unavailable, never silently truncated",
       "Bound native-ID draft changes against the active revision; private values omitted; incomplete comparison is unavailable, never unchanged or approved.",
       "The conversation can expand the exact saved authored revision through the same Original bounded flow projection, including declared operations, possible effects, approval checkpoints and connections. A discarded historical revision is never relabeled current or published.",
-      "A structural comparison of a later current draft is keyed by actual Native node IDs and omits private expressions and configurations. Unavailable or older responses remain unavailable, never an unchanged comparison."
+      "A structural comparison of a later current draft is keyed by actual Native node IDs and omits private expressions and configurations. Unavailable or older responses remain unavailable, never an unchanged comparison.",
+      "The same current conversation surface previews up to ten distinct tasks from actual Native create_task mutation receipts. Current task state and execution-start evidence are separate from workflow drafts; current task and originating-run source access are rechecked. Earlier sessions, arbitrary links, hidden tasks and unavailable source data are suppressed."
     ]
   },
   "inputs": [],
@@ -55,7 +56,8 @@
   "systemWork": {
     "canonicalReadDomains": [
       "Native workflows/revisions and current learned-asset privacy/lineage checks",
-      "Native workflows:read/edit grants and immutable node registry descriptors"
+      "Native workflows:read/edit grants and immutable node registry descriptors",
+      "Original Native task creation receipts, current issues and their originating heartbeat runs; current issue authorization and source/erasure checks."
     ],
     "canonicalWriteOperation": "Review remains read-only; separate explicit lifecycle controls invoke the original native workflow owner (ADR-V9-023).",
     "authorityEffect": "Presentation and drafts cannot grant permissions. Material effects always require current native permissions, approvals and version preconditions.",
@@ -85,7 +87,7 @@
     "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
     "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
     "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
-    "targetSize": "Custom frequent and primary controls target at least 44 \u00d7 44 CSS px.",
+    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
     "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
     "reducedMotion": "No essential animated transition or moving progress indicator.",
     "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
@@ -121,7 +123,8 @@
       "Verify immutable active/draft separation, publication-free reads, native graph links, unknown operations, branch visibility and explicit bounds.",
       "Complete per-step actor/input/effect/access policy, chat authoring, representative test/inspect/check/publish/safe run and full recovery remain open. Separate native lifecycle controls are specified in WORKFLOW-OPERATE/RETIRE.",
       "Verify added/changed/removed native steps, dependency numbering, connection/data/settings indicators, private-value exclusion and unchanged immutable active source.",
-      "Run the Original workflow review suite, conversation Native authoring/authority suite, private client/widget suites and built conversation preview; verify exact authored revision binding, private-expression changes, unavailable topology and no model or publication effect."
+      "Run the Original workflow review suite, conversation Native authoring/authority suite, private client/widget suites and built conversation preview; verify exact authored revision binding, private-expression changes, unavailable topology and no model or publication effect.",
+      "Verify real Native backlog creation without wakeups, receipt replays without duplicate tasks, current owner status changes, pre-reset task exclusion, source-erasure denial, old-server coverage unavailability and EN/DA mobile task links. Native mutation checks reject old conversation generations before effects and roll back a late reset before saving its receipt."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
