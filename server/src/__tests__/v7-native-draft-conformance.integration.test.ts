@@ -1,3 +1,4 @@
+import { normalizePaperclipRunnerAdapterConfig } from "@paperclipai/adapter-utils/server-utils";
 import { randomUUID } from "node:crypto";
 import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
@@ -9,6 +10,10 @@ import {
   orchestrationPlans, orchestrationWorkers, orchestrationWorkerAttempts, orchestrationModelReservations,
 } from "@paperclipai/db";
 import { nativeDraftConformanceService, registerNativeDraftConformance } from "../services/native-draft-conformance.js";
+import { agentAuthoringService } from "../services/agents/authoring-drafts.js";
+import { agentRuntimeCandidateService } from "../services/agents/authoring-runtime-candidates.js";
+import { agentRuntimeCandidateConformanceService } from "../services/agents/authoring-runtime-candidate-conformance.js";
+import { agentRuntimeCandidateConformanceRequests } from "@paperclipai/db";
 import { providerConformanceService } from "../services/provider-conformance.js";
 import { discoverNativeCapabilities } from "../services/native-provider-conformance.js";
 import { makeProviderCapabilitySnapshot } from "../services/provider-capabilities.js";
@@ -98,6 +103,62 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
   };
   const service = () => nativeDraftConformanceService(db, { profiles, sourceSha, protectedEvidenceOrigin: "https://protected.test.invalid", fetch: transport });
   const test = (maximumCostCents = 12) => providerConformanceService(db).test(f.actor, f.home, f.presence.id, input(maximumCostCents));
+
+  it("qualifies a canonical virtual candidate through original probes without replacing the live configuration or binding", async () => {
+    await instanceSettingsService(db).updateExperimental({ agent_packages_v7: true, hire_agent_v9: true, saas_deployment_profile_v6: true, billing_v6: true });
+    const [original] = await db.select().from(agents).where(eq(agents.id, f.presence.id));
+    const [originalRuntime] = await db.select().from(agentPresenceRuntimeBindings).where(eq(agentPresenceRuntimeBindings.agentId, f.presence.id));
+    const id = randomUUID(), proposed = normalizePaperclipRunnerAdapterConfig(original!.adapterType, { ...original!.adapterConfig, workerModelProfileId: id });
+    const alternative = { ...profiles[0]!, id,
+      qualifiedConfigurationHash: hashContextPolicySnapshot({ adapterType: original!.adapterType, adapterConfig: proposed }) };
+    profiles.push(alternative);
+    const drafts = agentAuthoringService(db), initial = await drafts.create(f.actor, f.home, { requestId: randomUUID(), agentId: f.presence.id });
+    const candidates = agentRuntimeCandidateService(db, { profiles, sourceSha, protectedEvidenceOrigin: "https://protected.test.invalid" });
+    const candidate = await candidates.create(f.actor, f.home, initial.id, { requestId: randomUUID(), expectedVersion: initial.version, modelProfileId: id });
+    const saved = await drafts.save(f.actor, f.home, initial.id, { requestId: randomUUID(), expectedVersion: initial.version,
+      step: "runtime", content: { ...initial.content!, runtimeCandidateId: candidate.id } });
+    const conformance = agentRuntimeCandidateConformanceService(db, { profiles, sourceSha, protectedEvidenceOrigin: "https://protected.test.invalid" });
+    const nativeInput = input(), reviewed = await conformance.review(f.actor, f.home, saved.id, candidate.id, nativeInput);
+    expect(reviewed).toMatchObject({ canTest: true, maximumMinor: 12, probeCount: 4, toolsGranted: false, changesLiveConfiguration: false });
+    const command = { ...nativeInput, requestId: randomUUID(), expectedVersion: saved.version, expectedReviewHash: reviewed.reviewHash,
+      confirmBoundedConformance: true as const, confirmCompanyVisibleProbes: true as const };
+    duringCall = async () => {
+      const [live] = await db.select().from(agents).where(eq(agents.id, f.presence.id));
+      expect(live!.adapterConfig).toEqual(original!.adapterConfig);
+    };
+    const result = await conformance.start(f.actor, f.home, saved.id, candidate.id, command);
+    expect(result).toMatchObject({ status: "qualified", reservedMinor: 12, unknownCharges: 1, changesLiveConfiguration: false });
+    const [request] = await db.select().from(agentRuntimeCandidateConformanceRequests).where(eq(agentRuntimeCandidateConformanceRequests.requestId, command.requestId));
+    expect(request!.evidence).toMatchObject({ proof: { sourceSha, configurationHash: alternative.qualifiedConfigurationHash, accountingComplete: true } });
+    expect(calls).toBe(4); expect(result.runIds).toHaveLength(4);
+    const [live] = await db.select().from(agents).where(eq(agents.id, f.presence.id));
+    expect(live!.adapterConfig).toEqual(original!.adapterConfig); expect(live!.runtimeConfig).toEqual(original!.runtimeConfig);
+    expect(live!.permissions).toEqual(original!.permissions); expect(live!.status).toBe(original!.status);
+    expect((await db.select().from(agentPresenceRuntimeBindings).where(eq(agentPresenceRuntimeBindings.agentId, f.presence.id)))[0]).toEqual(originalRuntime);
+    expect((await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, request!.id)))[0]).toBeDefined();
+    // Even a second internal controller invocation cannot replay a group whose
+    // primary Original plan has already claimed this canonical request identity.
+    expect(await conformance.start(f.actor, f.home, saved.id, candidate.id, command)).toEqual(result);
+    expect(await conformance.receipt(f.actor, f.home, saved.id, candidate.id, command.requestId)).toEqual(result);
+    expect(calls).toBe(4);
+    const qualified = await candidates.qualified(db, f.actor, f.home, saved.id, candidate.id);
+    expect(qualified.configuration.workerModelProfileId).toBe(id);
+    expect(qualified.provider.runtime.qualifiedConfigurationHash).toBe(alternative.qualifiedConfigurationHash);
+    const [peer] = await db.select().from(agents).where(eq(agents.id, f.guestPresence.id));
+    await db.update(agents).set({ adapterConfig: { ...peer!.adapterConfig, maxOutputTokens: 128 } }).where(eq(agents.id, peer!.id));
+    await expect(candidates.qualified(db, f.actor, f.home, saved.id, candidate.id)).rejects.toMatchObject({ status: 409 });
+    await db.update(agents).set({ adapterConfig: peer!.adapterConfig }).where(eq(agents.id, peer!.id));
+    await instanceSettingsService(db).updateExperimental({ hire_agent_v9: false });
+    expect(await conformance.receipt(f.actor, f.home, saved.id, candidate.id, command.requestId)).toEqual(result);
+    expect(await conformance.receipt(f.actor, f.home, saved.id, candidate.id, randomUUID())).toBeNull();
+    expect(await conformance.start(f.actor, f.home, saved.id, candidate.id, command)).toEqual(result);
+    expect(calls).toBe(4);
+    await instanceSettingsService(db).updateExperimental({ hire_agent_v9: true });
+    // Claimed passing flags with no original runs cannot become runtime proof.
+    await db.update(agentRuntimeCandidateConformanceRequests).set({ evidence: { ...request!.evidence, runIds: [] } })
+      .where(eq(agentRuntimeCandidateConformanceRequests.id, request!.id));
+    await expect(candidates.qualified(db, f.actor, f.home, saved.id, candidate.id)).rejects.toMatchObject({ status: 409 });
+  });
 
   it("bootstraps through the actual operator service without fixture conformance and holds cancellation liability", async () => {
     await expect(agentProviderBindingService(db).assertRuntime(f.home, f.presence.id)).rejects.toThrow();

@@ -68,6 +68,7 @@ export const agentConfigurationDrafts = pgTable(
       .defaultNow(),
   },
   (table) => ({
+    companyIdId: uniqueIndex("agent_configuration_drafts_company_id_id_uq").on(table.companyId, table.id),
     package: check(
       "agent_configuration_drafts_package_check",
       sql`(${table.kind}='custom' and ${table.packageVersionId} is null and ${table.packageKey} is null and ${table.packageContentHash} is null) or (${table.kind}='hire' and ${table.agentId} is null and ${table.packageVersionId} is not null and ${table.packageKey} is not null and ${table.packageContentHash} is not null and ${table.packageContentHash} ~ '^[a-f0-9]{64}$')`,

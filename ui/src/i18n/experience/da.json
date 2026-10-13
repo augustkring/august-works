@@ -1910,5 +1910,36 @@
     "why": "Du administrerer virksomhedens godkendte hukommelse.",
     "consequence": "Den oprindelige indekskontrol har ingen gyldig kørselsreservation. Gennemgå dens oprindelige status før et nyt forsøg.",
     "evidence": "Resultatet er ubekræftet. Det betyder ikke, at kontrollen er stoppet eller mislykkedes."
+  },
+  "runtimeCandidates": {
+    "checking": "Kontrollerer den aktuelle gemte opsætning…",
+    "advanced": "Avancerede runtimealternativer",
+    "title": "Gemt runtimekandidat",
+    "boundary": "Et gemt alternativ ændrer ikke den aktive agent. Kvalifikation bruger fire syntetiske kald uden virksomhedskontekst eller værktøjer. Gennemgå og publicér den testede version særskilt.",
+    "unconfirmed": "Forespørgslen kunne ikke bekræftes. Kontroller dens oprindelige kvittering før en ny handling.",
+    "unavailable": "De aktuelle private runtimevalg er ikke tilgængelige.",
+    "profile": "Installeret modelprofil",
+    "choose": "Vælg en mulighed",
+    "noChoices": "Ingen aktuel konfiguration er kvalificeret for denne agent. Brug de eksisterende avancerede opsætningskontroller.",
+    "retryCreation": "Gentag samme forslag med samme forespørgsel",
+    "saveProposal": "Gem runtimeforslag",
+    "checkCreation": "Kontroller forslagets oprindelige kvittering",
+    "saveSelection": "Gem agentkladden, så kandidatvalget er fastholdt før kvalifikation.",
+    "peerCompany": "Virksomhed med den godkendte agent til isolationstest",
+    "noPeer": "Virksomheden har ingen tilgængelig testagent med samme logiske identitet.",
+    "ceiling": "Maksimal testforpligtelse (USD cent)",
+    "quote": "Maksimal forpligtelse for fire probes: USD {{amount}}. En ubekræftet udgift fastholder hele den reserverede grænse.",
+    "blocked": "Løs de aktuelle kvalifikationsblokeringer før disse probes køres.",
+    "consent": "Jeg godkender fire afgrænsede modelprobes og deres gennemgåede mulige udgifter.",
+    "visibility": "Jeg er indforstået med, at de syntetiske probes og kvitteringer er synlige i virksomheden.",
+    "run": "Kør fire kvalifikationsprobes",
+    "checkTest": "Kontroller kvalifikationens oprindelige kvittering",
+    "unknown": "Resultatet er ubekræftet. Der startes ikke automatisk en ny test.",
+    "outcome": {
+      "pending": "Den oprindelige kvalifikationsforespørgsel afventer.",
+      "qualified": "Den native konfigurationskvalifikation er registreret. Afslut scenarietest og gennemgå publiceringen.",
+      "failed": "Kvalifikationen bestod ikke. Gennemgå dens oprindelige status før et nyt forslag.",
+      "unknown": "Det oprindelige kvalifikationsresultat er ubekræftet; den reserverede forpligtelse fastholdes."
+    }
   }
 }

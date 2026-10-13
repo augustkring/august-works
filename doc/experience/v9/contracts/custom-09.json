@@ -7,7 +7,7 @@
     "admin",
     "security_admin"
   ],
-  "customerOutcome": "Select an existing current agent binding as a proposal; a binding alone never qualifies changed behavior.",
+  "customerOutcome": "Save an owned runtime alternative, review four bounded qualification probes and retain the active configuration until representative tests and explicit publication pass.",
   "entryConditions": [
     "Current verified authenticated company membership and native agents:create or target agents:configure authority; instance-admin status does not bypass membership.",
     "Draft belongs to the current creator; editing an existing agent requires current native read and configure authority.",
@@ -17,11 +17,11 @@
   "exitConditions": [
     "Only a canonical accepted draft ID/version permits a saved claim.",
     "Draft saving never changes production agent configuration, grants, runtime or scheduled work.",
-    "Testing, effective native policy mapping, publish and active monitoring remain unqualified; no success evidence is manufactured."
+    "A recorded four-probe qualification still requires representative tests, human verification and explicit publication; no hosted provider or human pilot acceptance is inferred."
   ],
   "content": {
     "h1": "Runtime",
-    "supportingCopy": "Select an existing current agent binding as a proposal; a binding alone never qualifies changed behavior.",
+    "supportingCopy": "Save an owned runtime alternative, review four bounded qualification probes and retain the active configuration until representative tests and explicit publication pass.",
     "customerTerms": [
       "Company",
       "Work",
@@ -44,6 +44,16 @@
       "help": "This is customer data and cannot confer native authority.",
       "validation": "packages/shared/src/agent-authoring.ts strict schema; current native references checked server-side",
       "autofillOrPrefill": "Saved creator-owned native draft; existing agent name/description only, no credentials/effective instruction import"
+    },
+    {
+      "id": "runtimeCandidateId",
+      "label": "Saved runtime candidate",
+      "dataType": "UUID referencing an owned canonical proposal",
+      "required": false,
+      "default": "No alternative; preserve the current Agent configuration",
+      "help": "Saving the proposal does not change the active Agent.",
+      "validation": "Current company, draft, actual Agent and creator scope; exact normalized configuration/private profile/source hashes",
+      "autofillOrPrefill": "Explicit Advanced selection from current installed owned configuration qualifications"
     }
   ],
   "actions": {
@@ -54,7 +64,10 @@
     "secondary": [
       "Save & exit after canonical acknowledgement",
       "Back/section navigation saves the current valid draft",
-      "Retry the exact same request after unknown acknowledgement; reload the saved draft explicitly on baseline conflict"
+      "Retry the exact same request after unknown acknowledgement; reload the saved draft explicitly on baseline conflict",
+      "Save runtime proposal with an immutable Original request identity",
+      "Review and explicitly authorize four bounded model probes and their company-visible receipts",
+      "Check the Original creation or qualification receipt after an unconfirmed result"
     ],
     "destructiveOrIrreversible": [
       "Discard draft removes authored content but never pauses/retires the target production agent"
@@ -64,12 +77,13 @@
     "canonicalReadDomains": [
       "agent_configuration_drafts (first-class unpublished configuration owner)",
       "Native agent configuration baseline, current company membership and permissions",
-      "Approved native Foundation revisions and existing presence runtime bindings"
+      "Approved native Foundation revisions and existing presence runtime bindings",
+      "Original Native four-probe controller, heartbeat execution records and pre-spend model reservation ledger"
     ],
     "canonicalWriteOperation": "Creator-scoped agent configuration create/save/discard with request hash, row version, database scope/version fences, native audit and post-commit publication",
-    "authorityEffect": "No grants, agent mutation, external messages, runtime provisioning or work execution. Native publication mapping and representative execution are unqualified.",
+    "authorityEffect": "Creating or saving a proposal changes no live configuration or grants. Explicit conformance dispatches at most four reviewed synthetic no-tools probes. Representative tests and publication use retained Original proof and current authority.",
     "asyncWork": "Bounded native references and 25-row native timestamp/ID pagination; unknown acknowledgements retain immutable client request bodies/keys. V9 account observation rechecks on return inside the ordinary 30-second freshness window, without restarting reads for nested observers. Same-turn QueryClient fetch guards and authority epochs fence Native transport and late acknowledgements.",
-    "receipt": "Current creator-owned canonical draft ID/version; never an inferred active version or first-value receipt."
+    "receipt": "Private no-store creator/company/draft/candidate/request-scoped Original receipt. Absence does not prove refusal. An unknown dispatched charge retains its ceiling; no automatic probe redispatch."
   },
   "states": {
     "loading": "Announce loading only while the current identity/company request is pending.",
@@ -94,7 +108,7 @@
     "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
     "keyboardModel": "Native links, labeled inputs, select controls and semantic fieldsets; pending reconciliation disables editing. Standard Tab/Shift+Tab/Enter.",
     "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
-    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
+    "targetSize": "Custom frequent and primary controls target at least 44 \u00d7 44 CSS px.",
     "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
     "reducedMotion": "No essential animated transition or moving progress indicator.",
     "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
@@ -129,7 +143,9 @@
   },
   "acceptance": {
     "functional": [
-      "Verify canonical state, version conflicts, safe replay, unavailable states and principal/company switching on the exact artifact."
+      "Verify canonical state, version conflicts, safe replay, unavailable states and principal/company switching on the exact artifact.",
+      "PostgreSQL proposal/conformance/publication suites exercise live-configuration isolation, actual four runs/debits, current peer pins, immutable replay and atomic rollback/promotion.",
+      "Affected UI/client suites reject foreign identities and preserve unconfirmed immutable requests; the built browser journey covers saved selection, reload and Original receipt lookup."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."

@@ -57,6 +57,8 @@ import {
 } from "./worker-model-profiles.js";
 import type { guardedRemoteHttpFetch } from "../remote-http-fetch.js";
 import { authoringTestRuntime } from "../agents/authoring-test-runtime.js";
+import { agentRuntimeCandidateService } from "../agents/authoring-runtime-candidates.js";
+import { agentRuntimeCandidateConformanceService } from "../agents/authoring-runtime-candidate-conformance.js";
 
 type BoundClaims = RuntimeToolsTokenClaims & {
   worker_model: WorkerModelBinding;
@@ -547,6 +549,8 @@ export function workerModelGateway(db: Db, options: Options) {
     });
   }
   return {
+    runtimeCandidates: agentRuntimeCandidateService(db, options),
+    runtimeCandidateConformance: agentRuntimeCandidateConformanceService(db, options),
     qualifyAuthoringTest: authoringTestRuntime(db, options, profile).qualify,
     executeAuthoringTest: authoringTestRuntime(db, options, profile).execute,
     /** Private pre-start qualification. Editable provider configuration is a

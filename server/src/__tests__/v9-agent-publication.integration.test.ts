@@ -1,3 +1,4 @@
+import { normalizePaperclipRunnerAdapterConfig } from "@paperclipai/adapter-utils/server-utils";
 import { seedApprovedAuthoringPreference } from "./helpers/authoring-memory.js";
 import { memoryService } from "../services/memory/memory-service.js";
 import { foundationService } from "../services/foundation/foundation-service.js";
@@ -14,7 +15,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, desc, eq, sql } from "drizzle-orm";
-import { agentConfigRevisions, agentExecutionManifests, memoryJobs, activityLog, agentConfigurationDrafts, agentConfigurationTests, agents, authUsers, billingAccounts, billingAccountCompanies, companyMemberships, companySkills, companySkillVersions, principalPermissionGrants, createDb, documents, heartbeatRuns, orchestrationPlans, orchestrationModelReservations, orchestrationWorkers, toolInvocations, verificationRuns } from "@paperclipai/db";
+import { agentPresenceRuntimeBindings, agentConfigRevisions, agentExecutionManifests, memoryJobs, activityLog, agentConfigurationDrafts, agentConfigurationTests, agents, authUsers, billingAccounts, billingAccountCompanies, companyMemberships, companySkills, companySkillVersions, principalPermissionGrants, createDb, documents, heartbeatRuns, orchestrationPlans, orchestrationModelReservations, orchestrationWorkers, toolInvocations, verificationRuns } from "@paperclipai/db";
 import { agentAuthoringContentSchema, type AgentAuthoringDraftView, type AgentDraftTestCommand, AUTHORED_AGENT_DEFINITION_KEY, agentDraftPublicationCommandSchema, type AgentDraftPublicationCommand, type VerificationReviewInput } from "@paperclipai/shared";
 import { agentAuthoringService } from "../services/agents/authoring-drafts.js";
 import { agentAuthoringTestService } from "../services/agents/authoring-tests.js";
@@ -26,6 +27,9 @@ import { providerConformanceRequirements, makeProviderCapabilitySnapshot } from 
 import { hashContextPolicySnapshot } from "../services/context/context-manifest.js";
 import { workerModelGateway } from "../services/orchestration/worker-model-gateway.js";
 import { registerNativeDraftGateway } from "../services/orchestration/native-draft-runtime.js";
+import { nativeDraftConformanceService, registerNativeDraftConformance } from "../services/native-draft-conformance.js";
+import { agentRuntimeCandidateService } from "../services/agents/authoring-runtime-candidates.js";
+import { agentRuntimeCandidateConformanceService } from "../services/agents/authoring-runtime-candidate-conformance.js";
 import type { WorkerModelProfile } from "../services/orchestration/worker-model-profiles.js";
 import type { guardedRemoteHttpFetch } from "../services/remote-http-fetch.js";
 import { documentService } from "../services/documents.js";
@@ -147,6 +151,77 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
   }
   async function publish() { return publications().publish(f.actor, f.home, draft.id, await publicationCommand()); }
   async function agent() { return (await db.select().from(agents).where(eq(agents.id, f.presence.id)))[0]!; }
+  it("tests a saved alternative and atomically promotes its Original configuration, runtime proof and identified version", async () => {
+    const original = await agent(), peer = f.guestPresence, peerProfileId = randomUUID();
+    const peerConfig = { provider: "aw_text_only", model: profile.tariff.model, workerModelProfileId: peerProfileId, maxOutputTokens: 256 };
+    await db.update(agents).set({ adapterType: "paperclip_runner", adapterConfig: peerConfig }).where(eq(agents.id, peer.id));
+    const bindings = agentProviderBindingService(db), pb = await bindings.create(f.actor, f.guest, peer.id,
+      { providerType: "paperclip_native", providerAgentRef: peer.id, isolationMode: "isolated_per_presence", providerEndpointRef: null });
+    const peerRuntime = await bindings.attach(f.actor, f.guest, peer.id, { providerBindingId: pb.id, providerProfileRef: `private:${peer.id}` });
+    const connection = await aiConnectionService(db).save(f.guest, f.userId, { provider: "anthropic", method: "api_key", ownership: "shared",
+      name: "Private synthetic peer", apiKey: "fixture", allAgents: false, agentIds: [peer.id] }, `private-safe-test-key-${peer.id}`);
+    const peerSnapshot = makeProviderCapabilitySnapshot(await discoverNativeCapabilities({ companyId: f.guest, adapterType: "paperclip_runner", config: peerConfig }));
+    const peerProfile: WorkerModelProfile = { ...profile, id: peerProfileId, companyId: f.guest, workerAgentId: peer.id,
+      providerBindingId: pb.id, providerProfileRef: peerRuntime.providerProfileRef, providerSnapshotHash: peerSnapshot.hash,
+      qualifiedConfigurationHash: hashContextPolicySnapshot({ adapterType: "paperclip_runner", adapterConfig: peerConfig }),
+      binding: { provider: "anthropic", method: "api_key", mode: "shared", ...connection } };
+    const candidateProfileId = randomUUID(), configuration = normalizePaperclipRunnerAdapterConfig(original.adapterType, { ...original.adapterConfig, workerModelProfileId: candidateProfileId });
+    const alternative: WorkerModelProfile = { ...profile, id: candidateProfileId,
+      qualifiedConfigurationHash: hashContextPolicySnapshot({ adapterType: "paperclip_runner", adapterConfig: configuration }) };
+    const profiles = [profile, alternative, peerProfile], options = { profiles, sourceSha, protectedEvidenceOrigin: "https://protected.test.invalid" };
+    let probes = 0;
+    const probeTransport: typeof guardedRemoteHttpFetch = async (_url, init) => {
+      probes++; const body = JSON.parse(String(init.body)), prompt = body.messages[0].content[0].text;
+      expect(body.tools).toBeUndefined(); expect(String(init.body)).not.toContain("Produce a short internal welcome draft");
+      if (prompt.includes("cancellation probe")) await new Promise<void>((_resolve, reject) => {
+        const abort = () => reject(new Error("Synthetic local publication cancellation"));
+        if (init.signal?.aborted) abort(); else init.signal?.addEventListener("abort", abort, { once: true });
+      });
+      const marker = prompt.match(/^Output exactly (AW_DRAFT_[a-z0-9]+)\.$/)?.[1];
+      return new Response(JSON.stringify({ type: "message", role: "assistant", model: body.model, stop_reason: "end_turn",
+        content: [{ type: "text", text: marker ?? "NONE" }], usage: { input_tokens: 20, output_tokens: 10 } }),
+        { status: 200, headers: { "content-type": "application/json" } });
+    };
+    registerNativeDraftConformance(db, nativeDraftConformanceService(db, { ...options, fetch: probeTransport }));
+    registerNativeDraftGateway(db, workerModelGateway(db, { ...options, fetch: transport }));
+    const candidates = agentRuntimeCandidateService(db, options), conformance = agentRuntimeCandidateConformanceService(db, options);
+    const candidate = await candidates.create(f.actor, f.home, draft.id, { requestId: randomUUID(), expectedVersion: draft.version, modelProfileId: alternative.id });
+    draft = await drafts().save(f.actor, f.home, draft.id, { requestId: randomUUID(), expectedVersion: draft.version, step: "runtime",
+      content: { ...draft.content!, runtimeCandidateId: candidate.id } });
+    const input = { acknowledgeProviderRuns: true as const, maximumCostCents: 12, isolationPeer: { companyId: f.guest, agentId: peer.id } };
+    const review = await conformance.review(f.actor, f.home, draft.id, candidate.id, input);
+    expect(review.canTest).toBe(true);
+    expect(await conformance.start(f.actor, f.home, draft.id, candidate.id, { ...input, requestId: randomUUID(), expectedVersion: draft.version,
+      expectedReviewHash: review.reviewHash, confirmBoundedConformance: true, confirmCompanyVisibleProbes: true })).toMatchObject({ status: "qualified" });
+    expect((await agent()).adapterConfig).toEqual(original.adapterConfig);
+    await qualify(); expect(calls).toBe(1); expect((await agent()).adapterConfig).toEqual(original.adapterConfig);
+    const publicationInput = await publicationCommand();
+    const beforeRuntime = await db.select().from(agentPresenceRuntimeBindings).where(eq(agentPresenceRuntimeBindings.agentId, f.presence.id));
+    await db.execute(sql`create function aw_v9_candidate_publication_failure() returns trigger language plpgsql as $body$
+      begin if new.action='agent_configuration.version_published' then raise exception 'Synthetic final audit failure'; end if;
+      return new; end $body$`);
+    await db.execute(sql`create trigger aw_v9_candidate_publication_failure after insert on activity_log
+      for each row execute function aw_v9_candidate_publication_failure()`);
+    try { await expect(publications().publish(f.actor, f.home, draft.id, publicationInput)).rejects.toThrow(); }
+    finally {
+      await db.execute(sql`drop trigger aw_v9_candidate_publication_failure on activity_log`);
+      await db.execute(sql`drop function aw_v9_candidate_publication_failure()`);
+    }
+    expect((await agent()).adapterConfig).toEqual(original.adapterConfig);
+    expect((await agent()).runtimeConfig).toEqual(original.runtimeConfig);
+    expect(await db.select().from(agentPresenceRuntimeBindings).where(eq(agentPresenceRuntimeBindings.agentId, f.presence.id))).toEqual(beforeRuntime);
+    expect(await db.select().from(agentConfigRevisions).where(eq(agentConfigRevisions.id, publicationInput.requestId))).toEqual([]);
+    const publication = await publications().publish(f.actor, f.home, draft.id, publicationInput); expect(publication.publishedVersion).toBe(1);
+    const live = await agent(); expect(live.adapterConfig).toEqual(configuration);
+    const runtime = await bindings.assertRuntime(f.home, f.presence.id);
+    expect(runtime.runtime.qualifiedConfigurationHash).toBe(alternative.qualifiedConfigurationHash);
+    expect((live.runtimeConfig as Record<string, any>)[AUTHORED_AGENT_DEFINITION_KEY].revisionId).toBe(publication.revisionId);
+    const [revision] = await db.select().from(agentConfigRevisions).where(eq(agentConfigRevisions.id, publication.revisionId));
+    expect(revision!.afterConfig.adapterConfig).toEqual({ ...configuration, maxOutputTokens: "***REDACTED***" }); expect(probes).toBe(4); expect(calls).toBe(1);
+    const fresh = await drafts().create(f.actor, f.home, { requestId: randomUUID(), agentId: f.presence.id });
+    expect(fresh.content?.runtimeCandidateId).toBeUndefined();
+    registerNativeDraftConformance(db, undefined);
+  });
   it("publishes the exact verified candidate once and recovers its Original receipt without another model call", async () => {
     await qualify(); const input = await publicationCommand();
     const runCount = (await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home))).length;

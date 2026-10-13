@@ -45,6 +45,54 @@ export function agentProviderBindingService(db: Db) {
     const accepted = new Set(acknowledgements.map((ack) => ack.companyId));
     if (companyIds.some((id) => !accepted.has(id))) throw conflict("Every participating company must acknowledge reduced provider isolation");
   }
+  async function recordDiscoveryInTransaction(tx: Db, companyId: string, agentId: string, snapshotInput: Omit<ProviderCapabilitySnapshot, "hash">, evidence: Record<string, boolean>, expected: { configurationHash: string; runtimeId: string; profileRef: string; bindingId: string; accountingComplete?: boolean; isolationPeer?: IsolationPeerProof; accountingBasis?: "native_pre_spend_liability_ceiling"; reservationIds?: string[] } | undefined, publications: ActivityPublication[]) {
+    await assertV5Enabled(tx, "agent_provider_bindings_v5");
+    const snapshot = makeProviderCapabilitySnapshot(snapshotInput);
+        const presence = await localPresence(tx, companyId, agentId);
+        await lockIdentity(tx, presence.agentIdentityId);
+        const [runtime] = await tx.select().from(agentPresenceRuntimeBindings).where(and(eq(agentPresenceRuntimeBindings.companyId, companyId), eq(agentPresenceRuntimeBindings.agentId, agentId))).limit(1).for("update");
+        // A late conformance result cannot reattach a revoked local runtime.
+        // The existing row lock orders report retention against revocation.
+        if (!runtime || runtime.status === "revoked") throw notFound("Provider runtime binding not found");
+        if (expected && (runtime.id !== expected.runtimeId || runtime.providerProfileRef !== expected.profileRef || runtime.providerBindingId !== expected.bindingId || hashContextPolicySnapshot({ adapterType: presence.adapterType, adapterConfig: presence.adapterConfig }) !== expected.configurationHash)) throw conflict("Provider configuration/profile changed during conformance; repeat the tests");
+        const [binding] = await tx.select().from(agentProviderBindings).where(eq(agentProviderBindings.id, runtime.providerBindingId)).limit(1).for("update");
+        if (!binding || binding.status === "revoked") throw conflict("Provider binding is revoked");
+        if (binding.providerType !== snapshot.provider) throw conflict("Provider discovery identity does not match the binding");
+        const drift = providerCapabilityChanges(binding.capabilitySnapshot, snapshot);
+        const qualified = expected?.accountingComplete !== false && providerConformanceRequirements(snapshot, binding.isolationMode).every((key) => evidence[key] === true);
+        const status = !qualified ? "unqualified" : drift.changed || binding.status === "degraded" ? "degraded" : "active";
+        const [updated] = await tx.update(agentProviderBindings).set({
+          capabilitySnapshot: snapshot, capabilitySnapshotHash: snapshot.hash,
+          capabilityDiscoveredAt: new Date(snapshot.discoveredAt), conformance: evidence, status, updatedAt: new Date(),
+        }).where(eq(agentProviderBindings.id, binding.id)).returning();
+        if (status !== "active") await tx.update(agentPresenceRuntimeBindings).set({ status: "degraded", updatedAt: new Date() }).where(and(eq(agentPresenceRuntimeBindings.providerBindingId, binding.id), ne(agentPresenceRuntimeBindings.status, "revoked")));
+        await tx.update(agentPresenceRuntimeBindings).set({
+          status: status === "active" ? "active" : "degraded", updatedAt: new Date(),
+          qualifiedConfigurationHash: qualified ? hashContextPolicySnapshot({ adapterType: presence.adapterType, adapterConfig: presence.adapterConfig }) : null,
+          conformanceSnapshotHash: qualified ? snapshot.hash : null,
+          conformanceReport: { adapterContractVersion: PROVIDER_CONFORMANCE_CONTRACT_VERSION, ...(expected ? { accountingComplete: expected.accountingComplete === true } : {}), providerVersion: snapshot.version, testedAt: new Date().toISOString(), profileRef: runtime.providerProfileRef, checks: evidence, ...(expected?.isolationPeer ? { isolationPeer: expected.isolationPeer } : {}), ...(expected?.accountingBasis ? { accountingBasis: expected.accountingBasis, reservationIds: expected.reservationIds ?? [] } : {}) },
+        }).where(eq(agentPresenceRuntimeBindings.id, runtime.id));
+        await logActivity(tx, { companyId, actorType: "system", actorId: "provider-discovery", action: drift.changed ? "provider_binding.capability_drift_detected" : "provider_binding.capabilities_discovered", entityType: "agent_provider_binding", entityId: binding.id, details: { hash: snapshot.hash, status, lostFeatures: drift.lostFeatures, versionChanged: drift.versionChanged } }, publications);
+        return updated!;
+  }
+  async function revalidateInTransaction(tx: Db, actor: AuthorizationActor, companyId: string, agentId: string, expectedSnapshotHash: string, rationale: string, publications: ActivityPublication[]) {
+    await assertV5Enabled(tx, "agent_provider_bindings_v5"); const userId = v5HumanActorId(actor);
+    await assertV5Authorization(tx, actor, companyId, "agents:configure", { type: "agent", companyId, agentId });
+    if (rationale.trim().length < 20 || rationale.length > 4000) throw conflict("Provider revalidation requires a reviewed rationale of 20–4000 characters");
+        const presence = await localPresence(tx, companyId, agentId); await lockIdentity(tx, presence.agentIdentityId);
+        const [runtime] = await tx.select().from(agentPresenceRuntimeBindings).where(and(eq(agentPresenceRuntimeBindings.companyId, companyId), eq(agentPresenceRuntimeBindings.agentId, agentId))).limit(1).for("update");
+        if (!runtime || runtime.status === "revoked") throw notFound("Current provider profile not found");
+        const [binding] = await tx.select().from(agentProviderBindings).where(eq(agentProviderBindings.id, runtime.providerBindingId)).limit(1).for("update");
+        if (!binding || binding.status === "revoked" || !binding.capabilitySnapshot || binding.capabilitySnapshot.hash !== expectedSnapshotHash) throw conflict("Provider capabilities changed; repeat review");
+        await assertIsolationPeerCurrent(tx, runtime.conformanceReport);
+        const report = runtime.conformanceReport, checks = report?.checks as Record<string, unknown> | undefined;
+        if (runtime.qualifiedConfigurationHash !== hashContextPolicySnapshot({ adapterType: presence.adapterType, adapterConfig: presence.adapterConfig }) || runtime.conformanceSnapshotHash !== expectedSnapshotHash || report?.profileRef !== runtime.providerProfileRef || report?.adapterContractVersion !== PROVIDER_CONFORMANCE_CONTRACT_VERSION || report?.accountingComplete === false || !providerConformanceRequirements(binding.capabilitySnapshot, binding.isolationMode).every((key) => checks?.[key] === true)) throw conflict("Revalidation requires fresh, passing adapter-owned conformance for this exact local profile and configuration");
+        if (binding.isolationMode === "shared_trusted_runtime") { await assertV5Enabled(tx, "shared_trusted_runtime_v5"); const peers = await tx.select({ companyId: agentPresenceRuntimeBindings.companyId }).from(agentPresenceRuntimeBindings).where(and(eq(agentPresenceRuntimeBindings.providerBindingId, binding.id), ne(agentPresenceRuntimeBindings.status, "revoked"))).limit(501); if (peers.length > 500) throw conflict("Provider presence limit reached"); await assertSharedAcknowledgements(tx, binding.id, peers.map((peer) => peer.companyId)); }
+        const [updated] = await tx.update(agentProviderBindings).set({ status: "active", updatedAt: new Date() }).where(eq(agentProviderBindings.id, binding.id)).returning();
+        await tx.update(agentPresenceRuntimeBindings).set({ status: "active", updatedAt: new Date() }).where(eq(agentPresenceRuntimeBindings.id, runtime.id));
+        await logActivity(tx, { companyId, actorType: "user", actorId: userId, action: "provider_binding.profile_revalidated", entityType: "agent_provider_binding", entityId: binding.id, details: { profileRef: runtime.providerProfileRef, snapshotHash: expectedSnapshotHash, rationale } }, publications);
+        return updated!;
+  }
   return {
     assertReducedIsolationAcknowledgements: async (bindingId: string) => {
       await assertV5Enabled(db, "shared_trusted_runtime_v5");
@@ -186,61 +234,16 @@ export function agentProviderBindingService(db: Db) {
     },
     // Internal entry point for adapter-owned deterministic discovery/conformance.
     // No HTTP route accepts snapshots or evidence supplied by an agent/model.
+    recordDiscoveryInTransaction,
     recordDiscovery: async (companyId: string, agentId: string, snapshotInput: Omit<ProviderCapabilitySnapshot, "hash">, evidence: Record<string, boolean>, expected?: { configurationHash: string; runtimeId: string; profileRef: string; bindingId: string; accountingComplete?: boolean; isolationPeer?: IsolationPeerProof; accountingBasis?: "native_pre_spend_liability_ceiling"; reservationIds?: string[] }) => {
-      await assertV5Enabled(db, "agent_provider_bindings_v5");
       const snapshot = makeProviderCapabilitySnapshot(snapshotInput);
-      const result = await withV5ActivityTransaction(db, async (tx, publications) => {
-        const presence = await localPresence(tx, companyId, agentId);
-        await lockIdentity(tx, presence.agentIdentityId);
-        const [runtime] = await tx.select().from(agentPresenceRuntimeBindings).where(and(eq(agentPresenceRuntimeBindings.companyId, companyId), eq(agentPresenceRuntimeBindings.agentId, agentId))).limit(1).for("update");
-        // A late conformance result cannot reattach a revoked local runtime.
-        // The existing row lock orders report retention against revocation.
-        if (!runtime || runtime.status === "revoked") throw notFound("Provider runtime binding not found");
-        if (expected && (runtime.id !== expected.runtimeId || runtime.providerProfileRef !== expected.profileRef || runtime.providerBindingId !== expected.bindingId || hashContextPolicySnapshot({ adapterType: presence.adapterType, adapterConfig: presence.adapterConfig }) !== expected.configurationHash)) throw conflict("Provider configuration/profile changed during conformance; repeat the tests");
-        const [binding] = await tx.select().from(agentProviderBindings).where(eq(agentProviderBindings.id, runtime.providerBindingId)).limit(1).for("update");
-        if (!binding || binding.status === "revoked") throw conflict("Provider binding is revoked");
-        if (binding.providerType !== snapshot.provider) throw conflict("Provider discovery identity does not match the binding");
-        const drift = providerCapabilityChanges(binding.capabilitySnapshot, snapshot);
-        const qualified = expected?.accountingComplete !== false && providerConformanceRequirements(snapshot, binding.isolationMode).every((key) => evidence[key] === true);
-        const status = !qualified ? "unqualified" : drift.changed || binding.status === "degraded" ? "degraded" : "active";
-        const [updated] = await tx.update(agentProviderBindings).set({
-          capabilitySnapshot: snapshot, capabilitySnapshotHash: snapshot.hash,
-          capabilityDiscoveredAt: new Date(snapshot.discoveredAt), conformance: evidence, status, updatedAt: new Date(),
-        }).where(eq(agentProviderBindings.id, binding.id)).returning();
-        if (status !== "active") await tx.update(agentPresenceRuntimeBindings).set({ status: "degraded", updatedAt: new Date() }).where(and(eq(agentPresenceRuntimeBindings.providerBindingId, binding.id), ne(agentPresenceRuntimeBindings.status, "revoked")));
-        await tx.update(agentPresenceRuntimeBindings).set({
-          status: status === "active" ? "active" : "degraded", updatedAt: new Date(),
-          qualifiedConfigurationHash: qualified ? hashContextPolicySnapshot({ adapterType: presence.adapterType, adapterConfig: presence.adapterConfig }) : null,
-          conformanceSnapshotHash: qualified ? snapshot.hash : null,
-          conformanceReport: { adapterContractVersion: PROVIDER_CONFORMANCE_CONTRACT_VERSION, ...(expected ? { accountingComplete: expected.accountingComplete === true } : {}), providerVersion: snapshot.version, testedAt: new Date().toISOString(), profileRef: runtime.providerProfileRef, checks: evidence, ...(expected?.isolationPeer ? { isolationPeer: expected.isolationPeer } : {}), ...(expected?.accountingBasis ? { accountingBasis: expected.accountingBasis, reservationIds: expected.reservationIds ?? [] } : {}) },
-        }).where(eq(agentPresenceRuntimeBindings.id, runtime.id));
-        await logActivity(tx, { companyId, actorType: "system", actorId: "provider-discovery", action: drift.changed ? "provider_binding.capability_drift_detected" : "provider_binding.capabilities_discovered", entityType: "agent_provider_binding", entityId: binding.id, details: { hash: snapshot.hash, status, lostFeatures: drift.lostFeatures, versionChanged: drift.versionChanged } }, publications);
-        return updated!;
-      });
+      const result = await withV5ActivityTransaction(db, (tx, publications) => recordDiscoveryInTransaction(tx, companyId, agentId, snapshotInput, evidence, expected, publications));
       const affected = await db.select({ companyId: agentPresenceRuntimeBindings.companyId }).from(agentPresenceRuntimeBindings).where(eq(agentPresenceRuntimeBindings.providerBindingId, result.id));
       for (const affectedCompany of new Set(affected.map((presence) => presence.companyId))) await skillLifecycleService(db).invalidateDependency(affectedCompany, "provider_capability", result.id, result.status === "active" ? snapshot.hash : null);
       return result;
     },
-    revalidate: async (actor: AuthorizationActor, companyId: string, agentId: string, expectedSnapshotHash: string, rationale: string) => {
-      await assertV5Enabled(db, "agent_provider_bindings_v5"); const userId = v5HumanActorId(actor);
-      await assertV5Authorization(db, actor, companyId, "agents:configure", { type: "agent", companyId, agentId });
-      if (rationale.trim().length < 20 || rationale.length > 4000) throw conflict("Provider revalidation requires a reviewed rationale of 20–4000 characters");
-      return withV5ActivityTransaction(db, async (tx, publications) => {
-        const presence = await localPresence(tx, companyId, agentId); await lockIdentity(tx, presence.agentIdentityId);
-        const [runtime] = await tx.select().from(agentPresenceRuntimeBindings).where(and(eq(agentPresenceRuntimeBindings.companyId, companyId), eq(agentPresenceRuntimeBindings.agentId, agentId))).limit(1).for("update");
-        if (!runtime || runtime.status === "revoked") throw notFound("Current provider profile not found");
-        const [binding] = await tx.select().from(agentProviderBindings).where(eq(agentProviderBindings.id, runtime.providerBindingId)).limit(1).for("update");
-        if (!binding || binding.status === "revoked" || !binding.capabilitySnapshot || binding.capabilitySnapshot.hash !== expectedSnapshotHash) throw conflict("Provider capabilities changed; repeat review");
-        await assertIsolationPeerCurrent(tx, runtime.conformanceReport);
-        const report = runtime.conformanceReport, checks = report?.checks as Record<string, unknown> | undefined;
-        if (runtime.qualifiedConfigurationHash !== hashContextPolicySnapshot({ adapterType: presence.adapterType, adapterConfig: presence.adapterConfig }) || runtime.conformanceSnapshotHash !== expectedSnapshotHash || report?.profileRef !== runtime.providerProfileRef || report?.adapterContractVersion !== PROVIDER_CONFORMANCE_CONTRACT_VERSION || report?.accountingComplete === false || !providerConformanceRequirements(binding.capabilitySnapshot, binding.isolationMode).every((key) => checks?.[key] === true)) throw conflict("Revalidation requires fresh, passing adapter-owned conformance for this exact local profile and configuration");
-        if (binding.isolationMode === "shared_trusted_runtime") { await assertV5Enabled(tx, "shared_trusted_runtime_v5"); const peers = await tx.select({ companyId: agentPresenceRuntimeBindings.companyId }).from(agentPresenceRuntimeBindings).where(and(eq(agentPresenceRuntimeBindings.providerBindingId, binding.id), ne(agentPresenceRuntimeBindings.status, "revoked"))).limit(501); if (peers.length > 500) throw conflict("Provider presence limit reached"); await assertSharedAcknowledgements(tx, binding.id, peers.map((peer) => peer.companyId)); }
-        const [updated] = await tx.update(agentProviderBindings).set({ status: "active", updatedAt: new Date() }).where(eq(agentProviderBindings.id, binding.id)).returning();
-        await tx.update(agentPresenceRuntimeBindings).set({ status: "active", updatedAt: new Date() }).where(eq(agentPresenceRuntimeBindings.id, runtime.id));
-        await logActivity(tx, { companyId, actorType: "user", actorId: userId, action: "provider_binding.profile_revalidated", entityType: "agent_provider_binding", entityId: binding.id, details: { profileRef: runtime.providerProfileRef, snapshotHash: expectedSnapshotHash, rationale } }, publications);
-        return updated!;
-      });
-    },
+    revalidateInTransaction,
+    revalidate: async (actor: AuthorizationActor, companyId: string, agentId: string, expectedSnapshotHash: string, rationale: string) => withV5ActivityTransaction(db, (tx, publications) => revalidateInTransaction(tx, actor, companyId, agentId, expectedSnapshotHash, rationale, publications)),
     assertRuntime: async (companyId: string, agentId: string) => {
       const [record] = await db.select({ runtime: agentPresenceRuntimeBindings, provider: agentProviderBindings }).from(agentPresenceRuntimeBindings)
         .innerJoin(agentProviderBindings, eq(agentPresenceRuntimeBindings.providerBindingId, agentProviderBindings.id))

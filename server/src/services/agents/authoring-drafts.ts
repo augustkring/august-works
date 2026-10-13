@@ -2,6 +2,7 @@ import { memoryService } from "../memory/memory-service.js";
 import { and, desc, eq, gte, inArray, isNotNull, notInArray, sql } from "drizzle-orm";
 import {
   agentConfigurationDrafts,
+  agentConfigurationRuntimeCandidates,
   agents,
   heartbeatRuns,
   approvals,
@@ -281,7 +282,7 @@ export function agentAuthoringService(db: Db) {
     const requestedName = Array.from(row.content.name.trim()).slice(0, 80).join(""), outcome = row.content.outcome.trim();
     if (!requestedName || !outcome || !row.content.ownerUserId)
       throw unprocessable("Confirm the saved name, responsibility and initiating accountable owner before preparing an Agent");
-    await validateReferences(tx, actor, row.companyId, null, row.content);
+    await validateReferences(tx, actor, row.companyId, null, row.content, row.id);
     const [accountable] = await tx.select({ userId: authUsers.id, name: authUsers.name }).from(authUsers)
       .innerJoin(companyMemberships, and(eq(companyMemberships.principalId, authUsers.id), eq(companyMemberships.principalType, "user"),
         eq(companyMemberships.companyId, row.companyId), eq(companyMemberships.status, "active")))
@@ -315,6 +316,7 @@ export function agentAuthoringService(db: Db) {
     companyId: string,
     agentId: string | null,
     content: AgentAuthoringContent,
+    draftId: string,
   ) {
     if (content.ownerUserId) {
       const [owner] = await tx
@@ -360,6 +362,18 @@ export function agentAuthoringService(db: Db) {
         !source.expiresAt || new Date(source.expiresAt).getTime() <= Date.now())
         throw unprocessable("Selected approved work preferences are unavailable; review their source", { code: "draft_memory_unavailable" });
     }
+    if (content.runtimeCandidateId) {
+      const [candidate] = await tx.select({ id: agentConfigurationRuntimeCandidates.id })
+        .from(agentConfigurationRuntimeCandidates).where(and(
+          eq(agentConfigurationRuntimeCandidates.companyId, companyId),
+          eq(agentConfigurationRuntimeCandidates.draftId, draftId),
+          eq(agentConfigurationRuntimeCandidates.agentId, agentId ?? "00000000-0000-0000-0000-000000000000"),
+          eq(agentConfigurationRuntimeCandidates.createdByUserId, v5HumanActorId(actor)),
+          eq(agentConfigurationRuntimeCandidates.id, content.runtimeCandidateId),
+          sql`${agentConfigurationRuntimeCandidates.status} <> 'retired'`,
+        )).limit(1).for("share");
+      if (!candidate) throw unprocessable("Choose this draft's own saved runtime candidate", { code: "draft_runtime_candidate_unavailable" });
+    }
     if (content.runtimeBindingId) {
       const [binding] = await tx
         .select({ id: agentPresenceRuntimeBindings.id })
@@ -386,6 +400,9 @@ export function agentAuthoringService(db: Db) {
     /** Internal publication owner uses the same verified creator/configuration
      * write admission and locked Original draft; never exposed as an HTTP DTO. */
     publicationCandidate: async (actor: AuthorizationActor, companyId: string, id: string) => read(db, actor, companyId, id, true),
+    /** Internal raw snapshot; reads preserve original proposal receipts across
+     * new-work rollback, while writes retain the original admission checks. */
+    runtimeCandidateSnapshot: async (actor: AuthorizationActor, companyId: string, id: string, write = false) => read(db, actor, companyId, id, write),
     runtime: async (actor: AuthorizationActor, companyId: string, id: string) => db.transaction(async rawTx => {
       const tx = rawTx as unknown as Db;
       v5HumanActorId(actor);
@@ -727,7 +744,15 @@ export function agentAuthoringService(db: Db) {
             name: target?.name ?? "",
             description: target?.description?.slice(0, 1000) ?? "",
           };
-          if (target) publishedContent = (await readAuthoredAgentDefinition(tx, target))?.content ?? null;
+          if (target) {
+            const previous = (await readAuthoredAgentDefinition(tx, target))?.content;
+            if (previous) {
+              // Candidate IDs belong to their original draft. The new version
+              // starts from its actual live runtime, not a prior draft's selector.
+              const { runtimeCandidateId: _previousCandidate, ...content } = previous;
+              publishedContent = content;
+            }
+          }
         }
         const [row] = await tx
           .insert(agentConfigurationDrafts)
@@ -951,6 +976,7 @@ export function agentAuthoringService(db: Db) {
           companyId,
           row.agentId ?? row.preparedAgentId,
           input.content,
+          row.id,
         );
         await access(tx, actor, companyId, row.agentId, true);
         const contentChanged = nativeSha256(input.content) !== nativeSha256(row.content);
@@ -1110,7 +1136,7 @@ export function agentAuthoringService(db: Db) {
           step: "instructions",
         });
       try {
-        await validateReferences(db, actor, companyId, row.agentId ?? row.preparedAgentId, content);
+        await validateReferences(db, actor, companyId, row.agentId ?? row.preparedAgentId, content, row.id);
       } catch (error) {
         if ((error as { status?: number }).status !== 422) throw error;
         blockers.push({
@@ -1129,7 +1155,7 @@ export function agentAuthoringService(db: Db) {
             "The active configuration changed after this draft was created; review a fresh revision before publishing",
           step: "review",
         });
-      if (!content.runtimeBindingId)
+      if (!content.runtimeBindingId && !content.runtimeCandidateId)
         blockers.push({
           code: "runtime_required",
           message: "A currently qualified runtime is required before testing",

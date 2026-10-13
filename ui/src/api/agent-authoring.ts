@@ -1,4 +1,7 @@
 import {
+  agentRuntimeCandidateCatalogSchema, agentRuntimeCandidateCreateSchema, agentRuntimeCandidateViewSchema,
+  agentRuntimeCandidateConformanceCommandSchema, agentRuntimeCandidateConformanceReviewSchema, agentRuntimeCandidateConformanceReceiptSchema,
+  type AgentRuntimeCandidateCreate, type AgentRuntimeCandidateConformanceCommand,
   agentAuthoringDraftPageSchema,
   agentAuthoringDraftViewSchema,
   agentAuthoringReviewSchema,
@@ -26,6 +29,16 @@ const root = (company: string) =>
   `/companies/${company}/agent-configuration-drafts`;
 const scope = (path: string, principal: string) =>
   `${path}?expectedUserId=${encodeURIComponent(principal)}`;
+const candidatesPath = (company: string, draft: string, candidate?: string) => {
+  uuid.parse(company); uuid.parse(draft);
+  if (candidate !== undefined) uuid.parse(candidate);
+  return `${root(company)}/${draft}/runtime-candidates${candidate ? `/${candidate}` : ""}`;
+};
+const uuid = agentRuntimeCandidateViewSchema.shape.id;
+function candidateContext<T extends { companyId: string; draftId: string }>(value: T, company: string, draft: string) {
+  if (value.companyId !== company || value.draftId !== draft) throw new Error("Runtime candidate context changed");
+  return value;
+}
 export interface AgentAuthoringOptions {
   owners: Array<{ id: string; name: string }>;
   knowledge: Array<{ id: string; title: string; sensitivity: string; revision?: number }>;
@@ -68,6 +81,54 @@ export const agentAuthoringApi = {
     agentDraftTestViewSchema.parse(await api.post(scope(`${root(company)}/${id}/tests`, principal), input)),
   runtime: async (company: string, principal: string, id: string, signal?: AbortSignal) =>
     agentDraftRuntimeViewSchema.parse(await api.get(scope(`${root(company)}/${id}/runtime`, principal), { signal, cache: "no-store" })),
+  runtimeCandidateCatalog: async (company: string, principal: string, draft: string, signal?: AbortSignal) =>
+    candidateContext(agentRuntimeCandidateCatalogSchema.parse(await api.get(scope(candidatesPath(company, draft), principal),
+      { signal, cache: "no-store" })), company, draft),
+  createRuntimeCandidate: async (company: string, principal: string, draft: string, input: AgentRuntimeCandidateCreate) => {
+    const command = agentRuntimeCandidateCreateSchema.parse(input);
+    const value = candidateContext(agentRuntimeCandidateViewSchema.parse(await api.post(scope(candidatesPath(company, draft), principal), command)), company, draft);
+    if (value.modelProfileId !== command.modelProfileId) throw new Error("Runtime candidate selector changed");
+    return value;
+  },
+  runtimeCandidateCreationReceipt: async (company: string, principal: string, draft: string, request: string, signal?: AbortSignal) => {
+    uuid.parse(request);
+    const value = agentRuntimeCandidateViewSchema.nullable().parse(await api.get(scope(`${candidatesPath(company, draft)}/requests/${request}`, principal),
+      { signal, cache: "no-store" }));
+    return value ? candidateContext(value, company, draft) : null;
+  },
+  runtimeCandidate: async (company: string, principal: string, draft: string, candidate: string, signal?: AbortSignal) => {
+    const value = candidateContext(agentRuntimeCandidateViewSchema.parse(await api.get(scope(candidatesPath(company, draft, candidate), principal),
+      { signal, cache: "no-store" })), company, draft);
+    if (value.id !== candidate) throw new Error("Runtime candidate identity changed");
+    return value;
+  },
+  runtimeCandidateConformanceReview: async (company: string, principal: string, draft: string, candidate: string,
+    input: { maximumCostCents: number; isolationPeer: { companyId: string; agentId: string } | null }, signal?: AbortSignal) => {
+    const query = new URLSearchParams({ maximumCostCents: String(input.maximumCostCents) });
+    if (input.isolationPeer) { uuid.parse(input.isolationPeer.companyId); uuid.parse(input.isolationPeer.agentId);
+      query.set("peerCompanyId", input.isolationPeer.companyId); query.set("peerAgentId", input.isolationPeer.agentId); }
+    const value = candidateContext(agentRuntimeCandidateConformanceReviewSchema.parse(await api.get(
+      scope(`${candidatesPath(company, draft, candidate)}/conformance-review`, principal) + `&${query}`, { signal, cache: "no-store" })), company, draft);
+    if (value.candidateId !== candidate) throw new Error("Runtime qualification context changed");
+    return value;
+  },
+  startRuntimeCandidateConformance: async (company: string, principal: string, draft: string, candidate: string,
+    input: AgentRuntimeCandidateConformanceCommand) => {
+    const command = agentRuntimeCandidateConformanceCommandSchema.parse(input);
+    const value = candidateContext(agentRuntimeCandidateConformanceReceiptSchema.parse(await api.post(
+      scope(`${candidatesPath(company, draft, candidate)}/conformance`, principal), command)), company, draft);
+    if (value.candidateId !== candidate || value.requestId !== command.requestId) throw new Error("Runtime qualification receipt changed");
+    return value;
+  },
+  runtimeCandidateConformanceReceipt: async (company: string, principal: string, draft: string, candidate: string, request: string, signal?: AbortSignal) => {
+    uuid.parse(request);
+    const value = agentRuntimeCandidateConformanceReceiptSchema.nullable().parse(await api.get(
+      scope(`${candidatesPath(company, draft, candidate)}/conformance/requests/${request}`, principal), { signal, cache: "no-store" }));
+    if (!value) return null;
+    candidateContext(value, company, draft);
+    if (value.candidateId !== candidate || value.requestId !== request) throw new Error("Runtime qualification receipt changed");
+    return value;
+  },
   preparationReview: async (company: string, principal: string, id: string, signal?: AbortSignal) =>
     agentDraftPreparationReviewSchema.parse(await api.get(scope(`${root(company)}/${id}/preparation-review`, principal),
       { signal, cache: "no-store" })),

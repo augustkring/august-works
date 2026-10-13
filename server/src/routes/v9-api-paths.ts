@@ -1,5 +1,7 @@
 import { z } from "zod";
 import {
+  agentRuntimeCandidateCreateSchema, agentRuntimeCandidateCatalogSchema, agentRuntimeCandidateViewSchema,
+  agentRuntimeCandidateConformanceCommandSchema, agentRuntimeCandidateConformanceReviewSchema, agentRuntimeCandidateConformanceReceiptSchema,
   agentDraftPublicationReviewSchema, agentDraftPublicationCommandSchema, agentDraftPublicationReceiptSchema,
   agentPackageSetupReviewSchema, agentPackageSetupCommandSchema, agentPackageSetupReceiptSchema,
   activationConnectionReviewSchema, activationConnectionConsentCommandSchema,
@@ -265,6 +267,14 @@ export const v9ApiPaths: V9ApiOperation[] = [
   read(`${drafts}/{id}/runtime`,
     "Inspect the actual Agent's current Original runtime proof; never representative test qualification",
     agentDraftRuntimeViewSchema),
+  read(`${drafts}/{id}/runtime-candidates`, "List owned private configuration proposals without live effects or conformance claims", agentRuntimeCandidateCatalogSchema),
+  write(`${drafts}/{id}/runtime-candidates`, "Save one immutable original runtime proposal without changing the live Agent", agentRuntimeCandidateCreateSchema, agentRuntimeCandidateViewSchema, 201),
+  read(`${drafts}/{id}/runtime-candidates/requests/{requestId}`, "Read the original proposal creation slot; absence is not refusal", agentRuntimeCandidateViewSchema.nullable()),
+  read(`${drafts}/{id}/runtime-candidates/{candidateId}`, "Read the exact owned saved runtime proposal and recorded status", agentRuntimeCandidateViewSchema),
+  read(`${drafts}/{id}/runtime-candidates/{candidateId}/conformance-review`, "Review four bounded original probes with an explicit isolation peer and liability ceiling", agentRuntimeCandidateConformanceReviewSchema,
+    account.extend({ maximumCostCents: z.coerce.number().int().min(1).max(10000), peerCompanyId: z.uuid().optional(), peerAgentId: z.uuid().optional() })),
+  write(`${drafts}/{id}/runtime-candidates/{candidateId}/conformance`, "Admit one original bounded probe request without changing live configuration or confirming remote compute stop", agentRuntimeCandidateConformanceCommandSchema, agentRuntimeCandidateConformanceReceiptSchema),
+  read(`${drafts}/{id}/runtime-candidates/{candidateId}/conformance/requests/{requestId}`, "Recover the exact original probe receipt without a new model dispatch", agentRuntimeCandidateConformanceReceiptSchema.nullable()),
   read(`${drafts}/{id}/test-review`, "Review a saved representative candidate and its model cost ceiling",
     agentDraftTestReviewSchema, account.extend({ scenarioIndex: z.coerce.number().int().min(0).max(9) })),
   read(`${drafts}/{id}/tests`, "Read the original representative test history", z.array(agentDraftTestViewSchema).max(30)),

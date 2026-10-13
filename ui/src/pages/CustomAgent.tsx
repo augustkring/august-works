@@ -771,11 +771,18 @@ function DraftEditor({
               onConfirmed={value => { if (!alive.current || !authority.canRead() || securityPending.current) return;
                 client.setQueryData(["agent-authoring", company, principal, id, authority.epoch], value); setReceipt(value); setContent(value.content); }} />
             <AgentDraftRuntime company={company} principal={principal} draft={receipt} enabled={viewReady}
+              selectedRuntimeCandidateId={content.runtimeCandidateId ?? null}
+              onSelectRuntimeCandidate={candidateId => {
+                if (!viewReady || locked || !authority.canWrite() || securityPending.current ||
+                  client.getQueryState(["agent-authoring", company, principal, id, authority.epoch])?.fetchStatus !== "idle") return;
+                change("runtimeCandidateId", candidateId);
+              }}
               selectedRuntimeBindingId={content.runtimeBindingId} selectionEnabled={!locked}
               onSelectRuntime={bindingId => {
                 if (!viewReady || locked || !authority.canWrite() || securityPending.current ||
                   client.getQueryState(["agent-authoring", company, principal, id, authority.epoch])?.fetchStatus !== "idle") return;
                 change("runtimeBindingId", bindingId);
+                if (content.runtimeCandidateId) change("runtimeCandidateId", null);
               }}
               canUseAuthority={() => alive.current && authority.canRead() && !securityPending.current && !reauthorizing} />
             <p>{t("customAgent.runtimeBoundary")}</p>
@@ -783,9 +790,10 @@ function DraftEditor({
                 className="min-h-11 w-full rounded-md border bg-background p-2"
                 {...validationProps("customAgent.runtimeSelection")}
                 value={content.runtimeBindingId ?? ""}
-                onChange={(e) =>
-                  change("runtimeBindingId", e.target.value || null)
-                }
+                onChange={(e) => {
+                  change("runtimeBindingId", e.target.value || null);
+                  if (content.runtimeCandidateId) change("runtimeCandidateId", null);
+                }}
               >
                 <option value="">{t("customAgent.chooseRuntime")}</option>
                 {options.data?.runtimes.map((runtime) => (

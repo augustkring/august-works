@@ -10,6 +10,9 @@ import {
   verificationReviewSchema,
   agentDraftPublicationCommandSchema,
   agentPackageSetupCommandSchema,
+  agentRuntimeCandidateCreateSchema,
+  agentRuntimeCandidateConformanceCommandSchema,
+  providerConformanceInputSchema,
 } from "@paperclipai/shared";
 import { assertBoard, assertCompanyAccess } from "./authz.js";
 import { conflict } from "../errors.js";
@@ -18,10 +21,18 @@ import { agentAuthoringTestService } from "../services/agents/authoring-tests.js
 import { agentAuthoringPublicationService } from "../services/agents/authoring-publication.js";
 import { agentAuthoringPackageSetupService } from "../services/agents/authoring-package-setup.js";
 import { validate } from "../middleware/validate.js";
+import { installedNativeDraftGateway } from "../services/orchestration/native-draft-runtime.js";
+import { agentRuntimeCandidateService } from "../services/agents/authoring-runtime-candidates.js";
+import { agentRuntimeCandidateConformanceService } from "../services/agents/authoring-runtime-candidate-conformance.js";
 
 export function agentAuthoringRoutes(db: Db) {
   const router = Router(),
     service = agentAuthoringService(db);
+  // Original metadata receipts do not require an installed model transport.
+  // These instances are used only by the read routes below.
+  const metadataOptions = { profiles: [], sourceSha: "", protectedEvidenceOrigin: "" };
+  const candidateMetadata = agentRuntimeCandidateService(db, metadataOptions);
+  const conformanceMetadata = agentRuntimeCandidateConformanceService(db, metadataOptions);
   function company(req: Request) {
     assertBoard(req);
     const id = z.uuid().parse(req.params.companyId);
@@ -91,6 +102,39 @@ export function agentAuthoringRoutes(db: Db) {
   ));
   router.get(`${root}/:id/runtime`, async (req, res) => res.json(
     await service.runtime(req.actor, company(req), z.uuid().parse(req.params.id)),
+  ));
+  const runtimeCandidates = "/companies/:companyId/agent-configuration-drafts/:id/runtime-candidates";
+  router.get(runtimeCandidates, async (req, res) => res.json(
+    await installedNativeDraftGateway(db).runtimeCandidates.catalog(req.actor, company(req), z.uuid().parse(req.params.id)),
+  ));
+  router.post(runtimeCandidates, validate(agentRuntimeCandidateCreateSchema), async (req, res) => res.status(201).json(
+    await installedNativeDraftGateway(db).runtimeCandidates.create(req.actor, company(req), z.uuid().parse(req.params.id), req.body),
+  ));
+  router.get(`${runtimeCandidates}/requests/:requestId`, async (req, res) => res.json(
+    await candidateMetadata.creationReceipt(req.actor, company(req),
+      z.uuid().parse(req.params.id), z.uuid().parse(req.params.requestId)),
+  ));
+  router.get(`${runtimeCandidates}/:candidateId`, async (req, res) => res.json(
+    await candidateMetadata.get(req.actor, company(req),
+      z.uuid().parse(req.params.id), z.uuid().parse(req.params.candidateId)),
+  ));
+  router.get(`${runtimeCandidates}/:candidateId/conformance-review`, async (req, res) => {
+    const companyId = company(req);
+    const query = z.strictObject({ expectedUserId: z.string().optional(), maximumCostCents: z.coerce.number().int().min(1).max(10000),
+      peerCompanyId: z.uuid().optional(), peerAgentId: z.uuid().optional() }).parse(req.query);
+    const input = providerConformanceInputSchema.parse({ acknowledgeProviderRuns: true, maximumCostCents: query.maximumCostCents,
+      isolationPeer: query.peerCompanyId !== undefined || query.peerAgentId !== undefined
+        ? { companyId: query.peerCompanyId, agentId: query.peerAgentId } : null });
+    res.json(await installedNativeDraftGateway(db).runtimeCandidateConformance.review(req.actor, companyId,
+      z.uuid().parse(req.params.id), z.uuid().parse(req.params.candidateId), input));
+  });
+  router.post(`${runtimeCandidates}/:candidateId/conformance`, validate(agentRuntimeCandidateConformanceCommandSchema), async (req, res) => res.json(
+    await installedNativeDraftGateway(db).runtimeCandidateConformance.start(req.actor, company(req),
+      z.uuid().parse(req.params.id), z.uuid().parse(req.params.candidateId), req.body),
+  ));
+  router.get(`${runtimeCandidates}/:candidateId/conformance/requests/:requestId`, async (req, res) => res.json(
+    await conformanceMetadata.receipt(req.actor, company(req),
+      z.uuid().parse(req.params.id), z.uuid().parse(req.params.candidateId), z.uuid().parse(req.params.requestId)),
   ));
   router.get(`${root}/:id/package-setup-review`, async (req, res) => res.json(
     await agentAuthoringPackageSetupService(db).review(req.actor, company(req), z.uuid().parse(req.params.id),

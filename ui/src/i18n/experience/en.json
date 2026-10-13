@@ -1910,5 +1910,36 @@
     "why": "You manage this company’s approved memory.",
     "consequence": "The original index check has no current execution lease. Review its original state before another attempt.",
     "evidence": "The outcome is unconfirmed. This does not establish that the check stopped or failed."
+  },
+  "runtimeCandidates": {
+    "checking": "Checking the current saved setup…",
+    "advanced": "Advanced runtime alternatives",
+    "title": "Saved runtime candidate",
+    "boundary": "Saving an alternative does not change the active agent. Qualification uses four synthetic calls with no company context or tools. Review and publish the tested version separately.",
+    "unconfirmed": "The request could not be confirmed. Check its original receipt before another action.",
+    "unavailable": "The current private runtime choices are unavailable.",
+    "profile": "Installed model profile",
+    "choose": "Choose an option",
+    "noChoices": "No current configuration qualification is installed for this agent. Use the existing Advanced setup controls.",
+    "retryCreation": "Retry the same proposal request",
+    "saveProposal": "Save runtime proposal",
+    "checkCreation": "Check original proposal receipt",
+    "saveSelection": "Save your agent draft to retain this candidate selection before qualification.",
+    "peerCompany": "Company with the approved isolation test agent",
+    "noPeer": "This company has no accessible test agent with the same logical identity.",
+    "ceiling": "Maximum test liability (USD cents)",
+    "quote": "Maximum liability for four probes: USD {{amount}}. An unknown charge retains its full reserved ceiling.",
+    "blocked": "Resolve the current qualification blockers before running these probes.",
+    "consent": "I authorize four bounded model probes and their reviewed possible charges.",
+    "visibility": "I understand that the synthetic probes and receipts are visible in the company.",
+    "run": "Run four qualification probes",
+    "checkTest": "Check original qualification receipt",
+    "unknown": "The outcome is unconfirmed. No new test will start automatically.",
+    "outcome": {
+      "pending": "The original qualification request is pending.",
+      "qualified": "Native configuration qualification is recorded. Complete representative tests and review publication.",
+      "failed": "Qualification did not pass. Review its original state before a new proposal.",
+      "unknown": "The original qualification outcome is unknown; reserved liability remains."
+    }
   }
 }

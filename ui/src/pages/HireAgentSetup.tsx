@@ -545,11 +545,16 @@ export function HireAgentSetup({
               client.setQueryData(key, value); setReceipt(value); setContent(value.content); }} />
           <p>{t("hireSetup.expected")}{" "}{receipt.content.outcome}</p>
           <AgentDraftRuntime company={company} principal={principal} draft={receipt} enabled={viewReady}
+            selectedRuntimeCandidateId={content.runtimeCandidateId ?? null}
+            onSelectRuntimeCandidate={candidateId => {
+              if (!viewReady || !enabled || frozen || !authority.canWrite() || checking.current || client.getQueryState(key)?.fetchStatus !== "idle") return;
+              setContent({ ...content, runtimeCandidateId: candidateId });
+            }}
             selectedRuntimeBindingId={content.runtimeBindingId} selectionEnabled={enabled && !frozen}
             onSelectRuntime={bindingId => {
               if (!viewReady || !enabled || frozen || !authority.canWrite() || checking.current ||
                 client.getQueryState(key)?.fetchStatus !== "idle") return;
-              setContent({ ...content, runtimeBindingId: bindingId });
+              setContent({ ...content, runtimeBindingId: bindingId, ...(content.runtimeCandidateId ? { runtimeCandidateId: null } : {}) });
             }}
             canUseAuthority={() => alive.current && authority.canRead() && !checking.current && !checkingAccess &&
               client.getQueryState(key)?.fetchStatus === "idle"} />

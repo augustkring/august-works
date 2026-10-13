@@ -4,6 +4,7 @@ import { z } from "zod";
 import {
   agents, agentIdentities, companies, companySecrets, companySecretVersions,
   heartbeatRuns, issues, orchestrationPlans, type Db,
+  agentConfigurationRuntimeCandidates, agentRuntimeCandidateConformanceRequests,
 } from "@paperclipai/db";
 import { orchestrationCompletionSchema, orchestrationBudgetSchema, providerConformanceInputSchema } from "@paperclipai/shared";
 import { conflict, forbidden } from "../errors.js";
@@ -23,6 +24,8 @@ import { modelReservationService } from "./orchestration/model-reservations.js";
 import { assertWorkerModelProfileCurrent, selectWorkerModelProfile, type WorkerModelProfile } from "./orchestration/worker-model-profiles.js";
 import { anthropicReadOnlyCall, readOnlyModelEnvelopeBytes } from "./orchestration/read-only-model-transport.js";
 import { guardedRemoteHttpFetch } from "./remote-http-fetch.js";
+import { agentRuntimeCandidateService } from "./agents/authoring-runtime-candidates.js";
+import { authoringCandidateHash } from "./agents/authoring-test-candidate.js";
 
 type Options = {
   profiles: readonly WorkerModelProfile[];
@@ -49,31 +52,58 @@ export function installedNativeDraftConformance(db: Db) {
  * Unknown provider charges retain the entire pre-spend liability ceiling. */
 export function nativeDraftConformanceService(db: Db, options: Options) {
   return {
-    async test(actor: AuthorizationActor, companyId: string, agentId: string, raw: z.infer<typeof providerConformanceInputSchema>) {
+    async test(actor: AuthorizationActor, companyId: string, agentId: string, raw: z.infer<typeof providerConformanceInputSchema>, candidateRequestId?: string) {
       const input = providerConformanceInputSchema.parse(raw), userId = v7HumanActorId(actor);
       if (actor.source === "local_implicit") throw forbidden("Draft conformance requires an authenticated initiating human");
       await assertV7Enabled(db, "orchestration_v7");
-      const bindings = agentProviderBindingService(db), groupId = randomUUID();
+      const bindings = agentProviderBindingService(db), groupId = candidateRequestId ?? randomUUID();
+      // An internal canonical request identity, never an HTTP configuration
+      // override or a customer-supplied proof/callback.
+      async function virtualCandidate(tx: Db) {
+        if (!candidateRequestId) return null;
+        const [retained] = await tx.select({ request: agentRuntimeCandidateConformanceRequests, candidate: agentConfigurationRuntimeCandidates })
+          .from(agentRuntimeCandidateConformanceRequests).innerJoin(agentConfigurationRuntimeCandidates, and(
+            eq(agentConfigurationRuntimeCandidates.companyId, agentRuntimeCandidateConformanceRequests.companyId),
+            eq(agentConfigurationRuntimeCandidates.id, agentRuntimeCandidateConformanceRequests.candidateId)))
+          .where(and(eq(agentRuntimeCandidateConformanceRequests.companyId, companyId),
+            eq(agentRuntimeCandidateConformanceRequests.id, candidateRequestId),
+            eq(agentRuntimeCandidateConformanceRequests.createdByUserId, userId),
+            eq(agentConfigurationRuntimeCandidates.agentId, agentId)));
+        if (!retained || retained.request.status !== "pending" || retained.candidate.status !== "testing" ||
+          retained.candidate.createdByUserId !== userId || nativeSha256(input) !== nativeSha256(retained.request.input))
+          throw forbidden("The exact pending canonical candidate qualification request is required");
+        const state = await agentRuntimeCandidateService(db, options).configured(tx, actor, companyId,
+          retained.candidate.draftId, retained.candidate.modelProfileId);
+        if (state.draft.version !== retained.request.expectedDraftVersion || state.draft.content?.runtimeCandidateId !== retained.candidate.id ||
+          authoringCandidateHash(state.draft) !== retained.request.candidateHash || state.configurationHash !== retained.candidate.configurationHash ||
+          state.baselineConfigurationHash !== retained.candidate.baselineConfigurationHash || nativeSha256(state.p) !== retained.candidate.profileHash ||
+          retained.candidate.sourceSha !== options.sourceSha)
+          throw forbidden("The saved candidate configuration or reviewed source changed");
+        return { ...state, candidate: retained.candidate, request: retained.request };
+      }
       const runIds: string[] = [], reservationIds: string[] = [];
       let reservedMinor = 0, failure: string | null = null;
 
       async function target(cid: string, aid: string) {
         await assertV7Authorization(db, actor, cid, "agents:configure", { type: "agent", companyId: cid, agentId: aid });
         await assertV7Authorization(db, actor, cid, "agent:wake", { type: "agent", companyId: cid, agentId: aid });
+        const proposed = cid === companyId && aid === agentId ? await virtualCandidate(db) : null;
         const [configured] = await db.select({ adapterConfig: agents.adapterConfig }).from(agents)
           .where(and(eq(agents.companyId, cid), eq(agents.id, aid)));
         if (!configured) throw conflict("The exact Native presence is required");
-        const selected = resolvePaperclipRunnerProviderProfile(configured.adapterConfig);
+        const selected = resolvePaperclipRunnerProviderProfile(proposed?.configuration ?? configured.adapterConfig);
         if (selected.provider !== "aw_text_only") throw forbidden("The installed text transport is required");
         const p = selectWorkerModelProfile(options.profiles, { companyId: cid, agentId: aid, profileId: selected.workerModelProfileId,
           sourceSha: options.sourceSha, protectedEvidenceOrigin: options.protectedEvidenceOrigin });
-        const advertised = await providerDiscoveryService(db).discover(actor, cid, aid);
+        const advertised = proposed ? { capabilitySnapshotHash: proposed.snapshot.hash, capabilitySnapshot: proposed.snapshot }
+          : await providerDiscoveryService(db).discover(actor, cid, aid);
         if (advertised.capabilitySnapshotHash !== p.providerSnapshotHash) throw conflict("Draft capability profile changed before qualification");
         const initial = await bindings.getForPresence(actor, cid, aid);
         if (!initial) throw conflict("Draft provider binding is missing");
         let plan: typeof orchestrationPlans.$inferSelect | undefined;
 
         async function current(tx: Db, runId?: string) {
+          const virtual = proposed ? await virtualCandidate(tx) : null;
           await assertV7Enabled(tx, "orchestration_v7");
           const fresh = assertWorkerModelProfileCurrent(p, options.sourceSha, options.protectedEvidenceOrigin);
           for (const action of ["agents:configure", "agent:wake"] as const)
@@ -83,21 +113,22 @@ export function nativeDraftConformanceService(db: Db, options: Options) {
             .innerJoin(companies, eq(companies.id, agents.companyId))
             .where(and(eq(agents.companyId, cid), eq(agents.id, aid)));
           if (!presence || presence.company.status !== "active" || presence.identity.status !== "active" ||
-              !["idle", "error", ...(runId ? ["running"] : [])].includes(presence.agent.status) ||
+              !["idle", "error", ...(proposed && presence.agent.pauseReason === "manual" ? ["paused"] : []), ...(runId ? ["running"] : [])].includes(presence.agent.status) ||
               presence.agent.adapterType !== "paperclip_runner" || presence.agent.runtimeConfig?.aiConnection ||
               await budgetService(tx).getInvocationBlock(cid, aid))
             throw forbidden("Current idle Native presence and company budget required");
-          const selected = resolvePaperclipRunnerProviderProfile(presence.agent.adapterConfig);
+          const effectiveConfig = virtual?.configuration ?? presence.agent.adapterConfig;
+          const selected = resolvePaperclipRunnerProviderProfile(effectiveConfig);
           if (selected.provider !== "aw_text_only" || selected.workerModelProfileId !== p.id || selected.model !== p.tariff.model ||
               selected.maxOutputTokens > p.maxOutputTokens ||
-              hashContextPolicySnapshot({ adapterType: presence.agent.adapterType, adapterConfig: presence.agent.adapterConfig }) !== p.qualifiedConfigurationHash)
+              hashContextPolicySnapshot({ adapterType: presence.agent.adapterType, adapterConfig: effectiveConfig }) !== p.qualifiedConfigurationHash)
             throw forbidden("The presence does not select its exact installed draft profile");
           const bound = await agentProviderBindingService(tx).getForPresence(actor, cid, aid);
           if (!bound || bound.provider.status === "revoked" || bound.runtime.status === "revoked" ||
               bound.provider.providerType !== "paperclip_native" || bound.provider.providerAgentRef !== aid ||
               bound.provider.isolationMode !== "isolated_per_presence" ||
               bound.provider.id !== p.providerBindingId || bound.runtime.id !== initial!.runtime.id ||
-              bound.provider.capabilitySnapshotHash !== p.providerSnapshotHash || bound.runtime.providerProfileRef !== p.providerProfileRef ||
+              bound.provider.capabilitySnapshotHash !== (proposed ? initial!.provider.capabilitySnapshotHash : p.providerSnapshotHash) || bound.runtime.providerProfileRef !== p.providerProfileRef ||
               bound.runtime.providerProfileRef.startsWith("aw:cell:")) throw forbidden("Draft bootstrap binding changed or requires physical admission");
           if (runId) {
             const [run] = await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, cid), eq(heartbeatRuns.agentId, aid), eq(heartbeatRuns.id, runId)));
@@ -114,7 +145,9 @@ export function nativeDraftConformanceService(db: Db, options: Options) {
           if (connection.attribution.method !== "api_key" || !secret || secret.secret.status !== "active" || secret.version.revokedAt ||
               ["disabled", "destroyed"].includes(secret.version.status)) throw forbidden("Current encrypted draft grant required");
           const authorityHash = nativeSha256(JSON.parse(JSON.stringify({ profile: fresh, runId, groupId, userId,
-            agent: { id: aid, config: presence.agent.adapterConfig, permissions: presence.agent.permissions },
+            agent: { id: aid, config: effectiveConfig, permissions: presence.agent.permissions },
+            ...(virtual ? { runtimeCandidateId: virtual.candidate.id, candidateRequestId,
+              candidateHash: virtual.request.candidateHash, baselineConfigurationHash: virtual.baselineConfigurationHash } : {}),
             provider: { id: bound.provider.id, snapshot: bound.provider.capabilitySnapshotHash, runtime: bound.runtime.id, profile: bound.runtime.providerProfileRef },
             connection: { id: connection.connection.id, config: connection.connection.config, updatedAt: connection.connection.updatedAt },
             grant: { id: connection.grant.id, updatedAt: connection.grant.updatedAt, refs: connection.grant.credentialSecretRefs },
@@ -133,7 +166,7 @@ export function nativeDraftConformanceService(db: Db, options: Options) {
               const contract = await writeOrchestrationContract(tx, cid, task!.id, orchestrationCompletionSchema.parse({
                 objective: "Retain actual synthetic draft transport probes", requiredOutputs: [{ key: "probe-evidence" }],
                 businessInvariants: ["Qualification grants no ordinary execution authority"] }), userId);
-              const [created] = await tx.insert(orchestrationPlans).values({ companyId: cid, issueId: task!.id, completionContractId: contract.id,
+              const [created] = await tx.insert(orchestrationPlans).values({ ...(proposed ? { id: candidateRequestId } : {}), companyId: cid, issueId: task!.id, completionContractId: contract.id,
                 mode: "single_worker", actionClass: "internal_draft", riskClass: "C0", supervisionMode: "none", verificationMode: "deterministic",
                 humanOversightMode: "human_review", status: "paused", startedAt: new Date(), createdBy: userId, executionPrincipal: { type: "user", userId },
                 budgets: orchestrationBudgetSchema.parse({ maxModelCostMinor: input.maximumCostCents, maxToolActions: 0, maxWallClockSeconds: 300, maxRetries: 0, maxDelegationDepth: 0 }) }).returning();
@@ -163,14 +196,19 @@ export function nativeDraftConformanceService(db: Db, options: Options) {
         const now = new Date();
         const run = await db.transaction(async (transaction) => {
           const tx = transaction as unknown as Db;
+          // The authoring owner locks the draft before its Agent. Keep that
+          // order before taking the Original probe's execution claim.
+          if (candidateRequestId) await entry.current(tx);
           const [agent] = await tx.select().from(agents).where(and(eq(agents.companyId, entry.cid), eq(agents.id, entry.aid))).for("update");
-          if (!agent || !["idle", "error"].includes(agent.status)) throw conflict("Wait for existing work to settle before probing");
+          if (!agent || !["idle", "error", ...(candidateRequestId && entry.cid === companyId && agent.pauseReason === "manual" ? ["paused"] : [])].includes(agent.status)) throw conflict("Wait for existing work to settle before probing");
           const active = await tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, entry.cid), eq(heartbeatRuns.agentId, entry.aid), inArray(heartbeatRuns.status, ["queued", "running"]))).limit(1);
           if (active.length) throw conflict("Existing work owns this presence");
           await entry.current(tx);
           const [created] = await tx.insert(heartbeatRuns).values({ companyId: entry.cid, agentId: entry.aid, responsibleUserId: userId,
             status: "running", invocationSource: "on_demand", triggerDetail: "provider_conformance", startedAt: now,
-            contextSnapshot: { providerConformanceGroupId: groupId, providerConformancePlanId: entry.plan!.id, containsCompanyContext: false, platformToolsGranted: false } }).returning();
+            contextSnapshot: { providerConformanceGroupId: groupId, providerConformancePlanId: entry.plan!.id,
+              ...(candidateRequestId ? { runtimeCandidateConformanceRequestId: candidateRequestId } : {}),
+              containsCompanyContext: false, platformToolsGranted: false } }).returning();
           await tx.update(agents).set({ status: "running" }).where(eq(agents.id, entry.aid));
           return created!;
         });
@@ -280,6 +318,15 @@ export function nativeDraftConformanceService(db: Db, options: Options) {
       }
       try { for (const entry of entries) await entry.current(db); }
       catch { failure = "Draft conformance authority changed before retaining qualification."; }
+      if (candidateRequestId) return { binding: primary.initial.provider, checks,
+        requiredChecks: providerConformanceRequirements(primary.snapshot, primary.initial.provider.isolationMode), runIds, groupId,
+        spentCents: null, reservedMinor, reservationIds, unknownCharges, accountingBasis: "native_pre_spend_liability_ceiling", failure,
+        candidateProof: { sourceSha: options.sourceSha, configurationHash: primary.p.qualifiedConfigurationHash,
+          providerSnapshot: primary.snapshot, profileRef: primary.p.providerProfileRef,
+          providerBindingId: primary.p.providerBindingId, runtimeId: primary.initial.runtime.id, profileHash: nativeSha256(primary.p),
+          testedAt: new Date().toISOString(), accountingComplete: !failure && reservationIds.length === runIds.length,
+          isolationPeer: { companyId: peer.cid, agentId: peer.aid, runtimeId: peer.initial.runtime.id, bindingId: peer.initial.provider.id,
+            profileRef: peer.p.providerProfileRef, configurationHash: peer.p.qualifiedConfigurationHash } } };
       const { hash: _hash, ...snapshot } = primary.snapshot;
       const binding = await bindings.recordDiscovery(companyId, agentId, snapshot, checks, {
         accountingComplete: !failure && reservationIds.length === runIds.length, configurationHash: primary.p.qualifiedConfigurationHash,

@@ -185,8 +185,21 @@ export function agentAuthoringPublicationService(db: Db) {
               versionId: packageVersion.id, keyParts: state.row.packageKey!.split("."), releaseVersion: packageVersion.version.split(".") as [string, string, string],
               contentHash: packageVersion.contentHash } } : {}) } });
         await agentService(tx).update(state.agent.id, { name: state.row.content!.name, capabilities: state.row.content!.description,
+          ...(state.current.runtimeCandidate ? { adapterConfig: state.current.runtimeCandidate.configuration } : {}),
           runtimeConfig: { ...state.agent.runtimeConfig, [AUTHORED_AGENT_DEFINITION_KEY]: definition }, status: "idle", pauseReason: null },
           { authoredPublication: definition, recordRevision: { id: definition.revisionId, source: "agent_authoring_publish", createdByUserId: userId } });
+        if (state.current.runtimeCandidate) {
+          const candidate = state.current.runtimeCandidate, bindingOwner = agentProviderBindingService(tx);
+          const { hash: _snapshotHash, ...snapshot } = candidate.snapshot;
+          await bindingOwner.recordDiscoveryInTransaction(tx, companyId, state.agent.id, snapshot, candidate.evidence.checks, {
+            configurationHash: candidate.configurationHash, runtimeId: candidate.provider.runtime.id,
+            profileRef: candidate.p.providerProfileRef, bindingId: candidate.p.providerBindingId, accountingComplete: true,
+            isolationPeer: candidate.evidence.proof.isolationPeer, accountingBasis: "native_pre_spend_liability_ceiling",
+            reservationIds: candidate.evidence.reservationIds,
+          }, publications);
+          await bindingOwner.revalidateInTransaction(tx, { ...actor, ignoreInstanceAdmin: true }, companyId, state.agent.id,
+            candidate.snapshot.hash, "Publish the current independently verified saved runtime candidate", publications);
+        }
         if (state.packageInstallation) {
           // The definition participates in the Original package authority hash.
           // Reassess and bind that owner to the exact new version inside this C3.

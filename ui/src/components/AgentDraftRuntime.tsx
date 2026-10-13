@@ -6,13 +6,15 @@ import { useV9AuthoringAuthority } from "@/hooks/useV9AuthoringAuthority";
 import { useTranslation } from "@/i18n";
 import { Link } from "@/lib/router";
 import { Button } from "./ui/button";
+import { AgentRuntimeCandidates } from "./AgentRuntimeCandidates";
 
 /** Read the actual Agent's current Original qualification, never a cached or
  * other Agent's success. Configuration remains with the Original save owner. */
 export function AgentDraftRuntime({ company, principal, draft, enabled, canUseAuthority, selectedRuntimeBindingId,
-  selectionEnabled = false, onSelectRuntime }: {
+  selectionEnabled = false, onSelectRuntime, selectedRuntimeCandidateId, onSelectRuntimeCandidate }: {
   company: string; principal: string; draft: AgentAuthoringDraftView; enabled: boolean; canUseAuthority: () => boolean;
   selectedRuntimeBindingId?: string | null; selectionEnabled?: boolean; onSelectRuntime?: (bindingId: string) => void;
+  selectedRuntimeCandidateId?: string | null; onSelectRuntimeCandidate?: (candidateId: string) => void;
 }) {
   const authority = useV9AuthoringAuthority(company, principal), client = useQueryClient(), { t } = useTranslation("experience");
   const latest = useRef({ company, principal, draft, enabled, canUseAuthority });
@@ -36,15 +38,20 @@ export function AgentDraftRuntime({ company, principal, draft, enabled, canUseAu
     const state = client.getQueryState(runtimeKey);
     return current() && state?.status === "success" && state.fetchStatus === "idle" && !state.isInvalidated && state.data === runtime.data;
   }
+  const alternatives = onSelectRuntimeCandidate ? <AgentRuntimeCandidates key={`${company}:${principal}:${draft.id}`}
+    company={company} principal={principal} draft={draft}
+    enabled={enabled && authority.readReady && current() && !runtime.isFetching && !runtime.isPending}
+    selectionEnabled={selectionEnabled} canUseAuthority={canUseAuthority}
+    selectedId={selectedRuntimeCandidateId ?? draft.content?.runtimeCandidateId ?? null} onSelect={onSelectRuntimeCandidate} /> : null;
   if (!agentId) return null;
   if (!enabled || !authority.readReady || !current() || runtime.isPending || runtime.isFetching)
-    return <p role="status">{t("agentRuntime.checking")}</p>;
-  if (runtime.isError || !runtime.data) return <div className="space-y-3">
+    return <><p role="status">{t("agentRuntime.checking")}</p>{alternatives}</>;
+  if (runtime.isError || !runtime.data) return <><div className="space-y-3">
     <p role="status">{t("agentRuntime.unavailable")}</p>
     <Button className="min-h-11" variant="outline" onClick={() => { if (current()) void runtime.refetch(); }}>{t("agentRuntime.refresh")}</Button>
-  </div>;
+  </div>{alternatives}</>;
   const selected = selectedRuntimeBindingId === undefined ? draft.content?.runtimeBindingId : selectedRuntimeBindingId;
-  return <section className="space-y-3" aria-label={t("agentRuntime.title")}>
+  return <><section className="space-y-3" aria-label={t("agentRuntime.title")}>
     <h2 className="text-lg font-semibold">{t("agentRuntime.title")}</h2>
     <p role="status">{t(`agentRuntime.status.${runtime.data.status}`)}</p>
     <p>{t("agentRuntime.boundary")}</p>
@@ -59,5 +66,5 @@ export function AgentDraftRuntime({ company, principal, draft, enabled, canUseAu
     {runtime.data.configurationEditAllowed === true && !draft.agentId && draft.status === "draft" ? <Button asChild className="min-h-11" variant="outline"><Link to={`/agents/${agentId}/configuration`}
       onClick={event => { if (!fresh()) event.preventDefault(); }}>{t("agentRuntime.configure")}</Link></Button> : null}
     <p>{t(runtime.data.configurationEditAllowed === true && !draft.agentId ? "agentRuntime.configurationBoundary" : "agentRuntime.liveConfigurationBoundary")}</p>
-  </section>;
+  </section>{alternatives}</>;
 }

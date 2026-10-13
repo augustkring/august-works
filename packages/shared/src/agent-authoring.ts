@@ -105,6 +105,9 @@ const storedAgentAuthoringContentSchema = z
     // Delegation requires an independently qualified bounded policy; no draft boolean can grant it.
     collaboration: z.literal("none").default("none"),
     runtimeBindingId: z.uuid().nullable().default(null),
+    // Optional preserves existing candidate/revision hashes. Only a canonical
+    // draft-owned runtime candidate can be selected; this field grants no proof.
+    runtimeCandidateId: z.uuid().nullable().optional(),
     scenarios: z.array(text(2000)).max(10).default([]),
     channel: z.literal("in_app").default("in_app"),
   })
