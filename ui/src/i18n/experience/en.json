@@ -1869,6 +1869,7 @@
     "why": "You manage this company’s app connections.",
     "consequence": "Review current access in the app settings before reconnecting or changing permissions.",
     "accessEvidence": "Account access needs review.",
-    "evidence": "The app connection needs review."
+    "evidence": "The app connection needs review.",
+    "personalWhy": "This is your own connected account."
   }
 }

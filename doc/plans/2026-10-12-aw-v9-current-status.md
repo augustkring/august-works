@@ -10,7 +10,12 @@ through the Original tool-access owner, with Source/role withdrawal and localize
 navigation only. Seventy native/UI cases, changed server/UI types, token gates
 and the built recovery/private-feedback journeys pass. See the
 [connector recovery checkpoint](2026-10-13-aw-v9-connector-recovery-checkpoint.md).
-Non-manager personal recovery and the remaining maintenance classes stay open.
+Ordinary-member personal recovery now reuses the Original fixed reconnect
+identity, with content-free current grant review and no credential/permission
+effects. Seventy focused credential/visibility/recovery cases, changed types
+and both built persona journeys pass. See the
+[personal recovery checkpoint](2026-10-13-aw-v9-personal-connector-recovery-checkpoint.md).
+The remaining maintenance classes and full V9 verification stay open.
 
 The recovered customer pause and selected approved public/internal knowledge mappings
 are now qualified. See the [recovery checkpoint](2026-10-12-aw-v9-environment-recovery.md)

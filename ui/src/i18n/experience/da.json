@@ -1869,6 +1869,7 @@
     "why": "Du administrerer virksomhedens appforbindelser.",
     "consequence": "Kontrollér aktuel adgang i appens indstillinger, før du forbinder kontoen igen eller ændrer rettigheder.",
     "accessEvidence": "Kontoadgang kræver gennemgang.",
-    "evidence": "Appforbindelsen kræver gennemgang."
+    "evidence": "Appforbindelsen kræver gennemgang.",
+    "personalWhy": "Dette er din egen tilknyttede konto."
   }
 }

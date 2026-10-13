@@ -18,7 +18,8 @@ export function ExperienceCard({
     maintenance && card.evidence.includes("unknown_outcome");
   const runtimeRecovery = card.source.domain === "runtime_cell" && card.kind === "recovery";
   const connectorRecovery = card.source.domain === "connection" && card.kind === "recovery";
-  const connectorAccess = connectorRecovery && card.evidence.includes("connector_access_review");
+  const personalConnector = connectorRecovery && card.evidence.includes("connector_personal_access_review");
+  const connectorAccess = connectorRecovery && (personalConnector || card.evidence.includes("connector_access_review"));
   const workflowRecovery = card.source.domain === "workflow" && card.kind === "recovery";
   const runtimeCapacity = runtimeRecovery && card.evidence.includes("runtime_capacity_review");
   const recoveryNamespace = connectorRecovery ? "connectorRecovery" : workflowRecovery ? "workflowRecovery" : runtimeRecovery ? "runtimeRecovery" : null;
@@ -47,7 +48,7 @@ export function ExperienceCard({
       <Heading className="font-medium text-foreground">{title}</Heading>
       {card.whyYou && (
         <p className="text-sm text-foreground">
-          {recoveryNamespace ? t(`${recoveryNamespace}.why`) : maintenance ? t("maintenanceAttentionWhy") : card.whyYou}
+          {personalConnector ? t("connectorRecovery.personalWhy") : recoveryNamespace ? t(`${recoveryNamespace}.why`) : maintenance ? t("maintenanceAttentionWhy") : card.whyYou}
         </p>
       )}
       {card.consequence && (

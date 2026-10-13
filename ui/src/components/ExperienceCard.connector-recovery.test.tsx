@@ -15,6 +15,7 @@ afterEach(async () => { await act(async () => root.unmount()); container.remove(
 it.each([
   ["en", false, "Review app connection"], ["en", true, "Review app connection"],
   ["da", false, "Gennemgå appforbindelse"], ["da", true, "Gennemgå appforbindelse"],
+  ["en", "personal", "Review app connection"], ["da", "personal", "Gennemgå appforbindelse"],
 ] as const)("renders current recovery navigation in %s with capacity=%s and no effect controls", async (locale, capacity, heading) => {
   await i18n.changeLanguage(locale);
   const fetch = vi.spyOn(globalThis, "fetch");
@@ -22,7 +23,7 @@ it.each([
     resourceId: "10000000-0000-4000-8000-000000000002", version: "a".repeat(64), observedAt: new Date().toISOString() };
   const card: CardModel = { id: "owned-recovery", kind: "recovery", source, freshness: "fresh", title: "server fallback title",
     whyYou: "server fallback reason", consequence: "server fallback consequence",
-    evidence: [capacity ? "connector_access_review" : "connector_recovery_review"], actions: [{ id: "review-connection", label: "fallback action",
+    evidence: [capacity === "personal" ? "connector_personal_access_review" : capacity ? "connector_access_review" : "connector_recovery_review"], actions: [{ id: "review-connection", label: "fallback action",
       labelKey: "review", operation: "open", href: "/apps/10000000-0000-4000-8000-000000000002/permissions", criticality: "C4", source, requiresCurrentAuthorization: true }] };
   await act(async () => root.render(<ExperienceCard card={card} />));
   expect(container.querySelector("h3")?.textContent).toBe(heading);
@@ -31,6 +32,7 @@ it.each([
   expect(container.textContent).not.toContain("connector_access_review");
   expect(container.textContent).not.toContain("connector_recovery_review");
   expect(container.querySelector("a")?.getAttribute("href")).toBe("/apps/10000000-0000-4000-8000-000000000002/permissions");
+  if (capacity === "personal") expect(container.textContent).toContain(locale === "da" ? "Dette er din egen tilknyttede konto." : "This is your own connected account.");
   expect(container.querySelector("button")).toBeNull();
   expect(fetch).not.toHaveBeenCalled();
 });

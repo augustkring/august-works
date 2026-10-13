@@ -66,13 +66,58 @@ describe("V9 Original connector recovery projection", () => {
     await db.update(companyMemberships).set({ membershipRole: "member" }).where(and(eq(companyMemberships.companyId, fixture.home), eq(companyMemberships.principalId, fixture.userId)));
     await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId, fixture.home),
       eq(principalPermissionGrants.principalId, fixture.userId), eq(principalPermissionGrants.permissionKey, "tools:manage_connections")));
-    await expect(read()).rejects.toMatchObject({ status: 403 });
-    await expect(readConnectorRecovery(db, { ...fixture.actor, isInstanceAdmin: true }, fixture.home, new AbortController().signal)).rejects.toMatchObject({ status: 403 });
+    expect((await read()).needsYou).toEqual([]);
+    expect((await readConnectorRecovery(db, { ...fixture.actor, isInstanceAdmin: true }, fixture.home, new AbortController().signal)).needsYou).toEqual([]);
     await db.insert(principalPermissionGrants).values({ companyId: fixture.home, principalType: "user", principalId: fixture.userId,
       permissionKey: "tools:manage_connections", scope: null });
     expect((await read()).needsYou).toHaveLength(1);
     await db.update(companyMemberships).set({ membershipRole: "viewer" }).where(and(eq(companyMemberships.companyId, fixture.home), eq(companyMemberships.principalId, fixture.userId)));
     await expect(read()).rejects.toMatchObject({ status: 403 });
+  });
+  async function ordinaryMember() {
+    await db.update(companyMemberships).set({ membershipRole: "member" }).where(and(eq(companyMemberships.companyId, fixture.home), eq(companyMemberships.principalId, fixture.userId)));
+    await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId, fixture.home),
+      eq(principalPermissionGrants.principalId, fixture.userId), eq(principalPermissionGrants.permissionKey, "tools:manage_connections")));
+  }
+  it("lets a regular member review only their own fixed personal identity without gaining management authority", async () => {
+    await ordinaryMember();
+    const own = await connection(fixture.home, { credentialPolicy: "per_user", createdByUserId: fixture.userId,
+      connectionPurpose: "ai", transport: "runtime_auth", authKind: "api_key", healthStatus: "ok" });
+    await db.insert(connectionGrants).values({ companyId: fixture.home, connectionId: own.id, kind: "user", subjectUserId: fixture.userId, status: "revoked", revokedAt: new Date() });
+    await connection(fixture.home, { credentialPolicy: "per_user", createdByUserId: "other-native-user" });
+    await connection();
+    const before = await db.select().from(connectionGrants).where(eq(connectionGrants.companyId, fixture.home));
+    const permissions = await db.select().from(principalPermissionGrants).where(eq(principalPermissionGrants.companyId, fixture.home));
+    const value = await read(); expect(value.needsYou.map(card => card.source.resourceId)).toEqual([own.id]);
+    expect(value.needsYou[0]?.evidence).toEqual(["connector_personal_access_review"]);
+    expect(JSON.stringify(value)).not.toContain("other-native-user");
+    expect(await db.select().from(connectionGrants).where(eq(connectionGrants.companyId, fixture.home))).toEqual(before);
+    expect(await db.select().from(principalPermissionGrants).where(eq(principalPermissionGrants.companyId, fixture.home))).toEqual(permissions);
+  });
+  it("uses the Original fixed subject when a creator-less historical personal connection has retained grants", async () => {
+    await ordinaryMember();
+    const own = await connection(fixture.home, { credentialPolicy: "per_user" });
+    await db.insert(connectionGrants).values({ companyId: fixture.home, connectionId: own.id, kind: "user", subjectUserId: fixture.userId, status: "needs_reauthorization" });
+    expect((await read()).needsYou.map(card => card.source.resourceId)).toEqual([own.id]);
+    const other = await connection(fixture.home, { credentialPolicy: "per_user", createdByUserId: "other-native-user" });
+    await db.insert(connectionGrants).values({ companyId: fixture.home, connectionId: other.id, kind: "user", subjectUserId: fixture.userId, status: "revoked", revokedAt: new Date() });
+    expect((await read()).needsYou.map(card => card.source.resourceId)).toEqual([own.id]);
+  });
+  it("withdraws a personal recovery finding when its actual retained grant is restored", async () => {
+    await ordinaryMember();
+    const own = await connection(fixture.home, { credentialPolicy: "per_user", createdByUserId: fixture.userId,
+      connectionPurpose: "ai", transport: "runtime_auth", authKind: "api_key", healthStatus: "ok" });
+    const [grant] = await db.insert(connectionGrants).values({ companyId: fixture.home, connectionId: own.id,
+      kind: "user", subjectUserId: fixture.userId, status: "expired" }).returning();
+    const real = recovery.readConnectorRecovery; let calls = 0;
+    vi.spyOn(recovery, "readConnectorRecovery").mockImplementation(async (...args) => {
+      const result = await real(...args);
+      if (++calls === 1) await db.update(connectionGrants).set({ status: "active", updatedAt: new Date() }).where(eq(connectionGrants.id, grant!.id));
+      return result;
+    });
+    const value = await experienceService(db).home(fixture.actor, fixture.home);
+    expect(value.needsYou.filter(card => card.source.domain === "connection" && card.kind === "recovery")).toEqual([]);
+    expect(value.dependencies.find(entry => entry.domain === "connector-recovery")).toMatchObject({ state: "partial", reason: "source_stale" });
   });
   it("requires a verified account/current rollout and bounds the findings", async () => {
     for (let index = 0; index < 6; index++) await connection();

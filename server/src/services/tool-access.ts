@@ -16950,6 +16950,17 @@ export function toolAccessService(
 
     finishGalleryAppConnection,
 
+    /** Internal content-free review of the same fixed subject used by
+     * Original OAuth/key reconnect. This never creates a credential/state. */
+    personalReconnectIdentity: async (companyId: string, connectionId: string, userId: string) => {
+      const row = await getConnectionRow(connectionId, companyId);
+      const identity = await fixedPersonalIdentityForReconnect(row, userId, { actorType: "user", actorId: userId });
+      if (!identity) return null;
+      return { userId: identity.subjectUserId, grant: identity.grant ? {
+        id: identity.grant.id, status: identity.grant.status, updatedAt: identity.grant.updatedAt.toISOString(),
+      } : null };
+    },
+
     reconnectGalleryApp,
 
     storeConnectorOAuthSecret: createOrRotateOAuthSecret,
