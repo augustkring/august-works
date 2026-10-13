@@ -3403,6 +3403,13 @@
       "when": 1791885177166,
       "tag": "0487_famous_gambit",
       "breakpoints": true
+    },
+    {
+      "idx": 488,
+      "version": "7",
+      "when": 1791897119226,
+      "tag": "0488_exotic_sentinels",
+      "breakpoints": true
     }
   ]
 }

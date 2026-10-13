@@ -5,6 +5,7 @@ import { conversationAuthoringViewSchema } from "@paperclipai/shared";
 import { authorizationService, type AuthorizationActor } from "../authorization.js";
 import { assertV5Authorization, v5HumanActorId } from "../v5-authorization.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { assertAnalyticalContextPayloadAccess } from "../analytical-context-authority.js";
 import { workflowService } from "../workflows/workflow-service.js";
 import { workflowNodeRegistryService } from "../workflows/workflow-node-registry.js";
@@ -37,7 +38,7 @@ export function conversationAuthoringService(db: Db) {
     get: (actor: AuthorizationActor, companyId: string, conversationId: string, signal?: AbortSignal) => withExperienceAdmission(async (currentSignal, remainingMs) => db.transaction(async rawTx => {
       const tx = rawTx as unknown as Db;
       await tx.execute(sql`select set_config('statement_timeout', ${String(remainingMs()) + 'ms'}, true), set_config('lock_timeout', '1000ms', true)`);
-      currentSignal.throwIfAborted(); await lockMemoryPrivacy(tx, companyId);
+      currentSignal.throwIfAborted(); await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
       const initial = await owner(tx, actor, companyId, conversationId);
       // The Original revision's author/run relation establishes provenance.
       // Current conversation generation and responsible user exclude earlier

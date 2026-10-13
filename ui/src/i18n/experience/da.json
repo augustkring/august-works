@@ -2004,5 +2004,8 @@
       "cancelled": "Annulleret"
     }
   },
-  "loadingView": "Indlæser visning…"
+  "loadingView": "Indlæser visning…",
+  "announcement": {
+    "summary": "Produktnyheder"
+  }
 }

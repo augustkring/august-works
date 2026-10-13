@@ -85,6 +85,31 @@ export async function assertLearnedWorkflowPayloadAccess(db:Db,companyId:string,
 }
 
 export async function assertAnalyticalContextPayloadAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,scope:{issueId:string}|{runId:string},readScope?:NativeReadScope) {
+ const origins=()=>db.execute<{source_run_id:string|null;source_task_id:string|null;invalid:boolean}>(sql`
+   select source_run_id,source_task_id,invalid from aw_runner_task_source_chain(${companyId}::uuid,
+     ${"runId"in scope?scope.runId:null}::uuid,${"issueId"in scope?scope.issueId:null}::uuid)
+   order by source_run_id,source_task_id,invalid`);
+ const initial=await origins();
+ if(initial.length>16||initial.some(source=>source.invalid||!source.source_run_id||!source.source_task_id))
+   throw new HttpError(403,"Native task source access is unavailable",{code:"analytical_source_access_lost"});
+ await assertDirectAnalyticalContextPayloadAccess(db,companyId,actor,scope,readScope);
+ for(const source of initial){
+   // Each actual ancestor keeps its Original current-reader policy, not just
+   // an erasure marker or the descendant task's company membership.
+   await assertDirectAnalyticalContextPayloadAccess(db,companyId,actor,{runId:source.source_run_id!},readScope);
+   await assertDirectAnalyticalContextPayloadAccess(db,companyId,actor,{issueId:source.source_task_id!},readScope);
+ }
+ if(initial.length){
+   const final=await origins();
+   if(JSON.stringify(initial)!==JSON.stringify(final))
+     throw new HttpError(403,"Native task source provenance changed",{code:"analytical_source_access_lost"});
+   const [receipt]=await db.execute<{erased:boolean}>(sql`select aw_workflow_memory_erased(${companyId}::uuid,
+     ${"runId"in scope?scope.runId:null}::uuid,${"issueId"in scope?scope.issueId:null}::uuid) as erased`);
+   if(receipt?.erased)throw new HttpError(403,"Native task source access is unavailable",{code:"analytical_source_access_lost"});
+ }
+}
+
+async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,scope:{issueId:string}|{runId:string},readScope?:NativeReadScope) {
  const [sourceReceipt]=await db.execute<{erased:boolean}>(sql`select aw_workflow_memory_erased(${companyId}::uuid,${"runId"in scope?scope.runId:null}::uuid,${"issueId"in scope?scope.issueId:null}::uuid) as erased`);
  if(sourceReceipt?.erased)throw new HttpError(403,"Analytical conversation source access is unavailable",{code:"analytical_source_access_lost"});
  await assertLearnedWorkflowPayloadAccess(db,companyId,actor,scope,readScope);

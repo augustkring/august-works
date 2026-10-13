@@ -200,7 +200,13 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
   const originWorkflowTasks = affected.length ? await db.select({ id: issues.id }).from(issues)
     .where(and(eq(issues.companyId, companyId), eq(issues.originKind, "workflow_task"),
       inArray(issues.originRunId, [...new Set(affected.map(step => step.workflowRunId))]))) : [];
-  const issueIds = [...new Set([...originWorkflowTasks.map(task => task.id),...skillHarnessTasks.map(task=>task.issue_id),...childWaits.flatMap((wait) => wait.issueId ? [wait.issueId] : []), ...contextRoots.flatMap((root) => root.issueId ? [root.issueId] : []),
+  // These tasks are separate saved Native results, not workflow_task rows.
+  // Keep their Original origin IDs after receipt/context payloads are erased.
+  const originNativeTasks = childIds.length ? await db.select({ id: issues.id }).from(issues).where(and(
+    eq(issues.companyId, companyId), eq(issues.originKind, "manual"), inArray(issues.originRunId, childIds),
+    sql`${issues.originId} like 'paperclip-runner:create-task:%'`,
+  )) : [];
+  const issueIds = [...new Set([...originNativeTasks.map(task => task.id),...originWorkflowTasks.map(task => task.id),...skillHarnessTasks.map(task=>task.issue_id),...childWaits.flatMap((wait) => wait.issueId ? [wait.issueId] : []), ...contextRoots.flatMap((root) => root.issueId ? [root.issueId] : []),
     ...sourceRunContexts.flatMap(context => context.issueId ? [context.issueId] : []), ...sourceRunIssues])];
   if (issueIds.length) {
     await eraseAnalyticalSourcesUnderMemory(db, companyId, "issue", issueIds, now);

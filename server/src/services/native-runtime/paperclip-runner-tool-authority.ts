@@ -1,6 +1,8 @@
 import { publicChatTaskUrl } from "../chat-task-url.js";
 import {MANAGEMENT_ANALYTICAL_TOOL_DEFINITIONS,isManagementAnalyticalTool,executeManagementAnalyticalTool} from "./management-analytical-tools.js";
 import {assertAnalyticalContextPayloadAccess} from "../analytical-context-authority.js";
+import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { withOrchestrationNativeTool, lockNativeToolPlan, assertNativeToolPlanCurrent } from "../orchestration/native-tool-boundary.js";
 import type { createAssignedMcpTools } from "./assigned-mcp-tools.js";
 import { assertAssignableAgent } from "../agent-assignability.js";
@@ -1487,6 +1489,7 @@ export class PaperclipRunnerToolAuthority {
             throw new Error("paperclip_runner_tool_idempotency_conflict");
           }
           await options.beforeReceiptReplay?.(tx as unknown as Db, context);
+          await this.#assertMutationSourceCurrent(tx as unknown as Db, context);
           return describeResult(prior.result);
         }
         const result = JSON.parse(
@@ -1500,6 +1503,7 @@ export class PaperclipRunnerToolAuthority {
         ));
         if (!currentIssue) throw new Error("paperclip_runner_tool_binding_not_authorized");
         this.#assertConversationGeneration({ issue: currentIssue, run: context.run });
+        await this.#assertMutationSourceCurrent(tx as unknown as Db, context);
         receipts[idempotencyKey] = {
           operationId,
           input,
@@ -1529,12 +1533,23 @@ export class PaperclipRunnerToolAuthority {
     }
   }
 
+  async #assertMutationSourceCurrent(tx: Db, context: { run: typeof heartbeatRuns.$inferSelect }) {
+    const actor = { type: "agent" as const, source: "agent_jwt" as const, companyId: this.binding.companyId,
+      agentId: this.binding.agentId, runId: this.binding.runId, onBehalfOfUserId: context.run.responsibleUserId };
+    await assertAnalyticalContextPayloadAccess(tx, this.binding.companyId, actor, { runId: this.binding.runId });
+    await assertAnalyticalContextPayloadAccess(tx, this.binding.companyId, actor, { issueId: this.binding.issueId });
+  }
+
   async #lockAuthorizedMutationContext(tx: Db): Promise<{
     run: typeof heartbeatRuns.$inferSelect;
     issue: typeof issues.$inferSelect;
     actor: typeof agents.$inferSelect;
   }> {
     this.binding.authoritySignal?.throwIfAborted();
+    // Current analytical source review must acquire its company boundary
+    // before Memory; then preserve the Native plan -> Task -> run order.
+    await lockAnalyticalCompany(tx, this.binding.companyId);
+    await lockMemoryPrivacy(tx, this.binding.companyId);
     // Bounded plans use the same order as reservation, supervision and Stop.
     // Ordinary native runs retain their existing Task/run mutation behavior.
     const bounded = await lockNativeToolPlan(tx, this.binding);
@@ -1582,6 +1597,7 @@ export class PaperclipRunnerToolAuthority {
     if (bounded) await assertNativeToolPlanCurrent(tx, this.binding, true);
     this.binding.authoritySignal?.throwIfAborted();
     this.#assertConversationGeneration(context);
+    await this.#assertMutationSourceCurrent(tx, context);
     return context;
   }
 

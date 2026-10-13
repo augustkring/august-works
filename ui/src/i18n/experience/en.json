@@ -2004,5 +2004,8 @@
       "cancelled": "Cancelled"
     }
   },
-  "loadingView": "Loading view…"
+  "loadingView": "Loading view…",
+  "announcement": {
+    "summary": "Product updates"
+  }
 }

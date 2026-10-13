@@ -31,6 +31,13 @@ test("V7 discovery answers, readiness and governance remain human reviewed and c
   test.setTimeout(180_000);
   page.setDefaultTimeout(15_000);
   const stamp = Date.now();
+  // Keep a real visible announcement in this navigation journey. Its former
+  // floating placement intercepted the Governance link in CI.
+  await page.route("**/api/announcements/current", route => route.fulfill({ json: {
+    id: `v9-navigation-${stamp}`, eyebrow: "Product update", title: "Navigation remains available",
+    description: "Read this optional update when you choose.",
+    primaryAction: { kind: "route", label: "Open projects", path: "/projects" },
+  } }));
   await signUp(page, `v7-owner-${stamp}@test.invalid`);
   const config = process.env.PAPERCLIP_E2E_SERVER_CONFIG;
   if (!config || !baseURL) throw new Error("An isolated authenticated server is required");
@@ -83,6 +90,11 @@ test("V7 discovery answers, readiness and governance remain human reviewed and c
     await expect(page.getByRole("region", { name: "Readiness assessment", exact: true })).toContainText("blocked");
     await expect(page.getByRole("region", { name: "Knowledge requiring review", exact: true })).toBeVisible();
 
+    const updateWell = page.getByRole("complementary", { name: "Paperclip announcements", exact: true });
+    await expect(updateWell).toBeVisible();
+    await expect(updateWell.locator("details")).not.toHaveAttribute("open");
+    await updateWell.locator("summary").focus(); await page.keyboard.press("Enter");
+    await expect(updateWell.locator("details")).toHaveAttribute("open");
     await page.getByRole("link", { name: "AI Governance", exact: true }).click();
     await expect(page).toHaveURL(`${baseURL}${route}/ai-governance`);
     const createdProfile = page.waitForResponse((r) => r.url().includes(`${api}/human-oversight-profiles`) && r.request().method() === "POST");
