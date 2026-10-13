@@ -2,7 +2,12 @@
   "screenId": "WORKFLOW-RETIRE",
   "journeyId": "workflow",
   "routeOrSurface": "/workflows/:workflowId",
-  "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
   "customerOutcome": "Retire a paused, drained and unbound native workflow while preserving published revisions and run history.",
   "entryConditions": [
     "Current authenticated principal and company selection; no retained foreign-principal payload",
@@ -68,9 +73,9 @@
   },
   "navigation": {
     "back": "Return to existing native workflow list.",
-    "cancelOrSaveExit": "Ordinary close/reopen retains an unknown in-memory tuple and offers same-request retry. Full route/company/principal/flag teardown can lose it; durable cross-navigation recovery remains open.",
+    "cancelOrSaveExit": "Closing an in-memory dialog retains its exact Original command for existing explicit idempotent retry. Route reload retains only a content-free locator; exact GET recovery reads the Original journal. A Native pre-effect refusal can release only its own tuple.",
     "deepLink": "/workflows/:workflowId",
-    "resume": "Re-read current company/principal/native revision and grants. Flag rollback restores the existing graph editor; /advanced preserves a direct graph route."
+    "resume": "Current Native read and a bounded content-free per-tab company/account/workflow/kind/request locator survive page return. Follow the exact Original request GET under current account/permission/Source admission; no new command identity is inferred from absence."
   },
   "accessibility": {
     "initialFocus": "Main heading or the dialog category control; keyboard focus is visible and unobscured.",

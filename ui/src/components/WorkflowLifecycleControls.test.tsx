@@ -1,8 +1,9 @@
 // @vitest-environment jsdom
 import { act } from "react";
+import { MemoryRouter } from "react-router-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type {
   WorkflowExperience,
   WorkflowLifecycleCommand,
@@ -11,7 +12,12 @@ import { createWorkflowsApi, workflowsApi } from "../api/workflows";
 import { api, ApiError } from "../api/client";
 import { WorkflowLifecycleControls } from "./WorkflowLifecycleControls";
 import "../i18n";
+import { authApi } from "../api/auth";
+import { queryKeys } from "../lib/queryKeys";
+import { v9SessionFixture } from "../hooks/v9-session.test-support";
+beforeEach(() => { window.sessionStorage.clear(); vi.spyOn(authApi, "getSession").mockResolvedValue(v9SessionFixture("member")); });
 
+vi.mock("../context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: "10000000-0000-4000-8000-000000000001", selectedCompany: { issuePrefix: "AW" } }) }));
 const detail: WorkflowExperience = {
   companyId: "10000000-0000-4000-8000-000000000001",
   id: "10000000-0000-4000-8000-000000000002",
@@ -55,6 +61,8 @@ afterEach(async () => {
 async function render(value: WorkflowExperience | null) {
   if (!root || !container?.isConnected) {
     client = new QueryClient();
+    client.setQueryDefaults(queryKeys.auth.session, { gcTime: Infinity });
+    client.setQueryData(queryKeys.auth.session, v9SessionFixture("member"));
     container = document.createElement("div");
     document.body.append(container);
     root = createRoot(container);
@@ -62,13 +70,13 @@ async function render(value: WorkflowExperience | null) {
   await act(async () =>
     root.render(
       <QueryClientProvider client={client}>
-        <WorkflowLifecycleControls
+        <MemoryRouter><WorkflowLifecycleControls
           company={detail.companyId}
           principal="member"
           id={detail.id}
           detail={value}
           refresh={refresh}
-        />
+        /></MemoryRouter>
       </QueryClientProvider>,
     ),
   );

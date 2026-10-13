@@ -41,9 +41,22 @@ import {
   type WorkflowStopCommand,
   type WorkflowLaunchCommand,
   type WorkflowLifecycleCommand,
+  workflowRequestKindSchema, workflowRequestReceiptSchema,
+  type WorkflowRequestKind,
 } from "@paperclipai/shared";
 
 export const createWorkflowsApi = (api: typeof defaultApi = defaultApi) => ({
+  requestReceipt: async (companyId: string, principal: string, workflowId: string, kind: WorkflowRequestKind, requestId: string, signal?: AbortSignal) => {
+    workflowRequestKindSchema.parse(kind); workflowPublicationReceiptSchema.shape.requestId.parse(requestId);
+    workflowPublicationReceiptSchema.shape.companyId.parse(companyId); workflowPublicationReceiptSchema.shape.workflowId.parse(workflowId);
+    const value = workflowRequestReceiptSchema.parse(await api.get(
+      `/companies/${companyId}/workflows/${workflowId}/experience/requests/${kind}/${requestId}?${new URLSearchParams({ expectedUserId: principal })}`,
+      { signal, cache: "no-store" }));
+    signal?.throwIfAborted();
+    if (value.kind !== kind || value.receipt.companyId !== companyId || value.receipt.workflowId !== workflowId || value.receipt.requestId !== requestId)
+      throw new Error("The Original workflow request scope changed");
+    return value;
+  },
   publicationReview: async (company: string, principal: string, workflow: string, signal?: AbortSignal) => {
     const view = workflowPublicationReviewSchema.parse(await api.get(`/companies/${company}/workflows/${workflow}/experience/publication?expectedUserId=${encodeURIComponent(principal)}`, { signal, cache: "no-store" }));
     if (view.companyId !== company || view.workflowId !== workflow) throw new Error("Publication context changed");

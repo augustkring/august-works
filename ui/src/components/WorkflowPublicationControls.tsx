@@ -10,6 +10,8 @@ import { workflowsApi } from "../api/workflows";
 import { ApiError } from "../api/client";
 import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
 import { Button } from "./ui/button";
+import { useWorkflowRequestLocator } from "../hooks/useWorkflowRequestLocator";
+import { Link } from "../lib/router";
 import {
   Dialog,
   DialogContent,
@@ -60,13 +62,15 @@ export function WorkflowPublicationControls({
     setEpoch((old) => old + 1);
   });
   const feedback = useRef<HTMLParagraphElement>(null);
+  const locator = useWorkflowRequestLocator(company, principal, id, "publication", !!detail?.canOperate && query.isSuccess && !query.isFetching);
   const mutation = useMutation({
     mutationKey: ["workflow-publication-command", company, principal, id],
     gcTime: 0,
     retry: false,
     mutationFn: (command: WorkflowPublicationCommand) =>
-      workflowsApi.publishReviewed(company, principal, id, command),
-    onSuccess: () => {
+      locator.write(command.requestId, () => workflowsApi.publishReviewed(company, principal, id, command)),
+    onSuccess: (receipt) => {
+      if (!locator.confirm(receipt)) return;
       setAttempt(null);
       setReviewed(null);
       setOpen(false);
@@ -83,6 +87,7 @@ export function WorkflowPublicationControls({
         error.status === 409 &&
         code === "workflow_publication_conflict"
       ) {
+        if (attempt) locator.refused(attempt.requestId);
         setAttempt(null);
         setReviewed(null);
         setOpen(false);
@@ -95,19 +100,20 @@ export function WorkflowPublicationControls({
   const observed = current ? query.data?.receipt : null;
   useEffect(() => {
     if (
-      attempt &&
-      observed?.requestId === attempt.requestId &&
+      observed && locator.pending === observed.requestId &&
+      (!attempt || (observed.requestId === attempt.requestId &&
       observed.revisionId === attempt.expectedDraftRevisionId &&
-      observed.testRunId === attempt.expectedTestRunId &&
+      observed.testRunId === attempt.expectedTestRunId)) &&
       !mutation.isPending
     ) {
+      if (!locator.observed(observed)) return;
       setAttempt(null);
       setReviewed(null);
       setOpen(false);
       mutation.reset();
       refresh();
     }
-  }, [attempt, observed, mutation.isPending]);
+  }, [attempt, observed, mutation.isPending, locator.pending]);
   useEffect(() => {
     const dialog = document.activeElement?.closest('[role="dialog"]');
     if (
@@ -120,6 +126,7 @@ export function WorkflowPublicationControls({
   const view = query.data!;
   const receipt = mutation.isSuccess ? mutation.data : observed;
   function begin() {
+    if (locator.failed || !locator.ready || (locator.pending && !attempt)) return;
     if (attempt) {
       setOpen(true);
       return;
@@ -131,6 +138,7 @@ export function WorkflowPublicationControls({
     mutation.reset();
   }
   function confirm() {
+    if (locator.failed || !locator.ready || mutation.isPending) return;
     if (attempt) {
       mutation.mutate(attempt);
       return;
@@ -158,6 +166,8 @@ export function WorkflowPublicationControls({
       <p className="text-muted-foreground">
         {t("workflowPublicationBoundary")}
       </p>
+      {locator.failed && <p role="alert">{t("workflowRequestRecovery.storageFailed")}</p>}
+      {locator.pending && <Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${id}/requests/publication/${locator.pending}`}>{t("workflowRequestRecovery.open")}</Link>}
       {view.availability !== "internal_ready" && !attempt && (
         <p>{t(`workflowPublicationAvailability.${view.availability}`)}</p>
       )}
@@ -165,7 +175,7 @@ export function WorkflowPublicationControls({
         <Button
           className="min-h-11"
           onClick={begin}
-          disabled={mutation.isPending}
+          disabled={mutation.isPending || !locator.ready || locator.failed || (!!locator.pending && !attempt)}
         >
           {attempt
             ? t("workflowPublicationRetry")

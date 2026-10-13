@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type {
   WorkflowExperience,
   WorkflowTestCommand,
@@ -12,6 +12,11 @@ import { WorkflowTestControls } from "./WorkflowTestControls";
 import { workflowsApi, createWorkflowsApi } from "../api/workflows";
 import { api, ApiError } from "../api/client";
 import "../i18n";
+import { authApi } from "../api/auth";
+import { queryKeys } from "../lib/queryKeys";
+import { v9SessionFixture } from "../hooks/v9-session.test-support";
+import { pendingWorkflowRequests } from "../lib/pending-workflow-requests";
+beforeEach(() => { window.sessionStorage.clear(); vi.spyOn(authApi, "getSession").mockResolvedValue(v9SessionFixture("member")); });
 const company = "10000000-0000-4000-8000-000000000001";
 const workflow = "10000000-0000-4000-8000-000000000002";
 const revision = "10000000-0000-4000-8000-000000000003";
@@ -59,6 +64,8 @@ afterEach(async () => {
 async function render(value: WorkflowExperience | null) {
   if (!root || !container?.isConnected) {
     client = new QueryClient();
+    client.setQueryDefaults(queryKeys.auth.session, { gcTime: Infinity });
+    client.setQueryData(queryKeys.auth.session, v9SessionFixture("member"));
     container = document.createElement("div");
     document.body.append(container);
     root = createRoot(container);
@@ -101,6 +108,36 @@ const receipt = (command: WorkflowTestCommand) => ({
   revisionId: command.expectedDraftRevisionId,
   purpose: "test" as const,
   disposition: "admitted" as const,
+});
+it("retains only the original locator across reload and refuses a fresh test identity", async () => {
+  const test = vi.spyOn(workflowsApi, "test").mockRejectedValue(new Error("PRIVATE lost response"));
+  await render(detail); await click("Review internal test"); await acknowledge(); await click("Start internal test");
+  await vi.waitFor(() => expect(pendingWorkflowRequests(company, "member", workflow)).toHaveLength(1));
+  const pending = pendingWorkflowRequests(company, "member", workflow)[0]!;
+  expect(window.sessionStorage.getItem("aw.v9.pending-workflow-request-receipts")).not.toMatch(/PRIVATE|expectedUpdatedAt|acknowledge|prompt|input/);
+  await act(async () => root.unmount()); container.remove(); client.clear();
+  await render(detail);
+  const start = [...container.querySelectorAll("button")].find(button => button.textContent === "Review internal test")!;
+  expect(start.disabled).toBe(true);
+  expect(container.querySelector(`a[href$="/requests/test/${pending.requestId}"]`)).not.toBeNull();
+  expect(test).toHaveBeenCalledTimes(1);
+});
+it("blocks a new test when Original request recovery storage is corrupted", async () => {
+  window.sessionStorage.setItem("aw.v9.pending-workflow-request-receipts", "{corrupt");
+  const test = vi.spyOn(workflowsApi, "test"); await render(detail);
+  expect(container.textContent).toContain("Request recovery is unavailable");
+  const start = [...container.querySelectorAll("button")].find(button => button.textContent === "Review internal test")!;
+  expect(start.disabled).toBe(true); expect(test).not.toHaveBeenCalled();
+});
+it("keeps an admitted test unconfirmed after the current account changes before acknowledgement", async () => {
+  let finish!: (value: ReturnType<typeof receipt>) => void;
+  const test = vi.spyOn(workflowsApi, "test").mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  await render(detail); await click("Review internal test"); await acknowledge(); await click("Start internal test");
+  await vi.waitFor(() => expect(test).toHaveBeenCalledOnce());
+  const command = test.mock.calls[0]![3];
+  await act(async () => { client.setQueryData(queryKeys.auth.session, v9SessionFixture("another-account")); finish(receipt(command)); });
+  expect(pendingWorkflowRequests(company, "member", workflow)).toHaveLength(1);
+  expect(container.textContent).not.toContain("Internal test admitted"); expect(refresh).not.toHaveBeenCalled();
 });
 it("requires explicit acknowledgement and freezes the reviewed draft and expected result", async () => {
   const test = vi

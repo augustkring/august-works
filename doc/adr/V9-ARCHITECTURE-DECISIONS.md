@@ -1502,3 +1502,39 @@ corrupt-storage refusal, English/Danish consequences and React effect remount
 behavior. Built browser and final integrated qualification remain tracked in the
 dated continuation plan; this decision does not complete takeover, effective
 delegation inspection or all kill/revocation propagation requirements.
+
+## ADR-V9-034 — Exact workflow request history survives page and rollout changes
+
+2026-10-13. Test, Publication, Run and Status-change commands retain a bounded
+content-free per-tab locator before POST. Current account, company and reviewed
+Source remain required for the write and acknowledgement. A late or foreign
+reply cannot discard its locator. Explicit known Native pre-effect refusals may
+release only their exact tuple; conflict with an already recorded request is
+not an absence proof. Existing explicit same-command in-memory retry retains
+the Original idempotency owner, never a fresh request identity.
+
+A separate always-mounted GET reads the exact Original own-request Activity
+journal and its retained revision/run Sources. The Original current permissions
+and actual Native role remain authoritative; request-snapshot instance-admin
+flags cannot replace current role admission. Test/publication reuse their
+existing receipt validators; Run/status history remains in the Original
+workflow owner. All four paths omit customer inputs, prompts, results and
+credentials. They create no run, revision, audit, model call or new decision.
+Rollout closure affects new work without replaying or hiding an admitted
+request's independent history. Source withdrawal still refuses private history.
+
+The workflow entry retains only recovery when it has an unconfirmed request
+and the old experimental gate would redirect away. Other work remains behind
+that Original gate. The exact receipt entry retains navigation/language after
+rollout closure. Current-source confirmation clears only its matched locator;
+missing/ambiguous/refused reads stay unconfirmed. Immutable receipts describe
+historical admission/publication/status, not current state, completed execution,
+physical Stop or independent result verification.
+
+Focused PostgreSQL, strict API, current-account/Source, storage and UI cases are
+recorded in the dated continuation plan. The built browser exercises an actual
+Native C0 test/journal and exact recovery GET, with its UI account/review frame
+explicitly controlled as a software fixture. No real authenticated Human,
+host/provider, representative business or release qualification is inferred.
+Full retained-run safety, external outcome reconciliation/compensation and the
+remaining guided authoring lifecycle remain open.

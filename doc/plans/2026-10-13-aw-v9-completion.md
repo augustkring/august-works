@@ -239,3 +239,52 @@ the remaining full-scope implementation and immutable whole test qualification.
 Read-only GitHub environment/deployment discovery returned no configured
 environments or deployment records for `augustkring/august-works`; unrelated
 upstream QA tenant links are not authorized AW staging qualification targets.
+
+### Workflow request history and page-return recovery
+
+Test, Publication, Run and Status-change controls now retain only a per-tab
+company/account/workflow/kind/request locator before POST. Reload cannot silently
+replace an unresolved command with a fresh identity. Corrupt/full storage refuses
+new commands. Current account/company/Source checks withhold late acknowledgements;
+explicit known Native pre-effect refusal can release its exact locator, whereas
+conflict with an already recorded request cannot prove absence.
+
+The Original workflow owner now reads each exact own-request receipt through
+current Native permissions/role and retained revision/run Sources. This creates
+no execution, model call, revision or audit event. Rollout withdrawal cannot turn
+that GET into another command. Publication/Test reuse Original validation;
+Run/status read their Original journals. Current actual Native role admission
+remains required rather than a request-snapshot admin flag. Private HTTP logging
+also covers malformed empty workflow/company scopes and refused methods.
+
+Focused Native workflow publication/test/lifecycle coverage passes 68 cases in
+three suites; the subsequent publication/OpenAPI group passes 30 cases in two
+suites. The account/storage/API/control/receipt group passes 45 cases in six
+suites; a further observation/review group passes 31 cases in four suites.
+Current server and UI types and source coverage passed at their corresponding
+checkpoints. Subsequent Source still requires integrated final verification.
+
+The first built recovery attempt exposed the old experimental gate navigating
+away after rollout withdrawal. Workflow entry now preserves its unresolved
+read-only recovery before that redirect. The corrected browser case passes
+(5.1 seconds test, 36.8 seconds including setup), with actual Native C0 admission,
+executor, journal and exact receipt GET after reload/rollout closure, one POST,
+Danish 390px rendering, focused receipt, no horizontal overflow and zero automated
+main-region axe violations. Its UI session/review frame are controlled fixtures,
+not real authenticated Human evidence. The existing actual Native unpublished
+test browser also passed on the preceding artifact (7.5 seconds); later observation
+changes remain under current regression and final-artifact qualification.
+
+The current managed environment reports no installed capabilities, secrets,
+runtime variables or outbound identities. No AW staging target/model/channel
+connection was supplied in reply to the pending clarification, and GitHub had
+no registered AW environments/deployments. These facts cannot qualify a hosted
+or provider/channel execution. Further source implementation continues; this
+checkpoint is not the requested whole-V9 completion or PR-ready declaration.
+
+The final current request-history checkpoint passes 93 focused cases in nine
+suites, full recursive types and the complete workspace build, including Original
+Rust/protocol/provider/parity safeguards and CLI. Application Source stayed fixed
+during those full checks. Token, module-boundary and 70-surface source checks pass;
+every surface still lacks full release evidence. The entire final scope still
+needs immutable `pnpm test:run`; no complete regression pass is claimed here.

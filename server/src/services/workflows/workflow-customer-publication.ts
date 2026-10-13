@@ -19,7 +19,7 @@ import { conflict, notFound } from "../../errors.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { v5HumanActorId } from "../v5-authorization.js";
 import { persistActivity, publishActivity } from "../activity-log.js";
-import { lockCustomerWorkflowControlAuthority } from "./workflow-customer-authority.js";
+import { lockCustomerWorkflowControlAuthority, lockCustomerWorkflowReceiptAuthority } from "./workflow-customer-authority.js";
 import { readCustomerWorkflowTestReceipt } from "./workflow-customer-test.js";
 import { customerWorkflowTestReady } from "./workflow-customer-launch.js";
 import { workflowService } from "./workflow-service.js";
@@ -94,6 +94,27 @@ async function historicalReceipt(
   )
     throw notFound("Original publication test source is unavailable");
   return { command: command.data, receipt: receipt.data };
+}
+/** Exact Original request recovery. Later publications cannot replace the
+ * requested receipt, and disabled rollout cannot turn a GET into a write. */
+export async function readCustomerWorkflowPublicationReceipt(
+  db: Db, companyId: string, workflowId: string, authority: AuthorizationActor, requestId: string,
+) {
+  workflowPublicationReceiptSchema.shape.requestId.parse(requestId);
+  const actor = currentActor(authority);
+  return db.transaction(async raw => {
+    const tx = raw as unknown as Db;
+    await lockCustomerWorkflowReceiptAuthority(tx, companyId, actor.authority, permissions);
+    const [workflow] = await tx.select({ id: workflows.id }).from(workflows).where(and(
+      eq(workflows.companyId, companyId), eq(workflows.id, workflowId))).for("share");
+    if (!workflow) throw notFound("The Original workflow is unavailable");
+    const events = await tx.select().from(activityLog).where(and(eq(activityLog.companyId, companyId),
+      eq(activityLog.entityType, "workflow"), eq(activityLog.entityId, workflowId), eq(activityLog.action, action),
+      eq(activityLog.actorType, "user"), eq(activityLog.actorId, actor.id),
+      sql`${activityLog.details}->'receipt'->>'requestId'=${requestId}`)).limit(2);
+    if (events.length !== 1) throw notFound("The Original publication request is unconfirmed");
+    return (await historicalReceipt(tx, companyId, workflowId, actor.id, events[0]!, actor.authority)).receipt;
+  });
 }
 /** Publication facts are recovered from the native audit owner, not browser persistence. */
 export async function readCustomerWorkflowPublication(

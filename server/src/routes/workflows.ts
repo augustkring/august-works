@@ -19,12 +19,15 @@ import {
   workflowLaunchCommandSchema,
   workflowStopCommandSchema,
   workflowTestCommandSchema,
+  workflowRequestKindSchema,
   v9FeatureEnabled,
   type PermissionKey,
   type WorkflowCapabilities,
 } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
-import { conflict, forbidden, notFound, unauthorized, unprocessable } from "../errors.js";
+import { conflict, forbidden, notFound, unauthorized, unprocessable, HttpError } from "../errors.js";
+import { withExperienceAdmission } from "../services/experience/admission.js";
+import { ExperienceOverloadError } from "../services/experience/projection.js";
 import { workflowReview } from "../services/experience/workflow-review.js";
 import { workflowDraftIntentService } from "../services/experience/workflow-draft-intent.js";
 import { workflowRunReview } from "../services/experience/workflow-run-review.js";
@@ -686,6 +689,27 @@ export function workflowRoutes(db: Db) {
       res.json(result);
     },
   );
+
+  router.get("/companies/:companyId/workflows/:workflowId/experience/requests/:kind/:requestId", async (req, res) => {
+    res.set("Cache-Control", "private, no-store");
+    assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId), workflowId = z.uuid().parse(req.params.workflowId),
+      requestId = z.uuid().parse(req.params.requestId), kind = workflowRequestKindSchema.parse(req.params.kind);
+    const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+    const account = z.strictObject({ expectedUserId: z.string().min(1).max(300) }).parse(req.query);
+    if (!principal || account.expectedUserId !== principal) throw conflict("Account changed; reload", { code: "ACCOUNT_CHANGED" });
+    try {
+      const receipt = await withExperienceAdmission(async signal => {
+        signal.throwIfAborted();
+        const value = await svc.requestReceipt(companyId, workflowId, kind, requestId, req.actor);
+        signal.throwIfAborted(); return value;
+      });
+      res.json(receipt);
+    } catch (error) {
+      if (error instanceof ExperienceOverloadError) throw new HttpError(503, "The original request is unconfirmed; try the current read again");
+      throw error;
+    }
+  });
 
   router.get("/companies/:companyId/workflows/:workflowId/experience/publication", async (req, res) => {
     res.set("Cache-Control", "private, no-store");

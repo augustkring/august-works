@@ -1,4 +1,4 @@
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   companyMemberships,
   instanceSettings,
@@ -51,7 +51,30 @@ export async function lockCustomerWorkflowControlAuthority(
   authority: AuthorizationActor,
   actions: readonly PermissionKey[],
 ) {
+  return lockCustomerWorkflowAuthority(tx, companyId, authority, actions, true);
+}
+
+/** Historical request reads retain exactly the Native current permission/role
+ * and Source owners. Rollout can close new work without hiding its own receipt.
+ * This function admits no mutation, dispatch, retry, publication or new grant. */
+export async function lockCustomerWorkflowReceiptAuthority(
+  tx: Db,
+  companyId: string,
+  authority: AuthorizationActor,
+  actions: readonly PermissionKey[],
+) {
+  return lockCustomerWorkflowAuthority(tx, companyId, authority, actions, false);
+}
+
+async function lockCustomerWorkflowAuthority(
+  tx: Db,
+  companyId: string,
+  authority: AuthorizationActor,
+  actions: readonly PermissionKey[],
+  requireRollout: boolean,
+) {
   const principal = v5HumanActorId(authority);
+  if (!requireRollout) await tx.execute(sql`select set_config('statement_timeout','1500ms',true),set_config('lock_timeout','250ms',true)`);
   await lockAnalyticalCompany(tx, companyId);
   await lockMemoryPrivacy(tx, companyId);
   await instanceSettingsService(tx).getExperimental();
@@ -61,8 +84,8 @@ export async function lockCustomerWorkflowControlAuthority(
     .for("share");
   const flags = await instanceSettingsService(tx).getExperimental();
   if (
-    !flags.enableWorkflowsV1 ||
-    !v9FeatureEnabled(flags, "progressive_shell_v9")
+    requireRollout && (!flags.enableWorkflowsV1 ||
+    !v9FeatureEnabled(flags, "progressive_shell_v9"))
   )
     throw notFound("Customer workflow controls are not enabled");
   if (authority.source !== "local_implicit") {

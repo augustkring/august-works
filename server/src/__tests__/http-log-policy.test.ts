@@ -39,6 +39,16 @@ it("omits native test identity and command context from success and rejected gen
   }
   expect(privateExperienceLogUrl(url)).toBe("/api/companies/:companyId/workflows/:workflowId/experience");
 });
+it.each(["", "private-company"])("protects exact workflow receipt metadata and malformed empty scopes for company %s", company => {
+  for (const workflow of ["", "private-workflow"]) {
+    const url = `/api/companies/${company}/workflows/${workflow}/experience/requests/test/private-request?expectedUserId=private-user`;
+    for (const method of ["GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"]) {
+      expect(isPrivateExperienceHttpRequest(method, url)).toBe(true);
+      expect(isSecretSensitiveHttpRequest(method, url)).toBe(true);
+      expect(privateExperienceLogUrl(url)).toBe("/api/companies/:companyId/workflows/:workflowId/experience");
+    }
+  }
+});
 
 it("minimizes account and Company control metadata on successful and rejected requests", () => {
   const url = "/api/companies/private-company/experience/company?expectedUserId=private-user";

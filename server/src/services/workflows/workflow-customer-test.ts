@@ -22,7 +22,7 @@ import { assertLearnedAssetAnalyticalSources } from "../learning/learning-analyt
 import { assertLearnedWorkflowPayloadAccess } from "../analytical-context-authority.js";
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
-import { lockCustomerWorkflowControlAuthority } from "./workflow-customer-authority.js";
+import { lockCustomerWorkflowControlAuthority, lockCustomerWorkflowReceiptAuthority } from "./workflow-customer-authority.js";
 import { customerWorkflowTestReady } from "./workflow-customer-launch.js";
 import { workflowNodeRegistryService } from "./workflow-node-registry.js";
 import { enqueueWorkflowRunInTransaction } from "./workflow-executor.js";
@@ -34,11 +34,14 @@ export async function readCustomerWorkflowTestReceipt(
   companyId: string,
   workflowId: string,
   authority: AuthorizationActor,
+  requestId?: string,
 ): Promise<WorkflowTestReceipt | null> {
+  if (requestId !== undefined) workflowTestReceiptSchema.shape.requestId.parse(requestId);
   const deadline = performance.now() + 30_000;
   return db.transaction(async (tx) => {
     const nativeDb = tx as unknown as Db;
-    await lockCustomerWorkflowControlAuthority(nativeDb, companyId, authority, [
+    const lock = requestId === undefined ? lockCustomerWorkflowControlAuthority : lockCustomerWorkflowReceiptAuthority;
+    await lock(nativeDb, companyId, authority, [
       "workflows:read",
       "workflows:edit",
       "workflows:run",
@@ -51,7 +54,7 @@ export async function readCustomerWorkflowTestReceipt(
       )
       .for("share");
     if (!workflow) throw notFound("Workflow not found");
-    const [event] = await tx
+    const events = await tx
       .select({ details: activityLog.details })
       .from(activityLog)
       .where(
@@ -62,10 +65,13 @@ export async function readCustomerWorkflowTestReceipt(
           eq(activityLog.action, "workflow.customer_test_admitted"),
           eq(activityLog.actorType, "user"),
           eq(activityLog.actorId, v5HumanActorId(authority)),
+          requestId === undefined ? undefined : sql`${activityLog.details}->>'requestId'=${requestId}`,
         ),
       )
       .orderBy(desc(activityLog.createdAt), desc(activityLog.id))
-      .limit(1);
+      .limit(requestId === undefined ? 1 : 2);
+    if (requestId !== undefined && events.length > 1) throw notFound("The Original test request is ambiguous");
+    const event = events[0];
     if (!event) return null;
     const receipt = workflowTestReceiptSchema.safeParse(event.details?.receipt);
     const command = workflowTestCommandSchema.safeParse(event.details?.command);

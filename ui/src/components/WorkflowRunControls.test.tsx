@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type {
   WorkflowExperience,
   WorkflowLaunchCommand,
@@ -12,6 +12,10 @@ import { WorkflowRunControls } from "./WorkflowRunControls";
 import { workflowsApi, createWorkflowsApi } from "../api/workflows";
 import { api, ApiError } from "../api/client";
 import "../i18n";
+import { authApi } from "../api/auth";
+import { queryKeys } from "../lib/queryKeys";
+import { v9SessionFixture } from "../hooks/v9-session.test-support";
+beforeEach(() => { window.sessionStorage.clear(); vi.spyOn(authApi, "getSession").mockResolvedValue(v9SessionFixture("member")); });
 const company = "10000000-0000-4000-8000-000000000001";
 const workflow = "10000000-0000-4000-8000-000000000002";
 const revision = "10000000-0000-4000-8000-000000000003";
@@ -59,6 +63,8 @@ afterEach(async () => {
 async function render(value: WorkflowExperience | null) {
   if (!root || !container?.isConnected) {
     client = new QueryClient();
+    client.setQueryDefaults(queryKeys.auth.session, { gcTime: Infinity });
+    client.setQueryData(queryKeys.auth.session, v9SessionFixture("member"));
     container = document.createElement("div");
     document.body.append(container);
     root = createRoot(container);

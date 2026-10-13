@@ -8,6 +8,8 @@ import type {
 import { workflowsApi } from "../api/workflows";
 import { ApiError } from "../api/client";
 import { Button } from "./ui/button";
+import { Link } from "../lib/router";
+import { useWorkflowRequestLocator } from "../hooks/useWorkflowRequestLocator";
 import {
   Dialog,
   DialogContent,
@@ -39,13 +41,15 @@ export function WorkflowLifecycleControls({
     null,
   );
   const feedback = useRef<HTMLParagraphElement>(null);
+  const locator = useWorkflowRequestLocator(company, principal, id, "lifecycle", !!detail?.canOperate);
   const mutation = useMutation({
     mutationKey: ["workflow-lifecycle", company, principal, id],
     retry: false,
     gcTime: 0,
     mutationFn: (command: WorkflowLifecycleCommand) =>
-      workflowsApi.lifecycle(company, principal, id, command),
-    onSuccess: () => {
+      locator.write(command.requestId, () => workflowsApi.lifecycle(company, principal, id, command)),
+    onSuccess: (receipt) => {
+      if (!locator.confirm(receipt)) return;
       setAttempt(null);
       setReviewed(null);
       setAction(null);
@@ -68,9 +72,9 @@ export function WorkflowLifecycleControls({
           "workflow_invalid_transition",
           "workflow_work_pending",
           "workflow_bindings_present",
-          "workflow_request_conflict",
         ].includes(String(reason))
       ) {
+        if (attempt) locator.refused(attempt.requestId);
         setAttempt(null);
         setReviewed(null);
         setAction(null);
@@ -92,6 +96,7 @@ export function WorkflowLifecycleControls({
   // controls until the current principal's admission is known again.
   if (!detail || !detail.canOperate) return null;
   function begin(nextAction: WorkflowLifecycleCommand["action"]) {
+    if (!locator.ready || locator.failed || locator.pending) return;
     if (!detail) return;
     mutation.reset();
     setAction(nextAction);
@@ -110,6 +115,7 @@ export function WorkflowLifecycleControls({
     setOpen(true);
   }
   function send() {
+    if (!locator.ready || locator.failed) return;
     if (!detail || mutation.isPending || !action) return;
     const command = attempt ?? reviewed;
     if (!command) return;
@@ -125,6 +131,8 @@ export function WorkflowLifecycleControls({
         {t("workflowOperationControls")}
       </h2>
       <p>{t("workflowFinishExisting")}</p>
+      {locator.failed && <p role="alert">{t("workflowRequestRecovery.storageFailed")}</p>}
+      {locator.pending && <Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${id}/requests/lifecycle/${locator.pending}`}>{t("workflowRequestRecovery.open")}</Link>}
       {mutation.isSuccess && (
         <p ref={feedback} tabIndex={-1} role="status">
           {t(`workflowLifecycleConfirmed.${mutation.data.action}`)}
@@ -135,7 +143,7 @@ export function WorkflowLifecycleControls({
           {t("workflowLifecycleRefused")}
         </p>
       )}
-      {!attempt && detail.canOperate && (
+      {!attempt && !locator.pending && locator.ready && !locator.failed && detail.canOperate && (
         <div className="flex flex-wrap gap-3">
           {(detail.status === "active" || detail.status === "draft") && (
             <Button

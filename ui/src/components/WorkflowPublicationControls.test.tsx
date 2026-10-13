@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter } from "react-router-dom";
-import { afterEach, expect, it, vi } from "vitest";
+import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type {
   WorkflowExperience,
   WorkflowPublicationReview,
@@ -12,6 +12,10 @@ import { WorkflowPublicationControls } from "./WorkflowPublicationControls";
 import { workflowsApi, createWorkflowsApi } from "../api/workflows";
 import { api } from "../api/client";
 import "../i18n";
+import { authApi } from "../api/auth";
+import { queryKeys } from "../lib/queryKeys";
+import { v9SessionFixture } from "../hooks/v9-session.test-support";
+beforeEach(() => { window.sessionStorage.clear(); vi.spyOn(authApi, "getSession").mockResolvedValue(v9SessionFixture("owner")); });
 const id = (n: number) =>
   `00000000-0000-4000-8000-${String(n).padStart(12, "0")}`;
 const company = id(1),
@@ -41,7 +45,7 @@ vi.mock("../context/LiveUpdatesProvider", () => ({
   },
 }));
 vi.mock("../context/CompanyContext", () => ({
-  useCompany: () => ({ selectedCompany: { issuePrefix: "AW" } }),
+  useCompany: () => ({ selectedCompany: { issuePrefix: "AW" }, selectedCompanyId: company }),
 }));
 let root: Root, container: HTMLDivElement, client: QueryClient;
 afterEach(async () => {
@@ -52,6 +56,8 @@ afterEach(async () => {
 });
 async function mount(refresh = vi.fn()) {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryDefaults(queryKeys.auth.session, { gcTime: Infinity });
+    client.setQueryData(queryKeys.auth.session, v9SessionFixture("owner"));
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);

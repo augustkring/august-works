@@ -161,6 +161,31 @@ describePg("V9 actual reviewed native workflow publication", () => {
     expect(current.receipt).toEqual(receipt);
     expect(current.availability).toBe("test_required");
   });
+  it("reads each exact Original Test/Publish/Run/status request after rollout withdrawal without replaying work", async () => {
+    const f = await tested(), service = workflowService(db), command = await reviewed(f);
+    const publication = await admitCustomerWorkflowPublication(db, f.detail.companyId, f.detail.id, local, command);
+    const active = (await service.getDetail(f.detail.companyId, f.detail.id, local))!;
+    const run = await service.launch(f.detail.companyId, f.detail.id, { requestId: randomUUID(), expectedUpdatedAt: active.updatedAt.toISOString(),
+      expectedPublishedRevisionId: active.publishedRevisionId!, expectedDraftRevisionId: active.draftRevisionId,
+      acknowledgeInternalExecution: true }, local);
+    const pause = await service.lifecycle(f.detail.companyId, f.detail.id, { requestId: randomUUID(), action: "pause", expectedStatus: "active",
+      expectedUpdatedAt: active.updatedAt.toISOString(), expectedPublishedRevisionId: active.publishedRevisionId,
+      expectedDraftRevisionId: active.draftRevisionId, workPolicy: "finish_existing" }, local);
+    const before = { runs: await db.select({ id: workflowRuns.id }).from(workflowRuns).where(eq(workflowRuns.companyId, f.detail.companyId)),
+      events: await db.select({ id: activityLog.id }).from(activityLog).where(eq(activityLog.companyId, f.detail.companyId)),
+      revisions: await db.select({ id: workflowRevisions.id }).from(workflowRevisions).where(eq(workflowRevisions.companyId, f.detail.companyId)) };
+    await instanceSettingsService(db).updateExperimental({ enableWorkflowsV1: false, progressive_shell_v9: false });
+    for (const [kind, receipt] of [["test", f.receipt], ["publication", publication], ["launch", run], ["lifecycle", pause]] as const) {
+      expect(await service.requestReceipt(f.detail.companyId, f.detail.id, kind, receipt.requestId, local)).toEqual({ kind, receipt });
+      await expect(service.requestReceipt(f.detail.companyId, f.detail.id, kind, randomUUID(), local)).rejects.toMatchObject({ status: 404 });
+    }
+    expect(await db.select({ id: workflowRuns.id }).from(workflowRuns).where(eq(workflowRuns.companyId, f.detail.companyId))).toEqual(before.runs);
+    expect(await db.select({ id: activityLog.id }).from(activityLog).where(eq(activityLog.companyId, f.detail.companyId))).toEqual(before.events);
+    expect(await db.select({ id: workflowRevisions.id }).from(workflowRevisions).where(eq(workflowRevisions.companyId, f.detail.companyId))).toEqual(before.revisions);
+    // Own historical admission is separate from the current paused workflow;
+    // no queued execution, new audit, draft or publication is created by GET.
+    expect((await service.getDetail(f.detail.companyId, f.detail.id, local))?.status).toBe("paused");
+  });
   it("concurrent original requests publish once and replay after the next draft changes", async () => {
     const f = await tested(),
       command = await reviewed(f);
@@ -477,6 +502,7 @@ describePg("V9 actual reviewed native workflow publication", () => {
         )
       ).receipt,
     ).toBeNull();
+    await expect(workflowService(db).requestReceipt(f.detail.companyId, f.detail.id, "publication", command.requestId, authority)).rejects.toMatchObject({ status: 404 });
     await db
       .delete(principalPermissionGrants)
       .where(
@@ -493,5 +519,6 @@ describePg("V9 actual reviewed native workflow publication", () => {
         authority,
       ),
     ).rejects.toMatchObject({ status: 403 });
+    await expect(workflowService(db).requestReceipt(f.detail.companyId, f.detail.id, "publication", command.requestId, { ...authority, isInstanceAdmin: true })).rejects.toMatchObject({ status: 403 });
   });
 });

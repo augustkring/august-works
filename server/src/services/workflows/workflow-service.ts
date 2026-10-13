@@ -52,6 +52,8 @@ import { workflowLaunchCommandSchema, workflowLaunchReceiptSchema, type Workflow
 import { customerWorkflowLaunchReady } from "./workflow-customer-launch.js";
 import { enqueueWorkflowRunInTransaction, resolveWorkflowExecutionRevision } from "./workflow-executor.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
+import { workflowRequestKindSchema, workflowRequestReceiptSchema, type WorkflowRequestKind } from "@paperclipai/shared";
+import { lockCustomerWorkflowReceiptAuthority } from "./workflow-customer-authority.js";
 
 import { assertWorkflowAuthoringAuthority } from "./workflow-authoring-authority.js";
 
@@ -195,6 +197,64 @@ function assertPublishedPointer(workflow: typeof workflows.$inferSelect, expecte
 
 export function workflowService(db: Db) {
   return {
+    /** Read the exact Original request journal without replaying its command.
+     * Current Native permissions, original revisions and run payload Sources
+     * remain required even after the workflow/experience rollout is withdrawn. */
+    requestReceipt: async (companyId: string, workflowId: string, rawKind: WorkflowRequestKind, requestId: string, authority: AuthorizationActor) => {
+      // Like the existing publication owner, consult the actual current Native
+      // instance role rather than treating a request-snapshot flag as authority.
+      authority = { ...authority, isInstanceAdmin: false };
+      const kind = workflowRequestKindSchema.parse(rawKind), principal = v5HumanActorId(authority);
+      workflowLaunchReceiptSchema.shape.requestId.parse(requestId);
+      if (kind === "publication") {
+        const { readCustomerWorkflowPublicationReceipt } = await import("./workflow-customer-publication.js");
+        return workflowRequestReceiptSchema.parse({ kind, receipt: await readCustomerWorkflowPublicationReceipt(db, companyId, workflowId, authority, requestId) });
+      }
+      if (kind === "test") {
+        const { readCustomerWorkflowTestReceipt } = await import("./workflow-customer-test.js");
+        const receipt = await readCustomerWorkflowTestReceipt(db, companyId, workflowId, authority, requestId);
+        if (!receipt) throw notFound("The Original test request is unconfirmed");
+        return workflowRequestReceiptSchema.parse({ kind, receipt });
+      }
+      return db.transaction(async raw => {
+        const tx = raw as unknown as Db;
+        await lockCustomerWorkflowReceiptAuthority(tx, companyId, authority,
+          kind === "launch" ? ["workflows:read", "workflows:run"] : ["workflows:read", "workflows:publish"]);
+        const [workflow] = await tx.select({ id: workflows.id }).from(workflows).where(and(
+          eq(workflows.companyId, companyId), eq(workflows.id, workflowId))).for("share");
+        if (!workflow) throw notFound("The Original workflow is unavailable");
+        const events = await tx.select().from(activityLog).where(and(eq(activityLog.companyId, companyId),
+          eq(activityLog.entityType, "workflow"), eq(activityLog.entityId, workflowId),
+          eq(activityLog.action, kind === "launch" ? "workflow.customer_run_admitted" : "workflow.lifecycle_changed"),
+          eq(activityLog.actorType, kind === "lifecycle" && authority.source === "local_implicit" ? "system" : "user"),
+          eq(activityLog.actorId, principal), sql`${activityLog.details}->>'requestId'=${requestId}`)).limit(2);
+        if (events.length !== 1) throw notFound("The Original workflow request is unconfirmed");
+        const event = events[0]!;
+        const value = workflowRequestReceiptSchema.parse({ kind, receipt: event.details?.receipt });
+        if (value.receipt.companyId !== companyId || value.receipt.workflowId !== workflowId || value.receipt.requestId !== requestId)
+          throw notFound("The Original workflow request identity changed");
+        if (value.kind === "launch") {
+          const command = workflowLaunchCommandSchema.parse(event.details?.command), receipt = value.receipt;
+          if (command.requestId !== requestId || command.expectedPublishedRevisionId !== receipt.revisionId)
+            throw notFound("The Original run request changed");
+          const { workflowExecutorService } = await import("./workflow-executor.js");
+          const run = await workflowExecutorService(tx).getRun(companyId, receipt.runId, authority);
+          if (!run || run.run.workflowId !== workflowId || run.run.workflowRevisionId !== receipt.revisionId || run.run.source !== "manual")
+            throw notFound("The Original run source is unavailable");
+          if (!await getRevisionById(tx, companyId, workflowId, receipt.revisionId, authority)) throw notFound("The Original revision is unavailable");
+        } else if (value.kind === "lifecycle") {
+          const command = workflowLifecycleCommandSchema.parse(event.details?.command), receipt = value.receipt;
+          if (command.requestId !== requestId || command.action !== receipt.action || command.workPolicy !== receipt.workPolicy ||
+            command.expectedPublishedRevisionId !== receipt.publishedRevisionId ||
+            (command.action !== "retire" && command.expectedDraftRevisionId !== receipt.draftRevisionId))
+            throw notFound("The Original workflow status request changed");
+          for (const revisionId of [command.expectedPublishedRevisionId, command.expectedDraftRevisionId])
+            if (revisionId && !await getRevisionById(tx, companyId, workflowId, revisionId, authority))
+              throw notFound("The Original workflow status source is unavailable");
+        }
+        return value;
+      });
+    },
     launch: async (companyId: string, workflowId: string, rawInput: WorkflowLaunchCommand, authority: AuthorizationActor) => {
       const input = workflowLaunchCommandSchema.parse(rawInput), principal = v5HumanActorId(authority);
       const result = await db.transaction(async tx => {

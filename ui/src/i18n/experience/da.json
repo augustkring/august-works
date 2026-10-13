@@ -2190,5 +2190,37 @@
     "newTask": "Ny opgave",
     "agents": "Agenter",
     "inbox": "Indbakke"
+  },
+  "workflowRequestRecovery": {
+    "heading": "Kontrollér en gemt workflowanmodning",
+    "confirmed": "Workflowanmodning bekræftet",
+    "pending": "Ubekræftede workflowanmodninger",
+    "boundary": "Kontrol af en gemt anmodning sender den ikke igen. Et manglende svar beviser ikke, at ingen anmodning blev gemt.",
+    "unconfirmed": "Vi kunne ikke bekræfte den gemte anmodning. Kontrollér din konto og adgang til arbejdsgangen, og prøv igen.",
+    "storageFailed": "Genfinding af anmodningen er utilgængelig. Ingen ny anmodning sendes. Kontrollér den eksisterende arbejdsgang, før du prøver en anden handling.",
+    "open": "Kontrollér den gemte anmodning",
+    "openKind": "Kontrollér gemt anmodning om {{kind}}",
+    "back": "Tilbage til arbejdsgangen",
+    "recorded": "Registreret anmodning",
+    "historical": "Dette viser den oprindelige anmodning. Det beskriver ikke arbejdsgangens aktuelle tilstand og bekræfter ikke en vellykket kørsel, et stop eller uafhængig verificering.",
+    "inspectRun": "Gennemgå den registrerede kørsel",
+    "publishedVersion": "Udgivet revision registreret af anmodningen: {{revision}}",
+    "kind": {
+      "test": "test",
+      "publication": "udgivelse",
+      "launch": "kørsel",
+      "lifecycle": "statusændring"
+    },
+    "recordedKind": {
+      "test": "En testanmodning blev accepteret.",
+      "publication": "Den gennemgåede revision af arbejdsgangen blev udgivet.",
+      "launch": "En anmodning om kørsel blev accepteret.",
+      "lifecycle": "Arbejdsgangens statusændring blev registreret."
+    },
+    "status": {
+      "active": "Anmodningen satte arbejdsgangen til aktiv.",
+      "paused": "Anmodningen pausede igangsættelse af nyt arbejde. Eksisterende arbejde beholdt sine egne kontroller.",
+      "archived": "Anmodningen udfasede arbejdsgangen."
+    }
   }
 }

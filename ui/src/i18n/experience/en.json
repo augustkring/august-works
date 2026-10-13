@@ -2190,5 +2190,37 @@
     "newTask": "New Task",
     "agents": "Agents",
     "inbox": "Inbox"
+  },
+  "workflowRequestRecovery": {
+    "heading": "Check a saved workflow request",
+    "confirmed": "Workflow request confirmed",
+    "pending": "Unconfirmed workflow requests",
+    "boundary": "Checking a saved request does not send it again. A missing response does not prove that no request was saved.",
+    "unconfirmed": "We couldn’t confirm this saved request. Check your account and workflow access, then try again.",
+    "storageFailed": "Request recovery is unavailable. No new request will be sent. Check the existing workflow before trying another operation.",
+    "open": "Check the saved request",
+    "openKind": "Check saved {{kind}} request",
+    "back": "Back to workflow",
+    "recorded": "Recorded request",
+    "historical": "This records the original request. It does not describe the workflow’s current state or prove successful execution, stopping or independent verification.",
+    "inspectRun": "Review the recorded run",
+    "publishedVersion": "Published revision recorded by this request: {{revision}}",
+    "kind": {
+      "test": "test",
+      "publication": "publication",
+      "launch": "run",
+      "lifecycle": "status change"
+    },
+    "recordedKind": {
+      "test": "A workflow test was admitted.",
+      "publication": "The reviewed workflow revision was published.",
+      "launch": "A workflow run was admitted.",
+      "lifecycle": "The workflow status change was recorded."
+    },
+    "status": {
+      "active": "This request set the workflow to active.",
+      "paused": "This request paused admission of new work. Existing work kept its own controls.",
+      "archived": "This request retired the workflow."
+    }
   }
 }

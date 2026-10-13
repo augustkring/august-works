@@ -6,6 +6,8 @@ import { workflowsApi } from "../api/workflows";
 import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
 import { useV9PrivateReadAuthority } from "../hooks/useV9PrivateReadAuthority";
 import { useExperienceHeading } from "../hooks/useExperienceHeading";
+import { WorkflowRequestRecoveryLinks, usePendingWorkflowRequests } from "../components/WorkflowRequestRecoveryLinks";
+import { WorkflowBuilderExperimentalGate } from "../components/WorkflowBuilderExperimentalGate";
 import { useCompany } from "../context/CompanyContext";
 import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
 import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
@@ -27,7 +29,6 @@ export function WorkflowEntry() {
   const { workflowId } = useParams();
   const { t } = useTranslation("experience");
   if (feature.query.isPending) return <p role="status">{t("loading")}</p>;
-  if (!feature.enabled) return <WorkflowBuilder />;
   if (identity.failed)
     return (
       <div role="alert" className="space-y-4">
@@ -45,13 +46,29 @@ export function WorkflowEntry() {
   if (!selectedCompanyId) return <p role="status">{t("selectCompany")}</p>;
   if (!identity.settled || !principal || !workflowId)
     return <p role="status">{t("loading")}</p>;
+  return <WorkflowDetailEntrySurface key={`${selectedCompanyId}:${principal}:${workflowId}`} company={selectedCompanyId} principal={principal} id={workflowId}
+    progressive={feature.enabled} newWorkEnabled={!!feature.query.data?.enableWorkflowsV1 && !!feature.query.data?.enableWorkflowBuilderV1} />;
+}
+
+function WorkflowDetailEntrySurface({ company, principal, id, progressive, newWorkEnabled }: {
+  company: string; principal: string; id: string; progressive: boolean; newWorkEnabled: boolean;
+}) {
+  const pending = usePendingWorkflowRequests(company, principal, id), { t } = useTranslation("experience");
+  if (!pending.ready) return <p role="status">{t("loading")}</p>;
+  const savedRequests = <WorkflowRequestRecoveryLinks company={company} principal={principal} workflow={id} />;
+  // The Original gate redirects when rollout is closed. An unresolved request
+  // must retain its read-only recovery entry rather than navigate away from it.
+  if (pending.failed || (pending.rows.length && (!progressive || !newWorkEnabled))) return savedRequests;
+  if (!progressive) return <>{savedRequests}<WorkflowBuilderExperimentalGate><WorkflowBuilder /></WorkflowBuilderExperimentalGate></>;
   return (
-    <WorkflowReview
-      key={`${selectedCompanyId}:${principal}:${workflowId}`}
-      company={selectedCompanyId}
+    <>{savedRequests}
+    <WorkflowBuilderExperimentalGate><WorkflowReview
+      key={`${company}:${principal}:${id}`}
+      company={company}
       principal={principal}
-      id={workflowId}
-    />
+      id={id}
+    /></WorkflowBuilderExperimentalGate>
+    </>
   );
 }
 

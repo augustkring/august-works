@@ -83,9 +83,9 @@
   },
   "navigation": {
     "back": "Native workflow review",
-    "cancelOrSaveExit": "Cancel closes confirmation and retains an unknown original request within the current mounted private scope.",
+    "cancelOrSaveExit": "Closing an in-memory dialog retains its exact Original command for existing explicit idempotent retry. Route reload retains only a content-free locator; exact GET recovery reads the Original journal. A Native pre-effect refusal can release only its own tuple.",
     "deepLink": "Company/account/workflow-bound native review.",
-    "resume": "Reload current native review and original same-human receipt; no browser persistence."
+    "resume": "Current Native read and a bounded content-free per-tab company/account/workflow/kind/request locator survive page return. Follow the exact Original request GET under current account/permission/Source admission; no new command identity is inferred from absence."
   },
   "accessibility": {
     "initialFocus": "Native dialog title for explicit confirmation; private read checks never steal another actual native dialog focus.",
@@ -93,7 +93,7 @@
     "focusAfterSuccess": "Native dialog restores the initiating trigger; fresh current version read follows.",
     "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
     "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
-    "targetSize": "Custom frequent and primary controls target at least 44 \u00d7 44 CSS px.",
+    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
     "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
     "reducedMotion": "No essential animated transition or moving progress indicator.",
     "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."

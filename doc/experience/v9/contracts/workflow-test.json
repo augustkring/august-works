@@ -86,9 +86,9 @@
   },
   "navigation": {
     "back": "Return to existing native workflow list.",
-    "cancelOrSaveExit": "No writes or browser-persisted draft data. Native Advanced editor retains canonical draft saves.",
+    "cancelOrSaveExit": "Closing an in-memory dialog retains its exact Original command for existing explicit idempotent retry. Route reload retains only a content-free locator; exact GET recovery reads the Original journal. A Native pre-effect refusal can release only its own tuple.",
     "deepLink": "/workflows/:workflowId",
-    "resume": "Re-read current company/principal/native revision and grants. Flag rollback restores the existing graph editor; /advanced preserves a direct graph route."
+    "resume": "Current Native read and a bounded content-free per-tab company/account/workflow/kind/request locator survive page return. Follow the exact Original request GET under current account/permission/Source admission; no new command identity is inferred from absence."
   },
   "accessibility": {
     "initialFocus": "Main heading or the dialog category control; keyboard focus is visible and unobscured.",

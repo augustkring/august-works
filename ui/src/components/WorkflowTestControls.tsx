@@ -9,6 +9,7 @@ import { workflowsApi } from "../api/workflows";
 import { ApiError } from "../api/client";
 import { Link } from "../lib/router";
 import { Button } from "./ui/button";
+import { useWorkflowRequestLocator } from "../hooks/useWorkflowRequestLocator";
 import {
   Dialog,
   DialogContent,
@@ -42,13 +43,15 @@ export function WorkflowTestControls({
     deadline: number;
   } | null>(null);
   const feedback = useRef<HTMLParagraphElement>(null);
+  const locator = useWorkflowRequestLocator(company, principal, id, "test", !!detail?.canRequestTest);
   const mutation = useMutation({
     mutationKey: ["workflow-test", company, principal, id],
     gcTime: 0,
     retry: false,
     mutationFn: (command: WorkflowTestCommand) =>
-      workflowsApi.test(company, principal, id, command),
-    onSuccess: () => {
+      locator.write(command.requestId, () => workflowsApi.test(company, principal, id, command)),
+    onSuccess: (receipt) => {
+      if (!locator.confirm(receipt)) return;
       setAttempt(null);
       setReviewed(null);
       setOpen(false);
@@ -67,6 +70,7 @@ export function WorkflowTestControls({
           String(code),
         )
       ) {
+        if (attempt) locator.refused(attempt.requestId);
         setAttempt(null);
         setReviewed(null);
         setOpen(false);
@@ -77,17 +81,18 @@ export function WorkflowTestControls({
   const observed = detail?.canRequestTest ? detail.testReceipt : null;
   useEffect(() => {
     if (
-      attempt &&
-      observed?.requestId === attempt.requestId &&
-      observed.revisionId === attempt.expectedDraftRevisionId &&
+      observed && locator.pending === observed.requestId &&
+      (!attempt || (observed.requestId === attempt.requestId &&
+      observed.revisionId === attempt.expectedDraftRevisionId)) &&
       !mutation.isPending
     ) {
+      if (!locator.observed(observed)) return;
       setAttempt(null);
       setReviewed(null);
       setOpen(false);
       mutation.reset();
     }
-  }, [attempt, observed, mutation.isPending]);
+  }, [attempt, observed, mutation.isPending, locator.pending]);
   useEffect(() => {
     const active = document.activeElement?.closest('[role="dialog"]');
     if (
@@ -103,6 +108,7 @@ export function WorkflowTestControls({
     detail.draft &&
     detail.testDeadlineSeconds !== null;
   function send() {
+    if (!locator.ready || locator.failed) return;
     const command = attempt ?? reviewed?.command;
     if (mutation.isPending || !acknowledged || !command) return;
     setAttempt(command);
@@ -129,6 +135,8 @@ export function WorkflowTestControls({
           </Link>
         </>
       )}
+      {locator.failed && <p role="alert">{t("workflowRequestRecovery.storageFailed")}</p>}
+      {locator.pending && <Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${id}/requests/test/${locator.pending}`}>{t("workflowRequestRecovery.open")}</Link>}
       {mutation.isError && !attempt && (
         <p ref={feedback} tabIndex={-1} role="alert">
           {t("workflowTestRefused")}
@@ -148,7 +156,9 @@ export function WorkflowTestControls({
       ) : ready ? (
         <Button
           className="min-h-11"
+          disabled={!locator.ready || locator.failed || !!locator.pending}
           onClick={() => {
+            if (!locator.ready || locator.failed || locator.pending) return;
             mutation.reset();
             setAcknowledged(false);
             setReviewed({

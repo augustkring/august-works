@@ -9,6 +9,7 @@ import { workflowsApi } from "../api/workflows";
 import { ApiError } from "../api/client";
 import { Link } from "../lib/router";
 import { Button } from "./ui/button";
+import { useWorkflowRequestLocator } from "../hooks/useWorkflowRequestLocator";
 import {
   Dialog,
   DialogContent,
@@ -38,13 +39,15 @@ export function WorkflowRunControls({
     version: number;
   } | null>(null);
   const feedback = useRef<HTMLParagraphElement>(null);
+  const locator = useWorkflowRequestLocator(company, principal, id, "launch", !!detail?.canRequestRun);
   const mutation = useMutation({
     mutationKey: ["workflow-launch", company, principal, id],
     gcTime: 0,
     retry: false,
     mutationFn: (command: WorkflowLaunchCommand) =>
-      workflowsApi.launch(company, principal, id, command),
-    onSuccess: () => {
+      locator.write(command.requestId, () => workflowsApi.launch(company, principal, id, command)),
+    onSuccess: (receipt) => {
+      if (!locator.confirm(receipt)) return;
       setAttempt(null);
       setReviewed(null);
       setOpen(false);
@@ -61,9 +64,9 @@ export function WorkflowRunControls({
         [
           "workflow_launch_conflict",
           "workflow_launch_review_required",
-          "workflow_launch_request_conflict",
         ].includes(String(details?.code))
       ) {
+        if (attempt) locator.refused(attempt.requestId);
         setAttempt(null);
         setReviewed(null);
         setOpen(false);
@@ -85,6 +88,7 @@ export function WorkflowRunControls({
     detail.runAvailability === "internal_ready" &&
     Boolean(detail.active);
   function send() {
+    if (!locator.ready || locator.failed) return;
     const command = attempt ?? reviewed?.command;
     if (mutation.isPending || !command) return;
     setAttempt(command);
@@ -111,6 +115,8 @@ export function WorkflowRunControls({
           </Link>
         </>
       )}
+      {locator.failed && <p role="alert">{t("workflowRequestRecovery.storageFailed")}</p>}
+      {locator.pending && <Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${id}/requests/launch/${locator.pending}`}>{t("workflowRequestRecovery.open")}</Link>}
       {mutation.isError && !attempt && (
         <p ref={feedback} tabIndex={-1} role="alert">
           {t("workflowStartRefused")}
@@ -130,7 +136,9 @@ export function WorkflowRunControls({
       ) : ready ? (
         <Button
           className="min-h-11"
+          disabled={!locator.ready || locator.failed || !!locator.pending}
           onClick={() => {
+            if (!locator.ready || locator.failed || locator.pending) return;
             mutation.reset();
             setReviewed({
               version: detail.active!.version,

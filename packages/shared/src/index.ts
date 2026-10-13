@@ -3378,3 +3378,4 @@ export * from "./conversation-authoring.js";
 export * from "./routine-authoring.js";
 
 export * from "./foundation-authoring.js";
+export * from "./workflow-request-receipts.js";
