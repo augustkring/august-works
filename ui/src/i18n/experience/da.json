@@ -1988,5 +1988,6 @@
     "preview": "Se denne foreslåede version",
     "comparison": "Ændringer i det aktuelle udkast siden forslaget",
     "changeCounts": "{{added}} tilføjede · {{changed}} ændrede · {{removed}} fjernede trin i forløbet"
-  }
+  },
+  "loadingView": "Indlæser visning…"
 }

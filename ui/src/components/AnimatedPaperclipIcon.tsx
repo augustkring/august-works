@@ -23,14 +23,14 @@ export function AnimatedPaperclipIcon({ className, ...props }: SVGProps<SVGSVGEl
 }
 
 /** Full-page loading state: a large, centered, gray animated paperclip. */
-export function PaperclipLoading({ className }: { className?: string }) {
+export function PaperclipLoading({ className, label = "Loading…" }: { className?: string; label?: string }) {
   return (
     <div
       role="status"
       className={cn("flex min-h-dvh w-full items-center justify-center", className)}
     >
       <AnimatedPaperclipIcon className="h-24 w-24 text-muted-foreground" />
-      <span className="sr-only">Loading…</span>
+      <span className="sr-only">{label}</span>
     </div>
   );
 }

@@ -13,18 +13,9 @@ import {
   SaasWelcomeEntry,
   ActivationPage,
 } from "./pages/V9RouteEntries";
-import { SecurityEvents } from "./pages/SecurityEvents";
-import { Enterprise } from "./pages/Enterprise";
-import { AgentPackages } from "./pages/AgentPackages";
 import { OrgUnits, CompanyRelationships } from "./pages/OrganizationV5";
 import { V5Gate } from "./components/V5Gate";
-import { Playbooks } from "./pages/Playbooks";
 import { ProjectRoadmap } from "./pages/ProjectRoadmap";
-import { Portfolio, PortfolioCapabilities } from "./pages/Portfolio";
-import { RolePacks } from "./pages/RolePacks";
-import { SkillGovernance } from "./pages/SkillGovernance";
-import { NewGovernedSkill } from "./pages/NewGovernedSkill";
-import { AgentRuntimeFabric } from "./pages/AgentRuntimeFabric";
 import { lazy, Suspense, type ReactNode } from "react";
 import type { ToolConnectionCredentialSource } from "@paperclipai/shared";
 import { Navigate, Outlet, Route, Routes, useActiveCompanyPrefix, useLocation, useParams } from "@/lib/router";
@@ -71,15 +62,6 @@ import { IssueChatLongThreadPerf } from "./pages/IssueChatLongThreadPerf";
 import { Routines } from "./pages/Routines";
 import { Foundation } from "./pages/Foundation";
 import { Readiness } from "./pages/Readiness";
-import { StrategyExecution } from "./pages/StrategyExecution";
-import { ProcessIntelligence } from "./pages/ProcessIntelligence";
-import { BusinessMetrics } from "./pages/BusinessMetrics";
-import { BusinessForecasts } from "./pages/BusinessForecasts";
-import { BusinessExperiments } from "./pages/BusinessExperiments";
-import { CausalClaims } from "./pages/CausalClaims";
-import { CrossProjectPlanning } from "./pages/CrossProjectPlanning";
-import { ManagementReviews } from "./pages/ManagementReviews";
-import { BusinessScenarios } from "./pages/BusinessScenarios";
 import { V8FeatureGate } from "./components/V8FeatureGate";
 import { DerivedMemory } from "./pages/DerivedMemory";
 import { Orchestration } from "./pages/Orchestration";
@@ -184,6 +166,27 @@ import { useStreamlinedUiEnabled } from "./hooks/useStreamlinedUiEnabled";
 import { cloudStackCreateUrl } from "./lib/cloudLinks";
 import { navigateTopLevel } from "@/lib/browserNavigation";
 
+// Advanced domains load only when their admitted route is rendered.
+const SecurityEvents = lazy(() => import("./pages/SecurityEvents").then(module => ({ default: module.SecurityEvents })));
+const Enterprise = lazy(() => import("./pages/Enterprise").then(module => ({ default: module.Enterprise })));
+const AgentPackages = lazy(() => import("./pages/AgentPackages").then(module => ({ default: module.AgentPackages })));
+const Playbooks = lazy(() => import("./pages/Playbooks").then(module => ({ default: module.Playbooks })));
+const Portfolio = lazy(() => import("./pages/Portfolio").then(module => ({ default: module.Portfolio })));
+const PortfolioCapabilities = lazy(() => import("./pages/Portfolio").then(module => ({ default: module.PortfolioCapabilities })));
+const RolePacks = lazy(() => import("./pages/RolePacks").then(module => ({ default: module.RolePacks })));
+const SkillGovernance = lazy(() => import("./pages/SkillGovernance").then(module => ({ default: module.SkillGovernance })));
+const NewGovernedSkill = lazy(() => import("./pages/NewGovernedSkill").then(module => ({ default: module.NewGovernedSkill })));
+const AgentRuntimeFabric = lazy(() => import("./pages/AgentRuntimeFabric").then(module => ({ default: module.AgentRuntimeFabric })));
+const StrategyExecution = lazy(() => import("./pages/StrategyExecution").then(module => ({ default: module.StrategyExecution })));
+const ProcessIntelligence = lazy(() => import("./pages/ProcessIntelligence").then(module => ({ default: module.ProcessIntelligence })));
+const BusinessMetrics = lazy(() => import("./pages/BusinessMetrics").then(module => ({ default: module.BusinessMetrics })));
+const BusinessForecasts = lazy(() => import("./pages/BusinessForecasts").then(module => ({ default: module.BusinessForecasts })));
+const BusinessExperiments = lazy(() => import("./pages/BusinessExperiments").then(module => ({ default: module.BusinessExperiments })));
+const CausalClaims = lazy(() => import("./pages/CausalClaims").then(module => ({ default: module.CausalClaims })));
+const CrossProjectPlanning = lazy(() => import("./pages/CrossProjectPlanning").then(module => ({ default: module.CrossProjectPlanning })));
+const ManagementReviews = lazy(() => import("./pages/ManagementReviews").then(module => ({ default: module.ManagementReviews })));
+const BusinessScenarios = lazy(() => import("./pages/BusinessScenarios").then(module => ({ default: module.BusinessScenarios })));
+
 const CompanyExport = lazy(() =>
   import("./pages/CompanyExport").then((module) => ({ default: module.CompanyExport })),
 );
@@ -210,8 +213,9 @@ const ProductionOrgChart = lazy(() =>
   import("./pages/OrgChart.production").then((module) => ({ default: module.OrgChart })),
 );
 
-function ProductionSurface({ children }: { children: ReactNode }) {
-  return <Suspense fallback={<PaperclipLoading />}>{children}</Suspense>;
+function DeferredRouteSurface({ children }: { children: ReactNode }) {
+  const { t } = useTranslation("experience");
+  return <Suspense fallback={<PaperclipLoading label={t("loadingView")} />}>{children}</Suspense>;
 }
 
 function boardRoutes(streamlinedUiEnabled: boolean) {
@@ -236,8 +240,8 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       <Route path="companies" element={<Companies />} />
       <Route path="company/settings" element={<CompanySettingsEntry />} />
       <Route path="company/settings/general" element={<CompanySettings />} />
-      <Route path="company/settings/enterprise" element={<V7FeatureGate feature="enterprise_identity_v7"><Enterprise /></V7FeatureGate>} />
-      <Route path="company/settings/security-events" element={<V7FeatureGate feature="security_event_export_v7"><SecurityEvents /></V7FeatureGate>} />
+      <Route path="company/settings/enterprise" element={<V7FeatureGate feature="enterprise_identity_v7"><DeferredRouteSurface><Enterprise /></DeferredRouteSurface></V7FeatureGate>} />
+      <Route path="company/settings/security-events" element={<V7FeatureGate feature="security_event_export_v7"><DeferredRouteSurface><SecurityEvents /></DeferredRouteSurface></V7FeatureGate>} />
       <Route path="company/settings/billing" element={<SaasBillingPage />} />
       <Route path="company/settings/runtime" element={<SaasRuntimesPage />} />
       <Route path="company/settings/support" element={<SaasSupportPage />} />
@@ -349,21 +353,21 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       <Route path="skills/:skillId/studio" element={<LegacySkillStudioRedirect />} />
       <Route
         path="skills/*"
-        element={streamlinedUiEnabled ? <CompanySkills /> : <ProductionSurface><ProductionCompanySkills /></ProductionSurface>}
+        element={streamlinedUiEnabled ? <CompanySkills /> : <DeferredRouteSurface><ProductionCompanySkills /></DeferredRouteSurface>}
       />
       <Route path="settings" element={<LegacySettingsRedirect />} />
       <Route path="settings/*" element={<LegacySettingsRedirect />} />
       <Route path="plugins/:pluginId" element={<PluginPage />} />
       <Route
         path="org"
-        element={streamlinedUiEnabled ? <Navigate to="/agents/all" replace /> : <ProductionSurface><ProductionOrgChart /></ProductionSurface>}
+        element={streamlinedUiEnabled ? <Navigate to="/agents/all" replace /> : <DeferredRouteSurface><ProductionOrgChart /></DeferredRouteSurface>}
       />
       <Route path="agents" element={<Navigate to="/agents/all" replace />} />
       {AGENT_FILTER_TABS.map((tab) => (
         <Route
           key={tab}
           path={`agents/${tab}`}
-          element={streamlinedUiEnabled ? <Agents /> : <ProductionSurface><ProductionAgents /></ProductionSurface>}
+          element={streamlinedUiEnabled ? <Agents /> : <DeferredRouteSurface><ProductionAgents /></DeferredRouteSurface>}
         />
       ))}
       <Route path="agents/new" element={<NewAgent />} />
@@ -378,16 +382,16 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       <Route path="agents/:agentId/:tab" element={<AgentDetail />} />
       <Route path="agents/:agentId/runs/:runId" element={<AgentDetail />} />
       <Route path="projects" element={<Projects />} />
-      <Route path="playbooks" element={<V5Gate feature="playbooks_v5"><Playbooks /></V5Gate>} />
-      <Route path="playbooks/:playbookId" element={<V5Gate feature="playbooks_v5"><Playbooks /></V5Gate>} />
+      <Route path="playbooks" element={<V5Gate feature="playbooks_v5"><DeferredRouteSurface><Playbooks /></DeferredRouteSurface></V5Gate>} />
+      <Route path="playbooks/:playbookId" element={<V5Gate feature="playbooks_v5"><DeferredRouteSurface><Playbooks /></DeferredRouteSurface></V5Gate>} />
       <Route path="org-units" element={<V5Gate feature="org_units_v5"><OrgUnits /></V5Gate>} />
       <Route path="relationships" element={<V5Gate feature="company_relationships_v5"><CompanyRelationships /></V5Gate>} />
-      <Route path="runtime" element={<V5Gate feature="agent_identities_v5"><AgentRuntimeFabric /></V5Gate>} />
-      <Route path="role-packs" element={<V5Gate feature="role_packs_v5"><RolePacks /></V5Gate>} />
-      <Route path="portfolio" element={<V5Gate feature="portfolio_view_v5"><Portfolio /></V5Gate>} />
-      <Route path="portfolio-capabilities" element={<V5Gate feature="portfolio_skill_sharing_v5"><PortfolioCapabilities /></V5Gate>} />
-      <Route path="skills/:skillId/governance" element={<V5Gate feature="skill_lifecycle_v5"><SkillGovernance /></V5Gate>} />
-      <Route path="skills/governed/new" element={<V5Gate feature="skill_lifecycle_v5"><NewGovernedSkill /></V5Gate>} />
+      <Route path="runtime" element={<V5Gate feature="agent_identities_v5"><DeferredRouteSurface><AgentRuntimeFabric /></DeferredRouteSurface></V5Gate>} />
+      <Route path="role-packs" element={<V5Gate feature="role_packs_v5"><DeferredRouteSurface><RolePacks /></DeferredRouteSurface></V5Gate>} />
+      <Route path="portfolio" element={<V5Gate feature="portfolio_view_v5"><DeferredRouteSurface><Portfolio /></DeferredRouteSurface></V5Gate>} />
+      <Route path="portfolio-capabilities" element={<V5Gate feature="portfolio_skill_sharing_v5"><DeferredRouteSurface><PortfolioCapabilities /></DeferredRouteSurface></V5Gate>} />
+      <Route path="skills/:skillId/governance" element={<V5Gate feature="skill_lifecycle_v5"><DeferredRouteSurface><SkillGovernance /></DeferredRouteSurface></V5Gate>} />
+      <Route path="skills/governed/new" element={<V5Gate feature="skill_lifecycle_v5"><DeferredRouteSurface><NewGovernedSkill /></DeferredRouteSurface></V5Gate>} />
       <Route path="projects/:projectId/roadmap" element={<V5Gate feature="project_roadmap_v5"><ProjectRoadmap /></V5Gate>} />
       <Route path="projects/:projectId" element={<ProjectDetail />} />
       <Route path="projects/:projectId/overview" element={<ProjectDetail />} />
@@ -417,15 +421,15 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       ) : null}
       <Route path="foundation/discovery" element={<V7FeatureGate feature="foundation_bootstrap_v7"><FoundationBootstrap /></V7FeatureGate>} />
       <Route path="foundation/discovery/:bootstrapRunId" element={<V7FeatureGate feature="foundation_bootstrap_v7"><FoundationBootstrap /></V7FeatureGate>} />
-      <Route path="strategy-execution" element={<V8FeatureGate feature="strategy_execution_v8"><V7FeatureGate feature="governance_evidence_v7"><StrategyExecution /></V7FeatureGate></V8FeatureGate>} />
-      <Route path="process-intelligence" element={<V8FeatureGate feature="process_intelligence_v8"><V7FeatureGate feature="governance_evidence_v7"><ProcessIntelligence /></V7FeatureGate></V8FeatureGate>} />
-      <Route path="business-forecasts" element={<V8FeatureGate feature="business_forecasting_v8"><V7FeatureGate feature="governance_evidence_v7"><BusinessForecasts /></V7FeatureGate></V8FeatureGate>} />
-      <Route path="business-scenarios" element={<V8FeatureGate feature="scenario_planning_v8"><V7FeatureGate feature="governance_evidence_v7"><BusinessScenarios /></V7FeatureGate></V8FeatureGate>} />
-      <Route path="business-experiments" element={<BusinessExperiments />} />
-      <Route path="causal-claims" element={<CausalClaims />} />
-      <Route path="management-reviews" element={<ManagementReviews />} />
-      <Route path="adaptive-planning" element={<CrossProjectPlanning />} />
-      <Route path="business-metrics" element={<V8FeatureGate feature="business_metrics_v8"><V7FeatureGate feature="governance_evidence_v7"><BusinessMetrics /></V7FeatureGate></V8FeatureGate>} />
+      <Route path="strategy-execution" element={<V8FeatureGate feature="strategy_execution_v8"><V7FeatureGate feature="governance_evidence_v7"><DeferredRouteSurface><StrategyExecution /></DeferredRouteSurface></V7FeatureGate></V8FeatureGate>} />
+      <Route path="process-intelligence" element={<V8FeatureGate feature="process_intelligence_v8"><V7FeatureGate feature="governance_evidence_v7"><DeferredRouteSurface><ProcessIntelligence /></DeferredRouteSurface></V7FeatureGate></V8FeatureGate>} />
+      <Route path="business-forecasts" element={<V8FeatureGate feature="business_forecasting_v8"><V7FeatureGate feature="governance_evidence_v7"><DeferredRouteSurface><BusinessForecasts /></DeferredRouteSurface></V7FeatureGate></V8FeatureGate>} />
+      <Route path="business-scenarios" element={<V8FeatureGate feature="scenario_planning_v8"><V7FeatureGate feature="governance_evidence_v7"><DeferredRouteSurface><BusinessScenarios /></DeferredRouteSurface></V7FeatureGate></V8FeatureGate>} />
+      <Route path="business-experiments" element={<DeferredRouteSurface><BusinessExperiments /></DeferredRouteSurface>} />
+      <Route path="causal-claims" element={<DeferredRouteSurface><CausalClaims /></DeferredRouteSurface>} />
+      <Route path="management-reviews" element={<DeferredRouteSurface><ManagementReviews /></DeferredRouteSurface>} />
+      <Route path="adaptive-planning" element={<DeferredRouteSurface><CrossProjectPlanning /></DeferredRouteSurface>} />
+      <Route path="business-metrics" element={<V8FeatureGate feature="business_metrics_v8"><V7FeatureGate feature="governance_evidence_v7"><DeferredRouteSurface><BusinessMetrics /></DeferredRouteSurface></V7FeatureGate></V8FeatureGate>} />
       <Route path="readiness" element={<V7FeatureGate feature="readiness_engine_v7"><Readiness /></V7FeatureGate>} />
       <Route
         path="foundation"
@@ -444,7 +448,7 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       <Route path="company/measures" element={<ExperienceMeasuresEntry />} />
       <Route path="orchestration" element={<V7FeatureGate feature="orchestration_v7"><Orchestration /></V7FeatureGate>} />
       <Route path="agents/packages/installations/:installationId/maintenance" element={<MaintenanceHistoryEntry />} />
-      <Route path="agents/packages" element={<V7FeatureGate feature="agent_packages_v7"><AgentPackages /></V7FeatureGate>} />
+      <Route path="agents/packages" element={<V7FeatureGate feature="agent_packages_v7"><DeferredRouteSurface><AgentPackages /></DeferredRouteSurface></V7FeatureGate>} />
       <Route path="ai-governance" element={<V7FeatureGate feature="ai_use_cases_v7"><AIGovernance /></V7FeatureGate>} />
       <Route path="work-signals" element={<V7FeatureGate feature="work_signals_v7"><WorkSignals /></V7FeatureGate>} />
       <Route path="memory/learning" element={<V7FeatureGate feature="learning_engine_v7"><OrganizationalLearning /></V7FeatureGate>} />
@@ -478,7 +482,7 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
         path="workflows/:workflowId/runs/:runId/advanced"
         element={<WorkflowBuilderExperimentalGate><WorkflowRun /></WorkflowBuilderExperimentalGate>}
       />
-      <Route path="routines" element={streamlinedUiEnabled ? <Routines /> : <ProductionSurface><ProductionRoutines /></ProductionSurface>} />
+      <Route path="routines" element={streamlinedUiEnabled ? <Routines /> : <DeferredRouteSurface><ProductionRoutines /></DeferredRouteSurface>} />
       <Route
         path="cases"
         element={<CasesExperimentalGate><Cases /></CasesExperimentalGate>}
@@ -530,8 +534,8 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
         path="pipelines/:pipelineId/cases/:caseId"
         element={<PipelinesExperimentalGate><PipelineItemLegacyRedirect /></PipelinesExperimentalGate>}
       />
-      <Route path="routines/:routineId" element={streamlinedUiEnabled ? <RoutineDetail /> : <ProductionSurface><ProductionRoutineDetail /></ProductionSurface>} />
-      <Route path="routines/:routineId/:section" element={streamlinedUiEnabled ? <RoutineDetail /> : <ProductionSurface><ProductionRoutineDetail /></ProductionSurface>} />
+      <Route path="routines/:routineId" element={streamlinedUiEnabled ? <RoutineDetail /> : <DeferredRouteSurface><ProductionRoutineDetail /></DeferredRouteSurface>} />
+      <Route path="routines/:routineId/:section" element={streamlinedUiEnabled ? <RoutineDetail /> : <DeferredRouteSurface><ProductionRoutineDetail /></DeferredRouteSurface>} />
       <Route element={<IsolatedWorkspacesRouteGate />}>
         <Route element={<ExecutionWorkspaceCompanyGate />}>
           <Route path="execution-workspaces/:workspaceId" element={<ExecutionWorkspaceDetail />} />
@@ -549,7 +553,7 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       <Route path="approvals/pending" element={<Approvals />} />
       <Route path="approvals/all" element={<Approvals />} />
       <Route path="approvals/:approvalId" element={<ApprovalDetail />} />
-      <Route path="activity" element={streamlinedUiEnabled ? <CompanyActivity /> : <ProductionSurface><ProductionCompanyActivity /></ProductionSurface>} />
+      <Route path="activity" element={streamlinedUiEnabled ? <CompanyActivity /> : <DeferredRouteSurface><ProductionCompanyActivity /></DeferredRouteSurface>} />
       {streamlinedUiEnabled ? (
         <>
           <Route path="activity/runs" element={<AuditHub section="runs" />} />
@@ -568,7 +572,7 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
         </>
       ) : (
         <>
-          <Route path="costs" element={<ProductionSurface><ProductionCosts /></ProductionSurface>} />
+          <Route path="costs" element={<DeferredRouteSurface><ProductionCosts /></DeferredRouteSurface>} />
           <Route path="audit" element={<Navigate to="/activity?mode=agents" replace />} />
         </>
       )}
@@ -958,15 +962,15 @@ export function App() {
           <Route path="routines" element={<UnprefixedBoardRedirect />} />
           <Route path="routines/:routineId" element={<UnprefixedBoardRedirect />} />
           <Route path="review-queue" element={<UnprefixedBoardRedirect />} />
-          <Route path="strategy-execution" element={<V8FeatureGate feature="strategy_execution_v8"><V7FeatureGate feature="governance_evidence_v7"><StrategyExecution /></V7FeatureGate></V8FeatureGate>} />
-      <Route path="process-intelligence" element={<V8FeatureGate feature="process_intelligence_v8"><V7FeatureGate feature="governance_evidence_v7"><ProcessIntelligence /></V7FeatureGate></V8FeatureGate>} />
-          <Route path="business-forecasts" element={<V8FeatureGate feature="business_forecasting_v8"><V7FeatureGate feature="governance_evidence_v7"><BusinessForecasts /></V7FeatureGate></V8FeatureGate>} />
-          <Route path="business-scenarios" element={<V8FeatureGate feature="scenario_planning_v8"><V7FeatureGate feature="governance_evidence_v7"><BusinessScenarios /></V7FeatureGate></V8FeatureGate>} />
-          <Route path="business-experiments" element={<BusinessExperiments />} />
-      <Route path="causal-claims" element={<CausalClaims />} />
-      <Route path="management-reviews" element={<ManagementReviews />} />
-      <Route path="adaptive-planning" element={<CrossProjectPlanning />} />
-      <Route path="business-metrics" element={<V8FeatureGate feature="business_metrics_v8"><V7FeatureGate feature="governance_evidence_v7"><BusinessMetrics /></V7FeatureGate></V8FeatureGate>} />
+          <Route path="strategy-execution" element={<V8FeatureGate feature="strategy_execution_v8"><V7FeatureGate feature="governance_evidence_v7"><DeferredRouteSurface><StrategyExecution /></DeferredRouteSurface></V7FeatureGate></V8FeatureGate>} />
+      <Route path="process-intelligence" element={<V8FeatureGate feature="process_intelligence_v8"><V7FeatureGate feature="governance_evidence_v7"><DeferredRouteSurface><ProcessIntelligence /></DeferredRouteSurface></V7FeatureGate></V8FeatureGate>} />
+          <Route path="business-forecasts" element={<V8FeatureGate feature="business_forecasting_v8"><V7FeatureGate feature="governance_evidence_v7"><DeferredRouteSurface><BusinessForecasts /></DeferredRouteSurface></V7FeatureGate></V8FeatureGate>} />
+          <Route path="business-scenarios" element={<V8FeatureGate feature="scenario_planning_v8"><V7FeatureGate feature="governance_evidence_v7"><DeferredRouteSurface><BusinessScenarios /></DeferredRouteSurface></V7FeatureGate></V8FeatureGate>} />
+          <Route path="business-experiments" element={<DeferredRouteSurface><BusinessExperiments /></DeferredRouteSurface>} />
+      <Route path="causal-claims" element={<DeferredRouteSurface><CausalClaims /></DeferredRouteSurface>} />
+      <Route path="management-reviews" element={<DeferredRouteSurface><ManagementReviews /></DeferredRouteSurface>} />
+      <Route path="adaptive-planning" element={<DeferredRouteSurface><CrossProjectPlanning /></DeferredRouteSurface>} />
+      <Route path="business-metrics" element={<V8FeatureGate feature="business_metrics_v8"><V7FeatureGate feature="governance_evidence_v7"><DeferredRouteSurface><BusinessMetrics /></DeferredRouteSurface></V7FeatureGate></V8FeatureGate>} />
       <Route path="readiness" element={<UnprefixedBoardRedirect />} />
           <Route path="orchestration" element={<UnprefixedBoardRedirect />} />
           <Route path="work-signals" element={<UnprefixedBoardRedirect />} />

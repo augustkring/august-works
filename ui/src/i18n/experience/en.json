@@ -1988,5 +1988,6 @@
     "preview": "Inspect this proposed version",
     "comparison": "Changes in the current draft since this proposal",
     "changeCounts": "{{added}} added · {{changed}} changed · {{removed}} removed flow steps"
-  }
+  },
+  "loadingView": "Loading view…"
 }
