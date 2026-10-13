@@ -65,6 +65,8 @@ export function isPrivateExperienceHttpRequest(method: string | undefined, url: 
     || /^\/api\/companies\/[^/]*\/notifications\/preference-proposals(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]*\/conversations\/[^/]*\/authoring(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/experience\/commands(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/[^/]*\/experience\/(?:workflows|workflow-drafts|workflow-draft-requests)(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/[^/]*\/experience\/orchestration(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/experience\/company(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/experience\/analytics(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/experience\/support-access(?:\/|$)/i.test(pathname)
@@ -88,6 +90,8 @@ export function privateExperienceLogUrl(url: string): string {
   if (/^\/api\/saas\/companies\//i.test(pathname)) return "/api/saas/companies/:companyId/activation-or-onboarding/:operation";
   if (/\/conversations\/[^/]*\/authoring(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/conversations/:conversationId/authoring";
   if (/\/experience\/commands(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/commands";
+  if (/\/experience\/(?:workflows|workflow-drafts|workflow-draft-requests)(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/workflow-authoring/:operation";
+  if (/\/experience\/orchestration(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/orchestration";
   if (/\/experience\/company(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/company";
   if (/\/experience\/analytics(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/analytics";
   if (/\/experience\/support-access(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/support-access";

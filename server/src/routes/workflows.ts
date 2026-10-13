@@ -26,6 +26,7 @@ import {
 import { validate } from "../middleware/validate.js";
 import { conflict, forbidden, notFound, unauthorized, unprocessable } from "../errors.js";
 import { workflowReview } from "../services/experience/workflow-review.js";
+import { workflowDraftIntentService } from "../services/experience/workflow-draft-intent.js";
 import { workflowRunReview } from "../services/experience/workflow-run-review.js";
 import { currentWorkflowStopRoleAllows, readCustomerWorkflowStopReceipt } from "../services/workflows/workflow-customer-stop.js";
 import { assertV5Authorization } from "../services/v5-authorization.js";
@@ -69,6 +70,29 @@ export function workflowRoutes(db: Db) {
   const access = accessService(db);
   const settings = instanceSettingsService(db);
   const optimizerEvaluations = optimizerEvaluationService(db);
+
+  function currentDraftAccount(req: Request) {
+    const query = z.strictObject({ expectedUserId: z.string().min(1).max(300) }).parse(req.query);
+    if (req.actor.type !== "board" || req.actor.source === "local_implicit" || !req.actor.userId)
+      throw forbidden("A verified current account is required");
+    if (query.expectedUserId !== req.actor.userId)
+      throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
+  }
+  router.get("/companies/:companyId/experience/workflows", async (req, res) => {
+    currentDraftAccount(req);
+    res.set("Cache-Control", "no-store");
+    res.json(await workflowDraftIntentService(db).index(req.actor, z.uuid().parse(req.params.companyId)));
+  });
+  router.post("/companies/:companyId/experience/workflow-drafts", async (req, res) => {
+    currentDraftAccount(req);
+    res.set("Cache-Control", "no-store");
+    res.status(201).json(await workflowDraftIntentService(db).create(req.actor, z.uuid().parse(req.params.companyId), req.body));
+  });
+  router.get("/companies/:companyId/experience/workflow-draft-requests/:requestId", async (req, res) => {
+    currentDraftAccount(req);
+    res.set("Cache-Control", "no-store");
+    res.json(await workflowDraftIntentService(db).receipt(req.actor, z.uuid().parse(req.params.companyId), z.uuid().parse(req.params.requestId)));
+  });
 
   router.get("/companies/:companyId/workflows/:workflowId/optimizer-evaluations", async (req, res) => {
     const companyId = req.params.companyId as string;

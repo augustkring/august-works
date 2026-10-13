@@ -292,6 +292,27 @@ function loadSpecRoutes() {
 }
 
 describe("openapi routes", () => {
+  it("documents owned notification proposal review and exact Human baseline confirmation", () => {
+    const spec = buildOpenApiSpec() as any;
+    const base = "/api/companies/{companyId}/notifications/preference-proposals/{proposalId}";
+    for (const operation of [spec.paths[base].get, spec.paths[`${base}/apply`].post]) {
+      expect(operation["x-paperclip-authorization"]).toMatchObject({
+        actor: "board", currentNativeAuthority: true, companyScoped: true,
+      });
+      expect(operation.security).not.toEqual([]);
+      expect(operation.responses["200"].headers["Cache-Control"].schema.enum).toEqual(["no-store"]);
+      const result = operation.responses["200"].content["application/json"].schema;
+      expect(result.additionalProperties).toBe(false);
+      expect(result.properties.status.enum).toEqual(["pending", "applied", "discarded"]);
+      expect(JSON.stringify(result)).not.toMatch(/sourceRunId|createdByAgentId|responsibleUserId/);
+      expect(operation.responses["409"]).toBeDefined();
+    }
+    const confirmation = spec.paths[`${base}/apply`].post.requestBody.content["application/json"].schema;
+    expect(confirmation.additionalProperties).toBe(false);
+    expect(confirmation.required).toEqual(["requestId", "expectedProposalVersion", "expectedBaselineHash"]);
+    expect(confirmation.properties.expectedBaselineHash.pattern).toBe("^[a-f0-9]{64}$");
+    expect(confirmation.properties.preference).toBeUndefined();
+  });
   it("documents exact human experiment protocol commands, account guards and no-store responses", () => {
     const spec = buildOpenApiSpec(), base = "/api/companies/{companyId}/experiments";
     const create = spec.paths[base].post, transition = spec.paths[`${base}/{experimentId}/transition`].post;

@@ -5,6 +5,13 @@ PR #38 is a draft and must not merge yet.
 
 ## Latest integrated checkpoint
 
+The new whole-scope continuation is tracked in
+[the completion checkpoint](2026-10-13-aw-v9-completion.md). It adds current
+workflow discovery and Human-described draft creation with exact Native receipt
+recovery, fixes the latest notification OpenAPI coverage omission and retains
+the three additional writing playbooks. It remains a bounded source slice;
+full V9 source, final integrated checks and release qualification are open.
+
 Current principal-owned Core Steward/readiness findings now have a body-free
 Native metadata projection and a localized aggregate review card. It preserves
 Original company-read admission and creates no assessment, resolution or

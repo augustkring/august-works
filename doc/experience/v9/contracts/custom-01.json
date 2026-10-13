@@ -32,7 +32,8 @@
     ],
     "displayedState": [
       "Native draft version, section and explicit draft status",
-      "Saved-draft blockers are distinct from unsaved local proposals and executed outcomes"
+      "Saved-draft blockers are distinct from unsaved local proposals and executed outcomes",
+      "Conversation setup proposals show the actual Native draft kind, current version/state and exact editor link. Historical creation created no Agent, installation, runtime or authority; the current setup owner records any later explicit Human preparation or activation. Older server coverage remains unavailable."
     ]
   },
   "inputs": [
@@ -75,7 +76,8 @@
     "canonicalReadDomains": [
       "agent_configuration_drafts (first-class unpublished configuration owner)",
       "Native agent configuration baseline, current company membership and permissions",
-      "Approved native Foundation revisions and existing presence runtime bindings"
+      "Approved native Foundation revisions and existing presence runtime bindings",
+      "Actual Agent configuration draft creation Activity/run provenance, current conversation generation and creator authority. The bounded proposal projection excludes all current Human-edited names, instructions and private configuration."
     ],
     "canonicalWriteOperation": "Creator-scoped agent configuration create/save/discard with request hash, row version, database scope/version fences, native audit and post-commit publication",
     "authorityEffect": "No grants, agent mutation, external messages, runtime provisioning or work execution. Native publication mapping and representative execution are unqualified.",
@@ -141,7 +143,8 @@
   "acceptance": {
     "functional": [
       "Verify canonical state, version conflicts, safe replay, unavailable states and principal/company switching on the exact artifact.",
-      "Verify verified current create/configure admission, hidden entry after withdrawal/revocation, and preserved unsaved-change guard; navigation creates no active agent or grant."
+      "Verify verified current create/configure admission, hidden entry after withdrawal/revocation, and preserved unsaved-change guard; navigation creates no active agent or grant.",
+      "Verify one Native draft under concurrency, exact customer catalog pin/revocation, actual Agent journal writer, no Agent/installation/grant effect, refusal of copied private fields, Native low-trust and revoked-grant denial, Human-edit/replay privacy, source/generation withdrawal, late transaction rollback, SDK feature/policy gates and English/Danish current links."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."

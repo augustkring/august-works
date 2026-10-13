@@ -1,5 +1,11 @@
 import { z } from "zod";
 import {
+  orchestrationExperienceSchema,
+  workflowIntentDraftCommandSchema,
+  workflowIntentDraftReceiptSchema,
+  workflowExperienceIndexSchema,
+  notificationPreferenceProposalConfirmSchema,
+  notificationPreferenceProposalViewSchema,
   conversationAuthoringViewSchema,
   agentManagedRuntimeSetupCatalogSchema, agentManagedRuntimeSetupCommandSchema, agentManagedRuntimeSetupReviewSchema,
   agentManagedRuntimeSetupReviewInputSchema, agentManagedRuntimeSetupReceiptSchema,
@@ -125,6 +131,27 @@ const write = (
   privateResponse: true,
 });
 export const v9ApiPaths: V9ApiOperation[] = [
+  { ...read(`${company}/experience/orchestration`, "Read bounded Native work status; only currently authorized administrators receive worker inspection metadata",
+    orchestrationExperienceSchema, z.strictObject({ expectedUserId: z.string().min(1).max(300) })), cacheControl: "no-store", overloaded: true },
+  { ...read(`${company}/experience/workflows`, "Read the bounded current authorized workflow index; an empty view is not a complete inventory",
+    workflowExperienceIndexSchema, z.strictObject({ expectedUserId: z.string().min(1).max(300) })), cacheControl: "no-store", overloaded: true },
+  { ...write(`${company}/experience/workflow-drafts`, "Save the Human's described intent as one Original unpublished workflow draft; no schedule or work starts",
+    workflowIntentDraftCommandSchema, workflowIntentDraftReceiptSchema, 201),
+    query: z.strictObject({ expectedUserId: z.string().min(1).max(300) }), cacheControl: "no-store" },
+  { ...read(`${company}/experience/workflow-draft-requests/{requestId}`, "Read this creator's exact Original draft receipt after an unknown acknowledgement; never create a replacement",
+    workflowIntentDraftReceiptSchema, z.strictObject({ expectedUserId: z.string().min(1).max(300) })), cacheControl: "no-store" },
+  {
+    ...read(`${company}/notifications/preference-proposals/{proposalId}`,
+      "Review the current user's saved notification preference proposal against the Original account baseline",
+      notificationPreferenceProposalViewSchema),
+    cacheControl: "no-store",
+  },
+  {
+    ...write(`${company}/notifications/preference-proposals/{proposalId}/apply`,
+      "Apply an owned proposal after explicit Human confirmation of its exact version and current account preference baseline; replay only the Original receipt",
+      notificationPreferenceProposalConfirmSchema, notificationPreferenceProposalViewSchema),
+    cacheControl: "no-store",
+  },
   read(`${company}/conversations/{conversationId}/authoring`, "Read current canonical workflow proposals saved by this owned conversation's Original authoring runs", conversationAuthoringViewSchema),
   read(`${company}/experience/analytics`, "Read bounded native experience measures without private payloads", experienceMeasuresSchema,
     z.strictObject({ expectedUserId: z.string().min(1).max(300) })),

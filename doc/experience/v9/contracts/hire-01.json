@@ -33,7 +33,8 @@
     "displayedState": [
       "Current release identity and manifest outcome, prerequisites and limits",
       "Catalog is bounded to 50 capabilities; internal evaluation and raw release evidence are excluded",
-      "Declared automation is conditional on current policy/access; no effective authority or assigned owner is inferred"
+      "Declared automation is conditional on current policy/access; no effective authority or assigned owner is inferred",
+      "Conversation setup proposals show the actual Native draft kind, current version/state and exact editor link. Historical creation created no Agent, installation, runtime or authority; the current setup owner records any later explicit Human preparation or activation. Older server coverage remains unavailable."
     ]
   },
   "inputs": [
@@ -64,7 +65,8 @@
     "canonicalReadDomains": [
       "Native first-party agent packages and current published release qualification",
       "Current verified user/company membership and agents:create authorization",
-      "Canonical creator-private agent configuration draft summaries for saved Hire setups"
+      "Canonical creator-private agent configuration draft summaries for saved Hire setups",
+      "Actual Agent configuration draft creation Activity/run provenance, current conversation generation and creator authority. The bounded proposal projection excludes all current Human-edited names, instructions and private configuration."
     ],
     "canonicalWriteOperation": "Canonical agent_configuration_drafts create with frozen request ID and native package-version pin; no agent install or production publication.",
     "authorityEffect": "No grants, activation, agent mutation, external messages or runtime execution.",
@@ -129,7 +131,8 @@
   "acceptance": {
     "functional": [
       "Check customer/internal filtering, withdrawal, literal outcome search and exact-request setup retry.",
-      "Complete connection assessment, representative execution/verification, native publication and active receipt remain open; no complete hiring claim."
+      "Complete connection assessment, representative execution/verification, native publication and active receipt remain open; no complete hiring claim.",
+      "Verify one Native draft under concurrency, exact customer catalog pin/revocation, actual Agent journal writer, no Agent/installation/grant effect, refusal of copied private fields, Native low-trust and revoked-grant denial, Human-edit/replay privacy, source/generation withdrawal, late transaction rollback, SDK feature/policy gates and English/Danish current links."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."

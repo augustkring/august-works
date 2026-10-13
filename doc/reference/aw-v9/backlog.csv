@@ -34,18 +34,18 @@ V9-032,2219,Cmd+K intent router,in_progress
 V9-033,2221,command palette Ask/Create/Run UI,in_progress
 V9-034,2223,deterministic command catalog,in_progress
 V9-035,2225,natural-language task/project authoring,in_progress
-V9-036,2227,chat workflow draft adapter,not_started
+V9-036,2227,chat workflow draft adapter,in_progress
 V9-037,2229,workflow preview/diff/test card,in_progress
-V9-038,2231,chat Foundation proposal adapter,not_started
-V9-039,2233,chat agent/package proposal adapter,not_started
-V9-040,2235,chat connection intent adapter,not_started
+V9-038,2231,chat Foundation proposal adapter,in_progress
+V9-039,2233,chat agent/package proposal adapter,in_progress
+V9-040,2235,chat connection intent adapter,in_progress
 V9-041,2237,assistant-ui tool/action component registry,in_progress
 V9-042,2239,approval/decision/question cards,in_progress
 V9-043,2241,result/progress/recovery cards,in_progress
 V9-044,2243,V8 insight cards contracts,not_started
-V9-045,2245,Slack block/modal action-card mapping,not_started
-V9-046,2247,Teams adaptive-card action mapping,not_started
-V9-047,2249,channel semantic parity tests,not_started
+V9-045,2245,Slack block/modal action-card mapping,in_progress
+V9-046,2247,Teams adaptive-card action mapping,in_progress
+V9-047,2249,channel semantic parity tests,in_progress
 V9-048,2251,AG-UI mapping/conformance spike,in_progress
 V9-049,2253,A2UI compatibility/renderer experiment,in_progress
 V9-050,2255,MCP Apps stable-spec conformance + AW security ADR,not_started
@@ -76,10 +76,10 @@ V9-074,2303,retire redundant onboarding variants,not_started
 V9-075,2305,retire streamlined legacy flag after migration,not_started
 V9-076,2307,route-level lazy loading/performance pass,in_progress
 V9-077,2309,long-session memory/render performance,not_started
-V9-078,2311,mobile critical action surface,not_started
-V9-079,2313,WCAG automated gates,not_started
-V9-080,2315,keyboard/screen-reader critical journey tests,not_started
-V9-081,2317,accessible auth/onboarding tests,not_started
+V9-078,2311,mobile critical action surface,in_progress
+V9-079,2313,WCAG automated gates,in_progress
+V9-080,2315,keyboard/screen-reader critical journey tests,in_progress
+V9-081,2317,accessible auth/onboarding tests,in_progress
 V9-082,2319,charts/generative UI nonvisual alternatives,not_started
 V9-083,2321,localization key migration for V9 surfaces,in_progress
 V9-084,2323,Danish/English reference locale QA if launch scope requires,in_progress
@@ -107,7 +107,7 @@ V9-105,2370,onboarding execution screens ONB-09–ONB-12 + resume/recovery/acces
 V9-106,2372,Hire Agent flow + capability/access/authority/test/review/activation receipt,in_progress
 V9-107,2374,"Custom Agent builder steps 1–6 (outcome, identity, instructions, knowledge, tools, authority)",in_progress
 V9-108,2376,"Custom Agent builder steps 7–13 (memory, collaboration, runtime, test, review, publish, monitor) + draft/live lifecycle",in_progress
-V9-109,2378,orchestration decision contract + bounded multi-agent admin projection + takeover/kill propagation,not_started
+V9-109,2378,orchestration decision contract + bounded multi-agent admin projection + takeover/kill propagation,in_progress
 V9-110,2380,workflow full lifecycle + plain-language-first review + safe test + immutable publish revision + recovery/retirement,in_progress
 V9-111,2382,Company/Settings/Governance canonical IA + contextual governance + settings search/deep-link contracts,in_progress
 V9-112,2384,global microcopy/form/confirmation/error/recovery/loading/success receipt standards + component/state QA,in_progress

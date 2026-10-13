@@ -15,6 +15,7 @@ import { withExperienceAdmission } from "./admission.js";
 import { projectWorkflowRevisionFlow } from "./workflow-flow.js";
 import { workflowComparison } from "./workflow-comparison.js";
 import { assertRoutineSourceAccess } from "../routine-source-authority.js";
+import { agentAuthoringService } from "../agents/authoring-drafts.js";
 import { forbidden, notFound, conflict } from "../../errors.js";
 
 /** Read saved Original authoring results, never model-generated claimed links.
@@ -223,6 +224,26 @@ export function conversationAuthoringService(db: Db) {
       };
       const savedNotificationProposals=[];
       for(const candidate of notificationCandidates.slice(0,10))savedNotificationProposals.push(await readNotification(candidate.id));
+      const agentDraftCandidates = await tx.execute<{ id: string; run_id: string }>(sql`
+        select id,run_id from (select distinct on(a.entity_id) a.entity_id as id,h.id as run_id,a.created_at from activity_log a
+        join heartbeat_runs h on h.company_id=a.company_id and h.id=a.run_id
+        where a.company_id=${companyId}::uuid and a.action='agent_configuration.draft_created'
+          and a.entity_type='agent_configuration_draft' and a.actor_type='agent'
+          and a.actor_id=${initial.conversation.conversationAgentId} and a.agent_id=${initial.conversation.conversationAgentId}::uuid
+          and h.agent_id=${initial.conversation.conversationAgentId}::uuid
+          and h.responsible_user_id=${initial.userId}
+          and (h.native_issue_id=${conversationId}::uuid or (h.native_issue_id is null and coalesce(h.context_snapshot->>'issueId',h.context_snapshot->>'taskId')=${conversationId}))
+          and coalesce(h.context_snapshot->>'conversationSessionGeneration','0')=${String(initial.conversation.conversationSessionGeneration)}
+        order by a.entity_id,a.created_at desc,a.id desc) owned order by created_at desc,id desc limit 11`);
+      const readAgentDraft = async (candidate: { id: string; run_id: string }) => {
+        currentSignal.throwIfAborted();
+        await assertAnalyticalContextPayloadAccess(tx, companyId, initial.current, { runId: candidate.run_id });
+        const draft = await agentAuthoringService(tx).get(initial.current, companyId, candidate.id);
+        return { kind: "agent_setup" as const, id: draft.id, setupKind: draft.kind, version: draft.version, status: draft.status,
+          href: draft.kind === "hire" ? `/agents/hire/drafts/${draft.id}` : `/agents/custom/${draft.id}` };
+      };
+      const savedAgentDrafts = [];
+      for (const candidate of agentDraftCandidates.slice(0, 10)) savedAgentDrafts.push(await readAgentDraft(candidate));
       currentSignal.throwIfAborted();
       const final = await owner(tx, actor, companyId, conversationId);
       currentSignal.throwIfAborted();
@@ -234,8 +255,10 @@ export function conversationAuthoringService(db: Db) {
       for (const candidate of routineCandidates.slice(0, 10)) await readRoutine(candidate);
       for(const candidate of foundationCandidates.slice(0,10))await readFoundation(candidate);
       for(const candidate of notificationCandidates.slice(0,10))await readNotification(candidate.id);
+      for (const candidate of agentDraftCandidates.slice(0, 10)) await readAgentDraft(candidate);
       return conversationAuthoringViewSchema.parse({ companyId, conversationId, agentId: initial.conversation.conversationAgentId,
         generation: initial.conversation.conversationSessionGeneration, observedAt: new Date().toISOString(), hasMore: candidates.length > 10,
+        savedAgentDrafts, hasMoreAgentDrafts: agentDraftCandidates.length > 10,
         savedNotificationProposals,hasMoreNotificationProposals:notificationCandidates.length>10,proposals, savedTasks, hasMoreTasks: tasks.length > 10, savedRoutines, hasMoreRoutines: routineCandidates.length > 10, savedFoundationProposals,hasMoreFoundationProposals:foundationCandidates.length>10, modelCalled: false });
     }).catch(error => {
       let cause: unknown = error;

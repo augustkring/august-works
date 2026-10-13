@@ -48,6 +48,14 @@ export const conversationAuthoringViewSchema = z.strictObject({
     status:z.enum(["pending","applied","discarded"]),version:z.number().int().positive(),
   })).max(10).optional(),
   hasMoreNotificationProposals:z.boolean().optional(),
+  savedAgentDrafts: z.array(z.strictObject({
+    kind: z.literal("agent_setup"), id: z.uuid(), setupKind: z.enum(["custom", "hire"]),
+    version: z.number().int().positive(), status: z.enum(["draft", "discarded"]), href: z.string(),
+  }).superRefine((value, ctx) => {
+    if (value.href !== `${value.setupKind === "hire" ? "/agents/hire/drafts" : "/agents/custom"}/${value.id}`)
+      ctx.addIssue({ code: "custom", message: "Use the Original Agent setup reference" });
+  })).max(10).optional(),
+  hasMoreAgentDrafts: z.boolean().optional(),
   proposals: z.array(z.strictObject({
     kind: z.literal("workflow"), id: z.uuid(), name: z.string().min(1).max(200),
     authoredRevisionId: z.uuid(), authoredRevisionNumber: z.number().int().positive(),

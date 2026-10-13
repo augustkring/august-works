@@ -54,6 +54,7 @@ import { initialActivationState, createOrchestrationPlanSchema, type CreateOrche
 import { purpose as governancePurpose, oversight as governanceOversight, reviews as governanceReviews } from "./helpers/governance-fixture.js";
 import { seedRequiredAuthoringProcedures, seedApprovedAuthoringPlaybook } from "./helpers/authoring-procedures.js";
 import { seedHireAutomationComponents } from "./helpers/hire-automations.js";
+import { agentSetupAuthoringToolsService } from "../services/agent-setup-authoring-tools.js";
 import { workflows, routines, workflowRuns, routineRuns } from "@paperclipai/db";
 import { billingAccounts, billingAccountCompanies, billingSubscriptions, companyOnboardingRuns,
   documents, documentRevisions, issueDocuments } from "@paperclipai/db";
@@ -314,6 +315,38 @@ const support = await getEmbeddedPostgresTestSupport();
       };
       return {release, published: await service.publish(f.actor, release), hire: agentAuthoringService(db)};
     }
+    it("conversation package setup pins the Native catalog release without installing or broadening access", async () => {
+      const { release, published } = await hireFixture();
+      await db.update(agents).set({ permissions: { trustPreset: "standard", canCreateAgents: false } }).where(eq(agents.id, f.presence.id));
+      await db.insert(companyMemberships).values({ companyId: f.home, principalType: "agent", principalId: f.presence.id,
+        status: "active", membershipRole: "member" }).onConflictDoNothing();
+      await instanceSettingsService(db).updateExperimental({ experience_projection_v9: true, ambient_commands_v9: true });
+      await db.insert(principalPermissionGrants).values({ companyId: f.home, principalType: "agent", principalId: f.presence.id,
+        permissionKey: "agents:create" }).onConflictDoNothing();
+      const [conversation] = await db.insert(issues).values({ companyId: f.home, title: "Package setup software fixture",
+        assigneeAgentId: f.presence.id, conversationAgentId: f.presence.id, conversationUserId: f.userId,
+        conversationState: "active", status: "in_progress" }).returning();
+      const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
+        nativeIssueId: conversation!.id, runtimeMode: "native", status: "running", contextSnapshot: { conversationSessionGeneration: 0 } }).returning();
+      await db.update(issues).set({ executionRunId: run!.id }).where(eq(issues.id, conversation!.id));
+      const author = agentSetupAuthoringToolsService(db), context = { companyId: f.home, agentId: f.presence.id, runId: run!.id };
+      expect(await author.catalog(context, { query: release.packageKey })).toMatchObject({ coverage: "bounded", modelCalled: false,
+        capabilities: [expect.objectContaining({ key: release.packageKey, versionId: published.id })] });
+      const before = await db.select().from(agents).where(eq(agents.companyId, f.home));
+      const command = { idempotencyKey: "exact-package", packageVersionId: published.id };
+      const receipt = await author.create(context, command);
+      expect(receipt).toMatchObject({ kind: "hire", packageVersionId: published.id, creationInstalledPackage: false,
+        creationCreatedAgent: false, creationGrantedAuthority: false, href: `/agents/hire/drafts/${receipt.draftId}` });
+      expect(await author.create(context, command)).toEqual(receipt);
+      const draft = await agentAuthoringService(db).get(f.actor, f.home, receipt.draftId);
+      expect(draft.package).toMatchObject({ key: release.packageKey, versionId: published.id, contentHash: published.contentHash });
+      expect(draft.content?.outcome).toBe(release.manifest.purpose);
+      expect(await db.select().from(agents).where(eq(agents.companyId, f.home))).toEqual(before);
+      expect(await db.select().from(companyAgentPackageInstallations).where(eq(companyAgentPackageInstallations.companyId, f.home))).toEqual([]);
+      await expect(author.create(context, { ...command, packageVersionId: versionId })).rejects.toMatchObject({ status: 409 });
+      await service.revoke(f.actor, published.id);
+      await expect(author.create(context, { ...command, idempotencyKey: "later-package" })).rejects.toMatchObject({ status: 422 });
+    });
     it("saves a pinned unpublished Hire setup once without installing, granting or creating an agent", async () => {
       const {release, published, hire} = await hireFixture();
       const beforeAgents = (await db.select().from(agents)).length;

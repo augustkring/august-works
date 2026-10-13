@@ -275,7 +275,9 @@
         "ui/src/pages/HireAgent.tsx",
         "ui/src/pages/HireAgentSetup.tsx",
         "ui/src/pages/HireSavedSetups.tsx",
-        "server/src/services/agents/authoring-drafts.ts"
+        "server/src/services/agents/authoring-drafts.ts",
+        "server/src/services/agent-setup-authoring-tools.ts",
+        "packages/shared/src/agent-setup-authoring.ts"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/hire-01.json"
@@ -421,7 +423,9 @@
       "componentPaths": [
         "ui/src/pages/CustomAgent.tsx",
         "server/src/services/agents/authoring-drafts.ts",
-        "ui/src/components/AgentRevisionEntry.tsx"
+        "ui/src/components/AgentRevisionEntry.tsx",
+        "server/src/services/agent-setup-authoring-tools.ts",
+        "packages/shared/src/agent-setup-authoring.ts"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/custom-01.json"
@@ -821,9 +825,18 @@
       },
       "criticality": "C3",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/OrchestrationExperience.tsx",
+        "ui/src/pages/Orchestration.tsx",
+        "ui/src/api/orchestration-experience.ts",
+        "server/src/routes/orchestration.ts",
+        "server/src/services/experience/orchestration-experience.ts",
+        "server/src/services/orchestration/orchestration-service.ts",
+        "packages/shared/src/orchestration-experience.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/orchestration.json"
     },
     {
       "screenId": "WORKFLOW",
@@ -836,9 +849,14 @@
       },
       "criticality": "C3",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/WorkflowIndex.tsx",
+        "server/src/services/experience/workflow-draft-intent.ts",
+        "packages/shared/src/workflow-authoring-experience.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/workflow.json"
     },
     {
       "screenId": "COMPANY",
@@ -1132,9 +1150,14 @@
       },
       "criticality": "C3",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/WorkflowDescribe.tsx",
+        "server/src/services/experience/workflow-draft-intent.ts",
+        "packages/shared/src/workflow-authoring-experience.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/workflow-describe.json"
     },
     {
       "screenId": "WORKFLOW-DRAFT",
@@ -1173,7 +1196,9 @@
         "server/src/services/experience/conversation-authoring.ts",
         "server/src/services/workflows/workflow-authoring-authority.ts",
         "ui/src/components/ConversationWorkflowPreview.tsx",
-        "server/src/services/experience/workflow-flow.ts"
+        "server/src/services/experience/workflow-flow.ts",
+        "server/src/services/agent-setup-authoring-tools.ts",
+        "packages/shared/src/agent-setup-authoring.ts"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/workflow-review.json"

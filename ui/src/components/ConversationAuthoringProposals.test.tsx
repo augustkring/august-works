@@ -67,6 +67,25 @@ it("suppresses prior proposal names and links during source withdrawal and ignor
   await act(async () => release(data));
   await vi.waitFor(() => expect(container.textContent).not.toContain("Saved review draft"));
 });
+it("shows Agent setup as an owned draft reference without claiming present runtime or authority state", async () => {
+  const get = vi.spyOn(authoring, "getConversationAuthoring").mockResolvedValue({ ...data, proposals: [], savedAgentDrafts: [
+    { kind: "agent_setup", id: id(13), setupKind: "hire", version: 2, status: "draft", href: `/agents/hire/drafts/${id(13)}` },
+  ] });
+  await mount(); await vi.waitFor(() => expect(container.textContent).toContain("Saved Agent setup proposals"));
+  expect(container.textContent).toContain("Current saved version 2");
+  expect(container.textContent).toContain("installed no package");
+  expect(container.textContent).not.toContain("No saved workflow");
+  expect(container.querySelector("a")?.getAttribute("href")).toBe(`/agents/hire/drafts/${id(13)}`);
+  expect(container.querySelectorAll("button")).toHaveLength(0);
+  await act(async () => { await i18n.changeLanguage("da"); });
+  expect(container.textContent).toContain("Aktuel gemt version 2");
+  let release!: (value: ConversationAuthoringView) => void;
+  get.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+  await act(async () => live({ companyId: id(1), type: "activity.logged", payload: { entityType: "agent_configuration_draft", action: "agent_configuration.draft_discarded" } }));
+  expect(container.querySelectorAll("a")).toHaveLength(0);
+  await act(async () => release({ ...data, proposals: [], savedAgentDrafts: [] }));
+  await vi.waitFor(() => expect(container.textContent).not.toContain("Aktuel gemt version 2"));
+});
 it("reports an empty recorded set without treating a model's suggested link as a saved proposal", async () => {
   vi.spyOn(authoring, "getConversationAuthoring").mockResolvedValue({ ...data, proposals: [] });
   await mount(); await vi.waitFor(() => expect(container.textContent).toContain("suggested link alone"));

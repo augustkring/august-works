@@ -1410,3 +1410,51 @@ pending. Native refusal/historical-reference fixtures and built browser fixtures
 are not no-charge provider or starter-funding qualification. Automatic Task
 preparation, generic Free Core first delivery and full first-agent provisioning
 remain open; see the dated first-task owner-bridge plan.
+
+## ADR-V9-032 — Described workflow intent and conversational setup proposals
+
+2026-10-13. Described Human workflow intent commits through the Original
+workflow creator, with one empty unpublished revision and one body-free Activity
+receipt. The company/account/request identity binds the exact first revision;
+later edits, rollout withdrawal and retained deletion cannot turn receipt
+recovery into another creation. English/Danish labels preserve supplied intent.
+The browser retains only a per-tab request locator before the single POST.
+Unknown acknowledgement permits Original receipt reads, never automatic replay.
+Automatic graph proposals and the remaining guided lifecycle are still open.
+
+App connection intents retain the existing Human-only thread interaction and
+provider setup controller. Native issue identity takes precedence over context
+aliases. Conversation requests additionally require the current verified user,
+Agent/run ownership, generation, Native task authority and live Original source.
+The Original interaction writer repeats those checks inside its transaction;
+replay and final read checks cannot return a prior withdrawn proposal. Ordinary
+task connection requests retain their existing authorization and provider choice.
+No connection, credential, installation or grant is created by the proposal.
+
+Agent/Package setup proposals use Original `agent_configuration_drafts` and the
+initiating Human's existing creator admission. The proposing Agent retains its
+own Native `agents:create` authority and responsible-user intersection; the
+Human owner is never a substitution for missing Agent authority or low-trust
+refusal. The actual Agent/run is the Activity writer. Creation and its journal
+commit atomically, with current admission repeated before returning.
+
+The typed proposal accepts only an idempotency key and optional exact customer
+catalog version. Custom setup fields are empty; package defaults come from the
+Original qualified catalog pin. Conversation names, outcomes, instructions,
+knowledge, credentials, runtime selectors and permissions are refused. There is
+no private conversation copy to erase from independently retained configuration
+or a later published runtime. A Human's subsequent edits remain that Native
+owner's independently entered records. Copying conversational prose in a future
+extension requires complete Original source/erasure/restore lineage first.
+
+Setup receipts describe historical creation effects, not present Agent status.
+The current conversation projection follows the actual Native Activity/run and
+draft owners, exposes only ID/kind/version/state/link, checks current sources
+again, and excludes earlier generations. Source withdrawal hides that projection
+without manufacturing a deletion of independently entered Human configuration.
+Preparation, package installation, runtime qualification, approval, publication
+and activation remain separate explicit Original decisions. This bounded setup
+proposal does not complete the full Custom Agent or natural-language lifecycle.
+
+Verification and whole-scope work remain tracked in the dated continuation plan.
+No inherited host/provider qualification or release acceptance is upgraded here.

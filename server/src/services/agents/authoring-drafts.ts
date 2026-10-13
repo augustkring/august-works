@@ -1,4 +1,5 @@
 import { memoryService } from "../memory/memory-service.js";
+import { assertConversationRoutineAuthoring } from "../routine-authoring-authority.js";
 import { and, desc, eq, gte, inArray, isNotNull, notInArray, sql } from "drizzle-orm";
 import {
   agentConfigurationDrafts,
@@ -678,13 +679,23 @@ export function agentAuthoringService(db: Db) {
       actor: AuthorizationActor,
       companyId: string,
       raw: unknown,
+      conversation?: { companyId: string; agentId: string; runId: string },
     ) => {
       const input = agentDraftCreateSchema.parse(raw);
+      const assertConversation = async (tx: Db) => {
+        if (!conversation) return;
+        const current = await assertConversationRoutineAuthoring(tx, conversation, "agents:create");
+        if (conversation.companyId !== companyId || current.responsibleUserId !== v5HumanActorId(actor) || input.agentId)
+          throw forbidden("Conversation setup may only propose a new draft for its current responsible user");
+      };
+      await assertConversation(db);
       if (input.packageVersionId && input.agentId)
         throw badRequest("Hire setup starts an unpublished new agent");
       await access(db, actor, companyId, input.agentId, true);
       return withV5ActivityTransaction(db, async (tx, publications) => {
+        await lockAnalyticalCompany(tx, companyId);
         await lockMemoryPrivacy(tx, companyId);
+        await assertConversation(tx);
         const userId = await access(tx, actor, companyId, input.agentId, true),
           // Preserve the fingerprint of earlier custom-draft creation requests.
           hash = nativeSha256(
@@ -708,7 +719,9 @@ export function agentAuthoringService(db: Db) {
             throw conflict("Draft creation request has different content", {
               code: "draft_request_conflict",
             });
-          return view(previous, tx);
+          const result = await view(previous, tx);
+          await assertConversation(tx);
+          return result;
         }
         const [{ count }] = await tx
           .select({ count: sql<number>`count(*)::int` })
@@ -828,8 +841,9 @@ export function agentAuthoringService(db: Db) {
           tx,
           {
             companyId,
-            actorType: "user",
-            actorId: userId,
+            actorType: conversation ? "agent" : "user",
+            actorId: conversation?.agentId ?? userId,
+            ...(conversation ? { agentId: conversation.agentId, runId: conversation.runId } : {}),
             action: "agent_configuration.draft_created",
             entityType: "agent_configuration_draft",
             entityId: row!.id,
@@ -837,6 +851,8 @@ export function agentAuthoringService(db: Db) {
           },
           publications,
         );
+        await assertConversation(tx);
+        await access(tx, actor, companyId, input.agentId, true);
         return view(row!, tx);
       });
     },

@@ -12,6 +12,14 @@ import {
 
 describe("V9 private HTTP purpose", () => {
   it.each([
+    ["GET", "/api/companies/private-company/experience/workflows?expectedUserId=private-principal"],
+    ["POST", "/api/companies/private-company/experience/workflow-drafts?expectedUserId=private-principal"],
+    ["GET", "/api/companies/private-company/experience/workflow-draft-requests/private-record?expectedUserId=private-principal"],
+    ["DELETE", "/api/companies/private-company/experience/workflow-draft-requests/private-record?expectedUserId=private-principal"],
+    ["POST", "/api/companies//experience/workflow-drafts?expectedUserId=private-principal"],
+    ["GET", "/api/companies/private-company/experience/orchestration?expectedUserId=private-principal"],
+    ["POST", "/api/companies/private-company/experience/orchestration?expectedUserId=private-principal"],
+    ["DELETE", "/api/companies//experience/orchestration?expectedUserId=private-principal"],
     ["GET", "/api/companies/private-company/conversations/private-record/authoring?expectedUserId=private-principal"],
     ["POST", "/api/companies/private-company/conversations/private-record/authoring?expectedUserId=private-principal"],
     ["GET", "/api/companies//conversations/private-record/authoring?expectedUserId=private-principal"],

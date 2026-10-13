@@ -7,7 +7,8 @@ These are unchanged user-supplied references staged during the initial preparati
 - [V9 V3 build brief](brief/august-works-customer-experience-ambient-operations-ai-native-usability-master-build-brief-v9-v3.md) — directly reviewed in full; §§76–86 contain the final V3 experience locks.
 - [Preparation and next implementation sequence](../../plans/2026-10-09-aw-v9-preparation.md)
 - [Source manifest and direct review ranges](source-corpus.json)
-- [120-item implementation backlog](backlog.csv) — current per-item implementation status; use wave dependencies, not numerical order.
+- [Additional writing corpus](writing-corpus.json) — the three WR-00/01/02 V2 references supplied on 2026-10-13, retained unchanged with content hashes.
+- [120-item implementation backlog](backlog.csv) — broad-item working status; reconcile it with dated implementation checkpoints and use wave dependencies, not numerical order.
 - [Current V9 implementation ledger](../../plans/2026-10-09-aw-v9-build.md) and [70-surface coverage manifest](../../experience/v9/coverage.json) — implementation progress is separate from release evidence.
 - [Extracted Blentera logo package](../../assets/branding/blentera/v1.0/Blentera_Logo_Package_PRODUCTION_MASTER/README.md)
 
@@ -53,5 +54,8 @@ The earlier brief inventory lists 35 playbooks without 06 Security. The current 
 | [universal_software_ai_engineering_master_playbook_v2.md](playbooks/universal_software_ai_engineering_master_playbook_v2.md) | Cross-domain engineering and explicit assurance claims |
 | [ux_master_playbook_v2_double_validated_2026-09-21.md](playbooks/ux_master_playbook_v2_double_validated_2026-09-21.md) | Journeys, usability validation and accessibility |
 | [web_frontend_engineering_master_playbook_v2.md](playbooks/web_frontend_engineering_master_playbook_v2.md) | React/web architecture, performance and accessibility |
+| [WR-00_Universal_Writing_Content_Editorial_Standard_v2.0.md](playbooks/WR-00_Universal_Writing_Content_Editorial_Standard_v2.0.md) | Reader needs, exact meaning, restrained editing, terminology and truthful state/error copy |
+| [WR-01_Copywriting_Persuasive_Communication_Master_Playbook_v2.0.md](playbooks/WR-01_Copywriting_Persuasive_Communication_Master_Playbook_v2.0.md) | Proof-backed benefit descriptions and truthful calls to action; no unsupported capability claims |
+| [WR-02_Storytelling_Narrative_Design_Master_Playbook_v2.0.md](playbooks/WR-02_Storytelling_Narrative_Design_Master_Playbook_v2.0.md) | Truthful explanation of change; direct instructions and receipts take precedence when they serve the reader better |
 
 The original logo archive passes CRC and every extracted byte matches it. 173 of 174 supplied checksum entries match; `qa/favicon-size-review.png` differs from the supplied manifest. Preserve the supplied files and verify that QA evidence before using it as visual acceptance. Production asset entries match. See `source-corpus.json` for expected and actual hashes.

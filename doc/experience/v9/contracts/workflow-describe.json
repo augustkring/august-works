@@ -1,0 +1,203 @@
+{
+  "screenId": "WORKFLOW-DESCRIBE",
+  "journeyId": "workflow",
+  "routeOrSurface": "/workflows/new",
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
+  "customerOutcome": "Save described intent as one Original unpublished workflow draft and recover the exact request without duplicate creation.",
+  "entryConditions": [
+    "Current verified Human account and active company membership; instance administration cannot substitute for membership.",
+    "Original workflows:read authority is required; workflows:edit is separately required for creation.",
+    "Effective progressive_shell_v9 and Native workflows rollout admit new descriptions and the index. Exact Original receipt reads survive rollout withdrawal."
+  ],
+  "exitConditions": [
+    "Only the Original current creator/request-bound receipt establishes draft creation.",
+    "Saving intent produces an empty unpublished Native graph. Automatic flow generation, schedules, execution and publication remain separate work.",
+    "The bounded index does not claim a complete inventory or prove absence of older or hidden workflows."
+  ],
+  "content": {
+    "h1": "Describe a workflow",
+    "supportingCopy": "Save described intent as one Original unpublished workflow draft and recover the exact request without duplicate creation.",
+    "customerTerms": [
+      "Workflow",
+      "Draft",
+      "Desired outcome",
+      "Review",
+      "Request reference"
+    ],
+    "displayedState": [
+      "Current readable draft/active/paused/archived metadata; receipt is historical creation evidence, not current publication status.",
+      "Unknown acknowledgements preserve the original request; current account or Source uncertainty hides retained private fields.",
+      "Full chat-generated flow, access/approval-policy and human/hosted acceptance remain open."
+    ]
+  },
+  "inputs": [
+    {
+      "id": "name",
+      "label": "Workflow name",
+      "dataType": "Bounded plain text",
+      "required": true,
+      "default": "Empty; no inferred source, trigger or authority",
+      "help": "Record known intent; unresolved choices stay open for review.",
+      "validation": "At most 200 characters; reject null and malformed Unicode; name/outcome must be nonempty.",
+      "autofillOrPrefill": "Unsent same-account in-memory input only; no inferred private data."
+    },
+    {
+      "id": "outcome",
+      "label": "What should this achieve?",
+      "dataType": "Bounded plain text",
+      "required": true,
+      "default": "Empty; no inferred source, trigger or authority",
+      "help": "Record known intent; unresolved choices stay open for review.",
+      "validation": "At most 400 characters; reject null and malformed Unicode; name/outcome must be nonempty.",
+      "autofillOrPrefill": "Unsent same-account in-memory input only; no inferred private data."
+    },
+    {
+      "id": "trigger",
+      "label": "When should it start?",
+      "dataType": "Bounded plain text",
+      "required": false,
+      "default": "Empty; no inferred source, trigger or authority",
+      "help": "Record known intent; unresolved choices stay open for review.",
+      "validation": "At most 200 characters; reject null and malformed Unicode; name/outcome must be nonempty.",
+      "autofillOrPrefill": "Unsent same-account in-memory input only; no inferred private data."
+    },
+    {
+      "id": "sources",
+      "label": "What information should it use?",
+      "dataType": "Bounded plain text",
+      "required": false,
+      "default": "Empty; no inferred source, trigger or authority",
+      "help": "Record known intent; unresolved choices stay open for review.",
+      "validation": "At most 200 characters; reject null and malformed Unicode; name/outcome must be nonempty.",
+      "autofillOrPrefill": "Unsent same-account in-memory input only; no inferred private data."
+    },
+    {
+      "id": "conditions",
+      "label": "What conditions matter?",
+      "dataType": "Bounded plain text",
+      "required": false,
+      "default": "Empty; no inferred source, trigger or authority",
+      "help": "Record known intent; unresolved choices stay open for review.",
+      "validation": "At most 200 characters; reject null and malformed Unicode; name/outcome must be nonempty.",
+      "autofillOrPrefill": "Unsent same-account in-memory input only; no inferred private data."
+    },
+    {
+      "id": "finalEffect",
+      "label": "What should happen at the end?",
+      "dataType": "Bounded plain text",
+      "required": false,
+      "default": "Empty; no inferred source, trigger or authority",
+      "help": "Record known intent; unresolved choices stay open for review.",
+      "validation": "At most 300 characters; reject null and malformed Unicode; name/outcome must be nonempty.",
+      "autofillOrPrefill": "Unsent same-account in-memory input only; no inferred private data."
+    },
+    {
+      "id": "humanJudgment",
+      "label": "Where should a person review or decide?",
+      "dataType": "Bounded plain text",
+      "required": false,
+      "default": "Empty; no inferred source, trigger or authority",
+      "help": "Record known intent; unresolved choices stay open for review.",
+      "validation": "At most 200 characters; reject null and malformed Unicode; name/outcome must be nonempty.",
+      "autofillOrPrefill": "Unsent same-account in-memory input only; no inferred private data."
+    }
+  ],
+  "actions": {
+    "primary": {
+      "label": "Save draft",
+      "operation": "One explicit original Native draft create with immutable request hash and transactional activity receipt."
+    },
+    "secondary": [
+      "Back to workflows",
+      "Check original request after a lost acknowledgement; reads never recreate work"
+    ],
+    "destructiveOrIrreversible": []
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Original workflows/revisions and learned Source admission",
+      "Current Native membership, account and workflow grants",
+      "Original body-free Activity creation receipt"
+    ],
+    "canonicalWriteOperation": "Original workflowService.create composed transactionally with its Activity receipt; no parallel workflow store.",
+    "authorityEffect": "No schedules, grants, model calls, work or publication are created by described intent.",
+    "asyncWork": "Index examines at most 20 recent Native rows within existing four-request/1500ms admission; private source withdrawal is authoritative. Creation and receipt reads use Native database transactions.",
+    "receipt": "Exact company/creator/request/first-revision/creation-time identity. A missing row or receipt is unconfirmed; retained journals prevent replacement after deletion."
+  },
+  "states": {
+    "loading": "Announce loading only while the current identity/company request is pending.",
+    "empty": "The index has no readable records in its bounded current view; older or hidden records may exist.",
+    "partial": "Oversized, duplicate, cyclic or dangling-connection flows show flow unavailable with no truncated topology.",
+    "stale": "Remove retained private reads and controls during account, rollout or Source rechecks. Same-person unsent fields remain in memory.",
+    "validation_error": "This read-only surface accepts no workflow inputs.",
+    "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
+    "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
+    "recovering": "Check the immutable request with the Original owner. No automatic write retry, replacement key or absence inference.",
+    "success": "Show only the exact current-account confirmed Original draft creation receipt; describe preparation/test/review as remaining, not successful."
+  },
+  "navigation": {
+    "back": "Back returns to /workflows; unsent content is local until Save draft.",
+    "cancelOrSaveExit": "Only explicit Save creates a Native draft. Browser reload recovers admitted requests from a per-tab content-free locator.",
+    "deepLink": "/workflows/new",
+    "resume": "Exact admitted request locators are scoped to company and principal. No description/body/result enters browser persistence."
+  },
+  "accessibility": {
+    "initialFocus": "Main heading or the dialog category control; keyboard focus is visible and unobscured.",
+    "focusAfterError": "Error summary or first invalid control, with a programmatically associated explanation.",
+    "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
+    "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
+    "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
+    "targetSize": "Custom frequent and primary controls target at least 44 \u00d7 44 CSS px.",
+    "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
+    "reducedMotion": "No essential animated transition or moving progress indicator.",
+    "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
+  },
+  "responsive": {
+    "wide": "Readable constrained content width with natural wrapping.",
+    "narrow": "Reflow cards and form actions without concealing utilities or consequences.",
+    "mobile": "Touch targets remain reachable; dialogs scroll within the viewport and do not obscure focus."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Currently readable Native workflow name/description/status",
+      "Exact own draft receipt metadata"
+    ],
+    "dataCollected": [
+      "Explicit bounded Human description in Original workflow description",
+      "Per-tab company/principal/request locator for uncertain outcomes"
+    ],
+    "sensitiveFields": [
+      "Workflow intent and company context"
+    ],
+    "loggingConstraints": "Content-free HTTP classification covers all methods, rejected malformed company paths and exact request lookups. Activity records only immutable hashes and IDs; no description or raw errors. No external collection."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "Intent, prompts, customer prose, raw errors, credentials, URLs, DOM and screenshots"
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Actual PostgreSQL concurrent exact creation yields one Native workflow/revision/receipt. Changed body refuses the same key.",
+      "Lost responses use Original reads across reload; missing receipts stay unconfirmed and rollout withdrawal permits retained receipt reads.",
+      "Native deletion cannot recreate the retained request; late role loss rolls back draft, revision and audit.",
+      "Full chat-generated draft flow, broader lifecycle and representative human/hosted qualification remain pending."
+    ],
+    "accessibility": [
+      "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
+    ],
+    "securityPrivacy": [
+      "Current verified creator/company/account and Native grants are required. Foreign creator/account responses are refused.",
+      "No model dispatch, schedule, execution or permission grant is created. Content-free logs and per-tab locators omit described intent."
+    ],
+    "usability": [
+      "Use representative exploratory and pre-registered confirmatory journey evidence with explicit PASS/FAIL/INCONCLUSIVE; source checks are insufficient."
+    ]
+  }
+}

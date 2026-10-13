@@ -64,7 +64,7 @@ import { Foundation } from "./pages/Foundation";
 import { Readiness } from "./pages/Readiness";
 import { V8FeatureGate } from "./components/V8FeatureGate";
 import { DerivedMemory } from "./pages/DerivedMemory";
-import { Orchestration } from "./pages/Orchestration";
+import { OrchestrationEntry } from "./pages/OrchestrationExperience";
 import { AIGovernance } from "./pages/AIGovernance";
 import { WorkSignals } from "./pages/WorkSignals";
 import { OrganizationalLearning } from "./pages/OrganizationalLearning";
@@ -73,7 +73,8 @@ import { FoundationBootstrap } from "./pages/FoundationBootstrap";
 import { V7FeatureGate } from "./components/V7FeatureGate";
 import { Memory } from "./pages/Memory";
 import { Governance } from "./pages/Governance";
-import { Workflows } from "./pages/Workflows";
+import { WorkflowsEntry } from "./pages/WorkflowIndex";
+import { WorkflowDescribeEntry } from "./pages/WorkflowDescribe";
 import { AutomationArtifacts } from "./pages/AutomationArtifacts";
 import { WorkflowBuilder } from "./pages/WorkflowBuilder";
 import { WorkflowEntry } from "./pages/WorkflowReview";
@@ -446,7 +447,7 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       <Route path="memory/intelligence" element={<V7FeatureGate feature="memory_observations_v7"><DerivedMemory /></V7FeatureGate>} />
       <Route path="memory/maintenance" element={<MemoryMaintenanceHistoryEntry />} />
       <Route path="company/measures" element={<ExperienceMeasuresEntry />} />
-      <Route path="orchestration" element={<V7FeatureGate feature="orchestration_v7"><Orchestration /></V7FeatureGate>} />
+      <Route path="orchestration" element={<V7FeatureGate feature="orchestration_v7"><OrchestrationEntry /></V7FeatureGate>} />
       <Route path="agents/packages/installations/:installationId/maintenance" element={<MaintenanceHistoryEntry />} />
       <Route path="agents/packages" element={<V7FeatureGate feature="agent_packages_v7"><DeferredRouteSurface><AgentPackages /></DeferredRouteSurface></V7FeatureGate>} />
       <Route path="ai-governance" element={<V7FeatureGate feature="ai_use_cases_v7"><AIGovernance /></V7FeatureGate>} />
@@ -459,8 +460,9 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       />
       <Route
         path="workflows"
-        element={<WorkflowBuilderExperimentalGate><Workflows /></WorkflowBuilderExperimentalGate>}
+        element={<WorkflowBuilderExperimentalGate><WorkflowsEntry /></WorkflowBuilderExperimentalGate>}
       />
+      <Route path="workflows/new" element={<WorkflowDescribeEntry />} />
       <Route path="automation-artifacts" element={<AutomationArtifacts />} />
       <Route
         path="workflows/:workflowId"

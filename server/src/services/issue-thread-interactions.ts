@@ -1,5 +1,6 @@
 import { currentContinuationOrigins } from "./execution-continuation.js";
 import { assertAgentRunWriteAllowed } from "../agent-run-cancellation.js";
+import { assertConversationConnectionIntentCurrent } from "./conversation-connection-authority.js";
 import { connectionIntentDeliveries } from "@paperclipai/db";
 import { isDeepStrictEqual } from "node:util";
 import {
@@ -2550,6 +2551,9 @@ export function issueThreadInteractionService(
       },
     ) => {
       const payload = connectionIntentPayloadSchema.parse(input.payload);
+      const connectionContext = { companyId: issue.companyId, issueId: issue.id,
+        agentId: payload.requestingAgentId, runId: input.sourceRunId, userId: input.addresseeUserId };
+      await assertConversationConnectionIntentCurrent(db, connectionContext);
       const existing = await getIdempotentInteraction({
         issueId: issue.id,
         companyId: issue.companyId,
@@ -2571,11 +2575,14 @@ export function issueThreadInteractionService(
             },
           );
         }
-        return hydrateInteraction(existing) as ConnectionIntentInteraction;
+        const result = await hydrateInteraction(existing) as ConnectionIntentInteraction;
+        await assertConversationConnectionIntentCurrent(db, connectionContext);
+        return result;
       }
 
       let inserted = false;
       const created = await db.transaction(async (tx) => {
+        await assertConversationConnectionIntentCurrent(tx as unknown as Db, connectionContext, true);
         const issueRow = await tx
           .select({ status: issues.status, assigneeAgentId: issues.assigneeAgentId })
           .from(issues)
@@ -2674,12 +2681,14 @@ export function issueThreadInteractionService(
             })
             .where(inArray(issueThreadInteractions.id, supersededIds));
         }
+        await assertConversationConnectionIntentCurrent(tx as unknown as Db, connectionContext);
         await touchIssue(tx, issue.id);
         inserted = true;
         return row;
       });
 
       const interaction = hydrateInteraction(created) as ConnectionIntentInteraction;
+      await assertConversationConnectionIntentCurrent(db, connectionContext);
       if (inserted) emitInteractionCreatedTelemetry({
         interactionKind: "connection_intent",
         usedDeprecatedResolverPolicyAlias: false,

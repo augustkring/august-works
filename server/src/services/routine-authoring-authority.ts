@@ -22,7 +22,7 @@ export async function assertRoutineConversationDraftEntry(db: Db, companyId: str
 }
 
 export async function assertConversationRoutineAuthoring(db: Db, context: { companyId: string; agentId: string; runId: string },
-  requiredAction: "tasks:assign" | "foundation:propose" = "tasks:assign") {
+  requiredAction: "tasks:assign" | "foundation:propose" | "agents:create" = "tasks:assign") {
   if (!v9FeatureEnabled(await instanceSettingsService(db).getExperimental(), "ambient_commands_v9"))
     throw notFound("Conversation authoring is not enabled");
   const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, context.companyId),
