@@ -1,4 +1,7 @@
 import {
+  agentManagedRuntimeSetupCatalogSchema, agentManagedRuntimeSetupCommandSchema,
+  agentManagedRuntimeSetupReviewInputSchema, agentManagedRuntimeSetupReviewSchema, agentManagedRuntimeSetupReceiptSchema,
+  type AgentManagedRuntimeSetupCommand,
   agentRuntimeCandidateCatalogSchema, agentRuntimeCandidateCreateSchema, agentRuntimeCandidateViewSchema,
   agentRuntimeCandidateConformanceCommandSchema, agentRuntimeCandidateConformanceReviewSchema, agentRuntimeCandidateConformanceReceiptSchema,
   type AgentRuntimeCandidateCreate, type AgentRuntimeCandidateConformanceCommand,
@@ -46,6 +49,34 @@ export interface AgentAuthoringOptions {
   runtimes: Array<{ id: string }>;
 }
 export const agentAuthoringApi = {
+  managedRuntimeCatalog: async (company: string, principal: string, draft: string, signal?: AbortSignal) => {
+    uuid.parse(company); uuid.parse(draft);
+    return candidateContext(agentManagedRuntimeSetupCatalogSchema.parse(await api.get(scope(`${root(company)}/${draft}/managed-runtime`, principal),
+      { signal, cache: "no-store" })), company, draft);
+  },
+  latestManagedRuntimeReceipt: async (company: string, principal: string, draft: string, signal?: AbortSignal) => {
+    uuid.parse(company); uuid.parse(draft);
+    const result = agentManagedRuntimeSetupReceiptSchema.nullable().parse(await api.get(
+      scope(`${root(company)}/${draft}/managed-runtime/requests`, principal), { signal, cache: "no-store" }));
+    return result ? candidateContext(result, company, draft) : null;
+  },
+  managedRuntimeReview: async (company: string, principal: string, draft: string, raw: { capacityProfile: string; imageDigest: string }, signal?: AbortSignal) => {
+    uuid.parse(company); uuid.parse(draft); const input = agentManagedRuntimeSetupReviewInputSchema.parse(raw);
+    return candidateContext(agentManagedRuntimeSetupReviewSchema.parse(await api.get(
+      scope(`${root(company)}/${draft}/managed-runtime/review`, principal) + `&${new URLSearchParams(input)}`, { signal, cache: "no-store" })), company, draft);
+  },
+  confirmManagedRuntime: async (company: string, principal: string, draft: string, raw: AgentManagedRuntimeSetupCommand) => {
+    uuid.parse(company); uuid.parse(draft); const command = agentManagedRuntimeSetupCommandSchema.parse(raw);
+    const result = candidateContext(agentManagedRuntimeSetupReceiptSchema.parse(await api.post(scope(`${root(company)}/${draft}/managed-runtime`, principal), command)), company, draft);
+    if (result.requestId !== command.requestId) throw new Error("Managed provisioning request changed"); return result;
+  },
+  managedRuntimeReceipt: async (company: string, principal: string, draft: string, requestId: string, signal?: AbortSignal) => {
+    uuid.parse(company); uuid.parse(draft); uuid.parse(requestId);
+    const result = agentManagedRuntimeSetupReceiptSchema.nullable().parse(await api.get(
+      scope(`${root(company)}/${draft}/managed-runtime/requests/${requestId}`, principal), { signal, cache: "no-store" }));
+    if (!result) return null; candidateContext(result, company, draft);
+    if (result.requestId !== requestId) throw new Error("Managed provisioning request changed"); return result;
+  },
   packageSetupReview: async (company: string, principal: string, id: string, purposeId: string | null, signal?: AbortSignal) =>
     agentPackageSetupReviewSchema.parse(await api.get(scope(`${root(company)}/${id}/package-setup-review`, principal) +
       (purposeId ? `&purposeId=${encodeURIComponent(purposeId)}` : ""), { signal, cache: "no-store" })),

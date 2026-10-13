@@ -13,6 +13,8 @@ import {
   agentRuntimeCandidateCreateSchema,
   agentRuntimeCandidateConformanceCommandSchema,
   providerConformanceInputSchema,
+  agentManagedRuntimeSetupCommandSchema,
+  agentManagedRuntimeSetupReviewInputSchema,
 } from "@paperclipai/shared";
 import { assertBoard, assertCompanyAccess } from "./authz.js";
 import { conflict } from "../errors.js";
@@ -24,8 +26,10 @@ import { validate } from "../middleware/validate.js";
 import { installedNativeDraftGateway } from "../services/orchestration/native-draft-runtime.js";
 import { agentRuntimeCandidateService } from "../services/agents/authoring-runtime-candidates.js";
 import { agentRuntimeCandidateConformanceService } from "../services/agents/authoring-runtime-candidate-conformance.js";
+import { agentAuthoringManagedRuntimeSetupService } from "../services/agents/authoring-managed-runtime-setup.js";
+import type { SaasPlatformConfig } from "../saas-platform-config.js";
 
-export function agentAuthoringRoutes(db: Db) {
+export function agentAuthoringRoutes(db: Db, platformConfig?: SaasPlatformConfig) {
   const router = Router(),
     service = agentAuthoringService(db);
   // Original metadata receipts do not require an installed model transport.
@@ -33,6 +37,7 @@ export function agentAuthoringRoutes(db: Db) {
   const metadataOptions = { profiles: [], sourceSha: "", protectedEvidenceOrigin: "" };
   const candidateMetadata = agentRuntimeCandidateService(db, metadataOptions);
   const conformanceMetadata = agentRuntimeCandidateConformanceService(db, metadataOptions);
+  const managedSetup = agentAuthoringManagedRuntimeSetupService(db, platformConfig);
   function company(req: Request) {
     assertBoard(req);
     const id = z.uuid().parse(req.params.companyId);
@@ -222,6 +227,23 @@ export function agentAuthoringRoutes(db: Db) {
   ));
   router.post(`${root}/:id/publish`, validate(agentDraftPublicationCommandSchema), async (req, res) => res.json(
     await agentAuthoringPublicationService(db).publish(req.actor, company(req), z.uuid().parse(req.params.id), req.body),
+  ));
+  router.get("/companies/:companyId/agent-configuration-drafts/:id/managed-runtime", async (req, res) => res.json(
+    await managedSetup.catalog(req.actor, company(req), z.uuid().parse(req.params.id)),
+  ));
+  router.get("/companies/:companyId/agent-configuration-drafts/:id/managed-runtime/review", async (req, res) => res.json(
+    await managedSetup.review(req.actor, company(req), z.uuid().parse(req.params.id), agentManagedRuntimeSetupReviewInputSchema.parse({
+      capacityProfile: req.query.capacityProfile, imageDigest: req.query.imageDigest,
+    })),
+  ));
+  router.get("/companies/:companyId/agent-configuration-drafts/:id/managed-runtime/requests/:requestId", async (req, res) => res.json(
+    await managedSetup.receipt(req.actor, company(req), z.uuid().parse(req.params.id), z.uuid().parse(req.params.requestId)),
+  ));
+  router.get("/companies/:companyId/agent-configuration-drafts/:id/managed-runtime/requests", async (req, res) => res.json(
+    await managedSetup.latestReceipt(req.actor, company(req), z.uuid().parse(req.params.id)),
+  ));
+  router.post("/companies/:companyId/agent-configuration-drafts/:id/managed-runtime", validate(agentManagedRuntimeSetupCommandSchema), async (req, res) => res.status(202).json(
+    await managedSetup.confirm(req.actor, company(req), z.uuid().parse(req.params.id), req.body),
   ));
   return router;
 }

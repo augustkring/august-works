@@ -20,6 +20,8 @@ import { Textarea } from "@/components/ui/textarea";
 import { HireDeclaredAccess } from "@/components/HireDeclaredAccess";
 import { AgentDraftPreparation } from "@/components/AgentDraftPreparation";
 import { AgentDraftRuntime } from "@/components/AgentDraftRuntime";
+import { AgentManagedRuntimeSetup } from "@/components/AgentManagedRuntimeSetup";
+import { useSaasCapabilities } from "@/hooks/useSaasCapabilities";
 import { AgentDraftPublication } from "@/components/AgentDraftPublication";
 import { AgentDraftSafeTest } from "@/components/AgentDraftSafeTest";
 import { AgentDraftPackageSetup } from "@/components/AgentDraftPackageSetup";
@@ -61,6 +63,7 @@ export function HireAgentSetup({
     client = useQueryClient(),
     { screen } = useParams();
   const authority = useV9AuthoringAuthority(company, principal);
+  const managedCapabilities = useSaasCapabilities();
   const alive = useRef(true),
     heading = useRef<HTMLHeadingElement>(null);
   const securityEpoch = useRef(0),
@@ -544,6 +547,12 @@ export function HireAgentSetup({
             onConfirmed={value => { if (!alive.current || !authority.canRead() || checking.current) return;
               client.setQueryData(key, value); setReceipt(value); setContent(value.content); }} />
           <p>{t("hireSetup.expected")}{" "}{receipt.content.outcome}</p>
+          {managedCapabilities.data && (receipt.agentId || receipt.preparation?.agentId) && !content.runtimeBindingId &&
+            <AgentManagedRuntimeSetup key={`${company}:${principal}:${receipt.id}`} company={company} principal={principal} draft={receipt}
+              enabled={viewReady && !save.isPending && !discard.isPending}
+              selectionEnabled={enabled && !frozen && JSON.stringify(content) === JSON.stringify(receipt.content)}
+              canUseAuthority={() => alive.current && authority.canRead() && !checking.current && !checkingAccess &&
+                client.getQueryState(key)?.fetchStatus === "idle"} />}
           <AgentDraftRuntime company={company} principal={principal} draft={receipt} enabled={viewReady}
             selectedRuntimeCandidateId={content.runtimeCandidateId ?? null}
             onSelectRuntimeCandidate={candidateId => {

@@ -40,3 +40,21 @@ it("refuses malformed identifiers before transport", async () => {
   await expect(agentAuthoringApi.runtimeCandidateConformanceReceipt(id(1), "author", id(2), id(3), "../other")).rejects.toThrow();
   expect(get).not.toHaveBeenCalled();
 });
+it("recovers managed provisioning through a scoped Original read without a replacement effect", async () => {
+  const managed = { companyId: id(1), draftId: id(2), agentId: id(3), requestId: id(6), cellId: id(7), operationId: id(8),
+    recordedAt: "2026-10-13T00:00:00Z", operationStatus: "REQUESTED", runtimeStatus: "REQUESTED", modelConfigured: false,
+    activatesAgent: false, grantsAuthority: false, runtimeQualified: false };
+  const get = vi.spyOn(api, "get").mockResolvedValue(managed), post = vi.spyOn(api, "post");
+  expect(await agentAuthoringApi.managedRuntimeReceipt(id(1), "author", id(2), id(6))).toEqual(managed);
+  expect(get).toHaveBeenCalledWith(`/companies/${id(1)}/agent-configuration-drafts/${id(2)}/managed-runtime/requests/${id(6)}?expectedUserId=author`,
+    { signal: undefined, cache: "no-store" });
+  for (const field of ["companyId", "draftId", "requestId"]) {
+    get.mockResolvedValue({ ...managed, [field]: id(9) });
+    await expect(agentAuthoringApi.managedRuntimeReceipt(id(1), "author", id(2), id(6))).rejects.toThrow();
+  }
+  get.mockResolvedValue({ ...managed, gatewaySecretRef: "PRIVATE" });
+  await expect(agentAuthoringApi.latestManagedRuntimeReceipt(id(1), "author", id(2))).rejects.toThrow();
+  get.mockResolvedValue(null);
+  expect(await agentAuthoringApi.managedRuntimeReceipt(id(1), "author", id(2), id(6))).toBeNull();
+  expect(post).not.toHaveBeenCalled();
+});

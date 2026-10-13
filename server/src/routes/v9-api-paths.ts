@@ -1,5 +1,7 @@
 import { z } from "zod";
 import {
+  agentManagedRuntimeSetupCatalogSchema, agentManagedRuntimeSetupCommandSchema, agentManagedRuntimeSetupReviewSchema,
+  agentManagedRuntimeSetupReviewInputSchema, agentManagedRuntimeSetupReceiptSchema,
   agentRuntimeCandidateCreateSchema, agentRuntimeCandidateCatalogSchema, agentRuntimeCandidateViewSchema,
   agentRuntimeCandidateConformanceCommandSchema, agentRuntimeCandidateConformanceReviewSchema, agentRuntimeCandidateConformanceReceiptSchema,
   agentDraftPublicationReviewSchema, agentDraftPublicationCommandSchema, agentDraftPublicationReceiptSchema,
@@ -75,7 +77,7 @@ export interface V9ApiOperation {
   bodyContent?: Record<string, { schema: unknown }>;
   responseContent?: Record<string, { schema: unknown }>;
   result?: z.ZodType;
-  successStatus?: 200 | 201;
+  successStatus?: 200 | 201 | 202;
   privateResponse?: boolean;
   cacheControl?: "no-store" | "private, no-store";
   unavailable?: boolean;
@@ -109,7 +111,7 @@ const write = (
   summary: string,
   body: z.ZodType,
   result?: z.ZodType,
-  successStatus: 200 | 201 = 200,
+  successStatus: 200 | 201 | 202 = 200,
 ): V9ApiOperation => ({
   method: "post",
   path,
@@ -267,6 +269,15 @@ export const v9ApiPaths: V9ApiOperation[] = [
   read(`${drafts}/{id}/runtime`,
     "Inspect the actual Agent's current Original runtime proof; never representative test qualification",
     agentDraftRuntimeViewSchema),
+  read(`${drafts}/{id}/managed-runtime`, "Read current qualified managed capacity for the actual inactive Agent", agentManagedRuntimeSetupCatalogSchema),
+  read(`${drafts}/{id}/managed-runtime/review`, "Review an Original provisioning request without calling a model or activating the Agent",
+    agentManagedRuntimeSetupReviewSchema, account.extend(agentManagedRuntimeSetupReviewInputSchema.shape)),
+  write(`${drafts}/{id}/managed-runtime`, "Explicitly create one durable Original provisioning operation within included capacity",
+    agentManagedRuntimeSetupCommandSchema, agentManagedRuntimeSetupReceiptSchema, 202),
+  read(`${drafts}/{id}/managed-runtime/requests/{requestId}`, "Recover current Original provisioning status without a replacement request",
+    agentManagedRuntimeSetupReceiptSchema.nullable()),
+  read(`${drafts}/{id}/managed-runtime/requests`, "Resume the latest owned Original provisioning operation after reload",
+    agentManagedRuntimeSetupReceiptSchema.nullable()),
   read(`${drafts}/{id}/runtime-candidates`, "List owned private configuration proposals without live effects or conformance claims", agentRuntimeCandidateCatalogSchema),
   write(`${drafts}/{id}/runtime-candidates`, "Save one immutable original runtime proposal without changing the live Agent", agentRuntimeCandidateCreateSchema, agentRuntimeCandidateViewSchema, 201),
   read(`${drafts}/{id}/runtime-candidates/requests/{requestId}`, "Read the original proposal creation slot; absence is not refusal", agentRuntimeCandidateViewSchema.nullable()),

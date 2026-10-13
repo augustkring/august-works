@@ -8,7 +8,7 @@
     "admin",
     "security_admin"
   ],
-  "customerOutcome": "Show the expected outcome and truthful unavailable test state until independent native execution is implemented.",
+  "customerOutcome": "Prepare the inactive package Agent, review managed runtime capacity where available and perform an explicitly reviewed representative test against a qualified configuration.",
   "entryConditions": [
     "Current verified creator in the selected company with native agents:create authority; no instance-admin bypass.",
     "The canonical setup pins an immutable native customer package version; historical reads and discard survive flag rollback.",
@@ -16,12 +16,12 @@
   ],
   "exitConditions": [
     "Save & exit and section changes persist only an unpublished canonical proposal with request/version fences.",
-    "No agent, installation, grant, execution result or active receipt is created.",
-    "Native representative test, connection scope assessment, publication and active receipt remain incomplete."
+    "Inactive preparation and managed provisioning require separate explicit confirmations; neither activates the Agent or grants model/app access.",
+    "Recorded provisioning is separate from runtime qualification. Representative results need human verification before explicit package setup and publication."
   ],
   "content": {
     "h1": "Representative test",
-    "supportingCopy": "Show the expected outcome and truthful unavailable test state until independent native execution is implemented.",
+    "supportingCopy": "Prepare the inactive package Agent, review managed runtime capacity where available and perform an explicitly reviewed representative test against a qualified configuration.",
     "customerTerms": [
       "Agent",
       "Company",
@@ -45,7 +45,10 @@
       "Save & exit",
       "Resume saved section",
       "Retry the exact unacknowledged save",
-      "Explicitly reload after a version conflict"
+      "Explicitly reload after a version conflict",
+      "Review current qualified managed capacity and an approved runtime version",
+      "Authorize use of existing included capacity and inactive provisioning separately",
+      "Recover the existing provisioning receipt by request ID or resume it after reload without a replacement effect"
     ],
     "destructiveOrIrreversible": [
       "Discard setup removes authored proposal content; current native authority and exact request/version fences apply."
@@ -55,12 +58,13 @@
     "canonicalReadDomains": [
       "Native creator-private agent_configuration_drafts",
       "Pinned native package version and current customer qualification",
-      "Current authorized company members and approved Foundation sources"
+      "Current authorized company members and approved Foundation sources",
+      "Original runtime catalog, commercial entitlement/capacity, runtime cell and durable provisioning operation owners"
     ],
     "canonicalWriteOperation": "Native unpublished draft save/discard only; per-kind step validation, immutable source pins and unmodifiable Hire capability declarations.",
-    "authorityEffect": "No grants, activation, agent mutation, external messages or runtime execution.",
+    "authorityEffect": "Draft saves confer no authority. Separate preparation creates an inactive Agent/package installation; managed setup creates one reviewed provisioning operation. Qualification, model grants, binding, representative testing, human verification and publication remain distinct actions.",
     "asyncWork": "Principal/company/draft-keyed no-store queries; immediate hide on authority events; frozen request/body/version retry; late acknowledgements cannot restore private content after revocation. V9 account observation rechecks on return inside the ordinary 30-second freshness window, without restarting reads for nested observers. Same-turn QueryClient fetch guards and authority epochs fence Native transport and late acknowledgements.",
-    "receipt": "Saved setup version only. Representative execution, independent verification, publication and active-agent receipts remain unavailable."
+    "receipt": "Current private creator/company/draft/actual-Agent scoped Original provisioning receipt; lookup survives admission rollback, and a missing slot does not prove refusal."
   },
   "states": {
     "loading": "Announce loading only while the current identity/company request is pending.",
@@ -85,7 +89,7 @@
     "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
     "keyboardModel": "Native links, labeled inputs, select controls and semantic fieldsets; pending reconciliation disables editing. Standard Tab/Shift+Tab/Enter.",
     "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
-    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
+    "targetSize": "Custom frequent and primary controls target at least 44 \u00d7 44 CSS px.",
     "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
     "reducedMotion": "No essential animated transition or moving progress indicator.",
     "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
@@ -122,7 +126,9 @@
   "acceptance": {
     "functional": [
       "Exercise save/resume/discard, exact retries, concurrent versions, immutable package pins, withdrawal, authority revocation and rollback reads.",
-      "Complete representative execution, connection assessment, native publication and active receipt are open; source partial states cannot qualify this journey."
+      "Complete representative execution, connection assessment, native publication and active receipt are open; source partial states cannot qualify this journey.",
+      "Actual PostgreSQL tests compose provisioning with the prepared Hire package Agent and preserve inactive Agent and package state; final audit/qualification withdrawal rolls cell, secret, operation and receipt back together.",
+      "Built guided Hire interaction covers two confirmations, unconfirmed response, exact request recovery, reload, Danish mobile accessibility and absence of duplicate provisioning."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."

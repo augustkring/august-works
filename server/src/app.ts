@@ -912,7 +912,7 @@ export async function createApp(
   api.use(decisionIntelligenceRoutes(db));
   api.use(dashboardRoutes(db));
   api.use(experienceRoutes(db));
-  api.use(agentAuthoringRoutes(db));
+  api.use(agentAuthoringRoutes(db, opts.saasPlatform?.config));
   api.use(agentMonitorRoutes(db));
   api.use(agentRetirementRoutes(db));
   api.use(maintenanceHistoryRoutes(db));

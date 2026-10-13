@@ -3369,3 +3369,4 @@ export { agentDraftPublicationCommandSchema, agentDraftPublicationReviewSchema, 
 export * from "./agent-authoring-package-setup.js";
 
 export * from "./agent-pause.js";
+export * from "./agent-managed-runtime-setup.js";

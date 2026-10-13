@@ -1941,5 +1941,33 @@
       "failed": "Kvalifikationen bestod ikke. Gennemgå dens oprindelige status før et nyt forslag.",
       "unknown": "Det oprindelige kvalifikationsresultat er ubekræftet; den reserverede forpligtelse fastholdes."
     }
+  },
+  "managedAgentSetup": {
+    "title": "Opsæt den ansatte agents administrerede runtime",
+    "boundary": "Brug runtime-kapaciteten i jeres nuværende abonnement. Dette køber ikke ekstra kapacitet, opsætter ikke modeladgang og aktiverer ikke agenten. Modelomkostninger er separate.",
+    "checking": "Kontrollerer den oprindelige opsætning og tilgængelige kapacitet…",
+    "unknown": "Provisioneringsanmodningen kunne ikke bekræftes. Kontrollér dens oprindelige kvittering før en ny handling.",
+    "unavailable": "Den aktuelle administrerede opsætning er utilgængelig. Åbn de oprindelige runtime-kontroller for at undersøge kapacitet eller gendanne.",
+    "advanced": "Avancerede valg af kapacitet og version",
+    "capacity": "Kvalificeret kapacitet",
+    "version": "Godkendt runtime-version",
+    "blocked": "Afklar den aktuelle kapacitet eller kravet om en inaktiv agent før provisionering.",
+    "capacityConsent": "Jeg godkender brug af den gennemgåede runtime-kapacitet i vores nuværende abonnement.",
+    "inactiveConsent": "Jeg forstår, at provisionering holder agenten inaktiv og kræver separat modelopsætning og kvalificering.",
+    "request": "Anmod om administreret runtime",
+    "checkOriginal": "Kontrollér provisioneringsstatus",
+    "openOriginal": "Åbn runtime-opsætning og gendannelse",
+    "next": "Fuldfør modelopsætning og runtime-tilknytning samt kvalificering og repræsentative tests, før agenten publiceres.",
+    "status": {
+      "REQUESTED": "Der er anmodet om provisionering af administreret runtime.",
+      "RUNNING": "Den oprindelige provisionering kører.",
+      "WAITING_FOR_CAPACITY": "Den oprindelige handling venter på kapacitet.",
+      "NEEDS_RECONCILIATION": "Provisionering kræver gendannelse gennem den oprindelige handling.",
+      "SUCCEEDED": "Provisionering er afsluttet. Gennemgå agentens aktuelle opsætning før aktivering.",
+      "FAILED": "Den oprindelige provisionering mislykkedes. Undersøg dens muligheder for gendannelse.",
+      "CANCELED": "Den oprindelige provisionering blev annulleret."
+    },
+    "saveDraft": "Gem de aktuelle agentændringer, før du gennemgår provisioneringen.",
+    "capacityUse": "Bruger én runtime-plads fra jeres nuværende kapacitet."
   }
 }

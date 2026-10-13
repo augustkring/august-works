@@ -1941,5 +1941,33 @@
       "failed": "Qualification did not pass. Review its original state before a new proposal.",
       "unknown": "The original qualification outcome is unknown; reserved liability remains."
     }
+  },
+  "managedAgentSetup": {
+    "title": "Set up the hired agent’s managed runtime",
+    "boundary": "Use your existing plan’s runtime allowance. This does not buy extra capacity, configure model access or activate the agent. Model charges are separate.",
+    "checking": "Checking the existing request and available capacity…",
+    "unknown": "The provisioning request could not be confirmed. Check this request’s status before another action.",
+    "unavailable": "Current managed setup is unavailable. Open runtime setup to check capacity or recover the request.",
+    "advanced": "Advanced capacity and version choices",
+    "capacity": "Qualified capacity",
+    "version": "Approved runtime version",
+    "blocked": "Resolve the current capacity or inactive-agent requirement before provisioning.",
+    "capacityConsent": "I authorize using the reviewed runtime capacity in our current plan.",
+    "inactiveConsent": "I understand that provisioning keeps the agent inactive and requires separate model setup and qualification.",
+    "request": "Request managed runtime",
+    "checkOriginal": "Check provisioning status",
+    "openOriginal": "Open runtime setup and recovery",
+    "next": "Complete model setup and runtime binding, then qualification and representative tests before publishing the agent.",
+    "status": {
+      "REQUESTED": "Managed runtime provisioning is requested.",
+      "RUNNING": "The provisioning request is running.",
+      "WAITING_FOR_CAPACITY": "The request is waiting for capacity.",
+      "NEEDS_RECONCILIATION": "Provisioning needs recovery through the existing request.",
+      "SUCCEEDED": "Provisioning completed. Review the agent’s current setup before activation.",
+      "FAILED": "The provisioning request failed. Inspect its recovery options.",
+      "CANCELED": "The provisioning request was cancelled."
+    },
+    "saveDraft": "Save the current agent changes before reviewing provisioning.",
+    "capacityUse": "Uses one runtime slot from your existing allowance."
   }
 }
