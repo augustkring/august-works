@@ -1538,3 +1538,41 @@ explicitly controlled as a software fixture. No real authenticated Human,
 host/provider, representative business or release qualification is inferred.
 Full retained-run safety, external outcome reconciliation/compensation and the
 remaining guided authoring lifecycle remain open.
+
+## ADR-V9-035 — Retained workflow run safety is separate from private payload reads
+
+2026-10-13. An exact run-control entry remains mounted when workflow/builder/
+progressive rollout closes. Its read selects only Native retained IDs, status,
+purpose and update stamp. The Original workflow read/run permissions and actual
+write-role fence still apply. Opaque control additionally requires the responsible
+Human or the existing Native company administrative owner; a generic runtime
+action decision on a company object is not an administration attestation.
+Request-snapshot admin flags cannot replace current Native role admission.
+
+The explicit Stop freezes workflow/revision/run/update identity and acknowledgement
+that completed effects remain. A private internal safety context admits it through
+the unchanged Original cancellation engine, with no replacement queue, lease or
+cleanup driver. Rollout closure and private payload withdrawal cannot restore
+inputs/results or create new run authority. The Original cancellation-only
+reconciler already runs with workflow rollout disabled. Historical receipt replay
+does not initiate another safety continuation; the Original recovery owner retains
+pending physical cancellation. Receipt admission never proves all child/provider
+work stopped or reverses completed effects.
+
+Stop and its Original journal commit in the same transaction; retained authority
+is repeated after the journal so late role withdrawal rolls back both. The browser
+retains only a bounded per-tab original request locator before one POST. In-flight
+submission, lost acknowledgement and confirmed history are distinct states. A
+fresh current scoped control read is required before confirming/clearing a receipt;
+unknown/missing/foreign results remain unconfirmed and permit exact GET recovery.
+Navigation/language remain available on that safety entry after rollout closure.
+
+Native queued/waiting cancellation, scoped non-manager/viewer denial, actual copied
+payload erasure and late-role rollback are software fixtures. Immutable publication
+provenance and Native permission checks were preserved when correcting fixture
+setup. Temporary diagnostics used only in the disposable browser fixture were
+removed. The browser failure came from premature fixture cleanup before its POST
+finished; the corrected test waits for the actual Native response. Private run
+history also checks current account/Source before and after reads and preserves
+utility focus. Exact-source validation remains in the continuation plan; live
+process/provider, manual assistive technology and Human qualification stay open.

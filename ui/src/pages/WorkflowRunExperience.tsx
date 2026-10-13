@@ -3,7 +3,9 @@ import { workflowSupportDiagnostic } from "@paperclipai/shared";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { workflowsApi } from "../api/workflows";
-import { useAccountIdentity } from "../api/companies-query";
+import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
+import { useV9PrivateReadAuthority } from "../hooks/useV9PrivateReadAuthority";
+import { useExperienceHeading } from "../hooks/useExperienceHeading";
 import { useCompany } from "../context/CompanyContext";
 import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
 import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
@@ -25,7 +27,7 @@ function RunLoading() {
 }
 function CurrentRun() {
   const { selectedCompanyId } = useCompany();
-  const identity = useAccountIdentity();
+  const identity = useV9CurrentAccount();
   const { workflowId, runId } = useParams();
   const principal = identity.localImplicit ? "local-board" : identity.userId;
   const { t } = useTranslation("experience");
@@ -70,14 +72,25 @@ export function WorkflowRunExperience({
 }) {
   const { t } = useTranslation("experience");
   const client = useQueryClient();
+  const { selectedCompanyId } = useCompany();
+  const authority = useV9PrivateReadAuthority(principal, true);
   const [epoch, setEpoch] = useState(0);
-  const heading = useRef<HTMLHeadingElement>(null);
+  const source = useRef(0);
   const error = useRef<HTMLDivElement>(null);
   const prefix = ["workflow-run-experience", company, principal, workflow, id];
+  const key = [...prefix, authority.epoch, epoch];
+  const scope = useRef({ company, principal, workflow, id, selectedCompanyId, authority });
+  scope.current = { company, principal, workflow, id, selectedCompanyId, authority };
+  const canReadCurrent = () => scope.current.company === company && scope.current.principal === principal && scope.current.workflow === workflow &&
+    scope.current.id === id && scope.current.selectedCompanyId === company && scope.current.authority.canRead() && source.current === epoch;
   const query = useQuery({
-    queryKey: [...prefix, epoch],
-    queryFn: ({ signal }) =>
-      workflowsApi.runExperience(company, principal, workflow, id, signal),
+    queryKey: key,
+    enabled: authority.readReady && selectedCompanyId === company,
+    queryFn: ({ signal }) => authority.read(async () => {
+      if (!canReadCurrent()) throw new Error("Current run history needs review");
+      const value = await workflowsApi.runExperience(company, principal, workflow, id, signal);
+      if (!canReadCurrent()) throw new Error("Current run history scope changed"); return value;
+    }),
     retry: false,
     gcTime: 0,
     staleTime: 0,
@@ -100,16 +113,16 @@ export function WorkflowRunExperience({
       event.payload.entityType !== "company_membership"
     )
       return;
-    setEpoch((value) => value + 1);
+    source.current++; setEpoch(source.current);
     void client.cancelQueries({ queryKey: prefix });
     client.removeQueries({ queryKey: prefix });
   });
+  const state = client.getQueryState(key), fresh = canReadCurrent() && query.isSuccess && !query.isFetching && !state?.isInvalidated;
+  const heading = useExperienceHeading(`${company}:${principal}:${workflow}:${id}`, !fresh, query.isError);
   useEffect(() => {
-    heading.current?.focus();
-  }, [query.data?.id, query.isFetching]);
-  useEffect(() => {
-    if (query.isError) error.current?.focus();
+    if (canReadCurrent() && query.isError && !document.activeElement?.closest('[role="dialog"],button,a[href],input,select,textarea,summary,[contenteditable="true"],[role="button"]')) error.current?.focus();
   }, [query.isError]);
+  if (!canReadCurrent()) return <RunLoading />;
   const controls = (
     <WorkflowStopControls
       company={company}
@@ -117,7 +130,7 @@ export function WorkflowRunExperience({
       workflow={workflow}
       id={id}
       detail={
-        !query.isPending && !query.isFetching && !query.isError
+        fresh
           ? query.data
           : null
       }
@@ -136,14 +149,14 @@ export function WorkflowRunExperience({
         {controls}
       </>
     );
-  if (query.isPending || query.isFetching)
+  if (!fresh)
     return (
       <>
         <RunLoading />
         {controls}
       </>
     );
-  const detail = query.data;
+  const detail = query.data!;
   const supportReport = workflowSupportDiagnostic(detail, {
     companyId: company,
     workflowId: workflow,
@@ -172,6 +185,7 @@ export function WorkflowRunExperience({
           })}
         </p>
         <p role="status">{t(`workflowRunStatus.${detail.status}`)}</p>
+        {detail.canRequestStop && <Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${workflow}/runs/${id}/control`}>{t("workflowRunControl.open")}</Link>}
         <p className="text-sm text-muted-foreground">
           {t("workflowRunBoundary")}
         </p>

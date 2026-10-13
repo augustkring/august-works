@@ -66,6 +66,13 @@ export async function lockCustomerWorkflowReceiptAuthority(
   return lockCustomerWorkflowAuthority(tx, companyId, authority, actions, false);
 }
 
+/** Existing run cancellation is a safety decision, never admission of new
+ * work. Its Original current permissions/role survive rollout closure. The
+ * caller still mediates exact retained run control without payload disclosure. */
+export async function lockCustomerWorkflowSafetyAuthority(tx: Db, companyId: string, authority: AuthorizationActor, actions: readonly PermissionKey[]) {
+  return lockCustomerWorkflowAuthority(tx, companyId, authority, actions, false);
+}
+
 async function lockCustomerWorkflowAuthority(
   tx: Db,
   companyId: string,

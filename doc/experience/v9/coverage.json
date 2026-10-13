@@ -1289,7 +1289,11 @@
         "ui/src/components/WorkflowStopControls.tsx",
         "server/src/services/workflows/workflow-customer-stop.ts",
         "packages/shared/src/workflow-stop.ts",
-        "packages/shared/src/workflow-test.ts"
+        "packages/shared/src/workflow-test.ts",
+        "ui/src/pages/WorkflowRunControl.tsx",
+        "ui/src/api/workflow-run-control.ts",
+        "ui/src/lib/pending-workflow-stops.ts",
+        "server/src/services/workflows/workflow-executor.ts"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/workflow-inspect.json"
@@ -1393,7 +1397,12 @@
         "ui/src/components/WorkflowRequestRecoveryLinks.tsx",
         "ui/src/hooks/useWorkflowRequestLocator.ts",
         "ui/src/lib/pending-workflow-requests.ts",
-        "server/src/services/workflows/workflow-customer-authority.ts"
+        "server/src/services/workflows/workflow-customer-authority.ts",
+        "packages/shared/src/workflow-stop.ts",
+        "ui/src/pages/WorkflowRunControl.tsx",
+        "ui/src/api/workflow-run-control.ts",
+        "ui/src/lib/pending-workflow-stops.ts",
+        "server/src/services/workflows/workflow-customer-stop.ts"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/workflow-operate.json"
@@ -1418,7 +1427,13 @@
         "ui/src/lib/pending-workflow-requests.ts",
         "server/src/services/workflows/workflow-customer-authority.ts",
         "server/src/services/workflows/workflow-service.ts",
-        "server/src/routes/workflows.ts"
+        "server/src/routes/workflows.ts",
+        "packages/shared/src/workflow-stop.ts",
+        "ui/src/pages/WorkflowRunControl.tsx",
+        "ui/src/api/workflow-run-control.ts",
+        "ui/src/lib/pending-workflow-stops.ts",
+        "server/src/services/workflows/workflow-customer-stop.ts",
+        "server/src/services/workflows/workflow-executor.ts"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/workflow-recover.json"

@@ -183,6 +183,7 @@ export const createWorkflowsApi = (api: typeof defaultApi = defaultApi) => ({
         { signal, cache: "no-store" },
       ),
     );
+    signal?.throwIfAborted();
     if (
       result.companyId !== companyId ||
       result.workflowId !== workflowId ||

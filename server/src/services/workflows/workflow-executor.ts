@@ -9,7 +9,7 @@ import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { WorkflowCheckpointError } from "./workflow-errors.js";
 import { assertWorkflowTaskAssignmentAuthorized } from "./workflow-task-authority.js";
 import { directAgentConfig, dispatchDirectAgent } from "./workflow-direct-agent.js";
-import { lockCustomerWorkflowStop, inspectCustomerWorkflowStop, recordCustomerWorkflowStop, type CustomerWorkflowStop } from "./workflow-customer-stop.js";
+import { lockCustomerWorkflowStop, inspectCustomerWorkflowStop, recordCustomerWorkflowStop, readRetainedWorkflowRunControl, type CustomerWorkflowStop } from "./workflow-customer-stop.js";
 import { v5HumanActorId } from "../v5-authorization.js";
 import { logger } from "../../middleware/logger.js";
 import { customerWorkflowInternalGraphReady, customerWorkflowTestReady } from "./workflow-customer-launch.js";
@@ -8248,29 +8248,33 @@ export function workflowExecutorService(
   db: Db,
   runtimeDeps: WorkflowExecutorRuntimeDeps = {},
 ) {
+  async function stopCustomerRun(companyId: string, runId: string, rawInput: WorkflowStopCommand, authority: AuthorizationActor, retainedSafety = false): Promise<WorkflowStopReceipt> {
+    const command = workflowStopCommandSchema.parse(rawInput), principal = v5HumanActorId(authority);
+    const actor: WorkflowRunActor = { principal: authority.source === "local_implicit"
+      ? { type: "system", service: "local-board" } : { type: "user", userId: principal } };
+    const customer: CustomerWorkflowStop = { command, authority: retainedSafety ? { ...authority, isInstanceAdmin: false } : authority,
+      deadline: performance.now() + 30_000, receipt: null, ...(retainedSafety ? { retainedSafety: true as const } : {}) };
+    const reason = "Customer requested workflow stop";
+    const requested = await requestWorkflowRunCancellation(db, companyId, runId, reason, actor, undefined, customer);
+    if (!customer.receipt) throw new Error("Native workflow stop receipt is unavailable");
+    if (requested.status === "cancelling" && !(retainedSafety && customer.replayed)) {
+      try { await continueWorkflowRunCancellation(db, requested, reason, actor, runtimeDeps); }
+      catch {
+        // The Original cancellation-only reconciler also runs with rollout
+        // disabled. Admission and replay never claim physical completion.
+        logger.warn({ companyId, workflowRunId: runId }, "Native workflow stop is admitted; cancellation remains pending");
+      }
+    }
+    return customer.receipt;
+  }
   return {
     getRun: (companyId: string, runId: string, reader?:AuthorizationActor) =>
       getRunDetail(db, companyId, runId,reader),
 
-    stopRun: async (companyId: string, runId: string, rawInput: WorkflowStopCommand,
-      authority: AuthorizationActor): Promise<WorkflowStopReceipt> => {
-      const command = workflowStopCommandSchema.parse(rawInput), principal = v5HumanActorId(authority);
-      const actor: WorkflowRunActor = { principal: authority.source === "local_implicit"
-        ? { type: "system", service: "local-board" } : { type: "user", userId: principal } };
-      const customer: CustomerWorkflowStop = { command, authority, deadline: performance.now() + 30_000, receipt: null };
-      const reason = "Customer requested workflow stop";
-      const requested = await requestWorkflowRunCancellation(db, companyId, runId, reason, actor, undefined, customer);
-      if (!customer.receipt) throw new Error("Native workflow stop receipt is unavailable");
-      if (requested.status === "cancelling") {
-        try { await continueWorkflowRunCancellation(db, requested, reason, actor, runtimeDeps); }
-        catch {
-          // Native recovery retains the durable cancelling row. Never label
-          // child/provider cleanup complete from this admission receipt.
-          logger.warn({ companyId, workflowRunId: runId }, "Native workflow stop is admitted; cancellation remains pending");
-        }
-      }
-      return customer.receipt;
-    },
+    stopRun: (companyId: string, runId: string, rawInput: WorkflowStopCommand, authority: AuthorizationActor) => stopCustomerRun(companyId, runId, rawInput, authority),
+    stopRetainedRun: (companyId: string, runId: string, rawInput: WorkflowStopCommand, authority: AuthorizationActor) => stopCustomerRun(companyId, runId, rawInput, authority, true),
+    retainedRunControl: (companyId: string, runId: string, authority: AuthorizationActor) => readRetainedWorkflowRunControl(db, companyId, runId, authority),
+    retainedStopReceipt: (companyId: string, runId: string, requestId: string, authority: AuthorizationActor) => readRetainedWorkflowRunControl(db, companyId, runId, authority, requestId),
 
     cancelRun: async (
       companyId: string,

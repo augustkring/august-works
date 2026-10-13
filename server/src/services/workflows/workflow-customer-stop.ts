@@ -9,6 +9,7 @@ import {
 } from "@paperclipai/db";
 import {
   workflowStopReceiptSchema,
+  workflowRunControlSchema,
   workflowStopCommandSchema,
   type WorkflowStopCommand,
   type WorkflowStopReceipt,
@@ -16,19 +17,68 @@ import {
 } from "@paperclipai/shared";
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import { type AuthorizationActor } from "../authorization.js";
+import { assertDerivedManager } from "../memory/derived-memory.js";
 import { v5HumanActorId } from "../v5-authorization.js";
 import { assertLearnedAssetAnalyticalSources } from "../learning/learning-analytical-sources.js";
 import { assertLearnedWorkflowPayloadAccess } from "../analytical-context-authority.js";
 import { persistActivity } from "../activity-log.js";
-import { lockCustomerWorkflowControlAuthority } from "./workflow-customer-authority.js";
+import { lockCustomerWorkflowControlAuthority, lockCustomerWorkflowSafetyAuthority } from "./workflow-customer-authority.js";
 
 export interface CustomerWorkflowStop {
   command: WorkflowStopCommand;
   authority: AuthorizationActor;
   deadline: number;
   receipt: WorkflowStopReceipt | null;
+  /** Internal exact-run safety entry only; never accepted in HTTP bodies. */
+  retainedSafety?: true;
+  replayed?: boolean;
 }
 type Run = typeof workflowRuns.$inferSelect;
+const cancellable = (status: string) => ["queued", "running", "waiting", "recovering", "cancelling"].includes(status);
+
+/** Payload withdrawal cannot grant a new reader. Opaque retained control is
+ * additionally confined to its responsible Human or actual company manager,
+ * on top of the Original workflow read/run permissions and write-role fence. */
+async function assertRetainedControlScope(tx: Db, run: Pick<Run, "companyId" | "responsibleUserId" | "executionPrincipal">, authority: AuthorizationActor) {
+  if (authority.source === "local_implicit") return;
+  const principal = v5HumanActorId(authority);
+  if (run.responsibleUserId === principal || run.executionPrincipal?.type === "user" && run.executionPrincipal.userId === principal) return;
+  // Use the existing Native administrative owner; a generic runtime-action
+  // decision on a company resource is not a company-management attestation.
+  await assertDerivedManager(tx, { ...authority, isInstanceAdmin: false }, run.companyId);
+}
+
+/** Read only identifiers/status, not Original private payloads. */
+export async function readRetainedWorkflowRunControl(db: Db, companyId: string, runId: string, authority: AuthorizationActor, requestId?: string) {
+  v5HumanActorId(authority);
+  if (requestId !== undefined) workflowStopReceiptSchema.shape.requestId.parse(requestId);
+  const current = { ...authority, isInstanceAdmin: false };
+  return db.transaction(async raw => {
+    const tx = raw as unknown as Db;
+    await lockCustomerWorkflowSafetyAuthority(tx, companyId, current, ["workflows:read", "workflows:run"]);
+    const [candidate] = await tx.select({ workflowId: workflowRuns.workflowId }).from(workflowRuns).where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.id, runId)));
+    if (!candidate) throw notFound("The retained workflow run is unavailable");
+    const [workflow] = await tx.select({ id: workflows.id }).from(workflows).where(and(eq(workflows.companyId, companyId), eq(workflows.id, candidate.workflowId))).for("share");
+    const [run] = await tx.select({ id: workflowRuns.id, companyId: workflowRuns.companyId, workflowId: workflowRuns.workflowId,
+      workflowRevisionId: workflowRuns.workflowRevisionId, updatedAt: workflowRuns.updatedAt, status: workflowRuns.status,
+      source: workflowRuns.source, responsibleUserId: workflowRuns.responsibleUserId, executionPrincipal: workflowRuns.executionPrincipal })
+      .from(workflowRuns).where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.id, runId))).for("share");
+    if (!workflow || !run || run.workflowId !== workflow.id) throw notFound("The retained workflow run changed");
+    await assertRetainedControlScope(tx, run, current);
+    if (requestId === undefined) return workflowRunControlSchema.parse({ companyId, workflowId: run.workflowId, runId,
+      revisionId: run.workflowRevisionId, updatedAt: run.updatedAt.toISOString(), status: run.status,
+      purpose: run.source === "test" ? "test" : "live", canRequestStop: cancellable(run.status) });
+    const events = await tx.select({ details: activityLog.details }).from(activityLog).where(and(eq(activityLog.companyId, companyId),
+      eq(activityLog.entityType, "workflow_run"), eq(activityLog.entityId, runId), eq(activityLog.action, "workflow.customer_stop_admitted"),
+      eq(activityLog.actorType, "user"), eq(activityLog.actorId, v5HumanActorId(current)), sql`${activityLog.details}->>'requestId'=${requestId}`)).limit(2);
+    if (events.length !== 1) throw notFound("The retained Stop request is unconfirmed");
+    const receipt = workflowStopReceiptSchema.parse(events[0]!.details?.receipt), command = workflowStopCommandSchema.parse(events[0]!.details?.command);
+    if (receipt.companyId !== companyId || receipt.workflowId !== run.workflowId || receipt.runId !== runId || receipt.revisionId !== run.workflowRevisionId ||
+      receipt.requestId !== requestId || command.requestId !== requestId || command.expectedWorkflowId !== run.workflowId || command.expectedRevisionId !== run.workflowRevisionId)
+      throw notFound("The retained Stop request identity changed");
+    return receipt;
+  });
+}
 /** Recover only this human's native admission. The route repeats current run,
  * source and read/run authority checks before releasing this private receipt. */
 export async function readCustomerWorkflowStopReceipt(
@@ -80,7 +130,8 @@ export async function lockCustomerWorkflowStop(
   companyId: string,
   request: CustomerWorkflowStop,
 ) {
-  await lockCustomerWorkflowControlAuthority(tx, companyId, request.authority, [
+  const lock = request.retainedSafety ? lockCustomerWorkflowSafetyAuthority : lockCustomerWorkflowControlAuthority;
+  await lock(tx, companyId, request.authority, [
     "workflows:read",
     "workflows:run",
   ]);
@@ -117,6 +168,8 @@ export async function inspectCustomerWorkflowStop(
     )
     .for("share");
   if (!revision) throw notFound("Workflow run revision not found");
+  if (request.retainedSafety) await assertRetainedControlScope(tx, run, authority);
+  else {
   await assertLearnedAssetAnalyticalSources(
     tx,
     run.companyId,
@@ -127,6 +180,7 @@ export async function inspectCustomerWorkflowStop(
   await assertLearnedWorkflowPayloadAccess(tx, run.companyId, authority, {
     workflowRunId: run.id,
   });
+  }
   if (
     run.workflowId !== command.expectedWorkflowId ||
     run.workflowRevisionId !== command.expectedRevisionId
@@ -168,6 +222,7 @@ export async function inspectCustomerWorkflowStop(
       throw notFound("Original workflow stop receipt is unavailable");
     budget(request);
     request.receipt = receipt;
+    request.replayed = true;
     return true;
   }
   if (
@@ -212,6 +267,10 @@ export async function recordCustomerWorkflowStop(
       receipt,
     },
   });
+  if (request.retainedSafety) {
+    await lockCustomerWorkflowSafetyAuthority(tx, run.companyId, request.authority, ["workflows:read", "workflows:run"]);
+    await assertRetainedControlScope(tx, run, request.authority);
+  }
   request.receipt = receipt;
   return activity.publication;
 }

@@ -2222,5 +2222,29 @@
       "paused": "This request paused admission of new work. Existing work kept its own controls.",
       "archived": "This request retired the workflow."
     }
+  },
+  "workflowRunControl": {
+    "heading": "Stop this workflow run",
+    "recorded": "Stop request recorded",
+    "open": "Open Stop controls",
+    "boundary": "These controls remain available for existing runs when new-work features are turned off. Your current run-control permissions still apply.",
+    "unavailable": "We couldn’t read the current run controls. Check your account and run access, then try again.",
+    "receipt": "Recorded Stop request",
+    "requested": "Your request to stop this run was recorded.",
+    "propagation": "Stopping still needs confirmation. This receipt does not prove that every child task or running process has stopped, and it cannot undo completed actions.",
+    "recovery": "Recover the saved Stop request",
+    "unknown": "This Stop request is unconfirmed. Check its recorded request before another action; it will not be sent again automatically.",
+    "checkOriginal": "Check original Stop request",
+    "stillUnknown": "The saved Stop request is still unconfirmed. A missing response does not prove that no request was saved.",
+    "terminal": "This run is in a terminal state. Review its recorded outcome and whether running work has stopped.",
+    "consequence": "Stop applies to this run and its admitted work. It does not pause future workflow triggers. Completed actions remain.",
+    "acknowledge": "I understand that completed actions remain and stopping running work needs confirmation.",
+    "requestStop": "Request Stop",
+    "purpose": {
+      "test": "Test run",
+      "live": "Live run"
+    },
+    "requesting": "Requesting Stop. Keep this request reference until its original response is confirmed.",
+    "recordedStatus": "Recorded run status: {{status}}"
   }
 }

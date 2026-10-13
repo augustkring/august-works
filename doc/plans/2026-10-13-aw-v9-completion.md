@@ -288,3 +288,56 @@ Rust/protocol/provider/parity safeguards and CLI. Application Source stayed fixe
 during those full checks. Token, module-boundary and 70-surface source checks pass;
 every surface still lacks full release evidence. The entire final scope still
 needs immutable `pnpm test:run`; no complete regression pass is claimed here.
+
+### Retained workflow run Stop and private history
+
+The exact run-control page/API now survives workflow/builder/progressive shutdown.
+It reads only retained IDs, status/purpose/update stamp. Original read/run
+permissions and current write-role admission remain required, with additional
+responsible-Human or existing Native company-administrator scope for opaque
+control. Neither a request-snapshot admin flag nor a generic company runtime
+action can substitute for that administrative owner. Private inputs/results are
+not queried or restored by the minimal read.
+
+The Original cancellation engine receives a private internal retained-safety
+context; its queue/leases/child/provider cleanup remain authoritative. The existing
+cancellation-only reconciler already runs while workflow rollout is disabled.
+Stop freezes exact workflow/revision/run/update identity and acknowledges completed
+effects remain. The Original receipt and cancellation commit atomically, with
+late-role rechecks rolling back both. Replay returns historical admission without
+starting a second safety continuation. It never qualifies physical propagation.
+
+Six Native PostgreSQL cases pass: queued concurrent Stop, actual waiting timer
+under session and local software controllers, actual copied-input erasure without
+restoration, stale/viewer/non-manager denial, and late-role rollback. The waiting
+local case also exercises the mounted HTTP endpoint. The existing 37-case Native
+lifecycle suite passed during this work. Earlier fixture failures omitted a required
+feature dependency, attempted to change immutable published provenance, confused
+a generic runtime action with management authority and used a pre-erasure update
+stamp. Those were corrected without weakening Native dependency, immutability,
+privacy, version or role controls. Copied payload erasure leaves its legitimate
+sanitized metadata reader; it is not falsely recorded as physical run deletion or
+an unconditional Source-read denial.
+
+The new UI/storage/API plus private-run/logging/OpenAPI group passes 61 cases in
+five suites. The corrected current built browser pair passes (34.5 seconds including
+setup), covering actual Native waiting-run cancellation with rollout disabled,
+lost acknowledgement/reload/exact GET, one POST, current receipt focus, Danish
+390px rendering, zero automated main-region axe violations and the existing Native
+Stop regression. The initial browser fixture deleted its company before its POST
+completed, causing the subsequent control read to fail; it now waits for the actual
+Native response. Submission-in-flight and unknown acknowledgement are separately
+announced. All temporary error diagnostics are removed from application Source.
+These are software fixtures, not real authenticated Human/provider evidence.
+
+Private run history now withholds trace/support controls during Original account
+cache invalidation or recheck and rejects late account/Source responses. The
+integrated checkpoint passes 106 cases in seven suites, full recursive types
+and the complete workspace build. The subsequent recorded-status copy passes
+17 UI cases and was included in that build; it distinguishes stored run status
+from physical cancellation evidence. Application Source stayed fixed during the
+build. Token, module-boundary and source-coverage checks pass. No immutable
+whole-scope test pass or release acceptance is claimed. Full guided
+graph/step/access/approval authoring, broader Agent capability/
+transport/selection, external compensation, complete lifecycle and representative
+Human/live-provider qualification remain part of the whole-scope continuation.

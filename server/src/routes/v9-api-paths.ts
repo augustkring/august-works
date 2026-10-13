@@ -72,6 +72,7 @@ import {
   workflowTestReceiptSchema,
   workflowStopCommandSchema,
   workflowStopReceiptSchema,
+  workflowRunControlSchema,
 } from "@paperclipai/shared";
 
 /** Current mounted contracts. Listing an operation confers no rollout or execution qualification. */
@@ -184,6 +185,9 @@ export const v9ApiPaths: V9ApiOperation[] = [
   read(`${company}/experience/support-access`, "Read bounded native V6 support approval history without granting or asserting current support authorization", customerSupportHistorySchema, z.strictObject({ expectedUserId: z.string().min(1).max(300) })),
   read(`${company}/agent-package-installations/{installationId}/experience/maintenance`, "Read bounded original native M2 maintenance receipts separately from current activation state", maintenanceHistorySchema, z.strictObject({ expectedUserId: z.string().min(1).max(300) })),
   read(`${company}/workflows/{workflowId}/experience/publication`, "Review an exact native internal draft and its original successful internal test without material business qualification", workflowPublicationReviewSchema, account),
+  read(`${company}/workflow-runs/{runId}/experience/control`, "Read minimal retained Native run controls under exact current responsible-Human/company-administrator authority without restoring withdrawn private payloads", workflowRunControlSchema, account),
+  { ...write(`${company}/workflow-runs/{runId}/experience/retained-stop`, "Request Original retained run cancellation with reviewed identity/version and completed-effects acknowledgement; the Original cancellation-only reconciler owns physical propagation", workflowStopCommandSchema, workflowStopReceiptSchema), query: account },
+  read(`${company}/workflow-runs/{runId}/experience/retained-stop-requests/{requestId}`, "Read only the exact Original own-request Stop admission without repeating cancellation or claiming physical completion", workflowStopReceiptSchema, account),
   read(`${company}/workflows/{workflowId}/experience/requests/{kind}/{requestId}`, "Read only the exact Original own-account workflow request receipt with current Native permission and retained Source checks; rollout withdrawal cannot replay a write", workflowRequestReceiptSchema, account),
   { ...write(`${company}/workflows/{workflowId}/experience/publication`, "Publish the exact reviewed native internal draft after its bound test; recover the immutable original publication receipt", workflowPublicationCommandSchema, workflowPublicationReceiptSchema), query: account },
   read(`${company}/agents/{agentId}/experience/pause-review`, "Review current pause source under explicit Agent configuration authority", agentPauseReviewSchema, account),

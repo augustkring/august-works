@@ -705,7 +705,8 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
             )}
           >
             <ExperienceUtilities safetyRecovery={(companyPathSegments.length === 3 && companyPathSegments[0] === "orchestration" && companyPathSegments[2] === "control") ||
-              (companyPathSegments.length === 5 && companyPathSegments[0] === "workflows" && companyPathSegments[2] === "requests")} />
+              (companyPathSegments.length === 5 && companyPathSegments[0] === "workflows" && (companyPathSegments[2] === "requests" ||
+                companyPathSegments[2] === "runs" && companyPathSegments[4] === "control"))} />
             <div className={cn(!isMobile && useStreamlinedTaskDetailShell && "hidden")}>
             <StandaloneBrowserControls mobile={isMobile} />
             <BreadcrumbBar />

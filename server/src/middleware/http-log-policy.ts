@@ -76,7 +76,7 @@ export function isPrivateExperienceHttpRequest(method: string | undefined, url: 
     || /^\/api\/companies\/[^/]+\/agents\/[^/]+\/retirement(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/memory\/experience(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]*\/workflows\/[^/]*\/experience(?:\/|$)/i.test(pathname)
-    || /^\/api\/companies\/[^/]+\/workflow-runs\/[^/]+\/experience(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/[^/]*\/workflow-runs\/[^/]*\/experience(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/(?:[^/]*\/)*agent-configuration-drafts(?:\/|$)/i.test(pathname);
 }
 export function privateExperienceLogUrl(url: string): string {
@@ -101,7 +101,7 @@ export function privateExperienceLogUrl(url: string): string {
   if (/\/agents\/[^/]+\/retirement(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/agents/:agentId/retirement";
   if (/\/memory\/experience(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/memory/experience";
   if (/\/workflows\/[^/]*\/experience(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/workflows/:workflowId/experience";
-  if (/\/workflow-runs\/[^/]+\/experience(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/workflow-runs/:runId/experience";
+  if (/\/workflow-runs\/[^/]*\/experience(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/workflow-runs/:runId/experience";
   if (/^\/api\/internal\//i.test(pathname)) return "/api/internal/customer-feedback/:companyId/:operation";
   return "/api/companies/:companyId/customer-feedback/:operation";
 }

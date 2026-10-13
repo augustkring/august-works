@@ -31,6 +31,16 @@ it("purpose-separates native run metadata and rejected requests from generic log
   expect(privateExperienceLogUrl(url)).toBe("/api/companies/:companyId/workflow-runs/:runId/experience");
   expect(isPrivateExperienceHttpRequest("GET", "/api/companies/id/workflow-runs/id/experience-other")).toBe(false);
 });
+it("protects retained run-control and exact Stop receipts, including empty scopes and refused methods", () => {
+  for (const suffix of ["control", "retained-stop", "retained-stop-requests/private-request"])
+    for (const company of ["", "private-company"]) for (const run of ["", "private-run"]) {
+      const url = `/api/companies/${company}/workflow-runs/${run}/experience/${suffix}?expectedUserId=private-user`;
+      for (const method of ["GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"]) {
+        expect(isPrivateExperienceHttpRequest(method, url)).toBe(true); expect(isSecretSensitiveHttpRequest(method, url)).toBe(true);
+        expect(privateExperienceLogUrl(url)).toBe("/api/companies/:companyId/workflow-runs/:runId/experience");
+      }
+    }
+});
 it("omits native test identity and command context from success and rejected generic logs", () => {
   const url = "/api/companies/private-company/workflows/private-workflow/experience/test?expectedUserId=private-user";
   for (const method of ["GET", "POST", "DELETE"]) {

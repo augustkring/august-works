@@ -20,6 +20,7 @@ import {
   workflowStopCommandSchema,
   workflowTestCommandSchema,
   workflowRequestKindSchema,
+  workflowRunControlSchema, workflowStopReceiptSchema,
   v9FeatureEnabled,
   type PermissionKey,
   type WorkflowCapabilities,
@@ -543,6 +544,31 @@ export function workflowRoutes(db: Db) {
   };
   router.post("/companies/:companyId/workflow-runs/:runId/tool-reviews/:requestId/approve", reviewToolAction("approve"));
   router.post("/companies/:companyId/workflow-runs/:runId/tool-reviews/:requestId/reject", reviewToolAction("reject"));
+
+  const retainedControlScope = (req: Request, res: Response) => {
+    res.set("Cache-Control", "private, no-store"); assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId), runId = z.uuid().parse(req.params.runId);
+    const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+    const account = z.strictObject({ expectedUserId: z.string().min(1).max(300) }).parse(req.query);
+    if (!principal || account.expectedUserId !== principal) throw conflict("Account changed; reload", { code: "ACCOUNT_CHANGED" });
+    return { companyId, runId };
+  };
+  router.get("/companies/:companyId/workflow-runs/:runId/experience/control", async (req, res) => {
+    const scope = retainedControlScope(req, res);
+    res.json(workflowRunControlSchema.parse(await executor.retainedRunControl(scope.companyId, scope.runId, req.actor)));
+  });
+  router.post("/companies/:companyId/workflow-runs/:runId/experience/retained-stop", validate(workflowStopCommandSchema), async (req, res) => {
+    const scope = retainedControlScope(req, res);
+    const receipt = await executor.stopRetainedRun(scope.companyId, scope.runId, req.body, req.actor);
+    // Repeat actual current retained control before disclosing the immutable
+    // admission. A late lost reply is recovered by exact GET, not another Stop.
+    await executor.retainedRunControl(scope.companyId, scope.runId, req.actor);
+    res.json(workflowStopReceiptSchema.parse(receipt));
+  });
+  router.get("/companies/:companyId/workflow-runs/:runId/experience/retained-stop-requests/:requestId", async (req, res) => {
+    const scope = retainedControlScope(req, res), requestId = z.uuid().parse(req.params.requestId);
+    res.json(workflowStopReceiptSchema.parse(await executor.retainedStopReceipt(scope.companyId, scope.runId, requestId, req.actor)));
+  });
 
   router.get("/companies/:companyId/workflow-runs/:runId/experience", async (req, res) => {
     assertBoard(req);

@@ -8,6 +8,9 @@ import type { WorkflowRunExperience as View } from "@paperclipai/shared";
 import { workflowsApi } from "../api/workflows";
 import { WorkflowRunExperience } from "./WorkflowRunExperience";
 import * as supportDownloads from "../lib/support-diagnostic-download";
+import { authApi } from "../api/auth";
+import { queryKeys } from "../lib/queryKeys";
+import { v9SessionFixture } from "../hooks/v9-session.test-support";
 import "../i18n";
 let live: (event: {
   companyId: string;
@@ -21,7 +24,7 @@ vi.mock("../context/LiveUpdatesProvider", () => ({
 }));
 vi.mock("../context/CompanyContext", () => ({
   useCompany: () => ({
-    selectedCompanyId: "company",
+    selectedCompanyId: "10000000-0000-4000-8000-000000000001",
     selectedCompany: { issuePrefix: "AW" },
   }),
 }));
@@ -66,8 +69,25 @@ afterEach(async () => {
   container?.remove();
   vi.restoreAllMocks();
 });
+it("withdraws current run history when the original account cache becomes unresolved", async () => {
+  vi.spyOn(workflowsApi, "runExperience").mockResolvedValue(data); await mount();
+  await vi.waitFor(() => expect(container.textContent).toContain("Recorded earlier published version 2"));
+  await act(async () => { await client.invalidateQueries({ queryKey: queryKeys.auth.session, exact: true, refetchType: "none" }); });
+  expect(container.textContent).not.toContain("Recorded earlier published version 2");
+  expect(container.textContent).not.toContain("Prepare a support report");
+});
+it("rejects a run history response completed after the account changes", async () => {
+  let finish!: (value: typeof data) => void;
+  vi.spyOn(workflowsApi, "runExperience").mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  await mount();
+  await act(async () => { client.setQueryData(queryKeys.auth.session, v9SessionFixture("another-account")); finish(data); });
+  expect(container.textContent).not.toContain("Recorded earlier published version 2");
+  expect(container.textContent).not.toContain("Prepare a support report");
+});
 async function mount(principal = "member") {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(queryKeys.auth.session, v9SessionFixture(principal));
+  vi.spyOn(authApi, "getSession").mockResolvedValue(v9SessionFixture(principal));
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);

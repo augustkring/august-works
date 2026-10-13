@@ -1,7 +1,7 @@
 {
   "screenId": "WORKFLOW-RECOVER",
   "journeyId": "workflow",
-  "routeOrSurface": "/workflows/:workflowId/requests/:kind/:requestId",
+  "routeOrSurface": "/workflows/:workflowId/requests/:kind/:requestId; /workflows/:workflowId/runs/:runId/control",
   "targetExperienceProfiles": [
     "member",
     "manager",
@@ -35,7 +35,9 @@
       "Unconfirmed current read with explicit GET retry; raw errors and customer instructions are omitted."
     ]
   },
-  "inputs": [],
+  "inputs": [
+    "On exact retained-run control only: explicit acknowledgement that completed actions remain; the current Native update/revision identities are frozen by the client, never edited by a model or user."
+  ],
   "actions": {
     "primary": {
       "label": "Check the saved request",
@@ -46,7 +48,9 @@
       "Review the recorded run",
       "Return to the current workflow"
     ],
-    "destructiveOrIrreversible": []
+    "destructiveOrIrreversible": [
+      "The separate exact retained-run control requires current Native read/run permissions/write role and responsible-Human or Native company-administrator scope, exact workflow/revision/run/update review and completed-effects acknowledgement before one Original Stop POST. Admission does not prove physical termination."
+    ]
   },
   "systemWork": {
     "canonicalReadDomains": [
@@ -72,7 +76,7 @@
   "navigation": {
     "back": "Return to the exact Original workflow.",
     "cancelOrSaveExit": "No form or write exists on this page; leaving/reloading retains an unconfirmed content-free locator.",
-    "deepLink": "Exact company/workflow/request kind/request UUID; this route is independent of new-work rollout gates.",
+    "deepLink": "Exact company/workflow/request kind/request UUID; this route is independent of new-work rollout gates. Retained run control is always mounted; navigation/language remain available after rollback.",
     "resume": "Before commands, retain per-tab company/account/workflow/kind/request UUID. Pending links on workflow entry survive rollout withdrawal rather than the old gate redirecting away."
   },
   "accessibility": {
@@ -93,7 +97,8 @@
   },
   "privacySecurity": {
     "dataShown": [
-      "The current authorized Original own-request receipt IDs and recorded disposition only."
+      "The current authorized Original own-request receipt IDs and recorded disposition only.",
+      "Retained control selects only Native run/workflow/revision IDs, current status/purpose/update stamp. It does not query or restore private payload fields."
     ],
     "dataCollected": [
       "Per-tab bounded request locators written before Test/Publish/Run/Status POST. No command body, customer prose, input, result or credential is stored there."
@@ -113,7 +118,7 @@
     "functional": [
       "Actual Native PostgreSQL reads for all four kinds after rollout withdrawal without new runs, revisions or audit events; exact own-source/current-permission/foreign-actor refusal.",
       "API strict scope and aborted/foreign reply refusal; page current-account/Source withdrawal; locator-only reload and corrupt-storage refusal; preserved actual Native C0 browser test/recovery.",
-      "Source tests and browser fixtures do not complete every workflow recovery/compensation path. Retained run safety after rollout/payload withdrawal and full unknown external effect reconciliation remain separate open work."
+      "Native queued/waiting timer cancellation and copied-payload erasure, stale/viewer/non-manager refusal and late-role rollback are covered by software fixtures. Original cancellation-only recovery retains physical propagation after rollout closure; live child/provider termination and complete external outcome reconciliation/compensation remain open."
     ],
     "accessibility": [
       "Verify keyboard/focus, EN/DA and narrow layout against the actual build. Manual assistive technology and full zoom evidence remain pending."

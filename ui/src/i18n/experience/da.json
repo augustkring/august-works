@@ -2222,5 +2222,29 @@
       "paused": "Anmodningen pausede igangsættelse af nyt arbejde. Eksisterende arbejde beholdt sine egne kontroller.",
       "archived": "Anmodningen udfasede arbejdsgangen."
     }
+  },
+  "workflowRunControl": {
+    "heading": "Stop denne workflowkørsel",
+    "recorded": "Stopanmodning registreret",
+    "open": "Åbn stopkontroller",
+    "boundary": "Kontrollerne forbliver tilgængelige for eksisterende kørsler, når funktioner til nyt arbejde slås fra. Din aktuelle adgang til at styre kørslen gælder stadig.",
+    "unavailable": "Vi kunne ikke læse de aktuelle kørselskontroller. Kontrollér din konto og adgang til kørslen, og prøv igen.",
+    "receipt": "Registreret stopanmodning",
+    "requested": "Din anmodning om at stoppe kørslen blev registreret.",
+    "propagation": "Stop skal stadig bekræftes. Kvitteringen bekræfter ikke, at alle underopgaver eller kørende processer er stoppet, og den omgør ikke udførte handlinger.",
+    "recovery": "Genfind den gemte stopanmodning",
+    "unknown": "Stopanmodningen er ubekræftet. Kontrollér den registrerede anmodning før en anden handling; den sendes ikke automatisk igen.",
+    "checkOriginal": "Kontrollér oprindelig stopanmodning",
+    "stillUnknown": "Den gemte stopanmodning er stadig ubekræftet. Et manglende svar beviser ikke, at ingen anmodning blev gemt.",
+    "terminal": "Kørslen er i en afsluttende tilstand. Gennemgå dens registrerede resultat, og om kørende arbejde er stoppet.",
+    "consequence": "Stop gælder denne kørsel og dens igangsatte arbejde. Det pauser ikke fremtidige workflowtriggere. Udførte handlinger består.",
+    "acknowledge": "Jeg forstår, at udførte handlinger består, og at stop af kørende arbejde skal bekræftes.",
+    "requestStop": "Anmod om Stop",
+    "purpose": {
+      "test": "Testkørsel",
+      "live": "Livekørsel"
+    },
+    "requesting": "Stopanmodningen sendes. Behold anmodningens reference, indtil dens oprindelige svar er bekræftet.",
+    "recordedStatus": "Registreret kørselsstatus: {{status}}"
   }
 }
