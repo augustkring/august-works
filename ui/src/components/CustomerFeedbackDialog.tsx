@@ -204,7 +204,7 @@ function FeedbackForm({
         type="button"
         variant="ghost"
         className="min-h-11"
-        disabled={!accountReady}
+        aria-busy={!accountReady}
         onClick={() => show()}
         onKeyDown={(event) => {
           if (event.key === "Enter") {

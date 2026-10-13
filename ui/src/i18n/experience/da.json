@@ -1852,5 +1852,16 @@
     "why": "Du administrerer virksomhedens runtime.",
     "consequence": "Åbn de eksisterende recovery-kontroller for at gennemgå den aktuelle tilstand. Kortet genstarter ikke arbejde og ændrer ikke konfiguration.",
     "evidence": "Den aktuelle runtimetilstand kræver en administrators gennemgang."
+  },
+  "workflowRecovery": {
+    "title": "Gennemgå workflow-recovery",
+    "why": "Du har adgang til at gennemgå virksomhedens workflows.",
+    "consequence": "Gennemgå den aktuelle kørsel, før du vælger et nyt forsøg eller recovery i de eksisterende workflowkontroller.",
+    "workflow_live_run": "Live-workflowkørsel",
+    "workflow_test_run": "Testkørsel af workflow",
+    "workflow_failed": "Kørslen mislykkedes.",
+    "workflow_recovering": "Recovery er i gang.",
+    "workflow_waiting": "Kørslen venter på input fra et menneske.",
+    "evidence": "Gennemgå den aktuelle workflowkørsel."
   }
 }

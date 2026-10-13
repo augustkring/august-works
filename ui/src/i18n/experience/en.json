@@ -1852,5 +1852,16 @@
     "why": "You manage this company's runtime.",
     "consequence": "Open the existing recovery controls to review the current state. This card does not restart work or change configuration.",
     "evidence": "Current runtime state needs a manager review."
+  },
+  "workflowRecovery": {
+    "title": "Review workflow recovery",
+    "why": "You can review this company’s workflows.",
+    "consequence": "Review the current run before choosing any retry or recovery in the existing workflow controls.",
+    "workflow_live_run": "Live workflow run",
+    "workflow_test_run": "Test workflow run",
+    "workflow_failed": "The run failed.",
+    "workflow_recovering": "Recovery is in progress.",
+    "workflow_waiting": "The run is waiting for human input.",
+    "evidence": "Review the current workflow run."
   }
 }

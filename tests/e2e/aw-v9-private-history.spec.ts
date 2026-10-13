@@ -61,7 +61,7 @@ test("private feedback preserves the original unknown reply through session and 
     await expect(reply).toBeVisible();
     await reply.fill("PRIVATE frozen customer reply");
     await main.getByRole("button", { name: "Send feedback", exact: true }).click();
-    await expect(main.getByRole("alert")).toBeVisible();
+    await expect(main.getByRole("alert").filter({ hasText: "Your response has not been confirmed" })).toBeVisible();
     await expect(reply).toBeDisabled();
     expect(writes).toHaveLength(1);
     const previousReads = reads;

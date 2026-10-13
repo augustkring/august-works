@@ -24,7 +24,14 @@ qualification stay open.
 Current runtime degradation/capacity findings now appear in Needs You for the
 Original runtime manager, with source/role rechecks and navigation-only recovery.
 See the [runtime recovery checkpoint](2026-10-12-aw-v9-runtime-recovery-checkpoint.md).
-Workflow recovery, actual provisioning and staged live configuration remain open.
+Current workflow failures/recovery/human waits now have navigation-only cards,
+Original Source/admission checks, test/live labels and post-fan-out withdrawal.
+The public feedback opening button also remains available during account checks
+while private content and writes stay withheld. See the
+[workflow recovery checkpoint](2026-10-13-aw-v9-workflow-recovery-checkpoint.md).
+All 35 workspace types, 59 focused cases, six freshly built browser cases and
+token gates pass at this checkpoint. Actual provisioning, staged live
+configuration and full integrated release verification remain open.
 
 
 Current runtime selection, in-place Hire candidate saving and feedback-opening

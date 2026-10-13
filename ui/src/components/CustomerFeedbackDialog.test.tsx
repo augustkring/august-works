@@ -258,7 +258,7 @@ async function sessionRecheck() {
   });
   // Query notifications are batched outside React's act. Wait for the real
   // pending-state render before resolving the fixture or changing its account.
-  await vi.waitFor(() => expect([...document.querySelectorAll("button")].find(button => button.textContent === "Feedback")?.disabled).toBe(true));
+  await vi.waitFor(() => expect([...document.querySelectorAll("button")].find(button => button.textContent === "Feedback")?.getAttribute("aria-busy")).toBe("true"));
   return async () => { await act(async () => { resolve(v9SessionFixture(identityState.principal)); await pending; }); };
 }
 it("blocks feedback before transport when the completed session cache already changed account", async () => {
@@ -399,8 +399,9 @@ it("opens a public feedback frame during an immediate session recheck and restor
   let resolve!: (value: object) => void, pending!: Promise<unknown>;
   await act(async () => {
     pending = client.fetchQuery({ queryKey: queryKeys.auth.session, queryFn: () => new Promise<object>(done => { resolve = done; }) });
-    document.dispatchEvent(new Event("paperclip:open-feedback"));
   });
+  await vi.waitFor(() => expect([...document.querySelectorAll("button")].find(button => button.textContent === "Feedback")?.getAttribute("aria-busy")).toBe("true"));
+  await click("Feedback");
   await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeTruthy());
   expect(document.querySelector("textarea")).toBeNull();
   expect(document.body.textContent).not.toContain("PRIVATE-UNSENT-OPEN-FEEDBACK");
