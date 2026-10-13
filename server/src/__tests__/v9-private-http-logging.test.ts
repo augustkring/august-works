@@ -150,6 +150,8 @@ describe("V9 private HTTP purpose", () => {
       "GET",
       "/api/companies/private-company/experience/commands?q=private-command",
     ],
+    ["GET","/api/companies/private-company/notifications/preference-proposals/private-record?expectedUserId=private-principal"],
+    ["POST","/api/companies/private-company/notifications/preference-proposals/private-record/apply?expectedUserId=private-principal"],
     ["DELETE", "/API/INTERNAL/CUSTOMER-FEEDBACK/private-record"],
   ])("keeps rejected %s %s requests content-free", async (method, url) => {
     const chunks: string[] = [],

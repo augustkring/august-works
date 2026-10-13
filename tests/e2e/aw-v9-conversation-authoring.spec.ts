@@ -19,7 +19,7 @@ test("conversation previews a saved workflow version without publishing or calli
     const session = await json(await request.get("/api/auth/get-session"));
     const flags = { ...original, ...Object.fromEntries(V5_FEATURE_KEYS.map(key => [key, true])), enableAgentChat: true, enableClassicTaskInterface: false,
       enableFoundationV1: true, enableContextEngineV1: true, saas_deployment_profile_v6: true, billing_v6: true, agent_packages_v7: true,
-      experience_projection_v9: true, progressive_shell_v9: true, ambient_commands_v9: true };
+      experience_projection_v9: true, progressive_shell_v9: true, ambient_commands_v9: true,notification_policy_v9:true };
     let reads = 0, writes = 0;
     await page.route("**/api/auth/get-session", route => route.fulfill({ json: { ...session, session: { ...session.session, localImplicit: false } } }));
     await page.route("**/api/instance/settings/experimental", route => route.fulfill({ json: flags }));
@@ -42,7 +42,14 @@ test("conversation previews a saved workflow version without publishing or calli
           currentRevisionId: id(6), currentRevisionNumber: 1, status: "paused", executionConfigured: false,
           triggerCount: 0, enabledTriggerCount: 0, href: `/routines/${id(5)}` }], hasMoreRoutines: false,
         savedFoundationProposals:[{kind:"foundation_proposal",id:id(7),foundationDocumentId:id(8),title:"Saved Foundation policy proposal",
-          baseRevisionId:id(9),currentRevisionId:id(9),status:"pending",href:`/foundation/${id(8)}`}],hasMoreFoundationProposals:false } });
+          baseRevisionId:id(9),currentRevisionId:id(9),status:"pending",href:`/foundation/${id(8)}`}],hasMoreFoundationProposals:false,
+        savedNotificationProposals:[{kind:"notification_proposal",id:id(10),category:"work_update",status:"pending",version:1}],hasMoreNotificationProposals:false } });
+    });
+    await page.route(`**/api/companies/${company.id}/notifications/preference-proposals/**`,route=>{
+      expect(route.request().method()).toBe("GET");
+      return route.fulfill({json:{id:id(10),companyId:company.id,version:1,status:"pending",category:"work_update",
+        preference:{category:"work_update",emailEnabled:false},baselineHash:"a".repeat(64),baselineChanged:false,
+        preferenceApplied:false,requiresHumanReview:true,confirmationRequestId:null}});
     });
     await page.route(`**/api/companies/${company.id}/workflows/**`, route => {
       if (route.request().method() !== "GET") writes++;
@@ -68,6 +75,9 @@ test("conversation previews a saved workflow version without publishing or calli
     await expect(preview).toContainText("Saved Foundation policy proposal");
     await expect(preview).toContainText("awaits Human review");
     await expect(preview.getByRole("link",{name:"Review the Foundation proposal",exact:true})).toHaveAttribute("href",`/${company.issuePrefix}/foundation/${id(8)}`);
+    await preview.getByRole("button",{name:"Review notification proposal",exact:true}).click();
+    await expect(preview).toContainText("across all companies");
+    await expect(preview.getByRole("button",{name:"Apply to my account",exact:true})).toBeVisible();
     const beforeLanguage = reads;
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole("combobox", { name: "Language", exact: true }).selectOption("da");
@@ -77,6 +87,8 @@ test("conversation previews a saved workflow version without publishing or calli
     await expect(page.getByRole("region", { name: "Gemte forslag fra samtalen", exact: true })).toContainText("Der er ikke valgt et kørselsmål");
     await expect(page.getByRole("region",{name:"Gemte forslag fra samtalen",exact:true})).toContainText("afventer gennemgang");
     await expect(page.getByRole("link",{name:"Gennemgå Foundation-forslaget",exact:true})).toHaveAttribute("href",`/${company.issuePrefix}/foundation/${id(8)}`);
+    await expect(page.getByRole("region",{name:"Gemte forslag fra samtalen",exact:true})).toContainText("på tværs af alle virksomheder");
+    await expect(page.getByRole("button",{name:"Anvend på min konto",exact:true})).toBeVisible();
     expect(reads).toBe(beforeLanguage); expect(writes).toBe(0);
     await page.addScriptTag({ path: axePath });
     expect(await page.evaluate(async () => (await (window as unknown as { axe: { run(scope: string): Promise<{ violations: unknown[] }> } }).axe.run('[aria-label="Gemte forslag fra samtalen"]')).violations)).toEqual([]);

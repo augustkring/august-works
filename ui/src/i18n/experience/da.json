@@ -2032,5 +2032,30 @@
   "loadingView": "Indlæser visning…",
   "announcement": {
     "summary": "Produktnyheder"
+  },
+  "notificationProposal": {
+    "review": "Gennemgå notifikationsforslag",
+    "title": "Gemte notifikationsforslag",
+    "coverageUnavailable": "Denne server kan ikke vise dækning af gemte notifikationsforslag.",
+    "more": "Der findes flere gemte notifikationsforslag i denne samtale.",
+    "status": {
+      "pending": "Forslag gemt — dine indstillinger er ikke ændret.",
+      "applied": "Du har anvendt dette forslag på din konto.",
+      "discarded": "Dette forslag er kasseret."
+    },
+    "checking": "Kontrollerer det aktuelle forslag og dine kontoindstillinger…",
+    "unavailable": "Det aktuelle forslag kunne ikke verificeres. Opdater for at kontrollere igen.",
+    "emailEnabled": "Levering via e-mail aktiveret",
+    "emailDisabled": "Levering via e-mail deaktiveret",
+    "quietHours": "Stilleperiode: {{start}}–{{end}} i den viste tidszone.",
+    "digestTime": "Tidspunkt for opsamling: {{time}} i den viste tidszone.",
+    "applied": "Dine kontoindstillinger blev opdateret efter din bekræftelse.",
+    "consequence": "Anvend ændrer disse indstillinger for din konto på tværs af alle virksomheder. Sikkerhedsnotifikationer er fortsat påkrævet.",
+    "baselineChanged": "Dine indstillinger er ændret, siden forslaget blev gemt. Gennemgå det aktuelle forslag, før du anvender det.",
+    "confirmed": "Din oprindelige bekræftelse blev fundet. Forslaget er anvendt.",
+    "unknown": "Resultatet af bekræftelsen er ukendt. Opdater for at læse den aktuelle status; ændringen indsendes ikke igen.",
+    "apply": "Anvend på min konto",
+    "applying": "Anvender…",
+    "refresh": "Opdater aktuelt forslag"
   }
 }

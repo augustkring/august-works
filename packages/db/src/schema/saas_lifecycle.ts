@@ -158,6 +158,24 @@ export const saasNotificationPreferences = pgTable(
     ),
   ],
 );
+/** Native own-account proposal owner. Saving does not change delivery policy. */
+export const notificationPreferenceProposals=pgTable("notification_preference_proposals",{
+  id:uuid("id").primaryKey().defaultRandom(),companyId:uuid("company_id").notNull().references(()=>companies.id),
+  userId:text("user_id").notNull(),createdByAgentId:uuid("created_by_agent_id").notNull(),
+  sourceRunId:uuid("source_run_id").notNull(),conversationId:uuid("conversation_id").notNull(),
+  generation:integer("generation").notNull(),category:text("category").notNull(),
+  version:integer("version").notNull().default(1),status:text("status").notNull().default("pending"),
+  requestHash:text("request_hash").notNull(),baselineHash:text("baseline_hash").notNull(),
+  preference:jsonb("preference").$type<{category:"security"|"billing"|"runtime"|"approval"|"work_update";emailEnabled:boolean;policy?:NotificationPolicy}>(),
+  confirmationRequestId:uuid("confirmation_request_id"),confirmationRequestHash:text("confirmation_request_hash"),
+  createdAt:timestamp("created_at",{withTimezone:true}).notNull().defaultNow(),updatedAt:timestamp("updated_at",{withTimezone:true}).notNull().defaultNow(),
+},t=>({sourceIdx:index("notification_preference_proposals_company_source_idx").on(t.companyId,t.sourceRunId),
+  ownerIdx:index("notification_preference_proposals_owner_chat_idx").on(t.companyId,t.userId,t.conversationId,t.generation,t.createdAt),
+  statusCheck:check("notification_preference_proposals_status_check",sql`${t.status} in ('pending','applied','discarded','erased')`),
+  versionCheck:check("notification_preference_proposals_version_check",sql`${t.version}>0 and ${t.generation}>=0`),
+  categoryCheck:check("notification_preference_proposals_category_check",sql`${t.category} in ('security','billing','runtime','approval','work_update')`),
+}));
+
 export const supportSessions = pgTable(
   "support_sessions",
   {

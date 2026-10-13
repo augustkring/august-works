@@ -1,4 +1,6 @@
 import { v7FeatureEnabled, v9FeatureEnabled, activationCommandSchema } from "@paperclipai/shared";
+import { notificationPreferenceProposalService } from "../services/notification-preference-proposals.js";
+import { notificationService } from "../services/notifications/notifications.js";
 import { activationService } from "../services/saas/activation.js";
 import { activationConnectionConsentService } from "../services/saas/activation-connection-consent.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
@@ -294,6 +296,19 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
       );
     },
   );
+  router.get("/companies/:companyId/notifications/preference-proposals/:proposalId",async(req,res)=>{
+    const companyId=z.uuid().parse(req.params.companyId),id=z.uuid().parse(req.params.proposalId);
+    await company(req,companyId);await gate("transactional_email_v6");
+    res.setHeader("Cache-Control","no-store");
+    res.json(await notificationPreferenceProposalService(db).review(req.actor,companyId,id));
+  });
+  router.post("/companies/:companyId/notifications/preference-proposals/:proposalId/apply",async(req,res)=>{
+    const companyId=z.uuid().parse(req.params.companyId),id=z.uuid().parse(req.params.proposalId);
+    await company(req,companyId);await gate("transactional_email_v6");
+    res.setHeader("Cache-Control","no-store");
+    res.json(await notificationPreferenceProposalService(db).apply(req.actor,companyId,id,req.body,
+      tx=>notificationService(tx,platform.email)));
+  });
   router.get("/saas/account/notification-preferences", async (req, res) => {
     const actor = await user(req);
     await gate("transactional_email_v6");

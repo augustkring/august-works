@@ -7,6 +7,7 @@ import { conversationAuthoringKey, getConversationAuthoring } from "@/api/conver
 import { useTranslation } from "@/i18n";
 import { Link } from "@/lib/router";
 import { ConversationWorkflowPreview } from "./ConversationWorkflowPreview";
+import { NotificationProposalReview } from "./NotificationProposalReview";
 import { Button } from "./ui/button";
 
 /** Current references to actual saved proposals. The domain editor owns its
@@ -35,7 +36,7 @@ export function ConversationAuthoringProposals({ company, principal, conversatio
     const action = typeof event.payload.action === "string" ? event.payload.action : "";
     const conversationChanged = event.payload.entityType === "issue" && event.payload.entityId === conversation;
     const authoringRunChanged = event.payload.agentId === agent && /heartbeat|tool_invocation/.test(`${event.type}:${action}`);
-    if (/workflow|routine|foundation|document|issue|permission|membership|erased|deleted|withdraw|conversation/i.test(`${event.payload.entityType}:${action}`) ||
+    if (/notification|workflow|routine|foundation|document|issue|permission|membership|erased|deleted|withdraw|conversation/i.test(`${event.payload.entityType}:${action}`) ||
       event.type === "analytical.context.access_lost" || conversationChanged || authoringRunChanged) {
       source.current++; setSourceEpoch(source.current);
       void client.cancelQueries({ queryKey: prefix });
@@ -50,8 +51,8 @@ export function ConversationAuthoringProposals({ company, principal, conversatio
     {query.isError ? <div className="space-y-2"><p role="status">{t("conversationAuthoring.unavailable")}</p>
       <Button variant="outline" className="min-h-11" onClick={() => { if (current()) void query.refetch(); }}>{t("tryAgain")}</Button></div>
       : !fresh ? <p role="status">{t("conversationAuthoring.checking")}</p>
-      : query.data.proposals.length === 0 && !query.data.savedTasks?.length && !query.data.savedRoutines?.length && !query.data.savedFoundationProposals?.length ? <p role="status">{t(
-        query.data.savedTasks === undefined || query.data.savedRoutines === undefined || query.data.savedFoundationProposals === undefined ? "conversationAuthoring.workflowEmpty" : "conversationAuthoring.empty")}</p>
+      : query.data.proposals.length === 0 && !query.data.savedTasks?.length && !query.data.savedRoutines?.length && !query.data.savedFoundationProposals?.length && !query.data.savedNotificationProposals?.length ? <p role="status">{t(
+        query.data.savedTasks === undefined || query.data.savedRoutines === undefined || query.data.savedFoundationProposals === undefined || query.data.savedNotificationProposals === undefined ? "conversationAuthoring.workflowEmpty" : "conversationAuthoring.empty")}</p>
       : <ul className="space-y-3">{query.data.proposals.map(proposal => <li key={proposal.id} className="space-y-2 rounded-md border p-3">
         <h3 className="font-semibold">{proposal.name}</h3>
         <p>{t("conversationAuthoring.version", { version: proposal.authoredRevisionNumber, steps: proposal.stepCount, triggers: proposal.triggerCount })}</p>
@@ -95,5 +96,15 @@ export function ConversationAuthoringProposals({ company, principal, conversatio
       </li>)}</ul>
     </div>}
     {fresh && query.data.hasMoreFoundationProposals && <p role="status">{t("conversationAuthoring.moreFoundationProposals")}</p>}
+    {fresh&&query.data.savedNotificationProposals===undefined&&<p role="status">{t("notificationProposal.coverageUnavailable")}</p>}
+    {fresh&&!!query.data.savedNotificationProposals?.length&&<div className="space-y-3">
+      <h3 className="font-semibold">{t("notificationProposal.title")}</h3>
+      <ul className="space-y-3">{query.data.savedNotificationProposals.map(proposal=><li key={proposal.id} className="space-y-2 rounded-md border p-3">
+        <h4 className="font-semibold">{t(`notifications.category.${proposal.category}`)}</h4>
+        <p>{t(`notificationProposal.status.${proposal.status}`)}</p>
+        <NotificationProposalReview company={company} principal={principal} id={proposal.id}/>
+      </li>)}</ul>
+    </div>}
+    {fresh&&query.data.hasMoreNotificationProposals&&<p role="status">{t("notificationProposal.more")}</p>}
   </section>;
 }

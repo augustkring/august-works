@@ -2032,5 +2032,30 @@
   "loadingView": "Loading view…",
   "announcement": {
     "summary": "Product updates"
+  },
+  "notificationProposal": {
+    "review": "Review notification proposal",
+    "title": "Saved notification proposals",
+    "coverageUnavailable": "Saved notification proposal coverage is unavailable from this server.",
+    "more": "More saved notification proposals are available in this conversation.",
+    "status": {
+      "pending": "Saved proposal — your preferences have not changed.",
+      "applied": "You applied this proposal to your account.",
+      "discarded": "This proposal was discarded."
+    },
+    "checking": "Checking the current proposal and your account settings…",
+    "unavailable": "The current proposal could not be verified. Refresh to check again.",
+    "emailEnabled": "Email delivery enabled",
+    "emailDisabled": "Email delivery disabled",
+    "quietHours": "Quiet hours: {{start}}–{{end}} in the displayed timezone.",
+    "digestTime": "Digest time: {{time}} in the displayed timezone.",
+    "applied": "Your account preferences were updated after your confirmation.",
+    "consequence": "Apply changes these preferences for your account across all companies. Security notifications remain required.",
+    "baselineChanged": "Your preferences changed after this proposal was saved. Review the current proposal before applying it.",
+    "confirmed": "Your original confirmation was found. The proposal was applied.",
+    "unknown": "The confirmation result is unknown. Refresh to read its current state; no change is submitted again.",
+    "apply": "Apply to my account",
+    "applying": "Applying…",
+    "refresh": "Refresh current proposal"
   }
 }

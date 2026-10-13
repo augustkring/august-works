@@ -37,7 +37,8 @@
       "A structural comparison of a later current draft is keyed by actual Native node IDs and omits private expressions and configurations. Unavailable or older responses remain unavailable, never an unchanged comparison.",
       "The same current conversation surface previews up to ten distinct tasks from actual Native create_task mutation receipts. Current task state and execution-start evidence are separate from workflow drafts; current task and originating-run source access are rechecked. Earlier sessions, arbitrary links, hidden tasks and unavailable source data are suppressed.",
       "Conversation routine proposals use the actual Original first revision and current version. An unconfigured routine draft is paused with no execution target; there is no invented draft status. Current target/trigger declarations and a separate Human revision are shown without claiming execution, qualification or a grant. The Original routine editor owns configuration and explicit enable.",
-      "Saved Foundation proposals show exact Original proposal, target document, base/current revision, pending/accepted/rejected/superseded state and review link. Accepted means a Foundation draft; canonical approval remains a separate Human decision. Proposal bodies, reasons and frozen responsible-user provenance are excluded from the conversation projection."
+      "Saved Foundation proposals show exact Original proposal, target document, base/current revision, pending/accepted/rejected/superseded state and review link. Accepted means a Foundation draft; canonical approval remains a separate Human decision. Proposal bodies, reasons and frozen responsible-user provenance are excluded from the conversation projection.",
+      "Saved notification proposals use current owned conversation provenance and show pending/applied/discarded state. The user explicitly opens the actual account proposal, reviews category/email/delivery/timezone/quiet hours/digest and the consequence across companies, then confirms its current version and account baseline. Unknown confirmation responses permit only current reads and cannot automatically resubmit writes."
     ]
   },
   "inputs": [],
@@ -60,7 +61,8 @@
       "Native workflows/revisions and current learned-asset privacy/lineage checks",
       "Native workflows:read/edit grants and immutable node registry descriptors",
       "Original Native task creation receipts, current issues and their originating heartbeat runs; current issue authorization and source/erasure checks.",
-      "Original routine revisions and creator run/current conversation generation; current reader and originating source checks."
+      "Original routine revisions and creator run/current conversation generation; current reader and originating source checks.",
+      "Original own-account notification preferences and saved proposal provenance, current verified account/company/source admission, immutable proposal version, baseline hash and exact Human confirmation receipt."
     ],
     "canonicalWriteOperation": "Review remains read-only; separate explicit lifecycle controls invoke the original native workflow owner (ADR-V9-023).",
     "authorityEffect": "Presentation and drafts cannot grant permissions. Material effects always require current native permissions, approvals and version preconditions.",

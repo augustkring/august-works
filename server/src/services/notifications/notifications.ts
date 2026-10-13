@@ -1,3 +1,5 @@
+import { nativeSha256 } from "../native-runtime/canonical.js";
+import { conflict } from "../../errors.js";
 import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import {
   activityLog,
@@ -29,6 +31,14 @@ export type NotifyCompany = (
   dedupeKey: string,
   writer: EmailDb,
 ) => Promise<void>;
+export async function lockNotificationPreference(db:Db,userId:string,category:string){
+  await db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`notification-preference:${userId}:${category}`},0))`);
+}
+export async function notificationPreferenceBaseline(db:Db,userId:string,category:string){
+  const [row]=await db.select().from(saasNotificationPreferences).where(and(eq(saasNotificationPreferences.userId,userId),eq(saasNotificationPreferences.category,category)));
+  return nativeSha256({userId,category,emailEnabled:category==="security"||row?.emailEnabled!==false,policy:row?.deliveryPolicy??null});
+}
+
 export function notificationService(
   db: Db,
   email: ReturnType<typeof transactionalEmail>,
@@ -312,13 +322,17 @@ export function notificationService(
     companyId: string,
     userId: string,
     raw: unknown,
+    options:{expectedBaselineHash?:string}={},
   ) {
     const input = notificationPreferenceUpdateSchema.parse(raw);
     if (input.category === "security" && !input.emailEnabled)
       throw forbidden("Security notifications are required");
     if(input.category==="security"&&input.policy&&(input.policy.cadence!=="immediate"||input.policy.quietHours))throw forbidden("Account safety delivery cannot be delayed or disabled");
     return db.transaction(async (tx) => {
+      await lockNotificationPreference(tx as unknown as Db,userId,input.category);
       await membership(companyId, userId, tx);
+      if(options.expectedBaselineHash&&(await notificationPreferenceBaseline(tx as unknown as Db,userId,input.category))!==options.expectedBaselineHash)
+        throw conflict("Notification preferences changed; review the current proposal again");
       if(input.policy&&!v9FeatureEnabled(await instanceSettingsService(tx as unknown as Db).getExperimental(),"notification_policy_v9"))throw notFound("Notification policy changes are not enabled");
       await tx
         .insert(saasNotificationPreferences)

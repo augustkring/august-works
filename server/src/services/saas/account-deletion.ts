@@ -305,6 +305,7 @@ export async function eraseAccountAccess(
   await tx.execute(
     sql`delete from user_inbox_agent_policies where user_id=${userId}`,
   );
+  await tx.execute(sql`delete from notification_preference_proposals where user_id=${userId}`);
   await tx.execute(sql`delete from saas_notifications where user_id=${userId}`);
   await tx.execute(
     sql`delete from saas_notification_preferences where user_id=${userId}`,

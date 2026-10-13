@@ -1,7 +1,7 @@
 import { assertFoundationConversationSource, FOUNDATION_CONVERSATION_SOURCE } from "../foundation-authoring-source.js";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
-import { foundationChangeProposals, foundationDocuments, documents, heartbeatRuns, issues, routineRevisions, routines, workflows, type Db } from "@paperclipai/db";
+import { notificationPreferenceProposals, foundationChangeProposals, foundationDocuments, documents, heartbeatRuns, issues, routineRevisions, routines, workflows, type Db } from "@paperclipai/db";
 import { conversationAuthoringViewSchema } from "@paperclipai/shared";
 import { authorizationService, type AuthorizationActor } from "../authorization.js";
 import { assertV5Authorization, v5HumanActorId } from "../v5-authorization.js";
@@ -206,6 +206,23 @@ export function conversationAuthoringService(db: Db) {
       };
       const savedFoundationProposals=[];
       for(const candidate of foundationCandidates.slice(0,10))savedFoundationProposals.push(await readFoundation(candidate));
+      const notificationCandidates=await tx.select().from(notificationPreferenceProposals).where(and(
+        eq(notificationPreferenceProposals.companyId,companyId),eq(notificationPreferenceProposals.userId,initial.userId),
+        eq(notificationPreferenceProposals.createdByAgentId,initial.conversation.conversationAgentId!),
+        eq(notificationPreferenceProposals.conversationId,conversationId),eq(notificationPreferenceProposals.generation,initial.conversation.conversationSessionGeneration),
+        sql`${notificationPreferenceProposals.status}<>'erased'`,sql`not aw_notification_proposal_erased(${companyId}::uuid,${notificationPreferenceProposals.id})`,
+      )).orderBy(sql`${notificationPreferenceProposals.createdAt} desc`,sql`${notificationPreferenceProposals.id} desc`).limit(11).for("share");
+      const readNotification=async(id:string)=>{
+        currentSignal.throwIfAborted();
+        const [proposal]=await tx.select().from(notificationPreferenceProposals).where(and(eq(notificationPreferenceProposals.companyId,companyId),
+          eq(notificationPreferenceProposals.id,id),eq(notificationPreferenceProposals.userId,initial.userId),
+          sql`not aw_notification_proposal_erased(${companyId}::uuid,${notificationPreferenceProposals.id})`)).for("share");
+        if(!proposal)throw conflict("The saved notification proposal source changed");
+        await assertAnalyticalContextPayloadAccess(tx,companyId,initial.current,{runId:proposal.sourceRunId});
+        return {kind:"notification_proposal" as const,id:proposal.id,category:proposal.category,status:proposal.status,version:proposal.version};
+      };
+      const savedNotificationProposals=[];
+      for(const candidate of notificationCandidates.slice(0,10))savedNotificationProposals.push(await readNotification(candidate.id));
       currentSignal.throwIfAborted();
       const final = await owner(tx, actor, companyId, conversationId);
       currentSignal.throwIfAborted();
@@ -216,9 +233,10 @@ export function conversationAuthoringService(db: Db) {
       for (const candidate of tasks.slice(0, 10)) await readTask(candidate);
       for (const candidate of routineCandidates.slice(0, 10)) await readRoutine(candidate);
       for(const candidate of foundationCandidates.slice(0,10))await readFoundation(candidate);
+      for(const candidate of notificationCandidates.slice(0,10))await readNotification(candidate.id);
       return conversationAuthoringViewSchema.parse({ companyId, conversationId, agentId: initial.conversation.conversationAgentId,
         generation: initial.conversation.conversationSessionGeneration, observedAt: new Date().toISOString(), hasMore: candidates.length > 10,
-        proposals, savedTasks, hasMoreTasks: tasks.length > 10, savedRoutines, hasMoreRoutines: routineCandidates.length > 10, savedFoundationProposals,hasMoreFoundationProposals:foundationCandidates.length>10, modelCalled: false });
+        savedNotificationProposals,hasMoreNotificationProposals:notificationCandidates.length>10,proposals, savedTasks, hasMoreTasks: tasks.length > 10, savedRoutines, hasMoreRoutines: routineCandidates.length > 10, savedFoundationProposals,hasMoreFoundationProposals:foundationCandidates.length>10, modelCalled: false });
     }).catch(error => {
       let cause: unknown = error;
       for (let depth = 0; depth < 4 && cause && typeof cause === "object"; depth++) {

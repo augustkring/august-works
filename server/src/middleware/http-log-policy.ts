@@ -62,6 +62,7 @@ export function isPrivateExperienceHttpRequest(method: string | undefined, url: 
     || /^\/api\/projects(?:\/|$)/i.test(pathname)
     || /^\/api\/(?:companies\/(?:[^/]*\/)*customer-feedback|internal\/customer-feedback)(?:\/|$)/i.test(pathname)
     || /^\/api\/(?:saas\/)?companies\/[^/]*\/(?:activation|onboarding)(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/[^/]*\/notifications\/preference-proposals(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]*\/conversations\/[^/]*\/authoring(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/experience\/commands(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/experience\/company(?:\/|$)/i.test(pathname)
@@ -78,6 +79,7 @@ export function isPrivateExperienceHttpRequest(method: string | undefined, url: 
 }
 export function privateExperienceLogUrl(url: string): string {
   if (isPrivateTaskDraftUrl(url)) return "/api/companies/:companyId/issues/create-receipts/:operation";
+  if (/\/notifications\/preference-proposals(?:\/|$)/i.test(normalizePath(url))) return "/api/companies/:companyId/notifications/preference-proposals/:operation";
   const pathname = normalizePath(url).replace(/^https?:\/\/[^/]*/i, "");
   if (/^\/api\/companies\/[^/]*\/projects(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/projects/:operation";
   if (/^\/api\/projects(?:\/|$)/i.test(pathname)) return "/api/projects/:projectId/:operation";

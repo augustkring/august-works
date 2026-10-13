@@ -3431,6 +3431,13 @@
       "when": 1791909971642,
       "tag": "0491_graceful_lorna_dane",
       "breakpoints": true
+    },
+    {
+      "idx": 492,
+      "version": "7",
+      "when": 1791911783110,
+      "tag": "0492_bitter_star_brand",
+      "breakpoints": true
     }
   ]
 }

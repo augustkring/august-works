@@ -186,6 +186,8 @@ import { memoryAgentToolsService } from "./memory/memory-agent-tools.js";
 import { workflowAuthoringToolsService } from "./workflows/workflow-authoring-tools.js";
 import { foundationAuthoringToolsService } from "./foundation-authoring-tools.js";
 import { foundationAuthoringProposeInputJsonSchema } from "@paperclipai/shared";
+import { notificationPreferenceProposalService } from "./notification-preference-proposals.js";
+import { notificationPreferenceProposalInputJsonSchema } from "@paperclipai/shared";
 import { routineAuthoringToolsService } from "./routine-authoring-tools.js";
 import { routineAuthoringCreateInputJsonSchema, v9FeatureEnabled } from "@paperclipai/shared";
 
@@ -1034,6 +1036,13 @@ const BUILTIN_TOOLS: ToolGatewayDescriptor[] = [
     pluginId: "paperclip-self", providerType: "paperclip_self", risk: "write",
   },
   {
+    name: "paperclip-self:propose_notification_preferences",
+    displayName: "Propose notification preferences",
+    description: "Save a notification preference proposal for the current conversation user. The user must review and explicitly apply it. This cannot change another account, disable security delivery, or send notifications.",
+    parametersSchema: notificationPreferenceProposalInputJsonSchema,
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "write",
+  },
+  {
     name: "paperclip-self:create_routine_draft",
     displayName: "Create routine draft",
     description: "Save a typed routine intent for human review in the current conversation. The draft is inactive and has no execution target or schedule. Open its Original editor to configure and enable it.",
@@ -1414,6 +1423,7 @@ export function createToolGatewayService(
     return {
       sharedMemory: experimental.enableCollectiveMemoryV1 === true,
       privateMemory: experimental.enablePrivateAgentMemoryV1 === true,
+      notificationAuthoring: v9FeatureEnabled(experimental,"ambient_commands_v9") && v9FeatureEnabled(experimental,"notification_policy_v9"),
       routineAuthoring: v9FeatureEnabled(experimental, "ambient_commands_v9"),
       foundationAuthoring: experimental.enableFoundationV1 === true && v9FeatureEnabled(experimental, "ambient_commands_v9"),
       workflowAuthoring:
@@ -1432,6 +1442,7 @@ export function createToolGatewayService(
     }
     const flags = await selfToolFeatureFlags();
     return tools.filter((tool) => {
+      if (tool.name === "paperclip-self:propose_notification_preferences") return flags.notificationAuthoring;
       if (tool.name === "paperclip-self:create_routine_draft") return flags.routineAuthoring;
       if (tool.name === "paperclip-self:propose_foundation_change") return flags.foundationAuthoring;
       if (isMemorySelfToolName(tool.name)) {
@@ -3374,6 +3385,17 @@ export function createToolGatewayService(
         return {content:JSON.stringify(data),data};
       } catch(error) {
         if(error instanceof HttpError)throw new ToolGatewayHttpError(error.status,error.message,"foundation_authoring_rejected");
+        throw error;
+      }
+    }
+
+    if (tool.name === "paperclip-self:propose_notification_preferences") {
+      if(!session.agentId||!session.runId)throw new ToolGatewayHttpError(403,"Notification proposals require a current Agent run","notification_proposal_run_required");
+      try {
+        const data=await notificationPreferenceProposalService(db).propose({companyId:session.companyId,agentId:session.agentId,runId:session.runId},parameters);
+        return {content:JSON.stringify(data),data};
+      }catch(error){
+        if(error instanceof HttpError)throw new ToolGatewayHttpError(error.status,error.message,"notification_proposal_rejected");
         throw error;
       }
     }

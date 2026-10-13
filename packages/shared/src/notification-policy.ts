@@ -37,3 +37,26 @@ export const notificationPreferenceUpdateSchema = z.strictObject({
   emailEnabled: z.boolean(),
   policy: notificationPolicySchema.optional(),
 });
+
+/** A conversation may propose an own-account preference; only the Human's
+ * current Original account owner may apply it after baseline review. */
+export const notificationPreferenceProposalInputSchema = z.strictObject({
+  idempotencyKey:z.string().trim().min(1).max(120).regex(/^[^\u0000\uD800-\uDFFF]*$/u),
+  preference:notificationPreferenceUpdateSchema,
+});
+export const notificationPreferenceProposalInputJsonSchema=z.toJSONSchema(notificationPreferenceProposalInputSchema);
+export const notificationPreferenceProposalConfirmSchema=z.strictObject({
+  requestId:z.uuid(),expectedProposalVersion:z.number().int().positive(),expectedBaselineHash:z.string().regex(/^[a-f0-9]{64}$/),
+});
+
+export const notificationPreferenceProposalViewSchema=z.strictObject({
+  id:z.uuid(),companyId:z.uuid(),version:z.number().int().positive(),
+  status:z.enum(["pending","applied","discarded"]),category:notificationPreferenceUpdateSchema.shape.category,
+  preference:notificationPreferenceUpdateSchema,baselineHash:z.string().regex(/^[a-f0-9]{64}$/),
+  baselineChanged:z.boolean(),preferenceApplied:z.boolean(),requiresHumanReview:z.boolean(),
+  confirmationRequestId:z.uuid().nullable(),
+}).superRefine((value,ctx)=>{
+  if(value.category!==value.preference.category||value.preferenceApplied!==(value.status==="applied")||value.requiresHumanReview!==(value.status==="pending"))
+    ctx.addIssue({code:"custom",message:"Use the actual owned notification proposal state"});
+});
+export type NotificationPreferenceProposalView=z.infer<typeof notificationPreferenceProposalViewSchema>;

@@ -5,7 +5,7 @@ import { agentExecutionManifests,providerTraceRecords, memoryDeletionMarkers, me
   heartbeatRuns, heartbeatRunEvents, agentWakeupRequests, issues, issueComments, issueDocuments, documents, documentRevisions,
   nativeRunResults, workAssessments, statusDecisions, nativeRunFinalizations, completionContracts, issueWorkProducts, agentTaskSessions, agentRuntimeState,
   workflowRuns, workflowStepRuns, workflowWaits, workflowRunReviews, workflowOptimizerEvaluations, workflowOptimizerObservations, automationArtifacts, automationArtifactVersions, type Db } from "@paperclipai/db";
-import { foundationChangeProposals, foundationSections, routines, routineRevisions, routineTriggers, routineDocuments, routineRuns, companySecretBindings } from "@paperclipai/db";
+import { notificationPreferenceProposals, foundationChangeProposals, foundationSections, routines, routineRevisions, routineTriggers, routineDocuments, routineRuns, companySecretBindings } from "@paperclipai/db";
 import { eraseAnalyticalSourcesUnderMemory } from "../analytical-source-erasure.js";
 import { eraseBusinessEventObjectUnderMemory } from "../business-event-payload-erasure.js";
 import { conflict } from "../../errors.js";
@@ -145,6 +145,15 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
   if (!affected.length && !contextRoots.length && !sourceAssets?.runIds?.length&&!sourceAssets?.skillVersionIds?.length) return;
   const children = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), sql`not (${heartbeatMemoryPayloadVisible()})`));
   const childIds = children.map((child) => child.id);
+  const notificationProposals = childIds.length ? await db.select({id:notificationPreferenceProposals.id}).from(notificationPreferenceProposals)
+    .where(and(eq(notificationPreferenceProposals.companyId,companyId),inArray(notificationPreferenceProposals.sourceRunId,childIds))) : [];
+  if(notificationProposals.length){
+    const ids=notificationProposals.map(row=>row.id);
+    await db.update(notificationPreferenceProposals).set({preference:null,status:"erased",updatedAt:now})
+      .where(and(eq(notificationPreferenceProposals.companyId,companyId),inArray(notificationPreferenceProposals.id,ids)));
+    await db.update(activityLog).set({details:{payloadDeleted:true}}).where(and(eq(activityLog.companyId,companyId),
+      eq(activityLog.entityType,"notification_preference_proposal"),inArray(activityLog.entityId,ids)));
+  }
   const sourceFoundationProposals = childIds.length ? await db.select({ id: foundationChangeProposals.id }).from(foundationChangeProposals).where(and(
     eq(foundationChangeProposals.companyId,companyId),inArray(foundationChangeProposals.conversationSourceRunId,childIds),
   )) : [];

@@ -43,6 +43,11 @@ export const conversationAuthoringViewSchema = z.strictObject({
     if(value.href!==`/foundation/${value.foundationDocumentId}`)ctx.addIssue({code:"custom",message:"Use the Original Foundation reference"});
   })).max(10).optional(),
   hasMoreFoundationProposals:z.boolean().optional(),
+  savedNotificationProposals:z.array(z.strictObject({
+    kind:z.literal("notification_proposal"),id:z.uuid(),category:z.enum(["billing","runtime","approval","work_update"]),
+    status:z.enum(["pending","applied","discarded"]),version:z.number().int().positive(),
+  })).max(10).optional(),
+  hasMoreNotificationProposals:z.boolean().optional(),
   proposals: z.array(z.strictObject({
     kind: z.literal("workflow"), id: z.uuid(), name: z.string().min(1).max(200),
     authoredRevisionId: z.uuid(), authoredRevisionNumber: z.number().int().positive(),
@@ -68,6 +73,9 @@ export const conversationAuthoringViewSchema = z.strictObject({
     if (value.href !== `/workflows/${value.id}`) ctx.addIssue({ code: "custom", path: ["href"], message: "Use the Original workflow reference" });
   })).max(10),
 }).superRefine((value, ctx) => {
+  if((value.savedNotificationProposals===undefined)!==(value.hasMoreNotificationProposals===undefined)||value.savedNotificationProposals&&
+    new Set(value.savedNotificationProposals.map(p=>p.id)).size!==value.savedNotificationProposals.length)
+    ctx.addIssue({code:"custom",path:["savedNotificationProposals"],message:"Notification coverage requires distinct saved records"});
   if (new Set(value.proposals.map(p => p.id)).size !== value.proposals.length)
     ctx.addIssue({ code: "custom", path: ["proposals"], message: "Return distinct Original workflows" });
   if (value.savedTasks && new Set(value.savedTasks.map(p => p.id)).size !== value.savedTasks.length)
