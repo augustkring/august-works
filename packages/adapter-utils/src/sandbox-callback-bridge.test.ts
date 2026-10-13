@@ -433,25 +433,13 @@ describe("sandbox callback bridge", () => {
     const queueDir = path.posix.join(rootDir, "queue");
     const directories = sandboxCallbackBridgeDirectories(queueDir);
     const processed: string[] = [];
+    const client = createFileSystemSandboxCallbackBridgeQueueClient();
+    let releaseHandler!: () => void;
+    const handlerRelease = new Promise<void>(resolve => { releaseHandler = resolve; });
     let signalStarted!: () => void;
     const started = new Promise<void>(resolve => { signalStarted = resolve; });
 
-    const worker = await startSandboxCallbackBridgeWorker({
-      client: createFileSystemSandboxCallbackBridgeQueueClient(),
-      queueDir,
-      authorizeRequest: async () => null,
-      handleRequest: async (request) => {
-        processed.push(request.id);
-        signalStarted();
-        await new Promise((resolve) => setTimeout(resolve, 100));
-        return {
-          status: 200,
-          body: request.id,
-        };
-      },
-    });
-
-    await writeFile(
+    await client.writeTextFile(
       path.posix.join(directories.requestsDir, "req-a.json"),
       `${JSON.stringify({
         id: "req-a",
@@ -462,9 +450,8 @@ describe("sandbox callback bridge", () => {
         body: "",
         createdAt: new Date().toISOString(),
       })}\n`,
-      "utf8",
     );
-    await writeFile(
+    await client.writeTextFile(
       path.posix.join(directories.requestsDir, "req-b.json"),
       `${JSON.stringify({
         id: "req-b",
@@ -475,16 +462,40 @@ describe("sandbox callback bridge", () => {
         body: "",
         createdAt: new Date().toISOString(),
       })}\n`,
-      "utf8",
     );
+
+    // Publish complete requests using the actual queue client's atomic writer
+    // before polling begins; no empty/truncated fixture can be consumed.
+    const worker = await startSandboxCallbackBridgeWorker({
+      client,
+      queueDir,
+      authorizeRequest: async () => null,
+      handleRequest: async (request) => {
+        processed.push(request.id);
+        signalStarted();
+        await handlerRelease;
+        return {
+          status: 200,
+          body: request.id,
+        };
+      },
+    });
+
+    cleanupFns.push(async () => { releaseHandler(); await worker.stop({ drainTimeoutMs: 1_000 }); });
 
     // Begin the short drain deadline only after the first handler has started.
     // A fixed 250ms polling window can expire during a loaded test run.
     await started;
 
-    await worker.stop({ drainTimeoutMs: 10 });
+    const stopped = worker.stop({ drainTimeoutMs: 10 });
+    // Keep A in flight until the real 10-ms drain deadline has passed. This
+    // does not depend on finishing the queue writes inside a 100-ms sleep.
+    await new Promise(resolve => setTimeout(resolve, 25));
+    releaseHandler();
+    await stopped;
 
     expect(processed).toEqual(["req-a"]);
+    expect(JSON.parse(await readFile(path.posix.join(directories.responsesDir, "req-b.json"), "utf8")).status).toBe(503);
     await expect(readFile(path.posix.join(directories.responsesDir, "req-a.json"), "utf8")).resolves.toContain("\"req-a\"");
     await expect(readFile(path.posix.join(directories.responsesDir, "req-b.json"), "utf8")).resolves.toContain(
       "Bridge worker stopped before request could be handled.",
