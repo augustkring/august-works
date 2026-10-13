@@ -1863,5 +1863,12 @@
     "workflow_recovering": "Recovery er i gang.",
     "workflow_waiting": "Kørslen venter på input fra et menneske.",
     "evidence": "Gennemgå den aktuelle workflowkørsel."
+  },
+  "connectorRecovery": {
+    "title": "Gennemgå appforbindelse",
+    "why": "Du administrerer virksomhedens appforbindelser.",
+    "consequence": "Kontrollér aktuel adgang i appens indstillinger, før du forbinder kontoen igen eller ændrer rettigheder.",
+    "accessEvidence": "Kontoadgang kræver gennemgang.",
+    "evidence": "Appforbindelsen kræver gennemgang."
   }
 }

@@ -1,3 +1,4 @@
+import { readConnectorRecovery } from "./connector-recovery.js";
 import { readWorkflowRecovery } from "./workflow-recovery.js";
 import { readPackageMaintenanceAttention } from "./maintenance-attention.js";
 import { readRuntimeRecovery } from "./runtime-recovery.js";
@@ -420,6 +421,9 @@ export function experienceService(db: Db) {
             signal: admittedSignal,
             deadlineMs: remainingMs(),
             readers: [
+              ...(v9FeatureEnabled(flags, "maintenance_autopilot_v9")
+                ? [{ domain: "connector-recovery", read: (signal: AbortSignal) => readConnectorRecovery(db, actor, companyId, signal) }]
+                : []),
               ...(v9FeatureEnabled(flags, "maintenance_autopilot_v9") && v9FeatureEnabled(flags, "progressive_shell_v9") && flags.enableWorkflowsV1
                 ? [{ domain: "workflow-recovery", read: (signal: AbortSignal) => readWorkflowRecovery(db, actor, companyId, signal) }]
                 : []),
@@ -702,6 +706,28 @@ export function experienceService(db: Db) {
                 })
               ).allowed,
             );
+          }
+          if (result.needsYou.some(card => card.source.domain === "connection" && card.kind === "recovery")) {
+            try {
+              const reread = await readConnectorRecovery(db, actor, companyId, admittedSignal);
+              const current = new Map(reread.needsYou.map(card => [card.id, card]));
+              result.needsYou = result.needsYou.flatMap(card => {
+                if (card.source.domain !== "connection" || card.kind !== "recovery") return [card];
+                const source = current.get(card.id);
+                if (!source || source.source.version !== card.source.version) {
+                  markPartial("connector-recovery", "source_stale"); return [];
+                }
+                return [source];
+              });
+              if (reread.coverage) {
+                const dependency = result.dependencies.find(entry => entry.domain === "connector-recovery");
+                if (dependency) { dependency.state = "partial"; dependency.reason = reread.coverage.reason; }
+              }
+            } catch {
+              admittedSignal.throwIfAborted();
+              result.needsYou = result.needsYou.filter(card => card.source.domain !== "connection" || card.kind !== "recovery");
+              markPartial("connector-recovery", "denied");
+            }
           }
           if (result.needsYou.some(card => card.source.domain === "workflow" && card.kind === "recovery")) {
             try {

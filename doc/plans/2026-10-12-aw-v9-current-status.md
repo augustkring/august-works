@@ -5,6 +5,13 @@ PR #38 is a draft and must not merge yet.
 
 ## Latest integrated checkpoint
 
+Current connection-manager health and reauthorization findings now project
+through the Original tool-access owner, with Source/role withdrawal and localized
+navigation only. Seventy native/UI cases, changed server/UI types, token gates
+and the built recovery/private-feedback journeys pass. See the
+[connector recovery checkpoint](2026-10-13-aw-v9-connector-recovery-checkpoint.md).
+Non-manager personal recovery and the remaining maintenance classes stay open.
+
 The recovered customer pause and selected approved public/internal knowledge mappings
 are now qualified. See the [recovery checkpoint](2026-10-12-aw-v9-environment-recovery.md)
 and [knowledge checkpoint](2026-10-12-aw-v9-selected-knowledge-checkpoint.md).

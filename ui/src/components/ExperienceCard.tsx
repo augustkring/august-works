@@ -17,9 +17,22 @@ export function ExperienceCard({
   const unknownMaintenance =
     maintenance && card.evidence.includes("unknown_outcome");
   const runtimeRecovery = card.source.domain === "runtime_cell" && card.kind === "recovery";
+  const connectorRecovery = card.source.domain === "connection" && card.kind === "recovery";
+  const connectorAccess = connectorRecovery && card.evidence.includes("connector_access_review");
   const workflowRecovery = card.source.domain === "workflow" && card.kind === "recovery";
   const runtimeCapacity = runtimeRecovery && card.evidence.includes("runtime_capacity_review");
-  const title = workflowRecovery ? t("workflowRecovery.title") : runtimeRecovery ? t(runtimeCapacity ? "runtimeRecovery.capacityTitle" : "runtimeRecovery.title") : maintenance
+  const recoveryNamespace = connectorRecovery ? "connectorRecovery" : workflowRecovery ? "workflowRecovery" : runtimeRecovery ? "runtimeRecovery" : null;
+  function evidenceText(item: string) {
+    if (connectorRecovery) return t(connectorAccess ? "connectorRecovery.accessEvidence" : "connectorRecovery.evidence");
+    if (workflowRecovery) return t(["workflow_live_run", "workflow_test_run", "workflow_failed", "workflow_recovering", "workflow_waiting"].includes(item) ? `workflowRecovery.${item}` : "workflowRecovery.evidence");
+    if (runtimeRecovery) return t("runtimeRecovery.evidence");
+    if (card.source.domain === "task") return t(`taskStatus.${item}`, { defaultValue: item });
+    if (maintenance) return t("maintenanceAttentionEvidence");
+    return item;
+  }
+  const title = recoveryNamespace
+    ? t(runtimeCapacity ? "runtimeRecovery.capacityTitle" : `${recoveryNamespace}.title`)
+    : maintenance
     ? t(
         unknownMaintenance
           ? "maintenanceUnknownTitle"
@@ -34,12 +47,12 @@ export function ExperienceCard({
       <Heading className="font-medium text-foreground">{title}</Heading>
       {card.whyYou && (
         <p className="text-sm text-foreground">
-          {workflowRecovery ? t("workflowRecovery.why") : runtimeRecovery ? t("runtimeRecovery.why") : maintenance ? t("maintenanceAttentionWhy") : card.whyYou}
+          {recoveryNamespace ? t(`${recoveryNamespace}.why`) : maintenance ? t("maintenanceAttentionWhy") : card.whyYou}
         </p>
       )}
       {card.consequence && (
         <p className="text-sm text-muted-foreground">
-          {workflowRecovery ? t("workflowRecovery.consequence") : runtimeRecovery ? t("runtimeRecovery.consequence") : maintenance
+          {recoveryNamespace ? t(`${recoveryNamespace}.consequence`) : maintenance
             ? t(
                 unknownMaintenance
                   ? "maintenanceUnknownConsequence"
@@ -52,11 +65,7 @@ export function ExperienceCard({
         <ul className="text-sm text-muted-foreground">
           {card.evidence.map((item, i) => (
             <li key={i}>
-              {workflowRecovery ? t(["workflow_live_run", "workflow_test_run", "workflow_failed", "workflow_recovering", "workflow_waiting"].includes(item) ? `workflowRecovery.${item}` : "workflowRecovery.evidence") : runtimeRecovery ? t("runtimeRecovery.evidence") : card.source.domain === "task"
-                ? t(`taskStatus.${item}`, { defaultValue: item })
-                : maintenance
-                  ? t("maintenanceAttentionEvidence")
-                  : item}
+              {evidenceText(item)}
             </li>
           ))}
         </ul>
