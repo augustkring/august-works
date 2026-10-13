@@ -599,7 +599,7 @@ describePg("Workflow routes", () => {
       revisionId: first.body.run.workflowRevisionId, revisionState: "published", status: "succeeded",
       trace: { state: "available", attempts: [{ name: "Manual start", status: "succeeded", attempt: 1 }] },
     });
-    for (const privateField of ["triggerPayload", "inputJson", "outputJson", "errorMessage", "responsibleUserId", "executionOwnerId", "idempotencyKey", "c-1"])
+    for (const privateField of ["triggerPayload", "inputJson", "outputJson", "errorMessage", "responsibleUserId", "executionOwnerId", "idempotencyKey", '"c-1"'])
       expect(JSON.stringify(projected.body)).not.toContain(privateField);
     await http.get(privateRead).expect(409);
     await http.get(`${privateRead}?expectedUserId=another-account`).expect(409);

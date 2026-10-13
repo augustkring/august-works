@@ -25,10 +25,16 @@ export async function settleTheme(page: Page) {
         return false;
       return true;
     });
-    await Promise.all(
-      themeAnimations.map((animation) =>
-        animation.finished.catch(() => undefined),
-      ),
-    );
+    // A style flush can cancel an SVG color transition after enumeration.
+    // Reading .finished on that now-idle animation creates a new promise that
+    // never settles. Observe its actual terminal state instead; cancellation
+    // and completion both mean there is no remaining transition to inspect.
+    await new Promise<void>((resolve) => {
+      const observe = () => {
+        if (themeAnimations.every(animation => animation.playState === "finished" || animation.playState === "idle")) resolve();
+        else requestAnimationFrame(observe);
+      };
+      observe();
+    });
   });
 }
