@@ -1,8 +1,9 @@
 import { memoryService } from "../memory/memory-service.js";
-import { and, desc, eq, gte, isNotNull, notInArray, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNotNull, notInArray, sql } from "drizzle-orm";
 import {
   agentConfigurationDrafts,
   agents,
+  heartbeatRuns,
   approvals,
   companies,
   authUsers,
@@ -393,11 +394,25 @@ export function agentAuthoringService(db: Db) {
         .where(and(eq(agentConfigurationDrafts.companyId, companyId), eq(agentConfigurationDrafts.id, id))).for("share");
       const row = await read(tx, actor, companyId, id), agentId = row.agentId ?? row.preparedAgentId;
       let status: AgentDraftRuntimeView["status"] = "not_prepared", runtimeBindingId: string | null = null, configurationHash: string | null = null;
+      let configurationEditAllowed = false;
       if (agentId) {
-        const [agent] = await tx.select({ status: agents.status }).from(agents)
+        const [agent] = await tx.select().from(agents)
           .where(and(eq(agents.companyId, companyId), eq(agents.id, agentId))).for("share");
         status = !agent || agent.status === "terminated" ? "unavailable" : agent.status === "pending_approval" ? "awaiting_approval" : "needs_setup";
         configurationHash = agent ? await targetHash(tx, companyId, agentId) : null;
+        // The read owner has checked current verified membership and Original
+        // agents:configure authority. A published/live Agent must never be
+        // edited through a link presented as a draft-only runtime choice.
+        configurationEditAllowed = row.status === "draft" && !row.agentId && !!row.preparedAgentId &&
+          agent?.status === "paused" && agent.pauseReason === "manual" &&
+          !(await readAuthoredAgentDefinition(tx, agent)) &&
+          v9FeatureEnabled(await instanceSettingsService(tx).getExperimental(), "hire_agent_v9");
+        if (configurationEditAllowed) {
+          const [work] = await tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+            eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, agentId),
+            inArray(heartbeatRuns.status, ["queued", "scheduled_retry", "running"]))).for("share").limit(1);
+          configurationEditAllowed = !work;
+        }
         if (agent && status !== "unavailable") {
           const bindings = agentProviderBindingService(tx);
           await tx.select({ id: agentPresenceRuntimeBindings.id }).from(agentPresenceRuntimeBindings)
@@ -417,7 +432,7 @@ export function agentAuthoringService(db: Db) {
       await access(tx, actor, companyId, row.agentId);
       if (row.preparedAgentId) await access(tx, actor, companyId, row.preparedAgentId);
       return agentDraftRuntimeViewSchema.parse({ draftId: id, companyId, version: row.version, agentId, runtimeBindingId, configurationHash, status,
-        runtimeQualified: status === "qualified", safeTestQualified: false, executionStarted: false });
+        runtimeQualified: status === "qualified", configurationEditAllowed, safeTestQualified: false, executionStarted: false });
     }),
     preparationReview: async (actor: AuthorizationActor, companyId: string, id: string) => db.transaction(async tx => {
       const current = tx as unknown as Db, row = await read(current, actor, companyId, id, false, true);

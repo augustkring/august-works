@@ -56,8 +56,8 @@ export function AgentDraftRuntime({ company, principal, draft, enabled, canUseAu
           if (value?.runtimeQualified && value.runtimeBindingId) onSelectRuntime(value.runtimeBindingId);
         }}>{t("agentRuntime.select")}</Button> : null}
     <Button className="min-h-11" variant="outline" onClick={() => { if (current()) void runtime.refetch(); }}>{t("agentRuntime.refresh")}</Button>
-    <Button asChild className="min-h-11" variant="outline"><Link to={`/agents/${agentId}/configuration`}
-      onClick={event => { if (!fresh()) event.preventDefault(); }}>{t("agentRuntime.configure")}</Link></Button>
-    <p>{t("agentRuntime.configurationBoundary")}</p>
+    {runtime.data.configurationEditAllowed === true && !draft.agentId && draft.status === "draft" ? <Button asChild className="min-h-11" variant="outline"><Link to={`/agents/${agentId}/configuration`}
+      onClick={event => { if (!fresh()) event.preventDefault(); }}>{t("agentRuntime.configure")}</Link></Button> : null}
+    <p>{t(runtime.data.configurationEditAllowed === true && !draft.agentId ? "agentRuntime.configurationBoundary" : "agentRuntime.liveConfigurationBoundary")}</p>
   </section>;
 }

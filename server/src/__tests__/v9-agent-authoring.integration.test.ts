@@ -154,13 +154,13 @@ const support = await getEmbeddedPostgresTestSupport();
       const before = await db.select().from(activityLog), effects = await effectCounts();
       const observed = await service.runtime(f.actor, f.home, draft.id);
       expect(observed).toMatchObject({ draftId: draft.id, companyId: f.home, version: prepared.version, agentId: prepared.preparation!.agentId,
-        runtimeBindingId: owned!.id, status: "needs_setup", runtimeQualified: false, safeTestQualified: false, executionStarted: false });
+        runtimeBindingId: owned!.id, status: "needs_setup", runtimeQualified: false, configurationEditAllowed: true, safeTestQualified: false, executionStarted: false });
       const [row] = await db.select().from(agentConfigurationDrafts).where(eq(agentConfigurationDrafts.id, draft.id));
       expect(observed.configurationHash).toBe(row!.preparationConfigurationHash);
       expect(await db.select().from(activityLog)).toEqual(before); expect(await effectCounts()).toEqual(effects);
       expect(Object.keys(observed)).not.toContain("adapterConfig"); expect(Object.keys(observed)).not.toContain("providerProfileRef");
       await instanceSettingsService(db).updateExperimental({ hire_agent_v9: false });
-      expect((await service.runtime(f.actor, f.home, draft.id)).status).toBe("needs_setup");
+      expect(await service.runtime(f.actor, f.home, draft.id)).toMatchObject({ status: "needs_setup", configurationEditAllowed: false });
       await db.update(authUsers).set({ emailVerified: false }).where(eq(authUsers.id, f.userId));
       await expect(service.runtime({ ...f.actor, isInstanceAdmin: true }, f.home, draft.id)).rejects.toMatchObject({ status: 403 });
     });
@@ -173,7 +173,7 @@ const support = await getEmbeddedPostgresTestSupport();
       const revision = await service.create(f.actor, f.home, { requestId: randomUUID(), agentId: f.presence.id });
       const [binding] = await db.select().from(agentPresenceRuntimeBindings).where(eq(agentPresenceRuntimeBindings.agentId, f.presence.id));
       expect(await service.runtime(f.actor, f.home, revision.id)).toMatchObject({ agentId: f.presence.id, runtimeBindingId: binding!.id,
-        status: "needs_setup", safeTestQualified: false, executionStarted: false });
+        status: "needs_setup", configurationEditAllowed: false, safeTestQualified: false, executionStarted: false });
       await expect(service.runtime(f.actor, f.guest, draft.id)).rejects.toMatchObject({ status: 404 });
     });
     it("projects exact retained Original runtime pins and withdraws the projection on configuration or profile drift", async () => {

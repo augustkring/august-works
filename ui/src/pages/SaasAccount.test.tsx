@@ -250,3 +250,16 @@ it("coalesces two same-turn deletion submissions into one original Native reques
   });
   expect(remove).toHaveBeenCalledOnce();
 });
+
+it("does not steal focus from current-account input when a same-person source acknowledgement updates the epoch", async () => {
+  const remove = vi.spyOn(saasApi, "deleteAccount");
+  await mount();
+  const input = deletionSection().querySelector<HTMLInputElement>('input[autocomplete="off"]')!;
+  await act(async () => { input.focus(); setInput(input, "DELETE MY ACCOUNT"); });
+  const reconfirmed = v9SessionFixture("owner"); reconfirmed.session.id = "reconfirmed-same-owner-session";
+  await act(async () => { client.setQueryData(queryKeys.auth.session, reconfirmed); });
+  await vi.waitFor(() => expect(saasApi.sessions).toHaveBeenCalledTimes(2));
+  await vi.waitFor(() => expect(host.textContent).toContain(receipt.companyId));
+  expect(document.activeElement).toBe(input); expect(input.value).toBe("DELETE MY ACCOUNT");
+  expect(remove).not.toHaveBeenCalled();
+});

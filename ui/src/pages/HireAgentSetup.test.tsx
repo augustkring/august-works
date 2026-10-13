@@ -412,7 +412,7 @@ it("saves the selected actual Agent runtime in the original candidate without le
   vi.spyOn(agentAuthoringApi, "get").mockResolvedValue(prepared);
   vi.spyOn(agentAuthoringApi, "runtime").mockImplementation(async () => ({
     companyId: company, draftId: id, agentId, version: prepared.version, runtimeBindingId,
-    configurationHash: "b".repeat(64), status: "qualified", runtimeQualified: true, safeTestQualified: false, executionStarted: false,
+    configurationHash: "b".repeat(64), status: "qualified", runtimeQualified: true, configurationEditAllowed: true, safeTestQualified: false, executionStarted: false,
   }));
   vi.spyOn(agentAuthoringApi, "preparationReview").mockRejectedValue(new Error("Already prepared"));
   vi.spyOn(agentAuthoringApi, "testReview").mockRejectedValue(new Error("Saved candidate required"));

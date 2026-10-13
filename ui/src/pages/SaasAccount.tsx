@@ -37,7 +37,15 @@ function AccountSecurityScope({ principal, companyId }: { principal: string; com
   const interruptionPolicy = useV9FeatureEnabled("notification_policy_v9");
   const company = useRef(companyId); company.current = companyId;
   const heading = useRef<HTMLHeadingElement>(null);
-  useEffect(() => { if (scope.ready) heading.current?.focus(); }, [scope.ready, scope.epoch]);
+  useEffect(() => {
+    if (!scope.ready) return;
+    const active = document.activeElement, section = heading.current?.closest("section");
+    // A current-source acknowledgement may arrive after the form is visible.
+    // Preserve an interaction already started in this account's controls.
+    if (active instanceof HTMLElement && section?.contains(active) &&
+      active.matches("input, select, textarea, button, a[href]")) return;
+    heading.current?.focus();
+  }, [scope.ready, scope.epoch]);
   const preferenceKey = ["saas-notification-preferences", principal, scope.epoch] as const;
   const preferences = useQuery({ queryKey: preferenceKey,
     queryFn: ({ signal }) => scope.read(() => saasApi.notificationPreferences(principal, signal), "notifications"),

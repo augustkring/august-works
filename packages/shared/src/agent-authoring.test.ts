@@ -27,6 +27,8 @@ describe("unpublished agent authoring contracts", () => {
       agentId: "10000000-0000-4000-8000-000000000003", runtimeBindingId: "10000000-0000-4000-8000-000000000004", configurationHash: "a".repeat(64),
       status: "qualified", runtimeQualified: true, safeTestQualified: false, executionStarted: false };
     expect(agentDraftRuntimeViewSchema.safeParse(observation).success).toBe(true);
+    expect(agentDraftRuntimeViewSchema.parse(observation).configurationEditAllowed).toBe(false);
+    expect(agentDraftRuntimeViewSchema.safeParse({ ...observation, status: "not_prepared", runtimeQualified: false, agentId: null, runtimeBindingId: null, configurationHash: null, configurationEditAllowed: true }).success).toBe(false);
     for (const changed of [{ agentId: null }, { runtimeBindingId: null }, { configurationHash: null }, { status: "needs_setup" },
       { safeTestQualified: true }, { executionStarted: true }, { providerCredentials: "private" }])
       expect(agentDraftRuntimeViewSchema.safeParse({ ...observation, ...changed }).success).toBe(false);

@@ -26,16 +26,17 @@ const draft: AgentAuthoringDraftView = { id: "10000000-0000-4000-8000-0000000000
   createdAt: "2026-10-11T00:00:00.000Z", updatedAt: "2026-10-11T00:00:00.000Z" };
 const observed: AgentDraftRuntimeView = { draftId: draft.id, companyId: draft.companyId, version: draft.version, agentId: draft.preparation!.agentId,
   runtimeBindingId: "10000000-0000-4000-8000-000000000004", configurationHash: "a".repeat(64), status: "qualified", runtimeQualified: true,
-  safeTestQualified: false, executionStarted: false };
+  configurationEditAllowed: true, safeTestQualified: false, executionStarted: false };
+let renderedDraft = draft;
 let root: Root, container: HTMLDivElement, client: QueryClient;
 afterEach(async () => {
   if (root) await act(async () => root.unmount()); container?.remove(); client?.clear();
   context.ready = true; context.principal = "author"; selectable = false; selectedBinding = null; selectedRuntime.mockReset();
-  vi.restoreAllMocks(); await i18n.changeLanguage("en");
+  renderedDraft = draft; vi.restoreAllMocks(); await i18n.changeLanguage("en");
 });
 async function render() {
   await act(async () => root.render(<StrictMode><QueryClientProvider client={client}><MemoryRouter initialEntries={["/AW/agents/custom"]}>
-    <AgentDraftRuntime company={context.company} principal={context.principal} draft={draft} enabled={context.ready} canUseAuthority={() => context.ready}
+    <AgentDraftRuntime company={context.company} principal={context.principal} draft={renderedDraft} enabled={context.ready} canUseAuthority={() => context.ready}
       selectedRuntimeBindingId={selectedBinding} selectionEnabled={selectable} onSelectRuntime={selectable ? selectedRuntime : undefined} />
   </MemoryRouter></QueryClientProvider></StrictMode>));
 }
@@ -105,4 +106,18 @@ it("refuses a selection immediately when the session cache changes before React 
     button.click();
   });
   expect(selectedRuntime).not.toHaveBeenCalled();
+});
+
+it.each([false, undefined])("withholds direct configuration unless the server admits an inactive prepared Agent (%s)", async allowed => {
+  vi.spyOn(agentAuthoringApi, "runtime").mockResolvedValue({ ...observed, configurationEditAllowed: allowed } as AgentDraftRuntimeView);
+  const save = vi.spyOn(agentAuthoringApi, "save");
+  await mount(); await vi.waitFor(() => expect(container.textContent).toContain("execution setup unchanged"));
+  expect(container.querySelector("a")).toBeNull(); expect(save).not.toHaveBeenCalled();
+});
+it("keeps a live Agent's draft away from its effective configuration even if an obsolete response advertises editing", async () => {
+  renderedDraft = { ...draft, agentId: draft.preparation!.agentId, preparation: null };
+  vi.spyOn(agentAuthoringApi, "runtime").mockResolvedValue(observed);
+  const save = vi.spyOn(agentAuthoringApi, "save"), prepare = vi.spyOn(agentAuthoringApi, "prepare");
+  await mount(); await vi.waitFor(() => expect(container.textContent).toContain("execution setup unchanged"));
+  expect(container.querySelector("a")).toBeNull(); expect(save).not.toHaveBeenCalled(); expect(prepare).not.toHaveBeenCalled();
 });

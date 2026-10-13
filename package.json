@@ -98,7 +98,9 @@
     "verify:aw-v4-pilot-readiness": "node scripts/check-aw-v4-pilot-readiness.mjs --require-evidence",
     "test:aw-v4-pilot-readiness": "node --test scripts/check-aw-v4-pilot-readiness.test.mjs",
     "check:aw-v7-pilot-readiness": "node scripts/check-aw-v7-pilot-readiness.mjs",
-    "test:aw-v7-pilot-readiness": "node --test scripts/check-aw-v7-pilot-readiness.test.mjs"
+    "test:aw-v7-pilot-readiness": "node --test scripts/check-aw-v7-pilot-readiness.test.mjs",
+    "test:aw-v9-pilot": "node --test scripts/__tests__/aw-v9-pilot.test.mjs scripts/__tests__/aw-v9-pilot-files.test.mjs",
+    "validate:aw-v9-pilot": "node scripts/validate-aw-v9-pilot.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

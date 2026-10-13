@@ -9,6 +9,9 @@ on:
       - 'ui/src/**'
       - 'doc/reference/aw-v9/brief/**'
       - 'scripts/check-aw-v9-coverage.mjs'
+      - 'scripts/validate-aw-v9-pilot.mjs'
+      - 'scripts/__tests__/aw-v9-pilot*.test.mjs'
+      - 'scripts/__tests__/helpers/v9-pilot-fixtures.mjs'
       - 'scripts/e2e-shard.mjs'
       - 'scripts/__tests__/e2e-shard.test.mjs'
       - 'tests/e2e/aw-v9-storybook.*'
@@ -27,6 +30,8 @@ jobs:
         with:
           node-version: '24'
       - run: node scripts/check-aw-v9-coverage.mjs
+      - name: Check frozen pilot protocol and private artifact validation
+        run: node --test scripts/__tests__/aw-v9-pilot.test.mjs scripts/__tests__/aw-v9-pilot-files.test.mjs
   components:
     name: V9 component accessibility
     runs-on: ubuntu-24.04

@@ -1709,6 +1709,7 @@
     "changed": "Udkast, agent eller kontoadgang er ændret. Genindlæs det oprindelige udkast.",
     "configure": "Åbn denne agents konfiguration",
     "boundary": "Validering af runtime og en repræsentativ Safe Test er separate. Denne visning starter intet arbejde og giver ingen rettigheder.",
+    "liveConfigurationBoundary": "Denne kladde ændrer ikke agentens opsætning. Ændringer af en aktiv agent kræver en gemt kandidat, ny validering og Safe Test før særskilt publicering.",
     "configurationBoundary": "Konfigurer netop denne agent i Avanceret med de oprindelige gemmekontroller. Runtimeændringer kan gøre tidligere validering og testresultater ugyldige.",
     "status": {
       "not_prepared": "Forbered den inaktive agent, før du konfigurerer dens egen opsætning.",

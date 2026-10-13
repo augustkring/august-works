@@ -1,3 +1,4 @@
+import { tmpdir } from "node:os";
 import { randomUUID } from "node:crypto";
 import { createRequire } from "node:module";
 import { readFile } from "node:fs/promises";
@@ -46,11 +47,12 @@ test("maintenance history reads native receipts separately from current state an
     }),
   );
   const configPath = process.env.PAPERCLIP_E2E_SERVER_CONFIG!;
-  expect(configPath).toMatch(/^\/tmp\/paperclip-e2e-home-/);
+  const configParts = path.relative(tmpdir(), configPath).split(path.sep);
+  expect(configParts).toHaveLength(4);
+  expect(configParts[0]).toMatch(/^paperclip-e2e-home-[a-zA-Z0-9]+$/);
+  expect(configParts.slice(1)).toEqual(["instances", "playwright-e2e", "config.json"]);
   const config = JSON.parse(await readFile(configPath, "utf8"));
-  expect(config.database.embeddedPostgresDataDir).toMatch(
-    /^\/tmp\/paperclip-e2e-home-/,
-  );
+  expect(path.resolve(config.database.embeddedPostgresDataDir)).toBe(path.join(path.dirname(configPath), "db"));
   const pid = await readFile(
     path.join(config.database.embeddedPostgresDataDir, "postmaster.pid"),
     "utf8",

@@ -1,0 +1,624 @@
+{
+  "schemaVersion": 1,
+  "phase": "exploratory",
+  "sourceCommit": null,
+  "artifactSha256": null,
+  "configurationSha256": null,
+  "schemaSha256": null,
+  "policySha256": null,
+  "modelInventorySha256": null,
+  "toolInventorySha256": null,
+  "frozenAt": null,
+  "privacy": {
+    "purposeKey": null,
+    "policyKey": null,
+    "retentionKey": null,
+    "lawfulBasisKey": null,
+    "approvedByRole": null,
+    "expiresAt": null,
+    "sessionReplay": false
+  },
+  "journeys": [
+    {
+      "id": "first_outcome",
+      "roles": [
+        "founder"
+      ],
+      "surfaces": [
+        "web"
+      ],
+      "assistive": [
+        "none"
+      ],
+      "criticality": "C2",
+      "oracleKey": "journey.first_outcome.native_oracle",
+      "securityPrivacyKeys": [
+        "current_identity",
+        "current_scope",
+        "no_unintended_effect"
+      ],
+      "accessibilityKeys": [
+        "keyboard_focus",
+        "accessible_feedback"
+      ],
+      "effortConfidence": true,
+      "criticalSlices": [
+        {
+          "role": "founder",
+          "surface": "web",
+          "assistive": "none"
+        }
+      ],
+      "sampleRationaleKey": "journey.first_outcome.baseline_sampling",
+      "uncertaintyKey": "journey.first_outcome.evidence_margin",
+      "waiverOwnerRole": null,
+      "rule": null,
+      "minimumPerSlice": null,
+      "independenceRequired": true,
+      "monitoringKey": "journey.first_outcome.production_follow_up"
+    },
+    {
+      "id": "hire_agent",
+      "roles": [
+        "founder",
+        "ai_admin"
+      ],
+      "surfaces": [
+        "web"
+      ],
+      "assistive": [
+        "none"
+      ],
+      "criticality": "C2",
+      "oracleKey": "journey.hire_agent.native_oracle",
+      "securityPrivacyKeys": [
+        "current_identity",
+        "current_scope",
+        "no_unintended_effect"
+      ],
+      "accessibilityKeys": [
+        "keyboard_focus",
+        "accessible_feedback"
+      ],
+      "effortConfidence": true,
+      "criticalSlices": [
+        {
+          "role": "founder",
+          "surface": "web",
+          "assistive": "none"
+        },
+        {
+          "role": "ai_admin",
+          "surface": "web",
+          "assistive": "none"
+        }
+      ],
+      "sampleRationaleKey": "journey.hire_agent.baseline_sampling",
+      "uncertaintyKey": "journey.hire_agent.evidence_margin",
+      "waiverOwnerRole": null,
+      "rule": null,
+      "minimumPerSlice": null,
+      "independenceRequired": true,
+      "monitoringKey": "journey.hire_agent.production_follow_up"
+    },
+    {
+      "id": "connect_required_app",
+      "roles": [
+        "employee",
+        "ai_admin"
+      ],
+      "surfaces": [
+        "web"
+      ],
+      "assistive": [
+        "none"
+      ],
+      "criticality": "C3",
+      "oracleKey": "journey.connect_required_app.native_oracle",
+      "securityPrivacyKeys": [
+        "current_identity",
+        "current_scope",
+        "no_unintended_effect"
+      ],
+      "accessibilityKeys": [
+        "keyboard_focus",
+        "accessible_feedback"
+      ],
+      "effortConfidence": true,
+      "criticalSlices": [
+        {
+          "role": "employee",
+          "surface": "web",
+          "assistive": "none"
+        },
+        {
+          "role": "ai_admin",
+          "surface": "web",
+          "assistive": "none"
+        }
+      ],
+      "sampleRationaleKey": "journey.connect_required_app.baseline_sampling",
+      "uncertaintyKey": "journey.connect_required_app.evidence_margin",
+      "waiverOwnerRole": null,
+      "rule": null,
+      "minimumPerSlice": null,
+      "independenceRequired": true,
+      "monitoringKey": "journey.connect_required_app.production_follow_up"
+    },
+    {
+      "id": "channel_outcome",
+      "roles": [
+        "employee"
+      ],
+      "surfaces": [
+        "slack",
+        "teams"
+      ],
+      "assistive": [
+        "none"
+      ],
+      "criticality": "C2",
+      "oracleKey": "journey.channel_outcome.native_oracle",
+      "securityPrivacyKeys": [
+        "current_identity",
+        "current_scope",
+        "no_unintended_effect"
+      ],
+      "accessibilityKeys": [
+        "keyboard_focus",
+        "accessible_feedback"
+      ],
+      "effortConfidence": true,
+      "criticalSlices": [
+        {
+          "role": "employee",
+          "surface": "slack",
+          "assistive": "none"
+        },
+        {
+          "role": "employee",
+          "surface": "teams",
+          "assistive": "none"
+        }
+      ],
+      "sampleRationaleKey": "journey.channel_outcome.baseline_sampling",
+      "uncertaintyKey": "journey.channel_outcome.evidence_margin",
+      "waiverOwnerRole": null,
+      "rule": null,
+      "minimumPerSlice": null,
+      "independenceRequired": true,
+      "monitoringKey": "journey.channel_outcome.production_follow_up"
+    },
+    {
+      "id": "material_approval",
+      "roles": [
+        "manager"
+      ],
+      "surfaces": [
+        "web",
+        "slack",
+        "teams"
+      ],
+      "assistive": [
+        "none"
+      ],
+      "criticality": "C3",
+      "oracleKey": "journey.material_approval.native_oracle",
+      "securityPrivacyKeys": [
+        "current_identity",
+        "current_scope",
+        "no_unintended_effect"
+      ],
+      "accessibilityKeys": [
+        "keyboard_focus",
+        "accessible_feedback"
+      ],
+      "effortConfidence": true,
+      "criticalSlices": [
+        {
+          "role": "manager",
+          "surface": "web",
+          "assistive": "none"
+        },
+        {
+          "role": "manager",
+          "surface": "slack",
+          "assistive": "none"
+        },
+        {
+          "role": "manager",
+          "surface": "teams",
+          "assistive": "none"
+        }
+      ],
+      "sampleRationaleKey": "journey.material_approval.baseline_sampling",
+      "uncertaintyKey": "journey.material_approval.evidence_margin",
+      "waiverOwnerRole": null,
+      "rule": null,
+      "minimumPerSlice": null,
+      "independenceRequired": true,
+      "monitoringKey": "journey.material_approval.production_follow_up"
+    },
+    {
+      "id": "correct_result",
+      "roles": [
+        "employee"
+      ],
+      "surfaces": [
+        "web"
+      ],
+      "assistive": [
+        "none"
+      ],
+      "criticality": "C2",
+      "oracleKey": "journey.correct_result.native_oracle",
+      "securityPrivacyKeys": [
+        "current_identity",
+        "current_scope",
+        "no_unintended_effect"
+      ],
+      "accessibilityKeys": [
+        "keyboard_focus",
+        "accessible_feedback"
+      ],
+      "effortConfidence": true,
+      "criticalSlices": [
+        {
+          "role": "employee",
+          "surface": "web",
+          "assistive": "none"
+        }
+      ],
+      "sampleRationaleKey": "journey.correct_result.baseline_sampling",
+      "uncertaintyKey": "journey.correct_result.evidence_margin",
+      "waiverOwnerRole": null,
+      "rule": null,
+      "minimumPerSlice": null,
+      "independenceRequired": true,
+      "monitoringKey": "journey.correct_result.production_follow_up"
+    },
+    {
+      "id": "workflow_publish",
+      "roles": [
+        "ai_admin"
+      ],
+      "surfaces": [
+        "web"
+      ],
+      "assistive": [
+        "none"
+      ],
+      "criticality": "C3",
+      "oracleKey": "journey.workflow_publish.native_oracle",
+      "securityPrivacyKeys": [
+        "current_identity",
+        "current_scope",
+        "no_unintended_effect"
+      ],
+      "accessibilityKeys": [
+        "keyboard_focus",
+        "accessible_feedback"
+      ],
+      "effortConfidence": true,
+      "criticalSlices": [
+        {
+          "role": "ai_admin",
+          "surface": "web",
+          "assistive": "none"
+        }
+      ],
+      "sampleRationaleKey": "journey.workflow_publish.baseline_sampling",
+      "uncertaintyKey": "journey.workflow_publish.evidence_margin",
+      "waiverOwnerRole": null,
+      "rule": null,
+      "minimumPerSlice": null,
+      "independenceRequired": true,
+      "monitoringKey": "journey.workflow_publish.production_follow_up"
+    },
+    {
+      "id": "connection_recovery",
+      "roles": [
+        "employee"
+      ],
+      "surfaces": [
+        "web"
+      ],
+      "assistive": [
+        "none"
+      ],
+      "criticality": "C3",
+      "oracleKey": "journey.connection_recovery.native_oracle",
+      "securityPrivacyKeys": [
+        "current_identity",
+        "current_scope",
+        "no_unintended_effect"
+      ],
+      "accessibilityKeys": [
+        "keyboard_focus",
+        "accessible_feedback"
+      ],
+      "effortConfidence": true,
+      "criticalSlices": [
+        {
+          "role": "employee",
+          "surface": "web",
+          "assistive": "none"
+        }
+      ],
+      "sampleRationaleKey": "journey.connection_recovery.baseline_sampling",
+      "uncertaintyKey": "journey.connection_recovery.evidence_margin",
+      "waiverOwnerRole": null,
+      "rule": null,
+      "minimumPerSlice": null,
+      "independenceRequired": true,
+      "monitoringKey": "journey.connection_recovery.production_follow_up"
+    },
+    {
+      "id": "blocked_agent",
+      "roles": [
+        "employee"
+      ],
+      "surfaces": [
+        "web"
+      ],
+      "assistive": [
+        "none"
+      ],
+      "criticality": "C2",
+      "oracleKey": "journey.blocked_agent.native_oracle",
+      "securityPrivacyKeys": [
+        "current_identity",
+        "current_scope",
+        "no_unintended_effect"
+      ],
+      "accessibilityKeys": [
+        "keyboard_focus",
+        "accessible_feedback"
+      ],
+      "effortConfidence": true,
+      "criticalSlices": [
+        {
+          "role": "employee",
+          "surface": "web",
+          "assistive": "none"
+        }
+      ],
+      "sampleRationaleKey": "journey.blocked_agent.baseline_sampling",
+      "uncertaintyKey": "journey.blocked_agent.evidence_margin",
+      "waiverOwnerRole": null,
+      "rule": null,
+      "minimumPerSlice": null,
+      "independenceRequired": true,
+      "monitoringKey": "journey.blocked_agent.production_follow_up"
+    },
+    {
+      "id": "stop_work",
+      "roles": [
+        "manager"
+      ],
+      "surfaces": [
+        "web"
+      ],
+      "assistive": [
+        "none"
+      ],
+      "criticality": "C3",
+      "oracleKey": "journey.stop_work.native_oracle",
+      "securityPrivacyKeys": [
+        "current_identity",
+        "current_scope",
+        "no_unintended_effect"
+      ],
+      "accessibilityKeys": [
+        "keyboard_focus",
+        "accessible_feedback"
+      ],
+      "effortConfidence": true,
+      "criticalSlices": [
+        {
+          "role": "manager",
+          "surface": "web",
+          "assistive": "none"
+        }
+      ],
+      "sampleRationaleKey": "journey.stop_work.baseline_sampling",
+      "uncertaintyKey": "journey.stop_work.evidence_margin",
+      "waiverOwnerRole": null,
+      "rule": null,
+      "minimumPerSlice": null,
+      "independenceRequired": true,
+      "monitoringKey": "journey.stop_work.production_follow_up"
+    },
+    {
+      "id": "manager_decision",
+      "roles": [
+        "manager"
+      ],
+      "surfaces": [
+        "web"
+      ],
+      "assistive": [
+        "none"
+      ],
+      "criticality": "C2",
+      "oracleKey": "journey.manager_decision.native_oracle",
+      "securityPrivacyKeys": [
+        "current_identity",
+        "current_scope",
+        "no_unintended_effect"
+      ],
+      "accessibilityKeys": [
+        "keyboard_focus",
+        "accessible_feedback"
+      ],
+      "effortConfidence": true,
+      "criticalSlices": [
+        {
+          "role": "manager",
+          "surface": "web",
+          "assistive": "none"
+        }
+      ],
+      "sampleRationaleKey": "journey.manager_decision.baseline_sampling",
+      "uncertaintyKey": "journey.manager_decision.evidence_margin",
+      "waiverOwnerRole": null,
+      "rule": null,
+      "minimumPerSlice": null,
+      "independenceRequired": true,
+      "monitoringKey": "journey.manager_decision.production_follow_up"
+    },
+    {
+      "id": "restrict_permission",
+      "roles": [
+        "security_admin"
+      ],
+      "surfaces": [
+        "web"
+      ],
+      "assistive": [
+        "none"
+      ],
+      "criticality": "C4",
+      "oracleKey": "journey.restrict_permission.native_oracle",
+      "securityPrivacyKeys": [
+        "current_identity",
+        "current_scope",
+        "no_unintended_effect"
+      ],
+      "accessibilityKeys": [
+        "keyboard_focus",
+        "accessible_feedback"
+      ],
+      "effortConfidence": true,
+      "criticalSlices": [
+        {
+          "role": "security_admin",
+          "surface": "web",
+          "assistive": "none"
+        }
+      ],
+      "sampleRationaleKey": "journey.restrict_permission.baseline_sampling",
+      "uncertaintyKey": "journey.restrict_permission.evidence_margin",
+      "waiverOwnerRole": null,
+      "rule": null,
+      "minimumPerSlice": null,
+      "independenceRequired": true,
+      "monitoringKey": "journey.restrict_permission.production_follow_up"
+    },
+    {
+      "id": "downgrade_free",
+      "roles": [
+        "founder"
+      ],
+      "surfaces": [
+        "web"
+      ],
+      "assistive": [
+        "none"
+      ],
+      "criticality": "C4",
+      "oracleKey": "journey.downgrade_free.native_oracle",
+      "securityPrivacyKeys": [
+        "current_identity",
+        "current_scope",
+        "no_unintended_effect"
+      ],
+      "accessibilityKeys": [
+        "keyboard_focus",
+        "accessible_feedback"
+      ],
+      "effortConfidence": true,
+      "criticalSlices": [
+        {
+          "role": "founder",
+          "surface": "web",
+          "assistive": "none"
+        }
+      ],
+      "sampleRationaleKey": "journey.downgrade_free.baseline_sampling",
+      "uncertaintyKey": "journey.downgrade_free.evidence_margin",
+      "waiverOwnerRole": null,
+      "rule": null,
+      "minimumPerSlice": null,
+      "independenceRequired": true,
+      "monitoringKey": "journey.downgrade_free.production_follow_up"
+    },
+    {
+      "id": "assistive_completion",
+      "roles": [
+        "employee",
+        "ai_admin"
+      ],
+      "surfaces": [
+        "web"
+      ],
+      "assistive": [
+        "keyboard",
+        "screen_reader",
+        "zoom_200",
+        "zoom_400"
+      ],
+      "criticality": "C3",
+      "oracleKey": "journey.assistive_completion.native_oracle",
+      "securityPrivacyKeys": [
+        "current_identity",
+        "current_scope",
+        "no_unintended_effect"
+      ],
+      "accessibilityKeys": [
+        "keyboard_focus",
+        "accessible_feedback"
+      ],
+      "effortConfidence": true,
+      "criticalSlices": [
+        {
+          "role": "employee",
+          "surface": "web",
+          "assistive": "keyboard"
+        },
+        {
+          "role": "employee",
+          "surface": "web",
+          "assistive": "screen_reader"
+        },
+        {
+          "role": "employee",
+          "surface": "web",
+          "assistive": "zoom_200"
+        },
+        {
+          "role": "employee",
+          "surface": "web",
+          "assistive": "zoom_400"
+        },
+        {
+          "role": "ai_admin",
+          "surface": "web",
+          "assistive": "keyboard"
+        },
+        {
+          "role": "ai_admin",
+          "surface": "web",
+          "assistive": "screen_reader"
+        },
+        {
+          "role": "ai_admin",
+          "surface": "web",
+          "assistive": "zoom_200"
+        },
+        {
+          "role": "ai_admin",
+          "surface": "web",
+          "assistive": "zoom_400"
+        }
+      ],
+      "sampleRationaleKey": "journey.assistive_completion.baseline_sampling",
+      "uncertaintyKey": "journey.assistive_completion.evidence_margin",
+      "waiverOwnerRole": null,
+      "rule": null,
+      "minimumPerSlice": null,
+      "independenceRequired": true,
+      "monitoringKey": "journey.assistive_completion.production_follow_up"
+    }
+  ]
+}

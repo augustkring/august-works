@@ -58,7 +58,9 @@ test("account security hides private drafts during a session check and waits for
     const main = page.getByRole("main"), heading = main.getByRole("heading", { name: "Account security", exact: true });
     const timezone = main.getByRole("textbox", { name: "Timezone", exact: true });
     const password = main.getByLabel("Current password", { exact: true });
+    const confirmation = main.getByLabel("Type DELETE MY ACCOUNT", { exact: true });
     await timezone.fill("Europe/Paris"); await password.fill("PRIVATE current account password");
+    await confirmation.fill("DELETE MY ACCOUNT");
     const priorReads = state.reads; state.holdSession = true; state.holdPreferences = true;
     await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange", { bubbles: true })));
     await expect.poll(() => state.sessions.length).toBeGreaterThan(0);
@@ -70,6 +72,7 @@ test("account security hides private drafts during a session check and waits for
     await expect(timezone).toHaveCount(0);
     state.holdPreferences = false; for (const release of state.preferences.splice(0)) release();
     await expect(timezone).toHaveValue("Europe/Paris"); await expect(password).toHaveValue("PRIVATE current account password");
+    await expect(confirmation).toHaveValue("DELETE MY ACCOUNT");
     await expect(heading).toBeFocused(); expect(state.writes).toEqual([]);
     await page.setViewportSize({ width: 390, height: 844 }); await page.addScriptTag({ path: axePath });
     expect(await page.evaluate(async () => (await (window as unknown as { axe: { run(scope: string): Promise<{ violations: unknown[] }> } }).axe.run("main")).violations)).toEqual([]);
@@ -79,7 +82,7 @@ test("account security hides private drafts during a session check and waits for
   } finally { await json(await request.delete(`/api/companies/${company.id}`)); }
 });
 
-test("unknown account deletion retains one original request across the actual organization switcher", async ({ page, request }) => {
+test("unknown account deletion retains one original request across the actual organization switcher", async ({ page, request }, info) => {
   const first = await json(await request.post("/api/companies", { data: { name: "Disposable account-deletion context A" } }));
   let second: { id: string; issuePrefix: string; name: string } | null = null;
   try {
@@ -87,6 +90,7 @@ test("unknown account deletion retains one original request across the actual or
     const state = await fixture(page, request, first), main = page.getByRole("main");
     await main.getByLabel("Type DELETE MY ACCOUNT", { exact: true }).fill("DELETE MY ACCOUNT");
     await main.getByLabel("Current password", { exact: true }).fill("PRIVATE deletion password");
+    await expect(main.getByLabel("Type DELETE MY ACCOUNT", { exact: true })).toHaveValue("DELETE MY ACCOUNT");
     await main.getByRole("checkbox", { name: "I have saved any exports I need.", exact: true }).check();
     await main.getByRole("button", { name: "Delete account", exact: true }).click();
     await expect(main.getByRole("alert")).toContainText("Your deletion request is not confirmed");
@@ -103,6 +107,7 @@ test("unknown account deletion retains one original request across the actual or
     expect(state.writes).toHaveLength(1);
     await main.getByLabel("Type DELETE MY ACCOUNT", { exact: true }).fill("DELETE MY ACCOUNT");
     await main.getByLabel("Current password", { exact: true }).fill("PRIVATE deletion password");
+    await expect(main.getByLabel("Type DELETE MY ACCOUNT", { exact: true })).toHaveValue("DELETE MY ACCOUNT");
     await main.getByRole("checkbox", { name: "I have saved any exports I need.", exact: true }).check();
     await main.getByRole("button", { name: "Retry the same deletion request", exact: true }).click();
     await expect.poll(() => state.writes.length).toBe(2); expect(state.writes[1]).toEqual(original);
@@ -111,7 +116,13 @@ test("unknown account deletion retains one original request across the actual or
     expect(await page.evaluate(() => [...Object.values(localStorage), ...Object.values(sessionStorage)].some(value => value.includes("PRIVATE deletion password")))).toBe(false);
     await noNativeWork(request, first.id); await noNativeWork(request, second!.id);
   } finally {
-    if (second) await json(await request.delete(`/api/companies/${second.id}`));
-    await json(await request.delete(`/api/companies/${first.id}`));
+    for (const company of [second, first]) if (company) {
+      try { await json(await request.delete(`/api/companies/${company.id}`)); }
+      catch (error) {
+        // A timed-out fixture may already have closed its API context. Keep
+        // the original browser assertion instead of replacing it with cleanup.
+        if (info.status === info.expectedStatus) throw error;
+      }
+    }
   }
 });
