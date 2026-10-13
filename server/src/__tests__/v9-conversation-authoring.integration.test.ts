@@ -106,6 +106,28 @@ describe("Current conversation previews use actual Original authoring revisions"
     await db.update(authUsers).set({ emailVerified: false }).where(eq(authUsers.id, f.userId));
     await expect(conversationAuthoringService(db).get({ ...f.actor, isInstanceAdmin: true }, f.home, conversation.id)).rejects.toMatchObject({ status: 403 });
   });
+  it("refuses a draft write after the actual responsible account loses verification", async () => {
+    await db.update(authUsers).set({ emailVerified: false }).where(eq(authUsers.id, f.userId));
+    await expect(draft()).rejects.toMatchObject({ status: 403, details: { code: "workflow_authoring_account_unavailable" } });
+    expect(await db.select().from(workflowRevisions).where(eq(workflowRevisions.companyId, f.home))).toEqual([]);
+  });
+  it("rolls back a draft if account verification is withdrawn after the revision insert", async () => {
+    await db.execute(sql`create function aw_v9_test_unverify_author() returns trigger language plpgsql as $$
+      begin
+        update "user" set email_verified=false where id=(select responsible_user_id from heartbeat_runs where id=NEW.created_by_run_id);
+        return NEW;
+      end $$`);
+    await db.execute(sql`create trigger aw_v9_test_late_account_withdrawal after insert on workflow_revisions
+      for each row execute function aw_v9_test_unverify_author()`);
+    try {
+      await expect(draft()).rejects.toMatchObject({ status: 403, details: { code: "workflow_authoring_account_unavailable" } });
+      expect(await db.select().from(workflowRevisions).where(eq(workflowRevisions.companyId, f.home))).toEqual([]);
+      expect((await db.select().from(authUsers).where(eq(authUsers.id, f.userId)))[0]?.emailVerified).toBe(true);
+    } finally {
+      await db.execute(sql`drop trigger aw_v9_test_late_account_withdrawal on workflow_revisions`);
+      await db.execute(sql`drop function aw_v9_test_unverify_author()`);
+    }
+  });
   it("refuses a draft write from an older conversation generation even while its run remains active", async () => {
     await db.update(issues).set({ conversationSessionGeneration: 1 }).where(eq(issues.id, conversation.id));
     await expect(draft()).rejects.toMatchObject({ status: 403, details: { code: "workflow_authoring_context_changed" } });

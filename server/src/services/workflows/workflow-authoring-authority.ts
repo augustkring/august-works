@@ -1,5 +1,5 @@
 import { and, eq, sql } from "drizzle-orm";
-import { heartbeatRuns, issues, type Db } from "@paperclipai/db";
+import { authUsers, heartbeatRuns, issues, type Db } from "@paperclipai/db";
 import { forbidden } from "../../errors.js";
 import { authorizationService } from "../authorization.js";
 
@@ -12,6 +12,15 @@ export async function assertWorkflowAuthoringAuthority(db: Db, context: {
     eq(heartbeatRuns.id, context.runId), eq(heartbeatRuns.status, "running"),
   ));
   if (!run) throw forbidden("Workflow authoring requires the current active run", { code: "workflow_authoring_run_required" });
+  if (run.responsibleUserId !== null) {
+    // When called by the Original mutation transaction this share lock keeps
+    // the canonical account qualification stable until that write commits.
+    const [account] = await db.select({ verified: authUsers.emailVerified }).from(authUsers)
+      .where(eq(authUsers.id, run.responsibleUserId)).for("share");
+    if (!account?.verified) throw forbidden("Current verified account is required for conversation authoring", {
+      code: "workflow_authoring_account_unavailable",
+    });
+  }
   const snapshot = run.contextSnapshot ?? {};
   const issueId = run.nativeIssueId ?? snapshot.issueId ?? snapshot.taskId;
   if (typeof issueId === "string") {
