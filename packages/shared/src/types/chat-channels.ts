@@ -1,3 +1,5 @@
+import type { ExperienceChatCardContext } from "../experience.js";
+
 /** Provider-neutral contracts for Paperclip's native external chat subsystem. */
 export const CHAT_PROVIDERS = [
   "slack",
@@ -369,6 +371,7 @@ export interface SafeExternalChatCard {
   kind: SafeExternalChatCardKind;
   title: string;
   body?: string;
+  experience?: ExperienceChatCardContext;
   actions?: SafeExternalChatCardAction[];
 }
 

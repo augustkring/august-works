@@ -169,6 +169,14 @@ export const experienceCardSchema = z
       });
     }
   });
+/** Shared semantic fields for the Original external-chat card adapters.
+ * This is presentation metadata, never an action or authorization token. */
+export const experienceChatCardContextSchema = z.strictObject({
+  kind: experienceCardSchema.shape.kind, whyYou: experienceCardSchema.shape.whyYou,
+  consequence: experienceCardSchema.shape.consequence, source: experienceCardSchema.shape.source,
+  freshness: experienceCardSchema.shape.freshness, evidence: experienceCardSchema.shape.evidence,
+});
+export type ExperienceChatCardContext = z.infer<typeof experienceChatCardContextSchema>;
 export type ExperienceCard = z.infer<typeof experienceCardSchema>;
 export type ExperienceAction = z.infer<typeof experienceActionSchema>;
 export const experienceDependencySchema = z

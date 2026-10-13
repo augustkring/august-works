@@ -1,3 +1,4 @@
+import { instanceSettingsService } from "../services/instance-settings.js";
 import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -228,6 +229,39 @@ describeEmbeddedPostgres(
         update: db.update.bind(db),
       };
     }
+
+    it("stages V9 semantics in the actual Slack and Teams outbox and settles the same Native card", async () => {
+      await instanceSettingsService(db).getExperimental();
+      await instanceSettingsService(db).updateExperimental({ experience_projection_v9: true, action_cards_v9: true });
+      try {
+        const f = await seedBoundIssue(["slack", "microsoft-teams"]), service = issueThreadInteractionService(db);
+        const interaction = await service.create({ id: f.issueId, companyId: f.companyId }, { kind: "ask_user_questions",
+          payload: { version: 1, questions: [{ id: "priority", prompt: "Hvilken prioritet?", selectionMode: "single",
+            allowOther: false, options: [{ id: "high", label: "Høj" }] }] } }, { agentId: f.agentId });
+        const staged = await publicationsForInteraction(f.companyId, interaction.id);
+        expect(staged).toHaveLength(2);
+        for (const row of staged) {
+          expect(row.payload.card?.experience).toMatchObject({ kind: "question", freshness: "fresh", evidence: ["pending"],
+            source: { companyId: f.companyId, resourceId: interaction.id, version: new Date(interaction.updatedAt).toISOString() } });
+          expect(row.payload.card?.actions).toHaveLength(1);
+        }
+        await db.update(chatPublications).set({ state: "published", providerMessageId: "software-card-receipt" })
+          .where(and(eq(chatPublications.companyId, f.companyId), eq(sql<string>`${chatPublications.payload}->>'interactionId'`, interaction.id)));
+        const [settled] = await db.update(issueThreadInteractions).set({ status: "answered", updatedAt: new Date(),
+          result: { version: 1, answers: [{ questionId: "priority", optionIds: ["high"], otherText: null }] } })
+          .where(eq(issueThreadInteractions.id, interaction.id)).returning();
+        await enqueueTerminalIssueInteractionChatPublications(db, { ...interaction, status: "answered",
+          updatedAt: settled!.updatedAt.toISOString(), result: settled!.result } as typeof interaction);
+        const terminal = (await publicationsForInteraction(f.companyId, interaction.id)).filter(row => row.idempotencyKey.startsWith("interaction-resolution:"));
+        expect(terminal).toHaveLength(2);
+        for (const row of terminal) {
+          expect(row.payload.card?.experience).toMatchObject({ whyYou: null, consequence: null, evidence: ["answered"] });
+          expect(row.payload.card?.actions ?? []).toEqual([]);
+        }
+      } finally {
+        await instanceSettingsService(db).updateExperimental({ action_cards_v9: false, experience_projection_v9: false });
+      }
+    });
 
     it("publishes prompts only for the endpoint's verified immutable agent", async () => {
       const fixture = await seedBoundIssue();
