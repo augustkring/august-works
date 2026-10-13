@@ -47,7 +47,7 @@ it("opens only server-admitted bounded inspection and keeps joins, budget caps a
   vi.spyOn(api, "getOrchestrationExperience").mockResolvedValue({ ...view, canInspect: true, rows: [{ ...view.rows[0]!, inspection: {
     mode: "single_worker", budgets: { maxWorkers: 1, maxParallel: 1, maxDepth: 0, maxSeconds: 900, maxRetries: 1,
       maxToolActions: 100, modelCostCapConfigured: false }, workers: [{ number: 1, taskId: id(3), agent: view.rows[0]!.owner,
-      status: "running", dependsOn: [], attemptsRecorded: 1 }], controlHref: "/orchestration?view=advanced" } }] });
+      status: "running", dependsOn: [], attemptsRecorded: 1 }], controlHref: "/orchestration?view=advanced", safetyHref: `/orchestration/${id(2)}/control` } }] });
   await mount(); await vi.waitFor(() => expect(container.textContent).toContain("PRIVATE authorized work"));
   expect(container.querySelector<HTMLElement>(`#inspect-${id(2)}`)?.hidden).toBe(true);
   await act(async () => container.querySelector<HTMLButtonElement>("button[aria-controls]")!.click());

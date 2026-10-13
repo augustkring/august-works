@@ -82,6 +82,7 @@ export function readOrchestrationExperience(db: Db, actor: AuthorizationActor, c
             maxDepth: budget.maxDelegationDepth, maxSeconds: budget.maxWallClockSeconds, maxRetries: budget.maxRetries,
             maxToolActions: budget.maxToolActions, modelCostCapConfigured: budget.maxModelCostMinor !== null },
           controlHref: "/orchestration?view=advanced" as const,
+          safetyHref: `/orchestration/${plan.id}/control`,
         } : null };
     }
     const rows: OrchestrationExperience["rows"] = [];

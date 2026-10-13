@@ -8,12 +8,34 @@ import { verificationService } from "../services/supervision/verification-servic
 import { supervisionService } from "../services/supervision/supervision-service.js";
 import { orchestrationRuntimeControl } from "../services/orchestration/orchestration-runtime-control.js";
 import { readOrchestrationExperience } from "../services/experience/orchestration-experience.js";
+import { orchestrationControlExperienceService } from "../services/experience/orchestration-control.js";
+import { orchestrationControlCommandSchema } from "@paperclipai/shared";
 import { ExperienceOverloadError } from "../services/experience/projection.js";
 import { z } from "zod";
 import { conflict, forbidden } from "../errors.js";
 export function orchestrationRoutes(db: Db) {
   const router = Router(), service = orchestrationService(db);
   router.use((_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
+  const controls = orchestrationControlExperienceService(db);
+  function controlScope(req: Parameters<typeof assertCompanyAccess>[0]) {
+    const companyId = z.uuid().parse(req.params.companyId), planId = z.uuid().parse(req.params.planId);
+    const query = z.strictObject({ expectedUserId: z.string().min(1).max(300) }).parse(req.query);
+    assertCompanyAccess(req, companyId);
+    if (req.actor.type !== "board" || req.actor.source === "local_implicit" || !req.actor.userId)
+      throw forbidden("A verified account is required for work controls");
+    if (query.expectedUserId !== req.actor.userId) throw conflict("Account changed; refresh");
+    return { companyId, planId };
+  }
+  router.get("/companies/:companyId/experience/orchestration/:planId/control", async (req, res) => {
+    const { companyId, planId } = controlScope(req); res.json(await controls.get(req.actor, companyId, planId));
+  });
+  router.post("/companies/:companyId/experience/orchestration/:planId/control", validate(orchestrationControlCommandSchema), async (req, res) => {
+    const { companyId, planId } = controlScope(req); res.json(await controls.request(req.actor, companyId, planId, req.body));
+  });
+  router.get("/companies/:companyId/experience/orchestration/:planId/control-requests/:requestId", async (req, res) => {
+    const { companyId, planId } = controlScope(req), requestId = z.uuid().parse(req.params.requestId);
+    res.json(await controls.receipt(req.actor, companyId, planId, requestId));
+  });
   router.get("/companies/:companyId/experience/orchestration", async (req, res) => {
     const companyId = z.uuid().parse(req.params.companyId);
     const query = z.strictObject({ expectedUserId: z.string().min(1).max(300) }).parse(req.query);

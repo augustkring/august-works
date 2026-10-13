@@ -90,6 +90,7 @@ export function OrchestrationExperience({ company, principal }: { company: strin
                   <Link className="inline-flex min-h-11 items-center underline" to={`/issues/${worker.taskId}`}>{t("orchestrationExperience.openTask")}</Link>
                 </li>)}</ol>
                 <p>{t("orchestrationExperience.controlBoundary")}</p>
+                <Link className="inline-flex min-h-11 items-center underline" to={plan.inspection.safetyHref}>{t("orchestrationControl.heading")}</Link>
                 <Link className="inline-flex min-h-11 items-center underline" to={plan.inspection.controlHref}>{t("orchestrationExperience.controls")}</Link>
               </section>
             </div>}

@@ -270,6 +270,14 @@ Full actor/input/effect/access review, governed chat authoring, representative
 testing and the remaining lifecycle are open. WORKFLOW-REVIEW remains in progress;
 source tests confer no release or human usability qualification.
 
+2026-10-13 continuation: the client additionally checks the current Original
+session cache before and after each private read, including invalidation and
+account changes before React settles. Private controls are withheld during that
+recheck. A Source epoch rejects late old responses; the utility-aware heading
+owner preserves an ongoing keyboard/input/navigation gesture. Eight focused
+review cases pass; full actor/input/access review and guided lifecycle completion
+remain open.
+
 ## ADR-V9-017 — Agent revision entry uses native metadata-only admission
 
 Agent detail may offer a revised private setup after a bound, private/no-store
@@ -1458,3 +1466,39 @@ proposal does not complete the full Custom Agent or natural-language lifecycle.
 
 Verification and whole-scope work remain tracked in the dated continuation plan.
 No inherited host/provider qualification or release acceptance is upgraded here.
+
+## ADR-V9-033 — Exact plan safety controls survive rollout withdrawal
+
+2026-10-13. Pause/Stop uses the Original plan CAS decision, current verified
+company membership and Native administrative/root-task control authority. A
+separate exact-plan entry remains mounted when progressive shell, orchestration
+and supervision rollout are disabled. Its minimal read omits withdrawn Source
+payloads; retained control authority does not restore private instructions or
+execution evidence. Navigation and language remain available on that entry.
+
+The customer explicitly reviews the current plan version, a reason and the fact
+that completed effects remain. The Original decision, durable supervision stop
+outbox and body-free request receipt commit atomically. Current authority is
+rechecked before returning; late withdrawal rolls back all three. Reuse of a
+request identity with different content is refused. Receipt replay cannot
+dispatch another Stop. Browser persistence contains only a per-tab account,
+company, plan and request locator retained before the single POST. Unknown
+acknowledgement permits Original GET recovery only, including after reload.
+
+The immutable receipt qualifies admission only. A fresh current Native control
+read is required before displaying it or clearing its locator. Physical adapter
+or provider termination and reversal of completed effects are never inferred.
+The existing stop owner now suppresses ordinary immediate Task recovery when
+cancelling a durably fenced plan, preventing Stop from promoting that Task into
+a fresh run. The existing heartbeat cancellation option owns this behavior;
+there is no replacement queue or side-channel cancellation engine.
+
+Focused migrated PostgreSQL coverage includes concurrent replay, changed-command
+refusal, stale-version and member refusal, rollout withdrawal, late-role rollback
+and actual Original outbox delivery to a queued run without immediate recovery.
+That is software evidence, not live process/provider/channel qualification.
+Client/UI coverage preserves private account fences, unknown receipt recovery,
+corrupt-storage refusal, English/Danish consequences and React effect remount
+behavior. Built browser and final integrated qualification remain tracked in the
+dated continuation plan; this decision does not complete takeover, effective
+delegation inspection or all kill/revocation propagation requirements.

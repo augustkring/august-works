@@ -2155,5 +2155,40 @@
     },
     "refresh": "Refresh status",
     "checked": "Last checked: {{time}}"
+  },
+  "orchestrationControl": {
+    "heading": "Pause or stop work",
+    "back": "Back to work coordination",
+    "boundary": "These controls stay available for existing work when new-work features are turned off. Your current company and task permissions still apply.",
+    "unavailable": "We couldn’t read the current work controls. Check your account and task access, then try again.",
+    "requested": "Control request recorded",
+    "receipt": "Recorded control request",
+    "pauseRequested": "Your request to pause this work was recorded.",
+    "stopRequested": "Your request to stop this work was recorded.",
+    "pendingPropagation": "Stopping still needs confirmation. This receipt does not prove that every running worker has stopped or undo completed effects.",
+    "recovery": "Recover the original control request",
+    "unknown": "This request is unconfirmed. Read its original receipt; no decision is automatically submitted again.",
+    "checkOriginal": "Check original request",
+    "stillUnknown": "The original receipt is still unconfirmed. A missing response does not prove that no request was saved.",
+    "storageFailed": "Recovery storage is unavailable. No new control request is submitted. Review current work through its original controls.",
+    "terminal": "The plan is in a completed state. Review the task’s current state and whether running work has stopped.",
+    "action": "Action",
+    "stop": "Stop",
+    "pause": "Pause",
+    "stopConsequence": "Stop prevents new work and asks running work to stop. It cannot reverse completed effects.",
+    "pauseConsequence": "Pause prevents new work and asks running work to stop. Resuming requires a separate review under the initiating account’s current authority.",
+    "rationale": "Reason",
+    "rationaleHelp": "Use 20–2,000 characters of valid text. Your reason is saved with the control request.",
+    "acknowledge": "I understand that completed actions remain and stopping running work needs confirmation.",
+    "validation": "Review the reason and acknowledge the consequence before requesting this action.",
+    "requestPause": "Request Pause",
+    "requestStop": "Request Stop"
+  },
+  "legacyMobileNavigation": {
+    "overview": "Overview",
+    "tasks": "Tasks",
+    "newTask": "New Task",
+    "agents": "Agents",
+    "inbox": "Inbox"
   }
 }

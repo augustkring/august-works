@@ -166,3 +166,76 @@ Backlog rows for existing conversation workflow/Foundation and initial channel
 adapter work, plus existing automated mobile/accessibility/auth checks, now say
 `in_progress`. This corrects stale `not_started` labels, not their remaining
 full-scope requirements. No broad item is marked complete from these slices.
+
+### Exact plan safety and acknowledgement recovery
+
+The separate exact-plan Pause/Stop page, strict current-account API and Native
+receipt writer now retain the Original plan decision and supervision outbox.
+They survive rollout withdrawal without restoring private Source payloads.
+Current administrator/root-task control, reviewed plan version, reason and
+explicit completed-effect acknowledgement remain required. A per-tab locator
+retained before the single POST supports Original GET recovery after lost
+acknowledgement/reload; absence never proves that no write occurred. Historical
+admission cannot prove physical Stop or reverse completed effects.
+
+Eleven migrated PostgreSQL cases pass, including actual Original outbox delivery
+to a queued Native run after rollout withdrawal. That test exposed ordinary
+heartbeat Task recovery creating a new run after Stop. The existing internal
+cancellation option now suppresses immediate recovery for a durably fenced plan;
+the regression confirms exactly the original run, its cancelled state and one
+outbox delivery. The initial failing lifecycle/browser attempts and initial
+delivery teardown errors remain in local logs, not silently discarded.
+
+Thirteen current API/UI cases pass, including React effect remount, stale account
+acknowledgement, corrupt storage and Original receipt recovery. The built Stop
+browser case passes (4.7 seconds test, 29.3 seconds including setup), exercising
+keyboard submission, one POST, two Original receipt GETs, rollout-withdrawn reload,
+Danish 390px mobile rendering, focused admission receipt and zero automated axe
+violations on main. Its account/owner responses are controlled fixtures. The
+actual CAS/outbox/late-role rollback evidence is the separate PostgreSQL suite.
+Manual assistive technology, representative Human and live process/provider
+qualification remain pending. A separate workflow-intent browser case passed
+on the prior built artifact after the lifecycle fix; subsequent utility edits
+require integrated final Source qualification.
+
+The first broad run finished with 895 passed, seven failed and seven skipped
+test files (16,974 passed, 19 failed and 97 skipped tests in its first group).
+It spanned Source edits and stopped before the later groups. Current exact
+rechecks pass all 131 cases in the six implicated suites; the exact catalog
+package/SDK case also passes separately. Those mixed-transform failures remain
+recorded. A final immutable full run is still required and has not passed.
+
+An environment restart interrupted the subsequent Native V7 regression and full
+server dependency/type preparation. Their partial logs are not passing evidence.
+Source files, checkpoint commit and worktree were preserved. The completion scope
+above remains open; this safety slice is not full V9 or release acceptance.
+
+The current Native work/safety and inherited V7 orchestration group passes all
+43 cases in two suites, including safety admission after attempt Source payload
+erasure. The current OpenAPI/layout/language/locale group passes 64 cases in four
+suites. The final current Stop and described-workflow browser pair passes both
+cases (42.4 seconds including setup). Stop recovery also verifies Danish fallback
+mobile navigation after rollout withdrawal. Visible safety copy uses recorded
+requests and stopping confirmation rather than internal plan-owner/propagation
+terminology. Native run/physical provider qualification stays separate.
+
+Workflow review now uses the current session/account fence for each private read,
+withdraws prior prose during account cache invalidation/recheck and rejects late
+responses after account/Source change. The shared utility-aware heading owner
+preserves an existing navigation/input/utility gesture when a read completes.
+Eight workflow review cases and current UI types pass. These changes do not
+complete guided step editing, conversational graph proposal or remaining access,
+approval and unknown-acknowledgement lifecycle recovery.
+
+Full recursive types passed on the safety checkpoint before the later workflow
+review changes; focused current UI types pass afterward. The final entire scope
+still requires immutable full recursive types, tests and build. No broad release
+or Human acceptance is recorded by these focused/checkpoint results.
+
+The current integrated safety/private-review checkpoint also passed the complete
+workspace build, including Original Rust/provider/protocol/parity checks and CLI.
+No application Source was edited during that build. This checkpoint still omits
+the remaining full-scope implementation and immutable whole test qualification.
+Read-only GitHub environment/deployment discovery returned no configured
+environments or deployment records for `augustkring/august-works`; unrelated
+upstream QA tenant links are not authorized AW staging qualification targets.

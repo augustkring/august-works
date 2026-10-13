@@ -18,11 +18,14 @@ const row = z.strictObject({
       dependsOn: z.array(z.number().int().min(1).max(32)).max(31), attemptsRecorded: z.number().int().nonnegative() })).min(1).max(32),
     // The full original controls retain Stop/Pause, propagation and takeover.
     controlHref: z.literal("/orchestration?view=advanced"),
+    safetyHref: z.string(),
   }).nullable(),
 }).superRefine((value, ctx) => {
   if (value.taskHref !== `/issues/${value.taskId}`)
     ctx.addIssue({ code: "custom", message: "Use the Original task reference" });
   const workers = value.inspection?.workers;
+  if (value.inspection && value.inspection.safetyHref !== `/orchestration/${value.id}/control`)
+    ctx.addIssue({ code: "custom", message: "Use the exact Original safety control resource" });
   if (workers && (new Set(workers.map(worker => worker.number)).size !== workers.length ||
     new Set(workers.map(worker => worker.taskId)).size !== workers.length ||
     workers.some(worker => worker.dependsOn.some(dependency => dependency === worker.number || !workers.some(other => other.number === dependency)))))

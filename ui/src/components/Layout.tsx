@@ -704,7 +704,7 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
               isMobile && "sticky top-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85",
             )}
           >
-            <ExperienceUtilities />
+            <ExperienceUtilities safetyRecovery={companyPathSegments.length === 3 && companyPathSegments[0] === "orchestration" && companyPathSegments[2] === "control"} />
             <div className={cn(!isMobile && useStreamlinedTaskDetailShell && "hidden")}>
             <StandaloneBrowserControls mobile={isMobile} />
             <BreadcrumbBar />

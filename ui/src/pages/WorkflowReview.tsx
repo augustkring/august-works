@@ -3,7 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { workflowsApi } from "../api/workflows";
-import { useAccountIdentity } from "../api/companies-query";
+import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
+import { useV9PrivateReadAuthority } from "../hooks/useV9PrivateReadAuthority";
+import { useExperienceHeading } from "../hooks/useExperienceHeading";
 import { useCompany } from "../context/CompanyContext";
 import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
 import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
@@ -20,7 +22,7 @@ export function WorkflowEntry() {
   const client = useQueryClient();
   const feature = useV9FeatureEnabled("progressive_shell_v9");
   const { selectedCompanyId } = useCompany();
-  const identity = useAccountIdentity();
+  const identity = useV9CurrentAccount();
   const principal = identity.localImplicit ? "local-board" : identity.userId;
   const { workflowId } = useParams();
   const { t } = useTranslation("experience");
@@ -64,15 +66,27 @@ export function WorkflowReview({
 }) {
   const { t } = useTranslation("experience");
   const client = useQueryClient();
+  const { selectedCompanyId } = useCompany();
+  const authority = useV9PrivateReadAuthority(principal, true);
   const [epoch, setEpoch] = useState(0);
+  const source = useRef(0);
   const [selected, setSelected] = useState<"active" | "draft">("active");
-  const heading = useRef<HTMLHeadingElement>(null);
   const error = useRef<HTMLDivElement>(null);
   const prefix = ["workflow-experience", company, principal, id];
+  const key = [...prefix, authority.epoch, epoch];
+  const scope = useRef({ company, principal, id, selectedCompanyId, authority });
+  scope.current = { company, principal, id, selectedCompanyId, authority };
+  const canReadCurrent = () => scope.current.company === company && scope.current.principal === principal && scope.current.id === id &&
+    scope.current.selectedCompanyId === company && scope.current.authority.canRead() && source.current === epoch;
   const query = useQuery({
-    queryKey: [...prefix, epoch],
-    queryFn: ({ signal }) =>
-      workflowsApi.experience(company, principal, id, signal),
+    queryKey: key,
+    enabled: authority.readReady && selectedCompanyId === company,
+    queryFn: ({ signal }) => authority.read(async () => {
+      if (!canReadCurrent()) throw new Error("Current workflow access needs review");
+      const value = await workflowsApi.experience(company, principal, id, signal);
+      if (!canReadCurrent()) throw new Error("Current workflow access changed");
+      return value;
+    }),
     retry: false,
     gcTime: 0,
     staleTime: 0,
@@ -96,26 +110,28 @@ export function WorkflowReview({
     )
       return;
     // A new observer identity immediately hides retained data and rejects late old responses.
-    setEpoch((value) => value + 1);
+    source.current++;
+    setEpoch(source.current);
     void client.cancelQueries({ queryKey: prefix });
     client.removeQueries({ queryKey: prefix });
   });
+  const state = client.getQueryState(key);
+  const fresh = canReadCurrent() && query.isSuccess && !query.isFetching && !state?.isInvalidated;
+  const heading = useExperienceHeading(`${company}:${principal}:${id}:${selected}`, !fresh, query.isError);
   useEffect(() => {
-    if (!document.activeElement?.closest('[role="dialog"]')) heading.current?.focus();
-  }, [query.data?.id, selected]);
-  useEffect(() => {
-    if (query.isError && !document.activeElement?.closest('[role="dialog"]')) error.current?.focus();
+    if (canReadCurrent() && query.isError && !document.activeElement?.closest('[role="dialog"],button,a[href],input,select,textarea,summary,[contenteditable="true"],[role="button"]')) error.current?.focus();
   }, [query.isError]);
+  if (!canReadCurrent()) return <p role="status">{t("loading")}</p>;
   const controls = (
     <>
     <WorkflowPublicationControls key="publication" company={company} principal={principal} id={id}
-      detail={!query.isPending && !query.isFetching && !query.isError ? query.data : null}
+      detail={fresh ? query.data : null}
       refresh={() => void query.refetch()} />
     <WorkflowTestControls key="test" company={company} principal={principal} id={id}
-      detail={!query.isPending && !query.isFetching && !query.isError ? query.data : null}
+      detail={fresh ? query.data : null}
       refresh={() => void query.refetch()} />
     <WorkflowRunControls key="launch" company={company} principal={principal} id={id}
-      detail={!query.isPending && !query.isFetching && !query.isError ? query.data : null}
+      detail={fresh ? query.data : null}
       refresh={() => void query.refetch()} />
     <WorkflowLifecycleControls
       key="lifecycle"
@@ -123,7 +139,7 @@ export function WorkflowReview({
       principal={principal}
       id={id}
       detail={
-        !query.isPending && !query.isFetching && !query.isError
+        fresh
           ? query.data
           : null
       }
@@ -145,14 +161,14 @@ export function WorkflowReview({
         {controls}
       </>
     );
-  if (query.isPending || query.isFetching)
+  if (!fresh)
     return (
       <>
         <p role="status">{t("loading")}</p>
         {controls}
       </>
     );
-  const detail = query.data;
+  const detail = query.data!;
   const current =
     selected === "draft" || !detail.active ? detail.draft : detail.active;
   return (

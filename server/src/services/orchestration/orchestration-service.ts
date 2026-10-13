@@ -18,6 +18,7 @@ import { reconcileOrchestrationAttempts } from "./orchestration-admission.js";
 import { qualifyNativeDraftPlan } from "./native-draft-runtime.js";
 
 type Plan = typeof orchestrationPlans.$inferSelect;
+const terminalPlan = (status: string) => ["completed", "cancelled", "failed"].includes(status);
 /** Follow actual native Task/attempt bindings; copied IDs never grant source access. */
 export async function assertOrchestrationSources(db: Db, actor: AuthorizationActor | undefined, companyId: string, row: Plan) {
   const workers = await db.select({ issueId: orchestrationWorkers.issueId }).from(orchestrationWorkers).where(and(eq(orchestrationWorkers.companyId, companyId), eq(orchestrationWorkers.planId, row.id))).limit(257);
@@ -61,7 +62,7 @@ export function orchestrationService(db: Db) {
     await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId); await admit(actor, companyId, tx, true, control);
     const row = await plan(actor, companyId, id, tx, true, control);
     if (row.version !== input.expectedVersion) throw conflict("Plan version changed; reload before deciding");
-    if (["completed", "cancelled", "failed"].includes(row.status)) throw conflict("Plan is terminal");
+    if (terminalPlan(row.status)) throw conflict("Plan is terminal");
     if (input.action === "start") {
       const [task] = await tx.select({ harnessKind: issues.harnessKind }).from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, row.issueId)));
       if (["provider_conformance", "agent_safe_test"].includes(task?.harnessKind ?? "")) throw forbidden("A private qualification harness cannot start ordinary work");
@@ -143,6 +144,15 @@ export function orchestrationService(db: Db) {
     return created!;
   }
   return {
+    /** Minimal safety-control owner. No rollout or payload Source admission is
+     * substituted for current administrative/Root Task control authority. */
+    controlSummary: async (actor: AuthorizationActor, companyId: string, id: string) => withV7ActivityTransaction(db, async tx => {
+      await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
+      await admit(actor, companyId, tx, true, true);
+      const row = await plan(actor, companyId, id, tx, false, true);
+      return { companyId, planId: row.id, taskId: row.issueId, version: row.version, status: row.status,
+        canPause: !terminalPlan(row.status) && row.status !== "paused", canStop: !terminalPlan(row.status) };
+    }),
     list: async (actor: AuthorizationActor, companyId: string) => withV7ActivityTransaction(db, async tx => {
       await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
       await admit(actor, companyId, tx);

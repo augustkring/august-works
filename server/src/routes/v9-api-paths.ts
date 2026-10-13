@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   orchestrationExperienceSchema,
+  orchestrationControlViewSchema, orchestrationControlCommandSchema, orchestrationControlReceiptSchema,
   workflowIntentDraftCommandSchema,
   workflowIntentDraftReceiptSchema,
   workflowExperienceIndexSchema,
@@ -131,6 +132,12 @@ const write = (
   privateResponse: true,
 });
 export const v9ApiPaths: V9ApiOperation[] = [
+  { ...read(`${company}/experience/orchestration/{planId}/control`, "Read minimal current Native administrative Pause/Stop admission independent of rollout and payload Source qualification",
+    orchestrationControlViewSchema, z.strictObject({ expectedUserId: z.string().min(1).max(300) })), cacheControl: "no-store" },
+  { ...write(`${company}/experience/orchestration/{planId}/control`, "Request one reviewed Native Pause/Stop and its Original durable propagation; receipt does not prove physical Stop or reverse completed effects",
+    orchestrationControlCommandSchema, orchestrationControlReceiptSchema), query: z.strictObject({ expectedUserId: z.string().min(1).max(300) }), cacheControl: "no-store" },
+  { ...read(`${company}/experience/orchestration/{planId}/control-requests/{requestId}`, "Recover only this account's Original control request receipt after an unknown acknowledgement; never replay the effect",
+    orchestrationControlReceiptSchema, z.strictObject({ expectedUserId: z.string().min(1).max(300) })), cacheControl: "no-store" },
   { ...read(`${company}/experience/orchestration`, "Read bounded Native work status; only currently authorized administrators receive worker inspection metadata",
     orchestrationExperienceSchema, z.strictObject({ expectedUserId: z.string().min(1).max(300) })), cacheControl: "no-store", overloaded: true },
   { ...read(`${company}/experience/workflows`, "Read the bounded current authorized workflow index; an empty view is not a complete inventory",

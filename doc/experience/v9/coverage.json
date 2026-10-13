@@ -833,7 +833,14 @@
         "server/src/routes/orchestration.ts",
         "server/src/services/experience/orchestration-experience.ts",
         "server/src/services/orchestration/orchestration-service.ts",
-        "packages/shared/src/orchestration-experience.ts"
+        "packages/shared/src/orchestration-experience.ts",
+        "packages/shared/src/orchestration-control.ts",
+        "server/src/services/experience/orchestration-control.ts",
+        "server/src/services/orchestration/orchestration-runtime-control.ts",
+        "ui/src/pages/OrchestrationControl.tsx",
+        "ui/src/api/orchestration-control.ts",
+        "ui/src/lib/pending-orchestration-controls.ts",
+        "ui/src/components/ExperienceUtilities.tsx"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/orchestration.json"

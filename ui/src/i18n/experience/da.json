@@ -2155,5 +2155,40 @@
     },
     "refresh": "Opdatér status",
     "checked": "Sidst kontrolleret: {{time}}"
+  },
+  "orchestrationControl": {
+    "heading": "Pause eller stop arbejde",
+    "back": "Tilbage til koordinering",
+    "boundary": "Kontrollerne forbliver tilgængelige for eksisterende arbejde, når funktioner til nyt arbejde slås fra. Din aktuelle adgang til virksomheden og opgaven gælder stadig.",
+    "unavailable": "Vi kunne ikke læse de aktuelle kontroller. Kontrollér din konto og adgang til opgaven, og prøv igen.",
+    "requested": "Kontrolanmodning registreret",
+    "receipt": "Registreret kontrolanmodning",
+    "pauseRequested": "Din anmodning om at pause arbejdet blev registreret.",
+    "stopRequested": "Din anmodning om at stoppe arbejdet blev registreret.",
+    "pendingPropagation": "Stop skal stadig bekræftes. Kvitteringen bekræfter ikke, at alt kørende arbejde er stoppet, og omgør ikke allerede udførte handlinger.",
+    "recovery": "Genfind den oprindelige kontrolanmodning",
+    "unknown": "Anmodningen er ubekræftet. Læs dens oprindelige kvittering; ingen beslutning sendes automatisk igen.",
+    "checkOriginal": "Kontrollér oprindelig anmodning",
+    "stillUnknown": "Den oprindelige kvittering er stadig ubekræftet. Et manglende svar beviser ikke, at ingen anmodning blev gemt.",
+    "storageFailed": "Lagring til genfinding er utilgængelig. Ingen ny kontrolanmodning sendes. Gennemgå det aktuelle arbejde via de oprindelige kontroller.",
+    "terminal": "Planen er i en afsluttende tilstand. Gennemgå opgavens aktuelle tilstand, og om kørende arbejde er stoppet.",
+    "action": "Handling",
+    "stop": "Stop",
+    "pause": "Pause",
+    "stopConsequence": "Stop forhindrer nyt arbejde og anmoder om, at kørende arbejde stoppes. Det kan ikke omgøre udførte handlinger.",
+    "pauseConsequence": "Pause forhindrer nyt arbejde og anmoder om, at kørende arbejde stoppes. Genoptagelse kræver en separat gennemgang med den igangsættende kontos aktuelle adgang.",
+    "rationale": "Begrundelse",
+    "rationaleHelp": "Brug 20–2.000 tegn i gyldig tekst. Din begrundelse gemmes med kontrolanmodningen.",
+    "acknowledge": "Jeg forstår, at udførte handlinger består, og at stop af kørende arbejde skal bekræftes.",
+    "validation": "Gennemgå begrundelsen og anerkend konsekvensen, før du anmoder om handlingen.",
+    "requestPause": "Anmod om Pause",
+    "requestStop": "Anmod om Stop"
+  },
+  "legacyMobileNavigation": {
+    "overview": "Overblik",
+    "tasks": "Opgaver",
+    "newTask": "Ny opgave",
+    "agents": "Agenter",
+    "inbox": "Indbakke"
   }
 }

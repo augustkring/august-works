@@ -7,6 +7,9 @@ import { afterEach, beforeEach, expect, it, vi } from "vitest";
 import type { WorkflowExperience } from "@paperclipai/shared";
 import { workflowsApi } from "../api/workflows";
 import { WorkflowReview } from "./WorkflowReview";
+import { authApi } from "../api/auth";
+import { queryKeys } from "../lib/queryKeys";
+import { v9SessionFixture } from "../hooks/v9-session.test-support";
 import "../i18n";
 
 let live: (event: {
@@ -107,6 +110,8 @@ afterEach(async () => {
 });
 async function mount(principal = "member") {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  client.setQueryData(queryKeys.auth.session, v9SessionFixture(principal));
+  vi.spyOn(authApi, "getSession").mockResolvedValue(v9SessionFixture(principal));
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
@@ -288,6 +293,41 @@ it("rejects late operation metadata after native access loss hides the current p
   expect(container.textContent).not.toContain("Operation overview");
   expect(container.textContent).not.toContain("Next scheduled request");
   expect(container.textContent).not.toContain("PRIVATE ACCESS LOSS");
+});
+
+it("withholds current workflow prose when the original session cache is invalidated", async () => {
+  vi.spyOn(workflowsApi, "experience").mockResolvedValue(data);
+  await mount();
+  await vi.waitFor(() => expect(container.textContent).toContain(data.name));
+  await act(async () => { await client.invalidateQueries({ queryKey: queryKeys.auth.session, exact: true, refetchType: "none" }); });
+  expect(container.textContent).not.toContain(data.name);
+  expect(container.textContent).not.toContain("Operation overview");
+});
+
+it("rejects a private workflow response completed after the current account changes", async () => {
+  let finish!: (value: WorkflowExperience) => void;
+  const get = vi.spyOn(workflowsApi, "experience").mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  await mount();
+  await vi.waitFor(() => expect(get).toHaveBeenCalledOnce());
+  await act(async () => {
+    client.setQueryData(queryKeys.auth.session, v9SessionFixture("another-account"));
+    finish({ ...data, name: "LATE PRIVATE WORKFLOW" });
+  });
+  expect(container.textContent).not.toContain("LATE PRIVATE WORKFLOW");
+  expect(container.textContent).not.toContain("Operation overview");
+  expect(get).toHaveBeenCalledOnce();
+});
+
+it("does not take utility focus when the first current workflow read completes", async () => {
+  let finish!: (value: WorkflowExperience) => void;
+  vi.spyOn(workflowsApi, "experience").mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  await mount();
+  const utility = document.createElement("select"); document.body.append(utility); utility.focus();
+  try {
+    await act(async () => finish(data));
+    await vi.waitFor(() => expect(container.textContent).toContain(data.name));
+    expect(document.activeElement).toBe(utility);
+  } finally { utility.remove(); }
 });
 
 it("keeps an unavailable comparison separate from an unchanged-flow result", async () => {

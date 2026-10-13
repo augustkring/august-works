@@ -3347,6 +3347,7 @@ export * from "./workflow-experience.js";
 export * from "./workflow-authoring-experience.js";
 export * from "./agent-setup-authoring.js";
 export * from "./orchestration-experience.js";
+export * from "./orchestration-control.js";
 export * from "./workflow-run-experience.js";
 export * from "./workflow-lifecycle.js";
 export * from "./workflow-operations.js";

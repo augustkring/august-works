@@ -65,6 +65,7 @@ import { Readiness } from "./pages/Readiness";
 import { V8FeatureGate } from "./components/V8FeatureGate";
 import { DerivedMemory } from "./pages/DerivedMemory";
 import { OrchestrationEntry } from "./pages/OrchestrationExperience";
+import { OrchestrationControlEntry } from "./pages/OrchestrationControl";
 import { AIGovernance } from "./pages/AIGovernance";
 import { WorkSignals } from "./pages/WorkSignals";
 import { OrganizationalLearning } from "./pages/OrganizationalLearning";
@@ -448,6 +449,7 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       <Route path="memory/maintenance" element={<MemoryMaintenanceHistoryEntry />} />
       <Route path="company/measures" element={<ExperienceMeasuresEntry />} />
       <Route path="orchestration" element={<V7FeatureGate feature="orchestration_v7"><OrchestrationEntry /></V7FeatureGate>} />
+      <Route path="orchestration/:planId/control" element={<OrchestrationControlEntry />} />
       <Route path="agents/packages/installations/:installationId/maintenance" element={<MaintenanceHistoryEntry />} />
       <Route path="agents/packages" element={<V7FeatureGate feature="agent_packages_v7"><DeferredRouteSurface><AgentPackages /></DeferredRouteSurface></V7FeatureGate>} />
       <Route path="ai-governance" element={<V7FeatureGate feature="ai_use_cases_v7"><AIGovernance /></V7FeatureGate>} />
@@ -975,6 +977,7 @@ export function App() {
       <Route path="business-metrics" element={<V8FeatureGate feature="business_metrics_v8"><V7FeatureGate feature="governance_evidence_v7"><DeferredRouteSurface><BusinessMetrics /></DeferredRouteSurface></V7FeatureGate></V8FeatureGate>} />
       <Route path="readiness" element={<UnprefixedBoardRedirect />} />
           <Route path="orchestration" element={<UnprefixedBoardRedirect />} />
+          <Route path="orchestration/:planId/control" element={<UnprefixedBoardRedirect />} />
           <Route path="work-signals" element={<UnprefixedBoardRedirect />} />
           <Route path="agents/packages" element={<UnprefixedBoardRedirect />} />
           <Route path="ai-governance" element={<UnprefixedBoardRedirect />} />
