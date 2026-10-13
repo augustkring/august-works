@@ -16,14 +16,16 @@ export function ExperienceCard({
     card.kind === "maintenance";
   const unknownMaintenance =
     maintenance && card.evidence.includes("unknown_outcome");
+  const coreMaintenance = card.source.domain === "readiness" && card.kind === "maintenance";
   const runtimeRecovery = card.source.domain === "runtime_cell" && card.kind === "recovery";
   const connectorRecovery = card.source.domain === "connection" && card.kind === "recovery";
   const personalConnector = connectorRecovery && card.evidence.includes("connector_personal_access_review");
   const connectorAccess = connectorRecovery && (personalConnector || card.evidence.includes("connector_access_review"));
   const workflowRecovery = card.source.domain === "workflow" && card.kind === "recovery";
   const runtimeCapacity = runtimeRecovery && card.evidence.includes("runtime_capacity_review");
-  const recoveryNamespace = connectorRecovery ? "connectorRecovery" : workflowRecovery ? "workflowRecovery" : runtimeRecovery ? "runtimeRecovery" : null;
+  const cardNamespace = coreMaintenance ? "coreMaintenance" : connectorRecovery ? "connectorRecovery" : workflowRecovery ? "workflowRecovery" : runtimeRecovery ? "runtimeRecovery" : null;
   function evidenceText(item: string) {
+    if (coreMaintenance) return t("coreMaintenance.evidence");
     if (connectorRecovery) return t(connectorAccess ? "connectorRecovery.accessEvidence" : "connectorRecovery.evidence");
     if (workflowRecovery) return t(["workflow_live_run", "workflow_test_run", "workflow_failed", "workflow_recovering", "workflow_waiting"].includes(item) ? `workflowRecovery.${item}` : "workflowRecovery.evidence");
     if (runtimeRecovery) return t("runtimeRecovery.evidence");
@@ -31,8 +33,8 @@ export function ExperienceCard({
     if (maintenance) return t("maintenanceAttentionEvidence");
     return item;
   }
-  const title = recoveryNamespace
-    ? t(runtimeCapacity ? "runtimeRecovery.capacityTitle" : `${recoveryNamespace}.title`)
+  const title = cardNamespace
+    ? t(runtimeCapacity ? "runtimeRecovery.capacityTitle" : `${cardNamespace}.title`)
     : maintenance
     ? t(
         unknownMaintenance
@@ -48,12 +50,12 @@ export function ExperienceCard({
       <Heading className="font-medium text-foreground">{title}</Heading>
       {card.whyYou && (
         <p className="text-sm text-foreground">
-          {personalConnector ? t("connectorRecovery.personalWhy") : recoveryNamespace ? t(`${recoveryNamespace}.why`) : maintenance ? t("maintenanceAttentionWhy") : card.whyYou}
+          {personalConnector ? t("connectorRecovery.personalWhy") : cardNamespace ? t(`${cardNamespace}.why`) : maintenance ? t("maintenanceAttentionWhy") : card.whyYou}
         </p>
       )}
       {card.consequence && (
         <p className="text-sm text-muted-foreground">
-          {recoveryNamespace ? t(`${recoveryNamespace}.consequence`) : maintenance
+          {cardNamespace ? t(`${cardNamespace}.consequence`) : maintenance
             ? t(
                 unknownMaintenance
                   ? "maintenanceUnknownConsequence"

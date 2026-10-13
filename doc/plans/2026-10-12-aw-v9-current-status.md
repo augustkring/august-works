@@ -5,6 +5,14 @@ PR #38 is a draft and must not merge yet.
 
 ## Latest integrated checkpoint
 
+Current principal-owned Core Steward/readiness findings now have a body-free
+Native metadata projection and a localized aggregate review card. It preserves
+Original company-read admission and creates no assessment, resolution or
+approval. Fifty-one native/UI cases, changed types, token gates and the built
+customer journey pass. See the
+[Core finding checkpoint](2026-10-13-aw-v9-core-maintenance-checkpoint.md).
+The remaining maintenance classes and full V9 qualification remain open.
+
 Current connection-manager health and reauthorization findings now project
 through the Original tool-access owner, with Source/role withdrawal and localized
 navigation only. Seventy native/UI cases, changed server/UI types, token gates

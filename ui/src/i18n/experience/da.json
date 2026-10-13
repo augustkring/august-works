@@ -1871,5 +1871,11 @@
     "accessEvidence": "Kontoadgang kræver gennemgang.",
     "evidence": "Appforbindelsen kræver gennemgang.",
     "personalWhy": "Dette er din egen tilknyttede konto."
+  },
+  "coreMaintenance": {
+    "title": "Gennemgå dine arbejdskontroller",
+    "why": "De åbne fund stammer fra dine egne kontroller.",
+    "consequence": "Gennemgå den aktuelle kilde, før du stoler på resultatet. Brug de eksisterende kontroller til at tjekke eller godkende arbejdet.",
+    "evidence": "Dine kontroller har åbne fund, der kræver gennemgang."
   }
 }

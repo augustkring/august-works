@@ -1871,5 +1871,11 @@
     "accessEvidence": "Account access needs review.",
     "evidence": "The app connection needs review.",
     "personalWhy": "This is your own connected account."
+  },
+  "coreMaintenance": {
+    "title": "Review your work checks",
+    "why": "These open findings belong to your own checks.",
+    "consequence": "Review the current source before relying on the result. Use the existing controls to check or approve the work.",
+    "evidence": "Your checks have open findings that need review."
   }
 }

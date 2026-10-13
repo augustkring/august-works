@@ -1,3 +1,4 @@
+import { readCoreMaintenance } from "./core-maintenance.js";
 import { readConnectorRecovery } from "./connector-recovery.js";
 import { readWorkflowRecovery } from "./workflow-recovery.js";
 import { readPackageMaintenanceAttention } from "./maintenance-attention.js";
@@ -421,6 +422,9 @@ export function experienceService(db: Db) {
             signal: admittedSignal,
             deadlineMs: remainingMs(),
             readers: [
+              ...(v9FeatureEnabled(flags, "maintenance_autopilot_v9") && v7FeatureEnabled(flags, "core_stewards_v7") && v7FeatureEnabled(flags, "readiness_engine_v7")
+                ? [{ domain: "core-maintenance", read: (signal: AbortSignal) => readCoreMaintenance(db, actor, companyId, signal) }]
+                : []),
               ...(v9FeatureEnabled(flags, "maintenance_autopilot_v9")
                 ? [{ domain: "connector-recovery", read: (signal: AbortSignal) => readConnectorRecovery(db, actor, companyId, signal) }]
                 : []),
@@ -706,6 +710,28 @@ export function experienceService(db: Db) {
                 })
               ).allowed,
             );
+          }
+          if (result.needsYou.some(card => card.source.domain === "readiness" && card.kind === "maintenance")) {
+            try {
+              const reread = await readCoreMaintenance(db, actor, companyId, admittedSignal);
+              const current = new Map(reread.needsYou.map(card => [card.id, card]));
+              result.needsYou = result.needsYou.flatMap(card => {
+                if (card.source.domain !== "readiness" || card.kind !== "maintenance") return [card];
+                const source = current.get(card.id);
+                if (!source || source.source.version !== card.source.version) {
+                  markPartial("core-maintenance", "source_stale"); return [];
+                }
+                return [source];
+              });
+              if (reread.coverage) {
+                const dependency = result.dependencies.find(entry => entry.domain === "core-maintenance");
+                if (dependency) { dependency.state = "partial"; dependency.reason = reread.coverage.reason; }
+              }
+            } catch {
+              admittedSignal.throwIfAborted();
+              result.needsYou = result.needsYou.filter(card => card.source.domain !== "readiness" || card.kind !== "maintenance");
+              markPartial("core-maintenance", "denied");
+            }
           }
           if (result.needsYou.some(card => card.source.domain === "connection" && card.kind === "recovery")) {
             try {
