@@ -1,9 +1,9 @@
 import { useCompany } from "@/context/CompanyContext";
 import { useState, useRef, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { saasApi, saasAuthAction } from "@/api/saas";
+import { saasApi } from "@/api/saas";
 import { Button } from "@/components/ui/button";
-import { Link, useSearchParams } from "@/lib/router";
+import { Link } from "@/lib/router";
 import { useSaasCapabilities } from "@/hooks/useSaasCapabilities";
 import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
 import { useV9AccountScope } from "../hooks/useV9AccountScope";
@@ -217,86 +217,4 @@ function AccountSecurityScope({ principal, companyId }: { principal: string; com
   </section>;
 }
 
-export function SaasResetPasswordPage() {
-  const [params] = useSearchParams();
-  const token = params.get("token");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const mutation = useMutation({
-    mutationFn: () =>
-      token
-        ? saasAuthAction("reset-password", { token, newPassword: password })
-        : saasAuthAction("request-password-reset", {
-            email,
-            redirectTo: window.location.origin + "/saas/reset-password",
-          }),
-  });
-  return (
-    <main className="saas-page">
-      <h1 className="saas-title">
-        {token ? "Set a new password" : "Reset password"}
-      </h1>
-      {mutation.error && (
-        <p role="alert" className="saas-error">
-          {mutation.error.message}
-        </p>
-      )}
-      {mutation.isSuccess ? (
-        <p role="status">
-          {token
-            ? "Your password has been changed. Sign in with your new password."
-            : "If this email has an account, a reset link will arrive shortly."}
-        </p>
-      ) : (
-        <form
-          className="saas-section"
-          onSubmit={(event) => {
-            event.preventDefault();
-            mutation.mutate();
-          }}
-        >
-          {token ? (
-            <label className="saas-label">
-              New password
-              <input
-                className="saas-input"
-                type="password"
-                autoComplete="new-password"
-                minLength={12}
-                maxLength={128}
-                required
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-              />
-            </label>
-          ) : (
-            <label className="saas-label">
-              Email
-              <input
-                className="saas-input"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-              />
-            </label>
-          )}
-          <div className="saas-footer">
-            <Link className="saas-link" to="/auth">
-              Back to sign in
-            </Link>
-            <Button type="submit" disabled={mutation.isPending}>
-              {token ? "Change password" : "Send reset link"}
-            </Button>
-          </div>
-        </form>
-      )}
-      {mutation.isSuccess && (
-        <Link className="saas-link" to="/auth">
-          Sign in
-        </Link>
-      )}
-    </main>
-  );
-}
+export { SaasResetPasswordPage } from "./SaasPasswordReset";

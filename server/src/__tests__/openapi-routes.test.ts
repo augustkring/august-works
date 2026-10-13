@@ -915,6 +915,10 @@ describe("openapi routes", () => {
     expect(setup.requestBody.content["application/json"].schema.properties.confirmPackageActivation.enum).toEqual([true]);
     expect(setup.responses[200].content["application/json"].schema.properties.executionStarted.enum).toEqual([false]);
     const image = spec.paths[`${root}/customer-feedback/{feedbackId}/images`].post;
+    const feedbackRequest = spec.paths[`${root}/customer-feedback/requests/{requestKey}`].get;
+    expect(feedbackRequest.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    expect(feedbackRequest.responses[200].content["application/json"].schema.required).toEqual(expect.arrayContaining(["requestKey", "receipt"]));
+    expect(feedbackRequest.parameters).toContainEqual(expect.objectContaining({ name: "requestKey", in: "path", required: true }));
     expect(image.parameters).toContainEqual(expect.objectContaining({ name: "X-AW-Feedback-Request-Key", in: "header", required: true }));
     expect(image.requestBody.content["multipart/form-data"].schema.properties.file.format).toBe("binary");
     const readImage = spec.paths[`${root}/customer-feedback/{feedbackId}/images/{imageId}`].get;

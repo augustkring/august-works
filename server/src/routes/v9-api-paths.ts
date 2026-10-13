@@ -39,6 +39,7 @@ import {
   feedbackFollowUpSchema,
   feedbackTriageSchema,
   customerFeedbackSchema,
+  customerFeedbackRequestReceiptSchema,
   customerFeedbackListSchema,
   feedbackInternalListSchema,
   feedbackInternalDetailSchema,
@@ -323,6 +324,11 @@ export const v9ApiPaths: V9ApiOperation[] = [
     `${feedback}/{feedbackId}`,
     "Read the author's private feedback and customer-visible messages",
     customerFeedbackSchema,
+  ),
+  read(
+    `${feedback}/requests/{requestKey}`,
+    "Read the author's original submission receipt without resubmission; absence does not prove refusal",
+    customerFeedbackRequestReceiptSchema,
   ),
   {
     ...write(

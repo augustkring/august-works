@@ -1,9 +1,18 @@
 import { createRequire } from "node:module";
-import { expect, test, type APIResponse, type APIRequestContext, type Page } from "@playwright/test";
+import { expect, test, type APIResponse, type APIRequestContext, type Page, type Locator } from "@playwright/test";
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 async function json(response: APIResponse) {
   expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(true);
   return response.json();
+}
+// Privacy checks may withdraw an input between Playwright's focus and its
+// separate insertText command. Retry only this local edit after the current
+// account frame returns; no deletion, consent or Native request is replayed.
+async function enterCurrentField(field: Locator, value: string) {
+  await expect(async () => {
+    await field.fill(value);
+    await expect(field).toHaveValue(value);
+  }).toPass({ timeout: 10000 });
 }
 // Actual built security page with explicit personal-account software fixtures.
 // No personal account is deleted or live identity/transport acceptance claimed.
@@ -88,7 +97,7 @@ test("unknown account deletion retains one original request across the actual or
   try {
     second = await json(await request.post("/api/companies", { data: { name: "Disposable account-deletion context B" } }));
     const state = await fixture(page, request, first), main = page.getByRole("main");
-    await main.getByLabel("Type DELETE MY ACCOUNT", { exact: true }).fill("DELETE MY ACCOUNT");
+    await enterCurrentField(main.getByLabel("Type DELETE MY ACCOUNT", { exact: true }), "DELETE MY ACCOUNT");
     await main.getByLabel("Current password", { exact: true }).fill("PRIVATE deletion password");
     await expect(main.getByLabel("Type DELETE MY ACCOUNT", { exact: true })).toHaveValue("DELETE MY ACCOUNT");
     await main.getByRole("checkbox", { name: "I have saved any exports I need.", exact: true }).check();
@@ -105,7 +114,7 @@ test("unknown account deletion retains one original request across the actual or
     await expect(main.getByLabel("Current password", { exact: true })).toHaveValue("");
     await expect(main).toContainText("An earlier deletion request is unresolved");
     expect(state.writes).toHaveLength(1);
-    await main.getByLabel("Type DELETE MY ACCOUNT", { exact: true }).fill("DELETE MY ACCOUNT");
+    await enterCurrentField(main.getByLabel("Type DELETE MY ACCOUNT", { exact: true }), "DELETE MY ACCOUNT");
     await main.getByLabel("Current password", { exact: true }).fill("PRIVATE deletion password");
     await expect(main.getByLabel("Type DELETE MY ACCOUNT", { exact: true })).toHaveValue("DELETE MY ACCOUNT");
     await main.getByRole("checkbox", { name: "I have saved any exports I need.", exact: true }).check();

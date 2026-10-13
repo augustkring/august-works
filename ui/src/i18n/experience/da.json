@@ -1,4 +1,20 @@
 {
+  "passwordReset": {
+    "setTitle": "Vælg en ny adgangskode",
+    "requestTitle": "Nulstil adgangskode",
+    "password": "Ny adgangskode",
+    "email": "E-mail",
+    "back": "Tilbage til login",
+    "change": "Skift adgangskode",
+    "send": "Send link til nulstilling",
+    "signIn": "Log ind",
+    "changing": "Skifter adgangskode…",
+    "sending": "Sender anmodning…",
+    "changed": "Din adgangskode er ændret. Log ind med din nye adgangskode.",
+    "requested": "Hvis der findes en konto med denne e-mail, modtager du snart et link til nulstilling.",
+    "changeUnconfirmed": "Ændringen kunne ikke bekræftes. Prøv at logge ind med din nye adgangskode, eller anmod om et nyt link til nulstilling.",
+    "requestUnconfirmed": "Anmodningen kunne ikke bekræftes. Prøv igen, eller kontakt support."
+  },
   "agentDraftReview": {
     "scenarioNumber": "Repræsentativt scenarie {{number}}",
     "removeScenario": "Fjern scenarie {{number}}",

@@ -1,4 +1,20 @@
 {
+  "passwordReset": {
+    "setTitle": "Set a new password",
+    "requestTitle": "Reset password",
+    "password": "New password",
+    "email": "Email",
+    "back": "Back to sign in",
+    "change": "Change password",
+    "send": "Send reset link",
+    "signIn": "Sign in",
+    "changing": "Changing password…",
+    "sending": "Sending request…",
+    "changed": "Your password has been changed. Sign in with your new password.",
+    "requested": "If this email has an account, a reset link will arrive shortly.",
+    "changeUnconfirmed": "The password change could not be confirmed. Try signing in with your new password, or request a new reset link.",
+    "requestUnconfirmed": "The reset request could not be confirmed. Try again or contact support."
+  },
   "agentDraftReview": {
     "scenarioNumber": "Representative scenario {{number}}",
     "removeScenario": "Remove scenario {{number}}",
