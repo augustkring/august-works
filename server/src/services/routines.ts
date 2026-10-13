@@ -1,5 +1,8 @@
 import { lockAnalyticalCompany } from "./analytical-privacy.js";
 import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
+import { assertConversationRoutineAuthoring, assertRoutineConversationDraftEntry } from "./routine-authoring-authority.js";
+import { assertRoutineSourceAccess } from "./routine-source-authority.js";
+import type { AuthorizationActor } from "./authorization.js";
 import { assertRoutineReviewDelegation, draftRoutineManagementReview } from "./management-reviews/routine.js";
 import { verifyAppWebhook } from "./app-webhook.js";
 import { workflowDelegationForActor } from "./workflows/workflow-delegation.js";
@@ -752,6 +755,7 @@ export function routineService(
     heartbeat?: IssueAssignmentWakeupDeps;
     pluginWorkerManager?: PluginWorkerManager;
     runtimeEnv?: Record<string, string | undefined>;
+    sourceActor?: AuthorizationActor;
   } = {},
 ) {
   const issueSvc = issueService(db);
@@ -763,11 +767,13 @@ export function routineService(
   });
 
   async function getRoutineById(id: string) {
-    return db
+    const routine = await db
       .select()
       .from(routines)
       .where(eq(routines.id, id))
       .then((rows) => rows[0] ?? null);
+    if (routine) await assertRoutineSourceAccess(db, routine, deps.sourceActor);
+    return routine;
   }
 
   async function assertRoutineExecutionTarget(
@@ -964,11 +970,10 @@ export function routineService(
   }
 
   async function getTriggerById(id: string) {
-    return db
-      .select()
-      .from(routineTriggers)
-      .where(eq(routineTriggers.id, id))
-      .then((rows) => rows[0] ?? null);
+    const trigger = await db.select().from(routineTriggers)
+      .where(eq(routineTriggers.id, id)).then((rows) => rows[0] ?? null);
+    if (trigger && !await getRoutineById(trigger.routineId)) return null;
+    return trigger;
   }
 
   async function getRoutineDescriptionDocument(
@@ -1979,6 +1984,7 @@ export function routineService(
     nextRunAtOverride?: Date | null;
     actor?: Actor;
   }) {
+    await assertRoutineSourceAccess(db, input.routine, deps.sourceActor);
     const projectId = input.projectId ?? input.routine.projectId ?? null;
     const projectWorkspaceId = input.projectWorkspaceId ?? null;
     const configuredExecutionTarget = resolveRoutineExecutionTarget(input.routine);
@@ -2487,6 +2493,7 @@ export function routineService(
       filters?: { projectId?: string | null },
     ): Promise<RoutineListItem[]> => {
       const conditions = [eq(routines.companyId, companyId)];
+      conditions.push(sql`not aw_conversation_routine_source_erased(${companyId}::uuid,${routines.id})`);
       if (filters?.projectId) conditions.push(eq(routines.projectId, filters.projectId));
 
       const rows = await db
@@ -2495,6 +2502,7 @@ export function routineService(
         .where(and(...conditions))
         .orderBy(desc(routines.updatedAt), asc(routines.title));
       const routineIds = rows.map((row) => row.id);
+      for (const row of rows) await assertRoutineSourceAccess(db, row, deps.sourceActor);
       const [triggersByRoutine, latestRunByRoutine, activeIssueByRoutine, managedByRoutine] = await Promise.all([
         listTriggersForRoutineIds(companyId, routineIds),
         listLatestRunByRoutineIds(companyId, routineIds),
@@ -2624,6 +2632,7 @@ export function routineService(
         listManagedRoutineMetadata([row.id]),
       ]);
 
+      await assertRoutineSourceAccess(db, row, deps.sourceActor);
       return {
         ...row,
         managedByPlugin: managedByRoutine.get(row.id) ?? null,
@@ -2640,9 +2649,23 @@ export function routineService(
       };
     },
 
-    getDescriptionDocument: async (routineId: string) => getRoutineDescriptionDocument(routineId),
+    getDescriptionDocument: async (routineId: string) => {
+      const routine = await getRoutineById(routineId); if (!routine) return null;
+      const document = await getRoutineDescriptionDocument(routineId);
+      await assertRoutineSourceAccess(db, routine, deps.sourceActor);
+      return document;
+    },
 
-    create: async (companyId: string, input: CreateRoutine, actor: Actor): Promise<Routine> => {
+    create: async (companyId: string, input: CreateRoutine, actor: Actor,
+      options: { idOverride?: string; conversationDraftRunId?: string } = {}): Promise<Routine> => {
+      const authoringContext = options.conversationDraftRunId ? {
+        companyId, agentId: actor.agentId ?? "", runId: options.conversationDraftRunId,
+      } : null;
+      if (!authoringContext) await assertRoutineConversationDraftEntry(db, companyId, actor);
+      if (authoringContext && (!actor.agentId || actor.runId !== authoringContext.runId || input.status !== "paused" ||
+        input.assigneeAgentId || input.executionTarget || input.env || input.variables.length || input.managementReviewTemplate))
+        throw forbidden("Conversation routine drafts cannot select execution or credential authority");
+      const authoring = authoringContext ? await assertConversationRoutineAuthoring(db, authoringContext) : null;
       await assertProject(companyId, input.projectId ?? null);
       await assertRoutineFolder(companyId, input.folderId ?? null);
       const executionTarget = requestedRoutineExecutionTarget(input);
@@ -2666,16 +2689,23 @@ export function routineService(
         sanitizeRoutineVariableInputs(input.variables),
       );
       assertRoutineVariableDefinitions(variables);
-      const responsibleUserId = await resolveRoutineResponsibleUserId(db, companyId, actor.userId, input.parentIssueId ?? null);
+      const responsibleUserId = authoring?.responsibleUserId ?? await resolveRoutineResponsibleUserId(db, companyId, actor.userId, input.parentIssueId ?? null);
       if (!responsibleUserId) {
         throw unprocessable("Routine requires a responsible user");
       }
       const createdRoutine = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
+        if (authoringContext) {
+          await lockAnalyticalCompany(txDb, companyId); await lockMemoryPrivacy(txDb, companyId);
+          const current = await assertConversationRoutineAuthoring(txDb, authoringContext);
+          if (current.responsibleUserId !== responsibleUserId) throw conflict("The routine's responsible conversation user changed");
+        }
         const [created] = await txDb
           .insert(routines)
           .values({
+            ...(options.idOverride ? { id: options.idOverride } : {}),
             companyId,
+            ...(authoringContext ? { originKind: "conversation_draft", originId: authoringContext.runId } : {}),
             projectId: input.projectId ?? null,
             folderId: input.folderId ?? null,
             goalId: input.goalId ?? null,
@@ -2713,6 +2743,7 @@ export function routineService(
             { db: tx },
           );
         }
+        if (authoringContext) await assertConversationRoutineAuthoring(txDb, authoringContext);
         return routine;
       });
       return createdRoutine;
@@ -2721,6 +2752,7 @@ export function routineService(
     update: async (id: string, patch: UpdateRoutine, actor: Actor): Promise<Routine | null> => {
       const existing = await getRoutineById(id);
       if (!existing) return null;
+      await assertRoutineConversationDraftEntry(db, existing.companyId, actor);
       const nextProjectId = patch.projectId === undefined ? existing.projectId : patch.projectId;
       const nextFolderId = patch.folderId === undefined ? existing.folderId : patch.folderId;
       const existingExecutionTarget = resolveRoutineExecutionTarget(existing);
@@ -2932,6 +2964,8 @@ export function routineService(
       const routine = await getRoutineById(routineId);
       if (!routine) throw notFound("Routine not found");
 
+      await assertRoutineConversationDraftEntry(db, routine.companyId, actor);
+
       let secretMaterial: RoutineTriggerSecretMaterial | null = null;
       let secretId: string | null = null;
       let publicId: string | null = null;
@@ -3003,6 +3037,7 @@ export function routineService(
     ): Promise<{ trigger: RoutineTrigger; revision: RoutineRevision } | null> => {
       const existing = await getTriggerById(id);
       if (!existing) return null;
+      await assertRoutineConversationDraftEntry(db, existing.companyId, actor);
 
       let nextRunAt = existing.nextRunAt;
       let cronExpression = existing.cronExpression;
@@ -3069,6 +3104,7 @@ export function routineService(
     deleteTrigger: async (id: string, actor: Actor = {}): Promise<{ deleted: boolean; revision: RoutineRevision | null }> => {
       const existing = await getTriggerById(id);
       if (!existing) return { deleted: false, revision: null };
+      await assertRoutineConversationDraftEntry(db, existing.companyId, actor);
       const result = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
         await tx.execute(sql`select id from ${routines} where ${routines.id} = ${existing.routineId} for update`);
@@ -3103,6 +3139,7 @@ export function routineService(
     ): Promise<{ trigger: RoutineTrigger; secretMaterial: RoutineTriggerSecretMaterial; revision: RoutineRevision }> => {
       const existing = await getTriggerById(id);
       if (!existing) throw notFound("Routine trigger not found");
+      await assertRoutineConversationDraftEntry(db, existing.companyId, actor);
       if (existing.kind !== "webhook" || !existing.publicId || !existing.secretId) {
         throw unprocessable("Only webhook triggers can rotate secrets");
       }
@@ -3154,6 +3191,7 @@ export function routineService(
         .where(and(eq(routineRevisions.companyId, routine.companyId), eq(routineRevisions.routineId, routine.id)))
         .orderBy(desc(routineRevisions.revisionNumber), desc(routineRevisions.createdAt))
         .limit(MAX_ROUTINE_REVISIONS);
+      await assertRoutineSourceAccess(db, routine, deps.sourceActor);
       return rows.map(mapRoutineRevision);
     },
 
@@ -3170,6 +3208,7 @@ export function routineService(
     }> => {
       const existingRoutine = await getRoutineById(routineId);
       if (!existingRoutine) throw notFound("Routine not found");
+      await assertRoutineConversationDraftEntry(db, existingRoutine.companyId, actor);
       const targetRevision = await db
         .select()
         .from(routineRevisions)
@@ -3372,6 +3411,7 @@ export function routineService(
     runRoutine: async (id: string, input: RunRoutine, actor?: Actor) => {
       const routine = await getRoutineById(id);
       if (!routine) throw notFound("Routine not found");
+      if (actor) await assertRoutineConversationDraftEntry(db, routine.companyId, actor);
       if (routine.status === "archived") throw conflict("Routine is archived");
       await assertProject(routine.companyId, input.projectId ?? null);
       const trigger = input.triggerId ? await getTriggerById(input.triggerId) : null;
@@ -3614,6 +3654,8 @@ export function routineService(
     },
 
     listRuns: async (routineId: string, limit = 50): Promise<RoutineRunSummary[]> => {
+      const routine = await getRoutineById(routineId);
+      if (!routine) throw notFound("Routine not found");
       const cappedLimit = Math.max(1, Math.min(limit, 200));
       const rows = await db
         .select({
@@ -3660,6 +3702,7 @@ export function routineService(
         .orderBy(desc(routineRuns.createdAt))
         .limit(cappedLimit);
 
+      await assertRoutineSourceAccess(db, routine, deps.sourceActor);
       return rows.map((row) => ({
         id: row.id,
         companyId: row.companyId,

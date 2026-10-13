@@ -34,6 +34,15 @@ it.each(["foreign_href", "body_copy", "missing_coverage", "duplicate"])("rejects
     ...(failure === "missing_coverage" ? {} : { hasMoreTasks: false }) });
   await expect(getConversationAuthoring(id(1), "author", id(2), id(3), 1)).rejects.toThrow();
 });
+it.each(["foreign_href", "active_unconfigured", "counts", "body_copy"])("rejects invalid saved routine declarations: %s", async failure => {
+  const routine = { kind: "routine", id: id(8), title: "Actual saved routine", authoredRevisionId: id(9), authoredRevisionNumber: 1,
+    currentRevisionId: id(9), currentRevisionNumber: 1, status: failure === "active_unconfigured" ? "active" : "paused",
+    executionConfigured: false, triggerCount: 0, enabledTriggerCount: failure === "counts" ? 1 : 0,
+    href: failure === "foreign_href" ? `/routines/${id(7)}` : `/routines/${id(8)}`,
+    ...(failure === "body_copy" ? { description: "PRIVATE" } : {}) };
+  vi.spyOn(api, "get").mockResolvedValue({ ...result, savedRoutines: [routine], hasMoreRoutines: false });
+  await expect(getConversationAuthoring(id(1), "author", id(2), id(3), 1)).rejects.toThrow();
+});
 
 it.each(["wrong_version", "incomplete", "extra_payload"])("refuses an invalid flow preview: %s", async mismatch => {
   const preview = { id: id(5), version: mismatch === "wrong_version" ? 2 : 1, coverage: "complete", steps: [] };

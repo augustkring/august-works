@@ -92,6 +92,28 @@ export async function assertAnalyticalContextPayloadAccess(db:Db,companyId:strin
  const initial=await origins();
  if(initial.length>16||initial.some(source=>source.invalid||!source.source_run_id||!source.source_task_id))
    throw new HttpError(403,"Native task source access is unavailable",{code:"analytical_source_access_lost"});
+ // A saved routine may copy a private analytical answer into a new task.
+ // Retain the exact authoring run's current reader policy as well as erasure.
+ const routineOrigins=()=>db.execute<{source_run_id:string;source_task_id:string}>(sql`
+   with tasks as (
+     select coalesce(${"issueId"in scope?scope.issueId:null}::uuid,(select coalesce(h.native_issue_id,case
+       when coalesce(h.context_snapshot->>'issueId',h.context_snapshot->>'taskId') ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+       then coalesce(h.context_snapshot->>'issueId',h.context_snapshot->>'taskId')::uuid else null end)
+       from heartbeat_runs h where h.company_id=${companyId}::uuid and h.id=${"runId"in scope?scope.runId:null}::uuid)) as id
+     union select source_task_id from aw_runner_task_source_chain(${companyId}::uuid,
+       ${"runId"in scope?scope.runId:null}::uuid,${"issueId"in scope?scope.issueId:null}::uuid)
+   ) select distinct h.id as source_run_id,c.id as source_task_id
+     from tasks t join issues i on i.company_id=${companyId}::uuid and i.id=t.id and i.origin_kind='routine_execution'
+     join routines r on r.company_id=i.company_id and r.origin_kind='conversation_draft' and r.id=case
+       when i.origin_id ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' then i.origin_id::uuid else null end
+     join heartbeat_runs h on h.company_id=r.company_id and h.id=case
+       when r.origin_id ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$' then r.origin_id::uuid else null end
+     join issues c on c.company_id=h.company_id and c.id=coalesce(h.native_issue_id,case
+       when coalesce(h.context_snapshot->>'issueId',h.context_snapshot->>'taskId') ~ '^[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}$'
+       then coalesce(h.context_snapshot->>'issueId',h.context_snapshot->>'taskId')::uuid else null end)
+     order by source_run_id,source_task_id limit 18`);
+ const initialRoutines=await routineOrigins();
+ if(initialRoutines.length>17)throw new HttpError(403,"Complete routine source access is unavailable",{code:"analytical_source_access_lost"});
  await assertDirectAnalyticalContextPayloadAccess(db,companyId,actor,scope,readScope);
  for(const source of initial){
    // Each actual ancestor keeps its Original current-reader policy, not just
@@ -99,8 +121,14 @@ export async function assertAnalyticalContextPayloadAccess(db:Db,companyId:strin
    await assertDirectAnalyticalContextPayloadAccess(db,companyId,actor,{runId:source.source_run_id!},readScope);
    await assertDirectAnalyticalContextPayloadAccess(db,companyId,actor,{issueId:source.source_task_id!},readScope);
  }
- if(initial.length){
+ for(const source of initialRoutines){
+   await assertDirectAnalyticalContextPayloadAccess(db,companyId,actor,{runId:source.source_run_id},readScope);
+   await assertDirectAnalyticalContextPayloadAccess(db,companyId,actor,{issueId:source.source_task_id},readScope);
+ }
+ if(initial.length||initialRoutines.length){
    const final=await origins();
+   if(JSON.stringify(initialRoutines)!==JSON.stringify(await routineOrigins()))
+     throw new HttpError(403,"Routine source provenance changed",{code:"analytical_source_access_lost"});
    if(JSON.stringify(initial)!==JSON.stringify(final))
      throw new HttpError(403,"Native task source provenance changed",{code:"analytical_source_access_lost"});
    const [receipt]=await db.execute<{erased:boolean}>(sql`select aw_workflow_memory_erased(${companyId}::uuid,

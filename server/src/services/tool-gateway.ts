@@ -184,6 +184,8 @@ import { extendApprovedExecutionWaitDeadline } from "./approved-execution-wait.j
 import { instanceSettingsService } from "./instance-settings.js";
 import { memoryAgentToolsService } from "./memory/memory-agent-tools.js";
 import { workflowAuthoringToolsService } from "./workflows/workflow-authoring-tools.js";
+import { routineAuthoringToolsService } from "./routine-authoring-tools.js";
+import { routineAuthoringCreateInputJsonSchema, v9FeatureEnabled } from "@paperclipai/shared";
 
 const DEFAULT_SESSION_TTL_MS = 15 * 60 * 1000;
 const MAX_SESSION_TTL_MS = 60 * 60 * 1000;
@@ -1023,6 +1025,15 @@ const BUILTIN_TOOLS: ToolGatewayDescriptor[] = [
     risk: "write",
   },
   {
+    name: "paperclip-self:create_routine_draft",
+    displayName: "Create routine draft",
+    description: "Save a typed routine intent for human review in the current conversation. The draft is inactive and has no execution target or schedule. Open its Original editor to configure and enable it.",
+    parametersSchema: routineAuthoringCreateInputJsonSchema,
+    pluginId: "paperclip-self",
+    providerType: "paperclip_self",
+    risk: "write",
+  },
+  {
     name: "paperclip-self:add_trigger",
     displayName: "Add workflow trigger",
     description:
@@ -1394,6 +1405,7 @@ export function createToolGatewayService(
     return {
       sharedMemory: experimental.enableCollectiveMemoryV1 === true,
       privateMemory: experimental.enablePrivateAgentMemoryV1 === true,
+      routineAuthoring: v9FeatureEnabled(experimental, "ambient_commands_v9"),
       workflowAuthoring:
         experimental.enableWorkflowsV1 === true &&
         experimental.enableWorkflowBuilderV1 === true &&
@@ -1410,6 +1422,7 @@ export function createToolGatewayService(
     }
     const flags = await selfToolFeatureFlags();
     return tools.filter((tool) => {
+      if (tool.name === "paperclip-self:create_routine_draft") return flags.routineAuthoring;
       if (isMemorySelfToolName(tool.name)) {
         if (tool.name === "paperclip-self:share_memory") {
           return flags.sharedMemory && flags.privateMemory;
@@ -3341,6 +3354,17 @@ export function createToolGatewayService(
         content: JSON.stringify({ issue, planDocument: planDocument ?? null }),
         data: { issue, planDocument: planDocument ?? null },
       };
+    }
+
+    if (tool.name === "paperclip-self:create_routine_draft") {
+      if (!session.agentId || !session.runId) throw new ToolGatewayHttpError(403, "Routine authoring requires a current Agent run", "routine_authoring_run_required");
+      try {
+        const data = await routineAuthoringToolsService(db).create({ companyId: session.companyId, agentId: session.agentId, runId: session.runId }, parameters);
+        return { content: JSON.stringify(data), data };
+      } catch (error) {
+        if (error instanceof HttpError) throw new ToolGatewayHttpError(error.status, error.message, "routine_authoring_rejected");
+        throw error;
+      }
     }
 
     if (isWorkflowAuthoringSelfToolName(tool.name)) {

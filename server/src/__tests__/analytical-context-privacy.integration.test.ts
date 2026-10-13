@@ -1,3 +1,5 @@
+import { routines } from "@paperclipai/db";
+import { routineService } from "../services/routines.js";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { analyticalLineageEdges, memoryDeletionMarkers, agentIdentities, agentExecutionManifests, agentExecutionManifestItems, contextManifests, memoryBindings } from "@paperclipai/db";
 import { agentExecutionManifestSchema, createGovernedSkillSchema } from "@paperclipai/shared";
@@ -73,6 +75,21 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
  async function copied(){await db.update(heartbeatRuns).set({contextSnapshot:{sensitive:"Synthetic analytical context"},resultJson:{body:"Synthetic analytical result"},stdoutExcerpt:"Synthetic analytical output"}).where(eq(heartbeatRuns.id,runId));await db.insert(issueComments).values({companyId,issueId,body:"Synthetic analytical answer"});}
  async function root(){return (await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId)))[0]!;}
  async function erased(){expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(false);const [run]=await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,runId));expect(run!.resultJson).toBeNull();expect(run!.contextSnapshot).toEqual({});expect((await db.select().from(issueComments).where(eq(issueComments.issueId,issueId))).every(c=>c.body==="Source payload erased")).toBe(true);}
+
+ it("withdraws routine execution payloads when an actual analytical authoring input becomes hidden",async()=>{
+  const f=await fixture();await f.capture();
+  const [routine]=await db.insert(routines).values({companyId,title:"PRIVATE analytical routine",description:"PRIVATE copied answer",
+   status:"paused",originKind:"conversation_draft",originId:runId,createdByAgentId:agentId,responsibleUserId:userId}).returning();
+  const [task]=await db.insert(issues).values({companyId,title:"PRIVATE routine execution",originKind:"routine_execution",originId:routine!.id}).returning();
+  const [execution]=await db.insert(heartbeatRuns).values({companyId,agentId,responsibleUserId:userId,runtimeMode:"native",
+   nativeIssueId:task!.id,status:"queued",resultJson:{body:"PRIVATE execution result"}}).returning();
+  await expect(assertAnalyticalContextPayloadAccess(db,companyId,board,{issueId:task!.id})).resolves.toBeUndefined();
+  await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,f.sourceId));
+  await expect(routineService(db,{sourceActor:board}).get(routine!.id)).rejects.toMatchObject({status:403});
+  await expect(assertAnalyticalContextPayloadAccess(db,companyId,board,{issueId:task!.id})).rejects.toMatchObject({status:403});
+  await expect(assertAnalyticalContextPayloadAccess(db,companyId,board,{runId:execution!.id})).rejects.toMatchObject({status:403});
+  expect(await db.select().from(memoryDeletionMarkers).where(eq(memoryDeletionMarkers.companyId,companyId))).toEqual([]);
+ });
 
  it("rejects a mixed restore population atomically when one manifest or native input was erased",async()=>{
   const f=await fixture(),captured=await f.capture(),[original]=await db.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,captured.lineageManifestId));

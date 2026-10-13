@@ -90,3 +90,16 @@ it("shows current saved task state in both languages and suppresses it immediate
   expect(container.querySelectorAll("a")).toHaveLength(0);
   await act(async () => release({ ...data, proposals: [], savedTasks: [], hasMoreTasks: false }));
 });
+it("shows an unconfigured routine and a Human revision without declaring a run or permission grant", async () => {
+  vi.spyOn(authoring, "getConversationAuthoring").mockResolvedValue({ ...data, proposals: [], savedTasks: [], hasMoreTasks: false,
+    savedRoutines: [{ kind: "routine", id: id(8), title: "Saved weekly routine", authoredRevisionId: id(9), authoredRevisionNumber: 1,
+      currentRevisionId: id(10), currentRevisionNumber: 2, status: "paused", executionConfigured: false, triggerCount: 0,
+      enabledTriggerCount: 0, href: `/routines/${id(8)}` }], hasMoreRoutines: false });
+  await mount(); await vi.waitFor(() => expect(container.textContent).toContain("Saved weekly routine"));
+  expect(container.textContent).toContain("no execution target is configured");
+  expect(container.textContent).toContain("changed since this conversation draft");
+  expect(container.querySelector("a")?.getAttribute("href")).toBe(`/routines/${id(8)}`);
+  expect(container.querySelectorAll("button")).toHaveLength(0);
+  await act(async () => { await i18n.changeLanguage("da"); });
+  expect(container.textContent).toContain("Der er ikke valgt et kørselsmål");
+});

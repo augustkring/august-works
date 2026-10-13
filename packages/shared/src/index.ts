@@ -3371,3 +3371,4 @@ export * from "./agent-authoring-package-setup.js";
 export * from "./agent-pause.js";
 export * from "./agent-managed-runtime-setup.js";
 export * from "./conversation-authoring.js";
+export * from "./routine-authoring.js";

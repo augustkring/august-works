@@ -37,7 +37,10 @@ test("conversation previews a saved workflow version without publishing or calli
           ] }, comparison: { state: "available", steps: [{ number: 2, change: "changed" }], removedSteps: 0,
             connectionsChanged: false, dataDefinitionChanged: false, settingsChanged: false } }],
         savedTasks: [{ kind: "task", id: id(4), title: "Saved research task", titleTruncated: false,
-          status: "backlog", statusVersion: 0, executionStarted: false, href: `/issues/${id(4)}` }], hasMoreTasks: false } });
+          status: "backlog", statusVersion: 0, executionStarted: false, href: `/issues/${id(4)}` }], hasMoreTasks: false,
+        savedRoutines: [{ kind: "routine", id: id(5), title: "Saved weekly routine", authoredRevisionId: id(6), authoredRevisionNumber: 1,
+          currentRevisionId: id(6), currentRevisionNumber: 1, status: "paused", executionConfigured: false,
+          triggerCount: 0, enabledTriggerCount: 0, href: `/routines/${id(5)}` }], hasMoreRoutines: false } });
     });
     await page.route(`**/api/companies/${company.id}/workflows/**`, route => {
       if (route.request().method() !== "GET") writes++;
@@ -57,12 +60,16 @@ test("conversation previews a saved workflow version without publishing or calli
     await expect(preview).toContainText("Saved research task");
     await expect(preview).toContainText("no recorded execution start");
     await expect(preview.getByRole("link", { name: "Review the current task", exact: true })).toHaveAttribute("href", `/${company.issuePrefix}/issues/${id(4)}`);
+    await expect(preview).toContainText("Saved weekly routine");
+    await expect(preview).toContainText("no execution target is configured");
+    await expect(preview.getByRole("link", { name: "Review the current routine", exact: true })).toHaveAttribute("href", `/${company.issuePrefix}/routines/${id(5)}`);
     const beforeLanguage = reads;
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole("combobox", { name: "Language", exact: true }).selectOption("da");
     await expect(page.locator("html")).toHaveAttribute("lang", "da");
     await expect(page.getByRole("region", { name: "Gemte forslag fra samtalen", exact: true })).toContainText("Foreslået version 2");
     await expect(page.getByRole("region", { name: "Gemte forslag fra samtalen", exact: true })).toContainText("ikke registreret en kørselsstart");
+    await expect(page.getByRole("region", { name: "Gemte forslag fra samtalen", exact: true })).toContainText("Der er ikke valgt et kørselsmål");
     expect(reads).toBe(beforeLanguage); expect(writes).toBe(0);
     await page.addScriptTag({ path: axePath });
     expect(await page.evaluate(async () => (await (window as unknown as { axe: { run(scope: string): Promise<{ violations: unknown[] }> } }).axe.run('[aria-label="Gemte forslag fra samtalen"]')).violations)).toEqual([]);

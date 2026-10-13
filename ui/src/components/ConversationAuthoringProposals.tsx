@@ -35,7 +35,7 @@ export function ConversationAuthoringProposals({ company, principal, conversatio
     const action = typeof event.payload.action === "string" ? event.payload.action : "";
     const conversationChanged = event.payload.entityType === "issue" && event.payload.entityId === conversation;
     const authoringRunChanged = event.payload.agentId === agent && /heartbeat|tool_invocation/.test(`${event.type}:${action}`);
-    if (/workflow|issue|permission|membership|erased|deleted|withdraw|conversation/i.test(`${event.payload.entityType}:${action}`) ||
+    if (/workflow|routine|issue|permission|membership|erased|deleted|withdraw|conversation/i.test(`${event.payload.entityType}:${action}`) ||
       event.type === "analytical.context.access_lost" || conversationChanged || authoringRunChanged) {
       source.current++; setSourceEpoch(source.current);
       void client.cancelQueries({ queryKey: prefix });
@@ -50,7 +50,8 @@ export function ConversationAuthoringProposals({ company, principal, conversatio
     {query.isError ? <div className="space-y-2"><p role="status">{t("conversationAuthoring.unavailable")}</p>
       <Button variant="outline" className="min-h-11" onClick={() => { if (current()) void query.refetch(); }}>{t("tryAgain")}</Button></div>
       : !fresh ? <p role="status">{t("conversationAuthoring.checking")}</p>
-      : query.data.proposals.length === 0 && !query.data.savedTasks?.length ? <p role="status">{t("conversationAuthoring.empty")}</p>
+      : query.data.proposals.length === 0 && !query.data.savedTasks?.length && !query.data.savedRoutines?.length ? <p role="status">{t(
+        query.data.savedTasks === undefined || query.data.savedRoutines === undefined ? "conversationAuthoring.workflowEmpty" : "conversationAuthoring.empty")}</p>
       : <ul className="space-y-3">{query.data.proposals.map(proposal => <li key={proposal.id} className="space-y-2 rounded-md border p-3">
         <h3 className="font-semibold">{proposal.name}</h3>
         <p>{t("conversationAuthoring.version", { version: proposal.authoredRevisionNumber, steps: proposal.stepCount, triggers: proposal.triggerCount })}</p>
@@ -70,5 +71,18 @@ export function ConversationAuthoringProposals({ company, principal, conversatio
       </li>)}</ul>
     </div>}
     {fresh && query.data.hasMoreTasks && <p role="status">{t("conversationAuthoring.moreTasks")}</p>}
+    {fresh && query.data.savedRoutines === undefined && <p role="status">{t("conversationAuthoring.routineCoverageUnavailable")}</p>}
+    {fresh && !!query.data.savedRoutines?.length && <div className="space-y-3">
+      <h3 className="font-semibold">{t("conversationAuthoring.routinesTitle")}</h3>
+      <ul className="space-y-3">{query.data.savedRoutines.map(routine => <li key={routine.id} className="space-y-2 rounded-md border p-3">
+        <h4 className="font-semibold">{routine.title}</h4>
+        <p>{t("conversationAuthoring.routineVersion", { authored: routine.authoredRevisionNumber, current: routine.currentRevisionNumber })}</p>
+        <p>{t(!routine.executionConfigured ? "conversationAuthoring.routineUnconfigured" : `conversationAuthoring.routineStatus.${routine.status}`)}</p>
+        <p>{t("conversationAuthoring.routineTriggers", { total: routine.triggerCount, enabled: routine.enabledTriggerCount })}</p>
+        {routine.currentRevisionId !== routine.authoredRevisionId && <p>{t("conversationAuthoring.routineChanged")}</p>}
+        <Link className="inline-flex min-h-11 items-center underline" to={routine.href}>{t("conversationAuthoring.reviewRoutine")}</Link>
+      </li>)}</ul>
+    </div>}
+    {fresh && query.data.hasMoreRoutines && <p role="status">{t("conversationAuthoring.moreRoutines")}</p>}
   </section>;
 }

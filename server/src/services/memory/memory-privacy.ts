@@ -5,6 +5,7 @@ import { agentExecutionManifests,providerTraceRecords, memoryDeletionMarkers, me
   heartbeatRuns, heartbeatRunEvents, agentWakeupRequests, issues, issueComments, issueDocuments, documents, documentRevisions,
   nativeRunResults, workAssessments, statusDecisions, nativeRunFinalizations, completionContracts, issueWorkProducts, agentTaskSessions, agentRuntimeState,
   workflowRuns, workflowStepRuns, workflowWaits, workflowRunReviews, workflowOptimizerEvaluations, workflowOptimizerObservations, automationArtifacts, automationArtifactVersions, type Db } from "@paperclipai/db";
+import { routines, routineRevisions, routineTriggers, routineDocuments, routineRuns, companySecretBindings } from "@paperclipai/db";
 import { eraseAnalyticalSourcesUnderMemory } from "../analytical-source-erasure.js";
 import { eraseBusinessEventObjectUnderMemory } from "../business-event-payload-erasure.js";
 import { conflict } from "../../errors.js";
@@ -144,6 +145,40 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
   if (!affected.length && !contextRoots.length && !sourceAssets?.runIds?.length&&!sourceAssets?.skillVersionIds?.length) return;
   const children = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), sql`not (${heartbeatMemoryPayloadVisible()})`));
   const childIds = children.map((child) => child.id);
+  const sourceRoutines = childIds.length ? await db.select({ id: routines.id }).from(routines).where(and(
+    eq(routines.companyId, companyId), eq(routines.originKind, "conversation_draft"), inArray(routines.originId, childIds),
+  )) : [];
+  if (sourceRoutines.length) {
+    const routineIds = sourceRoutines.map(row => row.id);
+    await db.update(activityLog).set({ details: { payloadDeleted: true } }).where(and(
+      eq(activityLog.companyId, companyId), or(
+        and(eq(activityLog.entityType, "routine"), inArray(activityLog.entityId, routineIds)),
+        and(eq(activityLog.entityType, "routine_trigger"), sql`exists(select 1 from routine_triggers t
+          where t.company_id=${companyId}::uuid and t.id::text=${activityLog.entityId}
+            and t.routine_id in (${sql.join(routineIds.map(id => sql`${id}::uuid`), sql`, `)}))`),
+      ),
+    ));
+    await db.update(routines).set({ title: "Source-erased routine", description: null, status: "paused", variables: [], env: null, updatedAt: now })
+      .where(and(eq(routines.companyId, companyId), inArray(routines.id, routineIds)));
+    await db.update(routineTriggers).set({ enabled: false, nextRunAt: null, updatedAt: now })
+      .where(and(eq(routineTriggers.companyId, companyId), inArray(routineTriggers.routineId, routineIds)));
+    await db.update(routineRevisions).set({ title: "Source-erased routine", description: null, changeSummary: null,
+      snapshot: sql`jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(jsonb_set(${routineRevisions.snapshot},'{routine,title}','"Source-erased routine"'::jsonb),'{routine,description}','null'::jsonb),'{routine,variables}','[]'::jsonb),'{routine,env}','null'::jsonb),'{routine,status}','"paused"'::jsonb),'{triggers}','[]'::jsonb)` })
+      .where(and(eq(routineRevisions.companyId, companyId), inArray(routineRevisions.routineId, routineIds)));
+    await db.update(routineRuns).set({ triggerPayload: null, failureReason: "source_erased", updatedAt: now })
+      .where(and(eq(routineRuns.companyId, companyId), inArray(routineRuns.routineId, routineIds)));
+    await db.delete(companySecretBindings).where(and(eq(companySecretBindings.companyId, companyId),
+      eq(companySecretBindings.targetType, "routine"), inArray(companySecretBindings.targetId, routineIds)));
+    const linked = await db.select({ id: routineDocuments.documentId }).from(routineDocuments).where(and(
+      eq(routineDocuments.companyId, companyId), inArray(routineDocuments.routineId, routineIds)));
+    if (linked.length) {
+      const ids = linked.map(row => row.id); await eraseAnalyticalSourcesUnderMemory(db, companyId, "document", ids, now);
+      await db.update(documents).set({ title: "Source-erased routine document", latestBody: "", updatedAt: now })
+        .where(and(eq(documents.companyId, companyId), inArray(documents.id, ids)));
+      await db.update(documentRevisions).set({ title: null, body: "", changeSummary: null })
+        .where(and(eq(documentRevisions.companyId, companyId), inArray(documentRevisions.documentId, ids)));
+    }
+  }
   if(affected.length)await db.update(workflowRunReviews).set({correctedOutputs:{},reason:"Source payload erased"}).where(and(eq(workflowRunReviews.companyId,companyId),inArray(workflowRunReviews.workflowRunId,[...new Set(affected.map(row=>row.workflowRunId))])));
   if (childIds.length) {
     for (const child of children) {
@@ -206,7 +241,13 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
     eq(issues.companyId, companyId), eq(issues.originKind, "manual"), inArray(issues.originRunId, childIds),
     sql`${issues.originId} like 'paperclip-runner:create-task:%'`,
   )) : [];
-  const issueIds = [...new Set([...originNativeTasks.map(task => task.id),...originWorkflowTasks.map(task => task.id),...skillHarnessTasks.map(task=>task.issue_id),...childWaits.flatMap((wait) => wait.issueId ? [wait.issueId] : []), ...contextRoots.flatMap((root) => root.issueId ? [root.issueId] : []),
+  // A routine execution can retain a copied description before it has its
+  // own heartbeat. Scrub that actual task through the same Original owner.
+  const originRoutineTasks = sourceRoutines.length ? await db.select({ id: issues.id }).from(issues).where(and(
+    eq(issues.companyId, companyId), eq(issues.originKind, "routine_execution"),
+    inArray(issues.originId, sourceRoutines.map(routine => routine.id)),
+  )) : [];
+  const issueIds = [...new Set([...originRoutineTasks.map(task => task.id),...originNativeTasks.map(task => task.id),...originWorkflowTasks.map(task => task.id),...skillHarnessTasks.map(task=>task.issue_id),...childWaits.flatMap((wait) => wait.issueId ? [wait.issueId] : []), ...contextRoots.flatMap((root) => root.issueId ? [root.issueId] : []),
     ...sourceRunContexts.flatMap(context => context.issueId ? [context.issueId] : []), ...sourceRunIssues])];
   if (issueIds.length) {
     await eraseAnalyticalSourcesUnderMemory(db, companyId, "issue", issueIds, now);

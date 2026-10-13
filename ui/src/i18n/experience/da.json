@@ -1975,7 +1975,7 @@
     "boundary": "Disse resultater er gemt i denne samtale. Gennemgå workflows før publicering. Gemte opgaver findes allerede; at åbne deres aktuelle detaljer starter eller gentager ikke arbejdet.",
     "unavailable": "De aktuelle gemte forslag er utilgængelige. Opdatér efter at have afklaret adgang eller den underliggende kilde.",
     "checking": "Kontrollerer de aktuelle gemte forslag…",
-    "empty": "Der er ikke registreret et gemt workflow eller en opgave for denne samtalesession. Et foreslået link bekræfter ikke i sig selv et gemt resultat.",
+    "empty": "Der er ikke registreret et gemt workflow, en opgave eller en rutine for denne samtalesession. Et foreslået link bekræfter ikke i sig selv et gemt resultat.",
     "version": "Foreslået version {{version}} · {{steps}} trin · {{triggers}} udløsere",
     "review": "Gennemgå det aktuelle workflow",
     "more": "Der findes flere gemte forslag. Åbn Workflows for at se den fulde liste, du har adgang til.",
@@ -2002,7 +2002,21 @@
       "done": "Fuldført",
       "blocked": "Blokeret",
       "cancelled": "Annulleret"
-    }
+    },
+    "routinesTitle": "Gemte rutinekladder",
+    "routineCoverageUnavailable": "Denne server kan ikke vise dækningen af gemte rutiner.",
+    "routineVersion": "Foreslået version {{authored}} · aktuel version {{current}}",
+    "routineUnconfigured": "Gemt kladde: Der er ikke valgt et kørselsmål. Gennemgå og konfigurér den før aktivering.",
+    "routineTriggers": "{{total}} angivne udløsere · {{enabled}} aktiverede udløsere",
+    "routineChanged": "Den aktuelle rutine er ændret siden samtalens kladde. Gennemgå den aktuelle version.",
+    "reviewRoutine": "Gennemgå den aktuelle rutine",
+    "moreRoutines": "Der findes flere gemte rutiner. Åbn Rutiner for at se den fulde liste, du har adgang til.",
+    "routineStatus": {
+      "active": "Den aktuelle rutine er aktiveret. Det bekræfter ikke en vellykket kørsel.",
+      "paused": "Den aktuelle rutine er sat på pause.",
+      "archived": "Den aktuelle rutine er arkiveret."
+    },
+    "workflowEmpty": "Der er ikke registreret et gemt workflow-forslag for denne samtalesession. Et foreslået link bekræfter ikke i sig selv en gemt kladde."
   },
   "loadingView": "Indlæser visning…",
   "announcement": {

@@ -1,6 +1,6 @@
 import { and, eq, isNull, sql } from "drizzle-orm";
 import { z } from "zod";
-import { heartbeatRuns, issues, workflows, type Db } from "@paperclipai/db";
+import { heartbeatRuns, issues, routineRevisions, routines, workflows, type Db } from "@paperclipai/db";
 import { conversationAuthoringViewSchema } from "@paperclipai/shared";
 import { authorizationService, type AuthorizationActor } from "../authorization.js";
 import { assertV5Authorization, v5HumanActorId } from "../v5-authorization.js";
@@ -13,6 +13,7 @@ import { ExperienceOverloadError } from "./projection.js";
 import { withExperienceAdmission } from "./admission.js";
 import { projectWorkflowRevisionFlow } from "./workflow-flow.js";
 import { workflowComparison } from "./workflow-comparison.js";
+import { assertRoutineSourceAccess } from "../routine-source-authority.js";
 import { forbidden, notFound, conflict } from "../../errors.js";
 
 /** Read saved Original authoring results, never model-generated claimed links.
@@ -135,6 +136,44 @@ export function conversationAuthoringService(db: Db) {
           status: task.status, statusVersion: task.statusVersion,
           executionStarted: !!(task.startedAt || task.executionRunId), href: `/issues/${task.id}` });
       }
+      const routineCandidates = await tx.execute<{ id: string; revision_id: string; run_id: string }>(sql`
+        select r.id,v.id as revision_id,h.id as run_id from routines r
+        join routine_revisions v on v.company_id=r.company_id and v.routine_id=r.id and v.revision_number=1
+        join heartbeat_runs h on h.company_id=r.company_id and h.id=v.created_by_run_id
+        where r.company_id=${companyId}::uuid and r.origin_kind='conversation_draft' and r.origin_id=h.id::text
+          and r.created_by_agent_id=${initial.conversation.conversationAgentId}::uuid
+          and h.agent_id=${initial.conversation.conversationAgentId}::uuid and h.responsible_user_id=${initial.userId}
+          and (h.native_issue_id=${conversationId}::uuid or (h.native_issue_id is null and coalesce(h.context_snapshot->>'issueId',h.context_snapshot->>'taskId')=${conversationId}))
+          and coalesce(h.context_snapshot->>'conversationSessionGeneration','0')=${String(initial.conversation.conversationSessionGeneration)}
+        order by r.created_at desc,r.id desc limit 11`);
+      const readRoutine = async (candidate: { id: string; revision_id: string; run_id: string }) => {
+        currentSignal.throwIfAborted();
+        const [origin] = await tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+          eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, candidate.run_id),
+          eq(heartbeatRuns.agentId, initial.conversation.conversationAgentId!), eq(heartbeatRuns.responsibleUserId, initial.userId),
+          sql`(${heartbeatRuns.nativeIssueId}=${conversationId}::uuid or (${heartbeatRuns.nativeIssueId} is null and coalesce(${heartbeatRuns.contextSnapshot}->>'issueId',${heartbeatRuns.contextSnapshot}->>'taskId')=${conversationId}))`,
+          sql`coalesce(${heartbeatRuns.contextSnapshot}->>'conversationSessionGeneration','0')=${String(initial.conversation.conversationSessionGeneration)}`,
+        )).for("share");
+        if (!origin) throw conflict("The saved routine conversation provenance changed");
+        const [routine] = await tx.select().from(routines).where(and(eq(routines.companyId, companyId), eq(routines.id, candidate.id),
+          eq(routines.originKind, "conversation_draft"), eq(routines.originId, candidate.run_id),
+          eq(routines.createdByAgentId, initial.conversation.conversationAgentId!), eq(routines.responsibleUserId, initial.userId))).for("share");
+        const [authored] = await tx.select().from(routineRevisions).where(and(eq(routineRevisions.companyId, companyId),
+          eq(routineRevisions.routineId, candidate.id), eq(routineRevisions.id, candidate.revision_id),
+          eq(routineRevisions.createdByRunId, candidate.run_id), eq(routineRevisions.revisionNumber, 1))).for("share");
+        if (!routine || !authored || !routine.latestRevisionId) throw conflict("The saved conversation routine changed");
+        await assertRoutineSourceAccess(tx, routine, initial.current);
+        const [counts] = await tx.execute<{ total: number; enabled: number }>(sql`
+          select count(*)::integer as total,count(*) filter(where enabled)::integer as enabled from routine_triggers
+          where company_id=${companyId}::uuid and routine_id=${routine.id}::uuid and not archived`);
+        return { kind: "routine" as const, id: routine.id, title: routine.title,
+          authoredRevisionId: authored.id, authoredRevisionNumber: authored.revisionNumber,
+          currentRevisionId: routine.latestRevisionId, currentRevisionNumber: routine.latestRevisionNumber,
+          status: routine.status, executionConfigured: !!routine.executionTargetRef,
+          triggerCount: counts?.total ?? 0, enabledTriggerCount: counts?.enabled ?? 0, href: `/routines/${routine.id}` };
+      };
+      const savedRoutines = [];
+      for (const candidate of routineCandidates.slice(0, 10)) savedRoutines.push(await readRoutine(candidate));
       currentSignal.throwIfAborted();
       const final = await owner(tx, actor, companyId, conversationId);
       currentSignal.throwIfAborted();
@@ -143,9 +182,10 @@ export function conversationAuthoringService(db: Db) {
         throw conflict("The current conversation changed; reload its saved proposals");
       if (candidates.length) await assertV5Authorization(tx, final.current, companyId, "workflows:read");
       for (const candidate of tasks.slice(0, 10)) await readTask(candidate);
+      for (const candidate of routineCandidates.slice(0, 10)) await readRoutine(candidate);
       return conversationAuthoringViewSchema.parse({ companyId, conversationId, agentId: initial.conversation.conversationAgentId,
         generation: initial.conversation.conversationSessionGeneration, observedAt: new Date().toISOString(), hasMore: candidates.length > 10,
-        proposals, savedTasks, hasMoreTasks: tasks.length > 10, modelCalled: false });
+        proposals, savedTasks, hasMoreTasks: tasks.length > 10, savedRoutines, hasMoreRoutines: routineCandidates.length > 10, modelCalled: false });
     }).catch(error => {
       let cause: unknown = error;
       for (let depth = 0; depth < 4 && cause && typeof cause === "object"; depth++) {

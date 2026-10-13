@@ -3410,6 +3410,13 @@
       "when": 1791897119226,
       "tag": "0488_exotic_sentinels",
       "breakpoints": true
+    },
+    {
+      "idx": 489,
+      "version": "7",
+      "when": 1791901507270,
+      "tag": "0489_glossy_manta",
+      "breakpoints": true
     }
   ]
 }

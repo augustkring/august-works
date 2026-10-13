@@ -12,6 +12,19 @@ export const conversationSavedTaskSchema = z.strictObject({
     ctx.addIssue({ code: "custom", path: ["href"], message: "Use the Original task reference" });
 });
 
+export const conversationSavedRoutineSchema = z.strictObject({
+  kind: z.literal("routine"), id: z.uuid(), title: z.string().min(1).max(200),
+  authoredRevisionId: z.uuid(), authoredRevisionNumber: z.number().int().positive(),
+  currentRevisionId: z.uuid(), currentRevisionNumber: z.number().int().positive(),
+  status: z.enum(["active", "paused", "archived"]), executionConfigured: z.boolean(),
+  triggerCount: z.number().int().nonnegative(), enabledTriggerCount: z.number().int().nonnegative(),
+  href: z.string(),
+}).superRefine((value, ctx) => {
+  if (value.href !== `/routines/${value.id}` || value.enabledTriggerCount > value.triggerCount ||
+    value.status === "active" && !value.executionConfigured)
+    ctx.addIssue({ code: "custom", message: "Use the actual Original routine reference and declared state" });
+});
+
 /** Body-free references to drafts actually saved by the conversation's
  * Original authoring tools. A model's claimed link is never a receipt. */
 export const conversationAuthoringViewSchema = z.strictObject({
@@ -21,6 +34,8 @@ export const conversationAuthoringViewSchema = z.strictObject({
   // rather than proof that no tasks were saved.
   savedTasks: z.array(conversationSavedTaskSchema).max(10).optional(),
   hasMoreTasks: z.boolean().optional(),
+  savedRoutines: z.array(conversationSavedRoutineSchema).max(10).optional(),
+  hasMoreRoutines: z.boolean().optional(),
   proposals: z.array(z.strictObject({
     kind: z.literal("workflow"), id: z.uuid(), name: z.string().min(1).max(200),
     authoredRevisionId: z.uuid(), authoredRevisionNumber: z.number().int().positive(),
@@ -52,5 +67,8 @@ export const conversationAuthoringViewSchema = z.strictObject({
     ctx.addIssue({ code: "custom", path: ["savedTasks"], message: "Return distinct Original tasks" });
   if ((value.savedTasks === undefined) !== (value.hasMoreTasks === undefined))
     ctx.addIssue({ code: "custom", path: ["savedTasks"], message: "Task coverage requires the actual bounded owner result" });
+  if ((value.savedRoutines === undefined) !== (value.hasMoreRoutines === undefined) || value.savedRoutines &&
+    new Set(value.savedRoutines.map(p => p.id)).size !== value.savedRoutines.length)
+    ctx.addIssue({ code: "custom", path: ["savedRoutines"], message: "Routine coverage requires distinct Original saved records" });
 });
 export type ConversationAuthoringView = z.infer<typeof conversationAuthoringViewSchema>;
