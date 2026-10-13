@@ -9,8 +9,8 @@ import type {
 export function workflowComparison(
   active: WorkflowRevision | null,
   draft: WorkflowRevision | null,
-  activeView: WorkflowExperienceRevision | null,
-  draftView: WorkflowExperienceRevision | null,
+  activeView: Pick<WorkflowExperienceRevision, "coverage"> | null,
+  draftView: Pick<WorkflowExperienceRevision, "coverage"> | null,
   draftNodeOrder: string[],
 ): WorkflowExperience["comparison"] {
   if (!active || !draft) return null;

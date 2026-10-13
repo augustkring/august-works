@@ -1171,7 +1171,9 @@
         "ui/src/components/ConversationAuthoringProposals.tsx",
         "ui/src/api/conversation-authoring.ts",
         "server/src/services/experience/conversation-authoring.ts",
-        "server/src/services/workflows/workflow-authoring-authority.ts"
+        "server/src/services/workflows/workflow-authoring-authority.ts",
+        "ui/src/components/ConversationWorkflowPreview.tsx",
+        "server/src/services/experience/workflow-flow.ts"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/workflow-review.json"

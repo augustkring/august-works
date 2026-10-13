@@ -1984,6 +1984,9 @@
       "changed": "Den aktuelle kladde er ændret siden denne foreslåede version. Gennemgå den aktuelle version.",
       "published": "Denne foreslåede version er aktuelt publiceret.",
       "superseded": "Denne foreslåede version er historisk. Gennemgå workflowets aktuelle tilstand."
-    }
+    },
+    "preview": "Se denne foreslåede version",
+    "comparison": "Ændringer i det aktuelle udkast siden forslaget",
+    "changeCounts": "{{added}} tilføjede · {{changed}} ændrede · {{removed}} fjernede trin i forløbet"
   }
 }

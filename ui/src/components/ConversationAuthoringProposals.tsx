@@ -6,6 +6,7 @@ import { useV9PrivateReadAuthority } from "@/hooks/useV9PrivateReadAuthority";
 import { conversationAuthoringKey, getConversationAuthoring } from "@/api/conversation-authoring";
 import { useTranslation } from "@/i18n";
 import { Link } from "@/lib/router";
+import { ConversationWorkflowPreview } from "./ConversationWorkflowPreview";
 import { Button } from "./ui/button";
 
 /** Current references to actual saved proposals. The domain editor owns its
@@ -54,6 +55,7 @@ export function ConversationAuthoringProposals({ company, principal, conversatio
         <h3 className="font-semibold">{proposal.name}</h3>
         <p>{t("conversationAuthoring.version", { version: proposal.authoredRevisionNumber, steps: proposal.stepCount, triggers: proposal.triggerCount })}</p>
         <p role="status">{t(`conversationAuthoring.state.${proposal.state}`)}</p>
+        <ConversationWorkflowPreview proposal={proposal} />
         <Link className="inline-flex min-h-11 items-center underline" to={proposal.href}>{t("conversationAuthoring.review")}</Link>
       </li>)}</ul>}
     {fresh && query.data.hasMore && <p role="status">{t("conversationAuthoring.more")}</p>}

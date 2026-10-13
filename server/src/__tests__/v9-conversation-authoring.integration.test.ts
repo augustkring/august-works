@@ -56,6 +56,27 @@ describe("Current conversation previews use actual Original authoring revisions"
     } }, { principal: { type: "user", userId: f.userId } });
     expect((await view()).proposals[0]).toMatchObject({ state: "changed", authoredRevisionId: workflow.draftRevisionId, authoredRevisionNumber: 1, triggerCount: 0 });
   });
+  it("previews the actual saved flow and compares a later user edit without exposing private expressions", async () => {
+    const workflow = await draft();
+    const trigger = await tools().addTrigger(context(), { workflowId: workflow.id, expectedRevisionId: workflow.draftRevisionId,
+      node: { id: "begin", type: "core.manual_trigger", name: "Begin weekly review", position: { x: 0, y: 0 }, config: {} } });
+    const step = await tools().addStep(context(), { workflowId: workflow.id, expectedRevisionId: trigger.workflow.draftRevisionId,
+      node: { id: "research", type: "core.transform", name: "Research account", position: { x: 0, y: 1 }, config: { mapping: { privateExpression: "input.PRIVATE_CUSTOMER" } } } });
+    const linked = await tools().connectSteps(context(), { workflowId: workflow.id, expectedRevisionId: step.workflow.draftRevisionId,
+      edge: { id: "start-research", source: "begin", target: "research" } });
+    const authored = linked.workflow.draftRevision!;
+    const editedGraph = { ...authored.graph, nodes: authored.graph.nodes.map(node => node.id === "research" ? { ...node,
+      config: { mapping: { privateExpression: "input.PRIVATE_CHANGED" } } } : node) };
+    await workflowService(db).updateDraft(f.home, workflow.id, { expectedRevisionId: authored.id, graph: editedGraph },
+      { principal: { type: "user", userId: f.userId } });
+    const proposal = (await view()).proposals[0]!;
+    expect(proposal).toMatchObject({ state: "changed", authoredRevisionId: authored.id, preview: {
+      id: authored.id, version: authored.revisionNumber, coverage: "complete", steps: [
+        { number: 1, name: "Begin weekly review", next: [{ number: 2 }] },
+        { number: 2, name: "Research account", effect: "pure", approval: "not_verified" },
+      ] }, comparison: { state: "available", steps: [{ number: 2, change: "changed" }], removedSteps: 0 } });
+    expect(JSON.stringify(proposal)).not.toMatch(/PRIVATE_|privateExpression|config|inputMapping|graph|credential/);
+  });
   it("does not promote arbitrary model text or another chat session into a saved proposal", async () => {
     expect((await view()).proposals).toEqual([]);
     const otherUserId = `other-${randomUUID()}`, at = new Date();

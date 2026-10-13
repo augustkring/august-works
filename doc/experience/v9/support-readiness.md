@@ -95,14 +95,31 @@ approved support process.
 
 Feedback stores customer prose in its private native domain. Its expandable
 disclosure describes allow-listed context. Optional diagnostics are currently
-disclosed as an empty structured bundle; images are unavailable. Never replace
-that limit with a pasted raw log, prompt, screenshot or automatic capture.
+disclosed as an empty structured bundle. Explicitly selected image attachments
+are available only when the installed protected storage and scanner owners admit
+them. The server normalizes and scans those bytes; there is no automatic capture.
+Images are uploaded only after the original feedback receipt. An unknown upload
+response offers the exact original lookup, never an automatic replacement upload.
+Private image reads recheck the current account, retention and legal-hold scope.
 
 A lost submission acknowledgement retains the original frozen request and key.
-Retry that same submission rather than editing an unconfirmed request. My
-feedback and follow-up access remain bound to the current account/company.
+Use Check original request to read that exact immutable request. A missing
+receipt does not prove rejection or authorize replacing the request. Unsent
+content can be discarded; an unresolved admitted request cannot. My feedback
+and follow-up access remain bound to the current account/company.
 The no-name option removes the product submission's author field but keeps a
 separate protected account-access purpose; it is not an anonymity guarantee.
+
+Recommended retention is 90 days after closure for feedback text and follow-up
+messages, 30 days from first accepted image receipt for images, and an open-case
+review after 12 calendar months with a reasoned extension. Holds prevent erasure.
+Automatic retention deletion stays disabled until its operational gates pass.
+
+Restore preparation quarantines feedback data against the independent signed
+erasure ledger before replay. Missing PUT acknowledgement does not establish
+transport quiescence. Pending object erasure and independent ledger obligations
+remain unresolved until their original owners verify completion; a company purge
+must not destroy those markers.
 
 Public feedback GA remains refused. All six Privacy-owned policy references,
 their qualified native execution, attachment/scanner protection, retention,

@@ -29,7 +29,13 @@ test("conversation previews a saved workflow version without publishing or calli
       return route.fulfill({ json: { companyId: company.id, conversationId: conversation.id, agentId: agent.id, generation: 0,
         observedAt: "2026-10-13T00:00:00Z", hasMore: false, modelCalled: false, proposals: [{ kind: "workflow", id: id(1), name: "Saved weekly review proposal",
           authoredRevisionId: id(2), authoredRevisionNumber: 2, currentDraftRevisionId: id(3), currentPublishedRevisionId: null,
-          state: "changed", stepCount: 2, triggerCount: 1, href: `/workflows/${id(1)}` }] } });
+          state: "changed", stepCount: 2, triggerCount: 1, href: `/workflows/${id(1)}`,
+          preview: { id: id(2), version: 2, coverage: "complete", steps: [
+            { number: 1, name: "Begin weekly review", operation: "Manual trigger", effect: "pure", testMode: "safe", approval: "not_verified", retry: "none", next: [{ number: 2, label: null, output: null }] },
+            { number: 2, name: "Research account", operation: "Transform", effect: "pure", testMode: "safe", approval: "not_verified", retry: "none", next: [{ number: 3, label: null, output: null }] },
+            { number: 3, name: "Ask before outreach", operation: "Approval", effect: "pure", testMode: "safe", approval: "checkpoint", retry: "none", next: [] },
+          ] }, comparison: { state: "available", steps: [{ number: 2, change: "changed" }], removedSteps: 0,
+            connectionsChanged: false, dataDefinitionChanged: false, settingsChanged: false } }] } });
     });
     await page.route(`**/api/companies/${company.id}/workflows/**`, route => {
       if (route.request().method() !== "GET") writes++;
@@ -41,7 +47,11 @@ test("conversation previews a saved workflow version without publishing or calli
     await expect(preview).toContainText("Proposed version 2 · 2 steps · 1 triggers");
     await expect(preview).toContainText("changed since this proposed version");
     await expect(preview.getByRole("link", { name: "Review the current workflow", exact: true })).toHaveAttribute("href", `/${company.issuePrefix}/workflows/${id(1)}`);
-    await expect(preview.getByRole("button")).toHaveCount(0);
+    await preview.getByText("Inspect this proposed version", { exact: true }).click();
+    await expect(preview.getByText("Research account", { exact: false })).toBeVisible();
+    await expect(preview).toContainText("No approval decision is confirmed");
+    await expect(preview).toContainText("0 added · 1 changed · 0 removed");
+    await expect(preview.getByRole("button", { name: /publish|activate/i })).toHaveCount(0);
     const beforeLanguage = reads;
     await page.setViewportSize({ width: 390, height: 844 });
     await page.getByRole("combobox", { name: "Language", exact: true }).selectOption("da");

@@ -7,6 +7,8 @@ import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { assertAnalyticalContextPayloadAccess } from "../analytical-context-authority.js";
 import { workflowService } from "../workflows/workflow-service.js";
 import { workflowNodeRegistryService } from "../workflows/workflow-node-registry.js";
+import { projectWorkflowRevisionFlow } from "./workflow-flow.js";
+import { workflowComparison } from "./workflow-comparison.js";
 import { forbidden, notFound, conflict } from "../../errors.js";
 
 /** Read saved Original authoring results, never model-generated claimed links.
@@ -59,13 +61,18 @@ export function conversationAuthoringService(db: Db) {
         const revision = await workflowOwner.getRevision(companyId, candidate.id, candidate.revision_id, initial.current);
         if (!detail || !revision || revision.createdByAgentId !== initial.conversation.conversationAgentId || revision.revisionNumber !== candidate.revision_number)
           throw conflict("The Original conversation proposal changed; refresh its current owner");
+        const authoredFlow = projectWorkflowRevisionFlow(revision, registry);
+        const currentFlow = detail.draftRevision ? projectWorkflowRevisionFlow(detail.draftRevision, registry) : null;
+        const comparison = detail.draftRevision?.id !== revision.id
+          ? workflowComparison(revision, detail.draftRevision, authoredFlow.flow, currentFlow?.flow ?? null, currentFlow?.nodeOrder ?? [])
+          : null;
         const triggerCount = revision.graph.nodes.filter(node => triggerTypes.has(node.type)).length;
         proposals.push({ kind: "workflow" as const, id: detail.id, name: detail.name,
           authoredRevisionId: revision.id, authoredRevisionNumber: revision.revisionNumber,
           currentDraftRevisionId: detail.draftRevisionId, currentPublishedRevisionId: detail.publishedRevisionId,
           state: detail.draftRevisionId === revision.id ? "draft" as const : detail.publishedRevisionId === revision.id ? "published" as const
             : detail.draftRevisionId ? "changed" as const : "superseded" as const,
-          stepCount: revision.graph.nodes.length - triggerCount, triggerCount, href: `/workflows/${detail.id}` });
+          stepCount: revision.graph.nodes.length - triggerCount, triggerCount, preview: authoredFlow.flow, comparison, href: `/workflows/${detail.id}` });
       }
       const final = await owner(tx, actor, companyId, conversationId);
       if (final.conversation.conversationAgentId !== initial.conversation.conversationAgentId ||

@@ -1984,6 +1984,9 @@
       "changed": "The current draft has changed since this proposed version. Review the current version.",
       "published": "This proposed version is currently published.",
       "superseded": "This proposed version is historical. Review the workflow’s current state."
-    }
+    },
+    "preview": "Inspect this proposed version",
+    "comparison": "Changes in the current draft since this proposal",
+    "changeCounts": "{{added}} added · {{changed}} changed · {{removed}} removed flow steps"
   }
 }

@@ -23,3 +23,12 @@ it("rejects private extra fields and arbitrary model-provided destinations", asy
     currentDraftRevisionId: id(5), currentPublishedRevisionId: null, state: "draft", stepCount: 1, triggerCount: 1, href: "https://unrelated.invalid/claimed-draft" }] });
   await expect(getConversationAuthoring(id(1), "author", id(2), id(3), 1)).rejects.toThrow();
 });
+
+it.each(["wrong_version", "incomplete", "extra_payload"])("refuses an invalid flow preview: %s", async mismatch => {
+  const preview = { id: id(5), version: mismatch === "wrong_version" ? 2 : 1, coverage: "complete", steps: [] };
+  vi.spyOn(api, "get").mockResolvedValue({ ...result, proposals: [{ kind: "workflow", id: id(4), name: "Actual draft",
+    authoredRevisionId: id(5), authoredRevisionNumber: 1, currentDraftRevisionId: id(5), currentPublishedRevisionId: null,
+    state: "draft", stepCount: mismatch === "incomplete" ? 1 : 0, triggerCount: 0, href: `/workflows/${id(4)}`,
+    preview: mismatch === "extra_payload" ? { ...preview, prompt: "PRIVATE" } : preview }] });
+  await expect(getConversationAuthoring(id(1), "author", id(2), id(3), 1)).rejects.toThrow();
+});

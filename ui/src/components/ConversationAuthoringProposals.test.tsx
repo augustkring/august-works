@@ -45,6 +45,17 @@ it("previews saved version counts and current draft drift with only the validate
   await act(async () => { await i18n.changeLanguage("da"); });
   expect(container.textContent).toContain("Foreslået version 2"); expect(get).toHaveBeenCalledTimes(1);
 });
+it("shows actual saved flow declarations and a current-version structural comparison", async () => {
+  vi.spyOn(authoring, "getConversationAuthoring").mockResolvedValue({ ...data, proposals: [{ ...data.proposals[0]!, stepCount: 1, triggerCount: 0,
+    preview: { id: id(5), version: 2, coverage: "complete", steps: [{ number: 1, name: "Ask before outreach", operation: "Approval",
+      effect: "pure", testMode: "safe", approval: "checkpoint", retry: "none", next: [] }] },
+    comparison: { state: "available", steps: [{ number: 1, change: "changed" }], removedSteps: 1,
+      connectionsChanged: true, dataDefinitionChanged: false, settingsChanged: false } }] });
+  await mount(); await vi.waitFor(() => expect(container.textContent).toContain("Ask before outreach"));
+  expect(container.textContent).toContain("No approval decision is confirmed");
+  expect(container.textContent).toContain("0 added · 1 changed · 1 removed");
+  expect(container.querySelectorAll("button")).toHaveLength(0);
+});
 it("suppresses prior proposal names and links during source withdrawal and ignores a late result for another account", async () => {
   const get = vi.spyOn(authoring, "getConversationAuthoring").mockResolvedValue(data);
   await mount(); await vi.waitFor(() => expect(container.textContent).toContain("Saved review draft"));
