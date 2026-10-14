@@ -792,3 +792,37 @@ for the implemented controls, preserving the current branch fields and all open
 acceptance boundaries. No schema is weakened to accept the malformed documents.
 The exact existing contract suite passes all 60 cases on current Source. Later
 implementation changes still require their own immutable whole-suite result.
+
+### Selected Agent task brief editing — 2026-10-14
+
+The default current review/editor exposes an exact bounded Agent task brief and
+its actual completion behavior. A strict objective-only command changes the
+selected draft node through Original updateDraft and one body-free receipt. It
+preserves the selected Agent, input schema, retries, output requirements, optional
+defaults, active version and branch edges; it creates no Task/run/heartbeat/grant.
+Complex output contracts remain Advanced until they can be reviewed completely.
+Private task material remains in current authorized workflow surfaces and component
+memory, excluded from historical/conversation projections and browser storage.
+
+Initial database fixtures were refused by the canonical schema because retry
+delays were incomplete and a non-Native node inputMapping field was used. These
+fixtures were corrected to the actual inputSchema/retry contract; production
+validation was not weakened. The focused current-source follow-up passes 95 cases
+in six suites before the final additional strict-command/no-Task assertions.
+Token, module and 70-surface source gates pass. Current types/built mobile check
+and the final additional assertions follow; whole-brief gaps remain open.
+
+The final strict-command/no-Task assertions pass 69 cases in three suites. The
+first built browser run exposed an omitted current-review node-kind allowlist;
+agent.task is now explicitly included there, while historical/conversation
+projections remain body-free. The corrected built Danish 390px review/editor
+passes (47.7 seconds overall): current task brief, Native objective-only save,
+unchanged assignment/edges, no publication/run, zero main-region axe violations,
+no horizontal overflow and actual membership withdrawal hiding task material.
+UI types pass. Server types initially exposed missing object narrowing, corrected
+after structural validation. A later server type run was killed (137) by RAM
+pressure, not a passing check. Verified completed owned disposable browser homes
+were reclaimed from the tmpfs; the current serial follow-up passes server types.
+No application authority was weakened to accommodate either fixture or tooling
+failure. Current whole-suite checkpoint 15 remains on its earlier immutable
+Source, independently of this implementation, and cannot qualify this later code.

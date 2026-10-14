@@ -52,7 +52,7 @@ export function workflowCustomerDraftEdit(db: Db) {
       if (nodes.length !== 1 || nodes[0].type !== command.expectedNodeType || draft.graph.nodes.length > 100 || draft.graph.edges.length > 200)
         throw conflict("The draft step changed; review its current owner", { code: "workflow_draft_step_conflict" });
       const node = nodes[0], change = command.configuration;
-      if (change.kind !== "keep" && node.type !== (change.kind === "wait" ? "core.wait" : change.kind === "condition" ? "core.condition" : "human.approval"))
+      if (change.kind !== "keep" && node.type !== (change.kind === "wait" ? "core.wait" : change.kind === "condition" ? "core.condition" : change.kind === "agent_task" ? "agent.task" : "human.approval"))
         throw conflict("The draft step configuration changed", { code: "workflow_draft_step_conflict" });
       // Name-only edits preserve every original config, input, retry and branch.
       // Guided config edits refuse a shape that the review cannot fully expose.
@@ -61,6 +61,7 @@ export function workflowCustomerDraftEdit(db: Db) {
           throw conflict("This configuration needs its current Advanced editor", { code: "workflow_draft_step_conflict" });
       }
       const configuration = change.kind === "keep" ? node.config : change.kind === "wait" ? { durationSeconds: change.durationSeconds }
+        : change.kind === "agent_task" ? { ...(node.config as Record<string, unknown>), objective: change.objective }
         : change.kind === "condition" ? isDeepStrictEqual(change, reviewGuidedCondition(node.config)) ? node.config : { expression: guidedConditionExpression(change) }
         : { summary: change.summary, consequence: change.consequence };
       const saved = await owner.updateDraft(companyId, workflowId, { expectedRevisionId: draft.id,

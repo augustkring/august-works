@@ -2276,7 +2276,8 @@
       "summary": "Beskriv, hvad der skal godkendes, med højst 1000 tegn.",
       "consequence": "Beskriv konsekvensen af godkendelsen med højst 2000 tegn.",
       "path": "Angiv 1 til 8 feltnavne, ét pr. linje, med højst 160 tegn pr. navn.",
-      "value": "Angiv en gyldig sammenligningsværdi. Større end og mindre end kræver et tal."
+      "value": "Angiv en gyldig sammenligningsværdi. Større end og mindre end kræver et tal.",
+      "objective": "Beskriv opgaven med højst 10000 tegn."
     },
     "condition": {
       "heading": "Når denne betingelse er opfyldt",
@@ -2308,6 +2309,13 @@
       "value": "Sammenlign med",
       "true": "Ja",
       "false": "Nej"
+    },
+    "agent": {
+      "heading": "Agent-opgave",
+      "objective": "Hvad skal Agenten gøre?",
+      "boundary": "Rediger opgavebeskrivelsen til den valgte Agent. Agenten, input, indstillingen for fuldførelse og kravene til output forbliver de samme. Når du gemmer, starter Agenten ikke, og dens adgang ændres ikke.",
+      "waits": "Dette trin venter på, at opgaven bliver færdig, før flowet fortsætter.",
+      "continues": "Dette trin fortsætter efter oprettelse af opgaven; det venter ikke på resultatet."
     }
   },
   "workflowDraftFlow": {

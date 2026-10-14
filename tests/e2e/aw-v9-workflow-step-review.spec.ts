@@ -69,7 +69,7 @@ test("current ordered review shows exact private input and missing connection ac
     const preview = page.getByRole("link", { name: "Review Contact system permissions", exact: true });
     await expect(preview).toHaveAttribute("href", new RegExp(`/apps/${connectionId}/permissions$`));
     await expect(page.getByRole("button", { name: "Review internal test", exact: true })).toHaveCount(0);
-    await expect(page.getByRole("main")).not.toContainText("PRIVATE objective");
+    await expect(page.getByText("PRIVATE objective", { exact: true })).toBeVisible();
     await expect(page.getByRole("main")).not.toContainText("PRIVATE tool input");
     await expect(page.getByRole("main")).not.toContainText("PRIVATE credential");
     await page.getByRole("combobox", { name: "Language", exact: true }).selectOption("da");
@@ -81,9 +81,28 @@ test("current ordered review shows exact private input and missing connection ac
     await page.screenshot({ path: info.outputPath("current-step-input-access-da-mobile.png"), fullPage: true });
     const unchanged = await json(await request.get(`${base}/${created.id}`)); expect(unchanged.draftRevision).toEqual(prepared.draftRevision); expect(unchanged.publishedRevisionId).toBeNull();
     expect(await db.select().from(workflowRuns).where(eq(workflowRuns.companyId, company.id))).toEqual([]);
+    await db.update(companyMemberships).set({ membershipRole: "owner" }).where(eq(companyMemberships.principalId, userId));
+    await db.insert(principalPermissionGrants).values({ companyId: company.id, principalType: "user", principalId: userId, permissionKey: "workflows:edit" });
+    await page.goto(`/${company.issuePrefix}/workflows/${created.id}/draft/steps/agent`);
+    await expect(page.getByRole("heading", { name: "Rediger et kladdetrin", exact: true })).toBeVisible();
+    await expect(page.getByText("Dette trin venter på, at opgaven bliver færdig, før flowet fortsætter.", { exact: true })).toBeVisible();
+    await page.getByLabel("Hvad skal Agenten gøre?", { exact: true }).fill("PRIVATE revised objective\nBrug kun godkendte oplysninger");
+    await page.addScriptTag({ path: axePath });
+    expect(await page.evaluate(async () => (await (window as unknown as { axe: { run(scope: string): Promise<{ violations: unknown[] }> } }).axe.run("main")).violations)).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.getByRole("button", { name: "Gem kladdeændringer", exact: true }).click();
+    await expect(page.getByRole("status").filter({ hasText: "Dine ændringer blev gemt" })).toBeVisible();
+    const edited = await json(await request.get(`${base}/${created.id}`));
+    const oldAgent = prepared.draftRevision.graph.nodes.find((node: { id: string }) => node.id === "agent");
+    expect(edited.draftRevision.graph.nodes.find((node: { id: string }) => node.id === "agent")).toEqual({ ...oldAgent,
+      config: { ...oldAgent.config, objective: "PRIVATE revised objective\nBrug kun godkendte oplysninger" } });
+    expect(edited.draftRevision.graph.edges).toEqual(prepared.draftRevision.graph.edges); expect(edited.publishedRevisionId).toBeNull();
+    expect(await db.select().from(workflowRuns).where(eq(workflowRuns.companyId, company.id))).toEqual([]);
     await db.update(companyMemberships).set({ status: "inactive" }).where(eq(companyMemberships.principalId, userId));
-    await page.reload(); await expect(page.getByRole("alert").filter({ hasText: "Dette workflow kunne ikke kontrolleres" })).toBeVisible();
+    await page.goto(url); await expect(page.getByRole("alert").filter({ hasText: "Dette workflow kunne ikke kontrolleres" })).toBeVisible();
     await expect(page.getByRole("main")).not.toContainText("PRIVATE review facts"); await expect(page.getByRole("main")).not.toContainText("Selected analyst");
+    await expect(page.getByRole("main")).not.toContainText("PRIVATE objective");
+    await expect(page.getByRole("main")).not.toContainText("PRIVATE revised objective");
   } finally {
     await new Promise<void>((resolve, reject) => bridge.close(err => err ? reject(err) : resolve()));
     await request.patch("/api/instance/settings/experimental", { data: flags }).catch(() => {}); await request.delete(`/api/companies/${company.id}`).catch(() => {});

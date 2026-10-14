@@ -145,3 +145,18 @@ it("keeps exact text comparison spaces and exposes no expression field", async (
     kind: "condition", source: "variables", path: ["status"], operator: "===", value: " ready ",
   } }));
 });
+it("edits only the Agent objective, validates before POST and keeps task material out of request storage", async () => {
+  vi.mocked(workflowDraftEditApi.review).mockResolvedValue({ ...review, nodeType: "agent.task", configuration: {
+    kind: "agent_task", objective: "PRIVATE task brief", waitForCompletion: false,
+  } });
+  await mount();
+  expect(container.textContent).toContain("does not wait for the result");
+  expect(container.textContent).toContain("Saving does not run the Agent or change its access");
+  await field("objective", " "); await submit();
+  expect(workflowDraftEditApi.save).not.toHaveBeenCalled(); expect(pendingWorkflowRequests(company, principal, workflow)).toEqual([]);
+  expect(container.querySelector("#draft-step-objective")?.getAttribute("aria-invalid")).toBe("true");
+  await field("objective", "PRIVATE revised task\nUse approved data"); await submit();
+  expect(workflowDraftEditApi.save).toHaveBeenCalledOnce();
+  expect(vi.mocked(workflowDraftEditApi.save).mock.calls[0][3].configuration).toEqual({ kind: "agent_task", objective: "PRIVATE revised task\nUse approved data" });
+  expect(sessionStorage.getItem("aw.v9.pending-workflow-request-receipts")).not.toMatch(/PRIVATE|objective|approved data/);
+});

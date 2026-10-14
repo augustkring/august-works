@@ -7,6 +7,7 @@ export const workflowStepNameSchema = text(200);
 export const workflowWaitSecondsSchema = z.number().int().min(1).max(604800);
 export const workflowApprovalSummarySchema = text(1000);
 export const workflowApprovalConsequenceSchema = text(2000);
+export const workflowAgentObjectiveSchema = text(10000);
 /** Guided comparison data is rendered into the Original condition language on
  * the server. It is not a second evaluator or a customer-supplied expression. */
 export const workflowGuidedConditionSchema = z.strictObject({
@@ -23,12 +24,14 @@ export const workflowStepConfigurationChangeSchema = z.discriminatedUnion("kind"
   z.strictObject({ kind: z.literal("keep") }),
   z.strictObject({ kind: z.literal("wait"), durationSeconds: workflowWaitSecondsSchema }),
   z.strictObject({ kind: z.literal("approval"), summary: workflowApprovalSummarySchema, consequence: workflowApprovalConsequenceSchema }),
+  z.strictObject({ kind: z.literal("agent_task"), objective: workflowAgentObjectiveSchema }),
   workflowGuidedConditionSchema,
 ]);
 export const workflowStepInputReviewSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("advanced") }),
   z.strictObject({ kind: z.literal("wait"), durationSeconds: workflowWaitSecondsSchema }),
   z.strictObject({ kind: z.literal("approval"), summary: workflowApprovalSummarySchema, consequence: workflowApprovalConsequenceSchema }),
+  z.strictObject({ kind: z.literal("agent_task"), objective: workflowAgentObjectiveSchema, waitForCompletion: z.boolean() }),
   workflowGuidedConditionSchema,
 ]);
 export type WorkflowStepInputReview = z.infer<typeof workflowStepInputReviewSchema>;

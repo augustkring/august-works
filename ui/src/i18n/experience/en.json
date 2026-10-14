@@ -2276,7 +2276,8 @@
       "summary": "Describe what needs approval, up to 1000 characters.",
       "consequence": "Describe the consequence of approval, up to 2000 characters.",
       "path": "Enter 1 to 8 field names, one per line, up to 160 characters each.",
-      "value": "Enter a valid comparison value. Greater or less than comparisons need a number."
+      "value": "Enter a valid comparison value. Greater or less than comparisons need a number.",
+      "objective": "Describe the task, up to 10000 characters."
     },
     "condition": {
       "heading": "When this condition is met",
@@ -2308,6 +2309,13 @@
       "value": "Compare with",
       "true": "Yes",
       "false": "No"
+    },
+    "agent": {
+      "heading": "Agent task",
+      "objective": "What should the Agent do?",
+      "boundary": "Edit the task brief for the selected Agent. The Agent, input, completion setting and output requirements stay the same. Saving does not run the Agent or change its access.",
+      "waits": "This step waits for the task to finish before continuing.",
+      "continues": "This step continues after creating the task; it does not wait for the result."
     }
   },
   "workflowDraftFlow": {

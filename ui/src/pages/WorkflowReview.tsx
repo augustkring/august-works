@@ -395,6 +395,13 @@ export function WorkflowReview({
                             <dd className="whitespace-pre-wrap break-words">{step.inputReview.consequence}</dd>
                           </div>
                         </>}
+                        {step.inputReview?.kind === "agent_task" && <div>
+                          <dt className="font-medium">{t("workflowDraftStep.agent.objective")}</dt>
+                          <dd className="space-y-2">
+                            <p className="whitespace-pre-wrap break-words">{step.inputReview.objective}</p>
+                            <p>{t(step.inputReview.waitForCompletion ? "workflowDraftStep.agent.waits" : "workflowDraftStep.agent.continues")}</p>
+                          </dd>
+                        </div>}
                         {step.inputReview?.kind === "advanced" && <div>
                           <dt className="font-medium">{t("workflowSemantics.input")}</dt>
                           <dd>{t("workflowSemantics.inputs.advanced")}</dd>

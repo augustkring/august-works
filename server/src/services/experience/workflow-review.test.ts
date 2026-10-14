@@ -117,6 +117,15 @@ it("exposes closed approval material only in current review, keeping the convers
   expect(historical.flow.steps[1].inputReview).toBeUndefined();
   expect(JSON.stringify(historical)).not.toContain("PRIVATE");
 });
+it("keeps bounded Agent task material in current review and excludes it from conversation/history projection", () => {
+  const source = detail(), node = source.draftRevision!.graph.nodes[1];
+  node.type = "agent.task";
+  node.config = { agentId: "10000000-0000-4000-8000-000000000007", objective: "PRIVATE task brief", waitForCompletion: false };
+  expect(workflowReview(source, workflowNodeDefinitions(), false).draft?.steps[1].inputReview).toEqual({
+    kind: "agent_task", objective: "PRIVATE task brief", waitForCompletion: false });
+  const historical = projectWorkflowRevisionFlow(source.draftRevision!, workflowNodeDefinitions());
+  expect(historical.flow.steps[1].inputReview).toBeUndefined(); expect(JSON.stringify(historical)).not.toContain("PRIVATE task brief");
+});
 it("keeps an active immutable revision separate from the proposed draft and suppresses archived edits", () => {
   const source = detail();
   source.publishedRevision = {

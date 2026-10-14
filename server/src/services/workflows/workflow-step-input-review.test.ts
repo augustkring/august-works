@@ -20,8 +20,17 @@ it("preserves exact approval material and never trims, copies hidden fields or a
     { summary: "Valid", consequence: "Valid", kind: "approval" }, { summary: "x".repeat(1001), consequence: "Valid" }])
     expect(reviewWorkflowStepInput(node("human.approval", config))).toEqual({ kind: "advanced" });
 });
-it("only exposes a complete literal wait and keeps unrelated task/tool inputs Advanced", () => {
+it("only exposes a complete literal wait and keeps malformed task/tool inputs Advanced", () => {
   expect(reviewWorkflowStepInput(node("core.wait", { durationSeconds: 10 }))).toEqual({ kind: "wait", durationSeconds: 10 });
   expect(reviewWorkflowStepInput(node("core.wait", { durationSeconds: 10, secret: "PRIVATE" }))).toEqual({ kind: "advanced" });
   expect(reviewWorkflowStepInput(node("agent.task", { objective: "PRIVATE" }))).toEqual({ kind: "advanced" });
+});
+it("reviews a bounded Agent task with the Original completion default and no raw assignment identity", () => {
+  const config = { agentId: "10000000-0000-4000-8000-000000000001", objective: "Prepare a summary\nusing approved data" };
+  expect(reviewWorkflowStepInput(node("agent.task", config))).toEqual({ kind: "agent_task", objective: config.objective, waitForCompletion: true });
+  expect(reviewWorkflowStepInput(node("agent.task", { ...config, waitForCompletion: false, expectedOutputSchema: null }))).toEqual({
+    kind: "agent_task", objective: config.objective, waitForCompletion: false });
+  for (const override of [{ agentId: "bad" }, { objective: " padded " }, { waitForCompletion: "false" },
+    { expectedOutputSchema: { type: "object" } }, { secret: "PRIVATE" }, { objective: "x".repeat(10001) }])
+    expect(reviewWorkflowStepInput(node("agent.task", { ...config, ...override }))).toEqual({ kind: "advanced" });
 });

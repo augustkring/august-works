@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { activityLog, authUsers, companies, companyMemberships, createDb, principalPermissionGrants, workflowRevisions } from "@paperclipai/db";
+import { activityLog, agents, agentIdentities, authUsers, companies, companyMemberships, createDb, principalPermissionGrants, workflowRevisions, workflowRuns, heartbeatRuns, issues } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { workflowService } from "../services/workflows/workflow-service.js";
 import { workflowCustomerDraftEdit } from "../services/workflows/workflow-customer-draft-edit.js";
@@ -80,6 +80,37 @@ describe.sequential("Original guided workflow draft step owner", () => {
       expect((await db.select().from(authUsers).where(eq(authUsers.id, f.userId)))[0].emailVerified).toBe(true);
       expect((await db.select().from(workflowRevisions).where(eq(workflowRevisions.workflowId, f.published.id))).filter(row => row.state === "draft")).toHaveLength(1);
     } finally { await db.execute(sql`drop trigger aw_v9_test_draft_editor_unverify on activity_log`); await db.execute(sql`drop function aw_v9_test_draft_editor_unverify()`); }
+  });
+  it("edits an Agent task brief without changing its assignment, inputs, retry, active version or creating work", async () => {
+    const f = await fixture(), owner = workflowService(db), human = { principal: { type: "user" as const, userId: f.userId } };
+    const [identity] = await db.insert(agentIdentities).values({ homeCompanyId: f.companyId, name: "Selected analyst" }).returning();
+    const [agent] = await db.insert(agents).values({ companyId: f.companyId, agentIdentityId: identity.id, name: "Selected analyst" }).returning();
+    const graph = f.published.draftRevision!.graph;
+    const task = { id: "agent-work", type: "agent.task", name: "Prepare summary", position: { x: 0, y: 3 },
+      config: { agentId: agent.id, objective: "PRIVATE original task", waitForCompletion: false, expectedOutputSchema: null },
+      inputSchema: { type: "object", properties: { facts: { type: "string" } } }, retryPolicy: { mode: "none" as const, maxAttempts: 1, initialDelayMs: 0, maxDelayMs: 0 } };
+    const draft = await owner.updateDraft(f.companyId, f.published.id, { expectedRevisionId: f.published.draftRevisionId!, graph: {
+      ...graph, nodes: [...graph.nodes, task], edges: [...graph.edges, { id: "ask-work", source: "approval", target: task.id }],
+    } }, human);
+    const published = await owner.publish(f.companyId, f.published.id, { expectedDraftRevisionId: draft.draftRevisionId!, expectedPublishedRevisionId: f.published.publishedRevisionId }, human);
+    const view = await f.service.review(f.companyId, f.published.id, task.id, f.actor);
+    expect(view.configuration).toEqual({ kind: "agent_task", objective: task.config.objective, waitForCompletion: false });
+    const input = workflowDraftStepCommandSchema.parse({ ...await command(f), expectedNodeId: task.id, expectedNodeType: task.type,
+      name: task.name, configuration: { kind: "agent_task", objective: "PRIVATE revised task\nUse approved facts only" } });
+    const first = await f.service.save(f.companyId, f.published.id, input, f.actor);
+    expect(await f.service.save(f.companyId, f.published.id, input, f.actor)).toEqual(first);
+    const current = await owner.getDetail(f.companyId, f.published.id, f.actor);
+    const saved = current!.draftRevision!.graph.nodes.find(node => node.id === task.id)!;
+    expect(saved).toEqual({ ...published.draftRevision!.graph.nodes.find(node => node.id === task.id), config: { ...task.config, objective: input.configuration.kind === "agent_task" ? input.configuration.objective : "" } });
+    expect(current!.publishedRevision).toEqual(published.publishedRevision);
+    expect(current!.draftRevision!.graph.edges).toEqual(published.publishedRevision!.graph.edges);
+    expect(await db.select().from(workflowRuns).where(eq(workflowRuns.companyId, f.companyId))).toEqual([]);
+    expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.companyId))).toEqual([]);
+    expect(await db.select().from(issues).where(eq(issues.companyId, f.companyId))).toEqual([]);
+    const rows = await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.companyId), eq(activityLog.action, "workflow.customer_draft_step_saved")));
+    expect(rows).toHaveLength(1); expect(JSON.stringify(rows[0].details)).not.toMatch(/PRIVATE|objective|approved facts/);
+    expect(workflowDraftStepCommandSchema.safeParse({ ...input, configuration: { kind: "agent_task", objective: "New", agentId: randomUUID() } }).success).toBe(false);
+    await expect(f.service.save(f.companyId, f.published.id, { ...input, requestId: randomUUID() }, f.actor)).rejects.toMatchObject({ status: 409 });
   });
   it("changes a selected condition through the Original language while retaining both active branches and the exact receipt", async () => {
     const f = await fixture(), owner = workflowService(db), human = { principal: { type: "user" as const, userId: f.userId } };

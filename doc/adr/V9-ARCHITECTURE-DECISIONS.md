@@ -1887,3 +1887,25 @@ editable from current review; branch extension and more complex graph structure
 use Advanced. The customer reviews/tests both outcomes before publication, with
 Original C0 test limits unchanged. Full natural-language proposal, arbitrary
 actor/tool/trigger/branch design and hosted/Human qualification remain open.
+
+## ADR-46 — Edit a selected Agent task brief through Original draft admission
+
+Date: 2026-10-14. Status: implemented; full-V9 acceptance remains open.
+
+The default step editor now exposes a closed Agent task objective and its actual
+completion setting. Only a bounded, exact Original agent.task configuration with
+no complex output schema is representable. Unknown fields, invalid assignment
+IDs, transformed historical text and complex output requirements remain Advanced.
+The selected Agent ID is not copied into the input-review DTO or accepted by the
+objective-edit command. Current private workflow/account/read/edit ownership,
+revision/update/type CAS and Original updateDraft remain authoritative. The
+objective edit preserves configuration defaults, explicit false completion,
+null/omitted output requirements, input schema, retry policy and graph edges.
+The Original Activity receipt retains a digest and identities, never task prose.
+
+Only current workflow review receives private task material. Historical and
+conversation flow projections retain closed structural semantics without copying
+objectives. New task work, grants, publication, model dispatch and execution are
+separate Native operations. The existing selected-step authority fence withdraws
+material on Agent/account/Source changes. This adds ordinary task-brief editing;
+full Agent selection, model proposals and C2/C3 qualified tests remain open.
