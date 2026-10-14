@@ -3345,6 +3345,7 @@ export * from "./company-experience.js";
 export * from "./notification-policy.js";
 export * from "./agent-authoring.js";
 export * from "./agent-authored-definition.js";
+export * from "./agent-draft-output.js";
 export * from "./workflow-experience.js";
 export * from "./workflow-authoring-experience.js";
 export * from "./agent-setup-authoring.js";

@@ -2465,3 +2465,22 @@ execute after Original child creation/result persistence inside the same databas
 transaction. Either failure rolls back the verdict and all created tasks. A
 terminal interaction cannot create the same proposal again. These are Native
 prerequisites, not evidence that Custom Agents can yet propose or create tasks.
+
+
+## ADR-70 — Agent task proposals are bounded data and Native Human-only interactions
+
+A shared strict parser accepts one draft plus either no task or one task with
+only title and description. It refuses model-selected company/parent/assignee/
+state, arrays, unknown fields, prose envelopes and oversized content. Fixed
+errors contain no Source excerpts. This parser does not confer runtime policy
+or task authority, and is not yet connected to authored Agent execution.
+
+The real Native request_human_input projection may tighten resolverPolicy to
+human_only. Omission retains the existing Native policy; every other explicit
+value fails before interaction creation. The Original owner persists that policy
+and the existing semantic receipt handles replay. No vendor mock contract is
+changed or presented as production authorization proof. Native integration
+exercises the actual Agent-denied/Human-accepted path: only explicit Human
+acceptance creates the unassigned backlog child with Original source-run
+provenance. create_task runtime mapping remains closed until its full controller
+and representative-test paths use these prerequisites.

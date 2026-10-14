@@ -1797,3 +1797,25 @@ new cgroup OOM kill was recorded; the termination cause is unconfirmed. Its
 repository-wide typecheck passed; full tests and build remain unverified. The
 previous 'ongoing' notes describe the observations at those earlier checkpoints.
 A new final immutable run is required; no full-suite success is claimed.
+
+
+### Bounded Agent proposal data and Native Human-only tool policy — 2026-10-14 (checkpoint 45)
+
+The shared model-data parser admits exactly one internal draft and at most one
+title/description task proposal, with fixed errors and bounded closed fields.
+Native request_human_input now exposes optional human_only tightening and passes
+it to the Original owner. Other explicit resolver values fail before mutation.
+Existing omitted-policy behavior and vendor catalog remain unchanged. The actual
+Native regression proves identical replay, no task before approval, no Agent
+self-approval even with independent task effects authorization, and a canonical
+unassigned backlog child with the original parent/run and Human creator.
+
+The focused pair passes 13 cases (21.34 seconds). The first complete pair finds
+two existing schema-equality expectations (33 passing/2 failing, 32.32 seconds);
+they now assert the one deliberate Native extension and exact unchanged remaining
+contract, including immutable vendor catalog. Final full-pair result is recorded
+below. Server typecheck passes (exit 0). No authored Agent mapping is widened,
+no runtime is activated and all 70 launch-evidence rows remain pending.
+
+Final Native tool/parser pair passes all 35 cases (22.49 seconds); module and
+70-Source gates also pass. Mapping remains deliberately unchanged at this checkpoint.

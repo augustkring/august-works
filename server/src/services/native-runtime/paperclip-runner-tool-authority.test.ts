@@ -19,6 +19,7 @@ import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embed
 import { initializeRunIdentity, reserveSteeredIdentity, reconcileSteeredIdentity } from "../run-identity.js";
 import { documentService } from "../documents.js";
 import { issueService } from "../issues.js";
+import { issueThreadInteractionService } from "../issue-thread-interactions.js";
 import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
 import { createAssignedMcpTools } from "./assigned-mcp-tools.js";
 import type { ToolGatewayService } from "../tool-gateway.js";
@@ -90,6 +91,39 @@ describe("PaperclipRunnerToolAuthority", () => {
 
   afterAll(async () => {
     await temporary?.cleanup();
+  });
+
+  it("retains a Human-only backlog proposal through Native tool replay without granting Agent approval", async () => {
+    const binding = { companyId: randomUUID(), agentId: randomUUID(), issueId: randomUUID(), runId: randomUUID() };
+    await db.insert(companies).values({ id: binding.companyId, name: "Task proposal", issuePrefix: "TPR" });
+    await db.insert(agents).values({ id: binding.agentId, companyId: binding.companyId, name: "Proposer", status: "active", adapterType: "paperclip_runner" });
+    await db.insert(issues).values({ id: binding.issueId, companyId: binding.companyId, title: "Original scope", status: "in_progress", assigneeAgentId: binding.agentId });
+    await db.insert(heartbeatRuns).values({ id: binding.runId, companyId: binding.companyId, agentId: binding.agentId,
+      status: "running", runtimeMode: "native", nativeIssueId: binding.issueId, invocationSource: "assignment", triggerDetail: "system" });
+    await db.update(issues).set({ executionRunId: binding.runId }).where(eq(issues.id, binding.issueId));
+    const authority = new PaperclipRunnerToolAuthority(db, binding);
+    const definition = authority.definitions().find(tool => tool.name === "request_human_input")!;
+    expect((definition.inputSchema as { properties: { resolverPolicy: unknown } }).properties.resolverPolicy)
+      .toMatchObject({ enum: ["human_only"] });
+    const args = { idempotencyKey: "one-reviewed-proposal", interactionKind: "suggest_tasks", title: "Review one internal task",
+      prompt: "Create this unassigned backlog task?", continuationPolicy: "none", resolverPolicy: "human_only",
+      payload: { version: 1, tasks: [{ clientKey: "one", title: "A bounded follow-up", description: "Only the original scope", status: "backlog" }] } };
+    for (const resolverPolicy of ["anyone", "board_only", null])
+      await expect(authority.execute({ tool: "request_human_input", callId: randomUUID(), arguments: { ...args, resolverPolicy } }))
+        .rejects.toThrow("paperclip_runner_interaction_resolver_policy_invalid");
+    const first = await authority.execute({ tool: "request_human_input", callId: "proposal", arguments: args }) as { interaction: { id: string } };
+    await expect(authority.execute({ tool: "request_human_input", callId: "proposal-replay", arguments: args })).resolves.toEqual(first);
+    expect(await db.select().from(issues).where(eq(issues.companyId, binding.companyId))).toHaveLength(1);
+    const service = issueThreadInteractionService(db);
+    const issue = { id: binding.issueId, companyId: binding.companyId, projectId: null, goalId: null };
+    await expect(service.acceptInteraction(issue, first.interaction.id, {}, { agentId: binding.agentId,
+      runId: binding.runId, suggestedTaskEffectsAuthorized: true })).rejects.toThrow();
+    expect((await service.getById(first.interaction.id))?.status).toBe("pending");
+    const accepted = await service.acceptInteraction(issue, first.interaction.id, {}, { userId: "local-board" });
+    expect(accepted.createdIssues).toEqual([expect.objectContaining({ status: "backlog", assigneeAgentId: null })]);
+    const [created] = await db.select().from(issues).where(eq(issues.id, accepted.createdIssues[0]!.id));
+    expect(created).toMatchObject({ companyId: binding.companyId, parentId: binding.issueId, originRunId: binding.runId,
+      createdByUserId: "local-board", createdByAgentId: null, assigneeAgentId: null, assigneeUserId: null, status: "backlog" });
   });
 
   it("advertises only real bindings and reads the bound task", async () => {
@@ -413,7 +447,9 @@ describe("PaperclipRunnerToolAuthority", () => {
       );
       expect(advertised.description).not.toContain("mock");
       expect(advertised.description).not.toContain("questionSpec");
-      expect(advertised.inputSchema).toEqual(original.inputSchema);
+      const { resolverPolicy, ...properties } = advertised.inputSchema.properties;
+      expect(resolverPolicy).toMatchObject({ type: "string", enum: ["human_only"] });
+      expect({ ...advertised.inputSchema, properties }).toEqual(original.inputSchema);
       expect(advertised.inputSchema.properties).toHaveProperty("payload");
       expect(advertised.inputSchema.properties).not.toHaveProperty(
         "questionSpec",

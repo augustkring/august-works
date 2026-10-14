@@ -203,7 +203,18 @@ export class PaperclipRunnerToolAuthority {
             ? "Prepare one verified workspace file for Paperclip's final task or external-chat response. This records the attachment, work product, and explicit same-run selection; it does not confirm provider delivery."
             : descriptor.description,
         inputSchema:
-          descriptor.operationId === "register_deliverable"
+          descriptor.operationId === "request_human_input"
+            ? {
+                ...descriptor.inputSchema,
+                properties: {
+                  ...descriptor.inputSchema.properties,
+                  resolverPolicy: {
+                    type: "string", enum: ["human_only"],
+                    description: "Optional tightening: only a current authorized human may resolve this interaction. Omission preserves its Native policy.",
+                  },
+                },
+              }
+            : descriptor.operationId === "register_deliverable"
             ? {
                 ...descriptor.inputSchema,
                 properties: {
@@ -1602,6 +1613,8 @@ export class PaperclipRunnerToolAuthority {
   }
 
   async #requestHumanInput(input: Record<string, unknown>, identityContextId: string | null): Promise<unknown> {
+    if (input.resolverPolicy !== undefined && input.resolverPolicy !== "human_only")
+      throw new Error("paperclip_runner_interaction_resolver_policy_invalid");
     const interactionKind = requiredString(input.interactionKind);
     const interactionKinds = {
       confirmation: "request_confirmation",
@@ -1655,6 +1668,7 @@ export class PaperclipRunnerToolAuthority {
           kind,
           idempotencyKey,
           sourceRunId: this.binding.runId,
+          ...(input.resolverPolicy === "human_only" ? { resolverPolicy: "human_only" } : {}),
           title: requiredString(input.title),
           summary: prompt,
           continuationPolicy: requiredString(input.continuationPolicy),
