@@ -4,6 +4,7 @@ import { v9FeatureEnabled, workflowIntentDraftCommandSchema, type WorkflowIntent
 import { useTranslation } from "@/i18n";
 import { useCompany } from "../context/CompanyContext";
 import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
+import { workflowReadSourceChanged } from "../lib/workflow-source-invalidation";
 import { useV9CurrentAccount, hasCurrentV9Session } from "../hooks/useV9CurrentAccount";
 import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
 import { workflowAuthoringExperienceApi } from "../api/workflow-authoring-experience";
@@ -53,8 +54,7 @@ export function WorkflowDescribe({ company, principal }: { company: string; prin
     catch { setStorageFailed(true); }
   }, [readReady, company, principal]);
   useCompanyLiveEvent(event => {
-    if (event.companyId !== company || event.type !== "analytical.context.access_lost" &&
-      !(event.type === "activity.logged" && /workflow|permission|membership|privacy|erased|deleted|withdraw/.test(String(event.payload.action)))) return;
+    if (event.companyId !== company || !workflowReadSourceChanged(event)) return;
     current.current = { ...current.current, readReady: false, epoch: current.current.epoch + 1 };
     setConfirmed(null);
     void client.invalidateQueries({ queryKey: queryKeys.auth.session });

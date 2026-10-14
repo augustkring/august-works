@@ -11,6 +11,7 @@ import { useV9PrivateReadAuthority } from "../hooks/useV9PrivateReadAuthority";
 import { useWorkflowRequestLocator } from "../hooks/useWorkflowRequestLocator";
 import { useExperienceHeading } from "../hooks/useExperienceHeading";
 import { workflowDraftEditApi } from "../api/workflow-draft-edit";
+import { workflowReadSourceChanged } from "../lib/workflow-source-invalidation";
 import { ApiError } from "../api/client";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
@@ -70,7 +71,7 @@ export function WorkflowDraftStep({ company, principal, workflow, node }: { comp
     const details = event.payload.details as { requestId?: unknown } | undefined;
     if (event.type === "activity.logged" && event.payload.action === "workflow.customer_draft_step_saved" &&
       event.payload.entityType === "workflow" && event.payload.entityId === workflow && event.payload.actorId === principal && details?.requestId === inFlight.current) return;
-    if (event.type === "analytical.context.access_lost" || /workflow|agent|membership|permission|role|privacy|erased|deleted|withdraw/i.test(`${event.payload.entityType}:${event.payload.action}`)) { setSaved(null); refresh(); }
+    if (workflowReadSourceChanged(event)) { setSaved(null); refresh(); }
   });
   const mutation = useMutation({ retry: false, gcTime: 0,
     mutationFn: (command: WorkflowDraftStepCommand) => locator.write(command.requestId, () => workflowDraftEditApi.save(company, workflow, principal, command)),

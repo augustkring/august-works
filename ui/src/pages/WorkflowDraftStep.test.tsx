@@ -187,3 +187,10 @@ it("withdraws a previously selected Agent on Native invalidation and refuses it 
   expect(container.querySelector("#draft-step-agentId")?.getAttribute("aria-invalid")).toBe("true");
   expect(document.activeElement?.getAttribute("role")).toBe("alert");
 });
+it("withholds retained private step material while its original conversation issue is rechecked", async () => {
+  await mount(); expect(container.querySelector("form")).not.toBeNull();
+  vi.mocked(workflowDraftEditApi.review).mockImplementation(() => new Promise(() => {}));
+  await act(async () => listeners.at(-1)!({ companyId: company, type: "activity.logged", payload: { action: "issue.updated", entityType: "issue" } }));
+  expect(container.querySelector("form")).toBeNull();
+  expect(workflowDraftEditApi.save).not.toHaveBeenCalled(); expect(pendingWorkflowRequests(company, principal, workflow)).toEqual([]);
+});

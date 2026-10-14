@@ -8,6 +8,7 @@ import { useV9PrivateReadAuthority } from "../hooks/useV9PrivateReadAuthority";
 import { useExperienceHeading } from "../hooks/useExperienceHeading";
 import { useCompany } from "../context/CompanyContext";
 import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
+import { workflowReadSourceChanged } from "../lib/workflow-source-invalidation";
 import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
 import { Button } from "../components/ui/button";
 import { WorkflowStopControls } from "../components/WorkflowStopControls";
@@ -97,22 +98,7 @@ export function WorkflowRunExperience({
     refetchOnWindowFocus: true,
   });
   useCompanyLiveEvent((event) => {
-    if (event.companyId !== company) return;
-    const action =
-      typeof event.payload.action === "string" ? event.payload.action : "";
-    if (
-      event.type !== "activity.logged" &&
-      event.type !== "analytical.context.access_lost"
-    )
-      return;
-    if (
-      event.type === "activity.logged" &&
-      !/workflow|permission|membership|privacy|erased|deleted|withdraw/i.test(
-        action,
-      ) &&
-      event.payload.entityType !== "company_membership"
-    )
-      return;
+    if (event.companyId !== company || !workflowReadSourceChanged(event)) return;
     source.current++; setEpoch(source.current);
     void client.cancelQueries({ queryKey: prefix });
     client.removeQueries({ queryKey: prefix });

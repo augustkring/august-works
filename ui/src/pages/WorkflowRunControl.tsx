@@ -4,6 +4,7 @@ import { workflowRunControlSchema, workflowStopCommandSchema, type WorkflowStopR
 import { Link, useParams } from "../lib/router";
 import { useCompany } from "../context/CompanyContext";
 import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
+import { workflowReadSourceChanged } from "../lib/workflow-source-invalidation";
 import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
 import { useV9PrivateReadAuthority } from "../hooks/useV9PrivateReadAuthority";
 import { useExperienceHeading } from "../hooks/useExperienceHeading";
@@ -45,7 +46,7 @@ export function WorkflowRunControl({ company, principal, workflow, run }: { comp
     }) });
   const refresh = () => { source.current++; setEpoch(source.current); void client.cancelQueries({ queryKey: prefix }); void client.invalidateQueries({ queryKey: prefix, refetchType: "none" }); };
   useCompanyLiveEvent(event => {
-    if (event.companyId === company && (event.type === "analytical.context.access_lost" || /workflow|membership|permission|role|erased|deleted|withdraw/i.test(`${event.payload.entityType}:${event.payload.action}`))) refresh();
+    if (event.companyId === company && workflowReadSourceChanged(event)) refresh();
   });
   useEffect(() => { try { setRequestId(pendingWorkflowStop(company, principal, workflow, run)); setStorageReady(true); } catch { setStorageFailed(true); } }, [company, principal, workflow, run]);
   const state = client.getQueryState(key), fresh = current() && query.isSuccess && !query.isFetching && !state?.isInvalidated;

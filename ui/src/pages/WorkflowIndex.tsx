@@ -4,6 +4,7 @@ import { useTranslation } from "@/i18n";
 import { workflowAuthoringExperienceApi } from "../api/workflow-authoring-experience";
 import { useCompany } from "../context/CompanyContext";
 import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
+import { workflowReadSourceChanged } from "../lib/workflow-source-invalidation";
 import { useV9CurrentAccount, hasCurrentV9Session } from "../hooks/useV9CurrentAccount";
 import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
 import { useExperienceHeading } from "../hooks/useExperienceHeading";
@@ -39,8 +40,7 @@ export function WorkflowIndex({ company, principal }: { company: string; princip
     retry: false, gcTime: 0, staleTime: 0, refetchOnWindowFocus: true,
   });
   useCompanyLiveEvent(event => {
-    if (event.companyId !== company || event.type !== "analytical.context.access_lost" &&
-      !(event.type === "activity.logged" && /workflow|permission|membership|privacy|erased|deleted|withdraw/.test(String(event.payload.action)))) return;
+    if (event.companyId !== company || !workflowReadSourceChanged(event)) return;
     setEpoch(value => value + 1);
     void client.cancelQueries({ queryKey: prefix }); client.removeQueries({ queryKey: prefix });
   });

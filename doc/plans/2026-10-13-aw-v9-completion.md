@@ -885,3 +885,20 @@ node fields/edges and unpublished status, refreshed saved Agent name, no run, ze
 main-region axe violations/no overflow and actual membership withdrawal hiding
 private material. These are controlled software fixtures, not live Agent/Human
 qualification. Whole V9 remains incomplete and no push or PR is made.
+
+### Original Source activity withdraws cached workflow views — 2026-10-14
+
+Three explicit baseline client regressions fail (33 other cases pass): a Native
+issue.updated event leaves retained names/fields in the step editor, flow composer
+and review. This event can originate from the original private conversation; a
+workflow-only predicate was incomplete. Shared Source-family invalidation now
+withdraws cached material while Original server ownership is rechecked across
+nine workflow surfaces. Existing company/account/read-epoch and exact own-save
+exception behavior is retained; no Source event is interpreted as permission.
+
+All 73 cases across the nine affected client suites pass after the fix, as does UI
+typecheck. The current built Danish 390px review/Agent-choice/edit/withdrawal
+regression passes again (45.8 seconds overall), with no main axe violations or
+overflow. This is software regression coverage; it does not attest full delivery
+of Source-loss events, live-host or Human qualification. Broader retained-copy
+closure and the rest of the brief remain open.

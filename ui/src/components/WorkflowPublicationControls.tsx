@@ -9,6 +9,7 @@ import type {
 import { workflowsApi } from "../api/workflows";
 import { ApiError } from "../api/client";
 import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
+import { workflowReadSourceChanged } from "../lib/workflow-source-invalidation";
 import { Button } from "./ui/button";
 import { useWorkflowRequestLocator } from "../hooks/useWorkflowRequestLocator";
 import { Link } from "../lib/router";
@@ -56,7 +57,7 @@ export function WorkflowPublicationControls({
     refetchOnWindowFocus: true,
   });
   useCompanyLiveEvent((event) => {
-    if (event.companyId !== company || event.type !== "activity.logged") return;
+    if (event.companyId !== company || event.type !== "activity.logged" && !workflowReadSourceChanged(event)) return;
     void client.cancelQueries({ queryKey: prefix });
     client.removeQueries({ queryKey: prefix });
     setEpoch((old) => old + 1);

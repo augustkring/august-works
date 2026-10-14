@@ -426,3 +426,10 @@ it("withdraws derived schedule metadata when its Native routine changes", async 
     payload: { action: "routine.updated", entityType: "routine", entityId: "changed-routine" } }));
   expect(container.textContent).not.toContain("2099");
 });
+it("withdraws retained private workflow names while an original conversation issue update is rechecked", async () => {
+  const get = vi.spyOn(workflowsApi, "experience").mockResolvedValue(data);
+  await mount(); await vi.waitFor(() => expect(container.textContent).toContain(data.name));
+  get.mockImplementation(() => new Promise(() => {}));
+  await act(async () => live({ companyId: data.companyId, type: "activity.logged", payload: { action: "issue.updated", entityType: "issue" } }));
+  expect(container.textContent).not.toContain(data.name);
+});

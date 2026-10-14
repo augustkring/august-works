@@ -103,6 +103,14 @@ it("offers Danish manual-start controls without claiming generated steps or publ
   expect(container.textContent).toContain("Tilføj en manuel start"); expect(container.textContent).toContain("Den aktive version beholder");
   expect(workflowDraftFlowApi.save).not.toHaveBeenCalled();
 });
+it("withdraws private flow names while the original conversation issue is rechecked", async () => {
+  vi.mocked(workflowDraftFlowApi.review).mockResolvedValue({ ...linear, steps: [{ ...linear.steps[0], name: "PRIVATE Source step" }] });
+  await mount(); expect(container.textContent).toContain("PRIVATE Source step");
+  vi.mocked(workflowDraftFlowApi.review).mockImplementation(() => new Promise(() => {}));
+  await act(async () => live({ companyId: company, type: "activity.logged", payload: { action: "issue.updated", entityType: "issue" } }));
+  expect(container.textContent).not.toContain("PRIVATE Source step"); expect(container.querySelector("form")).toBeNull();
+  expect(pendingWorkflowRequests(company, principal, workflow)).toEqual([]);
+});
 it("keeps the pending flow request across a Source change and same-turn late acknowledgement", async () => {
   vi.mocked(workflowDraftFlowApi.review).mockResolvedValue(linear);
   let finish!: (value: Awaited<ReturnType<typeof workflowDraftFlowApi.save>>) => void;

@@ -1959,3 +1959,23 @@ input schema, completion defaults, output contract, retries, branches and publis
 revision. The digest/receipt contains no Agent name or task material. Real host
 qualification, full inline resource-policy preview and complete C2/C3 test modes
 remain open.
+
+## ADR-49 — Withdraw derived workflow views on Original Source activity
+
+Date: 2026-10-14. Status: implemented for workflow customer views.
+
+The private workflow owner can depend on an Agent×Human conversation issue. Its
+ordinary issue.updated event previously did not invalidate the draft-step editor,
+flow composer or review. Three client regressions reproduce retained fields/names
+while a changed Original Source should be rechecked. Server authorization was
+not bypassed; this was a client withholding gap.
+
+A shared Native event predicate now includes conversation/issue, account/grant,
+Agent/tool, memory/learning/document/artifact and project/team Source families.
+Company scoping, immediate read-epoch withdrawal, cache cancellation and existing
+late-response fences are retained across index, Describe, draft, review, receipt
+and run surfaces. Exact own-save Activity exceptions stay narrowly scoped.
+Publication also rechecks on analytical access loss, retaining its existing broad
+activity invalidation. No new event, telemetry, permission, Source-ID projection
+or automatic write is introduced. Every refreshed read still uses the Original
+server owner; event reception itself is not a grant or complete revocation proof.

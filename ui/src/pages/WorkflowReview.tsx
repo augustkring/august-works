@@ -10,6 +10,7 @@ import { WorkflowRequestRecoveryLinks, usePendingWorkflowRequests } from "../com
 import { WorkflowBuilderExperimentalGate } from "../components/WorkflowBuilderExperimentalGate";
 import { useCompany } from "../context/CompanyContext";
 import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
+import { workflowReadSourceChanged } from "../lib/workflow-source-invalidation";
 import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
 import { Button } from "../components/ui/button";
 import { Link, useParams, useLocation } from "../lib/router";
@@ -112,22 +113,7 @@ export function WorkflowReview({
     refetchOnWindowFocus: true,
   });
   useCompanyLiveEvent((event) => {
-    if (
-      event.companyId !== company ||
-      (event.type !== "activity.logged" &&
-        event.type !== "analytical.context.access_lost")
-    )
-      return;
-    const action =
-      typeof event.payload.action === "string" ? event.payload.action : "";
-    if (
-      event.type === "activity.logged" &&
-      !/workflow|routine|agent|connection|tool|permission|membership|privacy|erased|deleted|withdraw/i.test(
-        action,
-      ) &&
-      event.payload.entityType !== "company_membership"
-    )
-      return;
+    if (event.companyId !== company || !workflowReadSourceChanged(event)) return;
     // A new observer identity immediately hides retained data and rejects late old responses.
     source.current++;
     setEpoch(source.current);
