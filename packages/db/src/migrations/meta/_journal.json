@@ -3452,6 +3452,13 @@
       "when": 1791936450205,
       "tag": "0494_goofy_lionheart",
       "breakpoints": true
+    },
+    {
+      "idx": 495,
+      "version": "7",
+      "when": 1791966398292,
+      "tag": "0495_artifact_workflow_sources",
+      "breakpoints": true
     }
   ]
 }

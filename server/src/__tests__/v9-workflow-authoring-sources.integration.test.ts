@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { activityLog, authUsers, companyMemberships, createDb, heartbeatRuns, issues, memoryDeletionMarkers,
+import { activityLog, automationArtifacts, automationArtifactVersions, authUsers, companyMemberships, createDb, heartbeatRuns, issues, memoryDeletionMarkers, memoryJobs,
   principalPermissionGrants, workflowRevisions, workflowRuns, workflowStepRuns, workflows, workflowWaits } from "@paperclipai/db";
 import { seedV5Presences, enableV5ForTest } from "./helpers/v5-fixtures.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
@@ -14,6 +14,8 @@ import { lockMemoryPrivacy, purgeDerivedWorkflowMemory } from "../services/memor
 import { lockAnalyticalCompany } from "../services/analytical-privacy.js";
 import { workflowCustomerDraftFlow } from "../services/workflows/workflow-customer-draft-flow.js";
 import { capabilityResolverService } from "../services/capability-resolver.js";
+import { automationArtifactService } from "../services/automation-artifacts/automation-artifact-service.js";
+import { assertLearningAssetCurrent } from "../services/learning/learning-assets.js";
 
 describe.sequential("Original workflow private authoring copy owner", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>;
@@ -97,6 +99,61 @@ describe.sequential("Original workflow private authoring copy owner", () => {
     expect(inventory.map(row => row.ref)).not.toContain(published.id); expect(JSON.stringify(inventory)).not.toContain("PRIVATE workflow");
     await eraseSource();
     expect((await resolver.search(f.actor, f.home, "PRIVATE workflow")).map(row => row.ref)).not.toContain(published.id);
+  });
+  it("keeps an Artifact's copied private workflow material behind the original Source owner", async () => {
+    const workflow = await authored(), artifacts = automationArtifactService(db);
+    await instanceSettingsService(db).updateExperimental({ enableAutomationArtifactsV1: true });
+    const artifact = await artifacts.create(f.home, { name: "PRIVATE workflow derivative", description: "PRIVATE copied description",
+      kind: "expression", language: null, riskClass: "C0", sideEffectClass: "pure", originWorkflowId: workflow.id,
+      originNodeId: null, createdByOptimizerSuggestionId: null, sourceCode: "input.value", inputSchema: {}, outputSchema: {}, dependencyManifest: {}, testSpec: {},
+    }, human());
+    expect((await artifacts.getDetail(f.home, artifact.artifact.id, human()))!.latestVersion!.sourceCode).toBe("input.value");
+    const userId = randomUUID(), now = new Date();
+    await db.insert(authUsers).values({ id: userId, name: "Other Artifact reader", email: `${userId}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now });
+    await db.insert(companyMemberships).values({ companyId: f.home, principalType: "user", principalId: userId, membershipRole: "owner", status: "active" });
+    await db.insert(principalPermissionGrants).values({ companyId: f.home, principalType: "user", principalId: userId, permissionKey: "workflows:read" });
+    const foreign = { principal: { type: "user" as const, userId } };
+    await expect(artifacts.getDetail(f.home, artifact.artifact.id, foreign)).rejects.toMatchObject({ status: 403 });
+    await expect(assertLearningAssetCurrent(db, f.home, "automation_artifact_version", artifact.latestVersion!.id,
+      { type: "board", source: "session", userId })).rejects.toMatchObject({ status: 403 });
+    await assertLearningAssetCurrent(db, f.home, "automation_artifact_version", artifact.latestVersion!.id, f.actor);
+    expect((await artifacts.list(f.home, foreign)).map(row => row.id)).not.toContain(artifact.artifact.id);
+    await expect(artifacts.appendVersion(f.home, artifact.artifact.id, { expectedLatestVersionId: artifact.latestVersion!.id,
+      sourceCode: "input.value", inputSchema: {}, outputSchema: {}, dependencyManifest: {}, testSpec: {},
+    }, foreign)).rejects.toMatchObject({ status: 403 });
+    const revised = await artifacts.appendVersion(f.home, artifact.artifact.id, { expectedLatestVersionId: artifact.latestVersion!.id,
+      sourceCode: "lower(input.value)", inputSchema: { type: "object", properties: { "PRIVATE field": { type: "string" } } }, outputSchema: {}, dependencyManifest: {}, testSpec: {},
+    }, human());
+    await db.execute(sql`create function aw_v9_test_artifact_source_unverify() returns trigger language plpgsql as $$ begin
+      if NEW.action='automation_artifact.version_created' then update ${authUsers} set email_verified=false where id=NEW.actor_id; end if; return NEW; end $$`);
+    await db.execute(sql`create trigger aw_v9_test_artifact_source_unverify after insert on activity_log for each row execute function aw_v9_test_artifact_source_unverify()`);
+    try {
+      await expect(artifacts.appendVersion(f.home, artifact.artifact.id, { expectedLatestVersionId: revised.latestVersion!.id,
+        sourceCode: "upper(input.value)", inputSchema: {}, outputSchema: {}, dependencyManifest: {}, testSpec: {},
+      }, human())).rejects.toMatchObject({ status: 403 });
+      expect((await db.select().from(authUsers).where(eq(authUsers.id, f.userId)))[0].emailVerified).toBe(true);
+      expect((await artifacts.getDetail(f.home, artifact.artifact.id, human()))!.latestVersion!.id).toBe(revised.latestVersion!.id);
+    } finally {
+      await db.execute(sql`drop trigger aw_v9_test_artifact_source_unverify on activity_log`);
+      await db.execute(sql`drop function aw_v9_test_artifact_source_unverify()`);
+    }
+    await expect(db.update(automationArtifacts).set({ originWorkflowId: null }).where(eq(automationArtifacts.id, artifact.artifact.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+    await eraseSource();
+    await expect(artifacts.getDetail(f.home, artifact.artifact.id, human())).rejects.toMatchObject({ status: 403 });
+    const [erased] = await db.select().from(automationArtifacts).where(eq(automationArtifacts.id, artifact.artifact.id));
+    expect(erased).toMatchObject({ name: "Source-erased artifact", description: null, status: "deprecated", inputSchema: {}, outputSchema: {}, originWorkflowId: workflow.id });
+    const versions = await db.select().from(automationArtifactVersions).where(eq(automationArtifactVersions.artifactId, artifact.artifact.id));
+    expect(versions).toHaveLength(2);
+    for (const version of versions) expect(version).toMatchObject({ sourceCode: "", inputSchema: {}, outputSchema: {}, dependencyManifest: {}, testSpec: {}, validationReport: null, securityReport: null });
+    expect(versions.find(version => version.id === artifact.latestVersion!.id)!.contentHash).toBe(artifact.latestVersion!.contentHash);
+    await db.update(automationArtifactVersions).set({ sourceCode: "PRIVATE restored body", inputSchema: { secret: "PRIVATE restored schema" } }).where(eq(automationArtifactVersions.id, revised.latestVersion!.id));
+    expect((await db.select().from(automationArtifactVersions).where(eq(automationArtifactVersions.id, revised.latestVersion!.id)))[0]).toMatchObject({ sourceCode: "", inputSchema: {} });
+    const [restored] = await db.insert(automationArtifactVersions).values({ companyId: f.home, artifactId: artifact.artifact.id, versionNumber: 3,
+      sourceCode: "PRIVATE restored new version", inputSchema: { secret: "PRIVATE schema" }, outputSchema: {}, dependencyManifest: {}, testSpec: {},
+      contentHash: "a".repeat(64), createdByUserId: f.userId }).returning();
+    expect(restored).toMatchObject({ sourceCode: "", inputSchema: {}, outputSchema: {} });
+    const jobs = await db.select().from(memoryJobs).where(and(eq(memoryJobs.companyId, f.home), eq(memoryJobs.jobKey, `artifact-workspace-erasure:v1:${artifact.latestVersion!.id}`)));
+    expect(jobs).toHaveLength(1); expect(jobs[0].sourceRefJson).toEqual({ kind: "artifact_workspace_erasure", versionId: artifact.latestVersion!.id });
   });
   it("retains exact source identities through Human changes and publication without exposing them in public details", async () => {
     const { created, changed, published } = await changedAndPublished();

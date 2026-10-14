@@ -1979,3 +1979,35 @@ Publication also rechecks on analytical access loss, retaining its existing broa
 activity invalidation. No new event, telemetry, permission, Source-ID projection
 or automatic write is introduced. Every refreshed read still uses the Original
 server owner; event reception itself is not a grant or complete revocation proof.
+
+## ADR-50 — Keep an Artifact's actual origin workflow as a private copy owner
+
+Date: 2026-10-14. Status: implemented; current integration/types verification.
+
+A Native regression reproduces another same-company Human reading a private
+workflow-derived Artifact's name, schema and code despite refusal by the workflow
+owner. The existing originWorkflowId FK now retains its actual Source authority
+through reads, lists, versions, gates, lifecycle and canonical asset consumers.
+This reuses Original workflow authoring Sources and actual reader identity;
+company membership, an Artifact status or administrator hint supplies no grant.
+Origin references cannot be removed/retargeted. Actual optimizer relationships
+backfill missing origin pointers. No second provenance store is introduced.
+
+Migration 0495 extends the Original current/erased-asset and payload guards.
+The existing workflow Source eraser now clears affected Artifact metadata and all
+versions, optimizer reports/observations, and local activity payloads. Native
+workspace/copy outboxes retain exact version identities for downstream cleanup.
+Permanent deletion markers and before-insert parent checks keep raw restoration
+from rehydrating code/schema. Original version digests remain provenance, not
+verification of erased content. The canonical Source helper also protects direct
+internal asset consumers before code can be used. Private mutations repeat the
+actual Source check after journal insertion inside their Native transaction.
+
+The regression verifies creator/foreign-reader separation, canonical consumer
+refusal, unchanged Source pointer, two-version erasure, original digest retention,
+update/new-version restoration scrubbing and body-free workspace cleanup queue.
+A database-triggered late account withdrawal rolls back both version and journal.
+It does not claim physical filesystem cleanup until the Native worker completes.
+Additional copied run-result provenance, direct conversation-derived artifacts
+without an origin workflow, packages/knowledge and host/Human qualification remain
+separate whole-brief work; this is the actual persisted origin relationship.

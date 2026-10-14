@@ -902,3 +902,42 @@ regression passes again (45.8 seconds overall), with no main axe violations or
 overflow. This is software regression coverage; it does not attest full delivery
 of Source-loss events, live-host or Human qualification. Broader retained-copy
 closure and the rest of the brief remain open.
+
+### Private workflow-origin Artifact copies — 2026-10-14
+
+A new Native baseline fails: another same-company Human receives copied private
+workflow Artifact metadata/code. The Artifact owner checked only origin company
+existence. Original workflow authoring Sources now guard actual origin reads and
+all mutations, and the shared asset Source helper protects internal consumers.
+Current source filtering remains before catalog ranking. No grant is inferred
+from company membership, active status or copied administrator context.
+
+Generated custom migration 0495 preserves the existing origin FK as a monotonic
+copy owner, backfills actual optimizer origins and composes physical body erasure
+into Original workflow Source cleanup. Existing asset current/erased, immutable
+payload and workspace/copy outboxes are reused. Metadata/code/schema for all
+versions and associated optimizer reports are erased; permanent markers and the
+Original parent payload guard prevent restored updates/new versions from reviving
+content. The version digest is retained as provenance, not a passing validation.
+
+The exact erasure/restore case passes before the final canonical consumer and
+late-account assertions. The three-suite group then passes 26 cases. The broader
+six-suite run passes five suites/46 cases and fails the new rollback fixture: its
+trigger used auth_users instead of the actual Native user table. That fixture is
+corrected; production authorization and filesystem safety are unchanged. Current
+final three-suite Source group passes all 26 cases, including canonical internal
+consumer denial and late-verification transaction rollback. Types and the remaining
+current-source integration follow below. One expected retention safety warning in
+the broader scenario fixture is not represented as successful physical cleanup.
+
+Direct origin-copy closure is not all provenance: copied run outputs, conversation
+Artifact creation without a workflow origin and broader package/knowledge copies
+remain open with the other whole-V9 work. No push, deployment or PR is made.
+
+The current final Source group passes all 26 cases in three suites. Serial server
+and DB typechecks, migration numbering/safety, module and 70-surface source gates
+pass. The five remaining current integrations pass all 33 cases (account routes,
+evaluation, promotion, drift and scenario artifacts). Their filesystem safety
+warning retains its refusal; passing suite status does not establish actual
+workspace deletion. The scoped direct-origin Artifact change is verified; the
+whole brief and final immutable whole-workspace verification remain open.
