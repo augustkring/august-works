@@ -258,3 +258,14 @@ Current ephemeral scope/activity reads and cancellation/withdrawal protect
 private content. Statistical conformance provenance is not company calibration.
 Explicit synthetic chronological test prerequisites are not collected history
 or production predictive-performance evidence.
+
+
+Management summaries (ADR-77) live inside the Original signed historical reader
+with current Native Source/purpose/Human/tenant/flag/retention checks. Raw source
+snapshots/reference tuples, separate event records and creator/publisher/agenda
+owner fields are omitted; authorized fact/prose is not claimed anonymized.
+Bounded hashes/citations/authority, current scope/revisions, cancellation and
+expiry protect display; revalidation withdraws agenda/evidence. This reader
+creates no review/task/event/decision/approval, new purpose, grant or telemetry.
+Synthetic governance/goal/manager fixtures are bounded software evidence, not
+real Human, leadership result or production qualification.

@@ -2808,5 +2808,49 @@
     "moreRuns": "More runs may be available in the forecast view. This selection is not ordered by recency.",
     "moreForecasts": "More forecasts may be available outside this selection.",
     "inspect": "Review forecasts and their source evidence"
+  },
+  "insightReviews": {
+    "heading": "Published management reviews",
+    "boundary": "Historical reviews cite explicitly selected sources. They are not a complete company assessment and do not make decisions or grant approvals.",
+    "unavailable": "Management reviews could not be read with your current access. Try again.",
+    "empty": "No published review is available in this selection.",
+    "expired": "This review has expired. Review current evidence before using it.",
+    "needsReview": "Current sources changed or require revalidation. The retained agenda and evidence are withheld here.",
+    "period": "Review period: {{from}} to {{until}} (UTC; end excluded)",
+    "asOf": "Sources captured at {{time}} (UTC)",
+    "agendaBoundary": "This agenda was declared by a human. Requests for decisions or approvals are not completed decisions or approvals.",
+    "due": "Due {{time}} (UTC)",
+    "citations": "Cited sources: {{keys}}",
+    "humanHypothesis": "Human hypothesis; not an established cause",
+    "evidence": "Review cited facts and limitations",
+    "unknown": "Unknown",
+    "yes": "Yes",
+    "no": "No",
+    "more": "More reviews may be available outside this selection. This is not a latest-result ranking.",
+    "inspect": "Review management summaries and their sources",
+    "type": {
+      "daily_operational": "Daily operational review",
+      "weekly_leadership": "Weekly leadership review",
+      "monthly_business": "Monthly business review",
+      "quarterly_strategy": "Quarterly strategy review",
+      "ad_hoc": "Ad hoc review"
+    },
+    "category": {
+      "DECISION_REQUIRED": "Decision requested",
+      "INVESTIGATE": "Investigate",
+      "APPROVAL_REQUIRED": "Approval requested",
+      "AT_RISK": "At risk",
+      "NO_ACTION": "No action requested"
+    },
+    "grade": {
+      "native_observation": "Recorded measurement",
+      "native_current_state": "Recorded native state",
+      "predictive": "Forecast evidence",
+      "conditional_scenario": "Conditional scenario",
+      "human_interpreted_experiment": "Human-interpreted experiment",
+      "conditional_causal": "Conditional causal analysis",
+      "native_outcome_review": "Recorded outcome review",
+      "native_learning_cycle": "Recorded learning cycle"
+    }
   }
 }

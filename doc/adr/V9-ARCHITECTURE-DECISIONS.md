@@ -2672,3 +2672,28 @@ statistical profile requalification remains authoritative. The built Native
 baseline browser reuses chronologically coherent synthetic history prerequisites
 from existing Native tests, not collected history or a real Human trial. This
 is partial forecast-card software, not prediction, provider or launch validation.
+
+
+## ADR-77 — Native historical management summaries preserve Source and Human authority
+
+The Original management-review owner adds summary using the unchanged retained
+signed-source reader. It preserves Human/tenant/purpose/flag/current-source,
+privacy/retention, publication, replay, event and source integrity checks.
+The customer projection omits raw source snapshots/reference tuples, the
+separate event ledger, creator/publisher IDs and agenda-owner fields. Facts and
+Human prose remain private authorized content, not anonymized text. No review,
+recapture, publication, event, task, model, decision, approval, grant, processing
+purpose, parallel store or telemetry is introduced by visiting Insights.
+
+At most three published reviews from the Original bounded controls page are
+read. Current company/id/status/expiry/creation and original definition/content
+hashes, unique citations/claims/agenda and Human hypothesis authority must agree.
+Source admission stays server-side; a profile or packet label grants nothing.
+Current scope/activity revisions, fresh cancellable reads, refetch withdrawal
+and expiry protect private display. Source revalidation withdraws the agenda
+and evidence. Historical period/as-of, explicitly selected source grades/facts/
+limitations, null versus zero and Human-declared agenda are explicit in EN/DA.
+Decision/approval categories request work; they do not make an authoritative
+choice or grant approval. No complete census, latest ranking, score or causal
+conclusion is invented. This completes a basic read view for all six insight
+families, not chat card integration, representative Humans or V9 acceptance.

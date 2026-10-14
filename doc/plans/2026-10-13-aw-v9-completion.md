@@ -2131,3 +2131,40 @@ pass, one runtime-skills teardown case fails, seven files/90 cases skip,
 duration 7,532.43 seconds. That only failure was reproduced and fixed in 48;
 serialized/workspace stages and its full build were not reached. This is not
 a full test pass. A fresh immutable verification run is required.
+
+### Insights displays signed historical management summaries — 2026-10-14 (checkpoint 54)
+
+ADR-77/SHELL extend partial V9-044/092 work with the sixth Native family.
+Original retained reader and new summary GET preserve complete signed Source/
+purpose/Human/tenant/flag/retention/publication/replay/event checks. Raw source
+snapshots/reference tuples, separate event records and creator/publisher/agenda
+owner fields are omitted. Authorized prose/facts are not called anonymized.
+The client binds current company/id/published status/times/hash/citations/
+Human hypothesis authority. Scoped/activity fresh reads, cancellation, refetch
+withdrawal and expiry protect display. Revalidation hides the retained agenda
+and evidence. Human requests/hypotheses and explicit selected evidence grades
+remain distinct from decisions, approvals, causes or a complete company census.
+No writer, task/event, model, new store/grant/purpose or telemetry is added.
+
+Focused Native summary test passes 1 case (23.12 seconds; 26 unselected):
+identical original claims, omitted fields, foreign-tenant refusal, real Source
+change -> needs_revalidation without rewriting packet, closed rollout refusal.
+Three UI/API/directory suites pass 21 cases (8.62 seconds); server/UI typechecks
+pass exit 0. Actual built management/directory browsers pass 2 cases (57.2
+seconds): original signed snapshot/publication, narrowed payload, unchanged
+snapshot/no frontend writes, Human agenda/hypothesis/citations, EN/DA 390px
+no overflow/main axe zero, actual Source change hides private agenda, Native
+Memory Source erasure makes GET 404 and prevents restore. All business/role/
+governance inputs are explicit synthetic software fixtures, not a real Human
+trial or company leadership qualification. Complete Native review/kernel/
+routine regression is running.
+
+The frozen checkpoint 53 full typecheck passes; full test stages are running.
+That snapshot excludes this checkpoint. All six basic insight families now
+have read-only support, but unified chat cards and remaining V9 functionality/
+manual/provider/Human acceptance remain open. All 70 launch rows/R0 remain
+pending; no PR/push or whole-V9 completion claim.
+Complete Native review/kernel/routine regression passes 48 cases (47.64
+seconds); final token/module/coverage gates pass. The Danish mobile screenshot
+is inspected. These are software checks; all 70 release-evidence rows remain
+pending and the frozen workspace run still excludes this checkpoint.

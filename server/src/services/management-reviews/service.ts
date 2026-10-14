@@ -60,6 +60,20 @@ export function managementReviewService(db: Db) {
     async sourceOptions(companyId: string, actor: AuthorizationActor, raw: ManagementSourceOptionsQuery) { const query = managementSourceOptionsQuerySchema.parse(raw); return db.transaction(async transaction => { const tx = transaction as unknown as Db; await admit(tx, companyId, actor); return managementSourceOptions(tx, companyId, actor, query); }); },
     async controls(companyId: string, actor: AuthorizationActor, cursor?: string) { return db.transaction(async raw => { const tx = raw as unknown as Db; await admit(tx, companyId, actor, false, false); const rows = await tx.select({ id: managementReviewSnapshots.id, status: managementReviewSnapshots.status, createdAt: managementReviewSnapshots.createdAt, expiresAt: managementReviewSnapshots.expiresAt }).from(managementReviewSnapshots).where(and(eq(managementReviewSnapshots.companyId, companyId), cursor ? sql`${managementReviewSnapshots.id}>${cursor}::uuid` : undefined)).orderBy(asc(managementReviewSnapshots.id)).limit(21); return { items: rows.slice(0, 20).map(row => ({ ...row, createdAt: row.createdAt.toISOString(), expiresAt: row.expiresAt.toISOString() })), nextCursor: rows.length > 20 ? rows[19]!.id : null, coverage: "bounded_native_review_metadata" as const }; }); },
     async detail(companyId: string, actor: AuthorizationActor, id: string) { return db.transaction(async raw => { const tx = raw as unknown as Db; await admit(tx, companyId, actor); return retained(tx, companyId, actor, await root(tx, companyId, id)); }); },
+    async summary(companyId: string, actor: AuthorizationActor, id: string) {
+      return db.transaction(async raw => {
+        const tx = raw as unknown as Db; await admit(tx, companyId, actor);
+        const row = await root(tx, companyId, id), view = await retained(tx, companyId, actor, row);
+        // The Original signed/current-source reader still inspects everything.
+        // This customer projection omits operator IDs, raw source snapshots,
+        // source reference tuples and the separate Human event ledger.
+        return { id, companyId, status: view.status, name: view.definition.name, reviewType: view.definition.reviewType,
+          contentHash: row.contentHash, definitionHash: nativeSha256(view.definition), packet: { ...view.packet,
+            agenda: view.packet.agenda.map(({ ownerUserId: _owner, ...item }) => item) },
+          sourceKeys: view.sources.map(source => source.key), createdAt: view.createdAt, expiresAt: view.expiresAt,
+          publishedAt: view.publishedAt, currentQualification: view.currentQualification };
+      });
+    },
     async createTask(companyId: string, actor: AuthorizationActor, id: string, raw: unknown) {
       const input = createManagementReviewTaskSchema.parse(raw);
       return withV7ActivityTransaction(db, async (tx, publications) => {

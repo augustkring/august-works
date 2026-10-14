@@ -721,7 +721,12 @@
         "server/src/routes/business-experiments.ts",
         "ui/src/components/ExperienceForecastResults.tsx",
         "ui/src/api/insight-forecast-results.ts",
-        "packages/shared/src/experience-forecast-results.ts"
+        "packages/shared/src/experience-forecast-results.ts",
+        "ui/src/components/ExperienceManagementReviews.tsx",
+        "ui/src/api/insight-management-review-summaries.ts",
+        "packages/shared/src/experience-management-review-summaries.ts",
+        "server/src/services/management-reviews/service.ts",
+        "server/src/routes/management-reviews.ts"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/shell.json"

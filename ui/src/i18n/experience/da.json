@@ -2808,5 +2808,49 @@
     "moreRuns": "Flere kørsler kan være tilgængelige i prognosevisningen. Dette udvalg er ikke sorteret efter dato.",
     "moreForecasts": "Flere prognoser kan være tilgængelige uden for dette udvalg.",
     "inspect": "Gennemgå prognoser og deres kildeevidens"
+  },
+  "insightReviews": {
+    "heading": "Udgivne ledelsesgennemgange",
+    "boundary": "Historiske gennemgange henviser til udvalgte kilder. De er ikke en fuld vurdering af virksomheden og træffer ikke beslutninger eller giver godkendelser.",
+    "unavailable": "Ledelsesgennemgangene kunne ikke læses med din aktuelle adgang. Prøv igen.",
+    "empty": "Ingen udgivet gennemgang er tilgængelig i dette udvalg.",
+    "expired": "Denne gennemgang er udløbet. Gennemgå aktuel evidens, før du bruger den.",
+    "needsReview": "De aktuelle kilder er ændret eller kræver ny validering. Den gemte dagsorden og evidens er tilbageholdt her.",
+    "period": "Gennemgangsperiode: {{from}} til {{until}} (UTC; slutpunktet er ikke medregnet)",
+    "asOf": "Kilder aflæst {{time}} (UTC)",
+    "agendaBoundary": "Denne dagsorden er erklæret af et menneske. Anmodninger om beslutninger eller godkendelser er ikke afsluttede beslutninger eller godkendelser.",
+    "due": "Frist {{time}} (UTC)",
+    "citations": "Henviste kilder: {{keys}}",
+    "humanHypothesis": "Menneskelig hypotese; ikke en fastslået årsag",
+    "evidence": "Gennemgå henviste fakta og begrænsninger",
+    "unknown": "Ukendt",
+    "yes": "Ja",
+    "no": "Nej",
+    "more": "Flere gennemgange kan være tilgængelige uden for dette udvalg. Dette er ikke en rangering af de nyeste resultater.",
+    "inspect": "Gennemgå ledelsesopsummeringer og deres kilder",
+    "type": {
+      "daily_operational": "Daglig driftsgennemgang",
+      "weekly_leadership": "Ugentlig ledelsesgennemgang",
+      "monthly_business": "Månedlig forretningsgennemgang",
+      "quarterly_strategy": "Kvartalsvis strategigennemgang",
+      "ad_hoc": "Ad hoc-gennemgang"
+    },
+    "category": {
+      "DECISION_REQUIRED": "Beslutning anmodet",
+      "INVESTIGATE": "Undersøg",
+      "APPROVAL_REQUIRED": "Godkendelse anmodet",
+      "AT_RISK": "I risiko",
+      "NO_ACTION": "Ingen handling anmodet"
+    },
+    "grade": {
+      "native_observation": "Gemt måling",
+      "native_current_state": "Gemt tilstand",
+      "predictive": "Prognoseevidens",
+      "conditional_scenario": "Betinget scenarie",
+      "human_interpreted_experiment": "Menneskeligt fortolket forsøg",
+      "conditional_causal": "Betinget årsagsanalyse",
+      "native_outcome_review": "Gemt udfaldsgennemgang",
+      "native_learning_cycle": "Gemt læringscyklus"
+    }
   }
 }

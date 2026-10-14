@@ -30,6 +30,21 @@ describe.skipIf(!support.supported)("Native historical management review owner o
   afterAll(async () => { await database?.cleanup(); });
   beforeEach(async () => { await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental({ enableFoundationV1: true, project_roadmap_v5: true, analytical_lineage_v8: true, business_metrics_v8: true, management_reviews_v8: true, ai_use_cases_v7: true, governance_evidence_v7: true }); companyId = randomUUID(); otherId = randomUUID(); await db.insert(companies).values([{ id: companyId, name: "Synthetic native management", issuePrefix: randomUUID() }, { id: otherId, name: "Foreign native source", issuePrefix: randomUUID() }]); const policy = analyticalPurpose(); policy.analyticalPurpose!.capabilities = ["metrics", "reviews"]; policyId = (await aiGovernanceService(db).obligation(actor, companyId, policy)).id; });
   async function fixture() { const [goal] = await db.insert(goals).values({ companyId, title: "Native source goal", status: "planned" }).returning(); const now = new Date(), from = new Date(now.getTime() - 86400000).toISOString(), until = now.toISOString(); const definition = managementReviewDefinitionSchema.parse({ name: "Human cited leadership review", reviewType: "weekly_leadership", period: { from, until }, purpose: "management_intelligence", sensitivity: "internal", retentionDays: 1, governanceObligationRefs: [policyId], sources: [{ key: "goal", source: { kind: "canonical", reference: { type: "goal", id: goal!.id } } }], agenda: [{ key: "inspect", category: "INVESTIGATE", ownerUserId: "local-board", dueAt: new Date(now.getTime() + 86400000).toISOString(), sourceKeys: ["goal"], nextAction: rationale, hypothesis: "Human suspects a constraint; this remains an unverified hypothesis" }] }); return { goal: goal!, definition }; }
+  it("projects a signed review without raw source snapshots, actor fields or events and rechecks its current sources", async () => {
+    const f = await fixture(), owner = managementReviewService(db), created = await owner.create(companyId, actor, f.definition);
+    await publish(created.id, created.contentHash);
+    const full = await owner.detail(companyId, actor, created.id), summary = await owner.summary(companyId, actor, created.id);
+    expect(summary).toMatchObject({ id: created.id, companyId, status: "published", contentHash: created.contentHash, currentQualification: "current", sourceKeys: ["goal"] });
+    expect(summary.packet.claims).toEqual(full.packet.claims);
+    expect(summary.packet.agenda[0]).not.toHaveProperty("ownerUserId");
+    for (const field of ["sources", "events", "createdBy", "publishedBy"]) expect(summary).not.toHaveProperty(field);
+    await expect(owner.summary(otherId, actor, created.id)).rejects.toMatchObject({ status: 404 });
+    await db.update(goals).set({ title: "Changed actual Native source title" }).where(eq(goals.id, f.goal.id));
+    const rechecked = await owner.summary(companyId, actor, created.id);
+    expect(rechecked.currentQualification).toBe("needs_revalidation"); expect(rechecked.packet).toEqual(summary.packet);
+    await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental({ management_reviews_v8: false });
+    await expect(owner.summary(companyId, actor, created.id)).rejects.toMatchObject({ status: 404 });
+  });
   it("backfills native governance dependencies without rewriting or re-signing pre-migration review bytes", async () => {
     const f = await fixture(), owner = managementReviewService(db), created = await owner.create(companyId, actor, f.definition); await publish(created.id, created.contentHash); const original = await owner.detail(companyId, actor, created.id);
     const migration = await readFile(new URL("../../../packages/db/src/migrations/0412_woozy_scrambler.sql", import.meta.url), "utf8");
