@@ -15,6 +15,9 @@ export default defineConfig({
     headless: true,
     browserName: "chromium",
     screenshot: "only-on-failure",
+    ...(process.env.PAPERCLIP_PLAYWRIGHT_EXECUTABLE ? {
+      launchOptions: { executablePath: process.env.PAPERCLIP_PLAYWRIGHT_EXECUTABLE },
+    } : {}),
   },
   webServer: {
     cwd: path.resolve(import.meta.dirname, "../.."),

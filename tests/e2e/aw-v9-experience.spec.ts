@@ -348,6 +348,9 @@ test("V9 workflow review preserves the account gate, separates revisions and kee
   page,
   request,
 }) => {
+  // This covers the whole Native lifecycle and explicit receipt recovery; it
+  // is not an individual interaction or journey-performance timing budget.
+  test.setTimeout(120_000);
   const original = await json(
     await request.get("/api/instance/settings/experimental"),
   );
@@ -370,6 +373,27 @@ test("V9 workflow review preserves the account gate, separates revisions and kee
   const base = `/api/companies/${company.id}/workflows`;
   const errors: string[] = [];
   page.on("pageerror", (error) => errors.push(error.message));
+  // Native activity can withdraw an acknowledgement while its original change
+  // commits. Model the user's explicit, bounded same-request recovery; never
+  // create another command or relax current authority.
+  async function expectCurrentReceipt(text: RegExp) {
+    const receipt = page.getByText(text);
+    const retry = page.getByRole("button", { name: "Retry same request", exact: true });
+    for (let attempt = 0; attempt < 3; attempt++) {
+      try { await expect(receipt).toBeVisible(); return; }
+      catch (missingReceipt) {
+        if (!(await retry.isVisible())) throw missingReceipt;
+        try { await retry.click({ timeout: 1000 }); }
+        catch (changedDialog) {
+          // A late valid acknowledgement can close the dialog between the DOM
+          // check and click. Do not leave a click waiting for a later command.
+          if (await receipt.isVisible()) return;
+          throw changedDialog;
+        }
+      }
+    }
+    await expect(receipt).toBeVisible();
+  }
   try {
     const created = await json(
       await request.post(base, { data: { name: "Review deal opportunities" } }),
@@ -686,9 +710,7 @@ test("V9 workflow review preserves the account gate, separates revisions and kee
     await page
       .getByRole("button", { name: "Retry same request", exact: true })
       .click();
-    await expect(
-      page.getByText(/Pause confirmed for the original request/),
-    ).toBeVisible();
+    await expectCurrentReceipt(/Pause confirmed for the original request/);
     expect(originalChanges).toHaveLength(2);
     expect(originalChanges[1]).toEqual(originalChanges[0]);
     expect(
@@ -700,13 +722,26 @@ test("V9 workflow review preserves the account gate, separates revisions and kee
     });
     expect(blocked.status()).toBe(409);
     await page.unroute(lifecycleRoute);
+    // A current-source event can withhold the first acknowledgement. Exercise
+    // the same original Native receipt explicitly instead of assuming delivery.
+    const resumeChanges: unknown[] = [];
+    await page.route(lifecycleRoute, async route => {
+      resumeChanges.push(route.request().postDataJSON());
+      if (resumeChanges.length === 1) {
+        const accepted = await route.fetch(); expect(accepted.ok()).toBe(true);
+        await route.abort("failed");
+      } else await route.continue();
+    });
     await page.getByRole("button", { name: "Resume", exact: true }).click();
     await page
       .getByRole("button", { name: "Confirm resume", exact: true })
       .click();
-    await expect(
-      page.getByText(/Resume confirmed for the original request/),
-    ).toBeVisible();
+    await expect(page.getByRole("dialog")).toContainText("This change could not be confirmed");
+    await page.getByRole("button", { name: "Retry same request", exact: true }).click();
+    await expectCurrentReceipt(/Resume confirmed for the original request/);
+    expect(resumeChanges).toHaveLength(2);
+    expect(resumeChanges[1]).toEqual(resumeChanges[0]);
+    await page.unroute(lifecycleRoute);
     const resumed = await json(await request.get(`${base}/${created.id}`));
     expect(resumed.status).toBe("active");
     expect(resumed.publishedRevisionId).toBe(published.publishedRevisionId);
@@ -744,9 +779,7 @@ test("V9 workflow review preserves the account gate, separates revisions and kee
     await page
       .getByRole("button", { name: "Confirm pause", exact: true })
       .click();
-    await expect(
-      page.getByText(/Pause confirmed for the original request/),
-    ).toBeVisible();
+    await expectCurrentReceipt(/Pause confirmed for the original request/);
     await page
       .getByRole("button", { name: "Retire workflow", exact: true })
       .click();
@@ -756,7 +789,7 @@ test("V9 workflow review preserves the account gate, separates revisions and kee
     await page
       .getByRole("button", { name: "Confirm retirement", exact: true })
       .click();
-    await expect(page.getByText(/Retirement confirmed/)).toBeVisible();
+    await expectCurrentReceipt(/Retirement confirmed/);
     const retired = await json(await request.get(`${base}/${created.id}`));
     expect(retired.status).toBe("archived");
     expect(retired.draftRevisionId).toBeNull();

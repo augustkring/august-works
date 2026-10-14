@@ -2407,3 +2407,33 @@ Native idle-agent direct-route/reload loading regression is prepared for the
 deferred detail chunk, with no provider/model/work dispatch; its result is
 pending. Full current-candidate workspace typecheck is finishing. Frozen 53/60
 full tests remain running. All launch rows/R0 remain pending. No PR/push.
+
+
+### Complete receipt and component browser diagnostics — checkpoint 64
+
+Current full workspace pnpm -r typecheck passes exit 0 on candidate production
+code. The added actual Native idle-agent direct route/reload test passes
+(8.5 seconds), with no initial AgentDetail chunk or heartbeat/task dispatch.
+The shared module/lazy-view build is verified by that shipped-code browser path.
+
+Native activity can correctly withhold a lifecycle acknowledgement while its
+Original command commits. Resume now deliberately loses its first HTTP reply
+and checks identical original-request recovery. The test models bounded explicit
+Human retries; no product auto-retry or source/authority weakening is added.
+An initial helper clicked a disappearing retry control after a valid late
+acknowledgement closed the dialog; the trace proves the pending click while
+Pause confirmed is visible. It now waits for confirmation first and bounds any
+retry click, accepting the valid receipt if the dialog closes in that interval.
+The complete lifecycle/Advanced rollback fixture gets 120 seconds as a functional
+scenario, not an individual-interaction performance budget. Corrected Native
+workflow and actual committed-feedback/lost-ack cases pass both cases (1.2
+minutes including setup). Earlier failing runs are retained as diagnostics.
+
+Storybook static build passes. Its config now honors the same optional installed
+Chromium override as the application browser config. Twelve actual card stories
+in both light/dark 390px states pass the browser/axe/read-only exercise (one
+31.0-second case, 32.0 seconds total). This is 24 synthetic component states,
+not a visual baseline, manual AT or representative Human trial. Current
+anonymous MCP Apps policy/browser regression also passes all nine cases.
+Remaining customer browser files and frozen 53/60 full tests remain running.
+All 70 release surfaces/R0 remain pending. No PR/push or whole-V9 completion.
