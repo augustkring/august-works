@@ -2458,3 +2458,29 @@ Current server typecheck passes exit 0. The new metadata is outside frozen
 53/60 snapshots; those aggregate tests cannot establish its current-source pass.
 Customer browser remainder is running on a fixed build. All launch rows/R0 and
 whole-V9/provider/Human acceptance remain pending. No PR/push.
+
+### Align browser verification with the production UI — checkpoint 66
+
+Candidate 65 passes the full build and all 89 application browser cases in one
+disposable instance. Its compiled-server loopback health/OpenAPI smoke also
+passes. Storybook passes 24 light/dark mobile component states. These remain
+synthetic software checks, with no hosted, provider or Human acceptance claim.
+
+Artifact comparison found a material verification mismatch: the browser server
+configuration sets NODE_ENV=test for the entire build-and-start shell command.
+The Vite build therefore inherits test mode's Node environment even though its
+Vite mode is production. Its emitted main chunk differs from the ordinary
+production build on the same source commit. The earlier 89-case pass cannot be
+described as verification of the ordinary production UI artifact.
+
+Build the browser UI with an explicit NODE_ENV=production command prefix;
+retain NODE_ENV=test for the disposable backend and its test fixtures. The
+backend's current-account, Source and mutation guards are unchanged. New
+production-UI browser results and byte-identity comparison are pending. Frozen
+65 continues its serialized/workspace tests unchanged. Frozen 60 has a failing
+Slack durable-ingress case; the same case passes alone on 65 (one selected case,
+1043 skipped). This does not erase the aggregate failure or establish its cause.
+
+All 70 release surfaces, sourceComplete=false and R0 remain pending. The full
+brief still includes unfinished implementation and independent qualification.
+No PR is created or pushed.
