@@ -12,6 +12,8 @@ import {
 
 describe("V9 private HTTP purpose", () => {
   it.each([
+    ["GET", "/api/companies/private-company/experience/insight-card?expectedUserId=private-principal&request=PRIVATE-SOURCE-CANARY"],
+    ["POST", "/api/companies//experience/insight-card?request=PRIVATE-SOURCE-CANARY"],
     ["GET", "/api/agent-packages/private-record?expectedUserId=private-principal"],
     ["POST", "/api/companies/private-company/agent-packages/private-record/install?expectedUserId=private-principal"],
     ["PATCH", "/api/companies//agent-package-update-proposals/private-record/review?expectedUserId=private-principal"],
@@ -210,6 +212,7 @@ describe("V9 private HTTP purpose", () => {
     expect(output).not.toContain("private-principal");
     expect(output).not.toContain("private-record");
     expect(output).not.toContain("private-command");
+    expect(output).not.toContain("PRIVATE-SOURCE-CANARY");
     const log = JSON.parse(output.trim());
     expect(log.req).toEqual({
       id: expect.any(Number),

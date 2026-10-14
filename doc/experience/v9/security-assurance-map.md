@@ -303,3 +303,8 @@ or expired deadlines refuse display even with a stalled replacement. This is a
 privacy display limit, not an authority token or proof of immediate revocation.
 Native statement timeouts include company/privacy lock acquisition. Actual
 assistant-ui admission and stalled-read expiry cases pass (checkpoint 58).
+
+The insight-card namespace also uses private HTTP logging for rejected methods
+and malformed company scopes: normalized route only, no current principal,
+company/Source/hash query or error prose. Actual Express/pino rejection checks
+pass with account and Source canaries (checkpoint 59).

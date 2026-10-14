@@ -2266,3 +2266,14 @@ Token/module/coverage gates pass. Frozen checkpoint 53 full tests remain running
 that source excludes 54–58. All 70 launch rows/R0 remain pending. No PR/push.
 The corrected final UI typecheck passes exit 0. The additional runtime fixture
 uses concrete JSON references; no product behavior changed in that correction.
+
+
+### Private logging covers rejected insight references — checkpoint 59
+
+The new insight-card endpoint is added to the existing private HTTP purpose
+classification and stable URL normalization, including malformed company paths
+and rejected methods. Current account, company, Source/version query and error
+prose never become the request log URL or error payload. The mounted Express/
+pino rejection suite passes 67 cases (528 milliseconds), including the new
+account/Source canaries. This changes logging only, not Original reader admission
+or analytical business rows. No PR/push or release-evidence claim.
