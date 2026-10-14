@@ -1865,3 +1865,25 @@ visible. Routine changes withdraw cached workflow review and operation data.
 No schedule, trigger, dispatch, grant, queue or Source store is created by this
 read composition. Broader copied workflow/routine artifact provenance and full
 schedule authoring remain separate open requirements.
+
+## ADR-45 — Explicit bounded conditional draft composition (2026-10-14)
+
+The customer can append a closed exact comparison and two named literal waiting
+branches to a complete current single path. Original updateDraft owns all three
+new nodes and true/false edges, with request-derived IDs and existing exact
+workflow/revision/publication/update/tail CAS. No second graph or evaluator is
+created. The Original condition renderer/parser, timer, executor and test owners
+retain their meaning and admission rules; this command grants no execution.
+
+All three names, both delays, exact reference/operator and typed literal are
+chosen explicitly. Earlier-step input uses current Native step identity selected
+by readable name, not a required raw-ID field; the server refuses references
+outside the exact earlier path. Three added nodes must fit the 100-step bound.
+Names/material are ephemeral; browser storage and Native Activity retain only
+original scoped request identity/body-free receipt and command hash.
+
+A branched result is never flattened into the linear composer. Its steps remain
+editable from current review; branch extension and more complex graph structure
+use Advanced. The customer reviews/tests both outcomes before publication, with
+Original C0 test limits unchanged. Full natural-language proposal, arbitrary
+actor/tool/trigger/branch design and hosted/Human qualification remain open.

@@ -2332,7 +2332,17 @@
     "deadline": "Maximum run time (seconds)",
     "deadlineHelp": "Choose 1 to 60 seconds for this initial internal flow. This is a stop limit, not an estimate of completion time.",
     "deadlineError": "Enter a whole number from 1 to 60 seconds.",
-    "recordedDeadline": "Run time limit: {{seconds}} seconds."
+    "recordedDeadline": "Run time limit: {{seconds}} seconds.",
+    "condition": {
+      "kind": "Compare a value and choose a waiting branch",
+      "boundary": "Add one condition and two waiting branches to this draft. Only the matching branch runs. Choose both branch names and waiting times; review and test both outcomes before publishing. Edit individual steps from the review; use Advanced to extend the branches.",
+      "step": "Earlier step",
+      "chooseStep": "Choose an existing earlier step",
+      "stepError": "Choose one of the current earlier steps.",
+      "pathHelp": "Put each exact field level on a separate line. If you choose an earlier step, its identity is added automatically; enter only its result field names.",
+      "true": "If the condition is met",
+      "false": "Otherwise"
+    }
   },
   "workflowTestInputs": {
     "heading": "Start data for this test",

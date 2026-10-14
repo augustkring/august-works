@@ -117,6 +117,52 @@ describe.sequential("Original guided draft flow composition", () => {
     expect(steps).toHaveLength(2); expect(steps.find(step => step.nodeId === waitNode.id)).toMatchObject({ status: "succeeded", outputJson: { reason: "delay_elapsed" } });
     expect(await owner.getDetail(f.companyId, f.workflow.id, f.actor)).toEqual(before);
   });
+  it("composes explicit Native conditional branches once, preserves active data and tests both actual timer outcomes", async () => {
+    const f = await fixture(), owner = workflowService(db), executor = workflowExecutorService(db);
+    await f.service.save(f.companyId, f.workflow.id, await command(f, { kind: "start_manual", name: "Start", deadlineSeconds: 30 }), f.actor);
+    const started = (await owner.getDetail(f.companyId, f.workflow.id, f.actor))!;
+    const published = await owner.publish(f.companyId, f.workflow.id, { expectedDraftRevisionId: started.draftRevisionId!, expectedPublishedRevisionId: null }, f.human);
+    const input = await command(f, { kind: "append_condition", name: "Compare amount",
+      condition: { kind: "condition", source: "trigger", path: ["amount"], operator: ">=", value: 10000 },
+      whenTrue: { name: "PRIVATE large amount", durationSeconds: 1 }, whenFalse: { name: "PRIVATE small amount", durationSeconds: 1 } });
+    const [receipt, repeated] = await Promise.all([f.service.save(f.companyId, f.workflow.id, input, f.actor), f.service.save(f.companyId, f.workflow.id, input, f.actor)]);
+    expect(repeated).toEqual(receipt);
+    const before = (await owner.getDetail(f.companyId, f.workflow.id, f.actor))!;
+    expect(before.publishedRevision).toEqual(published.publishedRevision);
+    expect(before.draftRevision!.graph.nodes).toHaveLength(4); expect(before.draftRevision!.graph.edges).toHaveLength(3);
+    expect(before.draftRevision!.graph.nodes.find(node => node.type === "core.condition")!.config).toEqual({ expression: '{{trigger["amount"]}} >= 10000' });
+    const branches = before.draftRevision!.graph.edges.filter(edge => edge.sourceHandle);
+    expect(branches.map(edge => edge.sourceHandle)).toEqual(["true", "false"]);
+    expect((await f.service.review(f.companyId, f.workflow.id, f.actor)).availability).toBe("advanced");
+    await expect(f.service.save(f.companyId, f.workflow.id, await command(f, { kind: "append_wait", name: "No flattening", durationSeconds: 1 }), f.actor)).rejects.toMatchObject({ status: 409 });
+    for (const amount of [10000, 9999]) {
+      const testReceipt = await admitCustomerWorkflowTest(db, f.companyId, f.workflow.id, { requestId: randomUUID(), expectedWorkflowId: f.workflow.id,
+        expectedUpdatedAt: before.updatedAt.toISOString(), expectedDraftRevisionId: before.draftRevisionId!, expectedRunStatus: "succeeded", acknowledgeInternalTest: true,
+        syntheticInput: [{ path: ["amount"], value: amount }] }, f.actor);
+      expect((await executor.executeQueuedRun(f.companyId, testReceipt.runId, f.human))!.run.status).toBe("waiting");
+      await expect.poll(async () => { await executor.recoverExpiredRuns();
+        const [run] = await db.select().from(workflowRuns).where(eq(workflowRuns.id, testReceipt.runId)); return run.status;
+      }, { timeout: 10000, interval: 100 }).toBe("succeeded");
+      const steps = await db.select().from(workflowStepRuns).where(eq(workflowStepRuns.workflowRunId, testReceipt.runId));
+      const selected = branches.find(edge => edge.sourceHandle === (amount >= 10000 ? "true" : "false"))!;
+      expect(steps.find(step => step.nodeId === selected.target)).toMatchObject({ status: "succeeded", outputJson: { reason: "delay_elapsed" } });
+      expect(steps.find(step => step.nodeId === branches.find(edge => edge !== selected)!.target)?.status).not.toBe("succeeded");
+    }
+    expect(await owner.getDetail(f.companyId, f.workflow.id, f.actor)).toEqual(before);
+    const activities = await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.companyId), eq(activityLog.action, "workflow.customer_draft_flow_saved")));
+    expect(JSON.stringify(activities.map(row => row.details))).not.toMatch(/PRIVATE|condition|amount|durationSeconds/);
+    await instanceSettingsService(db).updateExperimental({ enableWorkflowsV1: false, enableWorkflowBuilderV1: false, progressive_shell_v9: false });
+    expect(await f.service.save(f.companyId, f.workflow.id, input, f.actor)).toEqual(receipt);
+  });
+  it("refuses references outside the exact current earlier path before adding a branch", async () => {
+    const f = await fixture();
+    await f.service.save(f.companyId, f.workflow.id, await command(f, { kind: "start_manual", name: "Start", deadlineSeconds: 30 }), f.actor);
+    const before = await workflowService(db).getDetail(f.companyId, f.workflow.id, f.actor);
+    const input = await command(f, { kind: "append_condition", name: "Compare", condition: { kind: "condition", source: "steps", path: ["another-step", "value"], operator: "===", value: true },
+      whenTrue: { name: "True", durationSeconds: 1 }, whenFalse: { name: "False", durationSeconds: 1 } });
+    await expect(f.service.save(f.companyId, f.workflow.id, input, f.actor)).rejects.toMatchObject({ status: 409 });
+    expect(await workflowService(db).getDetail(f.companyId, f.workflow.id, f.actor)).toEqual(before);
+  });
   it("tests both Native condition branches with exact synthetic data, body-free journals and changed-input replay refusal", async () => {
     const f = await fixture(), owner = workflowService(db), executor = workflowExecutorService(db);
     const draft = await owner.updateDraft(f.companyId, f.workflow.id, { expectedRevisionId: f.workflow.draftRevisionId!, graph: {

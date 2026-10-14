@@ -2332,7 +2332,17 @@
     "deadline": "Maksimal køretid (sekunder)",
     "deadlineHelp": "Vælg 1 til 60 sekunder til dette første interne flow. Det er en stopgrænse, ikke et skøn over gennemførelsestiden.",
     "deadlineError": "Angiv et helt antal sekunder fra 1 til 60.",
-    "recordedDeadline": "Køretidsgrænse: {{seconds}} sekunder."
+    "recordedDeadline": "Køretidsgrænse: {{seconds}} sekunder.",
+    "condition": {
+      "kind": "Sammenlign en værdi og vælg et venteforløb",
+      "boundary": "Tilføj én betingelse og to venteforløb til kladden. Kun det forløb, der passer, udføres. Vælg begge forløbs navne og ventetider; gennemgå og test begge udfald før udgivelse. Rediger de enkelte trin fra gennemgangen; brug Avanceret til at forlænge forløbene.",
+      "step": "Tidligere trin",
+      "chooseStep": "Vælg et eksisterende tidligere trin",
+      "stepError": "Vælg et af de aktuelle tidligere trin.",
+      "pathHelp": "Skriv hvert præcise feltniveau på en separat linje. Hvis du vælger et tidligere trin, tilføjes dets identitet automatisk; skriv kun resultatets feltnavne.",
+      "true": "Hvis betingelsen er opfyldt",
+      "false": "Ellers"
+    }
   },
   "workflowTestInputs": {
     "heading": "Startdata til denne test",

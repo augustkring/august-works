@@ -737,3 +737,34 @@ The current combined follow-up passes all 163 cases in five suites, including
 Original route and service coverage. Current focused UI/server types also pass.
 The Source, schedule, direct read/list and client invalidation changes remain
 read/authority composition; no telemetry caller or contract was changed.
+
+### Explicit conditional draft composition — 2026-10-14
+
+Guided composition now appends one closed Native comparison and two explicitly
+named waits, with true/false connections. Source fields/operator/typed literal
+and both delays are explicit. Earlier steps are chosen by current readable name
+and bound to the actual ID; the server refuses references outside the current
+path. Three nodes fit the original 100-node limit. Original revisions, request
+CAS, body-free Activity receipt, privacy and execution/test owners are reused.
+No AI proposal, publication, grant, schedule or external effect is implied.
+
+The Native fixture verifies concurrent one-revision admission, own flags-closed
+replay, unchanged active graph and both real timer outcomes using chosen input.
+A branched graph cannot subsequently be flattened by the linear composer;
+selected editors remain available from current review, extension stays Advanced.
+The integrated Native/conversion/client/editor group passes 23 cases in four
+suites. An initial client privacy assertion incorrectly matched the fixture UUID
+prefix 10000 as a typed literal; it now checks absent material fields and exact
+identity-only storage. Focused UI/server types and token/module/70-source gates
+pass on the current application Source. Built mobile recovery follows below.
+Whole brief implementation/release evidence and immutable whole-suite completion
+remain open; no push or PR is made.
+
+The new built browser case initially completed Native branch admission but the
+controlled fixture routed recovery to a path missing /experience; the resulting
+account mismatch is not a production recovery failure. Its corrected exact
+follow-up passes (43.4 seconds overall): Danish 390px branch fieldsets, zero main
+axe violations, no horizontal overflow, one actual four-node/true-false draft,
+unchanged active version, deliberate lost second POST and flags-closed Original
+GET receipt recovery with identity-only storage cleared. It provides software
+evidence over Native owners, not real Human/host/provider qualification.

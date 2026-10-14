@@ -8,6 +8,7 @@ import { lockWorkflowDraftAccount, originalWorkflowDraftReceipt } from "./workfl
 import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import type { AuthorizationActor } from "../authorization.js";
+import { guidedConditionExpression } from "./workflow-guided-condition.js";
 
 const action = "workflow.customer_draft_flow_saved";
 /** A complete single Native path, never a flattened or truncated branch view.
@@ -74,6 +75,20 @@ export function workflowCustomerDraftFlow(db: Db) {
         const last = ordered.at(-1)!;
         graph = { ...draft.graph, nodes: draft.graph.nodes.filter(node => node.id !== last.id),
           edges: draft.graph.edges.filter(edge => edge.target !== last.id && edge.source !== last.id) };
+      } else if (operation.kind === "append_condition") {
+        if (!ordered.length || ordered.length > 97) throw refuse();
+        if (operation.condition.source === "steps" && !ordered.some(node => node.id === operation.condition.path[0])) throw refuse();
+        const id = `step-${command.requestId}`, trueId = `${id}-true`, falseId = `${id}-false`;
+        if (draft.graph.nodes.some(node => [id, trueId, falseId].includes(node.id))) throw refuse();
+        graph = { ...draft.graph, nodes: [...draft.graph.nodes,
+          { id, type: "core.condition", name: operation.name, position: { x: 0, y: ordered.length * 160 }, config: { expression: guidedConditionExpression(operation.condition) } },
+          { id: trueId, type: "core.wait", name: operation.whenTrue.name, position: { x: 160, y: (ordered.length + 1) * 160 }, config: { durationSeconds: operation.whenTrue.durationSeconds } },
+          { id: falseId, type: "core.wait", name: operation.whenFalse.name, position: { x: -160, y: (ordered.length + 1) * 160 }, config: { durationSeconds: operation.whenFalse.durationSeconds } },
+        ], edges: [...draft.graph.edges,
+          { id: `edge-${command.requestId}`, source: ordered.at(-1)!.id, target: id },
+          { id: `edge-${command.requestId}-true`, source: id, target: trueId, sourceHandle: "true" },
+          { id: `edge-${command.requestId}-false`, source: id, target: falseId, sourceHandle: "false" },
+        ] };
       } else {
         if (operation.kind === "start_manual" ? ordered.length !== 0 : ordered.length === 0 || ordered.length >= 100) throw refuse();
         const node = { id: `step-${command.requestId}`, type: operation.kind === "start_manual" ? "core.manual_trigger" : operation.kind === "append_wait" ? "core.wait" : "human.approval",

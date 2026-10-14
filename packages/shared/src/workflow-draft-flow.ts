@@ -1,11 +1,15 @@
 import { z } from "zod";
-import { workflowStepNameSchema, workflowEditableNodeIdSchema, workflowWaitSecondsSchema, workflowApprovalSummarySchema, workflowApprovalConsequenceSchema } from "./workflow-draft-edit.js";
+import { workflowStepNameSchema, workflowEditableNodeIdSchema, workflowWaitSecondsSchema, workflowApprovalSummarySchema, workflowApprovalConsequenceSchema, workflowGuidedConditionSchema } from "./workflow-draft-edit.js";
 
 const name = workflowStepNameSchema;
 export const workflowDraftFlowOperationSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("start_manual"), name, deadlineSeconds: z.number().int().min(1).max(60) }),
   z.strictObject({ kind: z.literal("append_wait"), name, durationSeconds: workflowWaitSecondsSchema }),
   z.strictObject({ kind: z.literal("append_approval"), name, summary: workflowApprovalSummarySchema, consequence: workflowApprovalConsequenceSchema }),
+  z.strictObject({ kind: z.literal("append_condition"), name, condition: workflowGuidedConditionSchema,
+    whenTrue: z.strictObject({ name, durationSeconds: workflowWaitSecondsSchema }),
+    whenFalse: z.strictObject({ name, durationSeconds: workflowWaitSecondsSchema }),
+  }),
   z.strictObject({ kind: z.literal("remove_last") }),
 ]);
 export const workflowDraftFlowCommandSchema = z.strictObject({

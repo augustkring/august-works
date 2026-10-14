@@ -31,8 +31,12 @@ afterEach(async () => { await act(async () => root.unmount()); client.clear(); c
 async function flush() { await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); }); }
 async function mount() { await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter><WorkflowDraftFlow company={company} principal={principal} workflow={workflow} /></MemoryRouter></QueryClientProvider>)); await flush(); }
 async function click(label: string) { const button = [...container.querySelectorAll("button")].find(button => button.textContent === label)!; expect(button).toBeTruthy(); await act(async () => button.click()); await flush(); }
-async function field(id: string, value: string) { const input = container.querySelector<HTMLInputElement>(`#draft-flow-${id}`)!;
-  await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value); input.dispatchEvent(new Event("input", { bubbles: true })); }); }
+async function field(id: string, value: string) { const input = container.querySelector<HTMLInputElement | HTMLTextAreaElement>(`#draft-flow-${id}`)!;
+  await act(async () => { Object.getOwnPropertyDescriptor(input instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, "value")!.set!.call(input, value); input.dispatchEvent(new Event("input", { bubbles: true })); }); }
+async function choose(label: string, value: string) {
+  const parent = [...container.querySelectorAll("label")].find(item => item.querySelector("span")?.textContent === label)!, select = parent.querySelector("select")!;
+  await act(async () => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(select, value); select.dispatchEvent(new Event("change", { bubbles: true })); });
+}
 it("saves only an explicit manual start, retaining one original nonce through unknown response and reload", async () => {
   await mount(); await field("deadline", "30"); await click("Add a manual start"); expect(workflowDraftFlowApi.save).toHaveBeenCalledOnce();
   expect(workflowDraftFlowApi.save).toHaveBeenCalledWith(company, workflow, principal, expect.objectContaining({ expectedLastNodeId: null, operation: { kind: "start_manual", deadlineSeconds: 30, name: "Start when I run the workflow" } }));
@@ -41,6 +45,26 @@ it("saves only an explicit manual start, retaining one original nonce through un
   expect(container.querySelector(`a[href$="/requests/draft_build/${pending.requestId}"]`)).toBeTruthy();
   await act(async () => root.unmount()); root = createRoot(container); await mount(); await click("Add a manual start");
   expect(workflowDraftFlowApi.save).toHaveBeenCalledOnce();
+});
+it("validates both branch outcomes and binds a chosen earlier step without exposing IDs as a field-entry requirement", async () => {
+  vi.mocked(workflowDraftFlowApi.review).mockResolvedValue(linear); await mount();
+  await choose("What should happen next?", "append_condition"); await field("name", "Compare amount");
+  await choose("Read the value from", "steps"); await click("Add a step");
+  expect(workflowDraftFlowApi.save).not.toHaveBeenCalled(); expect(pendingWorkflowRequests(company, principal, workflow)).toEqual([]);
+  expect(container.querySelector("#draft-flow-earlierNode")?.getAttribute("aria-invalid")).toBe("true");
+  expect(container.querySelector("#draft-flow-trueName")?.getAttribute("aria-invalid")).toBe("true");
+  await choose("Earlier step", "start"); await field("path", "amount"); await choose("Comparison", ">=");
+  await choose("Type of comparison value", "number"); await field("value", "10000");
+  await field("trueName", "PRIVATE matching branch"); await field("trueDuration", "1");
+  await field("falseName", "PRIVATE other branch"); await field("falseDuration", "1"); await click("Add a step");
+  expect(workflowDraftFlowApi.save).toHaveBeenCalledOnce();
+  expect(workflowDraftFlowApi.save).toHaveBeenCalledWith(company, workflow, principal, expect.objectContaining({ expectedLastNodeId: "start",
+    operation: { kind: "append_condition", name: "Compare amount", condition: { kind: "condition", source: "steps", path: ["start", "amount"], operator: ">=", value: 10000 },
+      whenTrue: { name: "PRIVATE matching branch", durationSeconds: 1 }, whenFalse: { name: "PRIVATE other branch", durationSeconds: 1 } } }));
+  const stored = sessionStorage.getItem("aw.v9.pending-workflow-request-receipts")!;
+  expect(stored).not.toMatch(/PRIVATE|amount|whenTrue|condition|durationSeconds/);
+  expect(Object.keys(JSON.parse(stored)[0]).sort()).toEqual(["companyId", "kind", "principal", "requestId", "workflowId"]);
+  await click("Add a step"); expect(workflowDraftFlowApi.save).toHaveBeenCalledOnce();
 });
 it("rejects invalid visible fields before any request and saves the explicitly reviewed last node", async () => {
   vi.mocked(workflowDraftFlowApi.review).mockResolvedValue(linear); await mount(); await field("name", "PRIVATE wait"); await field("duration", "0"); await click("Add a step");
