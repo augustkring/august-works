@@ -927,7 +927,7 @@
   "workflowTestTitle": "Test the draft",
   "workflowTestNow": "Review internal test",
   "workflowTestConfirmTitle": "Test this draft version?",
-  "workflowTestConsequence": "This runs the unpublished draft with empty test input. It only follows internal control steps. It does not publish the draft or verify a production result.",
+  "workflowTestConsequence": "This runs the unpublished draft with your selected test values and its recorded time limit. Review the actual route and result before publishing.",
   "workflowTestExpected": "Draft version {{version}}. Expected result: Succeeded, within the configured {{deadline}} seconds. Check the actual run status afterwards.",
   "workflowTestAcknowledge": "I understand this is an internal test with no production input.",
   "workflowTestConfirm": "Start internal test",
@@ -2333,5 +2333,18 @@
     "deadlineHelp": "Choose 1 to 60 seconds for this initial internal flow. This is a stop limit, not an estimate of completion time.",
     "deadlineError": "Enter a whole number from 1 to 60 seconds.",
     "recordedDeadline": "Run time limit: {{seconds}} seconds."
+  },
+  "workflowTestInputs": {
+    "heading": "Start data for this test",
+    "boundary": "Use invented values to represent the scenario you want to test. Put each field level on a separate line. These values are saved only in the original test run, with no external actions. An empty list starts with no data.",
+    "row": "Test value {{number}}",
+    "path": "Field names, from outermost to innermost",
+    "valueType": "Value type",
+    "value": "Test value",
+    "add": "Add a test value",
+    "remove": "Remove test value {{number}}",
+    "invalid": "Review the test fields. Use up to 20 distinct paths and no more than 8 KB of input.",
+    "pathError": "Enter 1 to 8 exact field names, one per line. Paths must not duplicate or overlap.",
+    "valueError": "Enter a valid text, finite number, yes/no or no-value selection."
   }
 }

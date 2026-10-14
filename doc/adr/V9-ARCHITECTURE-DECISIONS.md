@@ -1752,3 +1752,33 @@ timer execution/recovery is used, never a simulation or alternate scheduler.
 A migrated verified-account case observes an actual one-second wait, Original
 recovery to succeeded, the Native delay_elapsed output and an unchanged
 unpublished draft. The Original deadline remains the stop criterion.
+
+## ADR-V9-041 — Representative internal test data stays Native-owned
+
+2026-10-14. The closed customer C0 test command optionally supplies up to 20
+explicit synthetic field paths and typed literals, at most eight levels and
+8 KiB. Overlapping/duplicate paths, malformed Unicode and non-finite values
+are refused. Construction uses own JSON properties: prototype-looking names
+are data, not code or authority. No graph, approval, actor, model, grant or
+side-effect profile is widened by these fields.
+
+Original enqueue verifies that the actual trigger payload exactly equals the
+validated command’s data. The actual Native run/steps retain that input. The
+Activity receipt stores only the exact command hash and body-free command
+metadata; it omits raw synthetic values. New replay compares the hash; old
+retained command-only journals keep their exact backward-compatible semantics.
+The optional field has no default which would mutate old command hashes.
+
+The dialog holds inputs only in memory, requires acknowledgement after edits,
+validates and focuses linked errors before any locator/POST, and freezes the
+original full command for an explicit lost-ack retry. Reload recovers Original
+history with no new command; browser storage retains scoped identity only.
+The dialog scrolls inside the viewport and newly added fields receive focus.
+Native source/account/role/current-revision fences remain authoritative.
+
+Native tests exercise both actual conditional paths with chosen data, unchanged
+unpublished revision, changed-input request refusal and journals without raw
+values. Built mobile testing exercises actual Native admission/execution, input
+selection, deliberate lost response and single-command reload recovery. These
+software fixtures do not qualify real Human fitness or hosted/provider behavior.
+Broader sandbox/live effects and production outcome verification remain open.

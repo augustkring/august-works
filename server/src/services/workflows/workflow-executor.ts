@@ -46,6 +46,7 @@ import {
   type WorkflowStopCommand,
   type WorkflowStopReceipt,
   workflowTestCommandSchema,
+  workflowSyntheticTriggerPayload,
   type WorkflowTestCommand,
   type WorkflowRevision,
   type CancelWorkflowRun,
@@ -433,7 +434,7 @@ export async function enqueueWorkflowRunInTransaction(
     const command = workflowTestCommandSchema.parse(input.customerTestCommand);
     if (command.expectedWorkflowId !== input.workflowId || command.expectedDraftRevisionId !== input.revisionId ||
         workflow.draftRevisionId !== input.revisionId || workflow.updatedAt.toISOString() !== command.expectedUpdatedAt ||
-        input.triggerId || input.parentWorkflowRunId || input.retryOfRunId || !isDeepStrictEqual(input.triggerPayload, {}))
+        input.triggerId || input.parentWorkflowRunId || input.retryOfRunId || !isDeepStrictEqual(input.triggerPayload, workflowSyntheticTriggerPayload(command.syntheticInput)))
       throw conflict("Workflow test changed; review the current draft", { code: "workflow_test_conflict" });
     const [revision] = await executor.select().from(workflowRevisions).where(and(
       eq(workflowRevisions.companyId, input.companyId), eq(workflowRevisions.workflowId, input.workflowId), eq(workflowRevisions.id, input.revisionId),

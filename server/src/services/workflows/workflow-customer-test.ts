@@ -10,6 +10,7 @@ import {
 import {
   workflowTestCommandSchema,
   workflowTestReceiptSchema,
+  workflowSyntheticTriggerPayload,
   type WorkflowRevision,
   type WorkflowTestCommand,
   type WorkflowTestReceipt,
@@ -201,7 +202,9 @@ export async function admitCustomerWorkflowTest(
       if (
         prior[0].actorId !== principal ||
         prior[0].actorType !== "user" ||
-        !isDeepStrictEqual(prior[0].details?.command, command)
+        (prior[0].details?.requestHash !== undefined
+          ? prior[0].details.requestHash !== nativeSha256(command)
+          : !isDeepStrictEqual(prior[0].details?.command, command))
       )
         throw conflict("Original workflow test request changed", {
           code: "workflow_test_request_conflict",
@@ -273,7 +276,7 @@ export async function admitCustomerWorkflowTest(
       revisionId: revision.id,
       nodeId: trigger.id,
       source: "test",
-      triggerPayload: {},
+      triggerPayload: workflowSyntheticTriggerPayload(command.syntheticInput),
       customerTestCommand: command,
       responsibleUserId:
         authority.source === "local_implicit" ? null : principal,
@@ -295,6 +298,7 @@ export async function admitCustomerWorkflowTest(
       purpose: "test",
       disposition: "admitted",
     });
+    const { syntheticInput: _input, ...journalCommand } = command;
     const event = await persistActivity(nativeDb, {
       companyId,
       actorType: "user",
@@ -302,7 +306,7 @@ export async function admitCustomerWorkflowTest(
       action: "workflow.customer_test_admitted",
       entityType: "workflow",
       entityId: workflowId,
-      details: { requestId: command.requestId, command, receipt },
+      details: { requestId: command.requestId, requestHash: nativeSha256(command), command: journalCommand, receipt },
     });
     budget();
     return {

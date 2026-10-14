@@ -5,6 +5,8 @@ import type {
   WorkflowExperience,
   WorkflowTestCommand,
 } from "@paperclipai/shared";
+import { workflowTestCommandSchema } from "@paperclipai/shared";
+import { WorkflowSyntheticInputEditor, syntheticInputRows, type SyntheticInputRow } from "./WorkflowSyntheticInputEditor";
 import { workflowsApi } from "../api/workflows";
 import { ApiError } from "../api/client";
 import { Link } from "../lib/router";
@@ -37,6 +39,8 @@ export function WorkflowTestControls({
   const [open, setOpen] = useState(false),
     [acknowledged, setAcknowledged] = useState(false);
   const [attempt, setAttempt] = useState<WorkflowTestCommand | null>(null);
+  const [inputRows, setInputRows] = useState<SyntheticInputRow[]>([]), [inputErrors, setInputErrors] = useState<Record<string, string>>({});
+  const validation = useRef<HTMLDivElement>(null);
   const [reviewed, setReviewed] = useState<{
     command: WorkflowTestCommand;
     version: number;
@@ -101,6 +105,7 @@ export function WorkflowTestControls({
     )
       feedback.current?.focus();
   }, [mutation.isError, mutation.isSuccess, detail]);
+  useEffect(() => { if (Object.keys(inputErrors).length) validation.current?.focus(); }, [inputErrors]);
   if (!detail || !detail.canRequestTest) return null;
   const receipt = mutation.isSuccess ? mutation.data : observed;
   const ready =
@@ -109,10 +114,18 @@ export function WorkflowTestControls({
     detail.testDeadlineSeconds !== null;
   function send() {
     if (!locator.ready || locator.failed) return;
-    const command = attempt ?? reviewed?.command;
+    const command = attempt ?? (reviewed ? { ...reviewed.command, ...inputRows.length ? { syntheticInput: syntheticInputRows(inputRows) } : {} } : null);
     if (mutation.isPending || !acknowledged || !command) return;
-    setAttempt(command);
-    mutation.mutate(command);
+    const parsed = workflowTestCommandSchema.safeParse(command);
+    if (!parsed.success) {
+      const errors: Record<string, string> = {};
+      for (const issue of parsed.error.issues) {
+        const row = issue.path[1], field = issue.path[2];
+        errors[typeof row === "number" && (field === "path" || field === "value") ? `${row}.${field}` : "general"] = t(`workflowTestInputs.${field === "path" ? "pathError" : field === "value" ? "valueError" : "invalid"}`);
+      }
+      setInputErrors(errors); return;
+    }
+    setInputErrors({}); setAttempt(parsed.data); mutation.mutate(parsed.data);
   }
   return (
     <section
@@ -161,6 +174,7 @@ export function WorkflowTestControls({
             if (!locator.ready || locator.failed || locator.pending) return;
             mutation.reset();
             setAcknowledged(false);
+            setInputRows([]); setInputErrors({});
             setReviewed({
               version: detail.draft!.version,
               deadline: detail.testDeadlineSeconds!,
@@ -194,6 +208,7 @@ export function WorkflowTestControls({
         }}
       >
         <DialogContent
+          className="max-h-(--sz-calc-18) overflow-y-auto"
           showCloseButton={!mutation.isPending}
           onEscapeKeyDown={(event) => {
             if (mutation.isPending) event.preventDefault();
@@ -212,6 +227,12 @@ export function WorkflowTestControls({
               })}
             </p>
           )}
+          <WorkflowSyntheticInputEditor rows={inputRows} change={rows => { setInputRows(rows); setInputErrors({}); setAcknowledged(false); }} disabled={mutation.isPending || !!attempt} errors={inputErrors} />
+          {Object.keys(inputErrors).length > 0 && <div ref={validation} tabIndex={-1} role="alert" className="space-y-2"><p>{t("workflowTestInputs.invalid")}</p>
+            <ul className="list-disc pl-5">{Object.entries(inputErrors).map(([key, message]) => {
+              const [index, field] = key.split("."), row = inputRows[Number(index)], target = row && (field === "path" || field === "value") ? `test-input-${row.id}-${field}` : null;
+              return <li key={key}>{target ? <a className="inline-flex min-h-11 items-center underline" href={`#${target}`} onClick={event => { event.preventDefault(); document.getElementById(target)?.focus(); }}>{message}</a> : message}</li>;
+            })}</ul></div>}
           <label className="flex min-h-11 items-center gap-3">
             <input
               type="checkbox"

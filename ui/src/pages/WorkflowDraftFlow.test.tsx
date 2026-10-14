@@ -15,7 +15,8 @@ const company = "10000000-0000-4000-8000-000000000001", workflow = "10000000-000
 const review = { companyId: company, workflowId: workflow, draftRevisionId: "10000000-0000-4000-8000-000000000003",
   publishedRevisionId: null, updatedAt: "2026-10-14T00:00:00.000Z", version: 1, deadlineSeconds: null, availability: "empty" as const, steps: [] };
 const linear = { ...review, availability: "linear" as const, steps: [{ nodeId: "start", type: "core.manual_trigger", name: "Start manually" }] };
-vi.mock("../context/LiveUpdatesProvider", () => ({ useCompanyLiveEvent: () => {} }));
+let live: (event: { companyId: string; type: string; payload: Record<string, unknown> }) => void;
+vi.mock("../context/LiveUpdatesProvider", () => ({ useCompanyLiveEvent: (listener: typeof live) => { live = listener; } }));
 vi.mock("../context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: "10000000-0000-4000-8000-000000000001", selectedCompany: { issuePrefix: "AW" } }) }));
 let root: Root, container: HTMLDivElement, client: QueryClient;
 beforeEach(async () => {
@@ -77,4 +78,19 @@ it("offers Danish manual-start controls without claiming generated steps or publ
   await i18n.changeLanguage("da"); await mount(); expect(container.textContent).toContain("Opbyg kladdens flow");
   expect(container.textContent).toContain("Tilføj en manuel start"); expect(container.textContent).toContain("Den aktive version beholder");
   expect(workflowDraftFlowApi.save).not.toHaveBeenCalled();
+});
+it("keeps the pending flow request across a Source change and same-turn late acknowledgement", async () => {
+  vi.mocked(workflowDraftFlowApi.review).mockResolvedValue(linear);
+  let finish!: (value: Awaited<ReturnType<typeof workflowDraftFlowApi.save>>) => void;
+  vi.mocked(workflowDraftFlowApi.save).mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  await mount(); await field("name", "Wait"); await field("duration", "7"); await click("Add a step");
+  const [pending] = pendingWorkflowRequests(company, principal, workflow);
+  vi.mocked(workflowDraftFlowApi.review).mockImplementation(() => new Promise(() => {}));
+  await act(async () => {
+    live({ companyId: company, type: "analytical.context.access_lost", payload: {} });
+    finish({ companyId: company, workflowId: workflow, requestId: pending.requestId, previousRevisionId: review.draftRevisionId,
+      draftRevisionId: "10000000-0000-4000-8000-000000000006", version: 2, changed: true, recordedAt: review.updatedAt, published: false, executionStarted: false });
+  }); await flush();
+  expect(pendingWorkflowRequests(company, principal, workflow)).toEqual([pending]);
+  expect(container.textContent).not.toContain("Your changes were saved");
 });

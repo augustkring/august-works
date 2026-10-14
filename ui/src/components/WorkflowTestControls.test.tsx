@@ -310,3 +310,24 @@ it.each(["companyId", "workflowId", "requestId", "revisionId"] as const)(
     ).rejects.toThrow("context changed");
   },
 );
+
+it("validates synthetic data before any request and freezes the exact private input for lost-acknowledgement retry", async () => {
+  const test = vi.spyOn(workflowsApi, "test").mockRejectedValue(new Error("Lost acknowledgement"));
+  await render(detail); await click("Review internal test"); await click("Add a test value");
+  const path = document.querySelector<HTMLTextAreaElement>('textarea[id^="test-input-"][id$="-path"]')!;
+  expect(document.activeElement).toBe(path);
+  await acknowledge(); await click("Start internal test");
+  expect(test).not.toHaveBeenCalled(); expect(pendingWorkflowRequests(company, "member", workflow)).toEqual([]);
+  expect(path.getAttribute("aria-invalid")).toBe("true"); expect(document.activeElement?.getAttribute("role")).toBe("alert");
+  const value = document.querySelector<HTMLInputElement>('input[id^="test-input-"][id$="-value"]')!;
+  await act(async () => { Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(path, "customer\nnote"); path.dispatchEvent(new Event("input", { bubbles: true })); });
+  await act(async () => { Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(value, "PRIVATE synthetic text"); value.dispatchEvent(new Event("input", { bubbles: true })); });
+  expect((document.querySelector('input[type="checkbox"]') as HTMLInputElement).checked).toBe(false);
+  await acknowledge(); await click("Start internal test");
+  await vi.waitFor(() => expect(test).toHaveBeenCalledOnce());
+  const command = test.mock.calls[0][3]; expect(command.syntheticInput).toEqual([{ path: ["customer", "note"], value: "PRIVATE synthetic text" }]);
+  expect(sessionStorage.getItem("aw.v9.pending-workflow-request-receipts")).not.toMatch(/PRIVATE|syntheticInput|customer|note/);
+  expect(path.disabled).toBe(false); expect(path.closest("fieldset")?.disabled).toBe(true);
+  await click("Reconcile original test");
+  expect(test).toHaveBeenCalledTimes(2); expect(test.mock.calls[1][3]).toEqual(command);
+});

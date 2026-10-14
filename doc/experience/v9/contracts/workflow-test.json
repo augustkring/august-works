@@ -19,7 +19,7 @@
   ],
   "content": {
     "h1": "Test the draft",
-    "supportingCopy": "Review the draft version, empty synthetic input, expected Succeeded result and configured stop deadline before admission. Only internal control steps are qualified here.",
+    "supportingCopy": "Review the immutable draft, explicit invented start values, expected Succeeded result and recorded stop limit before internal test admission.",
     "customerTerms": [
       "Draft",
       "Internal test",
@@ -29,7 +29,7 @@
     ],
     "displayedState": [
       "Current native draft ID, version, workflow updatedAt and internal eligibility are distinct from the published version.",
-      "Only the closed manual/condition/switch/merge/parallel C0 subset with empty input, no contracts/variables and a 1–60 second deadline is admitted.",
+      "Only the closed manual/condition/switch/merge/parallel/literal-wait C0 subset with no contracts/variables and a 1–60 second deadline is admitted. Summed literal waits must fit strictly within that deadline; input is optional, bounded explicit synthetic data.",
       "Native publish topology must pass before the view reports internal Test readiness; incomplete condition paths, disconnected nodes and cycles remain review-required. Full native node validation repeats at admission.",
       "The confirmation freezes the reviewed draft version and expected outcome; changing the native draft does not change an open confirmation.",
       "The original receipt means admitted, not completed or production verified. Follow its exact run for actual status and recorded steps.",
@@ -38,16 +38,8 @@
     ]
   },
   "inputs": [
-    {
-      "id": "acknowledgeInternalTest",
-      "label": "I understand this is an internal test with no production input.",
-      "dataType": "boolean",
-      "required": true,
-      "default": "Unchecked",
-      "help": "No publication, agent/model/tool/network calls or material effects are admitted by this test.",
-      "validation": "Explicitly checked before sending the reviewed command.",
-      "autofillOrPrefill": "Never infer acknowledgement from an earlier test."
-    }
+    "Explicit internal-test acknowledgement against current immutable draft/version/update identity",
+    "Optional invented start values: at most 20 non-overlapping exact paths, depth at most 8 and total input at most 8 KB; text/finite-number/boolean/null literals"
   ],
   "actions": {
     "primary": {
@@ -78,7 +70,7 @@
     "empty": "No current draft or inactive workflow permits new test admission; an existing original receipt remains historical.",
     "partial": "Oversized, duplicate, cyclic or dangling-connection flows show flow unavailable with no truncated topology.",
     "stale": "Hide retained private data during background rechecks and live authority/privacy/version invalidations; a new query epoch rejects late prior responses.",
-    "validation_error": "Changed native review requires a fresh confirmation. Unsupported graphs require separately qualified testing.",
+    "validation_error": "Associate invalid test field paths or values with inline corrections and a linked, focused error summary before persisting any locator or POST.",
     "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
     "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
     "recovering": "Retain the identical unknown command in memory; a reload reads the current human's actual native receipt. Absence of a receipt does not prove that a timed-out request cannot still commit.",
@@ -110,7 +102,8 @@
     "dataShown": [
       "Current human/company-authorized workflow name and description",
       "Allowlisted native revision/step/connection declarations only",
-      "Bound original native test receipt and explicit test purpose only; no test payload or private errors."
+      "Bound original native test receipt and explicit test purpose only; no test payload or private errors.",
+      "Only explicitly entered in-memory synthetic test values; no copy in browser storage, Activity journal or safe execution-trace projection."
     ],
     "dataCollected": [
       "Strict immutable command UUID and reviewed native version preconditions; no customer input or browser persistence."

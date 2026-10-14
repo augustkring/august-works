@@ -927,7 +927,7 @@
   "workflowTestTitle": "Test kladden",
   "workflowTestNow": "Gennemgå intern test",
   "workflowTestConfirmTitle": "Test denne kladdeversion?",
-  "workflowTestConsequence": "Dette kører den upublicerede kladde med tomt testinput. Kun interne kontroltrin bliver udført. Testen publicerer ikke kladden og verificerer ikke et produktionsresultat.",
+  "workflowTestConsequence": "Dette kører den upublicerede kladde med dine valgte testværdier og dens registrerede tidsgrænse. Gennemgå den faktiske rute og resultatet før publicering.",
   "workflowTestExpected": "Kladdeversion {{version}}. Forventet resultat: Gennemført inden for de konfigurerede {{deadline}} sekunder. Kontrollér den faktiske kørselsstatus bagefter.",
   "workflowTestAcknowledge": "Jeg forstår, at dette er en intern test uden produktionsinput.",
   "workflowTestConfirm": "Start intern test",
@@ -2333,5 +2333,18 @@
     "deadlineHelp": "Vælg 1 til 60 sekunder til dette første interne flow. Det er en stopgrænse, ikke et skøn over gennemførelsestiden.",
     "deadlineError": "Angiv et helt antal sekunder fra 1 til 60.",
     "recordedDeadline": "Køretidsgrænse: {{seconds}} sekunder."
+  },
+  "workflowTestInputs": {
+    "heading": "Startdata til denne test",
+    "boundary": "Brug opdigtede værdier, der repræsenterer scenariet, du vil teste. Skriv hvert feltniveau på en separat linje. Værdierne gemmes kun i den oprindelige testkørsel, og der udføres ingen eksterne handlinger. En tom liste starter uden data.",
+    "row": "Testværdi {{number}}",
+    "path": "Feltnavne, fra yderste til inderste niveau",
+    "valueType": "Værdiens type",
+    "value": "Testværdi",
+    "add": "Tilføj en testværdi",
+    "remove": "Fjern testværdi {{number}}",
+    "invalid": "Gennemgå testfelterne. Brug højst 20 forskellige stier og højst 8 KB input.",
+    "pathError": "Angiv 1 til 8 præcise feltnavne, ét pr. linje. Stier må ikke gentages eller overlappe.",
+    "valueError": "Angiv gyldig tekst, et endeligt tal, ja/nej eller ingen værdi."
   }
 }

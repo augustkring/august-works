@@ -567,3 +567,49 @@ unchanged during recursive types, the final three-case browser run and build.
 GitHub master and the existing V9 draft branch still match the inspected V8 and
 5dc6bce6 base, respectively; no remote update, push or PR was made. Whole-scope
 completion and an immutable full test:run pass remain open.
+
+### Explicit representative internal test data — 2026-10-14
+
+The initial immutable full test:run was interrupted in its general group to
+review a possible Source/late-ack render race. Its owned child process group
+was also stopped; it produced no final passing aggregate. Both targeted
+same-turn Source-change regressions passed against the existing application
+guard, so no reproduction or production fix is claimed. The regression cases
+are retained; this replaces the tentative suspicion with observed evidence.
+The complete immutable whole-suite pass remains open.
+
+Internal tests now accept optional explicit invented start data: at most 20
+non-overlapping paths, depth eight and 8 KiB, with exact typed literals. Native
+run payload is canonical; Original enqueue rejects differing data. New Activity
+journals retain the command hash and metadata without raw input; old retained
+command-only journals still replay unchanged. No data can become a permission,
+approval, runtime or broader test-mode grant. Input is not browser-persisted.
+
+The dialog validates visible fields, focuses linked corrections, acknowledges
+changed material values and freezes the same command for explicit recovery.
+It scrolls within the viewport and directs focus to a newly added field. Source
+/account/current-draft changes still suppress private views and refuse writes.
+The initial shared/Native/legacy-test/UI group passes 49 cases in four suites;
+private input/UI validation subsequently passes 22 cases in two suites after
+correcting a fixture’s retry-label spelling. Both focused server/UI types pass.
+The built native test browser passes (8.1 seconds test, 32.8 seconds total),
+selecting a real input-dependent branch with one POST despite lost response,
+original receipt recovery after reload, unchanged unpublished revision, mobile
+dialog reflow and zero automated dialog axe violations. This uses Native local
+trusted software fixtures, not real authenticated Human/provider qualification.
+
+Remaining implementation and full immutable types/tests/build, broader effect
+test modes, manual accessibility, Human and host/provider qualification stay
+open. Neither a passing fixture nor these local checkpoints completes full V9.
+
+The complete workspace build and token/module/70-source gates pass on the
+unchanged synthetic-input application Source. Concurrent recursive typecheck
+was killed with exit 137 while build ran; this is not a passing type check.
+A serial recursive rerun is in progress, and both earlier focused server/UI
+types passed. No broad test pass or whole-V9 readiness is inferred.
+
+The serial full recursive typecheck now passes, including server and CLI, on
+unchanged application Source. The synthetic-input workspace build, browser,
+focused tests and source/design/module checks also pass at this checkpoint.
+A complete immutable test:run pass still has not been produced; Source work
+and broader V9 implementation/qualification remain incomplete.

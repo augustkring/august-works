@@ -89,6 +89,20 @@ it("does not accept a late save acknowledgement after its account is invalidated
   expect(container.querySelector("form")).toBeNull();
   expect(pendingWorkflowRequests(company, principal, workflow)).toEqual([pending]);
 });
+it("retains its exact pending save when the Native source changes before React commits the new read epoch", async () => {
+  let finish!: (value: Awaited<ReturnType<typeof workflowDraftEditApi.save>>) => void;
+  vi.mocked(workflowDraftEditApi.save).mockImplementation(() => new Promise(resolve => { finish = resolve; }));
+  await mount(); await submit(); const [pending] = pendingWorkflowRequests(company, principal, workflow);
+  vi.mocked(workflowDraftEditApi.review).mockImplementation(() => new Promise(() => {}));
+  await act(async () => {
+    listeners.at(-1)!({ companyId: company, type: "analytical.context.access_lost", payload: {} });
+    finish({ companyId: company, workflowId: workflow, requestId: pending.requestId, previousRevisionId: review.draftRevisionId,
+      draftRevisionId: "10000000-0000-4000-8000-000000000005", version: 4, changed: true, recordedAt: review.updatedAt, published: false, executionStarted: false });
+  });
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+  expect(pendingWorkflowRequests(company, principal, workflow)).toEqual([pending]);
+  expect(container.textContent).not.toContain("Your changes were saved");
+});
 it("uses Danish labels and keeps edit settings separate from active publication", async () => {
   await i18n.changeLanguage("da"); await mount();
   expect(container.textContent).toContain("Rediger et kladdetrin"); expect(container.textContent).toContain("Ventetid (sekunder)");

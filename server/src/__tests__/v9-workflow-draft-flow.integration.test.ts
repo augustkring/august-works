@@ -117,4 +117,33 @@ describe.sequential("Original guided draft flow composition", () => {
     expect(steps).toHaveLength(2); expect(steps.find(step => step.nodeId === waitNode.id)).toMatchObject({ status: "succeeded", outputJson: { reason: "delay_elapsed" } });
     expect(await owner.getDetail(f.companyId, f.workflow.id, f.actor)).toEqual(before);
   });
+  it("tests both Native condition branches with exact synthetic data, body-free journals and changed-input replay refusal", async () => {
+    const f = await fixture(), owner = workflowService(db), executor = workflowExecutorService(db);
+    const draft = await owner.updateDraft(f.companyId, f.workflow.id, { expectedRevisionId: f.workflow.draftRevisionId!, graph: {
+      version: 1, nodes: [
+        { id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} },
+        { id: "choose", type: "core.condition", name: "Amount", position: { x: 0, y: 1 }, config: { expression: '{{trigger.amount}} >= 10000' } },
+        ...["yes", "no"].map(id => ({ id, type: "core.merge", name: id, position: { x: 0, y: 2 }, config: { mode: "all" } })),
+      ], edges: [{ id: "next", source: "start", target: "choose" },
+        { id: "yes", source: "choose", target: "yes", sourceHandle: "true", label: "true" },
+        { id: "no", source: "choose", target: "no", sourceHandle: "false", label: "false" }], variables: [], settings: { totalDeadlineSeconds: 30 },
+    } }, f.human);
+    for (const [amount, selected] of [[10000, "yes"], [9999, "no"]] as const) {
+      const input = { requestId: randomUUID(), expectedWorkflowId: f.workflow.id, expectedUpdatedAt: draft.updatedAt.toISOString(),
+        expectedDraftRevisionId: draft.draftRevisionId!, expectedRunStatus: "succeeded" as const, acknowledgeInternalTest: true as const,
+        syntheticInput: [{ path: ["amount"], value: amount }, { path: ["customer", "note"], value: "PRIVATE synthetic note" }] };
+      const receipt = await admitCustomerWorkflowTest(db, f.companyId, f.workflow.id, input, f.actor);
+      expect((await executor.executeQueuedRun(f.companyId, receipt.runId, f.human))!.run.status).toBe("succeeded");
+      const [run] = await db.select().from(workflowRuns).where(eq(workflowRuns.id, receipt.runId));
+      expect(run.triggerPayload).toEqual({ amount, customer: { note: "PRIVATE synthetic note" } });
+      const steps = await db.select().from(workflowStepRuns).where(eq(workflowStepRuns.workflowRunId, receipt.runId));
+      expect(steps.find(step => step.nodeId === selected)?.status).toBe("succeeded");
+      expect(steps.find(step => step.nodeId === (selected === "yes" ? "no" : "yes"))?.status).not.toBe("succeeded");
+      expect(await admitCustomerWorkflowTest(db, f.companyId, f.workflow.id, input, f.actor)).toEqual(receipt);
+      await expect(admitCustomerWorkflowTest(db, f.companyId, f.workflow.id, { ...input, syntheticInput: [{ path: ["amount"], value: 1 }] }, f.actor)).rejects.toMatchObject({ status: 409 });
+    }
+    const receipts = await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.companyId), eq(activityLog.action, "workflow.customer_test_admitted")));
+    expect(receipts).toHaveLength(2); expect(JSON.stringify(receipts.map(row => row.details))).not.toMatch(/PRIVATE|syntheticInput|customer/);
+    expect((await owner.getDetail(f.companyId, f.workflow.id, f.actor))!.publishedRevisionId).toBeNull();
+  });
 });

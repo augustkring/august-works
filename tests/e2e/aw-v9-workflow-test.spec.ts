@@ -63,7 +63,7 @@ test("an unpublished internal test recovers its original receipt after reload an
                 id: "route",
                 type: "core.condition",
                 name: "Choose internal route",
-                config: { expression: "true" },
+                config: { expression: '{{trigger.amount}} >= 10000' },
                 position: { x: 0, y: 1 },
               },
               {
@@ -122,12 +122,17 @@ test("an unpublished internal test recovers its original receipt after reload an
         name: "Start internal test",
         exact: true,
       });
-    await expect(dialog).toContainText("empty test input");
+    await expect(dialog).toContainText("An empty list starts with no data");
     await expect(dialog).toContainText(
       "Succeeded, within the configured 60 seconds",
     );
     await expect(confirm).toBeDisabled();
     expect(commands).toHaveLength(0);
+    await dialog.getByRole("button", { name: "Add a test value", exact: true }).click();
+    const inputPath = dialog.getByRole("textbox", { name: "Field names, from outermost to innermost", exact: true });
+    await expect(inputPath).toBeFocused(); await inputPath.fill("amount");
+    await dialog.getByRole("combobox", { name: "Value type", exact: true }).selectOption("number");
+    await dialog.getByRole("spinbutton", { name: "Test value", exact: true }).fill("10000");
     await page.addScriptTag({ path: axePath });
     const violations = await page.evaluate(
       async () =>
@@ -149,6 +154,7 @@ test("an unpublished internal test recovers its original receipt after reload an
     await dialog.getByRole("checkbox").check();
     await confirm.click();
     await expect.poll(() => commands.length).toBe(1);
+    expect(commands[0].syntheticInput).toEqual([{ path: ["amount"], value: 10000 }]);
     await expect.poll(() => accepted?.requestId).toBe(commands[0].requestId);
     await page.reload();
     await expect(
