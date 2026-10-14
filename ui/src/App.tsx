@@ -49,7 +49,6 @@ import { DashboardLive } from "./pages/DashboardLive";
 import { Timeline } from "./pages/Timeline";
 import { Companies } from "./pages/Companies";
 import { AGENT_FILTER_TABS, Agents } from "./pages/Agents";
-import { AgentDetail } from "./pages/AgentDetail";
 import { Projects } from "./pages/Projects";
 import { ProjectDetail } from "./pages/ProjectDetail";
 import { ProjectWorkspaceDetail } from "./pages/ProjectWorkspaceDetail";
@@ -198,6 +197,7 @@ const CompanyExport = lazy(() =>
   import("./pages/CompanyExport").then((module) => ({ default: module.CompanyExport })),
 );
 
+const AgentDetail = lazy(() => import("./pages/AgentDetail").then(module => ({ default: module.AgentDetail })));
 const ProductionAgents = lazy(() =>
   import("./pages/Agents.production").then((module) => ({ default: module.Agents })),
 );
@@ -385,9 +385,9 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       <Route path="agents/custom/:draftId/:screen?" element={<CustomAgent />} />
       <Route path="agents/:agentId/monitor" element={<AgentMonitorEntry />} />
       <Route path="agents/:agentId/retire" element={<AgentRetirementEntry />} />
-      <Route path="agents/:agentId" element={<AgentDetail />} />
-      <Route path="agents/:agentId/:tab" element={<AgentDetail />} />
-      <Route path="agents/:agentId/runs/:runId" element={<AgentDetail />} />
+      <Route path="agents/:agentId" element={<DeferredRouteSurface><AgentDetail /></DeferredRouteSurface>} />
+      <Route path="agents/:agentId/:tab" element={<DeferredRouteSurface><AgentDetail /></DeferredRouteSurface>} />
+      <Route path="agents/:agentId/runs/:runId" element={<DeferredRouteSurface><AgentDetail /></DeferredRouteSurface>} />
       <Route path="projects" element={<Projects />} />
       <Route path="playbooks" element={<V5Gate feature="playbooks_v5"><DeferredRouteSurface><Playbooks /></DeferredRouteSurface></V5Gate>} />
       <Route path="playbooks/:playbookId" element={<V5Gate feature="playbooks_v5"><DeferredRouteSurface><Playbooks /></DeferredRouteSurface></V5Gate>} />

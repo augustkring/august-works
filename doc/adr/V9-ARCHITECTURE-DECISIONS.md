@@ -2788,3 +2788,24 @@ not a new qualification. No calculation, numeric value, Source or authority is
 changed. The customer workflow index's verified-account admission also remains
 unchanged; the older local-board browser test now checks that gate rather than
 expecting the earlier list UI.
+
+
+## ADR-83 — Shared declarations and unused agent controls do not belong in startup
+
+The shared package declares sideEffects false. Its modules export schemas,
+constants and explicitly called functions; the source audit finds no bare
+side-effect imports or implicit telemetry/locale/event startup. This declaration
+lets the UI bundler omit unused modules without removing referenced validation.
+The Native Node module behavior and public exports remain unchanged.
+
+Agent detail routes use the existing localized DeferredRouteSurface boundary.
+SummarySlotCard loads built-in-agent setup only after its explicit setup action,
+with a localized loading status. It does not mount a closed configuration form
+or fetch its private configuration during the summary's initial render. Existing
+Native configuration, current authorization, mutation and close owners remain.
+
+Comparable local minified main assets shrink from 9,204,982 to 7,479,575 bytes
+(18.74 percent); Python gzip with the same settings shrinks from 2,124,862 to
+1,961,860 bytes (7.67 percent). Route/lazy-modal tests and built-UI checks remain
+required. These bytes do not establish a device/journey performance budget,
+field latency or release acceptance. Larger remaining chunks stay visible.

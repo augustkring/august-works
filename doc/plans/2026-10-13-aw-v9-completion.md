@@ -2353,3 +2353,36 @@ owned port still closing. Subsequent disposable browser runs explicitly set
 PAPERCLIP_TELEMETRY_DISABLED=1 and DO_NOT_TRACK=1. No provider/Human qualification
 is inferred. Frozen 53/60 full tests remain running and exclude this delta.
 All 70 launch rows/R0 remain pending. No PR/push.
+
+
+### Reduce unused startup JavaScript and defer agent setup — checkpoint 62
+
+The local before/after build compares the same Native code/dependencies with
+shared module side-effect metadata and deferred agent detail/setup loading.
+Shared declares sideEffects false after checking exports/explicit initialization
+and finding zero bare side-effect imports. Referenced schemas/validation and
+Native Node behavior stay intact. Agent detail uses the existing localized
+Suspense boundary; summary setup is imported/mounted only after its explicit
+button, with a localized loading status. No configuration or permission writer
+changes. The previous ineffective dynamic-import warning is removed.
+
+Main asset: 9,204,982 -> 7,479,575 bytes (-18.74 percent). Comparable Python gzip:
+2,124,862 -> 1,961,860 bytes (-7.67 percent). Build passes (16.94 seconds). These
+are artifact sizes, not proof of field latency/TTFO or the journey budgets.
+Remaining large chunks and actual device/overload measurements remain open.
+Four route/summary/setup suites pass 36 cases (36.98 seconds). The first test
+expected the newly lazy setup synchronously; it now awaits the visible setup
+result, preserving the assertion. Current UI typecheck passes exit 0. Fresh
+server typecheck is completing its own Native Rust/dependency bootstrap.
+
+After the workflow account-test correction, image/erasure checks and 14 further
+actual browser cases pass, including all six Native analytical families. An
+incorrect concurrent UI rebuild removed index.html during the next language
+case. That ENOENT is a verification-environment mistake and does not establish
+a language defect. The affected remaining batch is restarted on a fixed build;
+no further browser artifact mutation is allowed during it. Earlier passing
+batches are scoped software evidence, not one final-artifact 88-case pass.
+Frozen 53/60 full tests remain running and exclude 61/62. All launch rows/R0
+and whole-V9 acceptance remain pending. No PR/push.
+Current fresh server typecheck passes exit 0 after the Native bootstrap. Token,
+module and coverage checks pass; source/release acceptance remains pending.

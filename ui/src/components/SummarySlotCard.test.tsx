@@ -294,7 +294,7 @@ describe("SummarySlotCard", () => {
     });
     await flushQueries();
 
-    expect(container.querySelector('[data-testid="configure-modal"]')).not.toBeNull();
+    await vi.waitFor(() => expect(container.querySelector('[data-testid="configure-modal"]')).not.toBeNull());
   });
 
   it("clears a stale generation failure after setup succeeds", async () => {

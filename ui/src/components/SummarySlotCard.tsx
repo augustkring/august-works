@@ -1,4 +1,5 @@
-import { useEffect, useMemo, useState } from "react";
+import { lazy, Suspense, useEffect, useMemo, useState } from "react";
+import { useTranslation } from "../i18n";
 import { Link } from "@/lib/router";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
@@ -15,7 +16,6 @@ import { builtInAgentsApi, type BuiltInAgentState } from "@/api/builtInAgents";
 import { instanceSettingsApi } from "@/api/instanceSettings";
 import { summarySlotsApi, type SummarySlotSelector } from "@/api/summarySlots";
 import { MarkdownBody } from "@/components/MarkdownBody";
-import { ConfigureBuiltInAgentModal } from "@/components/ConfigureBuiltInAgentModal";
 import { InlineBanner } from "@/components/InlineBanner";
 import { useSummaryDraftStream } from "@/components/useSummaryDraftStream";
 import { useCompanyLiveEvent } from "@/context/LiveUpdatesProvider";
@@ -26,6 +26,7 @@ import { queryKeys } from "@/lib/queryKeys";
 import { cn, formatDateTime, relativeTime } from "@/lib/utils";
 
 const SUMMARIZER_KEY = "summarizer";
+const ConfigureBuiltInAgentModal = lazy(() => import("./ConfigureBuiltInAgentModal").then(module => ({ default: module.ConfigureBuiltInAgentModal })));
 const TERMINAL_ISSUE_STATUSES = new Set(["done", "cancelled"]);
 const LATEST_REVISION_SELECT_VALUE = "__latest__";
 const MAX_REVISION_OPTIONS = 30;
@@ -141,6 +142,7 @@ export function SummarySlotCard({
   description,
   className,
 }: SummarySlotCardProps) {
+  const { t } = useTranslation("experience");
   const queryClient = useQueryClient();
   const [selectedRevisionId, setSelectedRevisionId] = useState<string | null>(null);
   const [configureOpen, setConfigureOpen] = useState(false);
@@ -320,7 +322,8 @@ export function SummarySlotCard({
               </Button>
             )}
           </div>
-          {companyId ? (
+          {companyId && configureOpen ? (
+            <Suspense fallback={<p role="status">{t("loadingView")}</p>}>
             <ConfigureBuiltInAgentModal
               companyId={companyId}
               state={needsSetup}
@@ -328,6 +331,7 @@ export function SummarySlotCard({
               onOpenChange={setConfigureOpen}
               onConfigured={() => setActionError(null)}
             />
+            </Suspense>
           ) : null}
         </>
       ) : null}
