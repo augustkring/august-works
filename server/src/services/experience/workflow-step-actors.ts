@@ -1,6 +1,7 @@
 import { and, eq, sql } from "drizzle-orm";
 import { agents, authUsers, companyMemberships, principalPermissionGrants, toolConnections, toolCatalogEntries, type Db } from "@paperclipai/db";
-import type { WorkflowDetail, WorkflowExperienceRevision, WorkflowStepToolAccess } from "@paperclipai/shared";
+import { workflowConnectedInputReviewSchema, workflowToolFields, type WorkflowDetail, type WorkflowExperienceRevision, type WorkflowStepToolAccess, type WorkflowStepInputReview } from "@paperclipai/shared";
+import { nativeSha256 } from "../native-runtime/canonical.js";
 import { z } from "zod";
 import { authorizationService, type AuthorizationActor } from "../authorization.js";
 import { assertV5Authorization } from "../v5-authorization.js";
@@ -27,7 +28,7 @@ export function readWorkflowStepContext(db: Db, detail: WorkflowDetail, rawActor
     await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
     const actor = { ...rawActor, isInstanceAdmin: false, ignoreInstanceAdmin: true };
     const references: Array<{ key: string; id: string | null }> = [];
-    const toolReferences: Array<{ key: string; connectionId: string | null; entryId: string | null; version: unknown; schema: unknown }> = [];
+    const toolReferences: Array<{ key: string; connectionId: string | null; entryId: string | null; version: unknown; schema: unknown; config: Record<string, unknown> }> = [];
     for (const revision of [detail.draftRevision, detail.publishedRevision]) {
       if (!revision) continue;
       if (revision.graph.nodes.length > 100) continue; // The flow owner marks oversized revisions unavailable.
@@ -40,12 +41,13 @@ export function readWorkflowStepContext(db: Db, detail: WorkflowDetail, rawActor
         const config = node.config && typeof node.config === "object" && !Array.isArray(node.config) ? node.config as Record<string, unknown> : {};
         const connectionId = z.uuid().safeParse(config.connectionId), entryId = z.uuid().safeParse(config.toolCatalogEntryId);
         toolReferences.push({ key: `${revision.id}:${node.id}`, connectionId: connectionId.success ? connectionId.data : null,
-          entryId: entryId.success ? entryId.data : null, version: config.catalogVersionHash, schema: config.catalogSchemaHash });
+          entryId: entryId.success ? entryId.data : null, version: config.catalogVersionHash, schema: config.catalogSchemaHash, config });
       }
     }
     const assignments = new Map<string, Assignment>();
     const toolAccess = new Map<string, WorkflowStepToolAccess>();
-    const result = { assignments, toolAccess };
+    const toolInputs = new Map<string, WorkflowStepInputReview>();
+    const result = { assignments, toolAccess, toolInputs };
     const unavailable: WorkflowStepToolAccess = { state: "unavailable", connectionName: null, operationName: null, previewHref: null };
     // Historical/local fixtures may read the original flow, but cannot invent
     // a verified Human identity for selected-agent metadata.
@@ -83,31 +85,50 @@ export function readWorkflowStepContext(db: Db, detail: WorkflowDetail, rawActor
     }
     async function tool(reference: typeof toolReferences[number]): Promise<WorkflowStepToolAccess> {
       signal.throwIfAborted();
+      toolInputs.set(reference.key, { kind: "advanced" });
       if (!reference.connectionId || !reference.entryId) return unavailable;
-      const [connection] = await tx.select({ id: toolConnections.id, name: toolConnections.name, status: toolConnections.status,
-        enabled: toolConnections.enabled, createdByUserId: toolConnections.createdByUserId }).from(toolConnections)
+      const [connection] = await tx.select().from(toolConnections)
         .where(and(eq(toolConnections.companyId, companyId), eq(toolConnections.id, reference.connectionId))).for("share");
       const canManageConnections = await accessService(tx).hasPermission(companyId, "user", actor.userId!, "tools:manage_connections");
       if (!connection || !filterVisibleToolConnections([connection], { userId: actor.userId, canManageConnections }).length) return unavailable;
       const [entry] = await tx.select({ name: toolCatalogEntries.name, title: toolCatalogEntries.title, status: toolCatalogEntries.status,
-        version: toolCatalogEntries.versionHash, schema: toolCatalogEntries.schemaHash }).from(toolCatalogEntries).where(and(
+        version: toolCatalogEntries.versionHash, schema: toolCatalogEntries.schemaHash, inputSchema: toolCatalogEntries.inputSchema, toolName: toolCatalogEntries.toolName }).from(toolCatalogEntries).where(and(
           eq(toolCatalogEntries.companyId, companyId), eq(toolCatalogEntries.connectionId, connection.id), eq(toolCatalogEntries.id, reference.entryId))).for("share");
       if (!entry) return unavailable;
       const connectionName = connection.name.trim().slice(0, 200), operationName = (entry.title?.trim() || entry.name.trim()).slice(0, 200);
       if (!connectionName || !operationName) return unavailable;
       const canUse = (await auth.decide({ actor, action: "tools:use", resource: { type: "company", companyId } })).allowed;
+      let projectionChanged = false;
+      if (reference.config.projectedInputSchemaHash !== undefined) {
+        const { projectedConnectionToolInputSchema } = await import("../tool-access.js");
+        const schema = projectedConnectionToolInputSchema(connection, entry.inputSchema ?? {}, entry.toolName);
+        projectionChanged = reference.config.projectedInputSchemaHash !== nativeSha256(schema);
+        if (!projectionChanged && connection.status === "active" && connection.enabled && entry.status === "active" &&
+          entry.version === reference.version && entry.schema === reference.schema &&
+          !Object.keys(reference.config).some(key => !["toolCatalogEntryId", "connectionId", "catalogVersionHash", "catalogSchemaHash", "projectedInputSchemaHash", "input"].includes(key))) {
+          const fields = workflowToolFields(schema), review = fields && workflowConnectedInputReviewSchema.safeParse({ kind: "connected_tool", fields, values: reference.config.input });
+          if (review && review.success) toolInputs.set(reference.key, review.data);
+        }
+      }
+
       return { connectionName, operationName, previewHref: `/apps/${connection.id}/permissions`,
         state: connection.status !== "active" || !connection.enabled ? "connection_disabled"
-          : entry.status !== "active" || entry.version !== reference.version || !reference.schema || entry.schema !== reference.schema ? "catalog_changed"
+          : entry.status !== "active" || entry.version !== reference.version || !reference.schema || entry.schema !== reference.schema || projectionChanged ? "catalog_changed"
             : !canUse ? "permission_required" : "execution_check" };
     }
     await account();
     for (const id of ids) names.set(id, await name(id));
     for (const reference of toolReferences) toolAccess.set(reference.key, await tool(reference));
+    if (Buffer.byteLength(JSON.stringify([...toolInputs]), "utf8") > 65536)
+      throw new ExperienceOverloadError("Complete connected input review exceeds the read budget");
     await account();
     for (const id of ids) if (names.get(id) !== await name(id)) throw conflict("Current workflow assignment changed; refresh");
-    for (const reference of toolReferences) if (JSON.stringify(toolAccess.get(reference.key)) !== JSON.stringify(await tool(reference)))
-      throw conflict("Current workflow connection access changed; refresh");
+    for (const reference of toolReferences) {
+      const before = JSON.stringify([toolAccess.get(reference.key), toolInputs.get(reference.key)]);
+      const currentAccess = await tool(reference);
+      if (before !== JSON.stringify([currentAccess, toolInputs.get(reference.key)]))
+        throw conflict("Current workflow connection access changed; refresh");
+    }
     for (const reference of references) {
       const value = reference.id ? names.get(reference.id) : null;
       assignments.set(reference.key, value ? { state: "current", name: value } : { state: "unavailable", name: null });

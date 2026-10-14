@@ -51,7 +51,7 @@ export function workflowReview(
     // keep the separate body-free Original flow projection.
     for (const step of flow.steps) {
       const node = source.graph.nodes.find(item => item.id === step.nodeId);
-      if (node && ["core.condition", "core.wait", "human.approval", "agent.task"].includes(node.type)) step.inputReview =
+      if (node && ["core.condition", "core.wait", "human.approval", "agent.task", "connector.action"].includes(node.type)) step.inputReview =
         step.semantics?.input === "advanced" ? { kind: "advanced" } : reviewWorkflowStepInput(node);
     }
     if (state === "draft" && flow.coverage === "complete") draftNodeOrder = nodeOrder;

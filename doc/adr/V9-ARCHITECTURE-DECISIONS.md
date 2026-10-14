@@ -2057,3 +2057,22 @@ The metadata access indicator is not a grant, effective resource policy preview,
 provider health qualification or permission to bypass approval. Complex schemas,
 credential-like fields, full tool-step editing, meaningful connected-action tests,
 resource-policy preview and automatic natural-language graph proposals remain open.
+
+
+## ADR-53 — Saved tool inputs are current Source-bound review material
+
+The Original workflow step-context read now supplies closed scalar input review
+only for a current visible connection, active matching catalog entry and the
+retained effective input-schema pin. It reuses the Native account, company,
+workflow Source, connection visibility, row locks, final checks and deadline.
+Arbitrary config, connection credentials, defaults, mappings and complex or
+unpinned legacy configurations are never copied to this projection. Current
+account tools:use is shown separately and is not required to pretend execution
+is authorized. Input-definition drift also appears as catalog_changed.
+
+The complete private input projection is bounded to 64 KiB and refuses overload
+rather than silently truncating. The Original endpoint attaches it only to the
+matching current revision/node; historical conversation projections stay body-free.
+The UI preserves distinctions between false, empty text and omitted optional
+fields and withdraws the fields on existing Source events. Input editing remains
+with Advanced until the selected-step editor has equivalent current binding.

@@ -2452,5 +2452,11 @@
       "permission_required": "Din aktuelle konto mangler tilladelse til at bruge tilsluttede værktøjer i denne virksomhed. Gennemgå forbindelsens tilladelser.",
       "execution_check": "Din konto har virksomhedens tilladelse til at bruge værktøjer. Den præcise forbindelse, ressource og godkendelsesregel kontrolleres igen, når trinnet udføres."
     }
+  },
+  "workflowToolInputReview": {
+    "empty": "Denne operation har ingen inputfelter.",
+    "omitted": "Ikke medtaget",
+    "emptyText": "Tom tekst",
+    "boundary": "Gemte værdier for den aktuelle inputdefinition. Denne gennemgang kører ikke operationen og giver ikke adgang. Redigér input i Avanceret."
   }
 }

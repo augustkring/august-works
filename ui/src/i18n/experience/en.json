@@ -2452,5 +2452,11 @@
       "permission_required": "Your current account lacks permission to use connected tools in this company. Review the connection permissions.",
       "execution_check": "Your account has the company permission to use tools. The exact connection, resource and approval rules are checked again when this step executes."
     }
+  },
+  "workflowToolInputReview": {
+    "empty": "This operation has no input fields.",
+    "omitted": "Not included",
+    "emptyText": "Empty text",
+    "boundary": "Saved values for the current input definition. This review does not run the operation or grant access. Edit inputs in Advanced."
   }
 }

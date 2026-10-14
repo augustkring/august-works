@@ -433,3 +433,23 @@ it("withdraws retained private workflow names while an original conversation iss
   await act(async () => live({ companyId: data.companyId, type: "activity.logged", payload: { action: "issue.updated", entityType: "issue" } }));
   expect(container.textContent).not.toContain(data.name);
 });
+
+it("reviews named saved tool values including false, empty text and omission, withdrawing them with the Native connection Source", async () => {
+  const view = structuredClone(data), step = view.active!.steps[0];
+  const field = (name: string, type: "string" | "boolean" | "integer") => ({ name, label: `PRIVATE ${name}`, help: null,
+    type, required: false, options: null, minLength: null, maxLength: null, minimum: null, maximum: null });
+  step.semantics = { actor: "connected_tool", input: "tool_arguments", durationSeconds: null,
+    approvalPolicy: "execution_review", access: "execution_check", maxAttempts: 1, idempotency: "provider_passthrough" };
+  step.inputReview = { kind: "connected_tool", fields: [field("query", "string"), field("enabled", "boolean"), field("empty", "string"), field("count", "integer")],
+    values: { query: " PRIVATE literal ", enabled: false, empty: "" } };
+  const get = vi.spyOn(workflowsApi, "experience").mockResolvedValue(view), post = vi.spyOn(workflowsApi, "startRun");
+  await mount(); await vi.waitFor(() => expect(container.textContent).toContain('" PRIVATE literal "'));
+  const item = container.querySelector("#workflow-step-1")!;
+  expect(item.textContent).toContain("PRIVATE enabled");
+  expect([...item.querySelectorAll("dt")].find(node => node.textContent === "PRIVATE enabled")?.nextElementSibling?.textContent).toBe("No");
+  expect(item.textContent).toContain("Not included"); expect(item.textContent).toContain("Empty text");
+  expect(item.textContent).toContain("This review does not run the operation or grant access");
+  expect(post).not.toHaveBeenCalled(); get.mockImplementation(() => new Promise(() => {}));
+  await act(async () => live({ companyId: data.companyId, type: "activity.logged", payload: { action: "tool_connection.updated", entityType: "tool_connection" } }));
+  expect(container.textContent).not.toContain("PRIVATE literal"); expect(container.textContent).not.toContain("PRIVATE enabled");
+});

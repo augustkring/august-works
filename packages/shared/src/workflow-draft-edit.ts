@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { workflowToolArgumentsSchema, workflowToolFieldSchema, workflowToolArgumentErrors } from "./workflow-draft-tools.js";
 
 const text = (max: number) => z.string().trim().min(1).max(max).refine(value => !/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/u.test(value) &&
   !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u.test(value), "Use valid readable text");
@@ -27,7 +28,14 @@ export const workflowStepConfigurationChangeSchema = z.discriminatedUnion("kind"
   z.strictObject({ kind: z.literal("agent_task"), objective: workflowAgentObjectiveSchema, agentId: z.uuid().optional() }),
   workflowGuidedConditionSchema,
 ]);
+export const workflowConnectedInputReviewSchema = z.strictObject({ kind: z.literal("connected_tool"),
+  fields: z.array(workflowToolFieldSchema).max(20), values: workflowToolArgumentsSchema,
+}).superRefine((value, ctx) => {
+  if (new Set(value.fields.map(field => field.name)).size !== value.fields.length || workflowToolArgumentErrors(value.fields, value.values).length)
+    ctx.addIssue({ code: "custom", message: "Saved inputs do not match the current operation fields" });
+});
 export const workflowStepInputReviewSchema = z.discriminatedUnion("kind", [
+  workflowConnectedInputReviewSchema,
   z.strictObject({ kind: z.literal("advanced") }),
   z.strictObject({ kind: z.literal("wait"), durationSeconds: workflowWaitSecondsSchema }),
   z.strictObject({ kind: z.literal("approval"), summary: workflowApprovalSummarySchema, consequence: workflowApprovalConsequenceSchema }),

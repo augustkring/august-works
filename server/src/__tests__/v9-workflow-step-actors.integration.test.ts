@@ -1,3 +1,4 @@
+import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
@@ -93,6 +94,46 @@ describe.sequential("Current Native workflow step assignments", () => {
     await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId, f.companyId), eq(principalPermissionGrants.permissionKey, "tools:use")));
     expect(await read()).toMatchObject({ state: "permission_required" });
     expect(JSON.stringify(await read())).not.toMatch(/PRIVATE|private-endpoint|privateField|token/);
+    expect(await db.select().from(toolInvocations).where(eq(toolInvocations.companyId, f.companyId))).toEqual([]);
+    expect(await db.select().from(workflowRuns).where(eq(workflowRuns.companyId, f.companyId))).toEqual([]);
+  });
+  it("reviews exact saved scalar inputs only under the current connection and effective definition, withholding stale/private/complex values", async () => {
+    const f = await toolFixture(), schema = { type: "object", properties: { query: { type: "string", title: "Search" }, enabled: { type: "boolean" }, count: { type: "integer" } }, required: ["query"], additionalProperties: false };
+    await db.update(toolCatalogEntries).set({ inputSchema: schema }).where(eq(toolCatalogEntries.id, f.entryId));
+    async function save(config: Record<string, unknown>) {
+      const graph = structuredClone(f.detail.draftRevision!.graph); graph.nodes[1].config = config;
+      await f.owner.updateDraft(f.companyId, f.detail.id, { expectedRevisionId: f.detail.draftRevisionId!, graph }, f.human);
+      f.detail = (await f.owner.getDetail(f.companyId, f.detail.id, f.actor))!; f.key = `${f.detail.draftRevisionId}:tool`;
+    }
+    const config = { connectionId: f.connectionId, toolCatalogEntryId: f.entryId, catalogVersionHash: "version-a", catalogSchemaHash: "schema-a",
+      projectedInputSchemaHash: nativeSha256(schema), input: { query: " PRIVATE literal ", enabled: false } };
+    await save(config);
+    const read = () => readWorkflowStepContext(db, f.detail, { ...f.actor, isInstanceAdmin: true });
+    const current = await read();
+    expect(current.toolInputs.get(f.key)).toMatchObject({ kind: "connected_tool", values: { query: " PRIVATE literal ", enabled: false } });
+    expect(current.toolAccess.get(f.key)?.state).toBe("permission_required"); // review does not borrow tools:use
+    expect(JSON.stringify([...current.toolInputs])).not.toMatch(/credential|private-endpoint/);
+    expect(current.toolInputs.get(f.key)).toHaveProperty("fields", expect.arrayContaining([expect.objectContaining({ name: "count", required: false })]));
+    const single = structuredClone(f.detail.draftRevision!.graph), many = structuredClone(single);
+    many.nodes = [single.nodes[0], ...Array.from({ length: 20 }, (_, index) => ({ ...single.nodes[1], id: `tool-${index}`, config: { ...config, input: { query: "x".repeat(4000) } } }))];
+    many.edges = many.nodes.slice(1).map((node, index) => ({ id: `edge-${index}`, source: many.nodes[index].id, target: node.id }));
+    await f.owner.updateDraft(f.companyId, f.detail.id, { expectedRevisionId: f.detail.draftRevisionId!, graph: many }, f.human);
+    f.detail = (await f.owner.getDetail(f.companyId, f.detail.id, f.actor))!;
+    await expect(read()).rejects.toThrow("Complete connected input review exceeds the read budget");
+    await f.owner.updateDraft(f.companyId, f.detail.id, { expectedRevisionId: f.detail.draftRevisionId!, graph: single }, f.human);
+    f.detail = (await f.owner.getDetail(f.companyId, f.detail.id, f.actor))!; f.key = `${f.detail.draftRevisionId}:tool`;
+    await db.update(toolCatalogEntries).set({ inputSchema: { ...schema, properties: { query: { type: "string", minLength: 3 } } } }).where(eq(toolCatalogEntries.id, f.entryId));
+    const drift = await read(); expect(drift.toolInputs.get(f.key)).toEqual({ kind: "advanced" }); expect(drift.toolAccess.get(f.key)?.state).toBe("catalog_changed");
+    await db.update(toolCatalogEntries).set({ inputSchema: schema }).where(eq(toolCatalogEntries.id, f.entryId));
+    await db.update(toolConnections).set({ status: "draft" }).where(eq(toolConnections.id, f.connectionId));
+    expect((await read()).toolInputs.get(f.key)).toEqual({ kind: "advanced" });
+    await db.update(toolConnections).set({ status: "active" }).where(eq(toolConnections.id, f.connectionId));
+    await save({ ...config, inputMapping: { query: "{{trigger.private}}" } });
+    expect((await read()).toolInputs.get(f.key)).toEqual({ kind: "advanced" });
+    await save({ ...config, projectedInputSchemaHash: undefined });
+    expect((await read()).toolInputs.get(f.key)).toEqual({ kind: "advanced" });
+    await db.update(authUsers).set({ emailVerified: false }).where(eq(authUsers.id, f.userId));
+    await expect(read()).rejects.toMatchObject({ status: 403 });
     expect(await db.select().from(toolInvocations).where(eq(toolInvocations.companyId, f.companyId))).toEqual([]);
     expect(await db.select().from(workflowRuns).where(eq(workflowRuns.companyId, f.companyId))).toEqual([]);
   });

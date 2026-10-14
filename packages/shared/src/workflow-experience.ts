@@ -67,8 +67,8 @@ const stepSchema = z.strictObject({
 }).superRefine((step, ctx) => {
   const input = step.inputReview;
   if (input && input.kind !== "advanced") {
-    const expected = input.kind === "condition" ? "condition_data" : input.kind === "wait" ? "delay" : input.kind === "agent_task" ? "task_brief" : "approval_material";
-    if (step.semantics?.input !== expected) ctx.addIssue({ code: "custom", path: ["inputReview"], message: "Step input binding changed" });
+    const expected = input.kind === "condition" ? "condition_data" : input.kind === "wait" ? "delay" : input.kind === "agent_task" ? "task_brief" : input.kind === "connected_tool" ? "tool_arguments" : "approval_material";
+    if (step.semantics?.input !== expected || input.kind === "connected_tool" && step.semantics?.actor !== "connected_tool") ctx.addIssue({ code: "custom", path: ["inputReview"], message: "Step input binding changed" });
   }
   if (step.toolAccess && step.semantics?.actor !== "connected_tool")
     ctx.addIssue({ code: "custom", path: ["toolAccess"], message: "Connection actor binding changed" });

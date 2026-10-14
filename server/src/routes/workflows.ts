@@ -841,12 +841,14 @@ export function workflowRoutes(db: Db) {
     const result = workflowReview(detail, nodeRegistry.list(), edit.allowed,
       operate.allowed && rollout, run.allowed && rollout, canTest, testReceipt);
     try {
-      const { assignments, toolAccess } = await readWorkflowStepContext(db, detail, req.actor);
+      const { assignments, toolAccess, toolInputs } = await readWorkflowStepContext(db, detail, req.actor);
       for (const revision of [result.draft, result.active]) if (revision) for (const step of revision.steps) {
         const assignment = assignments.get(`${revision.id}:${step.nodeId}`);
         if (assignment) step.assignment = assignment;
         const connection = toolAccess.get(`${revision.id}:${step.nodeId}`);
         if (connection) step.toolAccess = connection;
+        const inputs = toolInputs.get(`${revision.id}:${step.nodeId}`);
+        if (inputs) step.inputReview = inputs;
       }
     } catch (error) {
       if (error instanceof ExperienceOverloadError) throw new HttpError(503, "Current workflow assignments are unavailable; try again");

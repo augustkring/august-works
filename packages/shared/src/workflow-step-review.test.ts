@@ -38,3 +38,13 @@ it("accepts only the Original local permission route and suppresses hidden conne
   expect(workflowStepToolAccessSchema.safeParse({ ...value, state: "unavailable" }).success).toBe(false);
   expect(workflowStepToolAccessSchema.safeParse({ state: "unavailable", connectionName: null, operationName: null, previewHref: null }).success).toBe(true);
 });
+
+it("binds scalar tool input review to the connected-tool actor and its declared input semantics", () => {
+  const inputReview = { kind: "connected_tool", fields: [{ name: "query", label: "Search", help: null, type: "string", required: true,
+    options: null, minLength: null, maxLength: null, minimum: null, maximum: null }], values: { query: " PRIVATE text " } };
+  const current = { ...step, semantics: { ...semantics, actor: "connected_tool", input: "tool_arguments" }, inputReview };
+  expect(workflowExperienceRevisionSchema.parse({ ...revision, steps: [current] }).steps[0].inputReview).toEqual(inputReview);
+  for (const change of [{ actor: "human" }, { input: "approval_material" }])
+    expect(workflowExperienceRevisionSchema.safeParse({ ...revision, steps: [{ ...current, semantics: { ...current.semantics, ...change } }] }).success).toBe(false);
+  expect(workflowExperienceRevisionSchema.safeParse({ ...revision, steps: [{ ...current, inputReview: { ...inputReview, values: { unknown: "PRIVATE" } } }] }).success).toBe(false);
+});

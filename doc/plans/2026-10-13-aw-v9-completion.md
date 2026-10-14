@@ -1012,3 +1012,41 @@ Current screen-contract validation passes 60 cases and OpenAPI routing passes 21
 An earlier command used nonexistent test paths and ran no tests; only the actual
 subsequent suites are evidence. All 70 surfaces remain pending implementation
 and/or qualification in the source register; sourceComplete stays false.
+
+
+### Current review of saved connected-operation inputs — 2026-10-14
+
+The current Native step-context owner supplies named scalar values only while
+actual connection visibility, current catalog pins and effective input-schema
+hash match. Unknown config keys, input mappings, disabled/hidden connections,
+legacy unpinned/complex inputs and drift receive Advanced without private values.
+Actual verified account and workflow Source checks remain mandatory; copied
+administrator context cannot reveal a private draft connection. The UI shows
+false, empty text and omitted optional values distinctly. Complete private input
+review is capped at 64 KiB with whole-read refusal rather than truncation.
+
+The initial server group passes 36 cases in three suites. The first client group
+passes 17 cases and fails one assertion because the existing boolean copy says
+No rather than False. After correcting that assertion, the client/shared and
+actual workflow route group passes all 60 cases in four suites. The immutable
+checkpoint-22 full recursive typecheck passes; its full tests are still running.
+These results are scoped; no whole V9 readiness or provider/Human result is claimed.
+
+Final budget/contract coverage passes 68 cases in two suites, including a complete
+20-step input projection over 64 KiB that refuses the whole read. UI/server types
+pass. The browser first exposes missing authenticated company scope in its
+controlled bridge (403); the bridge now derives scope from actual active Native
+memberships. It then exposes a real missing shared semantic-kind binding for the
+new connected-tool input review (400). The binding now requires tool_arguments
+and the connected_tool actor. Final shared/client binding tests pass all 20 cases.
+The built Danish 390px browser case then passes (53.2 seconds overall): actual
+current HTTP/schema projection, named values, false/omission, zero main axe
+violations/no overflow, physical private-draft connection withdrawal, unchanged
+publication/no work, one lost POST and Original flags-closed receipt recovery.
+Its screenshot was inspected. The controlled login/provider fixtures remain
+software evidence, not real Human, live connection or hosted qualification.
+
+The final shared typecheck, token/module/source gates and 21-case OpenAPI suite
+pass. All 70 surfaces remain pending implementation and/or qualification. The
+separate checkpoint-22 aggregate continues on its immutable source; it does not
+qualify this subsequent change or the whole brief.

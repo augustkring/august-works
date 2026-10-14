@@ -1,3 +1,4 @@
+import { WorkflowToolInputReview } from "../components/WorkflowToolInputReview";
 import { WorkflowPublicationControls } from "../components/WorkflowPublicationControls";
 import { useEffect, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
@@ -387,6 +388,10 @@ export function WorkflowReview({
                             <p className="whitespace-pre-wrap break-words">{step.inputReview.objective}</p>
                             <p>{t(step.inputReview.waitForCompletion ? "workflowDraftStep.agent.waits" : "workflowDraftStep.agent.continues")}</p>
                           </dd>
+                        </div>}
+                        {step.inputReview?.kind === "connected_tool" && <div>
+                          <dt className="font-medium">{t("workflowDraftFlow.tool.inputs")}</dt>
+                          <dd><WorkflowToolInputReview review={step.inputReview} /></dd>
                         </div>}
                         {step.inputReview?.kind === "advanced" && <div>
                           <dt className="font-medium">{t("workflowSemantics.input")}</dt>

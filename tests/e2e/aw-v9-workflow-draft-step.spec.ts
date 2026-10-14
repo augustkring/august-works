@@ -249,7 +249,14 @@ test("guided Native flow appends a scalar connected operation and recovers its o
   const [application] = await db.insert(toolApplications).values({ companyId: company.id, name: "Contacts", type: "mcp_http" }).returning();
   const [connection] = await db.insert(toolConnections).values({ companyId: company.id, applicationId: application.id, name: "Contact system", uid: randomUUID(), transport: "mcp_remote", status: "active", enabled: true, config: { privateToken: "PRIVATE connection credential" } }).returning();
   const [entry] = await db.insert(toolCatalogEntries).values({ companyId: company.id, applicationId: application.id, connectionId: connection.id, name: "contacts.find", toolName: "contacts.find", title: "Find contacts", versionHash: "v1", schemaHash: "s1", inputSchema: { type: "object", properties: { query: { type: "string", title: "Søgetekst", minLength: 1 }, count: { type: "integer", title: "Antal", minimum: 1, maximum: 10 }, includeInactive: { type: "boolean", title: "Medtag inaktive" } }, required: ["query"], additionalProperties: false } }).returning();
-  const app = express(); app.use(express.json()); app.use((req, _res, next) => { req.actor = { type: "board", source: "session", userId }; next(); }); app.use("/api", workflowRoutes(db)); app.use(errorHandler);
+  const app = express(); app.use(express.json()); app.use(async (req, _res, next) => {
+    try {
+      const memberships = await db.select().from(companyMemberships).where(eq(companyMemberships.principalId, userId));
+      req.actor = { type: "board", source: "session", userId, isInstanceAdmin: false,
+        companyIds: memberships.filter(item => item.principalType === "user" && item.status === "active").map(item => item.companyId) };
+      next();
+    } catch (error) { next(error); }
+  }); app.use("/api", workflowRoutes(db)); app.use(errorHandler);
   const bridge = app.listen(0, "127.0.0.1"); await new Promise<void>(resolve => bridge.once("listening", resolve));
   const address = bridge.address(); if (!address || typeof address === "string") throw new Error("Controlled fixture listener unavailable"); const bridgeBase = `http://127.0.0.1:${address.port}`;
   let posts = 0, receipts = 0, lost: { requestId: string } | null = null;
@@ -264,6 +271,12 @@ test("guided Native flow appends a scalar connected operation and recovers its o
     await page.route(`**${base}/${created.id}/experience/draft-flow**`, async route => {
       const url = new URL(route.request().url()), response = await route.fetch({ url: bridgeBase + url.pathname + url.search });
       if (route.request().method() === "POST") { posts++; expect(posts).toBe(1); lost = await json(response); await route.abort("failed"); return; }
+      await route.fulfill({ response });
+    });
+    await page.route(url => url.pathname === `${base}/${created.id}/experience`, async route => {
+      const url = new URL(route.request().url());
+      const response = await route.fetch({ url: bridgeBase + url.pathname + url.search });
+      expect(response.ok(), `Native current review ${response.status()}: ${await response.text()}`).toBe(true);
       await route.fulfill({ response });
     });
     await page.route(`**${base}/${created.id}/experience/requests/draft_build/**`, async route => {
@@ -295,6 +308,19 @@ test("guided Native flow appends a scalar connected operation and recovers its o
     expect(await db.select().from(issues).where(eq(issues.companyId, company.id))).toEqual([]);
     expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, company.id))).toEqual([]);
     const locator = await page.evaluate(() => sessionStorage.getItem("aw.v9.pending-workflow-request-receipts")); expect(locator).toContain(lost!.requestId); expect(locator).not.toMatch(/PRIVATE|contacts|query|includeInactive|connectionId/);
+    const nativeReview = await json(await request.get(`${bridgeBase}${base}/${created.id}/experience?expectedUserId=${userId}`));
+    expect(nativeReview.draft.steps[1].inputReview).toMatchObject({ kind: "connected_tool", values: { query: " PRIVATE forespørgsel ", includeInactive: false } });
+    await page.goto(`/${company.issuePrefix}/workflows/${created.id}?revision=draft`);
+    await expect(page.getByRole("main")).toContainText('" PRIVATE forespørgsel "');
+    await expect(page.getByRole("main")).toContainText("Input til operationen");
+    await expect(page.getByRole("main")).toContainText("Ikke medtaget");
+    await page.addScriptTag({ path: axePath }); expect(await page.evaluate(async () => (await (window as unknown as { axe: { run(scope: string): Promise<{ violations: unknown[] }> } }).axe.run("main")).violations)).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: info.outputPath("guided-connected-input-review-da-mobile.png"), fullPage: true });
+    await db.update(toolConnections).set({ status: "draft" }).where(eq(toolConnections.id, connection.id));
+    await page.reload(); await expect(page.getByRole("main")).toContainText("PRIVATE kontakttrin");
+    await expect(page.getByRole("main")).not.toContainText("PRIVATE forespørgsel");
+    await page.goto(`/${company.issuePrefix}/workflows/${created.id}/draft`);
     await json(await request.patch("/api/instance/settings/experimental", { data: { enableWorkflowBuilderV1: false, enableWorkflowsV1: false, progressive_shell_v9: false } }));
     await page.reload(); await page.getByRole("link", { name: "Kontrollér den gemte anmodning", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Workflowanmodning bekræftet", exact: true })).toBeFocused();
