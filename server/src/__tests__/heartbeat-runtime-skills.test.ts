@@ -45,7 +45,12 @@ async function waitForRunToFinish(
   const deadline = Date.now() + timeoutMs;
   while (Date.now() < deadline) {
     const run = await heartbeat.getRun(runId);
-    if (run && !["queued", "running"].includes(run.status)) return run;
+    if (run && !["queued", "running"].includes(run.status)) {
+      // A terminal receipt precedes runtime release/final bookkeeping. Wait
+      // for the Original execution owner before TRUNCATE acquires table locks.
+      await heartbeat.waitForRunExecutionDrain(runId, { timeoutMs });
+      return run;
+    }
     await new Promise((resolve) => setTimeout(resolve, 50));
   }
   return await heartbeat.getRun(runId);
@@ -112,7 +117,6 @@ describeEmbeddedPostgres("heartbeat runtime skill version pins", () => {
   afterEach(async () => {
     capturedRuns.length = 0;
     await instanceSettingsService(db).updateExperimental({ enableBetaSkills: false });
-    await new Promise((resolve) => setTimeout(resolve, 100));
     await db.execute(sql.raw(`
       TRUNCATE TABLE
         "activity_log",

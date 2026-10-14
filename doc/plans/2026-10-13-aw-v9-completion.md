@@ -1955,3 +1955,15 @@ and dates, without internal runtime jargon.
 Final paired built browsers pass 2 cases (46.9 seconds) after copy refinement.
 The retained-measurement Danish mobile screenshot is inspected. Token gates,
 module boundaries and V9 coverage pass; coverage still reports 70 pending.
+
+### Runtime skill verification waits for Native execution drain — 2026-10-14 (checkpoint 48)
+
+The frozen checkpoint 46 full run exposes a reproducible heartbeat-runtime-skills
+teardown deadlock. An isolated rerun fails too: a terminal run receipt is visible
+before runtime release finishes, while TRUNCATE acquires exclusive table locks
+against that last bookkeeping. The test helper now waits for the existing
+waitForRunExecutionDrain owner before returning terminal receipts; the arbitrary
+100 ms cleanup sleep is removed. No runtime, authorization, SQL guard or
+production behavior is weakened. The two-case regression passes (35.63 seconds).
+The full checkpoint 46 run remains running and contains the old failure; it must
+not be reported as a pass or used as final evidence for this fix. No PR/push.
