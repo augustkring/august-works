@@ -38,8 +38,26 @@
     ]
   },
   "inputs": [
-    "Explicit internal-test acknowledgement against current immutable draft/version/update identity",
-    "Optional invented start values: at most 20 non-overlapping exact paths, depth at most 8 and total input at most 8 KB; text/finite-number/boolean/null literals"
+    {
+      "id": "acknowledgeInternalTest",
+      "label": "I understand this is an internal test",
+      "dataType": "Boolean acknowledgement",
+      "required": true,
+      "default": "Unchecked",
+      "help": "Review the current immutable draft and exact stop limit; any changed material requires a new acknowledgement",
+      "validation": "Must be explicitly checked against the frozen current draft/update identity",
+      "autofillOrPrefill": "None; held only in memory for the current account and Source"
+    },
+    {
+      "id": "syntheticInput",
+      "label": "Invented start values",
+      "dataType": "Bounded rows of exact field paths and typed literals",
+      "required": false,
+      "default": "Empty list; no start data",
+      "help": "Choose text, finite number, boolean or null; fields are exact and case-sensitive",
+      "validation": "At most 20 non-overlapping paths, depth at most 8, total JSON UTF-8 at most 8192 bytes; text at most 1000 characters",
+      "autofillOrPrefill": "None; held only in memory for the current account and Source"
+    }
   ],
   "actions": {
     "primary": {

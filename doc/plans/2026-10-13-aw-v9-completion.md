@@ -775,3 +775,20 @@ unchanged during those sequential checks, including Native Rust/protocol/parity
 and CLI builds. Checkpoint 11's separate test:run remains in progress and cannot
 qualify this later Source. The full final aggregate and all whole-brief gaps
 above remain open; this is not PR-ready completion.
+
+### Executable screen-contract input records — 2026-10-14
+
+The immutable checkpoint-11 regression finishes general server (913 passed files,
+7 skipped; 17112 passed tests, 90 skipped), serialized server (787 files/7732 tests
+passed) and workspace A (63 files/502 tests passed). Workspace B reaches shared
+contracts (127 files/1123 tests pass; five failures in one screen-contract suite)
+and stops before all later workspace projects. test:run exits 1; its driver does
+not run the subsequent build. This is a failed aggregate, not a complete pass.
+
+ORCHESTRATION and WORKFLOW-DRAFT/FIX/TEST/RECOVER had prose strings in inputs,
+while the canonical executable schema requires explicit input records. The
+contracts now define actual labels/types/required/default/help/validation/prefill
+for the implemented controls, preserving the current branch fields and all open
+acceptance boundaries. No schema is weakened to accept the malformed documents.
+The exact existing contract suite passes all 60 cases on current Source. Later
+implementation changes still require their own immutable whole-suite result.

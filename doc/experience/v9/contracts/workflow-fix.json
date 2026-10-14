@@ -35,10 +35,56 @@
     ]
   },
   "inputs": [
-    "Step name, 1–200 readable Unicode characters",
-    "Wait duration, whole seconds 1–604800",
-    "Approval summary up to 1000 and consequence up to 2000 readable characters",
-    "Guided condition source, exact 1–8 field levels, comparator and explicit text/finite-number/boolean/null literal"
+    {
+      "id": "name",
+      "label": "Step name",
+      "dataType": "Text",
+      "required": true,
+      "default": "Current Native name",
+      "help": "Edit only the selected current draft step",
+      "validation": "Readable Unicode text, 1–200 characters; control characters and malformed surrogate pairs are refused",
+      "autofillOrPrefill": "Current selected Native node name"
+    },
+    {
+      "id": "durationSeconds",
+      "label": "Wait time (seconds)",
+      "dataType": "Integer",
+      "required": false,
+      "default": "Current Native value when the step is a complete literal wait",
+      "help": "Required for a supported wait; unchanged configuration is preserved",
+      "validation": "Whole seconds 1–604800",
+      "autofillOrPrefill": "Current exact literal Native delay"
+    },
+    {
+      "id": "summary",
+      "label": "What needs approval?",
+      "dataType": "Text",
+      "required": false,
+      "default": "Current exact Native summary when supported",
+      "help": "Required for a supported approval checkpoint",
+      "validation": "Readable Unicode text, 1–1000 characters; control characters and malformed surrogate pairs are refused",
+      "autofillOrPrefill": "Current exact Native checkpoint summary"
+    },
+    {
+      "id": "consequence",
+      "label": "What happens if it is approved?",
+      "dataType": "Text",
+      "required": false,
+      "default": "Current exact Native consequence when supported",
+      "help": "Required for a supported approval checkpoint; this does not grant action authority",
+      "validation": "Readable Unicode text, 1–2000 characters; control characters and malformed surrogate pairs are refused",
+      "autofillOrPrefill": "Current exact Native checkpoint consequence"
+    },
+    {
+      "id": "condition",
+      "label": "When this condition is met",
+      "dataType": "Closed source/path/operator/typed-literal comparison",
+      "required": false,
+      "default": "Current exact representable Native comparison",
+      "help": "Required for a supported condition; existing branches are preserved",
+      "validation": "Source trigger | variables | steps; 1–8 exact field levels; comparator === | !== | > | >= | < | <=; finite numeric ordering and exact text/boolean/null equality",
+      "autofillOrPrefill": "Exact Original parser round-trip, otherwise Advanced"
+    }
   ],
   "actions": {
     "primary": {

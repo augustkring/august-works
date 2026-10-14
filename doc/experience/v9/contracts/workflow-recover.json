@@ -36,7 +36,16 @@
     ]
   },
   "inputs": [
-    "On exact retained-run control only: explicit acknowledgement that completed actions remain; the current Native update/revision identities are frozen by the client, never edited by a model or user."
+    {
+      "id": "acknowledgeCompletedEffects",
+      "label": "I understand completed actions remain",
+      "dataType": "Boolean acknowledgement",
+      "required": true,
+      "default": "Unchecked",
+      "help": "On exact retained-run control only; Original revision/update/run identities are frozen by the client, not edited",
+      "validation": "Must be explicitly checked; preserve one Original request identity before POST",
+      "autofillOrPrefill": "None; held only in memory for the current account and Source"
+    }
   ],
   "actions": {
     "primary": {

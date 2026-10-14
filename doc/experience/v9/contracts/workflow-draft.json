@@ -39,11 +39,136 @@
     ]
   },
   "inputs": [
-    "Explicit manual start",
-    "Step name and wait duration, or approval summary/consequence",
-    "Explicit removal of the current last non-trigger draft step",
-    "Explicit internal run-time stop limit, whole seconds 1–60, required for the initial manual start; not an estimate of completion time",
-    "Exact condition source/field levels/operator/typed literal and explicit names/wait durations for both outcomes; an earlier source step is selected by its current readable name and bound by its actual Native node ID."
+    {
+      "id": "deadlineSeconds",
+      "label": "Maximum run time (seconds)",
+      "dataType": "Integer",
+      "required": true,
+      "default": "Empty for an initial manual start",
+      "help": "A stop limit, not an estimate of completion time",
+      "validation": "Explicit whole seconds 1–60 before adding a manual start",
+      "autofillOrPrefill": "Recorded Native limit for existing drafts"
+    },
+    {
+      "id": "operation",
+      "label": "What should happen next?",
+      "dataType": "Closed choice: append_wait | append_approval | append_condition",
+      "required": true,
+      "default": "Visible wait choice for an existing linear draft",
+      "help": "Manual start and removal are separate explicit actions; branched extension remains Advanced",
+      "validation": "Only supported complete current single-path composition; exact Native tail/version binding",
+      "autofillOrPrefill": "None; held only in memory for the current account and Source"
+    },
+    {
+      "id": "name",
+      "label": "Step name",
+      "dataType": "Text",
+      "required": true,
+      "default": "Empty",
+      "help": "Name the proposed wait, approval or condition",
+      "validation": "Readable Unicode text, 1–200 characters; control characters and malformed surrogate pairs are refused",
+      "autofillOrPrefill": "None; held only in memory for the current account and Source"
+    },
+    {
+      "id": "durationSeconds",
+      "label": "Wait time (seconds)",
+      "dataType": "Integer",
+      "required": false,
+      "default": "Empty",
+      "help": "Required for an appended literal wait",
+      "validation": "Explicit whole seconds 1–604800",
+      "autofillOrPrefill": "None; held only in memory for the current account and Source"
+    },
+    {
+      "id": "summary",
+      "label": "What needs approval?",
+      "dataType": "Text",
+      "required": false,
+      "default": "Empty",
+      "help": "Required for an appended approval checkpoint",
+      "validation": "Readable Unicode text, 1–1000 characters; control characters and malformed surrogate pairs are refused",
+      "autofillOrPrefill": "None; held only in memory for the current account and Source"
+    },
+    {
+      "id": "consequence",
+      "label": "What happens if it is approved?",
+      "dataType": "Text",
+      "required": false,
+      "default": "Empty",
+      "help": "Required for an appended approval checkpoint; no replacement for canonical action approval",
+      "validation": "Readable Unicode text, 1–2000 characters; control characters and malformed surrogate pairs are refused",
+      "autofillOrPrefill": "None; held only in memory for the current account and Source"
+    },
+    {
+      "id": "conditionSource",
+      "label": "Read the value from",
+      "dataType": "Closed choice: trigger | variables | steps",
+      "required": false,
+      "default": "Visible start-data choice when adding a condition",
+      "help": "Required for a condition; no expression supplied by a model is evaluated here",
+      "validation": "Closed Native comparison source",
+      "autofillOrPrefill": "None; held only in memory for the current account and Source"
+    },
+    {
+      "id": "earlierNode",
+      "label": "Earlier step",
+      "dataType": "Current Native node identity selected by readable name",
+      "required": false,
+      "default": "No selected step",
+      "help": "Required when reading an earlier result; its ID is added automatically to the field path",
+      "validation": "Must be one of the exact current earlier single-path node IDs",
+      "autofillOrPrefill": "None; held only in memory for the current account and Source"
+    },
+    {
+      "id": "path",
+      "label": "Field names, from outermost to innermost",
+      "dataType": "Exact field levels, one per line",
+      "required": false,
+      "default": "Empty",
+      "help": "Required for a condition; choose an earlier step separately, then enter result fields",
+      "validation": "1–8 readable levels, at most 160 characters each; at most 7 entered levels when an earlier step ID is prefixed",
+      "autofillOrPrefill": "None; held only in memory for the current account and Source"
+    },
+    {
+      "id": "operator",
+      "label": "Comparison",
+      "dataType": "Closed comparator choice",
+      "required": false,
+      "default": "Visible equality choice for a new condition",
+      "help": "Required for a condition; selected meaning is shown before saving",
+      "validation": "=== | !== | > | >= | < | <=",
+      "autofillOrPrefill": "None; held only in memory for the current account and Source"
+    },
+    {
+      "id": "value",
+      "label": "Compare with",
+      "dataType": "Explicit text | finite number | boolean | null",
+      "required": false,
+      "default": "Visible empty text; changing to boolean displays its selected value",
+      "help": "Required typed condition literal; exact string whitespace is retained",
+      "validation": "Text at most 1000 readable characters; ordering requires a finite number",
+      "autofillOrPrefill": "None; held only in memory for the current account and Source"
+    },
+    {
+      "id": "whenTrue",
+      "label": "If the condition is met",
+      "dataType": "Branch step name and literal wait duration",
+      "required": false,
+      "default": "Both fields empty",
+      "help": "Required for a condition; only the selected true branch executes",
+      "validation": "Name 1–200 readable characters and explicit whole seconds 1–604800",
+      "autofillOrPrefill": "None; held only in memory for the current account and Source"
+    },
+    {
+      "id": "whenFalse",
+      "label": "Otherwise",
+      "dataType": "Branch step name and literal wait duration",
+      "required": false,
+      "default": "Both fields empty",
+      "help": "Required for a condition; choose both outcomes before saving",
+      "validation": "Name 1–200 readable characters and explicit whole seconds 1–604800",
+      "autofillOrPrefill": "None; held only in memory for the current account and Source"
+    }
   ],
   "actions": {
     "primary": {

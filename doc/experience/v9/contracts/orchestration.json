@@ -38,7 +38,36 @@
     ]
   },
   "inputs": [
-    "On the separate exact-plan safety page only: Pause/Stop action, 20–2000 character reason and explicit acknowledgement that completed effects remain."
+    {
+      "id": "action",
+      "label": "Pause or stop",
+      "dataType": "Closed choice: pause | stop",
+      "required": true,
+      "default": "No submitted action",
+      "help": "On the exact-plan safety page; completed effects remain",
+      "validation": "Select one Native control action and bind the exact plan version",
+      "autofillOrPrefill": "None; held only in memory for the current account and Source"
+    },
+    {
+      "id": "reason",
+      "label": "Why are you stopping this work?",
+      "dataType": "Text",
+      "required": true,
+      "default": "Empty",
+      "help": "Record a concrete reason for the Native control receipt",
+      "validation": "20–2000 readable characters",
+      "autofillOrPrefill": "None; held only in memory for the current account and Source"
+    },
+    {
+      "id": "acknowledgeCompletedEffects",
+      "label": "I understand completed actions remain",
+      "dataType": "Boolean acknowledgement",
+      "required": true,
+      "default": "Unchecked",
+      "help": "Stopping prevents further admitted work; it does not undo completed effects",
+      "validation": "Must be explicitly checked before a new command",
+      "autofillOrPrefill": "None; held only in memory for the current account and Source"
+    }
   ],
   "actions": {
     "primary": {
