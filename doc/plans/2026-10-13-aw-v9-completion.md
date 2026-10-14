@@ -768,3 +768,10 @@ axe violations, no horizontal overflow, one actual four-node/true-false draft,
 unchanged active version, deliberate lost second POST and flags-closed Original
 GET receipt recovery with identity-only storage cleared. It provides software
 evidence over Native owners, not real Human/host/provider qualification.
+
+Full recursive typecheck and the full workspace build both pass on immutable
+application Source ba98ed0746799e769442c4c56d9cf7ed2c9cac3e. The Source remained
+unchanged during those sequential checks, including Native Rust/protocol/parity
+and CLI builds. Checkpoint 11's separate test:run remains in progress and cannot
+qualify this later Source. The full final aggregate and all whole-brief gaps
+above remain open; this is not PR-ready completion.
