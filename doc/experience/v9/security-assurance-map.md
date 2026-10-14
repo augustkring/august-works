@@ -269,3 +269,12 @@ expiry protect display; revalidation withdraws agenda/evidence. This reader
 creates no review/task/event/decision/approval, new purpose, grant or telemetry.
 Synthetic governance/goal/manager fixtures are bounded software evidence, not
 real Human, leadership result or production qualification.
+
+
+Conversation authoring receipts (ADR-78) inherit the Original accepted
+Human-only standalone task/run/interaction Source proof, rather than treating
+creator-kind or a copied origin as authority. Exact generation/current
+conversation Agent/responsible user, task RBAC and run/task Source revalidation
+remain required at the locked read. Agent semantic mutation receipts retain
+their additional checks. No current privilege is inferred from provenance;
+no writer, model, approval/continuation or telemetry is introduced.

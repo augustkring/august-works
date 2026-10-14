@@ -2180,3 +2180,32 @@ values and no claim of a complete inventory. Seven component/directory suites
 pass 49 cases (13.21 seconds). Actual built directory keyboard/current-account/
 EN-DA mobile/axe/no-write regression passes 1 case (45.4 seconds), restoring
 six destinations after the account fence. UI typecheck passes exit 0. No PR/push.
+
+### Conversation receipts include Native Human-reviewed backlog tasks — 2026-10-14 (checkpoint 56)
+
+An actual Original proposal/Human acceptance creates the standalone backlog
+task but the old authoring query returns savedTasks: []. The unmodified-source
+baseline fails (19.71 seconds), demonstrating the missing conversation receipt.
+Candidate selection and locked reads now reuse aw_runner_task_origin for
+accepted Human-only Original receipts as well as Agent provenance. Existing
+Agent semantic receipt checks, exact Native run/Agent/responsible user/session
+generation, current task RBAC, privacy and run/task Source checks remain.
+No writer, model, approval, continuation, new store or grant is added. Native
+fixture explicitly uses continuation none, matching the production review
+flow. Actual copied origins cannot appear as receipts; previous generations
+and erased run Sources cannot restore a Human task title. ADR-78/security
+mapping align the partial semantic authoring work.
+
+First full authoring suite passes 22 cases (30.79 seconds). The two added
+Human-source cases pass except an invented deletion-marker fixture field;
+the actual Native source kind is used instead, without changing production
+guards. Server typecheck passes exit 0. Final 24-case Native authoring
+regression is recorded below. The fixed task is unassigned/backlog and no
+second business task is created. No genuine provider, hosted Human or browser
+qualification is inferred. All 70 launch rows/R0 and whole-V9/final exact-head
+checks remain pending. Frozen checkpoint 53 verification is running and excludes
+this checkpoint. No PR/push.
+Final Native authoring regression passes all 24 cases (32.23 seconds),
+including the actual Human receipt, copied-origin exclusion, earlier-generation
+withdrawal and originating-run Source-erasure refusal. Token/module/coverage
+gates pass; release evidence remains pending.

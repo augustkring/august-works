@@ -1,5 +1,5 @@
 import { assertFoundationConversationSource, FOUNDATION_CONVERSATION_SOURCE } from "../foundation-authoring-source.js";
-import { and, eq, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import { notificationPreferenceProposals, foundationChangeProposals, foundationDocuments, documents, heartbeatRuns, issues, routineRevisions, routines, workflows, type Db } from "@paperclipai/db";
 import { conversationAuthoringViewSchema } from "@paperclipai/shared";
@@ -84,19 +84,24 @@ export function conversationAuthoringService(db: Db) {
             : detail.draftRevisionId ? "changed" as const : "superseded" as const,
           stepCount: revision.graph.nodes.length - triggerCount, triggerCount, preview: authoredFlow.flow, comparison, href: `/workflows/${detail.id}` });
       }
-      // Original Native create_task writes provenance atomically with its
-      // mutation receipt. Neither model prose nor an arbitrary task link is
-      // a saved result. Match the exact current conversation/run generation.
+      // Original Native mutations and accepted Human interactions bind their
+      // actual task receipts. The existing Source helper verifies both origins;
+      // model prose or a copied origin is not a saved result. Match the current
+      // conversation, Agent/responsible user and exact run generation.
       const tasks = await tx.execute<{ id: string; run_id: string }>(sql`
         select t.id,h.id as run_id from issues t join heartbeat_runs h
           on h.company_id=t.company_id and h.id::text=t.origin_run_id
-        where t.company_id=${companyId}::uuid and t.created_by_agent_id=${initial.conversation.conversationAgentId}::uuid
-          and t.origin_kind='manual' and t.origin_id like ${`paperclip-runner:create-task:${conversationId}:%`}
+        cross join lateral aw_runner_task_origin(t.company_id,t.id) proof
+        where t.company_id=${companyId}::uuid and t.origin_kind='manual'
+          and proof.invalid is false and proof.source_run_id=h.id and proof.source_task_id=${conversationId}::uuid
+          and ((t.created_by_agent_id=${initial.conversation.conversationAgentId}::uuid
+            and t.origin_id like ${`paperclip-runner:create-task:${conversationId}:%`}
+            and h.result_json->'semanticToolReceipts'->substr(t.origin_id,length(${`paperclip-runner:create-task:${conversationId}:`})+1)->>'operationId'='create_task'
+            and h.result_json->'semanticToolReceipts'->substr(t.origin_id,length(${`paperclip-runner:create-task:${conversationId}:`})+1)->'result'->'task'->>'id'=t.id::text)
+            or (t.created_by_agent_id is null and t.origin_id like 'paperclip-suggested-task:%'))
           and h.runtime_mode='native' and h.native_issue_id=${conversationId}::uuid
           and h.agent_id=${initial.conversation.conversationAgentId}::uuid and h.responsible_user_id=${initial.userId}
           and coalesce(h.context_snapshot->>'conversationSessionGeneration','0')=${String(initial.conversation.conversationSessionGeneration)}
-          and h.result_json->'semanticToolReceipts'->substr(t.origin_id,length(${`paperclip-runner:create-task:${conversationId}:`})+1)->>'operationId'='create_task'
-          and h.result_json->'semanticToolReceipts'->substr(t.origin_id,length(${`paperclip-runner:create-task:${conversationId}:`})+1)->'result'->'task'->>'id'=t.id::text
           and t.conversation_agent_id is null and t.conversation_retired_at is null and t.hidden_at is null
         order by t.created_at desc,t.id desc limit 11`);
       const savedTasks = [];
@@ -111,16 +116,23 @@ export function conversationAuthoringService(db: Db) {
         if (!origin) throw conflict("The saved task's conversation provenance changed");
         const [task] = await tx.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, candidate.id),
           isNull(issues.hiddenAt), isNull(issues.conversationAgentId), isNull(issues.conversationRetiredAt),
-          eq(issues.createdByAgentId, initial.conversation.conversationAgentId!), eq(issues.originKind, "manual"),
-          sql`${issues.originId} like ${`paperclip-runner:create-task:${conversationId}:%`}`,
+          eq(issues.originKind, "manual"),
+          or(and(eq(issues.createdByAgentId, initial.conversation.conversationAgentId!), sql`${issues.originId} like ${`paperclip-runner:create-task:${conversationId}:%`}`),
+            and(isNull(issues.createdByAgentId), sql`${issues.originId} like 'paperclip-suggested-task:%'`)),
           eq(issues.originRunId, candidate.run_id))).for("share");
         if (!task) throw conflict("The saved conversation task changed; refresh its current owner");
-        const receiptKey = task.originId!.slice(`paperclip-runner:create-task:${conversationId}:`.length);
-        const receipts = origin.receipts?.semanticToolReceipts;
-        const receipt = receipts && typeof receipts === "object" && !Array.isArray(receipts)
-          ? (receipts as Record<string, unknown>)[receiptKey] : undefined;
-        if (!z.object({ operationId: z.literal("create_task"), result: z.object({ task: z.object({ id: z.literal(task.id) }) }) }).safeParse(receipt).success)
-          throw conflict("The Original saved task receipt is unavailable");
+        const proof = await tx.execute<{ source_run_id: string | null; source_task_id: string | null; invalid: boolean }>(sql`
+          select * from aw_runner_task_origin(${companyId}::uuid,${task.id}::uuid)`);
+        if (proof.length !== 1 || proof[0].invalid || proof[0].source_run_id !== candidate.run_id || proof[0].source_task_id !== conversationId)
+          throw conflict("The Original saved task source receipt is unavailable");
+        if (task.createdByAgentId !== null) {
+          const receiptKey = task.originId!.slice(`paperclip-runner:create-task:${conversationId}:`.length);
+          const receipts = origin.receipts?.semanticToolReceipts;
+          const receipt = receipts && typeof receipts === "object" && !Array.isArray(receipts)
+            ? (receipts as Record<string, unknown>)[receiptKey] : undefined;
+          if (!z.object({ operationId: z.literal("create_task"), result: z.object({ task: z.object({ id: z.literal(task.id) }) }) }).safeParse(receipt).success)
+            throw conflict("The Original saved task receipt is unavailable");
+        }
         const access = await authorizationService(tx).decide({ actor: initial.current, action: "issue:read", resource: {
           type: "issue", companyId, issueId: task.id, projectId: task.projectId, parentIssueId: task.parentId,
           status: task.status, assigneeAgentId: task.assigneeAgentId, assigneeUserId: task.assigneeUserId,

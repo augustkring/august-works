@@ -8,6 +8,7 @@ import { workflowService } from "../services/workflows/workflow-service.js";
 import { lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
 import { ExperienceOverloadError } from "../services/experience/projection.js";
 import { issueService } from "../services/issues.js";
+import { issueThreadInteractionService } from "../services/issue-thread-interactions.js";
 import { PaperclipRunnerToolAuthority } from "../services/native-runtime/paperclip-runner-tool-authority.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
@@ -53,6 +54,35 @@ describe("Current conversation previews use actual Original authoring revisions"
     const receipt = await authority.execute(call) as { task: { id: string } };
     return { authority, call, receipt, enqueueWakeup };
   }
+  async function reviewedTask() {
+    await db.update(heartbeatRuns).set({ runtimeMode: "native", nativeIssueId: conversation.id }).where(eq(heartbeatRuns.id, run.id));
+    await db.update(issues).set({ executionRunId: run.id }).where(eq(issues.id, conversation.id));
+    const owner = issueThreadInteractionService(db);
+    const proposed = await owner.create(conversation, { kind: "suggest_tasks", sourceRunId: run.id, resolverPolicy: "human_only", continuationPolicy: "none",
+      payload: { version: 1, tasks: [{ clientKey: "reviewed-backlog", title: "Human reviewed backlog task", description: "PRIVATE review description", status: "backlog", placement: "company_backlog" }] } },
+      { agentId: f.presence.id, runId: run.id });
+    const accepted = await owner.acceptInteraction(conversation, proposed.id, {}, { userId: f.userId });
+    return accepted.createdIssues[0]!;
+  }
+  it("previews an actual Human-reviewed standalone backlog receipt without starting another task", async () => {
+    const saved = await reviewedTask();
+    expect(await view()).toMatchObject({ savedTasks: [{ id: saved.id, title: "Human reviewed backlog task", status: "backlog", executionStarted: false, href: `/issues/${saved.id}` }] });
+    expect(await db.select().from(issues).where(eq(issues.originRunId, run.id))).toHaveLength(1);
+  });
+  it("does not turn a copied Human task origin into a saved receipt and withdraws an earlier conversation generation", async () => {
+    const saved = await reviewedTask();
+    await db.insert(issues).values({ companyId: f.home, title: "FORGED copied receipt", status: "backlog", createdByUserId: f.userId,
+      originKind: "manual", originId: saved.originId, originRunId: run.id });
+    const current = await view(); expect(current.savedTasks.map(task => task.id)).toEqual([saved.id]); expect(JSON.stringify(current)).not.toContain("FORGED");
+    await db.update(issues).set({ conversationSessionGeneration: 1 }).where(eq(issues.id, conversation.id));
+    expect((await view()).savedTasks).toEqual([]);
+  });
+  it("never restores a Human-reviewed title after its Native originating run Source is erased", async () => {
+    const saved = await reviewedTask(); expect((await view()).savedTasks[0]?.id).toBe(saved.id);
+    await db.insert(memoryDeletionMarkers).values({ companyId: f.home, kind: "source",
+      key: `memory-run-source-erasure:v1:${run.id}` });
+    await expect(view()).rejects.toMatchObject({ status: 403 });
+  });
   it("previews a real Native saved backlog task without starting or repeating its mutation", async () => {
     const saved = await saveTask();
     const initial = await view();

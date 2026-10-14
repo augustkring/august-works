@@ -2697,3 +2697,18 @@ Decision/approval categories request work; they do not make an authoritative
 choice or grant approval. No complete census, latest ranking, score or causal
 conclusion is invented. This completes a basic read view for all six insight
 families, not chat card integration, representative Humans or V9 acceptance.
+
+
+## ADR-78 — Conversation receipts include Original Human-reviewed standalone tasks
+
+The read-only conversation authoring view previously admitted only Original
+Agent-created task prefixes and semantic receipts. It now also uses the
+existing aw_runner_task_origin proof to admit an accepted Human-only
+standalone task's exact Original interaction receipt. Candidate selection and
+locked task reads both validate that proof against the exact Native run and
+conversation. Current Agent/responsible user/conversation generation, task
+read RBAC, run/task Source authority, privacy and hidden/retired fences stay
+unchanged. Agent semantic receipt checks remain additional requirements.
+A copied origin is not a saved receipt; previous generations and erased
+Sources cannot restore titles. No task, approval, continuation, model, copied
+result store or permission is created by this projection.
