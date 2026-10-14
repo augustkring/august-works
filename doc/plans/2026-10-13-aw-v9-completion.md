@@ -2510,3 +2510,24 @@ Current lease checks: four shared/DOM/actual assistant-ui suites pass all 38
 cases (15.83 seconds); the actual Native management chat-reader case passes
 (one selected, 27 skipped; 39.02 seconds total). Token, module and source
 coverage checks pass. Full workspace typecheck is running on this code.
+
+### Separate rate-limit behavior from cold route loading — checkpoint 68
+
+Frozen 65 serialized qualification stops at invite-rate-limit-route.test.ts:
+the first case exceeds its explicit 20-second bound while the route's cold
+dependency transform takes 26.24 seconds. Two subsequent cases pass. This is
+a recorded failing aggregate; preceding suite passes do not make it complete.
+
+Import the actual access route and error handler at suite scope. The fixture
+already creates a separate injected limiter per app, so resetting all modules
+and reimporting the dependency graph per test adds no isolation of its budget.
+Keep the 20-second behavioral bound, real Supertest requests, 404-then-429,
+Retry-After, accept-route and spoofed-forwarded-IP assertions unchanged. This
+does not change the production rate limiter, threshold or authorization.
+The corrected three-case suite and remaining serialized suites must still run.
+
+The corrected actual HTTP suite passes all three cases: 32.71 seconds total,
+31.97 seconds import, 58 ms behavioral assertions. Full workspace typecheck on
+the lease implementation passes exit 0. The frozen 65 aggregate remains failed;
+its unrun workspace groups and remaining serialized suites are not passed.
+Current build and production-browser qualification are next.
