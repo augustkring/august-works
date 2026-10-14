@@ -2249,3 +2249,21 @@ grants access, creates a ready image, substitutes HEAD absence for quiescence or
 resolves a process crash. Original successful-write and unknown-write behavior
 remain authoritative. Deletion success still requires the Original delete and
 absence receipt; accounting refusal itself is not erasure proof.
+
+## ADR-61 — Assigned procedure review reuses current Native Source readers
+
+An assigned Skill reviewer or Playbook owner can receive a bounded M0 review
+finding through the existing Core maintenance reader. Assignment routes a finding;
+it never supplies access or promotion authority. Original Skill/private-version,
+Playbook/revision and retained Source readers remain required. Required Skill
+dependencies are resolved from current Native owners, never a cached status.
+The response contains no procedure name, body, dependency reference, private
+error or reviewer identity. Existing editor navigation rechecks its own access.
+
+This shares Core maintenance's verified-account transaction, privacy lock and
+1500 ms budget, preserving the existing eight-reader admission limit. Only five
+assigned records of each kind are examined; a sixth means partial coverage.
+Denied Sources remain partial and private. A final owner re-read withdraws
+reassigned or changed findings. No revalidation, assessment, candidate generation,
+version update, approval, publication, repair or Activity is performed by reading.
+Package/runtime recovery and real automation qualification are separate work.

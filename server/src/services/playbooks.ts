@@ -40,6 +40,14 @@ export function playbookService(db: Db) {
     return next!;
   }
   return {
+    /** Current own review metadata; never advances the approved revision. */
+    maintenanceReview: async (actor: AuthorizationActor, companyId: string, id: string) => {
+      const row = await get(db, actor, companyId, id);
+      return { id: row.id, ownerUserId: row.ownerUserId, status: row.status,
+        approvedRevisionId: row.approvedRevisionId, latestRevisionId: row.document.latestRevisionId,
+        updatedAt: row.updatedAt.toISOString(), nextReviewAt: row.nextReviewAt?.toISOString() ?? null,
+        needsReview: ["approved", "in_review"].includes(row.status) && row.overdue };
+    },
     // Runtime consumes only the exact reviewed procedure. The ordinary detail
     // owner also checks proposals and drafts; those bodies are not runtime pins.
     runtimeRevision: async (actor:AuthorizationActor,companyId:string,ref:string,revisionId?:string,readScope?:NativeReadScope)=>{

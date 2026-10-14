@@ -8,10 +8,12 @@ import { instanceSettingsService } from "../instance-settings.js";
 import { assertV7Authorization, v7HumanActorId } from "../v7-authorization.js";
 import { readinessService } from "../readiness/readiness-service.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
+import { readOwnProcedureRevalidation } from "./procedure-revalidation.js";
+import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 
-/** M0 current own findings only. No new assessment, resolution or approval. */
+/** M0 current own findings and assigned procedure review. No assessment or repair. */
 export async function readCoreMaintenance(db: Db, actor: AuthorizationActor, companyId: string, signal: AbortSignal): Promise<{
-  needsYou: ExperienceCard[]; coverage?: { state: "partial"; reason: "more_items_available" };
+  needsYou: ExperienceCard[]; coverage?: { state: "partial"; reason: "more_items_available" | "source_stale" };
 }> {
   const principal = v7HumanActorId(actor);
   if (actor.source === "local_implicit") throw forbidden("An authenticated current principal is required");
@@ -21,6 +23,7 @@ export async function readCoreMaintenance(db: Db, actor: AuthorizationActor, com
     const tx = rawTx as unknown as Db;
     await tx.execute(sql`set local statement_timeout='1500ms'`);
     await tx.execute(sql`set local lock_timeout='250ms'`);
+    await lockMemoryPrivacy(tx, companyId);
     async function access() {
       budget();
       const flags = await instanceSettingsService(tx).getExperimental();
@@ -47,7 +50,9 @@ export async function readCoreMaintenance(db: Db, actor: AuthorizationActor, com
       consequence: "Review the current source before relying on the result. Existing controls retain assessment and approval.",
       evidence: ["own_open_checks"], actions: [{ id: "review-own-checks", label: "Review your checks", labelKey: "review",
         operation: "open", href: "/readiness", criticality: "C2", source, requiresCurrentAuthorization: true }] }] : [];
+    const procedures = await readOwnProcedureRevalidation(tx, current, companyId, principal, budget);
     await access();
-    return { needsYou: cards, ...(findings.length > 5 ? { coverage: { state: "partial" as const, reason: "more_items_available" as const } } : {}) };
+    return { needsYou: [...cards, ...procedures.needsYou], ...(findings.length > 5 || procedures.reason
+      ? { coverage: { state: "partial" as const, reason: procedures.reason ?? "more_items_available" as const } } : {}) };
   });
 }

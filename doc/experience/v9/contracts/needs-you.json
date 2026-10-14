@@ -2,7 +2,12 @@
   "screenId": "NEEDS-YOU",
   "journeyId": "attention",
   "routeOrSurface": "/needs-you",
-  "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
   "customerOutcome": "Review current authorized items that need human action and open the exact native resolver.",
   "entryConditions": [
     "Effective progressive_shell_v9 and native experience projection prerequisites are enabled.",
@@ -17,12 +22,19 @@
   "content": {
     "h1": "Needs You",
     "supportingCopy": "Review current authorized items that need human action and open the exact native resolver.",
-    "customerTerms": ["Company", "Work", "Needs You", "Agent", "Feedback"],
+    "customerTerms": [
+      "Company",
+      "Work",
+      "Needs You",
+      "Agent",
+      "Feedback"
+    ],
     "displayedState": [
       "Title, why action is needed, known pending-state consequence, compact native evidence, action link and freshness in that order.",
       "A bounded native attention page; more_items_available is partial coverage, never a complete empty queue.",
       "No future business impact, full-queue count, effective authority or completed decision is inferred.",
-      "Current M2 exhausted durable attempt budgets or unconfirmed expired original attempts may appear only with current native installation/candidate/source and agent read/configure authority; stale or missing maintenance sources never imply a complete empty queue. Critical native approvals retain priority under the global 25-card boundary."
+      "Current M2 exhausted durable attempt budgets or unconfirmed expired original attempts may appear only with current native installation/candidate/source and agent read/configure authority; stale or missing maintenance sources never imply a complete empty queue. Critical native approvals retain priority under the global 25-card boundary.",
+      "Assigned Skill required-dependency/review-date findings and assigned overdue Playbooks are bounded current M0 observations. No private names, bodies, dependency references or reviewer identity are copied into the card."
     ]
   },
   "inputs": [],
@@ -41,7 +53,8 @@
   "systemWork": {
     "canonicalReadDomains": [
       "Native Attention source owners and current company/resource authorization",
-      "Existing Native Core Steward package installation, original reviewed budget receipt, current release qualification and actual 24-hour configured-change counts; maximum five installations, re-read before response."
+      "Existing Native Core Steward package installation, original reviewed budget receipt, current release qualification and actual 24-hour configured-change counts; maximum five installations, re-read before response.",
+      "Original Skill lifecycle/Source and Playbook revision/Source readers for at most five assigned procedures of each kind, within the existing Core maintenance reader and its shared 1500 ms deadline."
     ],
     "canonicalWriteOperation": "None; existing native resolvers own every mutation.",
     "authorityEffect": "Presentation and drafts cannot grant permissions. Material effects always require current native permissions, approvals and version preconditions.",
@@ -108,7 +121,8 @@
     "functional": [
       "Check pending-state consequence copy, source-specific card kind, exact resolver IDs and conservative consequence levels.",
       "Verify partial native pagination, unavailable versus empty, principal switches and unchanged native decision/action owners.",
-      "Prove real native budget exhaustion, current candidate withdrawal and owner suspension, rollout closure, abort and current membership loss; keep critical native approval recall under truncation."
+      "Prove real native budget exhaustion, current candidate withdrawal and owner suspension, rollout closure, abort and current membership loss; keep critical native approval recall under truncation.",
+      "Detect actual required dependency drift despite cached current flags; preserve Native rollout validation and current Source access; withdraw reassigned or changed procedures during the final owner re-read without repairs, approvals or Activity writes."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."

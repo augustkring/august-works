@@ -700,9 +700,14 @@
         "server/src/services/experience/service.ts",
         "server/src/services/experience/maintenance-attention.ts",
         "server/src/services/experience/projection.ts",
-        "server/src/services/stewards/maintenance-policy.ts"
+        "server/src/services/stewards/maintenance-policy.ts",
+        "server/src/services/experience/core-maintenance.ts",
+        "server/src/services/experience/procedure-revalidation.ts"
       ],
-      "evidenceRefs": [],
+      "evidenceRefs": [
+        "server/src/__tests__/v9-core-maintenance.integration.test.ts",
+        "ui/src/components/ExperienceCard.core-maintenance.test.tsx"
+      ],
       "contractPath": "doc/experience/v9/contracts/home.json"
     },
     {
@@ -725,9 +730,14 @@
         "server/src/services/experience/service.ts",
         "server/src/services/experience/maintenance-attention.ts",
         "server/src/services/experience/projection.ts",
-        "server/src/services/stewards/maintenance-policy.ts"
+        "server/src/services/stewards/maintenance-policy.ts",
+        "server/src/services/experience/core-maintenance.ts",
+        "server/src/services/experience/procedure-revalidation.ts"
       ],
-      "evidenceRefs": [],
+      "evidenceRefs": [
+        "server/src/__tests__/v9-core-maintenance.integration.test.ts",
+        "ui/src/components/ExperienceCard.core-maintenance.test.tsx"
+      ],
       "contractPath": "doc/experience/v9/contracts/needs-you.json"
     },
     {

@@ -9,7 +9,7 @@ export function ExperienceCard({
   card: CardModel;
   headingLevel?: 2 | 3;
 }) {
-  const { t } = useTranslation("experience");
+  const { t, i18n } = useTranslation("experience");
   const Heading = headingLevel === 2 ? "h2" : "h3";
   const maintenance =
     card.source.domain === "agent_package_installation" &&
@@ -17,6 +17,7 @@ export function ExperienceCard({
   const unknownMaintenance =
     maintenance && card.evidence.includes("unknown_outcome");
   const coreMaintenance = card.source.domain === "readiness" && card.kind === "maintenance";
+  const procedureMaintenance = card.kind === "maintenance" && ["company_skill", "playbook"].includes(card.source.domain);
   const memoryMaintenance = card.source.domain === "memory_job" && card.kind === "maintenance";
   const runtimeRecovery = card.source.domain === "runtime_cell" && card.kind === "recovery";
   const connectorRecovery = card.source.domain === "connection" && card.kind === "recovery";
@@ -24,8 +25,9 @@ export function ExperienceCard({
   const connectorAccess = connectorRecovery && (personalConnector || card.evidence.includes("connector_access_review"));
   const workflowRecovery = card.source.domain === "workflow" && card.kind === "recovery";
   const runtimeCapacity = runtimeRecovery && card.evidence.includes("runtime_capacity_review");
-  const cardNamespace = coreMaintenance ? "coreMaintenance" : memoryMaintenance ? "memoryMaintenanceAttention" : connectorRecovery ? "connectorRecovery" : workflowRecovery ? "workflowRecovery" : runtimeRecovery ? "runtimeRecovery" : null;
+  const cardNamespace = procedureMaintenance ? card.source.domain === "company_skill" ? "skillRevalidation" : "playbookRevalidation" : coreMaintenance ? "coreMaintenance" : memoryMaintenance ? "memoryMaintenanceAttention" : connectorRecovery ? "connectorRecovery" : workflowRecovery ? "workflowRecovery" : runtimeRecovery ? "runtimeRecovery" : null;
   function evidenceText(item: string) {
+    if (procedureMaintenance) return t(`${cardNamespace}.evidence`);
     if (coreMaintenance) return t("coreMaintenance.evidence");
     if (memoryMaintenance) return t("memoryMaintenanceAttention.evidence");
     if (connectorRecovery) return t(connectorAccess ? "connectorRecovery.accessEvidence" : "connectorRecovery.evidence");
@@ -97,7 +99,7 @@ export function ExperienceCard({
       )}
       <p className="text-xs text-muted-foreground">
         {t("checkedAt", {
-          time: new Date(card.source.observedAt).toLocaleTimeString(),
+          time: new Date(card.source.observedAt).toLocaleTimeString(i18n.resolvedLanguage ?? i18n.language),
         })}
       </p>
     </article>

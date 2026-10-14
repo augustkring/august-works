@@ -1377,3 +1377,39 @@ provides actual user-owned root/tmp, drops all capabilities and reaps its own
 children. Preflight executes all 29 actual Native Artifact sandbox cases and the
 actual scanner-wire case successfully without changing production guards.
 A new immutable full verification must include subsequent changes as well.
+
+### Assigned Skill and Playbook revalidation projection — 2026-10-14
+
+The existing Core maintenance reader now includes at most five assigned active
+Skills and five assigned overdue reviewed Playbooks. Original lifecycle,
+classification, current revision and learned/conversation Source readers still
+mediate access. A Skill's required dependencies are resolved against current
+Native state; cached dependency status is not authority. Assignment is checked
+again and confers no grant. Only a content-free digest/locator, fixed review
+explanation and navigation to the existing owner leave this read model. No
+catalog refresh, assessment, candidate, promotion, approval, repair or Activity
+is created. The existing eight-reader admission ceiling and shared 1500 ms
+budget remain unchanged; the final experience re-read also withdraws changed
+procedure cards. Bounded scans and denied Sources retain partial coverage.
+
+The initial group passes 16 cases and refuses an invalid feature-closure fixture
+through Native dependency validation. The corrected fixture verifies that guard
+and a valid complete closure. Six suites then pass 50 cases. The first server
+typecheck finds an unvalidated database dependency enum; the reader now parses
+each dependency with its Original strict input schema instead of casting it.
+Shared typecheck and the subsequent actual server/UI typechecks pass (exit 0).
+The final eleven-suite regression passes all 126 cases (51.51 seconds), including
+actual PostgreSQL dependency drift, stale cached flags, no-effect reads, assigned
+reviewer changes after fan-out, restricted sources, bounds, rollout, original
+Skill/Playbook behavior and localized navigation/card contracts.
+
+The first built browser passes (40.1 seconds): actual card rendering, EN/DA,
+keyboard focus, navigation-only controls, 390px no overflow and scoped axe with
+zero violations. Visual review finds that observed times still use the browser
+locale; cards now follow the selected product language. The repeat after that
+change passes (40.7 seconds), including the same keyboard, locale, 390px,
+no-overflow and zero-violation scoped axe checks. The final screenshot is visually
+reviewed. Browser data is an explicit projection fixture;
+Native persistence/access is tested separately, and neither qualifies real
+Humans or hosted automation. All 70 surfaces remain pending release evidence.
+Package revalidation and wider maintenance recovery remain open.

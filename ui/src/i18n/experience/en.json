@@ -2478,5 +2478,17 @@
     "inserted": "The request was added to the message field. Review the message before sending.",
     "insertFailed": "The message field is not ready for a new request. Review the current conversation status and try again.",
     "request": "Help me build the flow in [this saved workflow draft]({{href}}). Read its saved description and work on that exact draft version. Ask me if a material choice is missing or that version has changed. Save the proposed flow as a draft and return its link. I will review and test it before publishing."
+  },
+  "skillRevalidation": {
+    "title": "Review an assigned Skill",
+    "why": "You are the assigned reviewer for this procedure.",
+    "consequence": "Review the current source and dependencies using the existing procedure controls before relying on the work.",
+    "evidence": "Its current review status, date or required dependencies need a new check."
+  },
+  "playbookRevalidation": {
+    "title": "Review an assigned Playbook",
+    "why": "You are the assigned reviewer for this procedure.",
+    "consequence": "Review the current source and dependencies using the existing procedure controls before relying on the work.",
+    "evidence": "Its current review status, date or required dependencies need a new check."
   }
 }

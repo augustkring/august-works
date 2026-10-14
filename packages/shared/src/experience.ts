@@ -80,6 +80,8 @@ export const canonicalExperienceSourceSchema = z
       "agent_package_installation",
       "runtime_cell",
       "memory_job",
+      "company_skill",
+      "playbook",
     ]),
     companyId: z.uuid(),
     resourceId: boundedText,

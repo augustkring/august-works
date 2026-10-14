@@ -2,7 +2,12 @@
   "screenId": "HOME",
   "journeyId": "daily",
   "routeOrSurface": "/:companyPrefix/dashboard",
-  "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
   "customerOutcome": "Understand meaningful current work and the next action without interpreting internal domains.",
   "entryConditions": [
     "Current authenticated principal and company selection; no retained foreign-principal payload",
@@ -16,10 +21,17 @@
   "content": {
     "h1": "Home",
     "supportingCopy": "Understand meaningful current work and the next action without interpreting internal domains.",
-    "customerTerms": ["Company", "Work", "Needs You", "Agent", "Feedback"],
+    "customerTerms": [
+      "Company",
+      "Work",
+      "Needs You",
+      "Agent",
+      "Feedback"
+    ],
     "displayedState": [
       "Current canonical state/version",
-      "Missing permission or qualification is explicit; no invented progress or outcomes"
+      "Missing permission or qualification is explicit; no invented progress or outcomes",
+      "Assigned Skill required-dependency/review-date findings and assigned overdue Playbooks are bounded current M0 observations. No private names, bodies, dependency references or reviewer identity are copied into the card."
     ]
   },
   "inputs": [],
@@ -38,7 +50,8 @@
   "systemWork": {
     "canonicalReadDomains": [
       "Native Tasks with per-resource read authorization",
-      "Native Attention without materializing decision queues"
+      "Native Attention without materializing decision queues",
+      "Original Skill lifecycle/Source and Playbook revision/Source readers for at most five assigned procedures of each kind, within the existing Core maintenance reader and its shared 1500 ms deadline."
     ],
     "canonicalWriteOperation": "Navigation only; no business writes during projection reads.",
     "authorityEffect": "Presentation and drafts cannot grant permissions. Material effects always require current native permissions, approvals and version preconditions.",
@@ -103,7 +116,8 @@
   },
   "acceptance": {
     "functional": [
-      "Verify canonical state, version conflicts, safe replay, unavailable states and principal/company switching on the exact artifact."
+      "Verify canonical state, version conflicts, safe replay, unavailable states and principal/company switching on the exact artifact.",
+      "Detect actual required dependency drift despite cached current flags; preserve Native rollout validation and current Source access; withdraw reassigned or changed procedures during the final owner re-read without repairs, approvals or Activity writes."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
