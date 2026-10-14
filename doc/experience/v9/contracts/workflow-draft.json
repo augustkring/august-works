@@ -168,6 +168,26 @@
       "help": "Required for a condition; choose both outcomes before saving",
       "validation": "Name 1–200 readable characters and explicit whole seconds 1–604800",
       "autofillOrPrefill": "None; held only in memory for the current account and Source"
+    },
+    {
+      "id": "agentId",
+      "label": "Agent for this step",
+      "dataType": "Explicit Native Agent choice",
+      "required": false,
+      "default": "No Agent selected",
+      "help": "Required to append an Agent task; select from the current bounded Native list",
+      "validation": "Actual same-company readable Agent, active/idle/running, task-compatible adapter; server rechecks before one Original draft mutation",
+      "autofillOrPrefill": "Current actual readable Native Agent names; no raw-ID text entry"
+    },
+    {
+      "id": "objective",
+      "label": "What should the Agent do?",
+      "dataType": "Text",
+      "required": false,
+      "default": "Empty",
+      "help": "Required to append an Agent task; starts no work, grants no access and does not qualify a test",
+      "validation": "Readable Unicode text 1–10000 characters; control characters and malformed surrogate pairs refused",
+      "autofillOrPrefill": "None; explicit Human input"
     }
   ],
   "actions": {
@@ -251,6 +271,7 @@
   },
   "acceptance": {
     "functional": [
+      "Append one explicitly selected Agent task through Original updateDraft, preserve the active version and all existing nodes/edges, enforce current target admission and exact recovery, and refuse the internal wait/condition test with no Task/run/heartbeat/grant effect.",
       "Verify one separate draft under concurrent exact retries, unchanged immutable active graph/branches, strict node/config binding, stale/type/foreign/viewer denial, historical recovery with rollout closed, late-verification rollback and no grant/run/publication effect.",
       "Verify lost acknowledgement/reload causes only exact receipt GET, current-account/Source fences reject late replies, and source/version conflicts require current review.",
       "Full trigger/graph/condition/tool/access/approval-policy editing, conversation graph proposals, broader test modes and remaining lifecycle qualification stay open.",

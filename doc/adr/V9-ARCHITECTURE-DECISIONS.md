@@ -2011,3 +2011,25 @@ It does not claim physical filesystem cleanup until the Native worker completes.
 Additional copied run-result provenance, direct conversation-derived artifacts
 without an origin workflow, packages/knowledge and host/Human qualification remain
 separate whole-brief work; this is the actual persisted origin relationship.
+
+## ADR-51 — Compose an Agent task through the ordinary Native flow builder
+
+Date: 2026-10-14. Status: implemented; whole-V9 qualification remains open.
+
+The default linear composer can now append one explicitly named Agent task with
+a current named Agent choice and explicit task brief. The selected-step editor
+and composer reuse the same Native read/status/adapter checks and bounded choice
+projection. Source/account ownership, exact revision/publication/update/tail CAS,
+Original updateDraft and body-free own-request receipt remain authoritative.
+The operation appends one registered agent.task and edge, waits for completion
+and keeps the active revision and all prior nodes/settings. It creates no Task,
+run, heartbeat, grant, model dispatch or publication. Source lists are bounded,
+not claims that no other Agent exists; Advanced retains other composition.
+
+The default internal wait/condition test still refuses Agent tasks through its
+Original qualified-mode gate. Customer copy exposes that limitation before save.
+Private form material stays in memory; unknown response recovery keeps only the
+exact request locator and reads its Original receipt through rollout closure.
+Both form variants own a same-row back/primary footer. Full model-generated
+proposals, connected-tool composition, inline policy preview, C2/C3 tests and
+managed host/Human qualification remain open.

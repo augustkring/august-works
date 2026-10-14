@@ -3,7 +3,7 @@ import { createRequire } from "node:module";
 import { readFile } from "node:fs/promises";
 import path from "node:path";
 import { expect, test, type APIResponse } from "@playwright/test";
-import { authUsers, companyMemberships, createDb, closeRegisteredClients, principalPermissionGrants } from "../../packages/db/src/index.ts";
+import { agents, authUsers, companyMemberships, createDb, closeRegisteredClients, principalPermissionGrants, issues, workflowRuns, heartbeatRuns } from "../../packages/db/src/index.ts";
 import { workflowRoutes } from "../../server/src/routes/workflows.ts";
 import { errorHandler } from "../../server/src/middleware/error-handler.ts";
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
@@ -164,6 +164,70 @@ test("guided empty Native flow composes explicit steps and recovers its exact lo
     await expect(page.getByRole("heading", { level: 1, name: "Workflowanmodning bekræftet", exact: true })).toBeFocused();
     await expect(page.getByRole("main")).toContainText("Din ændring af kladdeflowet blev gemt"); expect(posts).toBe(3); expect(receipts).toBeGreaterThanOrEqual(1);
     expect(await page.evaluate(() => sessionStorage.getItem("aw.v9.pending-workflow-request-receipts"))).toBeNull();
+  } finally {
+    await new Promise<void>((resolve, reject) => bridge.close(err => err ? reject(err) : resolve()));
+    await request.patch("/api/instance/settings/experimental", { data: flags }).catch(() => {}); await request.delete(`/api/companies/${company.id}`).catch(() => {});
+    await db.delete(authUsers).where(eq(authUsers.id, userId)); await closeRegisteredClients(databaseUrl);
+  }
+});
+
+test("guided Native flow appends a named Agent task and recovers its only lost save without starting work", async ({ page, request }, info) => {
+  test.setTimeout(120000);
+  const configPath = process.env.PAPERCLIP_E2E_SERVER_CONFIG!;
+  expect(path.basename(path.dirname(path.dirname(path.dirname(configPath))))).toMatch(/^paperclip-e2e-home-/);
+  const config = JSON.parse(await readFile(configPath, "utf8")), pid = await readFile(path.join(config.database.embeddedPostgresDataDir, "postmaster.pid"), "utf8");
+  const databaseUrl = `postgres://paperclip:paperclip@127.0.0.1:${pid.split("\n")[3]}/paperclip`, db = createDb(databaseUrl);
+  const flags = await json(await request.get("/api/instance/settings/experimental")), session = await json(await request.get("/api/auth/get-session"));
+  const company = await json(await request.post("/api/companies", { data: { name: "Disposable guided Agent task" } })), userId = randomUUID(), now = new Date();
+  await db.insert(authUsers).values({ id: userId, name: "Task editor fixture", email: `${userId}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now });
+  await db.insert(companyMemberships).values({ companyId: company.id, principalType: "user", principalId: userId, membershipRole: "owner", status: "active" });
+  await db.insert(principalPermissionGrants).values(["workflows:read", "workflows:edit"].map(permissionKey => ({ companyId: company.id, principalType: "user", principalId: userId, permissionKey })));
+  const [agent] = await db.insert(agents).values({ companyId: company.id, name: "Readable task Agent", adapterType: "process" }).returning();
+  const app = express(); app.use(express.json()); app.use((req, _res, next) => { req.actor = { type: "board", source: "session", userId }; next(); }); app.use("/api", workflowRoutes(db)); app.use(errorHandler);
+  const bridge = app.listen(0, "127.0.0.1"); await new Promise<void>(resolve => bridge.once("listening", resolve));
+  const address = bridge.address(); if (!address || typeof address === "string") throw new Error("Controlled fixture listener unavailable"); const bridgeBase = `http://127.0.0.1:${address.port}`;
+  let posts = 0, receipts = 0, lost: { requestId: string } | null = null;
+  try {
+    await json(await request.patch("/api/instance/settings/experimental", { data: { enableWorkflowsV1: true, enableWorkflowBuilderV1: true, experience_projection_v9: true, progressive_shell_v9: true } }));
+    const base = `/api/companies/${company.id}/workflows`, created = await json(await request.post(base, { data: { name: "Guided task fixture" } }));
+    const prepared = await json(await request.patch(`${base}/${created.id}/draft`, { data: { expectedRevisionId: created.draftRevisionId, graph: {
+      version: 1, nodes: [{ id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} }], edges: [], variables: [], settings: { totalDeadlineSeconds: 30 },
+    } } }));
+    const published = await json(await request.post(`${base}/${created.id}/publish`, { data: { expectedDraftRevisionId: prepared.draftRevisionId, expectedPublishedRevisionId: null, approvalId: null } }));
+    await page.route("**/api/auth/get-session", route => route.fulfill({ json: { ...session, user: { ...session.user, id: userId, emailVerified: true }, session: { ...session.session, userId, localImplicit: false } } }));
+    await page.route(`**${base}/${created.id}/experience/draft-flow**`, async route => {
+      const url = new URL(route.request().url()), response = await route.fetch({ url: bridgeBase + url.pathname + url.search });
+      if (route.request().method() === "POST") { posts++; expect(posts).toBe(1); lost = await json(response); await route.abort("failed"); return; }
+      await route.fulfill({ response });
+    });
+    await page.route(`**${base}/${created.id}/experience/requests/draft_build/**`, async route => {
+      expect(route.request().method()).toBe("GET"); receipts++; const url = new URL(route.request().url());
+      expect(url.pathname.endsWith(`/draft_build/${lost!.requestId}`)).toBe(true);
+      await route.fulfill({ response: await route.fetch({ url: bridgeBase + url.pathname + url.search }) });
+    });
+    await page.setViewportSize({ width: 390, height: 844 }); await page.goto(`/${company.issuePrefix}/workflows/${created.id}/draft`);
+    await expect(page.getByRole("heading", { name: "Build the draft flow", exact: true })).toBeVisible();
+    await page.getByRole("combobox", { name: "Language", exact: true }).selectOption("da");
+    await page.getByRole("combobox", { name: "Hvad skal ske som det næste?", exact: true }).selectOption("append_agent_task");
+    await page.getByRole("textbox", { name: "Trinnets navn", exact: true }).fill("PRIVATE Agent-opgave");
+    await page.getByRole("textbox", { name: "Hvad skal Agenten gøre?", exact: true }).fill("PRIVATE opgavebeskrivelse");
+    await page.getByRole("combobox", { name: "Agent til dette trin", exact: true }).selectOption({ label: "Readable task Agent" });
+    await expect(page.getByRole("main")).toContainText("den interne test af ventetrin og betingelser kan ikke køre dem");
+    await page.addScriptTag({ path: axePath }); expect(await page.evaluate(async () => (await (window as unknown as { axe: { run(scope: string): Promise<{ violations: unknown[] }> } }).axe.run("main")).violations)).toEqual([]);
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    await page.screenshot({ path: info.outputPath("guided-agent-task-da-mobile.png"), fullPage: true });
+    await page.getByRole("button", { name: "Tilføj et trin", exact: true }).focus(); await page.keyboard.press("Enter");
+    await expect.poll(() => lost?.requestId).toBeTruthy();
+    const current = await json(await request.get(`${base}/${created.id}`)); expect(current.publishedRevision).toEqual(published.publishedRevision);
+    expect(current.draftRevision.graph.nodes).toHaveLength(2); expect(current.draftRevision.graph.nodes[1]).toMatchObject({ type: "agent.task", name: "PRIVATE Agent-opgave", config: { agentId: agent.id, objective: "PRIVATE opgavebeskrivelse", waitForCompletion: true } });
+    expect(await db.select().from(workflowRuns).where(eq(workflowRuns.companyId, company.id))).toEqual([]);
+    expect(await db.select().from(issues).where(eq(issues.companyId, company.id))).toEqual([]);
+    expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, company.id))).toEqual([]);
+    const locator = await page.evaluate(() => sessionStorage.getItem("aw.v9.pending-workflow-request-receipts")); expect(locator).toContain(lost!.requestId); expect(locator).not.toMatch(/PRIVATE|Readable task Agent|agentId|objective/);
+    await json(await request.patch("/api/instance/settings/experimental", { data: { enableWorkflowBuilderV1: false, enableWorkflowsV1: false, progressive_shell_v9: false } }));
+    await page.reload(); await page.getByRole("link", { name: "Kontrollér den gemte anmodning", exact: true }).click();
+    await expect(page.getByRole("heading", { name: "Workflowanmodning bekræftet", exact: true })).toBeFocused();
+    expect(posts).toBe(1); expect(receipts).toBeGreaterThanOrEqual(1); expect(await page.evaluate(() => sessionStorage.getItem("aw.v9.pending-workflow-request-receipts"))).toBeNull();
   } finally {
     await new Promise<void>((resolve, reject) => bridge.close(err => err ? reject(err) : resolve()));
     await request.patch("/api/instance/settings/experimental", { data: flags }).catch(() => {}); await request.delete(`/api/companies/${company.id}`).catch(() => {});

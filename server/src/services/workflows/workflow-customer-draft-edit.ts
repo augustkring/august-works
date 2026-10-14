@@ -1,18 +1,17 @@
 import { and, eq } from "drizzle-orm";
 import { isDeepStrictEqual } from "node:util";
-import { agents, workflows, type Db } from "@paperclipai/db";
+import { workflows, type Db } from "@paperclipai/db";
 import { workflowDraftStepCommandSchema, workflowDraftStepReceiptSchema, workflowDraftStepReviewSchema,
   workflowEditableNodeIdSchema, type WorkflowDraftStepCommand } from "@paperclipai/shared";
 import { conflict, notFound } from "../../errors.js";
 import { workflowService } from "./workflow-service.js";
 import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
-import { authorizationService, type AuthorizationActor } from "../authorization.js";
+import type { AuthorizationActor } from "../authorization.js";
 import { lockWorkflowDraftAccount, originalWorkflowDraftReceipt } from "./workflow-draft-authority.js";
 import { guidedConditionExpression, reviewGuidedCondition } from "./workflow-guided-condition.js";
 import { reviewWorkflowStepInput } from "./workflow-step-input-review.js";
-import { workflowCapabilityResolverService } from "./workflow-capability-resolver.js";
-import { workflowCapabilityVisibility } from "./workflow-capability-visibility.js";
+import { assertDraftAgentSelection, reviewDraftAgentSelection } from "./workflow-draft-agents.js";
 import { z } from "zod";
 
 const action = "workflow.customer_draft_step_saved";
@@ -34,22 +33,8 @@ export function workflowCustomerDraftEdit(db: Db) {
       const nodes = draft.graph.nodes.filter(node => node.id === nodeId);
       if (nodes.length !== 1) throw notFound("The current draft step is unavailable");
       const node = nodes[0], configuration = reviewWorkflowStepInput(node);
-      let agentSelection;
-      if (configuration.kind === "agent_task") {
-        const actor = { ...current.actor, ignoreInstanceAdmin: true }, visible = workflowCapabilityVisibility(tx, companyId, actor);
-        const catalog = await workflowCapabilityResolverService(tx).search(companyId, { q: "", kind: "agent", limit: 32 }, async candidate =>
-          candidate.nodeType === "agent.task" && candidate.availability.status === "available" && await visible(candidate));
-        const choices = [];
-        for (const candidate of catalog.candidates) {
-          const id = z.uuid().parse(candidate.source.agentId);
-          const [row] = await tx.select({ name: agents.name }).from(agents).where(and(eq(agents.companyId, companyId), eq(agents.id, id))).for("share");
-          if (row) choices.push({ agentId: id, name: row.name.trim().slice(0, 200) });
-        }
-        const selectedId = z.uuid().parse((node.config as Record<string, unknown>).agentId);
-        const canRead = (await authorizationService(tx).decide({ actor, action: "agent:read", resource: { type: "agent", companyId, agentId: selectedId } })).allowed;
-        const [selected] = canRead ? await tx.select({ name: agents.name }).from(agents).where(and(eq(agents.companyId, companyId), eq(agents.id, selectedId))).for("share") : [];
-        agentSelection = { coverage: "bounded", selectedName: selected?.name.trim().slice(0, 200) || null, choices };
-      }
+      const agentSelection = configuration.kind === "agent_task" ? await reviewDraftAgentSelection(tx, companyId, current.actor,
+        z.uuid().parse((node.config as Record<string, unknown>).agentId)) : null;
       await lockWorkflowDraftAccount(tx, actor, companyId);
       return workflowDraftStepReviewSchema.parse({ companyId, workflowId, draftRevisionId: draft.id, publishedRevisionId: detail.publishedRevisionId,
         updatedAt: detail.updatedAt.toISOString(), version: draft.revisionNumber, nodeId, nodeType: node.type, name: node.name, configuration,
@@ -81,12 +66,8 @@ export function workflowCustomerDraftEdit(db: Db) {
           throw conflict("This configuration needs its current Advanced editor", { code: "workflow_draft_step_conflict" });
       }
       if (change.kind === "agent_task" && change.agentId) {
-        const permitted = await authorizationService(tx).decide({ actor: { ...current.actor, ignoreInstanceAdmin: true }, action: "agent:read",
-          resource: { type: "agent", companyId, agentId: change.agentId }, enforceResponsibleUserIntersection: true });
-        const [selected] = permitted.allowed ? await tx.select({ status: agents.status, adapter: agents.adapterType }).from(agents)
-          .where(and(eq(agents.companyId, companyId), eq(agents.id, change.agentId))).for("share") : [];
-        if (!selected || !["active", "idle", "running"].includes(selected.status) || selected.adapter === "openclaw_gateway")
-          throw conflict("The selected Agent is unavailable; review the current choice", { code: "workflow_draft_step_conflict" });
+        await assertDraftAgentSelection(tx, companyId, current.actor, change.agentId,
+          () => conflict("The selected Agent is unavailable; review the current choice", { code: "workflow_draft_step_conflict" }));
       }
       const configuration = change.kind === "keep" ? node.config : change.kind === "wait" ? { durationSeconds: change.durationSeconds }
         : change.kind === "agent_task" ? { ...(node.config as Record<string, unknown>), objective: change.objective, ...(change.agentId ? { agentId: change.agentId } : {}) }

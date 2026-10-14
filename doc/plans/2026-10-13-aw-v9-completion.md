@@ -941,3 +941,23 @@ evaluation, promotion, drift and scenario artifacts). Their filesystem safety
 warning retains its refusal; passing suite status does not establish actual
 workspace deletion. The scoped direct-origin Artifact change is verified; the
 whole brief and final immutable whole-workspace verification remain open.
+
+### Guided creation of an Agent task step — 2026-10-14
+
+The ordinary linear flow builder now appends an explicitly chosen Native Agent
+task and its brief, reusing the selected-step choice/target owner. No raw-ID field,
+new graph/runtime store or permission grant is introduced. The Original revision
+and exact own-request journal remain final. The UI explains completion waiting
+and the separate test/access review; the simple internal test cannot qualify
+Agent work. Same-row back/primary footers now belong to each form variant.
+
+Focused Native/client coverage passes 43 cases in six suites, including actual
+foreign/paused target refusal, concurrent one-revision admission, unchanged active
+graph, no Task/run/heartbeat and an actual internal-test refusal. UI/server types
+and final footer UI types pass. OpenAPI/screen contracts pass 81 cases in two
+suites; token/module/70-surface gates pass. Two built Danish 390px browser cases
+pass (47.1 seconds overall): prior approval composition/recovery plus named Agent
+task composition, zero main axe violations/no overflow, deliberate lost only POST,
+unchanged active revision/no work and flags-closed Original receipt GET recovery.
+The fixtures qualify software behavior, not a real Agent/provider/Human outcome.
+The full brief and final immutable whole-workspace verification remain open.

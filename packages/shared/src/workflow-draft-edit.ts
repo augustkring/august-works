@@ -35,18 +35,20 @@ export const workflowStepInputReviewSchema = z.discriminatedUnion("kind", [
   workflowGuidedConditionSchema,
 ]);
 export type WorkflowStepInputReview = z.infer<typeof workflowStepInputReviewSchema>;
+export const workflowDraftAgentSelectionSchema = z.strictObject({ coverage: z.literal("bounded"), selectedName: text(200).nullable(),
+  choices: z.array(z.strictObject({ agentId: z.uuid(), name: text(200) })).max(32),
+}).superRefine((value, ctx) => {
+  if (new Set(value.choices.map(choice => choice.agentId)).size !== value.choices.length)
+    ctx.addIssue({ code: "custom", path: ["choices"], message: "Agent choice identity is duplicated" });
+});
 export const workflowDraftStepReviewSchema = z.strictObject({
   companyId: z.uuid(), workflowId: z.uuid(), draftRevisionId: z.uuid(), publishedRevisionId: z.uuid().nullable(),
   updatedAt: z.iso.datetime(), version: z.number().int().positive(), nodeId: workflowEditableNodeIdSchema,
   nodeType: text(160), name: workflowStepNameSchema, configuration: workflowStepInputReviewSchema,
-  agentSelection: z.strictObject({ coverage: z.literal("bounded"), selectedName: text(200).nullable(),
-    choices: z.array(z.strictObject({ agentId: z.uuid(), name: text(200) })).max(32),
-  }).optional(),
+  agentSelection: workflowDraftAgentSelectionSchema.optional(),
 }).superRefine((value, ctx) => {
   if (value.agentSelection && (value.nodeType !== "agent.task" || value.configuration.kind !== "agent_task"))
     ctx.addIssue({ code: "custom", path: ["agentSelection"], message: "Agent choice binding changed" });
-  if (value.agentSelection && new Set(value.agentSelection.choices.map(choice => choice.agentId)).size !== value.agentSelection.choices.length)
-    ctx.addIssue({ code: "custom", path: ["agentSelection"], message: "Agent choice identity is duplicated" });
 });
 export const workflowDraftStepCommandSchema = z.strictObject({
   requestId: z.uuid(), expectedWorkflowId: z.uuid(), expectedDraftRevisionId: z.uuid(), expectedPublishedRevisionId: z.uuid().nullable(),

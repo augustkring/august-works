@@ -2356,6 +2356,12 @@
       "pathHelp": "Put each exact field level on a separate line. If you choose an earlier step, its identity is added automatically; enter only its result field names.",
       "true": "If the condition is met",
       "false": "Otherwise"
+    },
+    "agent": {
+      "kind": "Ask an Agent to complete a task",
+      "choose": "Choose an Agent",
+      "none": "No Agent choice is available in this view. Use Advanced to review other Agents.",
+      "boundary": "This adds a task for the chosen Agent to the draft. It starts no work and grants no access. Agent tasks need a separate test and access review before publishing; the internal wait/condition test cannot run them."
     }
   },
   "workflowTestInputs": {

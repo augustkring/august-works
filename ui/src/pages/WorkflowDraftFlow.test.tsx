@@ -111,6 +111,24 @@ it("withdraws private flow names while the original conversation issue is rechec
   expect(container.textContent).not.toContain("PRIVATE Source step"); expect(container.querySelector("form")).toBeNull();
   expect(pendingWorkflowRequests(company, principal, workflow)).toEqual([]);
 });
+it("adds an explicit named Agent task, discloses test/access limits and keeps its material out of pending storage", async () => {
+  const agentId = "10000000-0000-4000-8000-000000000008";
+  vi.mocked(workflowDraftFlowApi.review).mockResolvedValue({ ...linear, agentSelection: {
+    coverage: "bounded", selectedName: null, choices: [{ agentId, name: "Readable task Agent" }],
+  } });
+  await mount(); await choose("What should happen next?", "append_agent_task"); await click("Add a step");
+  expect(container.querySelector("#draft-flow-name")?.getAttribute("aria-invalid")).toBe("true");
+  expect(container.querySelector("#draft-flow-agentId")?.getAttribute("aria-invalid")).toBe("true");
+  expect(container.querySelector("#draft-flow-objective")?.getAttribute("aria-invalid")).toBe("true");
+  expect(workflowDraftFlowApi.save).not.toHaveBeenCalled(); expect(pendingWorkflowRequests(company, principal, workflow)).toEqual([]);
+  expect(container.textContent).toContain("the internal wait/condition test cannot run them");
+  await field("name", "PRIVATE Agent task"); await field("objective", "PRIVATE task brief"); await choose("Agent for this step", agentId); await click("Add a step");
+  expect(workflowDraftFlowApi.save).toHaveBeenCalledOnce();
+  expect(workflowDraftFlowApi.save).toHaveBeenCalledWith(company, workflow, principal, expect.objectContaining({ operation: {
+    kind: "append_agent_task", name: "PRIVATE Agent task", agentId, objective: "PRIVATE task brief",
+  } }));
+  expect(sessionStorage.getItem("aw.v9.pending-workflow-request-receipts")).not.toMatch(/PRIVATE|agentId|Readable task Agent|objective/);
+});
 it("keeps the pending flow request across a Source change and same-turn late acknowledgement", async () => {
   vi.mocked(workflowDraftFlowApi.review).mockResolvedValue(linear);
   let finish!: (value: Awaited<ReturnType<typeof workflowDraftFlowApi.save>>) => void;

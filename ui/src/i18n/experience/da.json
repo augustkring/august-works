@@ -2356,6 +2356,12 @@
       "pathHelp": "Skriv hvert præcise feltniveau på en separat linje. Hvis du vælger et tidligere trin, tilføjes dets identitet automatisk; skriv kun resultatets feltnavne.",
       "true": "Hvis betingelsen er opfyldt",
       "false": "Ellers"
+    },
+    "agent": {
+      "kind": "Bed en Agent om at løse en opgave",
+      "choose": "Vælg en Agent",
+      "none": "Der er ingen Agent-valg tilgængelige i denne visning. Brug Avanceret til at gennemgå andre Agents.",
+      "boundary": "Dette føjer en opgave til den valgte Agent til kladden. Det starter ikke arbejde og giver ikke adgang. Agent-opgaver kræver særskilt gennemgang af test og adgang før publicering; den interne test af ventetrin og betingelser kan ikke køre dem."
     }
   },
   "workflowTestInputs": {

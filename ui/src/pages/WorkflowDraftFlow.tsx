@@ -25,9 +25,9 @@ export function WorkflowDraftFlowEntry() {
   if (!workflowId) return <p role="alert">{t("workflowDraftFlow.unavailable")}</p>;
   return <WorkflowDraftFlow key={JSON.stringify([selectedCompanyId, identity.userId, workflowId])} company={selectedCompanyId} principal={identity.userId} workflow={workflowId} />;
 }
-type Field = "name" | "duration" | "summary" | "consequence" | "deadline" | "path" | "value" | "earlierNode" | "trueName" | "trueDuration" | "falseName" | "falseDuration";
+type Field = "name" | "duration" | "summary" | "consequence" | "deadline" | "path" | "value" | "earlierNode" | "trueName" | "trueDuration" | "falseName" | "falseDuration" | "agentId" | "objective";
 type Condition = Extract<WorkflowDraftFlowOperation, { kind: "append_condition" }>["condition"];
-type Form = { source: string; kind: "append_wait" | "append_approval" | "append_condition"; name: string; duration: string; summary: string; consequence: string; deadline: string;
+type Form = { source: string; kind: "append_wait" | "append_approval" | "append_condition" | "append_agent_task"; name: string; duration: string; summary: string; consequence: string; deadline: string; agentId: string; objective: string;
   conditionSource: Condition["source"]; path: string; operator: Condition["operator"]; valueType: "string" | "number" | "boolean" | "null"; value: string;
   earlierNode: string; trueName: string; trueDuration: string; falseName: string; falseDuration: string };
 const sourceKey = (view: WorkflowDraftFlowReview) => JSON.stringify([view.draftRevisionId, view.updatedAt, view.steps.at(-1)?.nodeId ?? null]);
@@ -49,7 +49,7 @@ export function WorkflowDraftFlow({ company, principal, workflow }: { company: s
   const state = client.getQueryState(key), fresh = current() && query.isSuccess && !query.isFetching && !state?.isInvalidated;
   const view = fresh ? query.data : null, locator = useWorkflowRequestLocator(company, principal, workflow, "draft_build", !!view);
   const initialize = (value: WorkflowDraftFlowReview) => setForm({ source: sourceKey(value), kind: "append_wait", name: "", duration: "", summary: "", consequence: "", deadline: value.deadlineSeconds === null ? "" : String(value.deadlineSeconds),
-    conditionSource: "trigger", path: "", operator: "===", valueType: "string", value: "", earlierNode: "", trueName: "", trueDuration: "", falseName: "", falseDuration: "" });
+    conditionSource: "trigger", path: "", operator: "===", valueType: "string", value: "", earlierNode: "", trueName: "", trueDuration: "", falseName: "", falseDuration: "", agentId: "", objective: "" });
   useEffect(() => { if (view && !form) initialize(view); }, [view, form]);
   const refresh = () => { source.current++; setEpoch(source.current); void client.cancelQueries({ queryKey: prefix }); client.removeQueries({ queryKey: prefix }); };
   useCompanyLiveEvent(event => {
@@ -76,16 +76,17 @@ export function WorkflowDraftFlow({ company, principal, workflow }: { company: s
   const disabled = !view || !form || !current() || !locator.ready || locator.failed || !!locator.blockedBy || mutation.isPending || stale;
   function save(operation: WorkflowDraftFlowOperation) {
     if (disabled || !view) return;
+    const unavailableAgent = operation.kind === "append_agent_task" && !view.agentSelection?.choices.some(choice => choice.agentId === operation.agentId);
     const parsed = workflowDraftFlowCommandSchema.safeParse({ requestId: crypto.randomUUID(), expectedWorkflowId: workflow, expectedDraftRevisionId: view.draftRevisionId,
       expectedPublishedRevisionId: view.publishedRevisionId, expectedUpdatedAt: view.updatedAt, expectedLastNodeId: view.steps.at(-1)?.nodeId ?? null, operation });
-    if (!parsed.success) {
-      const errors: Partial<Record<Field, string>> = {};
-      for (const issue of parsed.error.issues) {
+    if (!parsed.success || unavailableAgent) {
+      const errors: Partial<Record<Field, string>> = unavailableAgent ? { agentId: t("workflowDraftStep.errors.agentId") } : {};
+      for (const issue of parsed.success ? [] : parsed.error.issues) {
         const field = issue.path[1] === "condition" ? issue.path[2] === "path" && form?.conditionSource === "steps" && !form.earlierNode ? "earlierNode" : issue.path[2]
           : issue.path[1] === "whenTrue" ? issue.path[2] === "name" ? "trueName" : "trueDuration"
             : issue.path[1] === "whenFalse" ? issue.path[2] === "name" ? "falseName" : "falseDuration"
               : issue.path[1] === "durationSeconds" ? "duration" : issue.path[1] === "deadlineSeconds" ? "deadline" : issue.path[1];
-        if (["name", "duration", "summary", "consequence", "deadline", "path", "value", "earlierNode", "trueName", "trueDuration", "falseName", "falseDuration"].includes(String(field)))
+        if (["name", "duration", "summary", "consequence", "deadline", "path", "value", "earlierNode", "trueName", "trueDuration", "falseName", "falseDuration", "agentId", "objective"].includes(String(field)))
           errors[field as Field] = t(field === "deadline" ? "workflowDraftFlow.deadlineError" : field === "earlierNode" ? "workflowDraftFlow.condition.stepError"
             : `workflowDraftStep.errors.${field === "trueName" || field === "falseName" ? "name" : field === "trueDuration" || field === "falseDuration" ? "duration" : String(field)}`);
       }
@@ -95,6 +96,7 @@ export function WorkflowDraftFlow({ company, principal, workflow }: { company: s
   }
   function submit(event: FormEvent) { event.preventDefault(); if (!form) return;
     save(form.kind === "append_wait" ? { kind: "append_wait", name: form.name, durationSeconds: Number(form.duration) }
+      : form.kind === "append_agent_task" ? { kind: "append_agent_task", name: form.name, agentId: form.agentId, objective: form.objective }
       : form.kind === "append_condition" ? { kind: "append_condition", name: form.name,
         condition: { kind: "condition", source: form.conditionSource, path: [...(form.conditionSource === "steps" ? [form.earlierNode] : []), ...form.path.split("\n")], operator: form.operator,
           value: form.valueType === "null" ? null : form.valueType === "boolean" ? form.value === "true" : form.valueType === "number" ? form.value.trim() ? Number(form.value) : NaN : form.value },
@@ -122,12 +124,13 @@ export function WorkflowDraftFlow({ company, principal, workflow }: { company: s
         {view.availability === "advanced" ? <section className="space-y-3"><p>{t("workflowDraftFlow.advanced")}</p><Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${workflow}/advanced`}>{t("workflowEditDraft")}</Link></section>
           : view.availability === "empty" ? <form noValidate className="space-y-3" onSubmit={event => { event.preventDefault(); save({ kind: "start_manual", name: t("workflowDraftFlow.manualName"), deadlineSeconds: Number(form.deadline) }); }}><p>{t("workflowDraftFlow.empty")}</p><p>{t("workflowDraftFlow.manualBoundary")}</p>
             <label className="block space-y-2"><span id="draft-flow-deadline-label">{t("workflowDraftFlow.deadline")}</span><Input {...fieldProps("deadline")} className="min-h-11" required type="number" min={1} max={60} step={1} value={form.deadline} disabled={disabled} onChange={event => setForm({ ...form, deadline: event.target.value })} />{fieldError("deadline")}</label>
-            <p className="text-sm text-muted-foreground">{t("workflowDraftFlow.deadlineHelp")}</p><Button type="submit" className="min-h-11" disabled={disabled}>{t(mutation.isPending ? "workflowDraftStep.saving" : "workflowDraftFlow.start")}</Button></form>
+            <p className="text-sm text-muted-foreground">{t("workflowDraftFlow.deadlineHelp")}</p>
+            <div className="flex flex-wrap items-center justify-between gap-3"><Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${workflow}?revision=draft`}>{t("workflowDraftStep.cancel")}</Link><Button type="submit" className="min-h-11" disabled={disabled}>{t(mutation.isPending ? "workflowDraftStep.saving" : "workflowDraftFlow.start")}</Button></div></form>
           : <>
             <section aria-label={t("workflowDraftFlow.steps")}><ol className="list-decimal space-y-2 pl-6">{view.steps.map(step => <li key={step.nodeId} className="break-words"><Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${workflow}/draft/steps/${encodeURIComponent(step.nodeId)}`}>{step.name}</Link></li>)}</ol></section>
             {view.steps.length >= 100 ? <p role="status">{t("workflowDraftFlow.limit")}</p> : <form noValidate onSubmit={submit} className="space-y-4"><h2 className="text-lg font-medium">{t("workflowDraftFlow.add")}</h2>
               <fieldset disabled={disabled} className="space-y-4">
-                <label className="block space-y-2"><span>{t("workflowDraftFlow.kind")}</span><select className={selectClass} value={form.kind} onChange={event => { setForm({ ...form, kind: event.target.value as Form["kind"] }); setInvalid(false); setFieldErrors({}); }}><option value="append_wait">{t("workflowDraftFlow.wait")}</option><option value="append_approval">{t("workflowDraftFlow.approval")}</option><option value="append_condition" disabled={view.steps.length > 97}>{t("workflowDraftFlow.condition.kind")}</option></select></label>
+                <label className="block space-y-2"><span>{t("workflowDraftFlow.kind")}</span><select className={selectClass} value={form.kind} onChange={event => { setForm({ ...form, kind: event.target.value as Form["kind"] }); setInvalid(false); setFieldErrors({}); }}><option value="append_wait">{t("workflowDraftFlow.wait")}</option><option value="append_approval">{t("workflowDraftFlow.approval")}</option><option value="append_agent_task">{t("workflowDraftFlow.agent.kind")}</option><option value="append_condition" disabled={view.steps.length > 97}>{t("workflowDraftFlow.condition.kind")}</option></select></label>
                 <label className="block space-y-2"><span id="draft-flow-name-label">{t("workflowDraftStep.name")}</span><Input {...fieldProps("name")} className="min-h-11" required maxLength={200} value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} />{fieldError("name")}</label>
                 {form.kind === "append_wait" ? <label className="block space-y-2"><span id="draft-flow-duration-label">{t("workflowDraftStep.duration")}</span><Input {...fieldProps("duration")} className="min-h-11" required type="number" min={1} max={604800} step={1} value={form.duration} onChange={event => setForm({ ...form, duration: event.target.value })} />{fieldError("duration")}</label> : form.kind === "append_condition" ? <section className="space-y-4" aria-label={t("workflowDraftFlow.condition.kind")}>
                   <p>{t("workflowDraftFlow.condition.boundary")}</p>
@@ -153,11 +156,24 @@ export function WorkflowDraftFlow({ company, principal, workflow }: { company: s
                     <label className="block space-y-2"><span id={`draft-flow-${branch}Name-label`}>{t("workflowDraftStep.name")}</span><Input {...fieldProps(`${branch}Name`)} className="min-h-11" required maxLength={200} value={form[`${branch}Name`]} onChange={event => setForm({ ...form, [`${branch}Name`]: event.target.value })} />{fieldError(`${branch}Name`)}</label>
                     <label className="block space-y-2"><span id={`draft-flow-${branch}Duration-label`}>{t("workflowDraftStep.duration")}</span><Input {...fieldProps(`${branch}Duration`)} className="min-h-11" required type="number" min={1} max={604800} step={1} value={form[`${branch}Duration`]} onChange={event => setForm({ ...form, [`${branch}Duration`]: event.target.value })} />{fieldError(`${branch}Duration`)}</label>
                   </fieldset>)}
+                </section> : form.kind === "append_agent_task" ? <section className="space-y-4" aria-label={t("workflowDraftStep.agent.heading")}>
+                  <p>{t("workflowDraftFlow.agent.boundary")}</p><p>{t("workflowDraftStep.agent.waits")}</p>
+                  <label className="block space-y-2"><span id="draft-flow-agentId-label">{t("workflowDraftStep.agent.choose")}</span>
+                    <select {...fieldProps("agentId")} className={selectClass} required value={form.agentId} onChange={event => setForm({ ...form, agentId: event.target.value })}>
+                      <option value="">{t("workflowDraftFlow.agent.choose")}</option>
+                      {form.agentId && !view.agentSelection?.choices.some(choice => choice.agentId === form.agentId) && <option value={form.agentId}>{t("workflowDraftStep.agent.unavailable")}</option>}
+                      {view.agentSelection?.choices.map(choice => <option key={choice.agentId} value={choice.agentId}>{choice.name}</option>)}
+                    </select>{fieldError("agentId")}
+                  </label>
+                  {!view.agentSelection?.choices.length && <p role="status">{t("workflowDraftFlow.agent.none")}</p>}
+                  <p className="text-sm text-muted-foreground">{t("workflowDraftStep.agent.choiceBoundary")}</p>
+                  <Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${workflow}/advanced`}>{t("workflowEditDraft")}</Link>
+                  <label className="block space-y-2"><span id="draft-flow-objective-label">{t("workflowDraftStep.agent.objective")}</span><Textarea {...fieldProps("objective")} required maxLength={10000} value={form.objective} onChange={event => setForm({ ...form, objective: event.target.value })} />{fieldError("objective")}</label>
                 </section> : <>
                   <p>{t("workflowDraftFlow.approvalBoundary")}</p>
                   <label className="block space-y-2"><span id="draft-flow-summary-label">{t("workflowDraftStep.summary")}</span><Textarea {...fieldProps("summary")} required maxLength={1000} value={form.summary} onChange={event => setForm({ ...form, summary: event.target.value })} />{fieldError("summary")}</label>
                   <label className="block space-y-2"><span id="draft-flow-consequence-label">{t("workflowDraftStep.consequence")}</span><Textarea {...fieldProps("consequence")} required maxLength={2000} value={form.consequence} onChange={event => setForm({ ...form, consequence: event.target.value })} />{fieldError("consequence")}</label></>}
-                <Button type="submit" className="min-h-11" disabled={disabled}>{t(mutation.isPending ? "workflowDraftStep.saving" : "workflowDraftFlow.add")}</Button>
+                <div className="flex flex-wrap items-center justify-between gap-3"><Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${workflow}?revision=draft`}>{t("workflowDraftStep.cancel")}</Link><Button type="submit" className="min-h-11" disabled={disabled}>{t(mutation.isPending ? "workflowDraftStep.saving" : "workflowDraftFlow.add")}</Button></div>
               </fieldset></form>}
             {view.steps.length > 1 && <section className="space-y-3"><p>{t("workflowDraftFlow.removeBoundary", { name: view.steps.at(-1)!.name })}</p><Button variant="outline" className="min-h-11" disabled={disabled} onClick={() => save({ kind: "remove_last" })}>{t("workflowDraftFlow.remove")}</Button></section>}
           </>}

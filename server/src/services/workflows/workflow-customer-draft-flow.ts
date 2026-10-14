@@ -9,6 +9,7 @@ import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { guidedConditionExpression } from "./workflow-guided-condition.js";
+import { assertDraftAgentSelection, reviewDraftAgentSelection } from "./workflow-draft-agents.js";
 
 const action = "workflow.customer_draft_flow_saved";
 /** A complete single Native path, never a flattened or truncated branch view.
@@ -52,6 +53,7 @@ export function workflowCustomerDraftFlow(db: Db) {
       const view = workflowDraftFlowReviewSchema.parse({ companyId, workflowId, draftRevisionId: draft.id, publishedRevisionId: detail.publishedRevisionId,
         updatedAt: detail.updatedAt.toISOString(), version: draft.revisionNumber, availability: ordered ? ordered.length ? "linear" : "empty" : "advanced",
         deadlineSeconds: draft.graph.settings.totalDeadlineSeconds ?? null,
+        ...(ordered?.length ? { agentSelection: await reviewDraftAgentSelection(tx, companyId, current.actor) } : {}),
         steps: ordered?.map(node => ({ nodeId: node.id, name: node.name, type: node.type })) ?? [] });
       await lockWorkflowDraftAccount(tx, actor, companyId); return view;
     }),
@@ -91,9 +93,12 @@ export function workflowCustomerDraftFlow(db: Db) {
         ] };
       } else {
         if (operation.kind === "start_manual" ? ordered.length !== 0 : ordered.length === 0 || ordered.length >= 100) throw refuse();
-        const node = { id: `step-${command.requestId}`, type: operation.kind === "start_manual" ? "core.manual_trigger" : operation.kind === "append_wait" ? "core.wait" : "human.approval",
+        if (operation.kind === "append_agent_task") await assertDraftAgentSelection(tx, companyId, current.actor, operation.agentId, refuse);
+        const node = { id: `step-${command.requestId}`, type: operation.kind === "start_manual" ? "core.manual_trigger" : operation.kind === "append_wait" ? "core.wait" : operation.kind === "append_agent_task" ? "agent.task" : "human.approval",
           name: operation.name, position: { x: 0, y: ordered.length * 160 },
-          config: operation.kind === "start_manual" ? {} : operation.kind === "append_wait" ? { durationSeconds: operation.durationSeconds } : { summary: operation.summary, consequence: operation.consequence } };
+          config: operation.kind === "start_manual" ? {} : operation.kind === "append_wait" ? { durationSeconds: operation.durationSeconds }
+            : operation.kind === "append_agent_task" ? { agentId: operation.agentId, objective: operation.objective, waitForCompletion: true }
+              : { summary: operation.summary, consequence: operation.consequence } };
         if (draft.graph.nodes.some(existing => existing.id === node.id)) throw refuse();
         graph = { ...draft.graph, nodes: [...draft.graph.nodes, node], edges: ordered.length ? [...draft.graph.edges,
           { id: `edge-${command.requestId}`, source: ordered.at(-1)!.id, target: node.id }] : draft.graph.edges };

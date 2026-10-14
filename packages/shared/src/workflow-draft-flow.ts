@@ -1,11 +1,12 @@
 import { z } from "zod";
-import { workflowStepNameSchema, workflowEditableNodeIdSchema, workflowWaitSecondsSchema, workflowApprovalSummarySchema, workflowApprovalConsequenceSchema, workflowGuidedConditionSchema } from "./workflow-draft-edit.js";
+import { workflowStepNameSchema, workflowEditableNodeIdSchema, workflowWaitSecondsSchema, workflowApprovalSummarySchema, workflowApprovalConsequenceSchema, workflowGuidedConditionSchema, workflowAgentObjectiveSchema, workflowDraftAgentSelectionSchema } from "./workflow-draft-edit.js";
 
 const name = workflowStepNameSchema;
 export const workflowDraftFlowOperationSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("start_manual"), name, deadlineSeconds: z.number().int().min(1).max(60) }),
   z.strictObject({ kind: z.literal("append_wait"), name, durationSeconds: workflowWaitSecondsSchema }),
   z.strictObject({ kind: z.literal("append_approval"), name, summary: workflowApprovalSummarySchema, consequence: workflowApprovalConsequenceSchema }),
+  z.strictObject({ kind: z.literal("append_agent_task"), name, agentId: z.uuid(), objective: workflowAgentObjectiveSchema }),
   z.strictObject({ kind: z.literal("append_condition"), name, condition: workflowGuidedConditionSchema,
     whenTrue: z.strictObject({ name, durationSeconds: workflowWaitSecondsSchema }),
     whenFalse: z.strictObject({ name, durationSeconds: workflowWaitSecondsSchema }),
@@ -20,6 +21,7 @@ export const workflowDraftFlowReviewSchema = z.strictObject({
   companyId: z.uuid(), workflowId: z.uuid(), draftRevisionId: z.uuid(), publishedRevisionId: z.uuid().nullable(),
   updatedAt: z.iso.datetime(), version: z.number().int().positive(), availability: z.enum(["empty", "linear", "advanced"]),
   deadlineSeconds: z.number().int().min(1).max(604800).nullable(),
+  agentSelection: workflowDraftAgentSelectionSchema.optional(),
   steps: z.array(z.strictObject({ nodeId: workflowEditableNodeIdSchema, name, type: z.string().min(1).max(160) })).max(100),
 }).superRefine((view, ctx) => {
   if ((view.availability === "linear") !== (view.steps.length > 0)) ctx.addIssue({ code: "custom", path: ["steps"], message: "The current flow shape changed" });

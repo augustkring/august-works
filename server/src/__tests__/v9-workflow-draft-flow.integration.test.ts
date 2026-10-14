@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { activityLog, authUsers, companies, companyMemberships, createDb, principalPermissionGrants, workflowRevisions, workflowRuns, workflowStepRuns } from "@paperclipai/db";
+import { activityLog, agents, authUsers, companies, companyMemberships, createDb, principalPermissionGrants, workflowRevisions, workflowRuns, workflowStepRuns, issues, heartbeatRuns } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { workflowService } from "../services/workflows/workflow-service.js";
 import { workflowCustomerDraftFlow } from "../services/workflows/workflow-customer-draft-flow.js";
@@ -86,6 +86,41 @@ describe.sequential("Original guided draft flow composition", () => {
     await db.update(companyMemberships).set({ membershipRole: "viewer" }).where(and(eq(companyMemberships.companyId, f.companyId), eq(companyMemberships.principalId, f.userId)));
     await expect(f.service.review(f.companyId, f.workflow.id, { ...f.actor, isInstanceAdmin: true })).rejects.toMatchObject({ status: 403 });
     await expect(f.service.save(randomUUID(), f.workflow.id, input, f.actor)).rejects.toMatchObject({ status: 403 });
+  });
+  it("appends an explicit readable Agent task once without creating work, qualifying a test or changing the active version", async () => {
+    const f = await fixture(), owner = workflowService(db);
+    await f.service.save(f.companyId, f.workflow.id, await command(f, { kind: "start_manual", deadlineSeconds: 30, name: "Start" }), f.actor);
+    const before = await owner.getDetail(f.companyId, f.workflow.id, f.actor);
+    const published = await owner.publish(f.companyId, f.workflow.id, { expectedDraftRevisionId: before!.draftRevisionId!, expectedPublishedRevisionId: null }, f.human);
+    const [agent] = await db.insert(agents).values({ companyId: f.companyId, name: "Readable task Agent", adapterType: "process" }).returning();
+    const foreignCompanyId = randomUUID(); await db.insert(companies).values({ id: foreignCompanyId, name: "Other", issuePrefix: randomUUID() });
+    const [foreign] = await db.insert(agents).values({ companyId: foreignCompanyId, name: "Foreign task Agent", adapterType: "process" }).returning();
+    const view = await f.service.review(f.companyId, f.workflow.id, f.actor);
+    expect(view.agentSelection?.choices).toContainEqual({ agentId: agent.id, name: "Readable task Agent" });
+    expect(JSON.stringify(view.agentSelection)).not.toContain("Foreign task Agent");
+    const input = await command(f, { kind: "append_agent_task", name: "PRIVATE task step", agentId: agent.id, objective: "PRIVATE task brief" });
+    await expect(f.service.save(f.companyId, f.workflow.id, { ...input, operation: { kind: "append_agent_task", name: "Task", agentId: foreign.id, objective: "Task" } }, { ...f.actor, isInstanceAdmin: true })).rejects.toMatchObject({ status: 409 });
+    await db.update(agents).set({ status: "paused" }).where(eq(agents.id, agent.id));
+    await expect(f.service.save(f.companyId, f.workflow.id, input, f.actor)).rejects.toMatchObject({ status: 409 });
+    expect((await owner.getDetail(f.companyId, f.workflow.id, f.actor))!.draftRevisionId).toBe(input.expectedDraftRevisionId);
+    await db.update(agents).set({ status: "idle" }).where(eq(agents.id, agent.id));
+    const [saved, duplicate] = await Promise.all([f.service.save(f.companyId, f.workflow.id, input, f.actor), f.service.save(f.companyId, f.workflow.id, input, f.actor)]);
+    expect(duplicate).toEqual(saved);
+    const after = await owner.getDetail(f.companyId, f.workflow.id, f.actor);
+    expect(after!.draftRevision!.graph.nodes).toHaveLength(2);
+    expect(after!.draftRevision!.graph.nodes[1]).toMatchObject({ id: `step-${input.requestId}`, name: "PRIVATE task step", type: "agent.task",
+      config: { agentId: agent.id, objective: "PRIVATE task brief", waitForCompletion: true } });
+    expect(after!.draftRevision!.graph.edges).toEqual([{ id: `edge-${input.requestId}`, source: input.expectedLastNodeId, target: `step-${input.requestId}` }]);
+    expect(after!.publishedRevision).toEqual(published.publishedRevision);
+    await expect(admitCustomerWorkflowTest(db, f.companyId, f.workflow.id, { requestId: randomUUID(), expectedWorkflowId: f.workflow.id,
+      expectedUpdatedAt: after!.updatedAt.toISOString(), expectedDraftRevisionId: after!.draftRevisionId!, expectedRunStatus: "succeeded", acknowledgeInternalTest: true }, f.actor)).rejects.toMatchObject({ status: 409 });
+    expect(await db.select().from(workflowRuns).where(eq(workflowRuns.companyId, f.companyId))).toEqual([]);
+    expect(await db.select().from(issues).where(eq(issues.companyId, f.companyId))).toEqual([]);
+    expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.companyId))).toEqual([]);
+    const rows = await db.select().from(activityLog).where(eq(activityLog.companyId, f.companyId));
+    expect(rows).toHaveLength(2); expect(JSON.stringify(rows.map(row => row.details))).not.toMatch(/PRIVATE|agentId|Readable task Agent|objective/);
+    await instanceSettingsService(db).updateExperimental({ enableWorkflowsV1: false, enableWorkflowBuilderV1: false, progressive_shell_v9: false });
+    expect(await f.service.save(f.companyId, f.workflow.id, input, f.actor)).toEqual(saved);
   });
   it("rolls back the original revision and receipt on late account withdrawal", async () => {
     const f = await fixture(), input = await command(f, { kind: "start_manual", deadlineSeconds: 30, name: "Start" });
