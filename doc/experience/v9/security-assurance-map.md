@@ -304,6 +304,16 @@ privacy display limit, not an authority token or proof of immediate revocation.
 Native statement timeouts include company/privacy lock acquisition. Actual
 assistant-ui admission and stalled-read expiry cases pass (checkpoint 58).
 
+Checkpoint 67 closes the client-wall-clock extension defect in that display
+bound. The Native owner returns a positive, at-most-30-second displayValidForMs
+shortened by Original retention. The renderer measures it from the monotonic
+request start; transit time consumes it. Missing/invalid lifetime and replies
+arriving after that lease are withheld. Thirty-eight shared/DOM/actual
+assistant-ui cases and the actual Native management-reader case pass, including
+clock rollback, in-flight delay and an already late reply. Full current types,
+build and browser qualification remain pending. A mixed-version rollout and
+instantaneous remote revocation are not qualified by these tests. See ADR-84.
+
 The insight-card namespace also uses private HTTP logging for rejected methods
 and malformed company scopes: normalized route only, no current principal,
 company/Source/hash query or error prose. Actual Express/pino rejection checks

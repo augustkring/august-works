@@ -18,15 +18,18 @@ vi.mock("@/lib/router", () => ({ Link: ({ to, children, ...props }: any) => <a h
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 const source = { companyId, domain: "insight" as const, resourceId, version: "a".repeat(64), observedAt: "2026-10-01T00:00:00Z" };
 const wire = { schemaVersion: 1, component: "ResultCard", companyId, cardId: `insight:${resourceId}`, source: { companyId, domain: "insight", resourceId, version: source.version } };
-const card = { id: wire.cardId, kind: "result", source, freshness: "fresh", displayExpiresAt: new Date(Date.now() + 60_000).toISOString(), title: "PRIVATE current Native review", whyYou: null, consequence: "Native read-only evidence",
+const card = { id: wire.cardId, kind: "result", source, freshness: "fresh", displayExpiresAt: new Date(Date.now() + 60_000).toISOString(), displayValidForMs: 30_000, title: "PRIVATE current Native review", whyYou: null, consequence: "Native read-only evidence",
   evidence: ["native_historical_review", "human_agenda_not_decision_or_approval"], actions: [{ id: "inspect", label: "Inspect", operation: "open", href: "/management-reviews", criticality: "C2", source, requiresCurrentAuthorization: true }] } as any;
 let host: HTMLDivElement, root: Root, client: QueryClient;
 const read = vi.mocked(experienceApi.insightCard);
-async function flush() { await act(async () => { await new Promise(resolve => setTimeout(resolve, 25)); }); }
+async function flush() { await act(async () => {
+  if (vi.isFakeTimers()) await vi.advanceTimersByTimeAsync(25);
+  else await new Promise(resolve => setTimeout(resolve, 25));
+}); }
 async function render() { await act(async () => root.render(<QueryClientProvider client={client}><ExperienceToolCard wire={wire} state="ready" /></QueryClientProvider>)); await flush(); }
 beforeEach(() => { vi.resetAllMocks(); f.userId = "manager-a"; f.profile = "manager"; f.loading = false; f.enabled = true; read.mockResolvedValue(card);
   client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } }); host = document.createElement("div"); document.body.append(host); root = createRoot(host); });
-afterEach(async () => { await act(async () => root.unmount()); client.clear(); host.remove(); await act(async () => i18n.changeLanguage("en")); });
+afterEach(async () => { await act(async () => root.unmount()); client.clear(); host.remove(); vi.useRealTimers(); vi.restoreAllMocks(); await act(async () => i18n.changeLanguage("en")); });
 it("renders only the current Native read with localized read-only authority and exact references", async () => {
   await render(); expect(host.textContent).toContain(card.title); expect(host.textContent).toContain("Published historical review");
   expect(host.textContent).toContain("not a decision or approval"); expect(host.querySelector("a")?.getAttribute("href")).toBe("/management-reviews");
@@ -52,7 +55,7 @@ it("refuses a substituted Native source or executable action and preserves fixed
 });
 
 it("withdraws private evidence at its display deadline while the next read is unavailable", async () => {
-  read.mockResolvedValueOnce({ ...card, displayExpiresAt: new Date(Date.now() + 150).toISOString() });
+  read.mockResolvedValueOnce({ ...card, displayExpiresAt: new Date(Date.now() + 150).toISOString(), displayValidForMs: 150 });
   await render(); expect(host.textContent).toContain("PRIVATE");
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 180)); });
   expect(host.textContent).not.toContain("PRIVATE"); expect(host.querySelector('[role="alert"]')).not.toBeNull();
@@ -63,4 +66,39 @@ it("refuses a missing or already expired insight display deadline", async () => 
   read.mockResolvedValueOnce({ ...card, displayExpiresAt: new Date(Date.now() - 1).toISOString() });
   await act(async () => { await client.invalidateQueries({ queryKey: ["experience-insight-tool-card"] }); });
   await flush(); expect(host.textContent).not.toContain("PRIVATE");
+});
+
+it("does not extend the Native display lease for a slow or rolled-back client clock", async () => {
+  const serverTime = Date.now();
+  vi.useFakeTimers(); vi.setSystemTime(serverTime - 600_000);
+  read.mockResolvedValueOnce({ ...card, displayExpiresAt: new Date(serverTime + 1000).toISOString(), displayValidForMs: 1000 });
+  await render(); expect(host.textContent).toContain("PRIVATE");
+  vi.setSystemTime(serverTime - 1_200_000);
+  await act(async () => { await vi.advanceTimersByTimeAsync(1000); });
+  expect(host.textContent).not.toContain("PRIVATE"); expect(host.querySelector('[role="alert"]')).not.toBeNull();
+});
+
+it("consumes the display lease while the Native read is in flight", async () => {
+  vi.useFakeTimers();
+  let release!: (value: any) => void;
+  read.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+  await render();
+  await act(async () => { await vi.advanceTimersByTimeAsync(600); release({ ...card, displayValidForMs: 1000 }); });
+  await flush(); expect(host.textContent).toContain("PRIVATE");
+  await act(async () => { await vi.advanceTimersByTimeAsync(400); });
+  expect(host.textContent).not.toContain("PRIVATE");
+});
+
+it("never displays a reply that arrives after its original display lease", async () => {
+  vi.useFakeTimers();
+  let release!: (value: any) => void;
+  read.mockImplementationOnce(() => new Promise(resolve => { release = resolve; }));
+  await render();
+  await act(async () => { await vi.advanceTimersByTimeAsync(1001); release({ ...card, displayValidForMs: 1000 }); });
+  await flush(); expect(host.textContent).not.toContain("PRIVATE"); expect(host.querySelector('[role="alert"]')).not.toBeNull();
+});
+
+it.each([undefined, 0, -1, 30_001, Number.NaN, Number.POSITIVE_INFINITY])("refuses invalid or missing server display lifetime %s", async displayValidForMs => {
+  read.mockResolvedValueOnce({ ...card, displayValidForMs }); await render();
+  expect(host.textContent).not.toContain("PRIVATE"); expect(host.querySelector('[role="alert"]')).not.toBeNull();
 });

@@ -2484,3 +2484,29 @@ Slack durable-ingress case; the same case passes alone on 65 (one selected case,
 All 70 release surfaces, sourceComplete=false and R0 remain pending. The full
 brief still includes unfinished implementation and independent qualification.
 No PR is created or pushed.
+
+### Bound private insight display independently of the client wall clock — checkpoint 67
+
+The previous display timer subtracts the client's Date.now() from a server ISO
+deadline. A slow or rolled-back client clock can therefore extend the intended
+30-second private display period, and can extend an earlier Native retention
+deadline. This is a concrete correctness/privacy defect, not a new grant policy.
+
+The Original reader will return a bounded positive displayValidForMs computed
+from the same server-time sample as displayExpiresAt and the retained Source's
+expiry. The client will begin its monotonic lease before sending the read, so
+network latency consumes the lease instead of extending it. Missing/invalid
+leases and responses arriving after the lease are withheld. The existing
+absolute deadline stays as an additional conservative refusal, never authority
+to extend the lease. Current-account/activity/refetch withdrawal stays in force.
+The lease is a display bound, not an instantaneous remote-revocation guarantee.
+
+Regression checks must cover client clock skew/rollback, delayed responses,
+the short Native retention limit and both actual assistant-ui tool names.
+Implementation and current-source qualification are in progress. Whole V9,
+all 70 launch surfaces and R0 remain incomplete; no PR/push.
+
+Current lease checks: four shared/DOM/actual assistant-ui suites pass all 38
+cases (15.83 seconds); the actual Native management chat-reader case passes
+(one selected, 27 skipped; 39.02 seconds total). Token, module and source
+coverage checks pass. Full workspace typecheck is running on this code.

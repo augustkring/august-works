@@ -89,10 +89,11 @@ export async function currentInsightToolCard(db: Db, actor: AuthorizationActor, 
     const finalFlags = await instanceSettingsService(tx).getExperimental();
     if (!v9FeatureEnabled(finalFlags, "action_cards_v9") || !v9FeatureEnabled(finalFlags, "experience_projection_v9") || !v8FeatureEnabled(finalFlags, config.feature as V8FeatureKey)) throw notFound("Native insight cards are no longer enabled");
     const source = { ...request.source, version, observedAt };
-    const deadline = Math.min(Date.parse(expiresAt), Date.now() + 30_000);
-    if (!Number.isFinite(deadline) || deadline <= Date.now()) throw conflict("Native insight retention expired; refresh its current owner");
+    const issuedAt = Date.now();
+    const deadline = Math.min(Date.parse(expiresAt), issuedAt + 30_000);
+    if (!Number.isFinite(deadline) || deadline <= issuedAt) throw conflict("Native insight retention expired; refresh its current owner");
     return experienceCardSchema.parse({ id: request.cardId, kind: config.component === "ResultCard" ? "result" : "insight", title,
-      whyYou: null, consequence: "Native insight evidence is read-only. Review its source and limitations before using it.", source, freshness: "fresh", displayExpiresAt: new Date(deadline).toISOString(), evidence,
+      whyYou: null, consequence: "Native insight evidence is read-only. Review its source and limitations before using it.", source, freshness: "fresh", displayExpiresAt: new Date(deadline).toISOString(), displayValidForMs: deadline - issuedAt, evidence,
       actions: [{ id: "inspect", label: "Review current Native evidence", operation: "open", href, criticality: "C2", source, requiresCurrentAuthorization: true }] });
   });
 }

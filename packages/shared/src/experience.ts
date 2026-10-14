@@ -148,6 +148,8 @@ export const experienceCardSchema = z
     freshness: experienceFreshnessSchema,
     /** Bounded display lifetime for a freshly authorized private insight read. */
     displayExpiresAt: z.iso.datetime().optional(),
+    /** Server lifetime; the client starts its monotonic timer before the read. */
+    displayValidForMs: z.number().int().min(1).max(30_000).optional(),
     actions: z.array(experienceActionSchema).max(8),
     evidence: z.array(boundedText).max(8),
   })

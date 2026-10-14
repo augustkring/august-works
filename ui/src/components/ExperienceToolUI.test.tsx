@@ -170,7 +170,7 @@ it.each(EXPERIENCE_CARD_TOOL_NAMES)("renders %s insight references with actual a
   message = makeMessage(toolName, request);
   const get = vi.spyOn(api, "get").mockImplementation(async path => path.includes("/insight-card?") ? {
     id: request.cardId, kind: "result", title: "CURRENT NATIVE REVIEW", source: insightSource,
-    freshness: "fresh", displayExpiresAt: new Date(Date.now() + 30_000).toISOString(),
+    freshness: "fresh", displayExpiresAt: new Date(Date.now() + 30_000).toISOString(), displayValidForMs: 30_000,
     whyYou: null, consequence: "Native read-only evidence", evidence: ["native_historical_review"],
     actions: [{ id: "inspect", label: "Inspect", operation: "open", href: "/management-reviews", criticality: "C2", source: insightSource, requiresCurrentAuthorization: true }],
   } : { companyId, profile: "manager", generatedAt: source.observedAt, dependencies: [], needsYou: [], inProgress: [], done: [], watch: [] });

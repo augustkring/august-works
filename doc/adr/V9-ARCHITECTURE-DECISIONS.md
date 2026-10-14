@@ -2809,3 +2809,23 @@ Comparable local minified main assets shrink from 9,204,982 to 7,479,575 bytes
 1,961,860 bytes (7.67 percent). Route/lazy-modal tests and built-UI checks remain
 required. These bytes do not establish a device/journey performance budget,
 field latency or release acceptance. Larger remaining chunks stay visible.
+
+## ADR-84 — A private insight display lease starts before the current read
+
+The Native insight reader returns displayExpiresAt plus displayValidForMs, a
+positive integer of at most 30,000. Both use the same server-time sample and the
+lease is shortened by the Original artifact's earlier retention expiry. The
+model's reference request cannot supply either field or extend the lease.
+
+The browser captures performance.now() before dispatch and derives its display
+deadline from that request start and the returned lifetime. Transport latency
+consumes the lease. A slow or rolled-back client wall clock cannot extend it;
+the absolute ISO deadline remains an additional conservative refusal. Missing
+or malformed lifetime and already late responses never render the private card.
+Existing current-account, Source activity, query-fetch and access-loss withdrawal
+stay in force. There is no persistence, action, grant or new telemetry purpose.
+
+An older server lacking the lifetime fails closed in the new renderer. Adoption
+by older parked clients, host/browser lifecycle behavior, actual revocation and
+mixed-version rollout still require qualification. This does not claim immediate
+remote revocation while a client is disconnected or unable to run its timer.
