@@ -41,6 +41,9 @@ export const workflows = pgTable(
     draftRevisionId: uuid("draft_revision_id"),
     createdByUserId: text("created_by_user_id"),
     createdByAgentId: uuid("created_by_agent_id").references(() => agents.id, { onDelete: "set null" }),
+    // Native authoring provenance survives later Human revisions and source-run
+    // removal. These IDs confer no read, execution or permission authority.
+    authoringSourceRunIds: jsonb("authoring_source_run_ids").$type<string[]>().notNull().default([]),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
@@ -58,6 +61,8 @@ export const workflows = pgTable(
       "workflows_status_check",
       sql`${table.status} in ('active', 'paused', 'archived')`,
     ),
+    authoringSourcesCheck: check("workflows_authoring_sources_check",
+      sql`jsonb_typeof(${table.authoringSourceRunIds}) = 'array'`),
     archiveCheck: check(
       "workflows_archive_check",
       sql`(${table.status} = 'archived') = (${table.archivedAt} is not null)`,

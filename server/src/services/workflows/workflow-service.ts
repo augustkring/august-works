@@ -41,7 +41,7 @@ import {
   type WorkflowGraphV1,
   type WorkflowRevision,
 } from "@paperclipai/shared";
-import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
+import { HttpError, conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import { workflowNodeRegistryService } from "./workflow-node-registry.js";
 import { assertV5Authorization, v5HumanActorId } from "../v5-authorization.js";
 import { instanceSettingsService } from "../instance-settings.js";
@@ -54,6 +54,7 @@ import { enqueueWorkflowRunInTransaction, resolveWorkflowExecutionRevision } fro
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { workflowRequestKindSchema, workflowRequestReceiptSchema, type WorkflowRequestKind } from "@paperclipai/shared";
 import { lockCustomerWorkflowReceiptAuthority } from "./workflow-customer-authority.js";
+import { assertWorkflowAuthoringSources } from "./workflow-authoring-sources.js";
 
 import { assertWorkflowAuthoringAuthority } from "./workflow-authoring-authority.js";
 
@@ -107,7 +108,8 @@ async function assertProjectReference(db: WorkflowDb, companyId: string, project
 }
 
 function mapWorkflow(row: typeof workflows.$inferSelect): Workflow {
-  return { ...row, status: row.status as Workflow["status"] };
+  const { authoringSourceRunIds: _privateSources, ...publicRow } = row;
+  return { ...publicRow, status: row.status as Workflow["status"] };
 }
 
 function mapRevision(row: typeof workflowRevisions.$inferSelect): WorkflowRevision {
@@ -140,6 +142,7 @@ async function getRevisionById(
 async function getDetail(db: WorkflowDb, companyId: string, workflowId: string, actor?:AuthorizationActor): Promise<WorkflowDetail | null> {
   const workflow = await getWorkflowRow(db, companyId, workflowId);
   if (!workflow) return null;
+  await assertWorkflowAuthoringSources(db, companyId, workflowId, actor);
   const [draft, published] = await Promise.all([
     getRevisionById(db, companyId, workflowId, workflow.draftRevisionId,actor),
     getRevisionById(db, companyId, workflowId, workflow.publishedRevisionId,actor),
@@ -489,14 +492,22 @@ export function workflowService(db: Db) {
       if (result.publication) publishActivity(result.publication);
       return result.receipt;
     },
-    list: async (companyId: string) =>
+    list: async (companyId: string, actor?: AuthorizationActor) =>
       db.select().from(workflows)
         .where(eq(workflows.companyId, companyId))
         .orderBy(desc(workflows.updatedAt))
-        .then((rows) => rows.map(mapWorkflow)),
+        .then(async (rows) => {
+          const visible: Workflow[] = [];
+          for (const row of rows) {
+            try { await assertWorkflowAuthoringSources(db, companyId, row.id, actor); visible.push(mapWorkflow(row)); }
+            catch (error) { if (!(error instanceof HttpError) || ![403, 404].includes(error.status)) throw error; }
+          }
+          return visible;
+        }),
 
-    get: async (companyId: string, workflowId: string) => {
+    get: async (companyId: string, workflowId: string, actor?: AuthorizationActor) => {
       const row = await getWorkflowRow(db, companyId, workflowId);
+      if (row) await assertWorkflowAuthoringSources(db, companyId, workflowId, actor);
       return row ? mapWorkflow(row) : null;
     },
 

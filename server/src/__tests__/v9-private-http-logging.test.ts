@@ -12,6 +12,10 @@ import {
 
 describe("V9 private HTTP purpose", () => {
   it.each([
+    ["PATCH", "/api/companies/private-company/workflows/private-record/draft?expectedUserId=private-principal"],
+    ["POST", "/api/companies/private-company/workflows/private-record/publish?expectedUserId=private-principal"],
+    ["PUT", "/api/companies//workflows/private-record/unknown?expectedUserId=private-principal"],
+    ["GET", "/api/companies/private-company/workflow-runs/private-record?expectedUserId=private-principal"],
     ["GET", "/api/companies/private-company/experience/workflows?expectedUserId=private-principal"],
     ["POST", "/api/companies/private-company/experience/workflow-drafts?expectedUserId=private-principal"],
     ["GET", "/api/companies/private-company/experience/workflow-draft-requests/private-record?expectedUserId=private-principal"],
@@ -188,6 +192,8 @@ describe("V9 private HTTP purpose", () => {
     const call =
       method === "POST"
         ? request(app).post(url)
+        : method === "PUT"
+          ? request(app).put(url)
         : method === "PATCH"
           ? request(app).patch(url)
           : method === "DELETE"

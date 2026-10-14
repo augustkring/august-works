@@ -405,7 +405,7 @@ export function workflowRoutes(db: Db) {
     await assertWorkflowsEnabled();
     const companyId = req.params.companyId as string;
     await assertPermission(req, companyId, "workflows:read");
-    res.json(await svc.list(companyId));
+    res.json(await svc.list(companyId, req.actor));
   });
 
   router.post(

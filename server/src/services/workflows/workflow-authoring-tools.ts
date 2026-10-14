@@ -1,3 +1,4 @@
+import { learningActorFromPrincipal } from "../learning/learning-analytical-sources.js";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { and, eq } from "drizzle-orm";
@@ -274,7 +275,7 @@ export function workflowAuthoringToolsService(db: Db) {
   ) {
     const scope = await resolveContext(context);
     await assertPermission(context, "workflows:edit");
-    const detail = await workflows.getDetail(context.companyId, workflowId);
+    const detail = await workflows.getDetail(context.companyId, workflowId, learningActorFromPrincipal(context.companyId, authoringActor(context).principal, context.runId));
     if (!detail) throw notFound("Workflow not found");
     if (
       scope.projectId &&
@@ -338,7 +339,7 @@ export function workflowAuthoringToolsService(db: Db) {
       scope.issueId ?? context.runId,
       parsed.data.idempotencyKey,
     );
-    const existing = await workflows.getDetail(context.companyId, workflowId);
+    const existing = await workflows.getDetail(context.companyId, workflowId, learningActorFromPrincipal(context.companyId, authoringActor(context).principal, context.runId));
     if (existing) {
       const sameRequest =
         existing.projectId === (requestedProjectId ?? null) &&
@@ -370,7 +371,7 @@ export function workflowAuthoringToolsService(db: Db) {
       // the final concurrency guard; only replay if the winning row is the same
       // logical request.
       if (!isUniqueViolation(error)) throw error;
-      const winner = await workflows.getDetail(context.companyId, workflowId);
+      const winner = await workflows.getDetail(context.companyId, workflowId, learningActorFromPrincipal(context.companyId, authoringActor(context).principal, context.runId));
       if (
         winner &&
         winner.projectId === (requestedProjectId ?? null) &&
@@ -663,7 +664,7 @@ export function workflowAuthoringToolsService(db: Db) {
     }
     const scope = await resolveContext(context);
     await assertPermission(context, "workflows:publish");
-    const detail = await workflows.getDetail(context.companyId, parsed.data.workflowId);
+    const detail = await workflows.getDetail(context.companyId, parsed.data.workflowId, learningActorFromPrincipal(context.companyId, authoringActor(context).principal, context.runId));
     if (!detail) throw notFound("Workflow not found");
     if (scope.projectId && detail.projectId !== scope.projectId) {
       throw forbidden("Workflow is outside the active project context", {

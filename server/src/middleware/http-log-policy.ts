@@ -75,8 +75,10 @@ export function isPrivateExperienceHttpRequest(method: string | undefined, url: 
     || /^\/api\/companies\/[^/]+\/agents\/[^/]+\/experience(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/agents\/[^/]+\/retirement(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/memory\/experience(?:\/|$)/i.test(pathname)
-    || /^\/api\/companies\/[^/]*\/workflows\/[^/]*\/experience(?:\/|$)/i.test(pathname)
-    || /^\/api\/companies\/[^/]*\/workflow-runs\/[^/]*\/experience(?:\/|$)/i.test(pathname)
+    // Original graph/draft/run writes can echo copied private configuration in
+    // database errors. Keep the whole Native owner namespace private, including
+    // rejected methods and malformed scopes, rather than just its V9 view.
+    || /^\/api\/companies\/[^/]*\/(?:workflows|workflow-runs)(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/(?:[^/]*\/)*agent-configuration-drafts(?:\/|$)/i.test(pathname);
 }
 export function privateExperienceLogUrl(url: string): string {
@@ -102,6 +104,8 @@ export function privateExperienceLogUrl(url: string): string {
   if (/\/memory\/experience(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/memory/experience";
   if (/\/workflows\/[^/]*\/experience(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/workflows/:workflowId/experience";
   if (/\/workflow-runs\/[^/]*\/experience(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/workflow-runs/:runId/experience";
+  if (/^\/api\/companies\/[^/]*\/workflows(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/workflows/:workflowId/:operation";
+  if (/^\/api\/companies\/[^/]*\/workflow-runs(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/workflow-runs/:runId/:operation";
   if (/^\/api\/internal\//i.test(pathname)) return "/api/internal/customer-feedback/:companyId/:operation";
   return "/api/companies/:companyId/customer-feedback/:operation";
 }

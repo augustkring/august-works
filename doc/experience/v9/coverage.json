@@ -1205,7 +1205,12 @@
         "ui/src/components/ConversationWorkflowPreview.tsx",
         "server/src/services/experience/workflow-flow.ts",
         "server/src/services/agent-setup-authoring-tools.ts",
-        "packages/shared/src/agent-setup-authoring.ts"
+        "packages/shared/src/agent-setup-authoring.ts",
+        "server/src/services/workflows/workflow-authoring-sources.ts",
+        "server/src/services/learning/learning-analytical-sources.ts",
+        "server/src/services/memory/memory-privacy.ts",
+        "packages/db/src/schema/workflows.ts",
+        "packages/db/src/migrations/0493_tidy_kat_farrell.sql"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/workflow-review.json"
@@ -1433,7 +1438,12 @@
         "ui/src/api/workflow-run-control.ts",
         "ui/src/lib/pending-workflow-stops.ts",
         "server/src/services/workflows/workflow-customer-stop.ts",
-        "server/src/services/workflows/workflow-executor.ts"
+        "server/src/services/workflows/workflow-executor.ts",
+        "server/src/services/workflows/workflow-authoring-sources.ts",
+        "server/src/services/learning/learning-analytical-sources.ts",
+        "server/src/services/memory/memory-privacy.ts",
+        "packages/db/src/schema/workflows.ts",
+        "packages/db/src/migrations/0493_tidy_kat_farrell.sql"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/workflow-recover.json"

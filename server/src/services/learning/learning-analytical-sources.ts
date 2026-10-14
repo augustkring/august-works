@@ -35,6 +35,13 @@ export async function assertLearningAnalyticalSources(db:Db,actor:AuthorizationA
 /** A native consumer must supply its current actor before copying learned
  * content with analytical signal dependencies. Missing actor never grants access. */
 export async function assertLearnedAssetAnalyticalSources(db:Db,companyId:string,type:string,id:string,actor?:AuthorizationActor,readScope?:NativeReadScope) {
+ if(type==="workflow_revision"){
+  const {workflowRevisions}=await import("@paperclipai/db");
+  const [source]=await db.select({workflowId:workflowRevisions.workflowId}).from(workflowRevisions)
+   .where(and(eq(workflowRevisions.companyId,companyId),eq(workflowRevisions.id,id)));
+  if(source){const {assertWorkflowAuthoringSources}=await import("../workflows/workflow-authoring-sources.js");
+   await assertWorkflowAuthoringSources(db,companyId,source.workflowId,actor,readScope);}
+ }
  if(type==="document_revision"){
   const {assertFoundationRevisionConversationSources}=await import("../foundation-authoring-source.js");
   await assertFoundationRevisionConversationSources(db,companyId,id,actor);

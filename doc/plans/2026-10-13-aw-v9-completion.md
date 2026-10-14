@@ -341,3 +341,56 @@ whole-scope test pass or release acceptance is claimed. Full guided
 graph/step/access/approval authoring, broader Agent capability/
 transport/selection, external compensation, complete lifecycle and representative
 Human/live-provider qualification remain part of the whole-scope continuation.
+
+### Private workflow authoring source closure before guided editing
+
+Native workflows now retain the actual private conversation authoring run IDs
+through discarded revisions, Human edits and publication. The generated schema
+and migration capture/backfill Original company/Agent/run/conversation relations
+without truncation; new capture is bounded to 32 sources. Current source-owning
+verified Human and Native workflow/issue/Agent reading authority are required.
+Internal Agent authors resolve their actual active responsible Human. Raw source
+IDs are excluded from public details, and unauthorized list entries are withheld.
+Original learned-source, execution and package component readers share this owner.
+
+The Original memory privacy transaction admits affected live runs through the
+existing cancellation owner before erasing root/revision/run/step/wait/review/
+activity and actual descendant task copies. Immutable publication retains only
+the existing empty/unavailable erasure shape. Permanent content-free markers
+and Native restore/late-writer guards prevent payload resurrection. The exact
+wait's existing cancellation marker remains body-free and cannot be overwritten
+by a late private result. Cancellation remains pending until the Original
+cancellation-only reconciler finishes software cleanup. Its Native heartbeat
+cancel suppresses immediate recovery, avoiding a replacement queued child.
+
+The final authoring/conversation/retained-control group passes 41 cases in four
+suites. The Native executor/source group passed 58 cases in two suites on the
+preceding source (before the final workflow-reading assertions and their eighth
+source case). These include actual Native authoring, Human publication, Native
+task creation, erasure/restore, current account/permission denial, waiting-child
+cleanup with rollout closed and actual queued heartbeat cancellation without a
+replacement. A real active authoring run also cannot let an API-key reader borrow
+its Human. They are software fixtures; queue admission is controlled and no
+provider/process or external-effect termination is qualified.
+
+Earlier checks exposed a trigger referencing another table's record field and
+unmaterialized SQL boolean evaluation recursing into an unrelated copy owner.
+Both are fixed; Native relationships are materialized before source evaluation.
+Fixture correction added the other private conversation owner's actual read
+grant, used the Original manual-run method/argument contract and exercised the
+intended HTTP method. None of these fixes weaken Native read, immutable-version,
+current-user, rollout, Source or no-replacement cancellation requirements.
+
+Private HTTP purpose now includes the entire Original workflow/run namespace,
+including Advanced graph writes and malformed/refused methods, because wrapped
+database errors can echo private copied configuration. Generic URL/error/body
+and crash-report metadata remain content-free. The final log/crash group passes
+153 cases in four suites, full recursive workspace types and generated database
+build/migration-safety checks pass. Source coverage and module boundaries pass;
+all 70 surfaces still require full implementation/evidence. The complete workspace
+build also passes on this unchanged application Source. No immutable
+whole-scope test pass is claimed.
+Parent workflow result copies, broader package/artifact copies and explicit
+sharing remain under continuation alongside guided graph/step/access/approval
+authoring, wider Agent capability/transport/selection, sharing, external outcome
+reconciliation and whole-V9 qualification still require continuation.

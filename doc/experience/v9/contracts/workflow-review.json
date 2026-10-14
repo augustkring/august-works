@@ -64,7 +64,8 @@
       "Original Native task creation receipts, current issues and their originating heartbeat runs; current issue authorization and source/erasure checks.",
       "Original routine revisions and creator run/current conversation generation; current reader and originating source checks.",
       "Original own-account notification preferences and saved proposal provenance, current verified account/company/source admission, immutable proposal version, baseline hash and exact Human confirmation receipt.",
-      "Actual Agent configuration draft creation Activity/run provenance, current conversation generation and creator authority. The bounded proposal projection excludes all current Human-edited names, instructions and private configuration."
+      "Actual Agent configuration draft creation Activity/run provenance, current conversation generation and creator authority. The bounded proposal projection excludes all current Human-edited names, instructions and private configuration.",
+      "Native workflow private authoring run provenance survives discarded revisions, Human edits and publication. Current verified source-owning Human and Original workflow/issue/Agent reads remain required; membership or a request-snapshot administrator flag supplies no private source-sharing grant."
     ],
     "canonicalWriteOperation": "Review remains read-only; separate explicit lifecycle controls invoke the original native workflow owner (ADR-V9-023).",
     "authorityEffect": "Presentation and drafts cannot grant permissions. Material effects always require current native permissions, approvals and version preconditions.",
@@ -111,7 +112,8 @@
     ],
     "dataCollected": [],
     "sensitiveFields": [
-      "Native graph configuration, prompts, credentials, inputs, schemas, variables, actor assignments and results are excluded from this projection"
+      "Native graph configuration, prompts, credentials, inputs, schemas, variables, actor assignments and results are excluded from this projection",
+      "Private authoring source run IDs are internal Native provenance and are excluded from public workflow details. Lists omit unavailable private owners; Source account/run/permission checks repeat before return."
     ],
     "loggingConstraints": "Purpose-separated workflow-experience namespace for success and rejected requests; generic logs omit account query strings, workflow/customer prose and raw errors."
   },
@@ -140,7 +142,8 @@
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
     ],
     "securityPrivacy": [
-      "Verify current native grants, membership revocation, account mismatch, foreign-company denial, agent denial, raw-config omission and late-response suppression."
+      "Verify current native grants, membership revocation, account mismatch, foreign-company denial, agent denial, raw-config omission and late-response suppression.",
+      "Verify actual Native authoring and Human publication retain private Source dependencies; current account/grant loss, copied-task erasure, immutable empty erasure shape, late/restore writers, permanent deletion markers and content-free original workflow/editor/run HTTP and crash logs. Parent workflow output, broader package/artifact copies and explicit cross-user sharing still need complete qualification."
     ],
     "usability": [
       "Use representative exploratory and pre-registered confirmatory journey evidence with explicit PASS/FAIL/INCONCLUSIVE; source checks are insufficient."

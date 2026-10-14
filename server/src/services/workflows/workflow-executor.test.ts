@@ -3376,7 +3376,7 @@ describePg("Workflow executor V1", () => {
     expect(heartbeat.cancelRun).toHaveBeenCalledWith(
       heartbeatRunId,
       "Operator cancelled external work",
-      { errorCode: "workflow_parent_cancelled" },
+      { errorCode: "workflow_parent_cancelled", suppressImmediateRecovery: true },
     );
     expect(cancelled.run.status).toBe("cancelled");
     expect(

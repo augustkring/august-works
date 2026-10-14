@@ -128,7 +128,7 @@ type WorkflowHeartbeatRuntime = IssueAssignmentWakeupDeps & {
   cancelRun?: (
     runId: string,
     reason?: string,
-    options?: { errorCode?: string },
+    options?: { errorCode?: string; suppressImmediateRecovery?: boolean },
   ) => Promise<unknown>;
 };
 
@@ -7235,6 +7235,7 @@ async function requestWorkflowRunCancellation(
   actor: WorkflowRunActor,
   terminalFailure?: { code: "workflow_deadline_exceeded" | "workflow_wait_timeout" | "workflow_execution_principal_revoked"; message: string },
   customerStop?: CustomerWorkflowStop,
+  sourceErasure = false,
 ): Promise<typeof workflowRuns.$inferSelect> {
   const publications: ActivityPublication[] = [];
   const updated = await db.transaction(async (tx) => {
@@ -7267,7 +7268,9 @@ async function requestWorkflowRunCancellation(
         status: run.status,
       });
     }
-    if (run.status === "cancelling") return admitted(run);
+    // A restore/late writer may already have entered the Source erasure fence.
+    // Its active waits still need Original cancellation admission exactly once.
+    if (run.status === "cancelling" && !sourceErasure) return admitted(run);
 
     const now = new Date();
     const resolutionActor = workflowCancellationResolutionActor(actor);
@@ -7737,7 +7740,7 @@ async function cancelWorkflowHeartbeatChildren(
         await heartbeatRuntime.cancelRun(
           heartbeat.id,
           reason,
-          { errorCode: "workflow_parent_cancelled" },
+          { errorCode: "workflow_parent_cancelled", suppressImmediateRecovery: true },
         );
       } catch {
         allTerminal = false;
@@ -7893,6 +7896,18 @@ async function finalizeWorkflowRunCancellation(
 
   publishActivities(publications);
   return result;
+}
+
+/** Internal privacy owner admission only. No HTTP/Agent request chooses this
+ * context, and no physical/provider call runs inside the erasure transaction.
+ * The Original cancellation-only reconciler owns post-commit cleanup. */
+export async function requestErasedWorkflowRunCancellation(db: Db, companyId: string, runId: string) {
+  const [run] = await db.select({ workflowId: workflowRuns.workflowId }).from(workflowRuns)
+    .where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.id, runId)));
+  const [source] = run ? await db.execute<{ erased: boolean }>(sql`select aw_workflow_authoring_source_erased(${companyId}::uuid,${run.workflowId}::uuid) as erased`) : [];
+  if (source?.erased !== true) throw forbidden("Original workflow source erasure is required for cancellation");
+  return requestWorkflowRunCancellation(db, companyId, runId, "Source payload erased",
+    { principal: { type: "system", service: "workflow-source-erasure" } }, undefined, undefined, true);
 }
 
 async function continueWorkflowRunCancellation(

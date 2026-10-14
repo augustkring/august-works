@@ -7,6 +7,22 @@ import {
   shouldSilenceHttpSuccessLog,
 } from "../middleware/http-log-policy.js";
 
+it("protects Original private graph/run owner writes and malformed rejected routes", () => {
+  for (const company of ["", "PRIVATE-company"]) {
+    for (const namespace of ["workflows", "workflow-runs"]) {
+      for (const suffix of ["", "/", "/PRIVATE-owner/draft", "/PRIVATE-owner/publish", "/PRIVATE-owner/unknown"]) {
+        const url = `/api/companies/${company}/${namespace}${suffix}?expectedUserId=PRIVATE-user`;
+        for (const method of ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]) {
+          expect(isPrivateExperienceHttpRequest(method, url)).toBe(true);
+          expect(isSecretSensitiveHttpRequest(method, url)).toBe(true);
+          expect(privateExperienceLogUrl(url)).not.toContain("PRIVATE");
+        }
+      }
+    }
+  }
+  expect(isPrivateExperienceHttpRequest("POST", "/api/companies/id/workflows-other/id/draft")).toBe(false);
+});
+
 it("keeps retirement context and rejected mutation payloads private for every HTTP method", () => {
   const url = "/api/companies/private-company/agents/private-agent/retirement?expectedUserId=private-account";
   for (const method of ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
@@ -29,7 +45,7 @@ it("purpose-separates native run metadata and rejected requests from generic log
   for (const method of ["GET", "POST", "DELETE"])
     expect(isPrivateExperienceHttpRequest(method, url)).toBe(true);
   expect(privateExperienceLogUrl(url)).toBe("/api/companies/:companyId/workflow-runs/:runId/experience");
-  expect(isPrivateExperienceHttpRequest("GET", "/api/companies/id/workflow-runs/id/experience-other")).toBe(false);
+  expect(isPrivateExperienceHttpRequest("GET", "/api/companies/id/workflow-runs/id/experience-other")).toBe(true);
 });
 it("protects retained run-control and exact Stop receipts, including empty scopes and refused methods", () => {
   for (const suffix of ["control", "retained-stop", "retained-stop-requests/private-request"])
@@ -74,7 +90,7 @@ it("purpose-separates workflow review text, account identity and rejected reques
     expect(isSecretSensitiveHttpRequest(method, url)).toBe(true);
     expect(privateExperienceLogUrl(url)).toBe("/api/companies/:companyId/workflows/:workflowId/experience");
   }
-  expect(isPrivateExperienceHttpRequest("GET", "/api/companies/id/workflows/id/experience-other")).toBe(false);
+  expect(isPrivateExperienceHttpRequest("GET", "/api/companies/id/workflows/id/experience-other")).toBe(true);
 });
 
 describe("isPrivateWebhookHttpRequest", () => {

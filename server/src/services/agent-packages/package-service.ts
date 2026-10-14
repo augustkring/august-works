@@ -1055,7 +1055,7 @@ export function agentPackageService(
             code: matches.length ? "hire_package_component_ambiguous" : "hire_package_component_unavailable" });
           const selected = matches[0]!;
           if (selected.targetKind === "workflow") {
-            const target = selected.targetRef ? await workflowService(db).get(companyId, selected.targetRef) : null;
+            const target = selected.targetRef ? await workflowService(db).get(companyId, selected.targetRef, { ...actor, ignoreInstanceAdmin: true }) : null;
             if (!target || target.status !== "active" || !target.publishedRevisionId ||
               !await workflowService(db).getRevision(companyId, target.id, target.publishedRevisionId, { ...actor, ignoreInstanceAdmin: true }))
               throw conflict("The routine's current published workflow is unavailable", { code: "hire_package_component_unavailable" });

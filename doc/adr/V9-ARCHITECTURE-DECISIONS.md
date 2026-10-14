@@ -1576,3 +1576,42 @@ finished; the corrected test waits for the actual Native response. Private run
 history also checks current account/Source before and after reads and preserves
 utility focus. Exact-source validation remains in the continuation plan; live
 process/provider, manual assistive technology and Human qualification stay open.
+
+## ADR-V9-036 — Native workflow authoring retains its private conversation sources
+
+2026-10-13. The Original workflow owner retains actual private authoring run IDs
+on the Native workflow itself. Discarding a revision, editing as a Human or
+publishing cannot remove those sources. Native revision creation captures the
+company/Agent/run/conversation relationship at the database boundary; existing
+private revisions are backfilled without truncation. New captures are bounded
+to 32 sources and readers refuse incomplete/excessive provenance. Source IDs
+remain internal and supply no current read, runtime, approval or sharing grant.
+
+Private reads require the current verified source-owning Human, current Native
+workflow/issue/Agent reading authority and Original analytical source admission.
+Internal Agent authors resolve their active run's actual responsible Human rather
+than trusting a supplied claim. Missing, withdrawn, foreign, unverified or cyclic
+sources remain unavailable. Source review repeats current account/run/permission
+checks and uses bounded recursion. SQL materializes actual descendant relationships
+before evaluating their copy owner; boolean evaluation order is not provenance.
+Resource selection, list/detail/revision reads, package component selection and
+Original execution reuse the same source owner. Cross-user sharing requires an
+explicit Original source-sharing contract, which is not inferred from membership.
+
+The Original memory privacy transaction admits cancellation for affected live
+runs through the existing workflow cancellation owner, then erases private root,
+revision, run, step, wait, review, activity and actual descendant task payloads.
+Immutable publication is changed only to the existing empty/unavailable erasure
+shape. Permanent content-free markers survive deletion and fence late/restore
+writers. Wait cleanup retains only the Original exact-wait parent-cancellation
+marker; private reasons/results cannot return. Nonterminal runs remain cancelling
+until the Original cancellation-only reconciler completes software cleanup, even
+with workflow rollout closed. Its heartbeat cancellation suppresses immediate
+task recovery so stopping a queued child cannot promote a replacement run.
+
+PostgreSQL cases exercise actual authoring, Human revision/publication, real
+Native task creation, erasure/restore, source/account/permission denial and the
+actual Native queued heartbeat cancellation service. Queue admission is controlled
+by the software fixture; this does not qualify host/provider process termination,
+external-effect compensation, complete sharing semantics or representative Human
+usability. Exact checkpoint results remain in the dated continuation plan.

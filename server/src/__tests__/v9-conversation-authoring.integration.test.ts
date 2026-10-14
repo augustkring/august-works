@@ -165,7 +165,9 @@ describe("Current conversation previews use actual Original authoring revisions"
     const otherUserId = `other-${randomUUID()}`, at = new Date();
     await db.insert(authUsers).values({ id: otherUserId, name: "Other account", email: `${otherUserId}@test.invalid`, emailVerified: true, createdAt: at, updatedAt: at });
     await db.insert(companyMemberships).values({ companyId: f.home, principalType: "user", principalId: otherUserId, status: "active" });
-    await db.insert(principalPermissionGrants).values({ companyId: f.home, principalType: "user", principalId: otherUserId, permissionKey: "workflows:edit" });
+    await db.insert(principalPermissionGrants).values(["workflows:edit", "workflows:read"].map(permissionKey => ({
+      companyId: f.home, principalType: "user", principalId: otherUserId, permissionKey,
+    })));
     const other = await issueService(db).create(f.home, { title: "Other owned chat", assigneeAgentId: f.presence.id,
       conversationAgentId: f.presence.id, conversationUserId: otherUserId, conversationState: "waiting", status: "in_review", createdByUserId: otherUserId });
     const [otherRun] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: otherUserId,
