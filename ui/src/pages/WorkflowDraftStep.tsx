@@ -26,10 +26,10 @@ export function WorkflowDraftStepEntry() {
   return <WorkflowDraftStep key={JSON.stringify([selectedCompanyId, identity.userId, workflowId, nodeId])}
     company={selectedCompanyId} principal={identity.userId} workflow={workflowId} node={nodeId!} />;
 }
-type Form = { source: string; name: string; duration: string; summary: string; consequence: string; objective: string;
+type Form = { source: string; name: string; duration: string; summary: string; consequence: string; objective: string; agentId: string;
   conditionSource: "trigger" | "variables" | "steps"; path: string; operator: "===" | "!==" | ">" | ">=" | "<" | "<=";
   valueType: "string" | "number" | "boolean" | "null"; value: string };
-type Field = "name" | "duration" | "summary" | "consequence" | "objective" | "path" | "value";
+type Field = "name" | "duration" | "summary" | "consequence" | "objective" | "agentId" | "path" | "value";
 const sourceKey = (view: WorkflowDraftStepReview) => JSON.stringify([view.draftRevisionId, view.updatedAt, view.nodeId, view.nodeType]);
 
 export function WorkflowDraftStep({ company, principal, workflow, node }: { company: string; principal: string; workflow: string; node: string }) {
@@ -55,6 +55,7 @@ export function WorkflowDraftStep({ company, principal, workflow, node }: { comp
     summary: value.configuration.kind === "approval" ? value.configuration.summary : "",
     consequence: value.configuration.kind === "approval" ? value.configuration.consequence : "",
     objective: value.configuration.kind === "agent_task" ? value.configuration.objective : "",
+    agentId: "",
     conditionSource: value.configuration.kind === "condition" ? value.configuration.source : "trigger",
     path: value.configuration.kind === "condition" ? value.configuration.path.join("\n") : "",
     operator: value.configuration.kind === "condition" ? value.configuration.operator : "===",
@@ -92,12 +93,15 @@ export function WorkflowDraftStep({ company, principal, workflow, node }: { comp
   function submit(event: FormEvent) {
     event.preventDefault();
     if (!view || !form || sourceKey(view) !== form.source || !locator.ready || locator.failed || locator.blockedBy || mutation.isPending || !current()) return;
+    if (view.configuration.kind === "agent_task" && form.agentId && !view.agentSelection?.choices.some(choice => choice.agentId === form.agentId)) {
+      setFieldErrors({ agentId: t("workflowDraftStep.errors.agentId") }); setInvalid(true); return;
+    }
     const parsed = workflowDraftStepCommandSchema.safeParse({ requestId: crypto.randomUUID(), expectedWorkflowId: workflow,
       expectedDraftRevisionId: view.draftRevisionId, expectedPublishedRevisionId: view.publishedRevisionId, expectedUpdatedAt: view.updatedAt,
       expectedNodeId: node, expectedNodeType: view.nodeType, name: form.name,
       configuration: view.configuration.kind === "wait" ? { kind: "wait", durationSeconds: Number(form.duration) }
         : view.configuration.kind === "approval" ? { kind: "approval", summary: form.summary, consequence: form.consequence }
-        : view.configuration.kind === "agent_task" ? { kind: "agent_task", objective: form.objective }
+        : view.configuration.kind === "agent_task" ? { kind: "agent_task", objective: form.objective, ...(form.agentId ? { agentId: form.agentId } : {}) }
         : view.configuration.kind === "condition" ? { kind: "condition", source: form.conditionSource, path: form.path.split("\n"), operator: form.operator,
           value: form.valueType === "null" ? null : form.valueType === "boolean" ? form.value === "true" : form.valueType === "number" ? form.value.trim() ? Number(form.value) : NaN : form.value }
         : { kind: "keep" } });
@@ -105,7 +109,7 @@ export function WorkflowDraftStep({ company, principal, workflow, node }: { comp
       const errors: Partial<Record<Field, string>> = {};
       for (const issue of parsed.error.issues) {
         const field = issue.path[0] === "name" ? "name" : issue.path[1] === "durationSeconds" ? "duration" : issue.path[1];
-        if (["name", "duration", "summary", "consequence", "objective", "path", "value"].includes(String(field))) errors[field as Field] = t(`workflowDraftStep.errors.${String(field)}`);
+        if (["name", "duration", "summary", "consequence", "objective", "agentId", "path", "value"].includes(String(field))) errors[field as Field] = t(`workflowDraftStep.errors.${String(field)}`);
       }
       setFieldErrors(errors); setInvalid(true); return;
     }
@@ -144,6 +148,14 @@ export function WorkflowDraftStep({ company, principal, workflow, node }: { comp
           </>}
           {view.configuration.kind === "agent_task" && <section className="space-y-4" aria-label={t("workflowDraftStep.agent.heading")}>
             <p>{t("workflowDraftStep.agent.boundary")}</p>
+            {view.agentSelection && <label className="block space-y-2"><span id="draft-step-agentId-label">{t("workflowDraftStep.agent.choose")}</span>
+              <select {...fieldProps("agentId")} className={selectClass} value={form.agentId} onChange={event => setForm({ ...form, agentId: event.target.value })}>
+                <option value="">{view.agentSelection.selectedName ? t("workflowDraftStep.agent.keepNamed", { name: view.agentSelection.selectedName }) : t("workflowDraftStep.agent.keep")}</option>
+                {form.agentId && !view.agentSelection.choices.some(choice => choice.agentId === form.agentId) && <option value={form.agentId}>{t("workflowDraftStep.agent.unavailable")}</option>}
+                {view.agentSelection.choices.map(choice => <option key={choice.agentId} value={choice.agentId}>{choice.name}</option>)}
+              </select>{fieldError("agentId")}<span className="block text-sm text-muted-foreground">{t("workflowDraftStep.agent.choiceBoundary")}</span>
+            </label>}
+            {view.agentSelection && <Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${workflow}/advanced?${new URLSearchParams({ node })}`}>{t("workflowEditDraft")}</Link>}
             <p>{t(view.configuration.waitForCompletion ? "workflowDraftStep.agent.waits" : "workflowDraftStep.agent.continues")}</p>
             <label className="block space-y-2"><span id="draft-step-objective-label">{t("workflowDraftStep.agent.objective")}</span>
               <Textarea {...fieldProps("objective")} required maxLength={10000} value={form.objective} onChange={event => setForm({ ...form, objective: event.target.value })} />{fieldError("objective")}</label>

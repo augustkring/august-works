@@ -17,7 +17,7 @@ it("requires selected-agent semantics for visible assignment metadata", () => {
   expect(workflowExperienceRevisionSchema.safeParse({ ...revision, steps: [{ ...step, semantics, assignment }] }).success).toBe(false);
   expect(workflowExperienceRevisionSchema.safeParse({ ...revision, steps: [{ ...step, semantics: { ...semantics, actor: "selected_agent", input: "task_brief" }, assignment }] }).success).toBe(true);
 });
-it("binds task briefs to task input semantics and refuses authority or completion changes in an objective edit", () => {
+it("binds task briefs to task input semantics and accepts only an explicit UUID assignment change without authority or completion changes", () => {
   const inputReview = { kind: "agent_task", objective: "PRIVATE task brief", waitForCompletion: true };
   const value = { ...revision, steps: [{ ...step, semantics: { ...semantics, actor: "selected_agent", input: "task_brief" }, inputReview }] };
   expect(workflowExperienceRevisionSchema.safeParse(value).success).toBe(true);
@@ -26,7 +26,8 @@ it("binds task briefs to task input semantics and refuses authority or completio
     expectedPublishedRevisionId: null, expectedUpdatedAt: "2026-10-14T00:00:00.000Z", expectedNodeId: "task", expectedNodeType: "agent.task",
     name: "Prepare summary", configuration: { kind: "agent_task", objective: "Prepare the summary" } };
   expect(workflowDraftStepCommandSchema.safeParse(command).success).toBe(true);
-  for (const extra of [{ agentId: revision.id }, { waitForCompletion: false }, { expectedOutputSchema: {} }, { grants: ["tools:use"] }])
+  expect(workflowDraftStepCommandSchema.safeParse({ ...command, configuration: { ...command.configuration, agentId: revision.id } }).success).toBe(true);
+  for (const extra of [{ agentId: "another-company:agent" }, { waitForCompletion: false }, { expectedOutputSchema: {} }, { grants: ["tools:use"] }])
     expect(workflowDraftStepCommandSchema.safeParse({ ...command, configuration: { ...command.configuration, ...extra } }).success).toBe(false);
 });
 it("accepts only the Original local permission route and suppresses hidden connection identity", () => {

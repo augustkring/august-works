@@ -160,3 +160,30 @@ it("edits only the Agent objective, validates before POST and keeps task materia
   expect(vi.mocked(workflowDraftEditApi.save).mock.calls[0][3].configuration).toEqual({ kind: "agent_task", objective: "PRIVATE revised task\nUse approved data" });
   expect(sessionStorage.getItem("aw.v9.pending-workflow-request-receipts")).not.toMatch(/PRIVATE|objective|approved data/);
 });
+it("uses current named Agent choices and sends an explicit assignment change without persisting names or task material", async () => {
+  const agentId = "10000000-0000-4000-8000-000000000008";
+  vi.mocked(workflowDraftEditApi.review).mockResolvedValue({ ...review, nodeType: "agent.task", configuration: {
+    kind: "agent_task", objective: "PRIVATE task brief", waitForCompletion: true,
+  }, agentSelection: { coverage: "bounded", selectedName: "Current analyst", choices: [{ agentId, name: "Chosen analyst" }] } });
+  await mount(); expect(container.textContent).toContain("Keep Current analyst");
+  const select = container.querySelector<HTMLSelectElement>("#draft-step-agentId")!;
+  await act(async () => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(select, agentId); select.dispatchEvent(new Event("change", { bubbles: true })); });
+  await submit();
+  expect(vi.mocked(workflowDraftEditApi.save).mock.calls[0][3].configuration).toEqual({ kind: "agent_task", objective: "PRIVATE task brief", agentId });
+  expect(sessionStorage.getItem("aw.v9.pending-workflow-request-receipts")).not.toMatch(/PRIVATE|Chosen analyst|Current analyst|agentId/);
+});
+it("withdraws a previously selected Agent on Native invalidation and refuses it before a request locator or POST", async () => {
+  const agentId = "10000000-0000-4000-8000-000000000008";
+  const taskReview = { ...review, nodeType: "agent.task", configuration: { kind: "agent_task" as const, objective: "PRIVATE task", waitForCompletion: true },
+    agentSelection: { coverage: "bounded" as const, selectedName: "Current analyst", choices: [{ agentId, name: "Withdrawn analyst" }] } };
+  vi.mocked(workflowDraftEditApi.review).mockResolvedValue(taskReview);
+  await mount(); const select = container.querySelector<HTMLSelectElement>("#draft-step-agentId")!;
+  await act(async () => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(select, agentId); select.dispatchEvent(new Event("change", { bubbles: true })); });
+  vi.mocked(workflowDraftEditApi.review).mockResolvedValue({ ...taskReview, agentSelection: { ...taskReview.agentSelection, choices: [] } });
+  await act(async () => listeners.at(-1)!({ companyId: company, type: "activity.logged", payload: { entityType: "agent", action: "agent.updated" } }));
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
+  expect(container.textContent).not.toContain("Withdrawn analyst");
+  await submit(); expect(workflowDraftEditApi.save).not.toHaveBeenCalled(); expect(pendingWorkflowRequests(company, principal, workflow)).toEqual([]);
+  expect(container.querySelector("#draft-step-agentId")?.getAttribute("aria-invalid")).toBe("true");
+  expect(document.activeElement?.getAttribute("role")).toBe("alert");
+});

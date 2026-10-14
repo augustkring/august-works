@@ -2277,7 +2277,8 @@
       "consequence": "Beskriv konsekvensen af godkendelsen med højst 2000 tegn.",
       "path": "Angiv 1 til 8 feltnavne, ét pr. linje, med højst 160 tegn pr. navn.",
       "value": "Angiv en gyldig sammenligningsværdi. Større end og mindre end kræver et tal.",
-      "objective": "Beskriv opgaven med højst 10000 tegn."
+      "objective": "Beskriv opgaven med højst 10000 tegn.",
+      "agentId": "Gennemgå de aktuelle Agent-valg, før du gemmer."
     },
     "condition": {
       "heading": "Når denne betingelse er opfyldt",
@@ -2313,9 +2314,14 @@
     "agent": {
       "heading": "Agent-opgave",
       "objective": "Hvad skal Agenten gøre?",
-      "boundary": "Rediger opgavebeskrivelsen til den valgte Agent. Agenten, input, indstillingen for fuldførelse og kravene til output forbliver de samme. Når du gemmer, starter Agenten ikke, og dens adgang ændres ikke.",
+      "boundary": "Rediger opgavebeskrivelsen eller vælg en Agent til kladden. Input, indstillingen for fuldførelse og kravene til output forbliver de samme. Når du gemmer, starter Agenten ikke, og dens adgang ændres ikke.",
       "waits": "Dette trin venter på, at opgaven bliver færdig, før flowet fortsætter.",
-      "continues": "Dette trin fortsætter efter oprettelse af opgaven; det venter ikke på resultatet."
+      "continues": "Dette trin fortsætter efter oprettelse af opgaven; det venter ikke på resultatet.",
+      "choose": "Agent til dette trin",
+      "keepNamed": "Behold {{name}}",
+      "keep": "Behold den gemte Agent",
+      "unavailable": "Den tidligere valgte Agent er ikke tilgængelig",
+      "choiceBoundary": "Listen indeholder højst 32 Agent-valg, som du aktuelt kan læse. Et valg giver ikke adgang og bekræfter ikke, at Agenten er klar til at køre. Brug Avanceret til at vælge en anden Agent."
     }
   },
   "workflowDraftFlow": {

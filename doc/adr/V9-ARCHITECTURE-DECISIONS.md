@@ -1934,3 +1934,28 @@ or approval grant and performs no provider discovery, refresh, invocation or wri
 Canonical Source owners currently implemented remain authoritative. This does not
 claim complete workflow-to-Artifact/package/knowledge copy provenance, host
 qualification or complete workflow Agent/tool selection in the default editor.
+
+## ADR-48 — Bind an explicit Agent choice to the current Native draft
+
+Date: 2026-10-14. Status: implemented for supported selected task steps.
+
+A supported selected Agent task now includes up to 32 actual readable Native
+choices and its separately authorized saved Agent name. Keeping the saved Agent
+is the default; an explicit UUID selects a new target in the draft command. No
+raw-ID text entry is required. Names/choices remain in the current private read
+and component memory. Duplicate IDs or a choice DTO attached to another node
+kind are refused by the shared contract. Other Agents remain with Advanced.
+
+The Original revision owner repeats actual resource admission and locks the
+same-company Agent row before accepting an explicit target: current Agent read,
+active/idle/running status and a task-compatible adapter are necessary. A foreign,
+missing, paused or external-adapter target cannot be admitted through the task
+selector, including with copied administrator context. This is draft composition,
+not Task assignment, a grant, runtime qualification or permission to execute.
+All Native execution/Source/approval/budget checks remain necessary later.
+
+Objective-only edits retain the previous ADR-46 behavior. Explicit changes retain
+input schema, completion defaults, output contract, retries, branches and published
+revision. The digest/receipt contains no Agent name or task material. Real host
+qualification, full inline resource-policy preview and complete C2/C3 test modes
+remain open.

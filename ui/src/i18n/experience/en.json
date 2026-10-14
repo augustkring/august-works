@@ -2277,7 +2277,8 @@
       "consequence": "Describe the consequence of approval, up to 2000 characters.",
       "path": "Enter 1 to 8 field names, one per line, up to 160 characters each.",
       "value": "Enter a valid comparison value. Greater or less than comparisons need a number.",
-      "objective": "Describe the task, up to 10000 characters."
+      "objective": "Describe the task, up to 10000 characters.",
+      "agentId": "Review the current Agent choices before saving."
     },
     "condition": {
       "heading": "When this condition is met",
@@ -2313,9 +2314,14 @@
     "agent": {
       "heading": "Agent task",
       "objective": "What should the Agent do?",
-      "boundary": "Edit the task brief for the selected Agent. The Agent, input, completion setting and output requirements stay the same. Saving does not run the Agent or change its access.",
+      "boundary": "Edit the task brief or explicitly choose an Agent for this draft. Input, completion setting and output requirements stay the same. Saving does not run the Agent or change its access.",
       "waits": "This step waits for the task to finish before continuing.",
-      "continues": "This step continues after creating the task; it does not wait for the result."
+      "continues": "This step continues after creating the task; it does not wait for the result.",
+      "choose": "Agent for this step",
+      "keepNamed": "Keep {{name}}",
+      "keep": "Keep the saved Agent",
+      "unavailable": "Previously chosen Agent is unavailable",
+      "choiceBoundary": "This list contains up to 32 currently readable Agent choices. Choosing one does not grant access or confirm it is ready to run. Use Advanced to choose another Agent."
     }
   },
   "workflowDraftFlow": {

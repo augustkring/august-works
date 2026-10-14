@@ -109,8 +109,40 @@ describe.sequential("Original guided workflow draft step owner", () => {
     expect(await db.select().from(issues).where(eq(issues.companyId, f.companyId))).toEqual([]);
     const rows = await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.companyId), eq(activityLog.action, "workflow.customer_draft_step_saved")));
     expect(rows).toHaveLength(1); expect(JSON.stringify(rows[0].details)).not.toMatch(/PRIVATE|objective|approved facts/);
-    expect(workflowDraftStepCommandSchema.safeParse({ ...input, configuration: { kind: "agent_task", objective: "New", agentId: randomUUID() } }).success).toBe(false);
+    const currentCommand = { ...input, requestId: randomUUID(), expectedDraftRevisionId: current!.draftRevisionId!, expectedUpdatedAt: current!.updatedAt.toISOString(),
+      configuration: { kind: "agent_task" as const, objective: "New", agentId: randomUUID() } };
+    await expect(f.service.save(f.companyId, f.published.id, currentCommand, f.actor)).rejects.toMatchObject({ status: 409 });
+    const foreignCompanyId = randomUUID();
+    await db.insert(companies).values({ id: foreignCompanyId, name: "Foreign Agent company", issuePrefix: randomUUID() });
+    const [foreignIdentity] = await db.insert(agentIdentities).values({ homeCompanyId: foreignCompanyId, name: "Foreign analyst" }).returning();
+    const [foreign] = await db.insert(agents).values({ companyId: foreignCompanyId, agentIdentityId: foreignIdentity.id, name: "Foreign analyst" }).returning();
+    await expect(f.service.save(f.companyId, f.published.id, { ...currentCommand, configuration: { ...currentCommand.configuration, agentId: foreign.id } }, { ...f.actor, isInstanceAdmin: true })).rejects.toMatchObject({ status: 409 });
     await expect(f.service.save(f.companyId, f.published.id, { ...input, requestId: randomUUID() }, f.actor)).rejects.toMatchObject({ status: 409 });
+    const [secondIdentity] = await db.insert(agentIdentities).values({ homeCompanyId: f.companyId, name: "Second analyst" }).returning();
+    const [second] = await db.insert(agents).values({ companyId: f.companyId, agentIdentityId: secondIdentity.id, name: "Second analyst" }).returning();
+    const selection = await f.service.review(f.companyId, f.published.id, task.id, f.actor);
+    expect(selection.agentSelection).toMatchObject({ coverage: "bounded", selectedName: "Selected analyst", choices: expect.arrayContaining([{ agentId: second.id, name: "Second analyst" }]) });
+    expect(JSON.stringify(selection.agentSelection)).not.toContain("Foreign analyst");
+    const selected = { ...currentCommand, requestId: randomUUID(), configuration: { kind: "agent_task" as const, objective: "PRIVATE changed assignment brief", agentId: second.id } };
+    await db.update(agents).set({ status: "paused" }).where(eq(agents.id, second.id));
+    await expect(f.service.save(f.companyId, f.published.id, selected, f.actor)).rejects.toMatchObject({ status: 409 });
+    expect((await owner.getDetail(f.companyId, f.published.id, f.actor))!.draftRevisionId).toBe(current!.draftRevisionId);
+    await db.update(agents).set({ status: "idle" }).where(eq(agents.id, second.id));
+    await db.update(agents).set({ adapterType: "openclaw_gateway" }).where(eq(agents.id, second.id));
+    await expect(f.service.save(f.companyId, f.published.id, selected, f.actor)).rejects.toMatchObject({ status: 409 });
+    await db.update(agents).set({ adapterType: "process" }).where(eq(agents.id, second.id));
+    const assignmentReceipt = await f.service.save(f.companyId, f.published.id, selected, f.actor);
+    expect(await f.service.save(f.companyId, f.published.id, selected, f.actor)).toEqual(assignmentReceipt);
+    const reassigned = await owner.getDetail(f.companyId, f.published.id, f.actor);
+    expect(reassigned!.draftRevision!.graph.nodes.find(node => node.id === task.id)).toEqual({ ...saved,
+      config: { ...task.config, agentId: second.id, objective: "PRIVATE changed assignment brief" } });
+    expect(reassigned!.publishedRevision).toEqual(published.publishedRevision);
+    expect((await f.service.review(f.companyId, f.published.id, task.id, f.actor)).agentSelection?.selectedName).toBe("Second analyst");
+    expect(await db.select().from(issues).where(eq(issues.companyId, f.companyId))).toEqual([]);
+    expect(await db.select().from(workflowRuns).where(eq(workflowRuns.companyId, f.companyId))).toEqual([]);
+    expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.companyId))).toEqual([]);
+    const assignmentRows = await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.companyId), eq(activityLog.action, "workflow.customer_draft_step_saved")));
+    expect(assignmentRows).toHaveLength(2); expect(JSON.stringify(assignmentRows.map(row => row.details))).not.toMatch(/PRIVATE|Second analyst|objective|agentId/);
   });
   it("changes a selected condition through the Original language while retaining both active branches and the exact receipt", async () => {
     const f = await fixture(), owner = workflowService(db), human = { principal: { type: "user" as const, userId: f.userId } };

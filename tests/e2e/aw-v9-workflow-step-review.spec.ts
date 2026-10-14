@@ -24,11 +24,12 @@ test("current ordered review shows exact private input and missing connection ac
   const databaseUrl = `postgres://paperclip:paperclip@127.0.0.1:${pid.split("\n")[3]}/paperclip`, db = createDb(databaseUrl);
   const flags = await json(await request.get("/api/instance/settings/experimental")), session = await json(await request.get("/api/auth/get-session"));
   const company = await json(await request.post("/api/companies", { data: { name: "Disposable step review fixture" } }));
-  const userId = randomUUID(), agentId = randomUUID(), applicationId = randomUUID(), connectionId = randomUUID(), entryId = randomUUID(), now = new Date();
+  const userId = randomUUID(), agentId = randomUUID(), secondAgentId = randomUUID(), applicationId = randomUUID(), connectionId = randomUUID(), entryId = randomUUID(), now = new Date();
   await db.insert(authUsers).values({ id: userId, name: "Viewer fixture", email: `${userId}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now });
   await db.insert(companyMemberships).values({ companyId: company.id, principalType: "user", principalId: userId, membershipRole: "viewer", status: "active" });
   await db.insert(principalPermissionGrants).values({ companyId: company.id, principalType: "user", principalId: userId, permissionKey: "workflows:read" });
   await db.insert(agents).values({ id: agentId, companyId: company.id, name: "Selected analyst", adapterType: "process", status: "idle" });
+  await db.insert(agents).values({ id: secondAgentId, companyId: company.id, name: "Second analyst", adapterType: "process", status: "idle" });
   await db.insert(toolApplications).values({ id: applicationId, companyId: company.id, name: "Contacts fixture", type: "mcp_http" });
   await db.insert(toolConnections).values({ id: connectionId, companyId: company.id, applicationId, name: "Contact system", uid: randomUUID(), transport: "mcp_remote", status: "active", enabled: true,
     config: { privateToken: "PRIVATE credential" }, transportConfig: { url: "https://private-endpoint.invalid" } });
@@ -87,6 +88,7 @@ test("current ordered review shows exact private input and missing connection ac
     await expect(page.getByRole("heading", { name: "Rediger et kladdetrin", exact: true })).toBeVisible();
     await expect(page.getByText("Dette trin venter på, at opgaven bliver færdig, før flowet fortsætter.", { exact: true })).toBeVisible();
     await page.getByLabel("Hvad skal Agenten gøre?", { exact: true }).fill("PRIVATE revised objective\nBrug kun godkendte oplysninger");
+    await page.getByRole("combobox", { name: "Agent til dette trin", exact: true }).selectOption({ label: "Second analyst" });
     await page.addScriptTag({ path: axePath });
     expect(await page.evaluate(async () => (await (window as unknown as { axe: { run(scope: string): Promise<{ violations: unknown[] }> } }).axe.run("main")).violations)).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
@@ -95,7 +97,8 @@ test("current ordered review shows exact private input and missing connection ac
     const edited = await json(await request.get(`${base}/${created.id}`));
     const oldAgent = prepared.draftRevision.graph.nodes.find((node: { id: string }) => node.id === "agent");
     expect(edited.draftRevision.graph.nodes.find((node: { id: string }) => node.id === "agent")).toEqual({ ...oldAgent,
-      config: { ...oldAgent.config, objective: "PRIVATE revised objective\nBrug kun godkendte oplysninger" } });
+      config: { ...oldAgent.config, agentId: secondAgentId, objective: "PRIVATE revised objective\nBrug kun godkendte oplysninger" } });
+    await expect(page.getByRole("combobox", { name: "Agent til dette trin", exact: true })).toContainText("Behold Second analyst");
     expect(edited.draftRevision.graph.edges).toEqual(prepared.draftRevision.graph.edges); expect(edited.publishedRevisionId).toBeNull();
     expect(await db.select().from(workflowRuns).where(eq(workflowRuns.companyId, company.id))).toEqual([]);
     await db.update(companyMemberships).set({ status: "inactive" }).where(eq(companyMemberships.principalId, userId));

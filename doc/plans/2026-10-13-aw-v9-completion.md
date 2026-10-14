@@ -857,3 +857,31 @@ permission consumption, telemetry change, grant or external communication was
 introduced. Checkpoint 15 continues independently on earlier immutable Source;
 its old review fixture lacks the verified user fixed here and its aggregate must
 be assessed on its own result. This checkpoint is not whole-V9 PR readiness.
+
+### Explicit selected Agent changes — 2026-10-14
+
+Supported task editing now includes a bounded Native Agent choice list using
+actual resource filtering and names. Keeping the saved Agent is the default;
+only an explicit selected UUID changes the assignment. The Original draft owner
+rechecks actual same-company existence, current Native Agent read permission,
+active/idle/running status and compatible task adapter under shared locks before
+updateDraft. Source/account, revision CAS, body-free journal and own exact recovery
+remain unchanged. Choices do not grant access, qualify a runtime or dispatch work.
+The ordinary review and selector remain separate from full C2/C3 test qualification.
+
+The first focused group passes 48 cases in five suites, including a newly paused
+choice refusal without a revision change, exact successful assignment receipt,
+Native unchanged published graph/input/retry/completion/output settings and no
+Task/run/heartbeat. Client coverage verifies explicit named selection and identity-
+only pending storage. Current types and built mobile selection follow.
+
+The current expanded four-suite follow-up passes 81 cases, including actual foreign
+Agent and external-adapter refusal, Native event withdrawal of a previously chosen
+Agent before locator/POST, and the executable screen contracts. Current UI/server
+types pass; the additional UI link/copy receives its own passing UI typecheck.
+The built Danish 390px selection follow-up passes (43.5 seconds overall): actual
+named second-Agent choice, one Native changed assignment/brief, preserved original
+node fields/edges and unpublished status, refreshed saved Agent name, no run, zero
+main-region axe violations/no overflow and actual membership withdrawal hiding
+private material. These are controlled software fixtures, not live Agent/Human
+qualification. Whole V9 remains incomplete and no push or PR is made.
