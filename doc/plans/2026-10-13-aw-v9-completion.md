@@ -2277,3 +2277,44 @@ prose never become the request log URL or error payload. The mounted Express/
 pino rejection suite passes 67 cases (528 milliseconds), including the new
 account/Source canaries. This changes logging only, not Original reader admission
 or analytical business rows. No PR/push or release-evidence claim.
+Checkpoint 59 final private-log regression passes 67 cases (including explicit
+Source canary absence); current server typecheck passes exit 0.
+
+
+### Stable MCP Apps security review and anonymous host prototype — checkpoint 60
+
+Official stable 2026-01-26 source is pinned by upstream commit and SHA-256, with
+current license-transition evidence and a scoped conformance/threat map. A local
+script uses an anonymous synthetic resource/result, separate loopback IP proxy,
+nested sandbox, independently verified exact resource hash, restrictive HTTP/
+View CSP, denied sensitive permissions and credentialless support. It enforces
+current window/origin/mount, bounded JSON-RPC/message work and fixed audit codes,
+initialization → tool-input → tool-result order, graceful/forced close and host
+focus recovery. All tool/resource/link/message operations are refused, including
+early/cross-connection attempts. No Native AW runtime, business data, model,
+grant or writer is imported. Existing mcp_apps_v9 remains closed in the product.
+
+The named pnpm test:aw-v9-mcp-apps-poc command passes all eight cases (4.54
+seconds): four policy and four actual-Chromium cases, no skips. These include
+DOM/cookie/CSP/navigation/tool/hash/refusal, fixed audit canaries, message-budget
+shutdown/reopen and late-read mount fencing. Main/View automated WCAG smoke has
+zero reported violations and 390px horizontal overflow is absent. Initial axe
+resolution used an undeclared root path and failed; the existing runner's
+declared locked dev dependency is used instead, without adding a dependency.
+Initial root screenshot omitted iframe paint despite working interaction;
+separate View and composed follow-up captures are inspected, not accepted as a
+browser/visual matrix. This container disables Chromium OS sandbox; no OS
+containment, remote arbitrary app or Human acceptance is claimed.
+
+ADR-81 and mcp-apps-experiment.md preserve production requirements. V9-050/051/
+053 move only to in_progress; V9-052 Native Tool Gateway admission remains
+unimplemented. All 70 launch rows/R0 remain pending. Frozen checkpoint 53 full
+verification remains running and excludes this source. No PR/push.
+A further untrusted-message check bounds cloned data before serialization
+(depth/nodes/fields/string size) and refuses accessors/exotic objects without
+invoking getters. The final named command includes five policy/four browser
+cases; result is recorded below. This limits host serialization work without
+claiming to prevent the browser's initial structured-clone memory allocation.
+Final bounded-data prototype regression passes all 9 cases with no skips;
+server typecheck and token/module/coverage checks pass. All 70 surfaces remain
+pending implementation/evidence. These checks do not qualify the product host.

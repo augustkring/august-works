@@ -48,10 +48,10 @@ V9-046,2247,Teams adaptive-card action mapping,in_progress
 V9-047,2249,channel semantic parity tests,in_progress
 V9-048,2251,AG-UI mapping/conformance spike,in_progress
 V9-049,2253,A2UI compatibility/renderer experiment,in_progress
-V9-050,2255,MCP Apps stable-spec conformance + AW security ADR,not_started
-V9-051,2257,MCP Apps sandboxed host PoC,not_started
+V9-050,2255,MCP Apps stable-spec conformance + AW security ADR,in_progress
+V9-051,2257,MCP Apps sandboxed host PoC,in_progress
 V9-052,2259,MCP Apps Tool Gateway authorization integration,not_started
-V9-053,2261,MCP Apps security/accessibility acceptance,not_started
+V9-053,2261,MCP Apps security/accessibility acceptance,in_progress
 V9-054,2263,maintenance action classification + desired-state/concurrency model,in_progress
 V9-055,2265,maintenance policy evaluator + fencing/version guards + blast-radius/kill/loop budgets,in_progress
 V9-056,2267,Core Steward/readiness maintenance projection,in_progress

@@ -2754,3 +2754,25 @@ evidence while a replacement is unavailable; render-time checks also refuse
 expired deadlines. This bounds display without granting access or claiming
 instantaneous Source revocation. Current owner admission, current principal/
 rollout, exact hashes, event withdrawal and open-only actions stay required.
+
+
+## ADR-81 — MCP Apps begins as an anonymous, separately isolated C0 experiment
+
+The official stable 2026-01-26 specification is pinned to upstream commit
+82221c0c8ce7661efa6771c9d461511b1650495f and a recorded SHA-256, not the draft.
+The supplied SWE-06 boundary/threat/assurance principles are applied in
+doc/experience/v9/mcp-apps-experiment.md. A local developer script exercises the
+separate-origin proxy, bounded JSON-RPC lifecycle, exact resource identity/hash,
+restrictive CSP/permissions, credentialless admission, current mount/window/
+origin, fixed audit codes, message budget and graceful/forced close. Synthetic
+HTML and result text carry no AW data. The host advertises no tools, resources,
+links or sensitive capabilities and refuses every such request. No authenticated
+AW runtime or Native business owner is imported by this experiment.
+
+This is partial V9-050/051/053 software evidence, not stable-spec certification
+or production hosting. The existing optional product flag remains closed and
+V9-052 remains unimplemented. Production requires a reviewed dedicated origin/
+credential/deployment boundary, actual authorized MCP resources and same-
+connection app visibility through the ordinary Tool Gateway's current tenant/
+Source/grants/policy/approval/budget/audit owner, plus browser/AT/Human/abuse
+qualification. No prototype bridge, hash or UI label becomes an authority token.

@@ -308,3 +308,19 @@ The insight-card namespace also uses private HTTP logging for rejected methods
 and malformed company scopes: normalized route only, no current principal,
 company/Source/hash query or error prose. Actual Express/pino rejection checks
 pass with account and Source canaries (checkpoint 59).
+
+
+### Anonymous MCP Apps C0 experiment — checkpoint 60
+
+Stable-spec evidence, boundaries, causal threats, controls, actual falsification
+and open production gates are in mcp-apps-experiment.md (ADR-81). The local
+prototype has no AW credentials/data/runtime or tool dispatch; every tool/link/
+resource request is refused. Exact resource bytes are hashed before mounting a
+separate-IP proxy and nested sandbox; CSP, denied permissions, credentialless
+support, window/origin/generation, bounded messages, fixed audit codes and
+graceful/forced close constrain this synthetic experiment. Four policy and four
+real-Chromium cases pass, including cookie/DOM/network/navigation/tool/hash/
+late-read/flood boundaries and automated host/View WCAG smoke. The container
+browser OS sandbox, genuine host/provider, arbitrary remote app, Native Tool
+Gateway integration, keyboard/AT/Human and full production security remain open.
+The product flag remains closed; no launch row or R0 is qualified.
