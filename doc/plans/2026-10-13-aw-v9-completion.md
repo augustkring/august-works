@@ -1967,3 +1967,32 @@ waitForRunExecutionDrain owner before returning terminal receipts; the arbitrary
 production behavior is weakened. The two-case regression passes (35.63 seconds).
 The full checkpoint 46 run remains running and contains the old failure; it must
 not be reported as a pass or used as final evidence for this fix. No PR/push.
+
+### Insights displays retained Native process findings — 2026-10-14 (checkpoint 49)
+
+ADR-73, SHELL source/contract and the existing V9-044/092 working states now
+cover a bounded read-only process view. Current published definition, matching
+run and first finding page are read from their Original owners. No run, finding,
+transition, model, alternate store or grant is created by visiting Insights.
+Tenant/definition/version/evidence hashes and retention are checked. Fresh
+cancellable account-bound GETs, parent authority fences, activity revisions,
+refetch withdrawal and client expiry protect displayed private content.
+Interpretation is explicitly Human, separate from inspectable observed facts
+and limitations. Unknown remains distinct from zero. Empty visible findings
+do not establish process health; UUID ordering is not recency ranking. EN/DA
+copy, period, recorded time, severity and lifecycle states are provided.
+
+Three focused UI/API/directory suites pass 23 cases (8.74 seconds); UI typecheck
+passes exit 0. The first actual browser's synthetic policy incorrectly grants
+metrics rather than process capability/purpose, and the Native owner refuses
+it with 409. The explicit disposable fixture is corrected to the same process
+purpose as Native integration tests; production guards remain unchanged. Final
+built process/directory browsers pass 2 cases (51.7 seconds): real Native
+published process, event projection, inconclusive run and missing-data finding;
+EN/DA mobile/no overflow/main axe zero; unchanged run/finding rows and no UI
+writes. Hiding the actual Source makes the Original finding GET return 403,
+and reload cannot restore its private interpretation. The Danish mobile
+screenshot is inspected. Synthetic governance/activity/role data are software
+evidence, not real-company, provider, representative Human or compliance proof.
+All 70 launch rows and R0 remain pending; whole-V9 and final exact-head workspace
+checks are outstanding. No PR/push.

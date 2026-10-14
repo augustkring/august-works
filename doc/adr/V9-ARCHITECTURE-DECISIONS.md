@@ -2566,3 +2566,28 @@ and business rows are explicit disposable software fixtures, not real-company
 or compliance evidence. Legacy local company removal fails on governance
 retention references; this discovered separate owner gap is not erased by a
 fixture cleanup or represented as a tenant-erasure pass.
+
+
+## ADR-73 — Insights reads Native process findings without another analysis owner
+
+The process card reads Original definition/detail/run/finding GETs only. It
+selects at most three currently published definitions, one matching run from
+each Native five-run UUID-ordered page, and three findings from each Native
+first page. No latest ranking, complete inventory, causal/person conclusion,
+new analysis, interpretation, transition or business mutation is inferred.
+Older-definition evidence stays in the canonical inspection surface. Exact
+company/definition/current publication/run/version/definition and event-set
+hashes must match; duplicate IDs, malformed contracts and findings outliving
+the run fail closed with fixed errors. Original Source/lineage/purpose and
+reader requalification remain authoritative. A frontend profile grants nothing.
+
+Private data uses ephemeral company/principal/authority and activity-revision
+keys, fresh cancellable GETs and refetch withdrawal. Parent identity/projection/
+feature fences unmount it. Definition, run and finding retention expiry hides
+private content; Native process/finding events withdraw old revisions. Facts
+and their limitations remain inspectable separately from Human interpretation,
+with null distinguished from zero. Evidence period, recorded time, status and
+severity are explicit in EN/DA. Native prose is business data, not translated
+into a newly manufactured finding. No new telemetry or processing purpose is
+introduced. This is partial ProcessFindingCard software support, not all V8
+cards, representative Human qualification or launch acceptance.

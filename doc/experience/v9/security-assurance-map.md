@@ -214,3 +214,13 @@ names/values. Business definitions/results remain inside the current company
 and canonical retention/rights policy. Synthetic browser governance and local
 operator context do not qualify real Humans or hosted disclosure. The legacy
 local company remove/governance-retention FK gap remains explicitly open.
+
+
+Process findings on Insights (ADR-73) preserve Original Source/purpose/lineage
+reader requalification on every bounded definition/run/finding GET. Shared
+contracts and client checks bind company, publication, version and evidence
+hashes; mixed evidence is withheld. Scope/revision cancellation, refetch
+withdrawal and retention expiry govern private facts/interpretations. No new
+analysis, transition, reader grant, telemetry event, copied snapshot store or
+processing purpose is created. Synthetic governance/activity/browser roles do
+not qualify hosted access or Human usability.

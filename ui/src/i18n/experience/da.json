@@ -2644,5 +2644,34 @@
       "project": "projekter",
       "ratio": "forholdstal"
     }
+  },
+  "insightProcess": {
+    "heading": "Gemte procesfund",
+    "boundary": "Gennemgå den observerede aktivitet sammen med den menneskelige fortolkning. Et fund fastslår ikke alene en årsag eller vurderer en person.",
+    "unavailable": "Procesfundene kunne ikke læses med din aktuelle adgang. Prøv igen.",
+    "empty": "Ingen udgivet procesdefinition er tilgængelig i dette udvalg.",
+    "expired": "Denne evidens er udløbet. Gennemgå aktuel evidens, før du bruger den.",
+    "noRun": "Ingen kørsel for denne udgivne definition vises i dette udvalg.",
+    "noFinding": "Ingen gemte fund vises for den valgte kørsel. Det fastslår ikke, at processen er uden problemer.",
+    "window": "Evidensperiode: {{from}} til {{until}} (UTC; slutpunktet er ikke medregnet)",
+    "recorded": "Analyse gemt {{time}} (UTC)",
+    "interpretation": "Menneskelig fortolkning",
+    "evidence": "Gennemgå observerede fakta og begrænsninger",
+    "unknown": "Ukendt",
+    "moreEvidence": "Flere kørsler eller fund kan være tilgængelige i procesvisningen. Dette udvalg er ikke sorteret efter dato.",
+    "moreDefinitions": "Flere procesdefinitioner kan være tilgængelige uden for dette udvalg.",
+    "inspect": "Gennemgå processer og deres fund",
+    "status": {
+      "OPEN": "Åbent",
+      "ACKNOWLEDGED": "Bekræftet",
+      "INVESTIGATING": "Undersøges",
+      "RESOLVED": "Løst",
+      "SUPPRESSED_WITH_REASON": "Skjult med en registreret begrundelse"
+    },
+    "severity": {
+      "low": "Lav alvorlighed",
+      "medium": "Middel alvorlighed",
+      "high": "Høj alvorlighed"
+    }
   }
 }

@@ -707,7 +707,10 @@
         "ui/src/api/instanceSettings.ts",
         "ui/src/components/ExperienceMetricObservations.tsx",
         "ui/src/api/insight-metric-observations.ts",
-        "packages/shared/src/experience-metric-observations.ts"
+        "packages/shared/src/experience-metric-observations.ts",
+        "ui/src/components/ExperienceProcessFindings.tsx",
+        "ui/src/api/insight-process-findings.ts",
+        "packages/shared/src/experience-process-findings.ts"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/shell.json"

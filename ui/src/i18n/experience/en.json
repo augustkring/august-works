@@ -2644,5 +2644,34 @@
       "project": "projects",
       "ratio": "ratio"
     }
+  },
+  "insightProcess": {
+    "heading": "Recorded process findings",
+    "boundary": "Review observed activity and the human interpretation together. A finding alone does not establish a cause or evaluate a person.",
+    "unavailable": "Process findings could not be read with your current access. Try again.",
+    "empty": "No published process definition is available in this selection.",
+    "expired": "This evidence has expired. Review current evidence before using it.",
+    "noRun": "No run for this published definition appears in this selection.",
+    "noFinding": "No recorded finding appears for the selected run. This does not establish that the process has no problems.",
+    "window": "Evidence period: {{from}} to {{until}} (UTC; end excluded)",
+    "recorded": "Analysis recorded at {{time}} (UTC)",
+    "interpretation": "Human interpretation",
+    "evidence": "Review observed facts and limitations",
+    "unknown": "Unknown",
+    "moreEvidence": "More runs or findings may be available in the process view. This selection is not ordered by recency.",
+    "moreDefinitions": "More process definitions may be available outside this selection.",
+    "inspect": "Review processes and their findings",
+    "status": {
+      "OPEN": "Open",
+      "ACKNOWLEDGED": "Acknowledged",
+      "INVESTIGATING": "Under investigation",
+      "RESOLVED": "Resolved",
+      "SUPPRESSED_WITH_REASON": "Suppressed with a recorded reason"
+    },
+    "severity": {
+      "low": "Low severity",
+      "medium": "Medium severity",
+      "high": "High severity"
+    }
   }
 }
