@@ -34,7 +34,8 @@
       "A bounded native attention page; more_items_available is partial coverage, never a complete empty queue.",
       "No future business impact, full-queue count, effective authority or completed decision is inferred.",
       "Current M2 exhausted durable attempt budgets or unconfirmed expired original attempts may appear only with current native installation/candidate/source and agent read/configure authority; stale or missing maintenance sources never imply a complete empty queue. Critical native approvals retain priority under the global 25-card boundary.",
-      "Assigned Skill required-dependency/review-date findings and assigned overdue Playbooks are bounded current M0 observations. No private names, bodies, dependency references or reviewer identity are copied into the card."
+      "Assigned Skill required-dependency/review-date findings and assigned overdue Playbooks are bounded current M0 observations. No private names, bodies, dependency references or reviewer identity are copied into the card.",
+      "At most five own Native installations in degraded/needs_update state may require revalidation review. Original installer identity plus current Agent read/configure authority is required. These generic metadata findings are separate from active-installation M2 attempt-budget/unknown-outcome cards."
     ]
   },
   "inputs": [],
@@ -54,7 +55,8 @@
     "canonicalReadDomains": [
       "Native Attention source owners and current company/resource authorization",
       "Existing Native Core Steward package installation, original reviewed budget receipt, current release qualification and actual 24-hour configured-change counts; maximum five installations, re-read before response.",
-      "Original Skill lifecycle/Source and Playbook revision/Source readers for at most five assigned procedures of each kind, within the existing Core maintenance reader and its shared 1500 ms deadline."
+      "Original Skill lifecycle/Source and Playbook revision/Source readers for at most five assigned procedures of each kind, within the existing Core maintenance reader and its shared 1500 ms deadline.",
+      "Original package installation metadata only; no component bodies, pins, readiness prose or owner identity is copied into its M0 card. Existing package controls retain updates, qualification and activation."
     ],
     "canonicalWriteOperation": "None; existing native resolvers own every mutation.",
     "authorityEffect": "Presentation and drafts cannot grant permissions. Material effects always require current native permissions, approvals and version preconditions.",

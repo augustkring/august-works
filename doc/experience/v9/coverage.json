@@ -702,11 +702,14 @@
         "server/src/services/experience/projection.ts",
         "server/src/services/stewards/maintenance-policy.ts",
         "server/src/services/experience/core-maintenance.ts",
-        "server/src/services/experience/procedure-revalidation.ts"
+        "server/src/services/experience/procedure-revalidation.ts",
+        "server/src/services/experience/package-revalidation.ts"
       ],
       "evidenceRefs": [
         "server/src/__tests__/v9-core-maintenance.integration.test.ts",
-        "ui/src/components/ExperienceCard.core-maintenance.test.tsx"
+        "ui/src/components/ExperienceCard.core-maintenance.test.tsx",
+        "server/src/__tests__/v7-agent-packages.integration.test.ts",
+        "tests/e2e/aw-v9-core-maintenance.spec.ts"
       ],
       "contractPath": "doc/experience/v9/contracts/home.json"
     },
@@ -732,11 +735,14 @@
         "server/src/services/experience/projection.ts",
         "server/src/services/stewards/maintenance-policy.ts",
         "server/src/services/experience/core-maintenance.ts",
-        "server/src/services/experience/procedure-revalidation.ts"
+        "server/src/services/experience/procedure-revalidation.ts",
+        "server/src/services/experience/package-revalidation.ts"
       ],
       "evidenceRefs": [
         "server/src/__tests__/v9-core-maintenance.integration.test.ts",
-        "ui/src/components/ExperienceCard.core-maintenance.test.tsx"
+        "ui/src/components/ExperienceCard.core-maintenance.test.tsx",
+        "server/src/__tests__/v7-agent-packages.integration.test.ts",
+        "tests/e2e/aw-v9-core-maintenance.spec.ts"
       ],
       "contractPath": "doc/experience/v9/contracts/needs-you.json"
     },

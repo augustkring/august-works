@@ -660,11 +660,9 @@ export function experienceService(db: Db) {
               ),
             ];
           }
-          if (
-            result.needsYou.some(
-              (card) => card.source.domain === "agent_package_installation",
-            )
-          ) {
+          const isAutomaticPackageMaintenance = (card: ExperienceCard) => card.source.domain === "agent_package_installation" &&
+            !card.evidence.includes("package_revalidation_required");
+          if (result.needsYou.some(isAutomaticPackageMaintenance)) {
             try {
               const reread = await readPackageMaintenanceAttention(
                 db,
@@ -676,7 +674,7 @@ export function experienceService(db: Db) {
                 reread.needsYou.map((card) => [card.id, card]),
               );
               result.needsYou = result.needsYou.flatMap((card) => {
-                if (card.source.domain !== "agent_package_installation")
+                if (!isAutomaticPackageMaintenance(card))
                   return [card];
                 const source = current.get(card.id);
                 if (!source || source.source.version !== card.source.version) {
@@ -697,7 +695,7 @@ export function experienceService(db: Db) {
             } catch {
               admittedSignal.throwIfAborted();
               result.needsYou = result.needsYou.filter(
-                (card) => card.source.domain !== "agent_package_installation",
+                (card) => !isAutomaticPackageMaintenance(card),
               );
               markPartial("maintenance", "denied");
             }
@@ -734,7 +732,9 @@ export function experienceService(db: Db) {
               markPartial("memory-maintenance", "denied");
             }
           }
-          const isCoreMaintenance = (card: ExperienceCard) => card.kind === "maintenance" && ["readiness", "company_skill", "playbook"].includes(card.source.domain);
+          const isCoreMaintenance = (card: ExperienceCard) => card.kind === "maintenance" &&
+            (["readiness", "company_skill", "playbook"].includes(card.source.domain) ||
+              card.source.domain === "agent_package_installation" && card.evidence.includes("package_revalidation_required"));
           if (result.needsYou.some(isCoreMaintenance)) {
             try {
               const reread = await readCoreMaintenance(db, actor, companyId, admittedSignal);

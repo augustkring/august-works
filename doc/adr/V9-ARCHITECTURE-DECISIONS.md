@@ -2267,3 +2267,21 @@ Denied Sources remain partial and private. A final owner re-read withdraws
 reassigned or changed findings. No revalidation, assessment, candidate generation,
 version update, approval, publication, repair or Activity is performed by reading.
 Package/runtime recovery and real automation qualification are separate work.
+
+## ADR-62 — Package revalidation is an Original installation metadata finding
+
+The Core maintenance reader can project five own degraded/needs_update Native
+installations through the existing package metadata owner. Original installer
+assignment routes the finding; current Agent read and configuration permission
+are separately required under the verified-account reader. No component content,
+pins, readiness prose, private reason or owner identity leaves the card. It opens
+the existing package owner without changing versions, grants, qualification or
+activation. The Source digest binds current Native installation metadata only;
+it is never proof of component qualification or a successful revalidation.
+
+These M0 findings are separate from active-installation M2 budget/unknown-outcome
+cards. Each final experience re-read dispatches to its actual owner and withdraws
+changed or canonically suspended installations. The existing shared deadline,
+private-source partial state, eight-reader bound and global critical-card priority
+remain unchanged. Generic unknown-outcome reconciliation, component source closure
+and hosted/Human qualification are independent requirements.

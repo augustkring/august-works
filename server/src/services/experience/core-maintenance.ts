@@ -10,6 +10,7 @@ import { readinessService } from "../readiness/readiness-service.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { readOwnProcedureRevalidation } from "./procedure-revalidation.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
+import { readOwnPackageRevalidation } from "./package-revalidation.js";
 
 /** M0 current own findings and assigned procedure review. No assessment or repair. */
 export async function readCoreMaintenance(db: Db, actor: AuthorizationActor, companyId: string, signal: AbortSignal): Promise<{
@@ -51,8 +52,12 @@ export async function readCoreMaintenance(db: Db, actor: AuthorizationActor, com
       evidence: ["own_open_checks"], actions: [{ id: "review-own-checks", label: "Review your checks", labelKey: "review",
         operation: "open", href: "/readiness", criticality: "C2", source, requiresCurrentAuthorization: true }] }] : [];
     const procedures = await readOwnProcedureRevalidation(tx, current, companyId, principal, budget);
+    const packages = await readOwnPackageRevalidation(tx, current, companyId, principal, budget);
+    const reasons = [procedures.reason, packages.reason];
+    const reason = reasons.includes("source_stale") ? "source_stale" as const
+      : reasons.includes("more_items_available") || findings.length > 5 ? "more_items_available" as const : null;
     await access();
-    return { needsYou: [...cards, ...procedures.needsYou], ...(findings.length > 5 || procedures.reason
-      ? { coverage: { state: "partial" as const, reason: procedures.reason ?? "more_items_available" as const } } : {}) };
+    return { needsYou: [...cards, ...procedures.needsYou, ...packages.needsYou], ...(reason
+      ? { coverage: { state: "partial" as const, reason } } : {}) };
   });
 }

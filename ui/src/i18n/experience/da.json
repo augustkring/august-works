@@ -2490,5 +2490,11 @@
     "why": "Du er ansvarlig for at gennemgå denne procedure.",
     "consequence": "Gennemgå den aktuelle kilde og afhængigheder i de eksisterende procedureindstillinger, før du bruger resultatet.",
     "evidence": "Den aktuelle reviewstatus, frist eller nødvendige afhængigheder kræver en ny kontrol."
+  },
+  "packageRevalidation": {
+    "title": "Gennemgå en installeret pakke",
+    "why": "Du installerede pakken og har adgang til at gennemgå agentens aktuelle opsætning.",
+    "consequence": "Gennemgå aktuelle afhængigheder og kvalificering i pakkeindstillingerne, før du bruger den. En gennemgang opdaterer eller aktiverer ikke pakken.",
+    "evidence": "Den aktuelle installerede pakke kræver gennemgang."
   }
 }

@@ -2490,5 +2490,11 @@
     "why": "You are the assigned reviewer for this procedure.",
     "consequence": "Review the current source and dependencies using the existing procedure controls before relying on the work.",
     "evidence": "Its current review status, date or required dependencies need a new check."
+  },
+  "packageRevalidation": {
+    "title": "Review an installed package",
+    "why": "You installed this package and can review its current Agent configuration.",
+    "consequence": "Review its current dependencies and qualification in the package settings before relying on it. Reviewing does not update or activate the package.",
+    "evidence": "The current installed package needs review."
   }
 }

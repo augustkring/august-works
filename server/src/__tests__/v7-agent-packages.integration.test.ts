@@ -9,6 +9,8 @@ import { activationConnectionConsents, activationConnectionValidations, companyS
 import { readExperienceMeasures } from "../services/experience/measures.js";
 import { experienceMeasuresRoutes } from "../routes/experience-measures.js";
 import { readPackageMaintenanceAttention } from "../services/experience/maintenance-attention.js";
+import { readCoreMaintenance } from "../services/experience/core-maintenance.js";
+import * as coreMaintenance from "../services/experience/core-maintenance.js";
 import { experienceService } from "../services/experience/service.js";
 import express from "express";
 import request from "supertest";
@@ -1244,6 +1246,55 @@ const support = await getEmbeddedPostgresTestSupport();
       ).rejects.toMatchObject({
         cause: { code: "23514", message: "package_run_pin_immutable" },
       });
+    });
+    it("V9 package revalidation projects the Original degraded installation without repair or activation", async () => {
+      await enableV9Maintenance();
+      const installed = await active();
+      await db.update(agents).set({ runtimeConfig: { changed: true } }).where(eq(agents.id, f.presence.id));
+      await reconcileAgentPackages(db);
+      const before = await service.get(f.actor, f.home, installed.id);
+      expect(before.status).toBe("degraded");
+      const activityBefore = await db.select().from(activityLog).where(eq(activityLog.companyId, f.home));
+      const result = await readCoreMaintenance(db, f.actor, f.home, new AbortController().signal);
+      const card = result.needsYou.find(card => card.evidence.includes("package_revalidation_required"));
+      expect(card).toMatchObject({ kind: "maintenance", source: { domain: "agent_package_installation", resourceId: installed.id },
+        actions: [{ operation: "open", href: "/agents/packages", criticality: "C2" }] });
+      expect(JSON.stringify(result)).not.toContain(f.userId); expect(JSON.stringify(result)).not.toContain(f.presence.id);
+      expect(JSON.stringify(result)).not.toContain(input.manifest.purpose);
+      const home = await experienceService(db).home(f.actor, f.home);
+      expect(home.needsYou.find(current => current.id === card!.id)).toEqual(expect.objectContaining({ source: expect.objectContaining({ version: card!.source.version }) }));
+      expect(await service.get(f.actor, f.home, installed.id)).toEqual(before);
+      expect(await db.select().from(activityLog).where(eq(activityLog.companyId, f.home))).toEqual(activityBefore);
+    });
+    it("V9 package revalidation requires current Agent configuration permission despite installer assignment", async () => {
+      await enableV9Maintenance(); const installed = await active();
+      await db.update(agents).set({ runtimeConfig: { changed: true } }).where(eq(agents.id, f.presence.id));
+      await reconcileAgentPackages(db);
+      await db.update(companyMemberships).set({ membershipRole: "member" }).where(and(eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
+      await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId, f.home),
+        eq(principalPermissionGrants.principalId, f.userId), eq(principalPermissionGrants.permissionKey, "agents:configure")));
+      const result = await readCoreMaintenance(db, { ...f.actor, isInstanceAdmin: true }, f.home, new AbortController().signal);
+      expect(result.needsYou.filter(card => card.source.resourceId === installed.id)).toEqual([]);
+      expect(result.coverage?.reason).toBe("source_stale");
+    });
+    it("V9 package revalidation withdraws a canonically suspended installation after fan-out", async () => {
+      await enableV9Maintenance(); const installed = await active();
+      await db.update(agents).set({ runtimeConfig: { changed: true } }).where(eq(agents.id, f.presence.id));
+      await reconcileAgentPackages(db);
+      const real = coreMaintenance.readCoreMaintenance; let calls = 0;
+      const spy = vi.spyOn(coreMaintenance, "readCoreMaintenance").mockImplementation(async (...args) => {
+        const result = await real(...args);
+        if (++calls === 1) {
+          const current = await service.get(f.actor, f.home, installed.id);
+          await service.decide(f.actor, f.home, installed.id, "suspend", { expectedVersion: current.version, reason: "Human suspended this changed installation" });
+        }
+        return result;
+      });
+      try {
+        const result = await experienceService(db).home(f.actor, f.home);
+        expect(result.needsYou.filter(card => card.source.resourceId === installed.id)).toEqual([]);
+        expect(result.dependencies.find(entry => entry.domain === "core-maintenance")).toMatchObject({ state: "partial", reason: "source_stale" });
+      } finally { spy.mockRestore(); }
     });
     it("material updates require explicit review and fresh activation, while uninstall keeps company resources", async () => {
       const installed = await active(),

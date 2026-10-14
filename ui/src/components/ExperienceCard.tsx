@@ -13,7 +13,9 @@ export function ExperienceCard({
   const Heading = headingLevel === 2 ? "h2" : "h3";
   const maintenance =
     card.source.domain === "agent_package_installation" &&
-    card.kind === "maintenance";
+    card.kind === "maintenance" && !card.evidence.includes("package_revalidation_required");
+  const packageRevalidation = card.source.domain === "agent_package_installation" &&
+    card.kind === "maintenance" && card.evidence.includes("package_revalidation_required");
   const unknownMaintenance =
     maintenance && card.evidence.includes("unknown_outcome");
   const coreMaintenance = card.source.domain === "readiness" && card.kind === "maintenance";
@@ -25,8 +27,9 @@ export function ExperienceCard({
   const connectorAccess = connectorRecovery && (personalConnector || card.evidence.includes("connector_access_review"));
   const workflowRecovery = card.source.domain === "workflow" && card.kind === "recovery";
   const runtimeCapacity = runtimeRecovery && card.evidence.includes("runtime_capacity_review");
-  const cardNamespace = procedureMaintenance ? card.source.domain === "company_skill" ? "skillRevalidation" : "playbookRevalidation" : coreMaintenance ? "coreMaintenance" : memoryMaintenance ? "memoryMaintenanceAttention" : connectorRecovery ? "connectorRecovery" : workflowRecovery ? "workflowRecovery" : runtimeRecovery ? "runtimeRecovery" : null;
+  const cardNamespace = packageRevalidation ? "packageRevalidation" : procedureMaintenance ? card.source.domain === "company_skill" ? "skillRevalidation" : "playbookRevalidation" : coreMaintenance ? "coreMaintenance" : memoryMaintenance ? "memoryMaintenanceAttention" : connectorRecovery ? "connectorRecovery" : workflowRecovery ? "workflowRecovery" : runtimeRecovery ? "runtimeRecovery" : null;
   function evidenceText(item: string) {
+    if (packageRevalidation) return t("packageRevalidation.evidence");
     if (procedureMaintenance) return t(`${cardNamespace}.evidence`);
     if (coreMaintenance) return t("coreMaintenance.evidence");
     if (memoryMaintenance) return t("memoryMaintenanceAttention.evidence");

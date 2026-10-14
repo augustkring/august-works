@@ -1413,3 +1413,26 @@ reviewed. Browser data is an explicit projection fixture;
 Native persistence/access is tested separately, and neither qualifies real
 Humans or hosted automation. All 70 surfaces remain pending release evidence.
 Package revalidation and wider maintenance recovery remain open.
+
+### Original package revalidation metadata reaches its installer — 2026-10-14
+
+Core maintenance now includes five own degraded/needs_update Native installations
+through the Original package metadata owner, with separate current Agent read
+and configure authority. No component body, pin, readiness prose, owner identity
+or private reason leaves the card. Current installed status is a review finding,
+not proof of qualification. These M0 cards route to the existing package controls
+and remain separate from active-installation M2 budget/unknown-attempt cards;
+the final experience re-read calls each card's actual owner. The existing
+verified-account/deadline/admission and critical-card priority controls remain.
+
+Three new real Native installation/reconciliation cases pass (23.66 seconds,
+103 cases deliberately unselected). They exercise actual authority drift to the
+Original degraded state, no repair/activation/Activity effect, retained card in
+Home, stale-admin/current-config denial and withdrawal after a canonical suspend.
+The whole six-suite group, including all 106 original package integration cases,
+passes all 197 cases (87.56 seconds). Actual server/UI typechecks pass (exit 0).
+The built EN/DA/390px browser passes (40.1 seconds), including keyboard navigation,
+no effect controls, scoped axe with zero violations and no overflow. The final
+screenshot is visually inspected. Browser projections remain explicit fixtures;
+Native software evidence does not qualify hosted automation, Humans or package
+component Source closure. Module/Source gates pass; all 70 surfaces remain pending.
