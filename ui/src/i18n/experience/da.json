@@ -2267,6 +2267,45 @@
     "unavailable": "Vi kunne ikke læse dette aktuelle kladdetrin. Kontroller din konto og redigeringsadgang, og prøv igen.",
     "changed": "Kladden blev ændret, mens du redigerede. Gennemgå det aktuelle trin, før du gemmer.",
     "reviewLatest": "Gennemgå det aktuelle trin",
-    "invalid": "Angiv et navn til trinnet og gyldige værdier i de synlige felter."
+    "invalid": "Angiv et navn til trinnet og gyldige værdier i de synlige felter.",
+    "errors": {
+      "name": "Angiv et læsbart navn på højst 200 tegn.",
+      "duration": "Angiv et helt antal sekunder fra 1 til 604800.",
+      "summary": "Beskriv, hvad der skal godkendes, med højst 1000 tegn.",
+      "consequence": "Beskriv konsekvensen af godkendelsen med højst 2000 tegn.",
+      "path": "Angiv 1 til 8 feltnavne, ét pr. linje, med højst 160 tegn pr. navn.",
+      "value": "Angiv en gyldig sammenligningsværdi. Større end og mindre end kræver et tal."
+    },
+    "condition": {
+      "heading": "Når denne betingelse er opfyldt",
+      "boundary": "Disse indstillinger afgør, hvilken eksisterende gren der køres. Grenene og deres trin bevares. Test begge udfald før publicering.",
+      "source": "Læs værdien fra",
+      "sources": {
+        "trigger": "Data ved workflowets start",
+        "variables": "Workflowets variabler",
+        "steps": "Resultatet fra et tidligere trin"
+      },
+      "path": "Feltnavne, fra yderste til inderste niveau",
+      "pathHelp": "Skriv hvert niveau på en separat linje. Ved et tidligere trin starter du med det eksisterende trin-ID og derefter resultatets feltnavne. Feltnavne skal være præcise; store og små bogstaver skelnes.",
+      "operator": "Sammenligning",
+      "operators": {
+        "===": "Er lig med",
+        "!==": "Er ikke lig med",
+        ">": "Er større end",
+        ">=": "Er større end eller lig med",
+        "<": "Er mindre end",
+        "<=": "Er mindre end eller lig med"
+      },
+      "valueType": "Sammenligningsværdiens type",
+      "types": {
+        "string": "Tekst",
+        "number": "Tal",
+        "boolean": "Ja eller nej",
+        "null": "Ingen værdi"
+      },
+      "value": "Sammenlign med",
+      "true": "Ja",
+      "false": "Nej"
+    }
   }
 }

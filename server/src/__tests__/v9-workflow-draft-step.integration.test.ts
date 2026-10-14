@@ -7,6 +7,7 @@ import { workflowService } from "../services/workflows/workflow-service.js";
 import { workflowCustomerDraftEdit } from "../services/workflows/workflow-customer-draft-edit.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { workflowDraftStepCommandSchema } from "@paperclipai/shared";
+import { evaluateWorkflowConditionExpression } from "../services/workflows/workflow-condition-expression.js";
 
 describe.sequential("Original guided workflow draft step owner", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>;
@@ -79,5 +80,33 @@ describe.sequential("Original guided workflow draft step owner", () => {
       expect((await db.select().from(authUsers).where(eq(authUsers.id, f.userId)))[0].emailVerified).toBe(true);
       expect((await db.select().from(workflowRevisions).where(eq(workflowRevisions.workflowId, f.published.id))).filter(row => row.state === "draft")).toHaveLength(1);
     } finally { await db.execute(sql`drop trigger aw_v9_test_draft_editor_unverify on activity_log`); await db.execute(sql`drop function aw_v9_test_draft_editor_unverify()`); }
+  });
+  it("changes a selected condition through the Original language while retaining both active branches and the exact receipt", async () => {
+    const f = await fixture(), owner = workflowService(db), human = { principal: { type: "user" as const, userId: f.userId } };
+    const nodes = f.published.draftRevision!.graph.nodes;
+    const draft = await owner.updateDraft(f.companyId, f.published.id, { expectedRevisionId: f.published.draftRevisionId!, graph: {
+      version: 1, nodes: [...nodes, { id: "choose", type: "core.condition", name: "High amount", position: { x: 1, y: 1 }, config: { expression: '{{trigger.amount}} >= 50000' } }],
+      edges: [{ id: "start-choice", source: "start", target: "choose" },
+        { id: "yes", source: "choose", target: "approval", sourceHandle: "true", label: "true" },
+        { id: "no", source: "choose", target: "wait", sourceHandle: "false", label: "false" }], variables: [], settings: {},
+    } }, human);
+    const published = await owner.publish(f.companyId, f.published.id, { expectedDraftRevisionId: draft.draftRevisionId!, expectedPublishedRevisionId: f.published.publishedRevisionId }, human);
+    const view = await f.service.review(f.companyId, f.published.id, "choose", f.actor);
+    expect(view.configuration).toEqual({ kind: "condition", source: "trigger", path: ["amount"], operator: ">=", value: 50000 });
+    const unchanged = workflowDraftStepCommandSchema.parse({ ...await command(f), expectedNodeId: view.nodeId, expectedNodeType: view.nodeType,
+      name: view.name, configuration: view.configuration });
+    expect(await f.service.save(f.companyId, f.published.id, unchanged, f.actor)).toMatchObject({ changed: false, draftRevisionId: view.draftRevisionId });
+    const input = workflowDraftStepCommandSchema.parse({ ...await command(f), expectedNodeId: view.nodeId, expectedNodeType: view.nodeType,
+      name: "Review large amount", configuration: { ...view.configuration, value: 10000 } });
+    const saved = await f.service.save(f.companyId, f.published.id, input, f.actor);
+    const current = await owner.getDetail(f.companyId, f.published.id, f.actor), graph = current!.draftRevision!.graph;
+    expect(graph.edges).toEqual(published.publishedRevision!.graph.edges); expect(current!.publishedRevision).toEqual(published.publishedRevision);
+    expect(graph.nodes.filter(node => node.id !== "choose")).toEqual(published.publishedRevision!.graph.nodes.filter(node => node.id !== "choose"));
+    const expression = graph.nodes.find(node => node.id === "choose")!.config.expression as string;
+    expect(evaluateWorkflowConditionExpression(expression, { trigger: { amount: 10000 }, variables: {}, steps: {} })).toBe(true);
+    expect(evaluateWorkflowConditionExpression(expression, { trigger: { amount: 9999 }, variables: {}, steps: {} })).toBe(false);
+    expect(await f.service.save(f.companyId, f.published.id, input, f.actor)).toEqual(saved);
+    const receipts = await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.companyId), eq(activityLog.action, "workflow.customer_draft_step_saved")));
+    expect(receipts).toHaveLength(2); expect(JSON.stringify(receipts.map(row => row.details))).not.toMatch(/amount|10000|Review large amount|expression/);
   });
 });

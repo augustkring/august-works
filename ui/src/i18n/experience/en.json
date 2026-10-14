@@ -2267,6 +2267,45 @@
     "unavailable": "We couldn’t read this current draft step. Check your account and edit access, then try again.",
     "changed": "This draft changed while you were editing. Review the current step before saving.",
     "reviewLatest": "Review the current step",
-    "invalid": "Enter a step name and valid values for the visible fields."
+    "invalid": "Enter a step name and valid values for the visible fields.",
+    "errors": {
+      "name": "Enter a readable step name, up to 200 characters.",
+      "duration": "Enter a whole number from 1 to 604800 seconds.",
+      "summary": "Describe what needs approval, up to 1000 characters.",
+      "consequence": "Describe the consequence of approval, up to 2000 characters.",
+      "path": "Enter 1 to 8 field names, one per line, up to 160 characters each.",
+      "value": "Enter a valid comparison value. Greater or less than comparisons need a number."
+    },
+    "condition": {
+      "heading": "When this condition is met",
+      "boundary": "These settings decide which existing branch runs. The branches and their steps stay the same. Test both outcomes before publishing.",
+      "source": "Read the value from",
+      "sources": {
+        "trigger": "Workflow start data",
+        "variables": "Workflow variables",
+        "steps": "An earlier step’s result"
+      },
+      "path": "Field names, from outermost to innermost",
+      "pathHelp": "Put each level on a separate line. For an earlier step, begin with its existing step ID, then the result field names. Field names are exact and case-sensitive.",
+      "operator": "Comparison",
+      "operators": {
+        "===": "Is equal to",
+        "!==": "Is not equal to",
+        ">": "Is greater than",
+        ">=": "Is greater than or equal to",
+        "<": "Is less than",
+        "<=": "Is less than or equal to"
+      },
+      "valueType": "Type of comparison value",
+      "types": {
+        "string": "Text",
+        "number": "Number",
+        "boolean": "Yes or no",
+        "null": "No value"
+      },
+      "value": "Compare with",
+      "true": "Yes",
+      "false": "No"
+    }
   }
 }

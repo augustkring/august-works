@@ -36,6 +36,11 @@ async function mount() {
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
 }
 async function submit() { await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))); await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); }); }
+async function field(id: string, value: string) {
+  const input = container.querySelector<HTMLInputElement | HTMLTextAreaElement>(`#draft-step-${id}`)!;
+  const proto = input.tagName === "INPUT" ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype;
+  await act(async () => { Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(input, value); input.dispatchEvent(new Event("input", { bubbles: true })); });
+}
 
 it("retains the exact scoped locator before one POST and recovers lost acknowledgement without another write after reload", async () => {
   const save = vi.mocked(workflowDraftEditApi.save);
@@ -89,4 +94,40 @@ it("uses Danish labels and keeps edit settings separate from active publication"
   expect(container.textContent).toContain("Rediger et kladdetrin"); expect(container.textContent).toContain("Ventetid (sekunder)");
   expect(container.textContent).toContain("Den aktive version beholder sine eksisterende trin");
   expect(container.querySelectorAll('h1')).toHaveLength(1);
+});
+it("associates invalid fields before creating a request locator, preserves valid input and focuses the summary", async () => {
+  await mount(); await field("duration", "0"); await submit();
+  expect(container.querySelector("#draft-step-duration")?.getAttribute("aria-invalid")).toBe("true");
+  expect(container.querySelector("#draft-step-duration")?.getAttribute("aria-describedby")).toBe("draft-step-duration-error");
+  expect(container.querySelector("#draft-step-duration-error")?.textContent).toContain("1 to 604800");
+  expect(document.activeElement?.getAttribute("role")).toBe("alert");
+  expect((container.querySelector("#draft-step-name") as HTMLInputElement).value).toBe(review.name);
+  expect(workflowDraftEditApi.save).not.toHaveBeenCalled(); expect(pendingWorkflowRequests(company, principal, workflow)).toEqual([]);
+  const link = container.querySelector<HTMLAnchorElement>('a[href="#draft-step-duration"]')!;
+  await act(async () => link.click()); expect(document.activeElement?.id).toBe("draft-step-duration");
+  await field("duration", "7"); await submit();
+  expect(workflowDraftEditApi.save).toHaveBeenCalledOnce();
+});
+it("presents a guided typed comparison, preserving literal whitespace and refusing a nonnumeric ordered value", async () => {
+  vi.mocked(workflowDraftEditApi.review).mockResolvedValue({ ...review, nodeType: "core.condition", configuration: {
+    kind: "condition", source: "trigger", path: ["amount"], operator: ">=", value: 50000,
+  } });
+  await mount();
+  expect(container.textContent).toContain("The branches and their steps stay the same");
+  await field("value", ""); await submit();
+  expect(workflowDraftEditApi.save).not.toHaveBeenCalled(); expect(pendingWorkflowRequests(company, principal, workflow)).toEqual([]);
+  expect(container.querySelector("#draft-step-value")?.getAttribute("aria-invalid")).toBe("true");
+  await field("value", "10000"); await submit();
+  expect(workflowDraftEditApi.save).toHaveBeenCalledWith(company, workflow, principal, expect.objectContaining({ configuration: {
+    kind: "condition", source: "trigger", path: ["amount"], operator: ">=", value: 10000,
+  } }));
+});
+it("keeps exact text comparison spaces and exposes no expression field", async () => {
+  vi.mocked(workflowDraftEditApi.review).mockResolvedValue({ ...review, nodeType: "core.condition", configuration: {
+    kind: "condition", source: "variables", path: ["status"], operator: "===", value: " ready ",
+  } });
+  await mount(); expect(container.querySelector('[name="expression"]')).toBeNull(); await submit();
+  expect(workflowDraftEditApi.save).toHaveBeenCalledWith(company, workflow, principal, expect.objectContaining({ configuration: {
+    kind: "condition", source: "variables", path: ["status"], operator: "===", value: " ready ",
+  } }));
 });

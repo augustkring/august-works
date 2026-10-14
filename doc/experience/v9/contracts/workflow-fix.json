@@ -35,8 +35,8 @@
     ]
   },
   "inputs": [
-    "Step name, 1–200 readable Unicode characters",
-    "Wait duration, whole seconds 1–604800",
+    "Step name, 1\u2013200 readable Unicode characters",
+    "Wait duration, whole seconds 1\u2013604800",
     "Approval summary up to 1000 and consequence up to 2000 readable characters"
   ],
   "actions": {
@@ -66,7 +66,7 @@
     "empty": "An empty revision means no steps in that revision, not a tested process.",
     "partial": "Oversized, duplicate, cyclic or dangling-connection flows show flow unavailable with no truncated topology.",
     "stale": "Hide retained private data during background rechecks and live authority/privacy/version invalidations; a new query epoch rejects late prior responses.",
-    "validation_error": "Show invalid visible fields; refuse unreadable Unicode, empty names and out-of-range durations before POST.",
+    "validation_error": "Associate each invalid name, duration, approval or condition field with a specific correction and a linked, focused error summary. Refuse before persisting a locator or sending POST.",
     "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
     "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
     "recovering": "Retain only exact company/account/workflow/kind/request identity. GET the Original receipt; never replace an unknown save with a fresh request.",
@@ -84,7 +84,7 @@
     "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
     "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
     "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
-    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
+    "targetSize": "Custom frequent and primary controls target at least 44 \u00d7 44 CSS px.",
     "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
     "reducedMotion": "No essential animated transition or moving progress indicator.",
     "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
@@ -96,7 +96,7 @@
   },
   "privacySecurity": {
     "dataShown": [
-      "Current authorized selected-node name and allowlisted wait/approval configuration"
+      "Current authorized selected-node name and allowlisted wait/approval/guided-condition configuration"
     ],
     "dataCollected": [
       "Original canonical draft values and body-free Native request receipt"
@@ -123,7 +123,7 @@
       "Full trigger/graph/condition/tool/access/approval-policy editing, conversation graph proposals, broader test modes and remaining lifecycle qualification stay open."
     ],
     "accessibility": [
-      "Verify visible labels, heading/error/receipt focus, keyboard, EN/DA 390px layout and automated main-region axe on built source; manual AT/200–400% zoom remains open."
+      "Verify visible labels, heading/error/receipt focus, keyboard, EN/DA 390px layout and automated main-region axe on built source; manual AT/200\u2013400% zoom remains open."
     ],
     "securityPrivacy": [
       "Verify no raw prose/configuration in request recovery storage, audit, generic HTTP/crash or background referer diagnostics; current native source and account authority remain required."

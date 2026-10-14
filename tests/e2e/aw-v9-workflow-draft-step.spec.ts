@@ -14,7 +14,7 @@ async function json(response: APIResponse) { expect(response.ok(), `${response.s
 // Built UI and actual migrated Native HTTP/revision/journal owners. The bridge
 // fixes a verified actor and the UI session as explicit software fixtures; this
 // is not a real authenticated Human, model or hosted provider qualification.
-test("guided Native draft edit recovers one lost save through rollout closure with Danish mobile accessibility", async ({ page, request }, info) => {
+for (const edit of ["wait", "condition"] as const) test(`guided Native ${edit} edit recovers one lost save through rollout closure with Danish mobile accessibility`, async ({ page, request }, info) => {
   test.setTimeout(120000);
   const configPath = process.env.PAPERCLIP_E2E_SERVER_CONFIG!;
   expect(path.basename(path.dirname(path.dirname(path.dirname(configPath))))).toMatch(/^paperclip-e2e-home-/);
@@ -39,8 +39,17 @@ test("guided Native draft edit recovers one lost save through rollout closure wi
     const drafted = await json(await request.patch(`${base}/${created.id}/draft`, { data: { expectedRevisionId: created.draftRevisionId,
       graph: { version: 1, nodes: [
         { id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} },
-        { id: "wait", type: "core.wait", name: "Original waiting step", position: { x: 0, y: 1 }, config: { durationSeconds: 3 } },
-      ], edges: [{ id: "next", source: "start", target: "wait" }], variables: [], settings: {} } } }));
+        edit === "wait" ? { id: "wait", type: "core.wait", name: "Original waiting step", position: { x: 0, y: 1 }, config: { durationSeconds: 3 } }
+          : { id: "condition", type: "core.condition", name: "Review large amount", position: { x: 0, y: 1 }, config: { expression: '{{trigger.amount}} >= 50000' } },
+        ...edit === "condition" ? [
+          { id: "yes", type: "core.wait", name: "Large amount", position: { x: 1, y: 2 }, config: { durationSeconds: 3 } },
+          { id: "no", type: "core.wait", name: "Small amount", position: { x: -1, y: 2 }, config: { durationSeconds: 3 } },
+        ] : [],
+      ], edges: edit === "wait" ? [{ id: "next", source: "start", target: "wait" }] : [
+        { id: "next", source: "start", target: "condition" },
+        { id: "yes", source: "condition", target: "yes", sourceHandle: "true", label: "true" },
+        { id: "no", source: "condition", target: "no", sourceHandle: "false", label: "false" },
+      ], variables: [], settings: {} } } }));
     const published = await json(await request.post(`${base}/${created.id}/publish`, { data: { expectedDraftRevisionId: drafted.draftRevisionId, expectedPublishedRevisionId: null, approvalId: null } }));
     await page.route("**/api/auth/get-session", route => route.fulfill({ json: { ...session, user: { ...session.user, id: userId, emailVerified: true }, session: { ...session.session, userId, localImplicit: false } } }));
     await page.route(`**${base}/${created.id}/experience/draft-steps**`, async route => {
@@ -54,18 +63,27 @@ test("guided Native draft edit recovers one lost save through rollout closure wi
       const url = new URL(route.request().url()); expect(url.pathname.endsWith(`/draft_edit/${saved!.requestId}`)).toBe(true);
       await route.fulfill({ response: await route.fetch({ url: bridgeBase + url.pathname + url.search }) });
     });
-    await page.goto(`/${company.issuePrefix}/workflows/${created.id}/draft/steps/wait`);
+    await page.goto(`/${company.issuePrefix}/workflows/${created.id}/draft/steps/${edit}`);
     await expect(page.getByRole("heading", { level: 1, name: "Edit a draft step", exact: true })).toBeVisible();
-    await page.getByRole("textbox", { name: "Step name", exact: true }).fill("Revised waiting step");
-    await page.getByRole("spinbutton", { name: "Wait time (seconds)", exact: true }).fill("7");
+    await page.getByRole("textbox", { name: "Step name", exact: true }).fill("Revised draft step");
+    if (edit === "wait") await page.getByRole("spinbutton", { name: "Wait time (seconds)", exact: true }).fill("7");
+    else {
+      await page.getByRole("spinbutton", { name: "Compare with", exact: true }).fill("");
+      await page.getByRole("button", { name: "Save draft changes", exact: true }).click();
+      await expect(page.locator('#draft-step-value')).toHaveAttribute("aria-invalid", "true");
+      await expect(page.getByRole("alert")).toBeFocused(); expect(posts).toBe(0);
+      expect(await page.evaluate(() => sessionStorage.getItem("aw.v9.pending-workflow-request-receipts"))).toBeNull();
+      await page.locator('#draft-step-value').fill("10000");
+    }
     await page.getByRole("button", { name: "Save draft changes", exact: true }).focus(); await page.keyboard.press("Enter");
     await expect.poll(() => saved?.requestId).toBeTruthy();
     await expect(page.getByRole("main")).toContainText("Check the original saved request");
     const current = await json(await request.get(`${base}/${created.id}`));
     expect(current.publishedRevision).toEqual(published.publishedRevision);
-    expect(current.draftRevision.graph.nodes[1]).toMatchObject({ name: "Revised waiting step", config: { durationSeconds: 7 } });
+    expect(current.draftRevision.graph.nodes[1]).toMatchObject({ name: "Revised draft step", config: edit === "wait" ? { durationSeconds: 7 } : { expression: '{{trigger["amount"]}} >= 10000' } });
+    expect(current.draftRevision.graph.edges).toEqual(published.publishedRevision.graph.edges);
     const locator = await page.evaluate(() => sessionStorage.getItem("aw.v9.pending-workflow-request-receipts"));
-    expect(locator).toContain(saved!.requestId); expect(locator).not.toContain("Revised waiting step");
+    expect(locator).toContain(saved!.requestId); expect(locator).not.toContain("Revised draft step"); expect(locator).not.toContain("amount");
     await json(await request.patch("/api/instance/settings/experimental", { data: { enableWorkflowBuilderV1: false, enableWorkflowsV1: false, progressive_shell_v9: false } }));
     await page.reload(); await page.getByRole("link", { name: "Check the saved request", exact: true }).click();
     await expect(page.getByRole("heading", { level: 1, name: "Workflow request confirmed", exact: true })).toBeFocused();

@@ -1677,3 +1677,30 @@ actor bridge and controlled UI session, with one POST, rollout-closed receipt
 GET, Danish 390px layout and zero automated main-region axe violations. These
 software fixtures do not qualify real authentication, Human usability, manual
 assistive technology or hosted provider/process behavior.
+
+## ADR-V9-039 — Guided comparisons preserve Original condition semantics
+
+2026-10-14. The selected-step editor now supports a fully representable Native
+condition: one current trigger/variable/step field path compared to an explicit
+text, finite number, boolean or null literal. Customer controls show data source,
+field levels, operator and typed value, without requiring expression syntax.
+The server converts the closed command into the Original condition language
+using JSON string keys/literals. Original parsing/evaluation and updateDraft
+validation remain authoritative; no alternate evaluator is added.
+
+Review uses the Original parsed operands and exact round-trip equality. Extra
+configuration, reference-to-reference comparisons, boolean-only expressions,
+unrepresentable field names and invalid ordering remain Advanced. Literal
+whitespace is preserved. An unchanged comparison keeps its exact Native config,
+so merely reviewing/saving it does not manufacture a revision. All branches,
+other nodes, immutable active revision, retries and governance are retained.
+
+Visible fields have specific inline errors and a linked, focused summary before
+a request locator or POST is created. Existing actor/source/CAS/receipt/lost-ack
+controls apply unchanged. Native tests cover both Original evaluated outcomes,
+quoted injection-shaped names, exact literals, immutable branch/revision
+separation, no-op save, replay and body-free journals. Built wait and condition
+recovery fixtures pass; they do not qualify real Human or hosted execution.
+
+Full trigger/tool/access editing, flow composition, natural-language graph
+proposals and all remaining V9 qualification stay open in the dated plan.

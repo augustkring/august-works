@@ -462,3 +462,36 @@ Full recursive types and the complete workspace build now also pass on the
 unchanged application Source for this guided-step checkpoint. Token, module and
 coverage gates pass. No final immutable whole-scope test pass, real Human or
 host/provider acceptance is recorded by these checkpoint checks.
+
+### Guided condition correction — 2026-10-14
+
+Selected Native condition comparisons are now editable as data source, exact
+field levels, operator and typed literal. The Original parser/evaluator remains
+authoritative, active graphs/branches are unchanged, and unsupported expression
+shapes remain Advanced. Quoted field/literal input cannot become executable
+syntax. Exact string whitespace and unchanged Native expressions are retained.
+Wait/name/approval/condition validation now supplies associated inline errors
+and a linked, focused summary before storing request identity or sending POST.
+
+The initial Native/conversion/UI group passes 19 cases in four suites; current
+follow-up evidence below includes the later exact no-op and stable field labels.
+Both built Native wait and condition recovery cases pass (45.9 seconds overall),
+including one POST, actual revision/journal persistence, unchanged active flow,
+rollout-closed receipt GET, Danish 390px recovery and zero automated main-region
+axe violations. The built run preceded the exact no-op/label association polish;
+that later Source requires subsequent integrated qualification. Real accounts,
+Human usability, manual assistive technology and hosted provider evidence are
+not manufactured by the controlled actor/session fixture.
+
+Full flow composition, trigger/tool/access/approval-policy editing, automatic
+intent-to-graph proposals, broader test modes and the remaining whole V9 code
+and qualifications remain open. This checkpoint does not make the full PR ready.
+
+The exact current condition/step/Native-owner group passes 19 cases in four
+suites after no-op retention, stable accessible field names and extraction of
+the common Native account/receipt composition. Recovery/OpenAPI separately
+pass 28 cases in two suites. Focused UI/server types passed; UI types were
+repeated after label polish. The first chained module/coverage invocation used
+the system pnpm after its first command and failed before module installation;
+the corrected run retains the project toolchain for all commands. No immutable
+full-scope test qualification is claimed.
