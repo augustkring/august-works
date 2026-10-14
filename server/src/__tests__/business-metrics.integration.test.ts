@@ -6,6 +6,7 @@ import { businessMetricDefinitionSchema, queryBusinessMetricSchema } from "@pape
 import { currentAnalyticalPurpose } from "../services/analytical-purpose.js";
 import { eraseExpiredAnalyticalLineage } from "../services/analytical-retention.js";
 import { businessMetricService } from "../services/business-metrics/service.js";
+import { currentInsightToolCard } from "../services/experience/insight-tool-card.js";
 import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { assertDatabaseRestoreAdmission, prepareRestoredQuarantine } from "../services/saas/quarantine.js";
@@ -23,6 +24,18 @@ suite("governed native metric owner on migrated PostgreSQL", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
   let db: ReturnType<typeof createDb>;
   let companyId: string; let otherCompanyId: string; let policyId: string; let projectId: string;
+  it("resolves a saved observed zero through the Native chat reader and withdraws a superseded metric version", async () => {
+    await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental({ action_cards_v9: true, experience_projection_v9: true, progressive_shell_v9: true });
+    const owner = businessMetricService(db), created = await owner.create(companyId, actor, { key: "chat_zero", definition: { ...metricDefinition(policyId), valueType: "count", unit: "objects", calculation: { kind: "native_count", population: { entity: "issue", statuses: ["done"], projectId } } } });
+    await owner.publish(companyId, actor, created.metric.id, { expectedRevision: 1, versionId: created.version.id });
+    const observation = await owner.query(companyId, actor, { metricId: created.metric.id, versionId: created.version.id, from: "2026-01-01T00:00:00Z", until: "2026-01-02T00:00:00Z", dimensions: [], maxRows: 5000 });
+    const resourceId = `metric:${observation.id}`, wire = { schemaVersion: 1, component: "MetricInsightCard", companyId, cardId: `insight:${resourceId}`, source: { companyId, domain: "insight", resourceId, version: `${observation.definitionHash}:${observation.inputHash}` } };
+    const card = await currentInsightToolCard(db, actor, companyId, wire);
+    expect(card.evidence).toContain("recorded_value:0|objects"); expect(card.actions.every(action => action.operation === "open")).toBe(true);
+    const changed = await owner.createVersion(companyId, actor, created.metric.id, { expectedRevision: 2, definition: { ...created.version.definition, name: "Current changed definition" } });
+    await owner.publish(companyId, actor, created.metric.id, { expectedRevision: 3, versionId: changed.id });
+    await expect(currentInsightToolCard(db, actor, companyId, wire)).rejects.toMatchObject({ status: 409 });
+  });
   beforeAll(async () => { database = await startEmbeddedPostgresTestDatabase("aw-v8-metrics-"); db = createDb(database.connectionString); });
   afterAll(async () => { await database?.cleanup(); });
   beforeEach(async () => {

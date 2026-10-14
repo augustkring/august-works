@@ -2852,5 +2852,51 @@
       "native_outcome_review": "Recorded outcome review",
       "native_learning_cycle": "Recorded learning cycle"
     }
+  },
+  "insightTool": {
+    "consequence": "Review the saved evidence and its limitations before using it. This card makes no decision or approval.",
+    "inspect": "Review current evidence",
+    "window": "Recorded period: {{from}} to {{until}} (UTC; end excluded)",
+    "asOf": "Observed at {{time}} (UTC)",
+    "cutoff": "Input cutoff: {{time}} (UTC)",
+    "value": "Recorded value: {{value}} ({{unit}})",
+    "title": {
+      "scenario": "Recorded conditional scenario",
+      "experiment": "Recorded experiment analysis",
+      "forecast": "Recorded forecast estimate"
+    },
+    "evidence": {
+      "native_metric_observation": "Recorded measurement",
+      "observed": "Observed",
+      "undefined": "Undefined; not zero",
+      "unavailable": "Value unavailable",
+      "restricted": "Value restricted",
+      "value_unavailable": "Value unavailable",
+      "native_process_finding": "Recorded process finding",
+      "OPEN": "Open",
+      "ACKNOWLEDGED": "Acknowledged",
+      "INVESTIGATING": "Investigating",
+      "RESOLVED": "Resolved",
+      "SUPPRESSED_WITH_REASON": "Suppressed with recorded reason",
+      "low": "Low severity",
+      "medium": "Medium severity",
+      "high": "High severity",
+      "human_interpretation_not_established_cause": "Human interpretation; no established cause",
+      "native_conditional_scenario": "Conditional calculation",
+      "assumptions_not_proven": "Publication does not prove assumptions",
+      "no_decision_or_commitment": "No decision or commitment is created",
+      "native_experiment_analysis": "Registered experiment analysis",
+      "pass": "Registered criteria met",
+      "fail": "Registered criteria not met",
+      "inconclusive": "Inconclusive",
+      "invalid": "Invalid",
+      "human_attested_exposure": "Human-attested exposure",
+      "advisory_not_rollout_authority": "Advisory; no rollout authority",
+      "native_forecast_run": "Retained forecast calculation",
+      "backtest_not_future_accuracy": "Backtest criteria do not establish future accuracy",
+      "native_historical_review": "Published historical review",
+      "selected_sources_not_complete_census": "Explicitly selected sources; not a complete census",
+      "human_agenda_not_decision_or_approval": "Human agenda; not a decision or approval"
+    }
   }
 }

@@ -2712,3 +2712,34 @@ unchanged. Agent semantic receipt checks remain additional requirements.
 A copied origin is not a saved receipt; previous generations and erased
 Sources cannot restore titles. No task, approval, continuation, model, copied
 result store or permission is created by this projection.
+
+
+## ADR-79 — Chat insight references resolve through their Original analytical owner
+
+The existing aw_experience_card MCP tool remains a reference-only tool. Its
+receiver now admits bounded UUID tuples for six retained analytical families.
+The model supplies no title, prose, value, URL, callback or authority. A private
+principal-bound Native GET parses the closed reference, locks company analytical
+and memory privacy, checks the actual rollout/profile, and reads the Original
+metric/process/scenario/experiment/forecast/review owner. Exact retained hashes
+and versions, current Source qualification and current authority must agree.
+Metric observations must use the currently published definition. Only an Original
+owner link is emitted; no analytical calculation, run, publication, task,
+experiment exposure, model call, grant or parallel store is added.
+
+The actual assistant-ui renderer independently resolves the reference. It scopes
+zero-retention cancellable queries to company, principal, authority epoch and
+current experience scope. Native activity/access-loss events withdraw old cards;
+refreshing queries withhold private evidence. Polling rechecks admission every
+30 seconds while mounted; this is not a claim of instantaneous server revocation
+in the absence of a delivered event. Native evidence is localized with period/
+as-of where recorded; zero remains zero. Human interpretation, conditional
+assumptions, attested exposure, historical selection and software backtest
+qualification remain explicit limitations, not decisions or proven outcomes.
+
+Six actual Native owner cases and the mounted HTTP admission case validate
+retained records, wrong versions/tenant/component, closed flags, changed/hidden
+Sources and unchanged business rows. Renderer tests include current account,
+late replies, Source events, non-admitted member and executable-action rejection.
+This is software evidence; live provider transcripts, hosted callbacks, complete
+interactive forms, representative Humans and all V9 release gates remain open.

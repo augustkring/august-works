@@ -19,6 +19,7 @@ import { decisionService } from "../services/decisions.js";
 import { decisionIntelligenceService } from "../services/decision-intelligence.js";
 import { businessExperimentService } from "../services/business-experiments/service.js";
 import { businessExperimentRecordingService } from "../services/business-experiments/recording.js";
+import { currentInsightToolCard } from "../services/experience/insight-tool-card.js";
 import { businessExperimentRoutes } from "../routes/business-experiments.js";
 import { errorHandler } from "../middleware/index.js";
 import { businessMetricService } from "../services/business-metrics/service.js";
@@ -97,6 +98,16 @@ suite("Native experiment final capture and human interpretation on migrated Post
   }
   function causalModel(d:Awaited<ReturnType<typeof running>>,analysisId:string,interpretationId:string){const seed=causalClaimFixture().definition;return {...seed,outcomeMetricId:d.definition.primaryMetric.metricId,outcomeMetricVersionId:d.definition.primaryMetric.metricVersionId,population:{...seed.population,scope:d.definition.scope,unit:d.definition.population.randomizationUnit},horizon:{from:d.definition.sampleOrDurationPlan.from,until:d.definition.sampleOrDurationPlan.until},experimentEvidence:{type:"experiment_analysis" as const,id:analysisId,experimentId:d.experiment.id,versionId:d.version.id,interpretationId},governanceObligationRefs:[policyId]};}
   const analyzed=(d:Awaited<ReturnType<typeof running>>)=>analysis().analyze(companyId,actor,d.experiment.id,{expectedRevision:5,versionId:d.version.id});
+  it("resolves stopped experiment evidence into a typed Native chat card without inventing an effect", async () => {
+    await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental({ action_cards_v9: true, experience_projection_v9: true, progressive_shell_v9: true });
+    const d = await running(), unit = await attested(d); await closure(d, "emergency_safety_stop"); const result = await analyzed(d);
+    const resourceId = `experiment:${d.experiment.id}:${d.version.id}`, wire = { schemaVersion: 1, component: "ExperimentResultCard", companyId, cardId: `insight:${resourceId}`, source: { companyId, domain: "insight", resourceId, version: `${result.analysis.receiptHash}:none` } };
+    const before = await db.select().from(businessExperimentAnalyses).where(eq(businessExperimentAnalyses.companyId, companyId));
+    expect(await currentInsightToolCard(db, actor, companyId, wire)).toMatchObject({ kind: "insight", title: "Recorded experiment analysis", evidence: expect.arrayContaining(["inconclusive", "advisory_not_rollout_authority"]), actions: [{ operation: "open", href: "/business-experiments" }] });
+    expect(await db.select().from(businessExperimentAnalyses).where(eq(businessExperimentAnalyses.companyId, companyId))).toEqual(before);
+    await db.update(issues).set({ hiddenAt: new Date() }).where(eq(issues.id, unit.unit.id));
+    await expect(currentInsightToolCard(db, actor, companyId, wire)).rejects.toMatchObject({ status: 404 });
+  });
   async function nativeDecision() {
     await db.insert(authUsers).values({id:"local-board",name:"Local fixture human",email:"experiment-decision@example.test",createdAt:new Date(),updatedAt:new Date()}).onConflictDoNothing();
     await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:"local-board",membershipRole:"member",status:"active"}).onConflictDoNothing();

@@ -100,3 +100,23 @@ it; tool arguments and results cannot supply card prose, HTML or action callback
 The renderer accepts the exact tool name and `mcp__paperclip__aw_experience_card`.
 The SDK's read-only annotations are hints, not authorization. This does not
 provide an MCP Apps iframe host or qualify every interactive card form.
+
+Retained analytical references use `source.domain: "insight"`,
+`cardId: "insight:" + source.resourceId`, and the following Original identities:
+
+| Family | Resource ID | Component | Source version |
+| --- | --- | --- | --- |
+| Metric | `metric:<observation UUID>` | `MetricInsightCard` | `definitionHash:inputHash` |
+| Process | `process:<definition UUID>:<run UUID>:<finding UUID>` | `ProcessFindingCard` | `contentHash:version` |
+| Scenario | `scenario:<scenario UUID>:<run UUID>` | `ScenarioComparisonCard` | run content hash |
+| Experiment | `experiment:<experiment UUID>:<version UUID>` | `ExperimentResultCard` | `analysisReceiptHash:interpretationReceiptHash`, or `:none` |
+| Forecast | `forecast:<spec UUID>:<run UUID>` | `ResultCard` | run content hash |
+| Review | `review:<review UUID>` | `ResultCard` | review content hash |
+
+These are references to existing records, not instructions to calculate or create
+them. Obtain identities and hashes from authorized Original reads; do not invent
+them. The receiving board client binds the read to its current principal and
+rechecks the Original analytical owner. A changed source, closed rollout,
+unqualified record or lost authority makes the card unavailable. Only a link to
+the Original owner is returned. Chat display is not approval, causal evidence,
+forecast accuracy or permission to act.

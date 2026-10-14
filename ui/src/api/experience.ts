@@ -1,11 +1,19 @@
 import {
   experienceModelSchema,
+  experienceCardSchema,
+  type ExperienceToolCardRequest,
   type ExperienceProfile,
 } from "@paperclipai/shared";
-import { api } from "./client";
+import { api, detachInflightGet } from "./client";
 export const experienceQueryKey = (companyId: string, principal: string) =>
   ["experience", companyId, principal] as const;
 export const experienceApi = {
+  async insightCard(request: ExperienceToolCardRequest, principal: string, signal: AbortSignal) {
+    const path = `/companies/${request.companyId}/experience/insight-card?expectedUserId=${encodeURIComponent(principal)}&request=${encodeURIComponent(JSON.stringify(request))}`;
+    detachInflightGet(path);
+    const body = await api.get(path, { signal, cache: "no-store" }); signal.throwIfAborted();
+    return experienceCardSchema.parse(body);
+  },
   async setProfile(
     companyId: string,
     principal: string,

@@ -11,6 +11,7 @@ import { activityLog, analyticalLineageEdges, analyticalLineageManifests, applyP
 import { processAnalysisDefinitionSchema, type ProcessAnalysisDefinition } from "@paperclipai/shared";
 import { processAnalysisService } from "../services/process-analysis.js";
 import { processFindingService } from "../services/process-findings.js";
+import { currentInsightToolCard } from "../services/experience/insight-tool-card.js";
 import { businessEventService } from "../services/business-events.js";
 import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
@@ -48,6 +49,16 @@ suite("Native human-published process analysis on migrated PostgreSQL", () => {
     ]);
   });
   const service = () => processAnalysisService(db);
+  it("resolves a Native finding receipt into a typed read-only chat card without authorizing its human interpretation", async () => {
+    await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental({ action_cards_v9: true, experience_projection_v9: true, progressive_shell_v9: true });
+    await project(); const d = await published({ ...definition(), requiresArrivalEvidence: true });
+    const run = await service().run(companyId, actor, d.root.id, { versionId: d.version.id, ...period });
+    const finding = await processFindingService(db).create(companyId, actor, d.root.id, run.id, { findingType: "missing_process_data", objectType: null, variantHash: null, severity: "medium", interpretation: "Investigate current arrival evidence before comparing process durations" });
+    const resourceId = `process:${d.root.id}:${run.id}:${finding.id}`, wire = { schemaVersion: 1, component: "ProcessFindingCard", companyId, cardId: `insight:${resourceId}`, source: { companyId, domain: "insight", resourceId, version: `${finding.contentHash}:${finding.version}` } };
+    expect(await currentInsightToolCard(db, actor, companyId, wire)).toMatchObject({ kind: "insight", title: finding.summary, evidence: expect.arrayContaining(["human_interpretation_not_established_cause"]), actions: [{ operation: "open", href: "/process-intelligence" }] });
+    await db.update(issues).set({ hiddenAt: new Date() }).where(eq(issues.id, issueId));
+    await expect(currentInsightToolCard(db, actor, companyId, wire)).rejects.toMatchObject({ status: 403 });
+  });
   const definition = () => processAnalysisDefinitionSchema.parse({ name: "Native task cycle", businessQuestion: "How long did the recorded native task cycle take?",
     ownerUserId: "local-board", reviewFrequencyDays: 30, retentionDays: 30, scope: "company", sensitivity: "internal", purpose: "process_intelligence",
     governanceObligationRefs: [policyId], requiredSourceProviders: ["activity_log"], objectTypes: ["issue"], requiredActivities: ["issue.created", "issue.updated"],

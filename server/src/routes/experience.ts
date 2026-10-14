@@ -11,10 +11,19 @@ import { ExperienceOverloadError } from "../services/experience/projection.js";
 import { badRequest, conflict } from "../errors.js";
 import { companyExperience } from "../services/experience/company-navigation.js";
 import { experienceCommands } from "../services/experience/commands.js";
+import { currentInsightToolCard } from "../services/experience/insight-tool-card.js";
 
 export function experienceRoutes(db: Db) {
   const router = Router();
   const service = experienceService(db);
+  router.get("/companies/:companyId/experience/insight-card", async (req, res) => {
+    assertBoard(req); const companyId = z.uuid().parse(req.params.companyId); assertCompanyAccess(req, companyId);
+    if (Object.keys(req.query).some(key => key !== "request" && key !== "expectedUserId") || typeof req.query.request !== "string") throw badRequest("Invalid Native insight request");
+    const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+    if (req.query.expectedUserId !== principal) throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
+    res.set("Cache-Control", "private, no-store");
+    res.json(await currentInsightToolCard(db, req.actor, companyId, req.query.request));
+  });
   router.get("/companies/:companyId/experience/commands", async (req, res) => {
     assertBoard(req);
     const companyId = z.uuid().parse(req.params.companyId);

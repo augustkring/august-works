@@ -2852,5 +2852,51 @@
       "native_outcome_review": "Gemt udfaldsgennemgang",
       "native_learning_cycle": "Gemt læringscyklus"
     }
+  },
+  "insightTool": {
+    "consequence": "Gennemgå den gemte evidens og dens begrænsninger, før du bruger den. Dette kort træffer ingen beslutning og giver ingen godkendelse.",
+    "inspect": "Gennemgå aktuel evidens",
+    "window": "Gemt periode: {{from}} til {{until}} (UTC; slutpunktet er ikke medregnet)",
+    "asOf": "Observeret {{time}} (UTC)",
+    "cutoff": "Skæringstidspunkt for input: {{time}} (UTC)",
+    "value": "Gemt værdi: {{value}} ({{unit}})",
+    "title": {
+      "scenario": "Gemt betinget scenarie",
+      "experiment": "Gemt forsøgsanalyse",
+      "forecast": "Gemt prognoseestimat"
+    },
+    "evidence": {
+      "native_metric_observation": "Gemt måling",
+      "observed": "Observeret",
+      "undefined": "Udefineret; ikke nul",
+      "unavailable": "Værdi utilgængelig",
+      "restricted": "Værdi begrænset",
+      "value_unavailable": "Værdi utilgængelig",
+      "native_process_finding": "Gemt procesfund",
+      "OPEN": "Åbent",
+      "ACKNOWLEDGED": "Bekræftet",
+      "INVESTIGATING": "Undersøges",
+      "RESOLVED": "Løst",
+      "SUPPRESSED_WITH_REASON": "Skjult med registreret begrundelse",
+      "low": "Lav alvorlighed",
+      "medium": "Middel alvorlighed",
+      "high": "Høj alvorlighed",
+      "human_interpretation_not_established_cause": "Menneskelig fortolkning; ingen fastslået årsag",
+      "native_conditional_scenario": "Betinget beregning",
+      "assumptions_not_proven": "Udgivelse beviser ikke antagelser",
+      "no_decision_or_commitment": "Ingen beslutning eller forpligtelse oprettes",
+      "native_experiment_analysis": "Registreret forsøgsanalyse",
+      "pass": "Registrerede kriterier opfyldt",
+      "fail": "Registrerede kriterier ikke opfyldt",
+      "inconclusive": "Uafklaret",
+      "invalid": "Ugyldig",
+      "human_attested_exposure": "Eksponering bekræftet af mennesker",
+      "advisory_not_rollout_authority": "Vejledende; ingen udrulningsmyndighed",
+      "native_forecast_run": "Gemt prognoseberegning",
+      "backtest_not_future_accuracy": "Backtestkrav fastslår ikke fremtidig præcision",
+      "native_historical_review": "Udgivet historisk gennemgang",
+      "selected_sources_not_complete_census": "Udvalgte kilder; ikke en fuld optælling",
+      "human_agenda_not_decision_or_approval": "Menneskelig dagsorden; ikke en beslutning eller godkendelse"
+    }
   }
 }

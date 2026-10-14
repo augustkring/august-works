@@ -1,6 +1,7 @@
 import { z } from "zod";
 import {
   canonicalExperienceSourceSchema,
+  experienceCardSchema,
   type ExperienceCard,
   type ExperienceModel,
 } from "./experience.js";
@@ -114,8 +115,16 @@ export function resolveExperienceToolCard(
     ...current.watch,
   ].filter((card) => card.id === request.cardId);
   if (cards.length !== 1) throw new Error("Card unavailable");
-  const card = cards[0];
+  resolveCurrentExperienceToolCard(request, cards[0]);
+  return cards[0];
+}
+
+/** Shared display checks for a card returned by its current Native read owner.
+ * No model result, presentation profile or Source reference grants an effect. */
+export function resolveCurrentExperienceToolCard(request: ExperienceToolCardRequest, wire: unknown): ExperienceCard {
+  const card = experienceCardSchema.parse(wire);
   if (
+    card.id !== request.cardId ||
     card.freshness !== "fresh" ||
     card.source.companyId !== request.companyId ||
     card.source.domain !== request.source.domain ||
@@ -124,7 +133,9 @@ export function resolveExperienceToolCard(
     !(
       EXPERIENCE_TOOL_COMPONENTS[request.component] as readonly string[]
     ).includes(card.kind) ||
-    card.actions.some((action) => action.operation !== "open")
+    card.actions.some((action) => action.operation !== "open" || card.source.domain === "insight" && (
+      action.source.companyId !== card.source.companyId || action.source.domain !== card.source.domain ||
+      action.source.resourceId !== card.source.resourceId || action.source.version !== card.source.version))
   )
     throw new Error("Card unavailable");
   return card;

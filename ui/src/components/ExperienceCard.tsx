@@ -10,6 +10,8 @@ export function ExperienceCard({
   headingLevel?: 2 | 3;
 }) {
   const { t, i18n } = useTranslation("experience");
+  const insight = card.source.domain === "insight";
+  const insightFamily = insight ? card.source.resourceId.split(":")[0] : null;
   const Heading = headingLevel === 2 ? "h2" : "h3";
   const maintenance =
     card.source.domain === "agent_package_installation" &&
@@ -29,6 +31,14 @@ export function ExperienceCard({
   const runtimeCapacity = runtimeRecovery && card.evidence.includes("runtime_capacity_review");
   const cardNamespace = packageRevalidation ? "packageRevalidation" : procedureMaintenance ? card.source.domain === "company_skill" ? "skillRevalidation" : "playbookRevalidation" : coreMaintenance ? "coreMaintenance" : memoryMaintenance ? "memoryMaintenanceAttention" : connectorRecovery ? "connectorRecovery" : workflowRecovery ? "workflowRecovery" : runtimeRecovery ? "runtimeRecovery" : null;
   function evidenceText(item: string) {
+    if (insight) {
+      const time = (value: string) => Number.isFinite(Date.parse(value)) ? new Intl.DateTimeFormat(i18n.language, { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value)) : t("toolCard.unavailable");
+      if (item.startsWith("window:")) { const [from, until] = item.slice(7).split("|"); return t("insightTool.window", { from: time(from), until: time(until) }); }
+      if (item.startsWith("as_of:")) return t("insightTool.asOf", { time: time(item.slice(6)) });
+      if (item.startsWith("cutoff:")) return t("insightTool.cutoff", { time: time(item.slice(7)) });
+      if (item.startsWith("recorded_value:")) { const [value, ...unit] = item.slice(15).split("|"); return t("insightTool.value", { value: new Intl.NumberFormat(i18n.language, { maximumSignificantDigits: 15 }).format(Number(value)), unit: unit.join("|") }); }
+      return t(`insightTool.evidence.${item}`, { defaultValue: item });
+    }
     if (packageRevalidation) return t("packageRevalidation.evidence");
     if (procedureMaintenance) return t(`${cardNamespace}.evidence`);
     if (coreMaintenance) return t("coreMaintenance.evidence");
@@ -40,7 +50,7 @@ export function ExperienceCard({
     if (maintenance) return t("maintenanceAttentionEvidence");
     return item;
   }
-  const title = cardNamespace
+  const title = insight && ["scenario", "experiment", "forecast"].includes(insightFamily ?? "") ? t(`insightTool.title.${insightFamily}`) : cardNamespace
     ? t(runtimeCapacity ? "runtimeRecovery.capacityTitle" : `${cardNamespace}.title`)
     : maintenance
     ? t(
@@ -62,7 +72,7 @@ export function ExperienceCard({
       )}
       {card.consequence && (
         <p className="text-sm text-muted-foreground">
-          {cardNamespace ? t(`${cardNamespace}.consequence`) : maintenance
+          {insight ? t("insightTool.consequence") : cardNamespace ? t(`${cardNamespace}.consequence`) : maintenance
             ? t(
                 unknownMaintenance
                   ? "maintenanceUnknownConsequence"
@@ -89,7 +99,7 @@ export function ExperienceCard({
               to={action.href}
               className="inline-flex min-h-11 items-center rounded-md font-medium text-primary underline underline-offset-4 focus-visible:outline focus-visible:outline-ring"
             >
-              {action.labelKey
+              {insight ? t("insightTool.inspect") : action.labelKey
                 ? t(`cardAction.${action.labelKey}`)
                 : action.label}
             </Link>

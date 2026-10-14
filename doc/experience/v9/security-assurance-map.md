@@ -278,3 +278,21 @@ conversation Agent/responsible user, task RBAC and run/task Source revalidation
 remain required at the locked read. Agent semantic mutation receipts retain
 their additional checks. No current privilege is inferred from provenance;
 no writer, model, approval/continuation or telemetry is introduced.
+
+
+### Current retained insight chat cards — checkpoint 57
+
+Existing aw_experience_card is a display reference, never a grant. The new
+private/no-store principal-bound GET reuses the six Original analytical owners
+under company analytical and memory privacy locks, with current rollout/profile/
+Source admission and exact retained hashes. Native metric publication pointers
+are rechecked. Only an Original open link is returned. No analytical writer,
+approval, model, exposure, copied store or telemetry is added. Strict bounded
+references reject prose/HTML and foreign or mismatched identities.
+
+Receiver queries have gcTime zero, cancellation and current principal/company/
+authority/scope fences. Activity/access-loss revisions withdraw old evidence;
+refetches hide private data and recheck admission every 30 seconds. No claim of
+immediate revocation without an event is made. Six Native retained-owner cases,
+actual mounted HTTP current-account/no-store admission and 25 shared/renderer
+cases pass. These do not establish hosted/provider/Human or whole-V9 acceptance.

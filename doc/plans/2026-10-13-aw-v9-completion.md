@@ -2209,3 +2209,35 @@ Final Native authoring regression passes all 24 cases (32.23 seconds),
 including the actual Human receipt, copied-origin exclusion, earlier-generation
 withdrawal and originating-run Source-erasure refusal. Token/module/coverage
 gates pass; release evidence remains pending.
+
+
+### Original retained insights in typed chat cards — 2026-10-14 (checkpoint 57)
+
+The existing reference-only MCP tool can now display retained metric, process,
+scenario, experiment, forecast and review references through their actual
+Original owners. No model prose/value/URL or callback becomes an authoritative
+card. The principal-bound private/no-store GET checks closed tuple grammar,
+actual flags/profile, current Source qualification and exact version/hash under
+Native analytical/privacy locks. A current publication check closes historical
+metric-version admission. Cards contain Original evidence and an open-only link,
+with EN/DA limits separating Human interpretation and conditional/advisory
+results from authority. No new writer, model, grant, exposure, store or telemetry.
+
+Receiver identity/authority/scope/revision fencing, cancellation, zero-retention
+queries, event withdrawal and 30-second rechecks protect display. Refreshing
+queries withhold private data; instantaneous revocation without a delivered event
+is not claimed. SDK reference grammar/version mapping is documented in its
+README. ADR-79 and the assurance map record these bounds.
+
+Six focused actual Native owner cases pass across management (29.31 seconds),
+metric/scenario (34.23 seconds) and process/forecast/experiment (49.17 seconds).
+The mounted Native HTTP case passes (23.42 seconds), including private/no-store,
+wrong account and unknown query rejection. Four shared/assistant-ui/renderer
+suites pass 25 cases (9.49 seconds), including late account reply withdrawal,
+Source event withdrawal, member refusal and executable-action rejection. Native
+fixtures are explicitly synthetic; this is not a live provider chat or Human
+acceptance. Full checkpoint 53 typecheck passed and its general tests remain
+running; that frozen snapshot excludes checkpoints 54–57. All 70 launch rows/R0
+remain pending. No PR/push or whole-V9 completion claim.
+Final current checkpoint 57 server/UI typechecks pass exit 0; token, module
+and coverage gates pass. All 70 surfaces remain pending implementation/evidence.
