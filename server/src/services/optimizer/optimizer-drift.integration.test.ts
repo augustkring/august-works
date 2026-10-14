@@ -8,6 +8,7 @@ import {
   createDb,
   workflowOptimizerSuggestions,
   workflowRevisions,
+  workflowRuns,
   workflows,
 } from "@paperclipai/db";
 import type { OptimizerDriftPolicy, OptimizerDriftWindow } from "@paperclipai/shared";
@@ -106,6 +107,12 @@ describePg("optimizer drift quarantine", () => {
       });
     });
 
+    // Promotion provenance resolves real Native observations, never legacy labels.
+    const observedRunIds = [randomUUID(), randomUUID(), randomUUID()];
+    await db.insert(workflowRuns).values(observedRunIds.map(id => ({
+      id, companyId: company!.id, workflowId, workflowRevisionId: revisionId, status: "succeeded", finishedAt: new Date(),
+    })));
+
     const [suggestion] = await db
       .insert(workflowOptimizerSuggestions)
       .values({
@@ -130,7 +137,7 @@ describePg("optimizer drift quarantine", () => {
         averageCost: 1,
         estimatedLatencySavingsMs: 10,
         estimatedCostSavings: 1,
-        observedRunIds: ["run-1", "run-2", "run-3"],
+        observedRunIds,
       })
       .returning();
 

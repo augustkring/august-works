@@ -1618,3 +1618,32 @@ causes/fixes require their own verification; this is not a full passing result.
 
 The final Telegram settings-read short circuit is included in a repeated Native
 regression: four cases pass (28.37 seconds; 1040 deliberately unselected).
+
+### Frozen-run failures: valid Native optimizer fixture and owned verification — 2026-10-14
+
+The optimizer drift fixture now supplies three actual same-company Workflow run
+rows with UUID identities and terminal finished times instead of nonexistent
+legacy strings. Its promoted Artifact passes the unchanged Source-provenance
+trigger; no production guard, optimizer behavior or schema is weakened. The
+first fixture correction correctly exposes the separate terminal-finished
+constraint; adding valid finished times yields three passing drift cases.
+
+Verification now uses the short disk-backed /workspace/v9-t temporary root,
+avoiding the previous long scanner/broker socket paths. The existing private
+PID/user namespace retains dropped capabilities, owned root/tmp and real Native
+process limits. Its SSH client configuration is a byte-identical readonly copy
+owned by the actual test user: host root-owned config mapped to overflow UID
+inside an unprivileged namespace was rejected by OpenSSH. No StrictHostKeyChecking,
+credential policy, scanner ownership check or sandbox limit is disabled. This
+is execution-environment setup outside the repository. Both formerly failed
+SSH cases pass independently (29.35 seconds).
+
+The original Discord handshake assertion has not been assigned a definitive
+cause or modified. All four socket teardown modes pass in the first focused
+group; 20 additional executions of the exact handshake-timeout child script
+also pass with zero failures. Its earlier full-run failure remains recorded.
+The final eight-suite regression includes every formerly failing file and actual
+Native Artifact runtime: all 271 cases pass (71.53 seconds), including the valid
+optimizer fixture, real scanner/local storage, Unix broker, SSH and sandbox.
+Current server typecheck passes (exit 0), including checkpoint 39 changes. These
+are scoped results; the full immutable three-stage run still needs repeating.
