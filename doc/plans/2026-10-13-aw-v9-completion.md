@@ -2386,3 +2386,24 @@ Frozen 53/60 full tests remain running and exclude 61/62. All launch rows/R0
 and whole-V9 acceptance remain pending. No PR/push.
 Current fresh server typecheck passes exit 0 after the Native bootstrap. Token,
 module and coverage checks pass; source/release acceptance remains pending.
+
+
+### Continue fixed-build browser verification — checkpoint 63
+
+The language/navigation batch passes its first six cases on the fixed build,
+then notification-account stops before main is visible (five-second default
+assertion; only Loading). An isolated trace passes (22.6 seconds total). Its
+initial navigation takes 4.53 seconds and main admission a further 1.69 seconds
+on this concurrently loaded test machine. This does not establish a product
+performance budget. The initial functional main-admission wait is made explicit
+at 15 seconds; all account-recheck, private-content withdrawal, fresh-list and
+no-write assertions remain unchanged. Two repetitions pass (1.6 minutes).
+
+The remaining batch includes all three experience.spec cases, so the actual
+committed-feedback/lost-acknowledgement case is not omitted by file-range
+selection. This remains scoped multi-batch software evidence, not an 88-case
+one-artifact pass, field latency or representative Human acceptance. A separate
+Native idle-agent direct-route/reload loading regression is prepared for the
+deferred detail chunk, with no provider/model/work dispatch; its result is
+pending. Full current-candidate workspace typecheck is finishing. Frozen 53/60
+full tests remain running. All launch rows/R0 remain pending. No PR/push.

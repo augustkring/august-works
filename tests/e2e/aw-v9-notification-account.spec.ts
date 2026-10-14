@@ -34,7 +34,9 @@ test("private notification updates wait for the current account and a fresh orig
       await route.fulfill({ headers: { "Cache-Control": "private, no-store" }, json: { items: [notification], nextCursor: null } });
     });
     await page.goto(`/${company.issuePrefix}/dashboard`);
-    await expect(page.getByRole("main")).toBeVisible();
+    // This is a functional admission check under concurrent workspace tests.
+    // Device/journey performance budgets need their own controlled measurement.
+    await expect(page.getByRole("main")).toBeVisible({ timeout: 15000 });
     await page.goto(`/${company.issuePrefix}/inbox`);
     const updates = page.getByRole("region", { name: "Account and runtime updates", exact: true });
     await expect(updates.getByRole("link", { name: notification.title })).toBeVisible();
