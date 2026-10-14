@@ -1349,3 +1349,31 @@ guard. The final provider/author selection and runtime-mode group passes all
 and Source gates pass with all 70 surfaces still pending. This classification
 is not host/provider/Human
 qualification. Broader Custom Agent tools/capability mapping stays open.
+
+### Storage admission refusal retains exact Feedback cleanup — 2026-10-14
+
+A real Native PostgreSQL/scanner/local-storage baseline reproduces an image
+stuck in storing with no transport receipt after accounting refuses its exact
+allocated key before any provider call. Storage now notifies that allocation
+owner of a prevented write. Feedback records that narrowly proven quiescence
+through the existing fixed-key receipt and deletion outbox. It never makes the
+image ready or treats an unknown provider acknowledgement as a prevented write.
+The Original deletion owner still deletes, checks absence and retains its receipt.
+
+The four-suite feedback image, retention/erasure and local-storage group passes
+all 64 cases (32.79 seconds). It includes the actual failing baseline after the
+fix, zero provider writes on refused admission, original error preservation,
+physical absence and completed deletion, and a write-then-reject case which must
+not receive the prevented-write callback. The actual server typecheck passes
+(exit 0). Module and 70-surface Source gates
+pass; all release evidence remains pending. Unknown provider responses, process
+crashes and the wider deletion horizon are still separate open work.
+
+The earlier broad checkpoint 27 run is deliberately stopped: its user namespace
+mapped host-owned scanner ancestors to an unmapped UID, and the unchanged scanner
+correctly refused them. Its recursive types passed; its full test run did not
+complete and is not reported as passing. A replacement disposable namespace
+provides actual user-owned root/tmp, drops all capabilities and reaps its own
+children. Preflight executes all 29 actual Native Artifact sandbox cases and the
+actual scanner-wire case successfully without changing production guards.
+A new immutable full verification must include subsequent changes as well.

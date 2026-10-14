@@ -111,6 +111,25 @@ describe("native selected feedback images with owned scanner-wire and filesystem
     expect(outcomes.filter(item => item.status === "rejected")).toEqual([expect.objectContaining({ reason: expect.objectContaining({ status: 409 }) })]);
     expect(await rows()).toHaveLength(3); expect(await service.list(actor(), companyId, feedbackId)).toHaveLength(3);
   });
+  it("reconciles a protected allocation when Storage admission refuses before any provider PUT", async () => {
+    const provider = createLocalDiskStorageProvider(join(directory, "admission-refused"));
+    let puts = 0, stored = 0;
+    const deniedStorage = createStorageService({ ...provider, async putObject(input) { puts++; return provider.putObject(input); } }, {
+      reserve: async () => { throw Error("owned-storage-admission-refused"); }, stored: async () => { stored++; },
+      deleting: async () => {}, deleted: async () => {},
+    });
+    const denied = customerFeedbackImageService(db, deniedStorage, { scanner });
+    await expect(denied.upload(actor(), companyId, feedbackId, randomUUID(), await bytes(), "image/png"))
+      .rejects.toThrow("owned-storage-admission-refused");
+    const [row] = await rows();
+    expect(row).toMatchObject({ status: "deleting", objectKey: expect.any(String), transportSettledAt: expect.any(Date) });
+    expect(puts).toBe(0); expect(stored).toBe(0);
+    expect(await deniedStorage.headObject(companyId, row!.objectKey!)).toEqual({ exists: false });
+    expect(await processFeedbackImageDeletion(db, deniedStorage, undefined, companyId, row!.id)).toBe(true);
+    expect((await rows())[0]).toMatchObject({ status: "deleted", deletedAt: expect.any(Date) });
+    const [receipt] = await db.select().from(feedbackImageDeletions).where(eq(feedbackImageDeletions.imageId, row!.id));
+    expect(receipt).toMatchObject({ transportSettledAt: expect.any(Date), deletedAt: expect.any(Date) });
+  });
   it("refuses another member and withdrawn native membership before returning protected bytes", async () => {
     const image = await upload();
     await expect(service.read(actor(otherUser), companyId, feedbackId, image.id)).rejects.toMatchObject({ status: 404 });

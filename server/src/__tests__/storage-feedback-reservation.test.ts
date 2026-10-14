@@ -15,6 +15,17 @@ async function fixture() {
 const input = { companyId: "owned-company", namespace: "feedback-images/owned-feedback/owned-image",
   originalFilename: "image.png", contentType: "image/png", body: Buffer.from("owned-storage-fixture-bytes") };
 describe("original Storage durable allocation callback", () => {
+  it("reports a prevented write after admission refusal without calling the provider or reporting stored bytes", async () => {
+    const { provider, directory } = await fixture(), put = vi.spyOn(provider, "putObject"), stored = vi.fn(), fulfilled = vi.fn();
+    let allocated: string | null = null;
+    const prevented = vi.fn(async (key: string) => { expect(key).toBe(allocated); expect(await provider.headObject({ objectKey: key })).toEqual({ exists: false }); });
+    const storage = createStorageService(provider, { reserve: async () => { throw Error("owned-admission-refused"); }, stored,
+      deleting: vi.fn(), deleted: vi.fn() });
+    await expect(storage.putFile({ ...input, onAllocated: async key => { allocated = key; },
+      onWritePrevented: prevented, onTransportSettled: fulfilled })).rejects.toThrow("owned-admission-refused");
+    expect(prevented).toHaveBeenCalledTimes(1); expect(put).not.toHaveBeenCalled(); expect(stored).not.toHaveBeenCalled();
+    expect(fulfilled).not.toHaveBeenCalled(); expect(await readdir(directory)).toEqual([]);
+  });
   it("observes fulfilled transport before accounting and never fabricates it for a rejected provider acknowledgement", async () => {
     const { provider } = await fixture(), order: string[] = [];
     const storage = createStorageService(provider, { reserve: async () => {},
@@ -24,12 +35,12 @@ describe("original Storage durable allocation callback", () => {
       expect((await provider.headObject({ objectKey: key })).exists).toBe(true); order.push("transport");
     } })).rejects.toThrow("owned-accounting-ack-lost");
     expect(order).toEqual(["transport"]);
-    const settled = vi.fn();
+    const settled = vi.fn(), prevented = vi.fn();
     const uncertain = createStorageService({ ...provider, async putObject(value) {
       await provider.putObject(value); throw Error("owned-provider-ack-lost");
     } });
-    await expect(uncertain.putFile({ ...input, onTransportSettled: settled })).rejects.toThrow("owned-provider-ack-lost");
-    expect(settled).not.toHaveBeenCalled();
+    await expect(uncertain.putFile({ ...input, onTransportSettled: settled, onWritePrevented: prevented })).rejects.toThrow("owned-provider-ack-lost");
+    expect(settled).not.toHaveBeenCalled(); expect(prevented).not.toHaveBeenCalled();
   });
   it("awaits the allocated company key before accounting or actual filesystem writes", async () => {
     const { provider } = await fixture(), order: string[] = [];

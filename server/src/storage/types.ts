@@ -57,6 +57,10 @@ export interface PutFileInput {
   /** Observed only after the actual provider write fulfils. A rejected or
    * unknown provider acknowledgement never invokes this callback. */
   onTransportSettled?: (objectKey: string) => Promise<void>;
+  /** The Original Storage owner refused accounting/admission before invoking
+   * its provider. This proves no PUT can later arrive from this operation;
+   * it is not a successful write or a provider-rejection acknowledgement. */
+  onWritePrevented?: (objectKey: string) => Promise<void>;
 }
 
 export interface PutFileResult {

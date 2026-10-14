@@ -172,6 +172,30 @@ export function customerFeedbackImageService(db: Db, storage: StorageService, op
       }, true);
       if (reserved.replay) return projection(reserved.row);
       let allocatedKey: string | null = null, stored = false, transportSettled = false;
+      const settleTransport = async (objectKey: string) => {
+        if (objectKey !== allocatedKey) throw conflict("Protected image transport receipt changed");
+        // The Original Storage owner proved that this exact PUT fulfilled
+        // or was prevented before dispatch. Neither observation admits
+        // bytes, grants access or reconciles an unknown provider response.
+        transportSettled = true;
+        await db.transaction(async tx => {
+          await tx.execute(sql`set local statement_timeout='5s'`);
+          await tx.execute(sql`set local lock_timeout='1s'`);
+          await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, companyId)).for("update");
+          await tx.select({ id: customerFeedback.id }).from(customerFeedback).where(and(
+            eq(customerFeedback.companyId, companyId), eq(customerFeedback.id, feedbackId),
+          )).for("update");
+          const [current] = await tx.select().from(customerFeedbackImages).where(and(
+            eq(customerFeedbackImages.companyId, companyId), eq(customerFeedbackImages.id, reserved.row.id),
+          )).for("update");
+          if (current?.leaseToken === leaseToken && current.objectKey === objectKey && current.storageScopeId === scopeId)
+            await tx.update(customerFeedbackImages).set({ transportSettledAt: sql`coalesce(${customerFeedbackImages.transportSettledAt}, clock_timestamp())` })
+              .where(eq(customerFeedbackImages.id, current.id));
+          await tx.update(feedbackImageDeletions).set({ transportSettledAt: sql`coalesce(${feedbackImageDeletions.transportSettledAt}, clock_timestamp())` })
+            .where(and(eq(feedbackImageDeletions.imageId, reserved.row.id), eq(feedbackImageDeletions.companyId, companyId),
+              eq(feedbackImageDeletions.objectKey, objectKey), eq(feedbackImageDeletions.storageScopeId, scopeId!), isNull(feedbackImageDeletions.deletedAt)));
+        });
+      };
       try {
         const prepared = await prepareFeedbackImage(options.scanner, body, mediaType);
         const extension = { "image/png": "png", "image/jpeg": "jpg", "image/webp": "webp" }[prepared.mediaType];
@@ -192,29 +216,8 @@ export function customerFeedbackImageService(db: Db, storage: StorageService, op
             }, true);
             allocatedKey = objectKey;
           },
-          onTransportSettled: async objectKey => {
-            if (objectKey !== allocatedKey) throw conflict("Protected image transport receipt changed");
-            // The original provider actually fulfilled this exact PUT. This
-            // records that observation; it never admits bytes or grants access.
-            transportSettled = true;
-            await db.transaction(async tx => {
-              await tx.execute(sql`set local statement_timeout='5s'`);
-              await tx.execute(sql`set local lock_timeout='1s'`);
-              await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, companyId)).for("update");
-              await tx.select({ id: customerFeedback.id }).from(customerFeedback).where(and(
-                eq(customerFeedback.companyId, companyId), eq(customerFeedback.id, feedbackId),
-              )).for("update");
-              const [current] = await tx.select().from(customerFeedbackImages).where(and(
-                eq(customerFeedbackImages.companyId, companyId), eq(customerFeedbackImages.id, reserved.row.id),
-              )).for("update");
-              if (current?.leaseToken === leaseToken && current.objectKey === objectKey && current.storageScopeId === scopeId)
-                await tx.update(customerFeedbackImages).set({ transportSettledAt: sql`coalesce(${customerFeedbackImages.transportSettledAt}, clock_timestamp())` })
-                  .where(eq(customerFeedbackImages.id, current.id));
-              await tx.update(feedbackImageDeletions).set({ transportSettledAt: sql`coalesce(${feedbackImageDeletions.transportSettledAt}, clock_timestamp())` })
-                .where(and(eq(feedbackImageDeletions.imageId, reserved.row.id), eq(feedbackImageDeletions.companyId, companyId),
-                  eq(feedbackImageDeletions.objectKey, objectKey), eq(feedbackImageDeletions.storageScopeId, scopeId!), isNull(feedbackImageDeletions.deletedAt)));
-            });
-          },
+          onTransportSettled: settleTransport,
+          onWritePrevented: settleTransport,
         });
         stored = true;
         if (result.objectKey !== allocatedKey || result.scopeId !== scopeId || !storageScopeMatches(storage, scopeId) ||

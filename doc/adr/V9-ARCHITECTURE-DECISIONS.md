@@ -2236,3 +2236,16 @@ Source epochs still withdraw names/actions and reject late acknowledgements.
 A prepared receipt describes insertion historically; it does not assert dispatch
 or a current workflow outcome. Model-generated flow and live runtime/Human
 qualification remain open.
+
+## ADR-60 — Storage admission can prove an allocated write never started
+
+The Storage service owns the boundary between accounting admission and its first
+provider invocation. When admission rejects, it can notify the durable allocation
+owner of the exact prevented key. This optional observation is distinct from a
+fulfilled PUT and is never emitted for a provider rejection or unknown response.
+Feedback uses either proven observation only to settle its own candidate's
+transport and invoke its existing fixed-key deletion owner. Neither observation
+grants access, creates a ready image, substitutes HEAD absence for quiescence or
+resolves a process crash. Original successful-write and unknown-write behavior
+remain authoritative. Deletion success still requires the Original delete and
+absence receipt; accounting refusal itself is not erasure proof.

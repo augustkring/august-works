@@ -99,7 +99,15 @@ export function createStorageService(provider: StorageProvider, accounting?: Sto
       const byteSize = input.body.length;
       const contentType = input.contentType.trim().toLowerCase();
       await input.onAllocated?.(objectKey);
-      await accounting?.reserve(input.companyId, objectKey, byteSize);
+      try {
+        await accounting?.reserve(input.companyId, objectKey, byteSize);
+      } catch (error) {
+        // No provider method has been invoked. Its durable allocation owner
+        // can reconcile this exact key without inventing a successful PUT or
+        // waiting for a transport which never started.
+        await input.onWritePrevented?.(objectKey);
+        throw error;
+      }
       await provider.putObject({
         objectKey,
         body: input.body,
