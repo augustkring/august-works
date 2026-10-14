@@ -1735,3 +1735,38 @@ dependency. Existing trusted action pins are reused in that touched CI job; no
 workflow is dispatched. All 70 launch-evidence rows remain pending. Checkpoint
 40 broad types pass and its full tests are still running on their frozen hash;
 that run does not include later checkpoints 41/42.
+
+### Insights navigation honors current read fences and includes experiments — 2026-10-14
+
+Three behavioral baselines fail (4.15 seconds): missing enabled experiment
+navigation, retained destinations during unsettled account/experience reads and
+retained destinations during an actual flags refetch. The directory now uses the
+existing complete experience loading fence, account/epoch-scoped ephemeral flags
+queries, fixed read-only recovery and the existing non-interrupting heading
+primitive. A fresh flags transport cannot join an earlier request; its actual
+fetch test proves two requests, current closed state and an independently
+settling old read without aborting other consumers. No analytical owner changes.
+
+Six existing Native families have EN/DA descriptions and a simple token-based
+list with headings/links. Disabled views are distinguished from missing business
+evidence. Account switches, permission/profile rechecking and flag/read failure
+hide retained navigation. Late prior-account responses cannot restore it. No
+private business object/result, grant, metric calculation, model call, analytical
+write or new source of truth is introduced. V8 insight result cards and semantic
+conversation authoring remain open. SHELL contract/source paths and ADR-68 are
+aligned without accepting any of the 70 release-evidence rows.
+
+The three-suite directory/Home/current-read regression passes 41 cases (12.04
+seconds); inherited React act-environment warnings are retained, not represented
+as a clean-console/manual qualification. The final directory/actual flags
+transport pair passes seven cases (4.30 seconds). UI typecheck passes (exit 0).
+The shipped browser passes initially (35.4 seconds), then with the extra actual
+hit-test for the final narrow-screen link (36.7 seconds): all six destinations,
+current-account read withdrawal/recovery, EN/DA, keyboard order, one main, 390px
+no overflow/scoped axe zero violations and zero analytical writes. Final Danish
+screenshot is visually inspected. The manager projection is an explicit fixture;
+no genuine manager/analytical/Human/provider qualification is claimed. Token,
+module and Source gates pass. The separate checkpoint 40 full run is ongoing.
+
+After final SHELL contract/source additions, the directory/current transport/
+screen-contract group passes all 68 cases (4.49 seconds).

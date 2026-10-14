@@ -70,7 +70,8 @@
     "process": "Sådan bevæger arbejdet sig",
     "forecasts": "Prognoser",
     "scenarios": "Scenarier",
-    "reviews": "Ledelsesgennemgange"
+    "reviews": "Ledelsesgennemgange",
+    "experiments": "Virksomhedseksperimenter"
   },
   "utilities": "Globale funktioner",
   "user": "Brugerkonto",
@@ -2584,5 +2585,15 @@
     "leave": "Hjem",
     "return": "Tilbage til pakker",
     "retryViewBoundary": "Kontrollér den oprindelige anmodning, før du starter en ny opsætning. Du kan kun genafsende den uændrede anmodning fra denne åbne formular. Genafsendelse kræver stadig din aktuelle adgang og de oprindelige kontroller; den kan ikke aktivere agenten eller tildele adgang."
+  },
+  "insightDirectory": {
+    "intro": "Undersøg målinger, estimater og spørgsmål, der kræver nærmere gennemgang.",
+    "unavailable": "Der er ingen analysevisninger aktiveret i øjeblikket.",
+    "metrics": "Se målinger og deres godkendte definitioner.",
+    "process": "Gennemgå evidens for, hvordan arbejdet bevæger sig gennem en proces.",
+    "forecasts": "Gennemgå estimater, intervaller og den bagvedliggende evidens.",
+    "scenarios": "Sammenlign betingede beregninger og deres antagelser.",
+    "experiments": "Gennemgå det registrerede spørgsmål, design og den registrerede evidens.",
+    "reviews": "Læs historiske opsummeringer med links til deres evidens."
   }
 }

@@ -70,7 +70,8 @@
     "process": "How work is moving",
     "forecasts": "Forecasts",
     "scenarios": "Scenarios",
-    "reviews": "Management reviews"
+    "reviews": "Management reviews",
+    "experiments": "Business experiments"
   },
   "utilities": "Global utilities",
   "user": "User account",
@@ -2584,5 +2585,15 @@
     "leave": "Home",
     "return": "Return to packages",
     "retryViewBoundary": "Check the original request before another setup. You can resend only the unchanged request retained by this open form. Resending still requires your current access and the original checks; it cannot activate the Agent or grant access."
+  },
+  "insightDirectory": {
+    "intro": "Explore measurements, estimates and questions that need closer review.",
+    "unavailable": "No analytical views are currently enabled.",
+    "metrics": "See measurements and their approved definitions.",
+    "process": "Review evidence of how work moves through a process.",
+    "forecasts": "Review estimates, ranges and the evidence behind them.",
+    "scenarios": "Compare conditional calculations and their assumptions.",
+    "experiments": "Review the registered question, design and recorded evidence.",
+    "reviews": "Read historical summaries with links to their evidence."
   }
 }

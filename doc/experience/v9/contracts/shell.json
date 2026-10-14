@@ -63,9 +63,10 @@
       "Native company memberships and permission grants",
       "Company/user sidebar preference",
       "Current auth principal",
-      "Native tasks, agents and projects after current resource authorization"
+      "Native tasks, agents and projects after current resource authorization",
+      "Insights directory uses the current experience/account epoch and a fresh Original experimental-settings read; pending, failed or rechecking reads withhold retained destinations. It navigates to existing V8 owners without analytical writes."
     ],
-    "canonicalWriteOperation": "Native experience/profile operation changes only the current principal\u2019s presentation preference; resource effects remain on native APIs. Explicit Create Task opens the existing editable native Task dialog; Run opens the existing workflow owner without executing a run.",
+    "canonicalWriteOperation": "Native experience/profile operation changes only the current principal’s presentation preference; resource effects remain on native APIs. Explicit Create Task opens the existing editable native Task dialog; Run opens the existing workflow owner without executing a run.",
     "authorityEffect": "Presentation and drafts cannot grant permissions. Material effects always require current native permissions, approvals and version preconditions.",
     "asyncWork": "Native reads/mutations only; projection work uses bounded admission and a 1500 ms total deadline. Unknown mutation outcomes retain the original request key for reconciliation.",
     "receipt": "Use the canonical current resource ID/version or immutable accepted feedback receipt; never infer success from a toast or attempted request."
@@ -93,7 +94,7 @@
     "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
     "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive. Cmd/Ctrl+K opens a labeled listbox/combobox, arrow keys choose a command, Enter selects and Escape restores the invoker. Switching account closes the palette.",
     "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
-    "targetSize": "Custom frequent and primary controls target at least 44 \u00d7 44 CSS px.",
+    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
     "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
     "reducedMotion": "No essential animated transition or moving progress indicator.",
     "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."

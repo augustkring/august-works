@@ -682,7 +682,9 @@
         "ui/src/components/MobileBottomNav.tsx",
         "ui/src/lib/company-routes.ts",
         "ui/src/components/ExperienceCommandPalette.tsx",
-        "server/src/services/experience/commands.ts"
+        "server/src/services/experience/commands.ts",
+        "ui/src/pages/ExperienceInsights.tsx",
+        "ui/src/api/instanceSettings.ts"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/shell.json"

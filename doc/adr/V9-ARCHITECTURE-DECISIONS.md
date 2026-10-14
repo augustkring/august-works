@@ -2431,3 +2431,21 @@ introduced. The Data Processing Contract requires the existing approved study
 source/retention/rights procedure. The scorer cannot certify those facts or
 enforce Native tenant authorization on supplied artifacts. Output always
 refuses population/GA claims; synthetic cases are software evidence only.
+
+## ADR-68 — Analytical navigation waits for the current account and rollout reads
+
+The Insights directory consumes the existing experience owner's complete loading
+fence and current account/epoch-scoped flags. Retained navigation is withheld
+during session, projection or flags rechecks and on error. A current flags GET
+detaches earlier transport coalescing without aborting existing readers; ordinary
+settings callers retain their behavior. Late prior-account flags cannot restore
+new-account navigation. Fixed read recovery repeats only Original reads.
+
+Existing Native business experiment navigation joins the other five analytical
+families. EN/DA descriptions distinguish measurements, process evidence,
+forecasts, conditional scenarios, historical reviews and registered experiments.
+Disabled views are separate from absence of business evidence. The directory
+displays no analytical object/result, performs no analytical write or model call
+and grants no authority; each Native destination keeps its current Source,
+permission, qualification and effect policy. Actual V8 insight result cards and
+conversation authoring remain separate pending work.
