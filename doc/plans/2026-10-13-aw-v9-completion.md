@@ -613,3 +613,37 @@ unchanged application Source. The synthetic-input workspace build, browser,
 focused tests and source/design/module checks also pass at this checkpoint.
 A complete immutable test:run pass still has not been produced; Source work
 and broader V9 implementation/qualification remain incomplete.
+
+### Current workflow step semantics and Agent assignments — 2026-10-14
+
+Checkpoint 10's immutable test:run process ended without an aggregate result or
+retained successful exit status. Its general-group log ends before later groups;
+it is incomplete, not a passing whole-suite result. No cause is asserted without
+evidence. A separate next-wave worktree preserved that source during the run.
+
+The ordered review now explains declared actor/input source/approval/access and
+retry/idempotency facts, plus the exact valid literal Native wait. Current Agent
+names require a separate bounded verified Native reader, actual membership and
+agent:read, privacy locks, Original private Source/revision bindings and repeated
+current checks. Removed/unreadable Agents and local fixture identity cannot
+provide a named assignment. Whole current review material is bounded at 256 KiB;
+its binding includes real JSON timestamps rather than Date-as-empty-object hashes.
+
+Initial next-worktree checks exposed missing built plugin-sdk artifacts, not a
+passing check; the canonical SDK build restored them. A regression then exposed
+new Agent metadata surviving agent.updated because the existing Source-event
+filter omitted Agent changes. The filter now withdraws private review data on
+Agent/tool/connection events. An initial stale-revision fixture made a no-op
+Original update; it was corrected to change actual material, preserving Native
+no-op semantics. The current integrated group passes 68 cases in six suites,
+including real Native rename/removal, revision change, un-verification, revoked
+membership, local identity refusal, Source suppression and timestamp/bounds.
+
+Focused UI and server types pass; token, module and all 70 source-coverage gates
+pass. The built 390px browser case passes (45.8 seconds overall): current Native
+ordered-flow disclosures, no horizontal overflow, actual synthetic conditional
+test, one-command lost-response recovery, unchanged unpublished graph and zero
+axe violations in the test dialog. It uses a disposable local Native fixture;
+it supplies no real Human, managed-host, provider or external-action qualification.
+Complete immutable recursive types/build/test:run and the remaining whole V9
+implementation/release requirements remain open. No push or PR was made.

@@ -30,6 +30,8 @@ import { conflict, forbidden, notFound, unauthorized, unprocessable, HttpError }
 import { withExperienceAdmission } from "../services/experience/admission.js";
 import { ExperienceOverloadError } from "../services/experience/projection.js";
 import { workflowReview } from "../services/experience/workflow-review.js";
+import { readWorkflowStepActors } from "../services/experience/workflow-step-actors.js";
+import { workflowReviewBinding } from "../services/experience/workflow-review-binding.js";
 import { workflowDraftIntentService } from "../services/experience/workflow-draft-intent.js";
 import { workflowCustomerDraftEdit } from "../services/workflows/workflow-customer-draft-edit.js";
 import { workflowCustomerDraftFlow } from "../services/workflows/workflow-customer-draft-flow.js";
@@ -837,6 +839,16 @@ export function workflowRoutes(db: Db) {
     const testReceipt = canTest ? await readCustomerWorkflowTestReceipt(db, companyId, workflowId, req.actor) : null;
     const result = workflowReview(detail, nodeRegistry.list(), edit.allowed,
       operate.allowed && rollout, run.allowed && rollout, canTest, testReceipt);
+    try {
+      const assignments = await readWorkflowStepActors(db, detail, req.actor);
+      for (const revision of [result.draft, result.active]) if (revision) for (const step of revision.steps) {
+        const assignment = assignments.get(`${revision.id}:${step.nodeId}`);
+        if (assignment) step.assignment = assignment;
+      }
+    } catch (error) {
+      if (error instanceof ExperienceOverloadError) throw new HttpError(503, "Current workflow assignments are unavailable; try again");
+      throw error;
+    }
     // Current native admission remains necessary after the asynchronous private read.
     await assertWorkflowsEnabled();
     await assertPermission(req, companyId, "workflows:read");
@@ -845,6 +857,15 @@ export function workflowRoutes(db: Db) {
       for (const action of ["workflows:edit", "workflows:run"] as const) await assertV5Authorization(db, req.actor, companyId, action);
       if (!v9FeatureEnabled(await settings.getExperimental(), "progressive_shell_v9") || !await currentWorkflowStopRoleAllows(db, companyId, req.actor))
         throw notFound("Workflow test view is unavailable");
+    }
+    const currentDetail = await svc.getDetail(companyId, workflowId, req.actor);
+    if (!currentDetail)
+      throw conflict("Current workflow changed; refresh");
+    try {
+      if (workflowReviewBinding(currentDetail) !== workflowReviewBinding(detail)) throw conflict("Current workflow changed; refresh");
+    } catch (error) {
+      if (error instanceof ExperienceOverloadError) throw new HttpError(503, "Current workflow review exceeds its read budget; try Advanced");
+      throw error;
     }
     res.json(result);
   });

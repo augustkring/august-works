@@ -1221,7 +1221,10 @@
         "packages/db/src/schema/workflows.ts",
         "packages/db/src/migrations/0493_tidy_kat_farrell.sql",
         "server/src/services/analytical-context-authority.ts",
-        "packages/db/src/migrations/0494_goofy_lionheart.sql"
+        "packages/db/src/migrations/0494_goofy_lionheart.sql",
+        "server/src/services/experience/workflow-step-actors.ts",
+        "server/src/services/experience/workflow-step-semantics.ts",
+        "server/src/services/experience/workflow-review-binding.ts"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/workflow-review.json"

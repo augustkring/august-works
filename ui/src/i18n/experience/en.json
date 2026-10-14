@@ -2346,5 +2346,54 @@
     "invalid": "Review the test fields. Use up to 20 distinct paths and no more than 8 KB of input.",
     "pathError": "Enter 1 to 8 exact field names, one per line. Paths must not duplicate or overlap.",
     "valueError": "Enter a valid text, finite number, yes/no or no-value selection."
+  },
+  "workflowSemantics": {
+    "actor": "Executed by",
+    "input": "Input source",
+    "access": "Access needed",
+    "policy": "Approval policy",
+    "delaySeconds_one": "Waits {{count}} second.",
+    "delaySeconds_other": "Waits {{count}} seconds.",
+    "maxAttempts_one": "At most {{count}} attempt.",
+    "maxAttempts_other": "At most {{count}} attempts, including the first attempt.",
+    "actors": {
+      "workflow": "Workflow engine",
+      "human": "The Human reviewing the approval checkpoint",
+      "selected_agent": "The Agent selected in this step",
+      "connected_tool": "The connected tool selected in this step",
+      "unknown": "Executor could not be verified"
+    },
+    "inputs": {
+      "start_data": "Data supplied when this workflow starts.",
+      "mapped_data": "Mapped start data, variables or earlier step outputs.",
+      "condition_data": "Start data, variables or earlier outputs used by the condition.",
+      "delay": "The configured delay.",
+      "approval_material": "The checkpoint’s summary and consequence.",
+      "task_brief": "The configured task brief and assigned work.",
+      "tool_arguments": "The selected tool’s configured and mapped arguments.",
+      "child_workflow_data": "Data mapped into the selected workflow revision.",
+      "native_query": "The configured query and its bounded result limit.",
+      "http_request": "The configured request, headers and body.",
+      "advanced": "Review the exact input in Advanced."
+    },
+    "accessStates": {
+      "no_step_grant": "No additional step permission is declared. Workflow and run permissions still apply.",
+      "execution_check": "Permission and resource access are checked again when this step executes. Current access has not been verified here.",
+      "unavailable": "Step access could not be verified."
+    },
+    "policies": {
+      "human_checkpoint": "A Human must review this checkpoint before the workflow continues.",
+      "no_checkpoint": "This step has no approval checkpoint. Workflow admission rules still apply.",
+      "execution_review": "The execution owner checks the current approval policy for the exact action and resource.",
+      "unavailable": "This operation is unavailable for publication or is not registered."
+    },
+    "idempotency": {
+      "not_required": "The operation declares that a duplicate-effect key is not required.",
+      "workflow_step_key": "Retries reuse the original workflow-step operation key.",
+      "provider_passthrough": "The operation key is passed to the provider; duplicate protection depends on that provider.",
+      "durable_receipt": "The operation uses its retained receipt for duplicate protection.",
+      "unknown": "Duplicate protection could not be verified."
+    },
+    "assignmentUnavailable": "The selected Agent is unavailable or cannot be read with your current access."
   }
 }

@@ -360,3 +360,20 @@ it("returns from editing to the current draft review while preserving the active
   expect(active).toBeTruthy(); await act(async () => active.click());
   expect(container.textContent).toContain("Ask owner");
 });
+
+it("explains selected actors, input, approval and duplicate protection while current Source changes withhold the complete private review", async () => {
+  const view = structuredClone(data), step = view.active!.steps[0];
+  step.semantics = { actor: "selected_agent", input: "task_brief", durationSeconds: null,
+    approvalPolicy: "execution_review", access: "execution_check", maxAttempts: 3, idempotency: "workflow_step_key" };
+  step.assignment = { state: "current", name: "PRIVATE selected analyst" };
+  vi.spyOn(workflowsApi, "experience").mockResolvedValue(view);
+  await mount();
+  await vi.waitFor(() => expect(container.textContent).toContain("PRIVATE selected analyst"));
+  expect(container.textContent).toContain("configured task brief");
+  expect(container.textContent).toContain("Current access has not been verified here");
+  expect(container.textContent).toContain("At most 3 attempts, including the first attempt");
+  expect(container.textContent).toContain("Retries reuse the original workflow-step operation key");
+  await act(async () => live({ companyId: data.companyId, type: "activity.logged",
+    payload: { action: "agent.updated", entityType: "agent", entityId: "changed-agent" } }));
+  expect(container.textContent).not.toContain("PRIVATE selected analyst");
+});

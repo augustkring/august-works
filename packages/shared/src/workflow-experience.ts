@@ -1,11 +1,32 @@
 import { z } from "zod";
 import { workflowTestReceiptSchema } from "./workflow-test.js";
+import { WORKFLOW_NODE_IDEMPOTENCY_STRATEGIES } from "./types/workflow.js";
+
+/** Declared Native step semantics; these facts never grant execution access. */
+export const workflowStepSemanticsSchema = z.strictObject({
+  actor: z.enum(["workflow", "human", "selected_agent", "connected_tool", "unknown"]),
+  input: z.enum(["start_data", "mapped_data", "condition_data", "delay", "approval_material", "task_brief", "tool_arguments", "child_workflow_data", "native_query", "http_request", "advanced"]),
+  durationSeconds: z.number().int().min(1).max(604800).nullable(),
+  approvalPolicy: z.enum(["human_checkpoint", "no_checkpoint", "execution_review", "unavailable"]),
+  access: z.enum(["no_step_grant", "execution_check", "unavailable"]),
+  maxAttempts: z.number().int().min(1).max(20).nullable(),
+  idempotency: z.enum([...WORKFLOW_NODE_IDEMPOTENCY_STRATEGIES, "unknown"]),
+});
+export type WorkflowStepSemantics = z.infer<typeof workflowStepSemanticsSchema>;
 
 const stepSchema = z.strictObject({
   nodeId: z.string().min(1).max(160).optional(),
   number: z.number().int().min(1).max(100),
   name: z.string().max(160),
   operation: z.string().max(160),
+  semantics: workflowStepSemanticsSchema.optional(),
+  assignment: z.strictObject({
+    state: z.enum(["current", "unavailable"]),
+    name: z.string().min(1).max(200).nullable(),
+  }).superRefine((value, ctx) => {
+    if ((value.state === "current") !== (value.name !== null))
+      ctx.addIssue({ code: "custom", message: "Assignment visibility is inconsistent" });
+  }).optional(),
   effect: z.enum([
     "pure",
     "read",

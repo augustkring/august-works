@@ -114,6 +114,11 @@ test("an unpublished internal test recovers its original receipt after reload an
     const path = `/${company.issuePrefix}/workflows/${draft.id}`;
     await page.setViewportSize({ width: 390, height: 844 });
     await page.goto(path);
+    await expect(page.getByText("Data supplied when this workflow starts.", { exact: true })).toBeVisible();
+    await expect(page.getByText("Start data, variables or earlier outputs used by the condition.", { exact: true })).toBeVisible();
+    await expect(page.getByText("This step has no approval checkpoint. Workflow admission rules still apply.", { exact: true }).first()).toBeVisible();
+    await expect(page.getByText("At most 1 attempt.", { exact: true }).first()).toBeVisible();
+    expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
     await page
       .getByRole("button", { name: "Review internal test", exact: true })
       .click();

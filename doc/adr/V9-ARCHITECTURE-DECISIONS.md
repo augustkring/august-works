@@ -1782,3 +1782,33 @@ values. Built mobile testing exercises actual Native admission/execution, input
 selection, deliberate lost response and single-command reload recovery. These
 software fixtures do not qualify real Human fitness or hosted/provider behavior.
 Broader sandbox/live effects and production outcome verification remain open.
+
+## ADR-42 — Current workflow step semantics and selected Agent reads (2026-10-14)
+
+The default ordered flow exposes closed Original registry declarations for the
+executor kind, input source, approval checkpoint, step-access requirement,
+maximum attempts and duplicate-effect strategy. It shows only a valid literal
+Native wait duration from configuration. Objectives, arguments, recipients,
+credentials, raw schemas and arbitrary configuration stay out of derived flow
+payloads. No declaration is an effective grant or a passed test.
+
+The current review enriches selected Agent steps through a separate bounded
+Native agent:read operation. Actual verified account, active company membership,
+current grants, Original workflow/revision/learned/private Source owners and
+selected Agent rows are rechecked under privacy locks. Reader identity is never
+borrowed from local fixtures, copied administrator flags or a run principal.
+Missing and unreadable assignments remain unavailable. No model, transport,
+catalog refresh, installation, execution session or mutation is performed.
+
+The complete Native detail binding is capped at 256 KiB and includes JSON
+normalized timestamps. A generic Native canonical hash treats Date objects as
+ordinary objects, so this read normalizes Dates locally without changing other
+domains' retained command hashes. Before returning the review the route reads
+the Original Source and current detail again; changed material is refused.
+Agent/tool/connection updates withdraw private client data immediately, as do
+existing permission, membership, privacy and Source events.
+
+This supplies structural disclosure and current Agent visibility, not the full
+connection permission-preview contract, exact configured input presentation,
+effective actor policy, external test qualification or Human fitness. Those
+whole-brief requirements remain open.

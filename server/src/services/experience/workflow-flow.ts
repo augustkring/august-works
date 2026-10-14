@@ -1,4 +1,5 @@
 import type { WorkflowNodeDefinitionDescriptor, WorkflowRevision, WorkflowExperienceRevision } from "@paperclipai/shared";
+import { workflowStepSemantics } from "./workflow-step-semantics.js";
 
 /** Reuse the Original bounded flow projection for current or historical
  * revisions already read through their canonical privacy/authority owner.
@@ -54,6 +55,7 @@ export function projectWorkflowRevisionFlow(source: WorkflowRevision, definition
             name: node.name.slice(0, 160),
             operation:
               definition?.displayName.slice(0, 160) ?? "Unknown operation",
+            semantics: workflowStepSemantics(node, definition),
             effect: definition?.sideEffectClass ?? "unknown",
             testMode: definition?.testMode ?? "unavailable",
             approval:

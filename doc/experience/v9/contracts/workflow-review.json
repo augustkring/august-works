@@ -39,7 +39,9 @@
       "Conversation routine proposals use the actual Original first revision and current version. An unconfigured routine draft is paused with no execution target; there is no invented draft status. Current target/trigger declarations and a separate Human revision are shown without claiming execution, qualification or a grant. The Original routine editor owns configuration and explicit enable.",
       "Saved Foundation proposals show exact Original proposal, target document, base/current revision, pending/accepted/rejected/superseded state and review link. Accepted means a Foundation draft; canonical approval remains a separate Human decision. Proposal bodies, reasons and frozen responsible-user provenance are excluded from the conversation projection.",
       "Saved notification proposals use current owned conversation provenance and show pending/applied/discarded state. The user explicitly opens the actual account proposal, reviews category/email/delivery/timezone/quiet hours/digest and the consequence across companies, then confirms its current version and account baseline. Unknown confirmation responses permit only current reads and cannot automatically resubmit writes.",
-      "Conversation setup proposals show the actual Native draft kind, current version/state and exact editor link. Historical creation created no Agent, installation, runtime or authority; the current setup owner records any later explicit Human preparation or activation. Older server coverage remains unavailable."
+      "Conversation setup proposals show the actual Native draft kind, current version/state and exact editor link. Historical creation created no Agent, installation, runtime or authority; the current setup owner records any later explicit Human preparation or activation. Older server coverage remains unavailable.",
+      "Closed per-step executor/input-source/approval/access/idempotency declarations from the Original registry; exact valid Native delay and declared maximum attempt count. These declarations do not establish a current execution grant.",
+      "Selected Agent names are read separately through current Native agent:read and verified company membership, bound to the exact current revision and private Source. Missing or unreadable assignments remain unavailable. Agent/tool/connection events withdraw cached private review data."
     ]
   },
   "inputs": [],
@@ -65,7 +67,8 @@
       "Original routine revisions and creator run/current conversation generation; current reader and originating source checks.",
       "Original own-account notification preferences and saved proposal provenance, current verified account/company/source admission, immutable proposal version, baseline hash and exact Human confirmation receipt.",
       "Actual Agent configuration draft creation Activity/run provenance, current conversation generation and creator authority. The bounded proposal projection excludes all current Human-edited names, instructions and private configuration.",
-      "Native workflow private authoring run provenance survives discarded revisions, Human edits and publication. Current verified source-owning Human and Original workflow/issue/Agent reads remain required; membership or a request-snapshot administrator flag supplies no private source-sharing grant."
+      "Native workflow private authoring run provenance survives discarded revisions, Human edits and publication. Current verified source-owning Human and Original workflow/issue/Agent reads remain required; membership or a request-snapshot administrator flag supplies no private source-sharing grant.",
+      "Current Native agents, verified auth users, company membership and grants; bounded read-only assignment enrichment, with no provider/transport/catalog refresh or execution session."
     ],
     "canonicalWriteOperation": "Review remains read-only; separate explicit lifecycle controls invoke the original native workflow owner (ADR-V9-023).",
     "authorityEffect": "Presentation and drafts cannot grant permissions. Material effects always require current native permissions, approvals and version preconditions.",
@@ -108,11 +111,12 @@
   "privacySecurity": {
     "dataShown": [
       "Current human/company-authorized workflow name and description",
-      "Allowlisted native revision/step/connection declarations only"
+      "Allowlisted native revision/step/connection declarations only",
+      "The selected Agent name only after a current separate Native read; input kinds and valid literal delay, never raw objectives, tool inputs, credentials, recipients or raw schemas."
     ],
     "dataCollected": [],
     "sensitiveFields": [
-      "Native graph configuration, prompts, credentials, inputs, schemas, variables, actor assignments and results are excluded from this projection",
+      "Native graph configuration, prompts, credentials, inputs, schemas, variables, raw assignment IDs and results are excluded from this projection",
       "Private authoring source run IDs are internal Native provenance and are excluded from public workflow details. Lists omit unavailable private owners; Source account/run/permission checks repeat before return."
     ],
     "loggingConstraints": "Purpose-separated workflow-experience namespace for success and rejected requests; generic logs omit account query strings, workflow/customer prose and raw errors."
@@ -136,7 +140,8 @@
       "Verify real Native backlog creation without wakeups, receipt replays without duplicate tasks, current owner status changes, pre-reset task exclusion, source-erasure denial, old-server coverage unavailability and EN/DA mobile task links. Native mutation checks reject old conversation generations before effects and roll back a late reset before saving its receipt.",
       "Verify actual SDK routine draft discovery/invocation, exact replay without duplicate revisions, no target/schedule/run, later Human version distinction, source erasure and restored-payload guards, current private conversation previews and EN/DA Original links. No software fixture supplies runtime or Human usability qualification.",
       "Verify actual SDK Foundation proposal creation and exact replay, approved-base conflict, current Human/Agent read/propose authority, source and generation withdrawal, no canonical mutation, separate Human accept/approve, promoted and later edited revision provenance, late rollback, physical erasure/restore guards, English/Danish current review metadata and exact domain links.",
-      "Verify one Native draft under concurrency, exact customer catalog pin/revocation, actual Agent journal writer, no Agent/installation/grant effect, refusal of copied private fields, Native low-trust and revoked-grant denial, Human-edit/replay privacy, source/generation withdrawal, late transaction rollback, SDK feature/policy gates and English/Danish current links."
+      "Verify one Native draft under concurrency, exact customer catalog pin/revocation, actual Agent journal writer, no Agent/installation/grant effect, refusal of copied private fields, Native low-trust and revoked-grant denial, Human-edit/replay privacy, source/generation withdrawal, late transaction rollback, SDK feature/policy gates and English/Danish current links.",
+      "Verify current Agent renaming/removal, real revision change, account un-verification and membership withdrawal, local fixture metadata refusal, Source-event suppression, exact retry/idempotency declarations and the bounded timestamp-sensitive material binding. Complete connector permission-preview details and exact configured input/actor policy qualification remain open."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."

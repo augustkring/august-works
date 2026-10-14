@@ -2346,5 +2346,54 @@
     "invalid": "Gennemgå testfelterne. Brug højst 20 forskellige stier og højst 8 KB input.",
     "pathError": "Angiv 1 til 8 præcise feltnavne, ét pr. linje. Stier må ikke gentages eller overlappe.",
     "valueError": "Angiv gyldig tekst, et endeligt tal, ja/nej eller ingen værdi."
+  },
+  "workflowSemantics": {
+    "actor": "Udføres af",
+    "input": "Inputkilde",
+    "access": "Nødvendig adgang",
+    "policy": "Godkendelsesregel",
+    "delaySeconds_one": "Venter {{count}} sekund.",
+    "delaySeconds_other": "Venter {{count}} sekunder.",
+    "maxAttempts_one": "Højst {{count}} forsøg.",
+    "maxAttempts_other": "Højst {{count}} forsøg, inklusive det første.",
+    "actors": {
+      "workflow": "Workflowmotoren",
+      "human": "Den person, der gennemgår godkendelsespunktet",
+      "selected_agent": "Den Agent, der er valgt i trinnet",
+      "connected_tool": "Det tilsluttede værktøj, der er valgt i trinnet",
+      "unknown": "Den udførende aktør kunne ikke verificeres"
+    },
+    "inputs": {
+      "start_data": "Data, der angives, når workflowet starter.",
+      "mapped_data": "Tilknyttede startdata, variabler eller resultater fra tidligere trin.",
+      "condition_data": "Startdata, variabler eller tidligere resultater, som betingelsen bruger.",
+      "delay": "Den indstillede ventetid.",
+      "approval_material": "Godkendelsespunktets beskrivelse og konsekvens.",
+      "task_brief": "Den angivne opgavebeskrivelse og tildeling.",
+      "tool_arguments": "Det valgte værktøjs angivne og tilknyttede argumenter.",
+      "child_workflow_data": "Data, der overføres til den valgte workflowversion.",
+      "native_query": "Den angivne forespørgsel og dens resultatgrænse.",
+      "http_request": "Den angivne anmodning, dens headers og indhold.",
+      "advanced": "Gennemgå det præcise input i Avanceret."
+    },
+    "accessStates": {
+      "no_step_grant": "Der er ikke angivet en yderligere tilladelse for trinnet. Tilladelser til workflow og kørsel gælder stadig.",
+      "execution_check": "Tilladelse og adgang til ressourcen kontrolleres igen, når trinnet udføres. Aktuel adgang er ikke verificeret her.",
+      "unavailable": "Adgangen til trinnet kunne ikke verificeres."
+    },
+    "policies": {
+      "human_checkpoint": "En person skal gennemgå dette godkendelsespunkt, før workflowet fortsætter.",
+      "no_checkpoint": "Trinnet har intet godkendelsespunkt. Reglerne for at starte workflowet gælder stadig.",
+      "execution_review": "Kørslens ejer kontrollerer den aktuelle godkendelsesregel for den præcise handling og ressource.",
+      "unavailable": "Handlingen kan ikke udgives eller er ikke registreret."
+    },
+    "idempotency": {
+      "not_required": "Handlingen angiver, at en nøgle mod dobbelte virkninger ikke er nødvendig.",
+      "workflow_step_key": "Nye forsøg genbruger det oprindelige workflowtrins handlingsnøgle.",
+      "provider_passthrough": "Handlingsnøglen sendes til udbyderen; beskyttelse mod dubletter afhænger af udbyderen.",
+      "durable_receipt": "Handlingen bruger sin gemte kvittering til beskyttelse mod dubletter.",
+      "unknown": "Beskyttelse mod dubletter kunne ikke verificeres."
+    },
+    "assignmentUnavailable": "Den valgte Agent er utilgængelig eller kan ikke læses med din aktuelle adgang."
   }
 }

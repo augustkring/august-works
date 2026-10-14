@@ -122,7 +122,7 @@ export function WorkflowReview({
       typeof event.payload.action === "string" ? event.payload.action : "";
     if (
       event.type === "activity.logged" &&
-      !/workflow|permission|membership|privacy|erased|deleted|withdraw/i.test(
+      !/workflow|agent|connection|tool|permission|membership|privacy|erased|deleted|withdraw/i.test(
         action,
       ) &&
       event.payload.entityType !== "company_membership"
@@ -344,6 +344,28 @@ export function WorkflowReview({
                           </dt>
                           <dd>{step.operation}</dd>
                         </div>
+                        {step.semantics && <>
+                          <div>
+                            <dt className="font-medium">{t("workflowSemantics.actor")}</dt>
+                            <dd>{step.assignment?.state === "current" ? step.assignment.name
+                              : step.assignment ? t("workflowSemantics.assignmentUnavailable")
+                              : t(`workflowSemantics.actors.${step.semantics.actor}`)}</dd>
+                          </div>
+                          <div>
+                            <dt className="font-medium">{t("workflowSemantics.input")}</dt>
+                            <dd>{t(`workflowSemantics.inputs.${step.semantics.input}`)}
+                              {step.semantics.durationSeconds !== null && ` ${t("workflowSemantics.delaySeconds", { count: step.semantics.durationSeconds })}`}
+                            </dd>
+                          </div>
+                          <div>
+                            <dt className="font-medium">{t("workflowSemantics.access")}</dt>
+                            <dd>{t(`workflowSemantics.accessStates.${step.semantics.access}`)}</dd>
+                          </div>
+                          <div>
+                            <dt className="font-medium">{t("workflowSemantics.policy")}</dt>
+                            <dd>{t(`workflowSemantics.policies.${step.semantics.approvalPolicy}`)}</dd>
+                          </div>
+                        </>}
                         <div>
                           <dt className="font-medium">{t("workflowEffect")}</dt>
                           <dd>{t(`workflowEffects.${step.effect}`)}</dd>
@@ -363,6 +385,10 @@ export function WorkflowReview({
                         <div>
                           <dt className="font-medium">{t("workflowRetry")}</dt>
                           <dd>{t(`workflowRetries.${step.retry}`)}</dd>
+                          {step.semantics && <dd>
+                            {step.semantics.maxAttempts !== null && <p>{t("workflowSemantics.maxAttempts", { count: step.semantics.maxAttempts })}</p>}
+                            <p>{t(`workflowSemantics.idempotency.${step.semantics.idempotency}`)}</p>
+                          </dd>}
                         </div>
                         <div>
                           <dt className="font-medium">
