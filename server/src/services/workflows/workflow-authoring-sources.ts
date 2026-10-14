@@ -11,6 +11,13 @@ import type { NativeReadScope } from "../analytical-reader.js";
 const sources = z.array(z.uuid()).max(32);
 const review = new AsyncLocalStorage<{ active: Set<string>; deadline: number }>();
 
+/** Compose a bounded batch of Original Source reads without restarting its
+ * existing recursion/deadline owner for every retained copy reference. */
+export function withWorkflowAuthoringSourceReview<T>(work: () => Promise<T>): Promise<T> {
+  return review.getStore() ? work() : review.run({ active: new Set<string>(), deadline: performance.now() + 8000 }, work);
+}
+
+
 /** Actual Native authoring runs remain private sources after Human edits,
  * publication and run removal. Provenance supplies no current reader grant. */
 export async function assertWorkflowAuthoringSources(db: Db, companyId: string, workflowId: string,

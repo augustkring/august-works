@@ -229,7 +229,7 @@ export function optimizerEvaluationService(db: Db) {
         await assertMemoryRecordsRetained(tx as unknown as Db, companyId, [...references]);
       const detail = await automationArtifactService(tx as unknown as Db).create(companyId, { ...candidate.artifact, originNodeId: nodeId,
         dependencyManifest: candidate.artifact.dependencyManifest as unknown as Record<string, unknown>,
-        testSpec: { ...candidate.artifact.testSpec, cases: cases.map((item) => ({ name: item.id, input: item.input, expectedOutput: item.expectedOutput, category: item.category, sourceRunId: item.sourceRunId })) } }, SYSTEM);
+        testSpec: { ...candidate.artifact.testSpec, cases: cases.map((item) => ({ name: item.id, input: item.input, expectedOutput: item.expectedOutput, category: item.category, sourceRunId: item.sourceRunId })) } }, { ...SYSTEM, sourceActor });
       const version = detail.latestVersion!;
         const [evaluation] = await tx.insert(workflowOptimizerEvaluations).values({ companyId, suggestionId, workflowId,
           workflowRevisionId: revision.id, nodeId, artifactId: detail.artifact.id, artifactVersionId: version.id, contentHash: version.contentHash,

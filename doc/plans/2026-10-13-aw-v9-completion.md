@@ -1195,3 +1195,60 @@ DB migration numbering/safety and DB/server typechecks pass. The 60-case screen
 contract suite and module/70-surface source gates pass. The generated 0496 snapshot
 is retained with its journal entry. No existing guard is disabled, and all 70
 surfaces remain pending implementation and/or qualification.
+
+### Artifact lineage for private descendant replay copies — 2026-10-14
+
+A real Native baseline fails after three actual local runs/reviews and Original
+proposal/compilation: another verified same-company reader receives the compiled
+Artifact's PRIVATE child replay values through a public workflow origin. Synthetic
+timing/cost data selects the span only; there is no performance or Human claim.
+
+The canonical Artifact now retains actual observation/replay workflow owners,
+derived inside Native SQL from persisted scoped run relationships. The Original
+service and canonical internal asset consumer require current Source access;
+public DTOs omit the internal references. A system compiler keeps its principal
+and supplies the actual current requester's Source read context. Generated 0497
+adds/backfills bounded, monotonic provenance and reuses all-version/report/compiler
+Source erasure, markers and outboxes. Missing legacy history is null/unavailable,
+not an empty proven list or a false erasure. Generated 0498 indexes source lookup.
+
+The initial exact compiled-copy regression passes. The expanded 18-case Native
+Source/restore suite passes, including actual private replay disclosure refusal,
+internal consumer denial, original run removal with retained access boundary,
+Source erasure, unchanged digest and refused body/gate restoration. A five-suite
+Artifact/account/evaluation/promotion/scenario run passes 34 cases and fails six
+cases in two fixtures with empty/non-UUID observation references. They now use
+actual queued Native relationship rows, explicitly structural fixtures without
+executed-outcome/provider/Human claims. The two affected suites pass all 15 cases;
+production Source validation is unchanged.
+
+A genuine pre-0497 SQL/journal upgrade fixture first fails because V5 is enabled
+after presence seeding; the order is corrected. It then rejects an observation
+counter below the existing three-observation schema constraint. The fixture now
+has three queued reference rows and matching synthetic structural counters. The
+upgrade follow-up passes: known sources are reconstructed and unknown historical
+bodies stay retained but unavailable, with no new version or false qualification.
+The final seven-suite regression passes all 59 cases (154.57 seconds). The
+five selected V7 Optimizer Source cases pass (68.36 seconds); 36 unrelated
+cases are not selected. The namespace init reaps only owned children without
+weakening the Native UID/process guard. Migration numbering/safety and DB
+typecheck pass; final server compiler confirmation also passes (exit 0).
+Module boundaries and the 70-surface source gate pass with all 70 still pending.
+The known unsafe runtime-cache cleanup warning remains a refusal; these tests
+do not attest successful physical workspace cleanup.
+
+The immutable d61d34270bd80edf07d63268fcbf09c52470dd4d aggregate has finished:
+recursive typecheck passed; general server tests have 910 passing files, five
+failed files, seven skipped files, 17,085 passing tests, eight failing tests and
+90 skipped tests. All failures and two setup-hook failures are the unchanged
+Linux sandbox UID process-budget refusal on this host. The runner stops there;
+serialized/workspace tests and build were not reached. Scoped non-root PID/user
+namespace checks are separate evidence and do not reclassify that aggregate.
+The next broad immutable run will use a namespace init that reaps only its owned
+test children, preserving all production guards and avoiding inherited PID-1
+zombies and temporary filesystem pressure.
+
+This addresses the demonstrated Workflow-replay Artifact copy. Conversation/
+Agent-origin Artifact sources, broader package/knowledge closure, the remainder
+of the full brief and final immutable whole-workspace verification remain open.
+No push, deployment or PR is made.

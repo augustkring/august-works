@@ -3466,6 +3466,20 @@
       "when": 1791975412867,
       "tag": "0496_workflow_copy_identity",
       "breakpoints": true
+    },
+    {
+      "idx": 497,
+      "version": "7",
+      "when": 1791977064502,
+      "tag": "0497_artifact_replay_sources",
+      "breakpoints": true
+    },
+    {
+      "idx": 498,
+      "version": "7",
+      "when": 1791977725781,
+      "tag": "0498_artifact_copy_source_index",
+      "breakpoints": true
     }
   ]
 }

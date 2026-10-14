@@ -10,6 +10,7 @@ import {
   companyMemberships,
   createDb,
   instanceSettings,
+  workflowRuns,
   workflowOptimizerSuggestions,
   workflowRevisions,
   workflows,
@@ -131,6 +132,11 @@ describePg("optimizer promotion service", () => {
       });
     });
 
+    // Structural Native provenance rows only; the promotion policy/evidence
+    // below is synthetic test data and does not qualify actual executions.
+    const observed = await db.insert(workflowRuns).values(Array.from({ length: 3 }, () => ({
+      companyId: company!.id, workflowId, workflowRevisionId: revisionId, status: "queued", source: "manual",
+    }))).returning({ id: workflowRuns.id });
     const [suggestion] = await db
       .insert(workflowOptimizerSuggestions)
       .values({
@@ -155,7 +161,7 @@ describePg("optimizer promotion service", () => {
         averageCost: 1,
         estimatedLatencySavingsMs: 10,
         estimatedCostSavings: 1,
-        observedRunIds: ["run-1", "run-2", "run-3"],
+        observedRunIds: observed.map(row => row.id),
       })
       .returning();
 

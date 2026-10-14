@@ -1,3 +1,6 @@
+import { optimizerEvaluationService } from "../services/optimizer/optimizer-evaluation.js";
+import { proposeOptimizerCandidate } from "../services/optimizer/optimizer-candidate-proposal.js";
+import type { OptimizerTrace } from "@paperclipai/shared";
 import { optimizerSuggestionService } from "../services/optimizer/optimizer-suggestions.js";
 import { optimizerTraceService } from "../services/optimizer/optimizer-trace.js";
 import { getWorkflowRunReview, reviewWorkflowRun } from "../services/optimizer/optimizer-run-review.js";
@@ -287,6 +290,67 @@ describe.sequential("Original workflow private authoring copy owner", () => {
     await expect(db.update(workflowRevisions).set({ workflowId: clean.id, graph: { version: 1, nodes: [], edges: [], variables: [], settings: {} } }).where(eq(workflowRevisions.id, child.publishedRevisionId!))).rejects.toMatchObject({ cause: { code: "23514" } });
     expect(JSON.stringify(await engine.getRun(f.home, publicRun.run.id, f.actor))).not.toContain("PRIVATE");
     expect((await db.select().from(workflowRunReviews).where(eq(workflowRunReviews.id, review.id)))[0].correctedOutputs).toEqual({});
+  });
+  it("keeps actual compiled Artifact replay copies behind a public parent's private child Sources", async () => {
+    await instanceSettingsService(db).updateExperimental({ enableAutomationArtifactsV1: true, enableWorkflowOptimizerSuggestions: true });
+    const child = await privateValueWorkflow(), owner = workflowService(db), engine = workflowExecutorService(db);
+    const parent = await owner.create(f.home, { name: "Public compiler parent" }, human());
+    const draft = await owner.updateDraft(f.home, parent.id, { expectedRevisionId: parent.draftRevisionId!, graph: { version: 1, nodes: [
+      { id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} },
+      { id: "child", type: "core.subworkflow", name: "Run child", position: { x: 0, y: 1 }, config: { workflowId: child.id, revisionId: child.publishedRevisionId!, inputMapping: {}, timeoutSeconds: 60, cancellationPolicy: "propagate" } },
+      { id: "project", type: "core.transform", name: "Select result", position: { x: 0, y: 2 }, config: { mapping: { value: "{{input.result.value}}" } } },
+      { id: "copy", type: "core.transform", name: "Copy value", position: { x: 0, y: 3 }, config: { mapping: { value: "{{input.value}}" } } },
+    ], edges: [{ id: "one", source: "start", target: "child" }, { id: "two", source: "child", target: "project" }, { id: "three", source: "project", target: "copy" }], variables: [], settings: {} } }, human());
+    const published = await owner.publish(f.home, parent.id, { expectedDraftRevisionId: draft.draftRevisionId!, expectedPublishedRevisionId: null }, human());
+    const traces = new Map<string, OptimizerTrace>();
+    for (let i = 0; i < 3; i++) {
+      const run = await engine.startManualRun(f.home, parent.id, { input: {} }, human(), randomUUID());
+      expect(run.run.status).toBe("succeeded"); expect(run.steps.find(step => step.nodeId === "copy")!.outputJson).toEqual({ value: "PRIVATE child result" });
+      await reviewWorkflowRun(db, f.home, run.run.id, { humanCorrection: false, correctedOutputs: {}, reason: "Synthetic Source-copy contract; no Human qualification" }, human());
+      const trace = await optimizerTraceService(db).normalizeWorkflowRun(f.home, run.run.id, f.actor);
+      // Synthetic timing/cost classification selects a span; actual payloads,
+      // runs, reviews, revisions and Sources remain the Original DB records.
+      traces.set(run.run.id, { ...trace, steps: trace.steps.map(step => ({ ...step, durationMs: 1000, cost: 10 })) });
+    }
+    const suggestions = await optimizerSuggestionService(db, { traceNormalizer: { normalizeWorkflowRun: async (_company, runId) => traces.get(runId)! } }).forWorkflow(f.home, parent.id, f.actor);
+    const suggestion = suggestions!.suggestions.find(item => item.stepOrdinals.length === 1 && item.stepOrdinals[0] === 4)!;
+    expect(suggestion).toBeTruthy();
+    const input = await proposeOptimizerCandidate(db, f.home, parent.id, suggestion.id, f.actor);
+    const compiled = await optimizerEvaluationService(db).compile(f.home, parent.id, suggestion.id, input, human());
+    expect(compiled.gatesPassed).toBe(true);
+    const mine = await automationArtifactService(db).getDetail(f.home, compiled.artifactId, human());
+    expect(JSON.stringify(mine)).toContain("PRIVATE child result");
+    const userId = randomUUID(), now = new Date();
+    await db.insert(authUsers).values({ id: userId, name: "Other compiled Artifact reader", email: `${userId}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now });
+    await db.insert(companyMemberships).values({ companyId: f.home, principalType: "user", principalId: userId, membershipRole: "owner", status: "active" });
+    await db.insert(principalPermissionGrants).values({ companyId: f.home, principalType: "user", principalId: userId, permissionKey: "workflows:read" });
+    const foreign = { principal: { type: "user" as const, userId } };
+    await expect(automationArtifactService(db).getDetail(f.home, compiled.artifactId, foreign)).rejects.toMatchObject({ status: 403 });
+    expect(mine.artifact).not.toHaveProperty("authoringSourceWorkflowIds");
+    expect((await db.select().from(automationArtifacts).where(eq(automationArtifacts.id, compiled.artifactId)))[0].authoringSourceWorkflowIds).toEqual([child.id]);
+    await expect(assertLearningAssetCurrent(db, f.home, "automation_artifact_version", compiled.artifactVersionId,
+      { type: "board", source: "session", userId })).rejects.toMatchObject({ status: 403 });
+    expect((await automationArtifactService(db).list(f.home, foreign)).map(row => row.id)).not.toContain(compiled.artifactId);
+    await expect(db.update(automationArtifacts).set({ authoringSourceWorkflowIds: [] }).where(eq(automationArtifacts.id, compiled.artifactId))).rejects.toMatchObject({ cause: { code: "23514" } });
+    await db.delete(workflowRuns).where(eq(workflowRuns.companyId, f.home));
+    expect(JSON.stringify(await automationArtifactService(db).getDetail(f.home, compiled.artifactId, human()))).toContain("PRIVATE child result");
+    await expect(automationArtifactService(db).getDetail(f.home, compiled.artifactId, foreign)).rejects.toMatchObject({ status: 403 });
+    const hash = mine.latestVersion!.contentHash;
+    await eraseSource();
+    const [erased] = await db.select().from(automationArtifactVersions).where(eq(automationArtifactVersions.id, compiled.artifactVersionId));
+    expect(erased).toMatchObject({ sourceCode: "", inputSchema: {}, outputSchema: {}, dependencyManifest: {}, testSpec: {}, validationReport: null, securityReport: null, contentHash: hash });
+    await db.update(automationArtifactVersions).set({ sourceCode: "PRIVATE restored compiler body", testSpec: { cases: [{ input: "PRIVATE restored replay" }] }, validationReport: mine.latestVersion!.validationReport, securityReport: mine.latestVersion!.securityReport }).where(eq(automationArtifactVersions.id, compiled.artifactVersionId));
+    expect((await db.select().from(automationArtifactVersions).where(eq(automationArtifactVersions.id, compiled.artifactVersionId)))[0]).toMatchObject({ sourceCode: "", testSpec: {}, validationReport: null, securityReport: null, contentHash: hash });
+    await expect(automationArtifactService(db).getDetail(f.home, compiled.artifactId, human())).rejects.toMatchObject({ status: 403 });
+    expect(published.publishedRevisionId).toBeTruthy();
+  });
+  it("keeps unresolvable legacy Artifact provenance unavailable and refuses new version copies", async () => {
+    const [legacy] = await db.insert(automationArtifacts).values({ companyId: f.home, name: "Unresolved legacy fixture", kind: "expression", riskClass: "C0", sideEffectClass: "pure", authoringSourceWorkflowIds: null }).returning();
+    await expect(automationArtifactService(db).getDetail(f.home, legacy.id, human())).rejects.toMatchObject({ status: 403 });
+    await expect(db.update(automationArtifacts).set({ authoringSourceWorkflowIds: [] }).where(eq(automationArtifacts.id, legacy.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+    await expect(db.insert(automationArtifactVersions).values({ companyId: f.home, artifactId: legacy.id, versionNumber: 1, sourceCode: "PRIVATE unproven copy", inputSchema: {}, outputSchema: {}, dependencyManifest: {}, testSpec: {}, contentHash: "a".repeat(64) })).rejects.toMatchObject({ cause: { code: "23514" } });
+    const [collected] = await db.execute<{ refs: unknown }>(sql`select aw_optimizer_artifact_workflow_sources(${f.home}::uuid,${JSON.stringify([randomUUID()])}::jsonb,null::uuid) as refs`);
+    expect(collected.refs).toBeNull();
   });
   it("propagates the actual private grandchild source to both public ancestors without changing their configurations", async () => {
     const child = await privateValueWorkflow(), middle = await parentWorkflow(child), outer = await parentWorkflow(middle);

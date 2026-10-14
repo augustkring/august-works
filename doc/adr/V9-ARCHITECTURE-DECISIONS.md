@@ -2150,3 +2150,36 @@ version reparenting, while a clean public execution remains free of private
 payload. No graph/runtime, permission, Source-completeness or qualification store
 is introduced. This closes the demonstrated owner-retargeting path; it does not
 attest every backup/host restore or complete broader copied Artifact provenance.
+
+## ADR-57 — Replay Artifacts retain copied descendant Workflow owners
+
+An actual Original compiler baseline exposes private replay values through an
+Artifact whose direct origin is a public parent workflow. The parent run retains
+the private child owner, but origin_workflow_id alone does not describe that copy.
+The canonical Artifact now retains the bounded union of actual observation/replay
+run workflow owners. Native database capture derives it from persisted same-company
+relationships; copied IDs grant no read. Root references cannot be removed or
+retargeted, and Optimizer evaluation ownership cannot be moved to another artifact.
+
+The Original Artifact service and canonical learned-asset consumer recheck direct
+and retained workflow Sources using the current actor, under the existing bounded
+Source-review owner. Internal references are excluded from the public Artifact
+DTO. Compiler/system writes retain their system principal and pass the actual
+requester's current read context, rather than borrowing a saved initiating actor.
+
+Generated 0497 adds nullable provenance and reconstructs exact historical Native
+relationships. null means that required history could not be reconstructed: reads,
+qualification and new version copies are unavailable. Retained unknown bodies are
+not falsely described as erased, and the unknown state cannot become an invented
+empty source list. Fresh incomplete observation/replay references fail closed.
+Generated 0498 indexes retained source lookups. Known Source erasure reuses the
+Original all-version/report/compiler erasure and downstream cleanup owners, with
+permanent markers and restore guards; retained digests are provenance, not passes.
+
+Actual compiled-copy tests cover foreign-reader denial, internal consumer denial,
+run-history removal, monotonic references, Source erasure and restored bodies/gates.
+Historical SQL/journal upgrade tests cover both reconstructable and unavailable
+legacy records. These are software fixtures; synthetic timing/cost values select
+a span only and establish no performance, Human or provider qualification. Direct
+conversation/Agent-authored Artifact Sources and wider package/knowledge closure
+remain separate open work.

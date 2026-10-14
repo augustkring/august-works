@@ -1,3 +1,4 @@
+import { assertArtifactWorkflowSources } from "./artifact-workflow-sources.js";
 import {lockAnalyticalCompany} from "../analytical-privacy.js";
 import {lockMemoryPrivacy} from "../memory/memory-privacy.js";
 import {assertLearnedAssetAnalyticalSources,learningActorFromPrincipal} from "../learning/learning-analytical-sources.js";
@@ -117,7 +118,8 @@ export function automationArtifactVersionContentHash(input: {
 function mapArtifact(
   row: typeof automationArtifacts.$inferSelect,
 ): AutomationArtifact {
-  return row;
+  const { authoringSourceWorkflowIds: _privateSources, ...visible } = row;
+  return visible;
 }
 
 function mapVersion(
@@ -181,7 +183,7 @@ async function persistArtifactActivity(
   });
   const artifact = await getArtifactRow(db, input.companyId, input.artifactId);
   if (!artifact) throw notFound("The Artifact Source owner is unavailable");
-  await assertOriginWorkflow(db, input.companyId, artifact.originWorkflowId, actor);
+  await assertArtifactWorkflowSources(db, input.companyId, artifact.id, actor.sourceActor ?? learningActorFromPrincipal(input.companyId, actor.principal, actor.runId));
   return result.publication;
 }
 
@@ -364,7 +366,7 @@ async function getDetail(
 ): Promise<AutomationArtifactDetail | null> {
   const artifact = await getArtifactRow(db, companyId, artifactId);
   if (!artifact) return null;
-  await assertOriginWorkflow(db, companyId, artifact.originWorkflowId, actor);
+  await assertArtifactWorkflowSources(db, companyId, artifact.id, actor.sourceActor ?? learningActorFromPrincipal(companyId, actor.principal, actor.runId));
 
   const [erased] = artifact.createdByOptimizerSuggestionId ? await db.select({ id: workflowOptimizerEvaluations.id })
     .from(workflowOptimizerEvaluations).innerJoin(memoryDeletionMarkers,
@@ -384,7 +386,7 @@ async function getDetail(
   }
 
   if(!erased&&latestVersion)await assertLearnedAssetAnalyticalSources(db,companyId,"automation_artifact_version",latestVersion.id,actor.sourceActor??learningActorFromPrincipal(companyId,actor.principal,actor.runId));
-  await assertOriginWorkflow(db, companyId, artifact.originWorkflowId, actor);
+  await assertArtifactWorkflowSources(db, companyId, artifact.id, actor.sourceActor ?? learningActorFromPrincipal(companyId, actor.principal, actor.runId));
   return {
     artifact: erased ? { ...mapArtifact(artifact), status: "deprecated", name: "Erased optimizer candidate", description: null } : mapArtifact(artifact),
     latestVersion: latestVersion ? erased ? { ...mapVersion(latestVersion), sourceCode: "", inputSchema: {}, outputSchema: {},
@@ -409,7 +411,7 @@ async function lockArtifact(
       ),
     )
     .for("update")
-    .then(async(rows) => {const row=rows[0]??null;if(row)await assertOriginWorkflow(db,companyId,row.originWorkflowId,actor);if(row?.latestVersionId)await assertLearnedAssetAnalyticalSources(db,companyId,"automation_artifact_version",row.latestVersionId,actor.sourceActor??learningActorFromPrincipal(companyId,actor.principal,actor.runId));return row;});
+    .then(async(rows) => {const row=rows[0]??null;if(row)await assertArtifactWorkflowSources(db,companyId,row.id,actor.sourceActor??learningActorFromPrincipal(companyId,actor.principal,actor.runId));if(row?.latestVersionId)await assertLearnedAssetAnalyticalSources(db,companyId,"automation_artifact_version",row.latestVersionId,actor.sourceActor??learningActorFromPrincipal(companyId,actor.principal,actor.runId));return row;});
 }
 
 function assertExpectedPointer(
@@ -573,7 +575,7 @@ export function automationArtifactService(db: Db) {
           const visible:AutomationArtifact[]=[];
           for(const row of rows){
             try {
-              await assertOriginWorkflow(db,companyId,row.originWorkflowId,actor);
+              await assertArtifactWorkflowSources(db,companyId,row.id,actor.sourceActor??learningActorFromPrincipal(companyId,actor.principal,actor.runId));
               if(!erasedIds.has(row.id)&&row.latestVersionId) await assertLearnedAssetAnalyticalSources(db,companyId,"automation_artifact_version",row.latestVersionId,actor.sourceActor??learningActorFromPrincipal(companyId,actor.principal,actor.runId));
             } catch(error){if(error&&typeof error==="object"&&"status" in error&&[403,404,409].includes(Number(error.status)))continue;throw error;}
             visible.push(mapArtifact(erasedIds.has(row.id)?{...row,name:"Erased optimizer candidate",description:null,status:"deprecated"}:row));
@@ -714,7 +716,7 @@ export function automationArtifactService(db: Db) {
           }),
         );
 
-        await assertOriginWorkflow(txDb, companyId, artifact.originWorkflowId, actor);
+        await assertArtifactWorkflowSources(txDb, companyId, artifact.id, actor.sourceActor ?? learningActorFromPrincipal(companyId, actor.principal, actor.runId));
         await assertOptimizerProvenance(txDb, companyId, artifact.createdByOptimizerSuggestionId, artifact.originWorkflowId, actor);
         return artifact.id;
       });
