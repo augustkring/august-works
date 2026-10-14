@@ -7,6 +7,8 @@ import { instanceSettingsService } from "../instance-settings.js";
 import { withExperienceAdmission } from "../experience/admission.js";
 import { ExperienceOverloadError } from "../experience/projection.js";
 import { runnerApiToolsEnabled } from "../native-runtime/runner-api-rollout.js";
+import { resolvePaperclipRunnerProviderProfile, PaperclipRunnerProviderProfileError } from "../native-runtime/provider-profile.js";
+import { hasAuthoredAgentDefinition } from "../agents/authored-definition.js";
 import { lockWorkflowDraftAccount } from "./workflow-draft-authority.js";
 import { workflowService } from "./workflow-service.js";
 
@@ -44,8 +46,19 @@ export function readWorkflowDraftAuthors(db: Db, actor: AuthorizationActor, comp
         eq(companyMemberships.principalType, "agent"), eq(companyMemberships.principalId, candidate.id))).for("share");
       await tx.select({ id: principalPermissionGrants.id }).from(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId, companyId),
         eq(principalPermissionGrants.principalType, "agent"), eq(principalPermissionGrants.principalId, candidate.id))).for("share");
-      const [agent] = await tx.select({ name: agents.name, adapter: agents.adapterType, status: agents.status }).from(agents)
+      const [agent] = await tx.select({ id: agents.id, companyId: agents.companyId, name: agents.name, adapter: agents.adapterType,
+        status: agents.status, adapterConfig: agents.adapterConfig, runtimeConfig: agents.runtimeConfig }).from(agents)
         .where(and(eq(agents.companyId, companyId), eq(agents.id, candidate.id))).for("share");
+      if (!agent || hasAuthoredAgentDefinition(agent)) continue;
+      try {
+        // The Original text-only backend has no model-controlled tools and can
+        // save only its declared Task document. Adapter identity alone cannot
+        // make it a workflow author. This read is not provider qualification.
+        if (resolvePaperclipRunnerProviderProfile(agent.adapterConfig).provider === "aw_text_only") continue;
+      } catch (error) {
+        if (error instanceof PaperclipRunnerProviderProfileError) continue;
+        throw error;
+      }
       if (agent?.adapter === "paperclip_runner" && ["active", "idle", "running"].includes(agent.status) && agent.name.trim() && await eligible(candidate.id))
         choices.push({ agentId: candidate.id, name: agent.name.trim().slice(0, 200) });
     }

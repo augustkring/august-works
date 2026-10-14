@@ -2213,7 +2213,11 @@ Describe receipts and draft review can discover bounded existing Native authors
 under current Human account, workflow Source and Agent read authority. A policy
 subject preview intersects existing Agent/User workflow grants; it supplies no
 JWT, runtime qualification, configuration or new authority. Current Agent status,
-Native adapter selection and authoring/chat/API rollout remain required.
+Native adapter selection and authoring/chat/API rollout remain required. The
+Original provider resolver excludes invalid configurations and the text-only
+Task-document controller, which has no executable workflow tools. The currently
+supported authored-definition runtime remains that text-only boundary and is
+not offered as a workflow author. This classification is not live qualification.
 
 Navigation carries only workflow/draft UUID locators. The destination re-reads
 the Original current draft and author choices before an explicit prepare action.

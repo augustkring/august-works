@@ -1330,3 +1330,22 @@ model/provider, representative Human or hosted runtime qualification.
 
 Immutable checkpoint 27 remains frozen in its separate worktree: recursive
 types pass and the full tests are still running. No push, deployment or PR.
+
+### Workflow author choices retain actual runtime capabilities — 2026-10-14
+
+An actual migrated Native baseline offers an aw_text_only Agent as a workflow
+author based on its adapter/grants, even though its Original backend can only
+save a declared Task document and has no model-controlled tools. Author discovery
+now uses the Original provider resolver, omits that backend and invalid profiles,
+and retains the current authored-definition runtime limitation. It neither
+widens the text-only backend nor grants tools to make the choice appear usable.
+Raw configuration remains internal and absent from DTOs.
+
+The first two-suite follow-up passes 33 cases and rejects one attempted fixture
+insertion of a malformed authored definition with the unchanged Native SQL
+guard (23514). The fixture now verifies that refusal; it does not bypass the
+guard. The final provider/author selection and runtime-mode group passes all
+34 cases (22.70 seconds). The actual server typecheck passes (exit 0); module
+and Source gates pass with all 70 surfaces still pending. This classification
+is not host/provider/Human
+qualification. Broader Custom Agent tools/capability mapping stays open.

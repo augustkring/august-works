@@ -55,6 +55,17 @@ describe.sequential("Current Native workflow author selection", () => {
     await db.update(agents).set({ adapterType: "paperclip_runner", status: "paused" }).where(eq(agents.id, f.presence.id));
     expect((await read()).body.choices).toEqual([]);
   });
+  it("does not offer a text-only controller that cannot execute workflow authoring tools", async () => {
+    await db.update(agents).set({ adapterConfig: { provider: "aw_text_only", workerModelProfileId: randomUUID(), model: "fixture-text-model" } })
+      .where(eq(agents.id, f.presence.id));
+    const response = await read(); expect(response.status).toBe(200); expect(response.body.choices).toEqual([]);
+  });
+  it("omits an invalid provider and preserves the Original authored-definition restore guard", async () => {
+    await db.update(agents).set({ adapterConfig: { provider: "unsupported-fixture" } }).where(eq(agents.id, f.presence.id));
+    expect((await read()).body.choices).toEqual([]);
+    await expect(db.update(agents).set({ adapterConfig: {}, runtimeConfig: { agentDefinitionVersion: {} } }).where(eq(agents.id, f.presence.id)))
+      .rejects.toMatchObject({ cause: { code: "23514" } });
+  });
   it("retains current account, company and feature admission without inventing a replacement Agent", async () => {
     expect((await read("another-account")).status).toBe(409);
     expect((await read(f.userId, f.guest)).status).toBe(404);
