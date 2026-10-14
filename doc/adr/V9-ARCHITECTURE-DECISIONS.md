@@ -2743,3 +2743,14 @@ Sources and unchanged business rows. Renderer tests include current account,
 late replies, Source events, non-admitted member and executable-action rejection.
 This is software evidence; live provider transcripts, hosted callbacks, complete
 interactive forms, representative Humans and all V9 release gates remain open.
+
+
+## ADR-80 — Private insight display has a bounded lifetime
+
+The optional card displayExpiresAt is issued only by the Native reader. Insight
+resolution requires it, and it cannot exceed the Original retained artifact's
+expiry or 30 seconds after reauthorization. A receiver timer withdraws private
+evidence while a replacement is unavailable; render-time checks also refuse
+expired deadlines. This bounds display without granting access or claiming
+instantaneous Source revocation. Current owner admission, current principal/
+rollout, exact hashes, event withdrawal and open-only actions stay required.

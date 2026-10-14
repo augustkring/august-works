@@ -146,6 +146,8 @@ export const experienceCardSchema = z
     consequence: boundedText.nullable(),
     source: canonicalExperienceSourceSchema,
     freshness: experienceFreshnessSchema,
+    /** Bounded display lifetime for a freshly authorized private insight read. */
+    displayExpiresAt: z.iso.datetime().optional(),
     actions: z.array(experienceActionSchema).max(8),
     evidence: z.array(boundedText).max(8),
   })

@@ -2241,3 +2241,28 @@ running; that frozen snapshot excludes checkpoints 54–57. All 70 launch rows/R
 remain pending. No PR/push or whole-V9 completion claim.
 Final current checkpoint 57 server/UI typechecks pass exit 0; token, module
 and coverage gates pass. All 70 surfaces remain pending implementation/evidence.
+
+
+### Bound private chat insight display lifetime — checkpoint 58
+
+A freshly admitted insight card now expires at the earlier of its Original
+retained artifact expiry or 30 seconds after the Native read. The receiver
+withdraws evidence on a timer even when a replacement read stalls; missing or
+expired deadlines refuse display. This is a display fence, never authorization
+or a claim that all Source revocations are instantly delivered. Original owner
+checks and event withdrawal remain authoritative; an open link creates no effect.
+The SQL timeout now also covers acquisition of the Native privacy/company locks.
+
+Four shared/renderer suites pass 29 cases (11.82 seconds), including the actual
+installed assistant-ui runtime for both exact MCP names and private deadline
+withdrawal. Mounted Native HTTP admission passes 1 case (26.88 seconds). The
+initial five-family follow-up selected no cases because its name filter did not
+match; it is not evidence. Corrected resolves.*chat selection passes 5 actual
+Native owner cases (73.37 seconds; 99 unselected), without new analytical rows.
+Server and initial UI typechecks pass. The final UI recheck found an overly
+broad fixture argument type in the two added runtime cases; its concrete JSON
+reference type is corrected and the follow-up typecheck is recorded below.
+Token/module/coverage gates pass. Frozen checkpoint 53 full tests remain running;
+that source excludes 54–58. All 70 launch rows/R0 remain pending. No PR/push.
+The corrected final UI typecheck passes exit 0. The additional runtime fixture
+uses concrete JSON references; no product behavior changed in that correction.

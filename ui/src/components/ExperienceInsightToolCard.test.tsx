@@ -18,7 +18,7 @@ vi.mock("@/lib/router", () => ({ Link: ({ to, children, ...props }: any) => <a h
 (globalThis as any).IS_REACT_ACT_ENVIRONMENT = true;
 const source = { companyId, domain: "insight" as const, resourceId, version: "a".repeat(64), observedAt: "2026-10-01T00:00:00Z" };
 const wire = { schemaVersion: 1, component: "ResultCard", companyId, cardId: `insight:${resourceId}`, source: { companyId, domain: "insight", resourceId, version: source.version } };
-const card = { id: wire.cardId, kind: "result", source, freshness: "fresh", title: "PRIVATE current Native review", whyYou: null, consequence: "Native read-only evidence",
+const card = { id: wire.cardId, kind: "result", source, freshness: "fresh", displayExpiresAt: new Date(Date.now() + 60_000).toISOString(), title: "PRIVATE current Native review", whyYou: null, consequence: "Native read-only evidence",
   evidence: ["native_historical_review", "human_agenda_not_decision_or_approval"], actions: [{ id: "inspect", label: "Inspect", operation: "open", href: "/management-reviews", criticality: "C2", source, requiresCurrentAuthorization: true }] } as any;
 let host: HTMLDivElement, root: Root, client: QueryClient;
 const read = vi.mocked(experienceApi.insightCard);
@@ -49,4 +49,18 @@ it("refuses a substituted Native source or executable action and preserves fixed
   read.mockResolvedValueOnce({ ...card, source: { ...source, version: "b".repeat(64) } }); await render(); expect(host.textContent).not.toContain("PRIVATE");
   await act(async () => i18n.changeLanguage("da")); read.mockResolvedValueOnce({ ...card, actions: [{ ...card.actions[0], operation: "accept" }] });
   await act(async () => { await client.invalidateQueries({ queryKey: ["experience-insight-tool-card"] }); }); await flush(); expect(host.textContent).not.toContain("PRIVATE"); expect(host.querySelector('[role="alert"]')).not.toBeNull();
+});
+
+it("withdraws private evidence at its display deadline while the next read is unavailable", async () => {
+  read.mockResolvedValueOnce({ ...card, displayExpiresAt: new Date(Date.now() + 150).toISOString() });
+  await render(); expect(host.textContent).toContain("PRIVATE");
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 180)); });
+  expect(host.textContent).not.toContain("PRIVATE"); expect(host.querySelector('[role="alert"]')).not.toBeNull();
+});
+it("refuses a missing or already expired insight display deadline", async () => {
+  read.mockResolvedValueOnce({ ...card, displayExpiresAt: undefined }); await render();
+  expect(host.textContent).not.toContain("PRIVATE");
+  read.mockResolvedValueOnce({ ...card, displayExpiresAt: new Date(Date.now() - 1).toISOString() });
+  await act(async () => { await client.invalidateQueries({ queryKey: ["experience-insight-tool-card"] }); });
+  await flush(); expect(host.textContent).not.toContain("PRIVATE");
 });

@@ -59,7 +59,9 @@ describe.skipIf(!support.supported)("Native historical management review owner o
     const app = express(); app.use((req, _res, next) => { req.actor = actor; next(); }); app.use(experienceRoutes(db)); app.use(errorHandler);
     const endpoint = `/companies/${companyId}/experience/insight-card?expectedUserId=local-board&request=${encodeURIComponent(JSON.stringify(wire))}`;
     const response = await request(app).get(endpoint).expect(200);
-    expect(response.headers["cache-control"]).toBe("private, no-store"); expect(response.body).toEqual(card);
+    expect(response.headers["cache-control"]).toBe("private, no-store"); expect(response.body).toEqual({ ...card, displayExpiresAt: expect.any(String) });
+    expect(Date.parse(response.body.displayExpiresAt)).toBeGreaterThan(Date.now());
+    expect(Date.parse(response.body.displayExpiresAt)).toBeLessThanOrEqual(Date.now() + 30_000);
     await request(app).get(endpoint.replace("expectedUserId=local-board", "expectedUserId=another-account")).expect(409);
     await request(app).get(`${endpoint}&unexpected=1`).expect(400);
     expect(await db.select().from(managementReviewSnapshots).where(eq(managementReviewSnapshots.id, created.id))).toEqual(before);

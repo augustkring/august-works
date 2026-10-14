@@ -296,3 +296,10 @@ refetches hide private data and recheck admission every 30 seconds. No claim of
 immediate revocation without an event is made. Six Native retained-owner cases,
 actual mounted HTTP current-account/no-store admission and 25 shared/renderer
 cases pass. These do not establish hosted/provider/Human or whole-V9 acceptance.
+
+Private insight cards additionally expire on the receiver at the earlier of the
+Original retained artifact deadline and a 30-second Native display lease. Missing
+or expired deadlines refuse display even with a stalled replacement. This is a
+privacy display limit, not an authority token or proof of immediate revocation.
+Native statement timeouts include company/privacy lock acquisition. Actual
+assistant-ui admission and stalled-read expiry cases pass (checkpoint 58).

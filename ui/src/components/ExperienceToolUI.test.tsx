@@ -56,7 +56,10 @@ const wire = {
   cardId: "card",
   source: { companyId, domain: "task", resourceId: "AW-1", version: "1" },
 };
-const makeMessage = (toolName: string) => fromThreadMessageLike({
+const makeMessage = (toolName: string, request: typeof wire | {
+  schemaVersion: number; component: string; companyId: string; cardId: string;
+  source: { companyId: string; domain: string; resourceId: string; version: string };
+} = wire) => fromThreadMessageLike({
   id: "native-tool-display-fixture",
   role: "assistant",
   createdAt: new Date(source.observedAt),
@@ -65,8 +68,8 @@ const makeMessage = (toolName: string) => fromThreadMessageLike({
       type: "tool-call",
       toolCallId: "display",
       toolName,
-      args: wire,
-      argsText: JSON.stringify(wire),
+      args: request,
+      argsText: JSON.stringify(request),
       result: {
         title: "PRIVATE INVENTED SUCCESS",
         html: "<script>sendSecrets()</script>",
@@ -157,4 +160,26 @@ it.each(EXPERIENCE_CARD_TOOL_NAMES)("registers %s with the installed real assist
   expect(container.textContent).not.toContain("INVENTED");
   expect(container.querySelector("script")).toBeNull();
   expect(post).not.toHaveBeenCalled();
+});
+
+it.each(EXPERIENCE_CARD_TOOL_NAMES)("renders %s insight references with actual assistant-ui and an independently admitted Native read", async toolName => {
+  const resourceId = "review:10000000-0000-4000-8000-000000000002", version = "a".repeat(64);
+  const insightSource = { companyId, domain: "insight", resourceId, version, observedAt: source.observedAt };
+  const request = { schemaVersion: 1, component: "ResultCard", companyId, cardId: `insight:${resourceId}`,
+    source: { companyId, domain: "insight", resourceId, version } };
+  message = makeMessage(toolName, request);
+  const get = vi.spyOn(api, "get").mockImplementation(async path => path.includes("/insight-card?") ? {
+    id: request.cardId, kind: "result", title: "CURRENT NATIVE REVIEW", source: insightSource,
+    freshness: "fresh", displayExpiresAt: new Date(Date.now() + 30_000).toISOString(),
+    whyYou: null, consequence: "Native read-only evidence", evidence: ["native_historical_review"],
+    actions: [{ id: "inspect", label: "Inspect", operation: "open", href: "/management-reviews", criticality: "C2", source: insightSource, requiresCurrentAuthorization: true }],
+  } : { companyId, profile: "manager", generatedAt: source.observedAt, dependencies: [], needsYou: [], inProgress: [], done: [], watch: [] });
+  const post = vi.spyOn(api, "post");
+  client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
+  container = document.createElement("div"); document.body.append(container); root = createRoot(container);
+  await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter><Conversation /></MemoryRouter></QueryClientProvider>));
+  await vi.waitFor(() => expect(container.querySelector("article")?.textContent).toContain("CURRENT NATIVE REVIEW"));
+  expect(get.mock.calls.some(([path]) => path.includes("/insight-card?") && path.includes("expectedUserId=member"))).toBe(true);
+  expect(container.textContent).not.toContain("INVENTED"); expect(container.querySelector("script")).toBeNull();
+  expect(container.querySelector("a")?.getAttribute("href")).toBe("/management-reviews"); expect(post).not.toHaveBeenCalled();
 });

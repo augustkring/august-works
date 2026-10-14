@@ -11,7 +11,7 @@ import { useExperience } from "../hooks/useExperience";
 import { ExperienceCard } from "./ExperienceCard";
 import { Button } from "./ui/button";
 import { useQuery } from "@tanstack/react-query";
-import { useState } from "react";
+import { useEffect, useState } from "react";
 import { experienceApi } from "../api/experience";
 import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
 
@@ -20,14 +20,22 @@ function CurrentInsight({ request }: { request: ExperienceToolCardRequest }) {
   const { t } = useTranslation("experience");
   const { query, loading, identity, scope } = useExperience(request.companyId);
   const [revision, setRevision] = useState(0);
+  const [now, setNow] = useState(Date.now);
   useCompanyLiveEvent(event => { if (event.companyId === request.companyId && (event.type === "analytical.context.access_lost" || event.type === "activity.logged")) setRevision(value => value + 1); });
   const principal = identity.localImplicit ? "local-board" : identity.userId;
   const enabled = !loading && !query.isError && query.data?.profile !== "member" && !!query.data && !!principal;
   const current = useQuery({ queryKey: ["experience-insight-tool-card", request.companyId, principal, identity.authorityEpoch, scope, revision, request.cardId, request.source.version],
     queryFn: ({ signal }) => experienceApi.insightCard(request, principal!, signal), enabled, gcTime: 0, retry: false, refetchInterval: 30000 });
+  useEffect(() => {
+    const expiry = Date.parse(current.data?.displayExpiresAt ?? "");
+    if (!Number.isFinite(expiry) || expiry <= now) return;
+    const timer = setTimeout(() => setNow(Date.now()), Math.max(1, expiry - Date.now()));
+    return () => clearTimeout(timer);
+  }, [current.data?.displayExpiresAt, now]);
   if (loading) return <p role="status">{t("toolCard.loading")}</p>;
   if (!enabled || query.isError || current.isError) return <p role="alert">{t("toolCard.unavailable")}</p>;
   if (current.isPending || current.isFetching) return <p role="status">{t("toolCard.loading")}</p>;
+  if (!current.data?.displayExpiresAt || Date.parse(current.data.displayExpiresAt) <= Math.max(now, Date.now())) return <p role="alert">{t("toolCard.unavailable")}</p>;
   try { return <ExperienceCard card={resolveCurrentExperienceToolCard(request, current.data)} />; }
   catch { return <p role="alert">{t("toolCard.unavailable")}</p>; }
 }

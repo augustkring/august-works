@@ -126,6 +126,7 @@ export function resolveCurrentExperienceToolCard(request: ExperienceToolCardRequ
   if (
     card.id !== request.cardId ||
     card.freshness !== "fresh" ||
+    (request.source.domain === "insight" && (!card.displayExpiresAt || Date.parse(card.displayExpiresAt) <= Date.now())) ||
     card.source.companyId !== request.companyId ||
     card.source.domain !== request.source.domain ||
     card.source.resourceId !== request.source.resourceId ||
