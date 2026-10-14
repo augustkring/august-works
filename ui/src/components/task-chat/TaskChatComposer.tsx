@@ -1,13 +1,17 @@
 import { AgentAvatar } from "../AgentAvatar";
 import {
   useEffect,
+  useImperativeHandle,
   useRef,
   useState,
   type ChangeEvent,
   type ClipboardEvent as ReactClipboardEvent,
   type CSSProperties,
   type ReactNode,
+  type Ref,
 } from "react";
+import type { IssueChatComposerHandle } from "../IssueChatThread";
+import { restoreSubmittedCommentDraft } from "../../lib/comment-submit-draft";
 import { cn } from "@/lib/utils";
 import { useComposerStop } from "@/hooks/useComposerStop";
 import { useStreamlinedTaskChatPresentation } from "./presentation-mode";
@@ -98,6 +102,7 @@ export interface TaskChatComposerTakeover {
 }
 
 interface TaskChatComposerProps {
+  composerRef?: Ref<IssueChatComposerHandle>;
   onAdd: (
     body: string,
     reopen?: boolean,
@@ -379,6 +384,7 @@ function escapeMarkdownLabel(name: string): string {
  * states) between the editor and the comp-bar.
  */
 export function TaskChatComposer({
+  composerRef,
   onAdd,
   confirmedSubmissionIds,
   onStop,
@@ -831,6 +837,21 @@ export function TaskChatComposer({
   const takeoverVisible = Boolean(
     takeover && !pause && !queuedEdit && !submitting && !uploadPending,
   );
+  useImperativeHandle(composerRef, () => ({
+    focus: () => { requestAnimationFrame(() => editorRef.current?.focus()); },
+    restoreDraft: submittedBody => {
+      if (disabled || queuedEdit || submittingRef.current || uncertainSubmission || pause || takeoverVisible) return;
+      changeBody(restoreSubmittedCommentDraft({ currentBody: bodyRef.current, submittedBody }));
+      requestAnimationFrame(() => editorRef.current?.focus());
+    },
+    appendRequest: request => {
+      if (disabled || queuedEdit || submittingRef.current || uncertainSubmission || pause || takeoverVisible) return false;
+      const current = bodyRef.current;
+      changeBody(current.includes(request) ? current : current.trim() ? `${current}\n\n${request}` : request);
+      requestAnimationFrame(() => editorRef.current?.focus());
+      return true;
+    },
+  }), [disabled, queuedEdit, uncertainSubmission, pause, takeoverVisible]);
   const previousTakeoverVisibleRef = useRef(takeoverVisible);
   useEffect(() => {
     if (previousTakeoverVisibleRef.current && !takeoverVisible && !queuedEdit) {

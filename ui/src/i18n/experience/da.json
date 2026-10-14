@@ -2252,7 +2252,9 @@
     "recordedStatus": "Registreret kørselsstatus: {{status}}"
   },
   "workflowDraftStep": {
-    "tool": { "boundary": "Når du gemmer, opdateres kun dette kladdetrins inputværdier. Det kører ingen operation og ændrer ikke forbindelse eller adgang. Publicering og test er særskilte beslutninger." },
+    "tool": {
+      "boundary": "Når du gemmer, opdateres kun dette kladdetrins inputværdier. Det kører ingen operation og ændrer ikke forbindelse eller adgang. Publicering og test er særskilte beslutninger."
+    },
     "open": "Rediger dette kladdetrin",
     "heading": "Rediger et kladdetrin",
     "boundary": "Ændringer gemmes i kladden. Den aktive version beholder sine eksisterende trin. Test og gennemgå den ændrede kladde, før du publicerer den.",
@@ -2459,5 +2461,22 @@
     "omitted": "Ikke medtaget",
     "emptyText": "Tom tekst",
     "boundary": "Gemte værdier for den aktuelle inputdefinition. Denne gennemgang kører ikke operationen og giver ikke adgang. Redigér input i Avanceret."
+  },
+  "workflowAuthoring": {
+    "heading": "Byg flowet med en Agent",
+    "failed": "Kunne ikke kontrollere, hvilke Agents der kan hjælpe med udkastet. Prøv igen.",
+    "changed": "Udkastet er ændret. Åbn workflowet og vælg igen.",
+    "unavailable": "Der vises ingen Agent til dette udkast her. Du kan stadig redigere flowet selv.",
+    "boundary": "Fortsæt i en samtale. Gennemgå anmodningen, før du sender den; gennemgå og test det gemte flow før publicering.",
+    "choose": "Vælg en Agent",
+    "choosePlaceholder": "Vælg en Agent",
+    "bounded": "Udvalget er begrænset. Der kan være flere Agents på siden Agents.",
+    "openDraft": "Åbn udkast",
+    "openChat": "Fortsæt i samtalen",
+    "insert": "Forbered anmodning",
+    "insertedButton": "Anmodning forberedt",
+    "inserted": "Anmodningen blev lagt i beskedfeltet. Gennemgå beskeden før afsendelse.",
+    "insertFailed": "Beskedfeltet er ikke klar til en ny anmodning. Gennemgå samtalens aktuelle status og prøv igen.",
+    "request": "Hjælp mig med at bygge flowet i [dette gemte workflow-udkast]({{href}}). Læs den gemte beskrivelse og arbejd på netop denne udkastversion. Spørg mig, hvis et væsentligt valg mangler, eller versionen er ændret. Gem det foreslåede flow som et udkast og giv mig linket. Jeg vil gennemgå og teste det før publicering."
   }
 }

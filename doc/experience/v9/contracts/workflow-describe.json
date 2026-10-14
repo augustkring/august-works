@@ -16,7 +16,7 @@
   ],
   "exitConditions": [
     "Only the Original current creator/request-bound receipt establishes draft creation.",
-    "Saving intent produces an empty unpublished Native graph. Automatic flow generation, schedules, execution and publication remain separate work.",
+    "Saving intent produces an empty unpublished Native graph. A subsequent explicitly sent Native conversation can author typed draft steps under existing current authority; automatic qualified generation, schedules, execution and publication are separate.",
     "The bounded index does not claim a complete inventory or prove absence of older or hidden workflows."
   ],
   "content": {
@@ -32,7 +32,7 @@
     "displayedState": [
       "Current readable draft/active/paused/archived metadata; receipt is historical creation evidence, not current publication status.",
       "Unknown acknowledgements preserve the original request; current account or Source uncertainty hides retained private fields.",
-      "Full chat-generated flow, access/approval-policy and human/hosted acceptance remain open."
+      "Saved drafts can be handed to an existing Native author using current policy choices and exact body-free locators. Real model-generated flow, access/approval policy and Human/hosted acceptance remain separately required."
     ]
   },
   "inputs": [
@@ -122,7 +122,8 @@
     "canonicalReadDomains": [
       "Original workflows/revisions and learned Source admission",
       "Current Native membership, account and workflow grants",
-      "Original body-free Activity creation receipt"
+      "Original body-free Activity creation receipt",
+      "Current bounded Native workflow author policy and account/Source/revision ownership; a choice is not an execution grant or runtime qualification."
     ],
     "canonicalWriteOperation": "Original workflowService.create composed transactionally with its Activity receipt; no parallel workflow store.",
     "authorityEffect": "No schedules, grants, model calls, work or publication are created by described intent.",
@@ -152,7 +153,7 @@
     "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
     "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
     "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
-    "targetSize": "Custom frequent and primary controls target at least 44 \u00d7 44 CSS px.",
+    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
     "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
     "reducedMotion": "No essential animated transition or moving progress indicator.",
     "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
@@ -187,10 +188,12 @@
       "Actual PostgreSQL concurrent exact creation yields one Native workflow/revision/receipt. Changed body refuses the same key.",
       "Lost responses use Original reads across reload; missing receipts stay unconfirmed and rollout withdrawal permits retained receipt reads.",
       "Native deletion cannot recreate the retained request; late role loss rolls back draft, revision and audit.",
-      "Full chat-generated draft flow, broader lifecycle and representative human/hosted qualification remain pending."
+      "Full chat-generated draft flow, broader lifecycle and representative human/hosted qualification remain pending.",
+      "Choose a current named Native author, navigate with only workflow/revision locators and explicitly prepare a localized request in the actual conversation composer. Preserve unsent notes; refuse changed revision, missing current author, disabled/uncertain composer and late private reads. Preparation performs no Send, run, grant or workflow mutation."
     ],
     "accessibility": [
-      "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
+      "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact.",
+      "Verify EN/DA labels, keyboard insertion and focus in the real composer, same-row Back/Open-draft and primary action at 390px, automated scoped axe and no horizontal overflow. This is software evidence; manual AT, zoom and representative Human qualification remain open."
     ],
     "securityPrivacy": [
       "Current verified creator/company/account and Native grants are required. Foreign creator/account responses are refused.",

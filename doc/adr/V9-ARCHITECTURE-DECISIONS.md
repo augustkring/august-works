@@ -2206,3 +2206,29 @@ ownership and pending Stop, including callers through other SDK transports.
 Conversation guidance points to the typed API and actual saved workflow links,
 while validation, execution and Human publication stay distinct. UI entry and
 real model/provider generation qualification remain open.
+
+## ADR-59 — Saved workflow intent enters the existing Native conversation
+
+Describe receipts and draft review can discover bounded existing Native authors
+under current Human account, workflow Source and Agent read authority. A policy
+subject preview intersects existing Agent/User workflow grants; it supplies no
+JWT, runtime qualification, configuration or new authority. Current Agent status,
+Native adapter selection and authoring/chat/API rollout remain required.
+
+Navigation carries only workflow/draft UUID locators. The destination re-reads
+the Original current draft and author choices before an explicit prepare action.
+Changed revisions or withdrawn authors cannot silently become another request.
+The localized prompt copies neither described intent nor private names/config;
+the authorized Agent reads the Original saved description only after normal Send.
+Both existing composer implementations share the same optional append handle.
+The actual task-chat composer now receives that handle; preparation preserves
+unsent text, focuses the editor and refuses disabled, uncertain, queued-edit or
+takeover states. It creates no conversation, run, model request or grant.
+
+A private read closes over its surface lifetime, so this widget's query identity
+includes the mounted reader. A deterministic two-surface baseline otherwise
+loses the remaining view when the first reader unmounts. Current account and
+Source epochs still withdraw names/actions and reject late acknowledgements.
+A prepared receipt describes insertion historically; it does not assert dispatch
+or a current workflow outcome. Model-generated flow and live runtime/Human
+qualification remain open.

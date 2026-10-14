@@ -1161,9 +1161,15 @@
       "componentPaths": [
         "ui/src/pages/WorkflowDescribe.tsx",
         "server/src/services/experience/workflow-draft-intent.ts",
-        "packages/shared/src/workflow-authoring-experience.ts"
+        "packages/shared/src/workflow-authoring-experience.ts",
+        "ui/src/components/WorkflowAuthoringHandoff.tsx",
+        "server/src/services/workflows/workflow-draft-authors.ts"
       ],
-      "evidenceRefs": [],
+      "evidenceRefs": [
+        "ui/src/components/WorkflowAuthoringHandoff.test.tsx",
+        "server/src/__tests__/v9-workflow-draft-authors.integration.test.ts",
+        "tests/e2e/aw-v9-workflow-author-handoff.spec.ts"
+      ],
       "contractPath": "doc/experience/v9/contracts/workflow-describe.json"
     },
     {
@@ -1181,12 +1187,17 @@
       "componentPaths": [
         "ui/src/pages/WorkflowDraftFlow.tsx",
         "ui/src/api/workflow-draft-flow.ts",
-        "server/src/services/workflows/workflow-customer-draft-flow.ts"
+        "server/src/services/workflows/workflow-customer-draft-flow.ts",
+        "ui/src/components/WorkflowAuthoringHandoff.tsx",
+        "server/src/services/workflows/workflow-draft-authors.ts"
       ],
       "evidenceRefs": [
         "server/src/__tests__/v9-workflow-draft-flow.integration.test.ts",
         "ui/src/pages/WorkflowDraftFlow.test.tsx",
-        "tests/e2e/aw-v9-workflow-draft-step.spec.ts"
+        "tests/e2e/aw-v9-workflow-draft-step.spec.ts",
+        "ui/src/components/WorkflowAuthoringHandoff.test.tsx",
+        "server/src/__tests__/v9-workflow-draft-authors.integration.test.ts",
+        "tests/e2e/aw-v9-workflow-author-handoff.spec.ts"
       ],
       "contractPath": "doc/experience/v9/contracts/workflow-draft.json"
     },
@@ -1226,9 +1237,15 @@
         "server/src/services/experience/workflow-step-semantics.ts",
         "server/src/services/experience/workflow-review-binding.ts",
         "server/src/services/workflows/workflow-step-input-review.ts",
-        "server/src/services/tool-connection-visibility.ts"
+        "server/src/services/tool-connection-visibility.ts",
+        "ui/src/components/WorkflowAuthoringHandoff.tsx",
+        "server/src/services/workflows/workflow-draft-authors.ts"
       ],
-      "evidenceRefs": [],
+      "evidenceRefs": [
+        "ui/src/components/WorkflowAuthoringHandoff.test.tsx",
+        "server/src/__tests__/v9-workflow-draft-authors.integration.test.ts",
+        "tests/e2e/aw-v9-workflow-author-handoff.spec.ts"
+      ],
       "contractPath": "doc/experience/v9/contracts/workflow-review.json"
     },
     {

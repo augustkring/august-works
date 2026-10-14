@@ -35,6 +35,7 @@ import { readWorkflowStepContext } from "../services/experience/workflow-step-ac
 import { workflowReviewBinding } from "../services/experience/workflow-review-binding.js";
 import { workflowDraftIntentService } from "../services/experience/workflow-draft-intent.js";
 import { applyWorkflowAuthoringApi } from "../services/workflows/workflow-authoring-api.js";
+import { readWorkflowDraftAuthors } from "../services/workflows/workflow-draft-authors.js";
 import { workflowCustomerDraftEdit } from "../services/workflows/workflow-customer-draft-edit.js";
 import { workflowCustomerDraftFlow } from "../services/workflows/workflow-customer-draft-flow.js";
 import { readWorkflowCapabilityCatalog } from "../services/workflows/workflow-capability-visibility.js";
@@ -106,6 +107,11 @@ export function workflowRoutes(db: Db) {
     currentDraftAccount(req);
     res.set("Cache-Control", "no-store");
     res.json(await workflowDraftIntentService(db).receipt(req.actor, z.uuid().parse(req.params.companyId), z.uuid().parse(req.params.requestId)));
+  });
+  router.get("/companies/:companyId/workflows/:workflowId/experience/authors", async (req, res) => {
+    currentDraftAccount(req);
+    res.set("Cache-Control", "no-store");
+    res.json(await readWorkflowDraftAuthors(db, req.actor, z.uuid().parse(req.params.companyId), z.uuid().parse(req.params.workflowId)));
   });
 
   router.get("/companies/:companyId/workflows/:workflowId/optimizer-evaluations", async (req, res) => {

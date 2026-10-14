@@ -1,5 +1,6 @@
 import {
   workflowExperienceIndexSchema, workflowIntentDraftCommandSchema, workflowIntentDraftReceiptSchema,
+  workflowDraftAuthorsSchema, workflowDraftAuthorLocatorSchema,
   type WorkflowIntentDraftCommand,
 } from "@paperclipai/shared";
 import { api } from "./client";
@@ -14,6 +15,15 @@ function receipt(raw: unknown, company: string, requestId: string) {
   return value;
 }
 export const workflowAuthoringExperienceApi = {
+  authors: async (company: string, workflow: string, principal: string, signal?: AbortSignal) => {
+    workflowDraftAuthorLocatorSchema.shape.workflowId.parse(workflow);
+    workflowIntentDraftReceiptSchema.shape.companyId.parse(company);
+    const query = new URLSearchParams({ expectedUserId: principal });
+    const value = workflowDraftAuthorsSchema.parse(await api.get(`/companies/${company}/workflows/${workflow}/experience/authors?${query}`, { signal, cache: "no-store" }));
+    signal?.throwIfAborted();
+    if (value.companyId !== company || value.workflowId !== workflow) throw new Error("Current workflow author scope changed");
+    return value;
+  },
   index: async (company: string, principal: string, signal?: AbortSignal) => {
     const { path, query } = base(company, principal);
     const value = workflowExperienceIndexSchema.parse(await api.get(`${path}/workflows?${query}`, { signal, cache: "no-store" }));

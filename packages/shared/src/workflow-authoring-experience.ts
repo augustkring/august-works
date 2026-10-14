@@ -30,6 +30,18 @@ export const workflowExperienceIndexSchema = z.strictObject({
 export type WorkflowIntentDraftCommand = z.infer<typeof workflowIntentDraftCommandSchema>;
 export type WorkflowIntentDraftReceipt = z.infer<typeof workflowIntentDraftReceiptSchema>;
 export type WorkflowExperienceIndex = z.infer<typeof workflowExperienceIndexSchema>;
+/** Current policy discovery, never an execution grant or runtime qualification. */
+export const workflowDraftAuthorsSchema = z.strictObject({
+  companyId: z.uuid(), workflowId: z.uuid(), draftRevisionId: z.uuid(), publishedRevisionId: z.uuid().nullable(),
+  observedAt: z.iso.datetime(), coverage: z.literal("bounded"), enabled: z.boolean(),
+  choices: z.array(z.strictObject({ agentId: z.uuid(), name: z.string().min(1).max(200) })).max(32),
+}).superRefine((view, ctx) => {
+  if (!view.enabled && view.choices.length || new Set(view.choices.map(choice => choice.agentId)).size !== view.choices.length)
+    ctx.addIssue({ code: "custom", message: "Current workflow author choices changed" });
+});
+export const workflowDraftAuthorLocatorSchema = z.strictObject({ workflowId: z.uuid(), draftRevisionId: z.uuid() });
+export type WorkflowDraftAuthors = z.infer<typeof workflowDraftAuthorsSchema>;
+export type WorkflowDraftAuthorLocator = z.infer<typeof workflowDraftAuthorLocatorSchema>;
 export const pendingWorkflowReceiptSchema = z.strictObject({
   companyId: z.uuid(), principal: z.string().min(1).max(300), requestId: z.uuid(),
 });

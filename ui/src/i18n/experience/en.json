@@ -2252,7 +2252,9 @@
     "recordedStatus": "Recorded run status: {{status}}"
   },
   "workflowDraftStep": {
-    "tool": { "boundary": "Saving updates only this draft step’s input values. It runs no operation, changes no connection or access, and leaves publishing and testing as separate decisions." },
+    "tool": {
+      "boundary": "Saving updates only this draft step’s input values. It runs no operation, changes no connection or access, and leaves publishing and testing as separate decisions."
+    },
     "open": "Edit this draft step",
     "heading": "Edit a draft step",
     "boundary": "Changes are saved to the draft. The active version keeps its existing steps. Test and review the changed draft before publishing it.",
@@ -2459,5 +2461,22 @@
     "omitted": "Not included",
     "emptyText": "Empty text",
     "boundary": "Saved values for the current input definition. This review does not run the operation or grant access. Edit inputs in Advanced."
+  },
+  "workflowAuthoring": {
+    "heading": "Build the flow with an Agent",
+    "failed": "Could not check which Agents can help with this draft. Try again.",
+    "changed": "This draft has changed. Open the workflow and choose again.",
+    "unavailable": "No Agent is offered here for this draft. You can still edit the flow yourself.",
+    "boundary": "Continue in a conversation. Review the request before sending it; review and test the saved flow before publishing.",
+    "choose": "Choose an Agent",
+    "choosePlaceholder": "Select an Agent",
+    "bounded": "This is a limited selection. More Agents may be available on the Agents page.",
+    "openDraft": "Open draft",
+    "openChat": "Continue in conversation",
+    "insert": "Prepare request",
+    "insertedButton": "Request prepared",
+    "inserted": "The request was added to the message field. Review the message before sending.",
+    "insertFailed": "The message field is not ready for a new request. Review the current conversation status and try again.",
+    "request": "Help me build the flow in [this saved workflow draft]({{href}}). Read its saved description and work on that exact draft version. Ask me if a material choice is missing or that version has changed. Save the proposed flow as a draft and return its link. I will review and test it before publishing."
   }
 }

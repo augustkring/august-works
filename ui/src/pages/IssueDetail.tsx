@@ -1,4 +1,5 @@
 import { useUserPreferences } from "../hooks/useUserPreferences";
+import { WorkflowAuthoringHandoff } from "../components/WorkflowAuthoringHandoff";
 import { DispositionRecoveryProvider } from "../components/DispositionRecoveryNotice";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { AgentIdentity } from "@/components/AgentIdentity";
@@ -2859,6 +2860,7 @@ export function IssueDetail({ tasksTab }: { tasksTab?: TaskSidePanelProps["tasks
 /** One controller and surface for both task URLs and agent conversations. */
 export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskSidePanelProps["tasksTab"]; conversation?: {
   agent: Agent; issue: Issue | null; ensureIssue: () => Promise<Issue>; refreshConversation?: () => void;
+  workflowAuthoring?: { workflowId: string; draftRevisionId: string };
 } }) {
   const { issueId: routeIssueId, companyPrefix } = useParams<{ issueId: string; companyPrefix: string }>();
   const issueId = conversation ? conversation.issue?.id : routeIssueId;
@@ -7957,13 +7959,24 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
                   onRefreshLatestComments={refetchLatestComments}
                   composerRef={commentComposerRef}
                   composerAccessory={
-                    hasVisibleMonitorSurface(issue) ? (
+                    <>
+                    {conversation?.workflowAuthoring && currentUserId && <WorkflowAuthoringHandoff
+                      key={JSON.stringify([issue.companyId, currentUserId, conversation.agent.id, conversation.workflowAuthoring])}
+                      company={issue.companyId} principal={currentUserId} workflow={conversation.workflowAuthoring.workflowId}
+                      expectedRevision={conversation.workflowAuthoring.draftRevisionId} agent={conversation.agent.id}
+                      onInsert={text => {
+                        const composer = commentComposerRef.current;
+                        if (!composer?.appendRequest) return false;
+                        return composer.appendRequest(text);
+                      }} />}
+                    {hasVisibleMonitorSurface(issue) ? (
                       <IssueMonitorComposerStrip
                         issue={issue}
                         onCheckNow={() => checkIssueMonitorNow.mutate()}
                         checkingNow={checkIssueMonitorNow.isPending}
                       />
-                    ) : null
+                    ) : null}
+                    </>
                   }
                   footer={
                     !taskChatShellEnabled && siblingNavigation ? (

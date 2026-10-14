@@ -11,6 +11,7 @@ import { authApi } from "../api/auth";
 import { queryKeys } from "../lib/queryKeys";
 import { v9SessionFixture } from "../hooks/v9-session.test-support";
 import "../i18n";
+vi.mock("../components/WorkflowAuthoringHandoff", () => ({ WorkflowAuthoringHandoff: () => null }));
 
 let live: (event: {
   companyId: string;

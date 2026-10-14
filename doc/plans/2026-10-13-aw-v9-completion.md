@@ -1289,3 +1289,44 @@ full tests independently.
 This supplies the missing Native transport, not the complete Describe-to-AI
 customer journey, broad Agent capability mapping, live H6/H7/Human qualification
 or all remaining V9 scope. All 70 surfaces remain pending.
+
+### Saved intent to a named Native workflow author — 2026-10-14
+
+Adds current bounded author selection after Describe and in draft review. The
+Original Human account/workflow Source and actual Agent policy owners mediate
+all names; only existing Native adapter/status/grants are considered. Selection
+creates no Agent or grant. The conversation URL retains only exact Native
+workflow/revision locators. A fresh destination read refuses a changed version
+or withdrawn author before the explicit prepare action. Normal Send is still
+the only dispatch. No raw intent, private name or configuration is copied into
+browser history or the prepared persistent composer body.
+
+The current task-chat implementation did not receive the shared composer ref.
+It now forwards it to its actual composer, alongside the classic implementation.
+The optional append action preserves existing notes, deduplicates exact text,
+focuses the editor and refuses unavailable/uncertain/queued/takeover states.
+A focused real composer test passes, and the initial six-suite UI/API/contract
+regression passes 98 cases. Four actual migrated Native HTTP/policy/Source
+integration cases pass without work or grant effects.
+
+The first built Danish 390px browser attempt fails closed while re-reading author
+metadata on navigation. A diagnostic repeat passes the entire real-composer
+handoff, old-note preservation, no-send/no-run proof, exact changed-version
+refusal, scoped axe and overflow checks (45.0 seconds total). A separate
+deterministic two-surface behavioral baseline demonstrates that a shared
+in-flight query loses the remaining reader after its first surface unmounts.
+The widget now owns its read by mounted identity. The final eight-suite
+regression, including both composer paths, passes all 276 cases (26.71 seconds).
+
+Shared, actual server-script and UI typechecks pass. Token, module and Source
+gates pass; all 70 surfaces stay pending. The final built-browser repeat passes
+(45.5 seconds), including historical preparation copy, exact draft refusal,
+actual composer focus/old notes, zero dispatch/run effects, same-row footer
+centers within one pixel, scoped axe with zero violations and no overflow. The
+390px screenshot is visually inspected. The updated screen-contract suite
+passes all 60 cases. The synthetic authenticated actor and inactive runtime
+configuration are explicitly structural fixtures, not signed-session, real
+model/provider, representative Human or hosted runtime qualification.
+
+Immutable checkpoint 27 remains frozen in its separate worktree: recursive
+types pass and the full tests are still running. No push, deployment or PR.

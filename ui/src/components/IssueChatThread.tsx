@@ -506,6 +506,7 @@ export function shouldRenderComposerHandoffPreview(
 export interface IssueChatComposerHandle {
   focus: () => void;
   restoreDraft: (submittedBody: string) => void;
+  appendRequest?: (body: string) => boolean;
 }
 
 interface IssueChatComposerProps {
@@ -4903,8 +4904,16 @@ const IssueChatComposer = forwardRef<
         );
         focusComposer();
       },
+      appendRequest: (request: string) => {
+        if (composerDisabledReason || composerPause || submittingRef.current || uncertainSubmission) return false;
+        const current = bodyRef.current;
+        const next = current.includes(request) ? current : current.trim() ? `${current}\n\n${request}` : request;
+        bodyRef.current = next; setBody(next);
+        focusComposer();
+        return true;
+      },
     }),
-    [],
+    [composerDisabledReason, composerPause, uncertainSubmission],
   );
 
   const showStop =

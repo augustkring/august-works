@@ -15,6 +15,7 @@ import { Link } from "../lib/router";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
+import { WorkflowAuthoringHandoff } from "../components/WorkflowAuthoringHandoff";
 
 export function WorkflowDescribeEntry() {
   const { selectedCompanyId } = useCompany(), identity = useV9CurrentAccount();
@@ -110,6 +111,7 @@ export function WorkflowDescribe({ company, principal }: { company: string; prin
       <p>{t("workflowIntent.savedBoundary")}</p>
       <p>{t("workflowIntent.requestId")}: <span className="break-all font-mono">{receipt.requestId}</span></p>
       <Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${receipt.workflowId}`}>{t("workflowIntent.openDraft")}</Link>
+      <WorkflowAuthoringHandoff company={company} principal={principal} workflow={receipt.workflowId} />
     </section> : requestId ? <section className="space-y-4" aria-label={t("workflowIntent.recovery")}>
       <div ref={error} role="status" tabIndex={-1}>{t("workflowIntent.unconfirmed")}</div>
       <p className="text-sm text-muted-foreground">{t("workflowIntent.recoveryBoundary")}</p>

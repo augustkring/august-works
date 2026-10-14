@@ -227,7 +227,8 @@
   },
   "systemWork": {
     "canonicalReadDomains": [
-      "Native workflow/revisions/node registry, source ownership, verified account, current read/edit grants and write-role fence"
+      "Native workflow/revisions/node registry, source ownership, verified account, current read/edit grants and write-role fence",
+      "Current bounded Native workflow author policy and account/Source/revision ownership; a choice is not an execution grant or runtime qualification."
     ],
     "canonicalWriteOperation": "Original workflow updateDraft; strict selected-node changes only, unchanged active revision and no test/publication/run/grant.",
     "authorityEffect": "No permission, approval or runtime authority is inferred from a draft change.",
@@ -296,11 +297,13 @@
       "Verify lost acknowledgement/reload causes only exact receipt GET, current-account/Source fences reject late replies, and source/version conflicts require current review.",
       "Full trigger/graph/condition/tool/access/approval-policy editing, conversation graph proposals, broader test modes and remaining lifecycle qualification stay open.",
       "Verify Original concurrent branch composition and own replay, unchanged immutable active graph, true/false handles, current earlier-step binding refusal, complete step bounds, no flattening, body-free journal and both selected outcomes through the actual Native timer with explicit synthetic input.",
-      "Native conversation authors can discover the typed workflow-authoring API through search_api/call_api and save Original step/edge revisions. Verify current run/Task/standard mode, account intersection, revision CAS, body-free atomic Activity and existing bounded-plan refusal. Step validation is not execution or publication; a live model-generated journey remains separately required."
+      "Native conversation authors can discover the typed workflow-authoring API through search_api/call_api and save Original step/edge revisions. Verify current run/Task/standard mode, account intersection, revision CAS, body-free atomic Activity and existing bounded-plan refusal. Step validation is not execution or publication; a live model-generated journey remains separately required.",
+      "Choose a current named Native author, navigate with only workflow/revision locators and explicitly prepare a localized request in the actual conversation composer. Preserve unsent notes; refuse changed revision, missing current author, disabled/uncertain composer and late private reads. Preparation performs no Send, run, grant or workflow mutation."
     ],
     "accessibility": [
       "Verify visible labels, heading/error/receipt focus, keyboard, EN/DA 390px layout and automated main-region axe on built source; manual AT/200–400% zoom remains open.",
-      "Verify branch fieldset legends, stable field labels, linked error focus and before-write validation; English/Danish 390px built browser recovery is software evidence, not representative Human or manual AT qualification."
+      "Verify branch fieldset legends, stable field labels, linked error focus and before-write validation; English/Danish 390px built browser recovery is software evidence, not representative Human or manual AT qualification.",
+      "Verify EN/DA labels, keyboard insertion and focus in the real composer, same-row Back/Open-draft and primary action at 390px, automated scoped axe and no horizontal overflow. This is software evidence; manual AT, zoom and representative Human qualification remain open."
     ],
     "securityPrivacy": [
       "Verify no raw prose/configuration in request recovery storage, audit, generic HTTP/crash or background referer diagnostics; current native source and account authority remain required."

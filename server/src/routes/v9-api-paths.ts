@@ -5,6 +5,7 @@ import {
   workflowIntentDraftCommandSchema,
   workflowIntentDraftReceiptSchema,
   workflowExperienceIndexSchema,
+  workflowDraftAuthorsSchema,
   workflowDraftStepReviewSchema, workflowDraftStepCommandSchema, workflowDraftStepReceiptSchema,
   workflowDraftFlowReviewSchema, workflowDraftFlowCommandSchema,
   notificationPreferenceProposalConfirmSchema,
@@ -137,6 +138,8 @@ const write = (
   privateResponse: true,
 });
 export const v9ApiPaths: V9ApiOperation[] = [
+  { ...read(`${company}/workflows/{workflowId}/experience/authors`, "Read current bounded Native conversation author choices for the exact saved draft; selection is not runtime admission or a new grant",
+    workflowDraftAuthorsSchema, z.strictObject({ expectedUserId: z.string().min(1).max(300) })), cacheControl: "no-store", overloaded: true },
   { ...read(`${company}/experience/orchestration/{planId}/control`, "Read minimal current Native administrative Pause/Stop admission independent of rollout and payload Source qualification",
     orchestrationControlViewSchema, z.strictObject({ expectedUserId: z.string().min(1).max(300) })), cacheControl: "no-store" },
   { ...write(`${company}/experience/orchestration/{planId}/control`, "Request one reviewed Native Pause/Stop and its Original durable propagation; receipt does not prove physical Stop or reverse completed effects",

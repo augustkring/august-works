@@ -34,3 +34,15 @@ it("refuses an index for another company and a late aborted read", async () => {
   const controller = new AbortController(); controller.abort();
   await expect(workflowAuthoringExperienceApi.index(company, "owner", controller.signal)).rejects.toThrow();
 });
+it("binds author choices to the current company and workflow and rejects extra authority fields", async () => {
+  const view = { companyId: company, workflowId: receipt.workflowId, draftRevisionId: receipt.draftRevisionId,
+    publishedRevisionId: null, observedAt: receipt.createdAt, enabled: true, coverage: "bounded", choices: [] };
+  const get = vi.spyOn(api, "get").mockResolvedValue(view), post = vi.spyOn(api, "post");
+  expect(await workflowAuthoringExperienceApi.authors(company, receipt.workflowId, "owner&other")).toEqual(view);
+  expect(new URL(get.mock.calls[0]![0], "https://fixture.invalid").searchParams.get("expectedUserId")).toBe("owner&other");
+  expect(get.mock.calls[0]![1]).toMatchObject({ cache: "no-store" }); expect(post).not.toHaveBeenCalled();
+  get.mockResolvedValue({ ...view, workflowId: requestId });
+  await expect(workflowAuthoringExperienceApi.authors(company, receipt.workflowId, "owner")).rejects.toThrow();
+  get.mockResolvedValue({ ...view, grants: [] });
+  await expect(workflowAuthoringExperienceApi.authors(company, receipt.workflowId, "owner")).rejects.toThrow();
+});

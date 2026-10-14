@@ -6,6 +6,7 @@ import { useTranslation } from "react-i18next";
 import { workflowsApi } from "../api/workflows";
 import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
 import { useV9PrivateReadAuthority } from "../hooks/useV9PrivateReadAuthority";
+import { WorkflowAuthoringHandoff } from "../components/WorkflowAuthoringHandoff";
 import { useExperienceHeading } from "../hooks/useExperienceHeading";
 import { WorkflowRequestRecoveryLinks, usePendingWorkflowRequests } from "../components/WorkflowRequestRecoveryLinks";
 import { WorkflowBuilderExperimentalGate } from "../components/WorkflowBuilderExperimentalGate";
@@ -237,7 +238,10 @@ export function WorkflowReview({
               )}
             </h2>
             {current.state === "draft" && <p>{t("workflowDraftSeparate")}</p>}
-            {current.state === "draft" && detail.canEdit && <Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${id}/draft`}>{t("workflowDraftFlow.open")}</Link>}
+            {current.state === "draft" && detail.canEdit && <>
+              <Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${id}/draft`}>{t("workflowDraftFlow.open")}</Link>
+              <WorkflowAuthoringHandoff company={company} principal={principal} workflow={id} />
+            </>}
             {current.state === "draft" &&
               detail.active &&
               detail.comparison && (

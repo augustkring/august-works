@@ -71,7 +71,8 @@
       "Original own-account notification preferences and saved proposal provenance, current verified account/company/source admission, immutable proposal version, baseline hash and exact Human confirmation receipt.",
       "Actual Agent configuration draft creation Activity/run provenance, current conversation generation and creator authority. The bounded proposal projection excludes all current Human-edited names, instructions and private configuration.",
       "Native workflow private authoring run provenance survives discarded revisions, Human edits and publication. Current verified source-owning Human and Original workflow/issue/Agent reads remain required; membership or a request-snapshot administrator flag supplies no private source-sharing grant.",
-      "Current Native agents, verified auth users, company membership and grants; bounded read-only assignment enrichment, with no provider/transport/catalog refresh or execution session."
+      "Current Native agents, verified auth users, company membership and grants; bounded read-only assignment enrichment, with no provider/transport/catalog refresh or execution session.",
+      "Current bounded Native workflow author policy and account/Source/revision ownership; a choice is not an execution grant or runtime qualification."
     ],
     "canonicalWriteOperation": "Review remains read-only; separate explicit lifecycle controls invoke the original native workflow owner (ADR-V9-023).",
     "authorityEffect": "Presentation and drafts cannot grant permissions. Material effects always require current native permissions, approvals and version preconditions.",
@@ -147,10 +148,12 @@
       "Verify one Native draft under concurrency, exact customer catalog pin/revocation, actual Agent journal writer, no Agent/installation/grant effect, refusal of copied private fields, Native low-trust and revoked-grant denial, Human-edit/replay privacy, source/generation withdrawal, late transaction rollback, SDK feature/policy gates and English/Danish current links.",
       "Verify current Agent renaming/removal, real revision change, account un-verification and membership withdrawal, local fixture metadata refusal, Source-event suppression, exact retry/idempotency declarations and the bounded timestamp-sensitive material binding. Complete connector permission-preview details and exact configured input/actor policy qualification remain open.",
       "Verify actual Native tools grant insertion/removal, connection disable, catalog hash drift, another user’s draft invisibility despite claimed administrator, own draft and actual manager visibility, removed connection, no invocation/run effect, Original permission href, exact condition field boundaries and typed values, complete Source withdrawal, and unchanged Native draft on read.",
-      "Verify closed input forms share the same exact review guard as guided editing; padding, hidden fields or config-supplied kind never silently normalize material. Complex task/tool/artifact input and the full inline per-resource permission preview/effective execution policy remain open."
+      "Verify closed input forms share the same exact review guard as guided editing; padding, hidden fields or config-supplied kind never silently normalize material. Complex task/tool/artifact input and the full inline per-resource permission preview/effective execution policy remain open.",
+      "Choose a current named Native author, navigate with only workflow/revision locators and explicitly prepare a localized request in the actual conversation composer. Preserve unsent notes; refuse changed revision, missing current author, disabled/uncertain composer and late private reads. Preparation performs no Send, run, grant or workflow mutation."
     ],
     "accessibility": [
-      "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
+      "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact.",
+      "Verify EN/DA labels, keyboard insertion and focus in the real composer, same-row Back/Open-draft and primary action at 390px, automated scoped axe and no horizontal overflow. This is software evidence; manual AT, zoom and representative Human qualification remain open."
     ],
     "securityPrivacy": [
       "Verify current native grants, membership revocation, account mismatch, foreign-company denial, agent denial, raw-config omission and late-response suppression.",

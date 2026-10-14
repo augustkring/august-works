@@ -11,6 +11,7 @@ import { v9SessionFixture } from "../hooks/v9-session.test-support";
 import { readPendingWorkflowReceipt, retainPendingWorkflowReceipt } from "../lib/pending-workflow-receipts";
 import i18n from "i18next";
 import "../i18n";
+vi.mock("../components/WorkflowAuthoringHandoff", () => ({ WorkflowAuthoringHandoff: () => null }));
 const state = vi.hoisted(() => ({ company: "10000000-0000-4000-8000-000000000001", principal: "workflow-owner", ready: true, epoch: 0, enabled: true }));
 vi.mock("../hooks/useV9CurrentAccount", async importOriginal => ({
   ...await importOriginal<typeof import("../hooks/useV9CurrentAccount")>(),
