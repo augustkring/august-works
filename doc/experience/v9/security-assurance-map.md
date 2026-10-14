@@ -248,3 +248,13 @@ role, authority/qualification, current scope and expiry checks govern display.
 Native participant Source withdrawal refuses this reader like the full receipt
 owner. Explicit synthetic governance/recording/manager fixtures do not qualify
 real Humans, causal business outcomes, production population or hosted access.
+
+
+Forecast cards (ADR-76) reuse Original Source/lineage/purpose/model-profile
+readers. Tenant/revision/version/definition/kind/provider/cadence checks bind
+retained estimates. Unqualified/stale/expired values are withheld; no model
+writer, observation, parallel store, grant or telemetry event is introduced.
+Current ephemeral scope/activity reads and cancellation/withdrawal protect
+private content. Statistical conformance provenance is not company calibration.
+Explicit synthetic chronological test prerequisites are not collected history
+or production predictive-performance evidence.

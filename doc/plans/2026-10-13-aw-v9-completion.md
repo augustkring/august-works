@@ -2097,3 +2097,37 @@ seconds), including Native Source withdrawal and updated singular units.
 The shorter experiment Danish mobile screenshot is inspected. Current UI
 typecheck, token gates, module boundaries and V9 coverage pass exit 0; all
 70 evidence rows and whole-V9/final workspace acceptance remain pending.
+
+### Insights displays retained Native forecast runs — 2026-10-14 (checkpoint 53)
+
+ADR-76/SHELL map another partial V9-044/092 family. Native list/detail/run
+owners retain exact published model, Source, provider and history authority.
+Bounded identity/hash/kind/provider/cadence checks refuse mixed evidence.
+Current scope/activity reads, refetch withdrawal and expiry protect data.
+Registered backtest/software qualification is not predictive accuracy; Native
+baselines gain no invented interval, model intervals claim no population
+calibration, and earlier periods are not recast as pre-event predictions.
+The card previews three periods with actual cutoff/time, estimates and
+limitations. No model writer, observation, publication, new store, telemetry
+or permission is created. Sibling family React keys are now unique.
+
+Three UI/API/directory suites pass 23 cases (9.22 seconds); UI typecheck passes
+exit 0. Actual built forecast/directory browsers pass 2 cases (57.6 seconds):
+Original backtest/publication/run over explicit synthetic chronological history
+prerequisites reused from Native tests; saved baseline value/absent interval,
+unchanged run rows/no frontend writes, EN/DA 390px/no overflow/main axe zero,
+actual Source-hidden 403 and no restored value. The Danish mobile screenshot
+is inspected. These fixture observations are NOT collected production history
+or proof of predictive skill, genuine Human or provider qualification. Source
+privacy checks/calculation owners run without weakening their gates. Server
+typecheck for the new fixture/shared contracts is running. All 70 launch rows
+and R0/whole-V9/final exact-head workspace checks remain pending. No PR/push.
+Server typecheck and token/module/coverage gates pass exit 0. Final forecast
+browser after copy inspection passes 1 case (39.6 seconds); final focused UI
+passes 7 cases. Units are labelled separately from the estimate. Periods that
+already began before recording/cutoff carry an explicit pre-event limitation.
+The frozen checkpoint 46 general test stage finishes: 917 files/17,200 cases
+pass, one runtime-skills teardown case fails, seven files/90 cases skip,
+duration 7,532.43 seconds. That only failure was reproduced and fixed in 48;
+serialized/workspace stages and its full build were not reached. This is not
+a full test pass. A fresh immutable verification run is required.

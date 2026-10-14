@@ -27,13 +27,15 @@ test("insight destinations localize and withdraw during current account reads", 
     await page.goto(`/${company.issuePrefix}/insights`);
     const main = page.getByRole("main"); await expect(main).toHaveCount(1);
     const heading = main.getByRole("heading", { name: "Insights", exact: true });
-    await expect(heading).toBeVisible(); await expect(main.getByRole("link")).toHaveCount(10);
+    await expect(heading).toBeVisible(); await expect(main.getByRole("link")).toHaveCount(11);
     const experiments = main.getByRole("link", { name: "Business experiments", exact: true });
     await expect(experiments).toHaveAttribute("href", `/${company.issuePrefix}/business-experiments`);
     await heading.focus(); await page.keyboard.press("Tab");
     await expect(main.getByRole("link", { name: "Inspect definitions and observations", exact: true })).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(main.getByRole("link", { name: "Review processes and their findings", exact: true })).toBeFocused();
+    await page.keyboard.press("Tab");
+    await expect(main.getByRole("link", { name: "Review forecasts and their source evidence", exact: true })).toBeFocused();
     await page.keyboard.press("Tab");
     await expect(main.getByRole("link", { name: "Review scenarios and their assumptions", exact: true })).toBeFocused();
     await page.keyboard.press("Tab");
@@ -45,7 +47,7 @@ test("insight destinations localize and withdraw during current account reads", 
     await expect.poll(() => release.length).toBeGreaterThan(0);
     await expect(main.getByRole("link")).toHaveCount(0);
     hold = false; release.splice(0).forEach(done => done());
-    await expect(main.getByRole("link")).toHaveCount(10);
+    await expect(main.getByRole("link")).toHaveCount(11);
     await page.getByRole("combobox", { name: "Language", exact: true }).selectOption("da");
     await expect(main.getByRole("heading", { name: "Indsigter", exact: true })).toBeVisible();
     await expect(main.getByRole("link", { name: "Virksomhedseksperimenter", exact: true })).toBeVisible();

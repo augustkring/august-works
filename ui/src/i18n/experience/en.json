@@ -2784,5 +2784,29 @@
       "iterate": "Revise and retest",
       "abstain": "Withhold a conclusion"
     }
+  },
+  "insightForecasts": {
+    "heading": "Recorded forecasts",
+    "boundary": "These retained estimates depend on the declared model and source history. Meeting backtest criteria does not establish future accuracy.",
+    "unavailable": "Forecasts could not be read with your current access. Try again.",
+    "empty": "No published forecast is available in this selection.",
+    "expired": "This forecast evidence has expired. Review current evidence before using it.",
+    "noRun": "No retained run for this published model appears in this selection.",
+    "needsReview": "The forecast is inconclusive or requires revalidation. Its estimates are withheld.",
+    "cutoff": "Input cutoff: {{time}} (UTC)",
+    "recorded": "Calculation recorded at {{time}} (UTC)",
+    "pastPeriods": "Some estimated periods had already begun when this calculation was recorded. Do not treat this as a forecast made before those periods.",
+    "nativeModel": "Native baseline calculation. No prediction interval is available.",
+    "statisticalModel": "Statistical model. Its software provenance does not establish calibration for your company.",
+    "period": "Estimated period: {{from}} to {{until}} (UTC; end excluded)",
+    "value": "Estimate: {{value}} ({{unit}})",
+    "interval": "{{level}}% model interval: {{lower}} to {{upper}} {{unit}}",
+    "intervalBoundary": "Model interval levels do not prove empirical coverage for this population.",
+    "noInterval": "No prediction interval is available.",
+    "morePoints": "More estimated periods are available in the full forecast.",
+    "limitations": "Review declared failure modes and limitations",
+    "moreRuns": "More runs may be available in the forecast view. This selection is not ordered by recency.",
+    "moreForecasts": "More forecasts may be available outside this selection.",
+    "inspect": "Review forecasts and their source evidence"
   }
 }

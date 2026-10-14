@@ -2648,3 +2648,27 @@ and do not authorize a decision or rollout. Scope/activity revisions, fresh
 cancellable reads, refetch withdrawal and expiry govern private content.
 This is partial ExperimentResultCard software and not a qualified business
 trial, representative Human validation or all V9 release acceptance.
+
+
+## ADR-76 — Retained forecast estimates preserve Native provenance and uncertainty
+
+Original forecast list/detail/run GETs supply at most three published models,
+one matching run from each Native twenty-run UUID page and three preview
+periods. Current company/root revision/publication/version/hash, run kind,
+provider engine/profile and contiguous declared UTC cadence must agree. Native
+baselines cannot gain invented intervals. Statistical profile provenance and
+model interval levels are software provenance, not empirical calibration or
+future prediction guarantees. Scope/activity revision keys, fresh cancellable
+reads, refetch withdrawal and expiry protect private content. Qualified zero
+is retained; stale/inconclusive/unqualified/expired estimates are withheld.
+Cutoff, recorded time, estimated periods, unavailable or 80/95 percent model
+intervals, failure modes and limitations are explicit. Native retained period
+estimates can precede cutoff; that is not silently recast as a pre-event
+forecast. Each sibling insight family has a unique scoped React key.
+
+The frontend never runs/backtests/publishes a model or creates observations,
+new forecast snapshots, reader grants or telemetry. Original Source and current
+statistical profile requalification remains authoritative. The built Native
+baseline browser reuses chronologically coherent synthetic history prerequisites
+from existing Native tests, not collected history or a real Human trial. This
+is partial forecast-card software, not prediction, provider or launch validation.

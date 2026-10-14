@@ -12,6 +12,7 @@ import { ExperienceMetricObservations } from "../components/ExperienceMetricObse
 import { ExperienceProcessFindings } from "../components/ExperienceProcessFindings";
 import { ExperienceScenarioComparisons } from "../components/ExperienceScenarioComparisons";
 import { ExperienceExperimentResults } from "../components/ExperienceExperimentResults";
+import { ExperienceForecastResults } from "../components/ExperienceForecastResults";
 const destinations: { feature: V8FeatureKey; href: string; key: string }[] = [
   { feature: "business_metrics_v8", href: "/business-metrics", key: "metrics" },
   {
@@ -67,13 +68,15 @@ export function ExperienceInsights() {
     <div className="space-y-6">
       <h1 ref={heading} tabIndex={-1} className="text-2xl font-semibold">{t("nav.insights")}</h1>
       <p>{t("insightDirectory.intro")}</p>
-      {visible.some(item => item.key === "metrics") && <ExperienceMetricObservations key={scope}
+      {visible.some(item => item.key === "metrics") && <ExperienceMetricObservations key={`${scope}:metrics`}
         companyId={selectedCompanyId} userId={identity.localImplicit ? null : identity.userId} scope={`${scope}:${identity.authorityEpoch}`} />}
-      {visible.some(item => item.key === "process") && <ExperienceProcessFindings key={scope}
+      {visible.some(item => item.key === "process") && <ExperienceProcessFindings key={`${scope}:process`}
         companyId={selectedCompanyId} userId={identity.localImplicit ? null : identity.userId} scope={`${scope}:${identity.authorityEpoch}`} />}
-      {visible.some(item => item.key === "scenarios") && <ExperienceScenarioComparisons key={scope}
+      {visible.some(item => item.key === "forecasts") && <ExperienceForecastResults key={`${scope}:forecasts`}
         companyId={selectedCompanyId} userId={identity.localImplicit ? null : identity.userId} scope={`${scope}:${identity.authorityEpoch}`} />}
-      {visible.some(item => item.key === "experiments") && <ExperienceExperimentResults key={scope}
+      {visible.some(item => item.key === "scenarios") && <ExperienceScenarioComparisons key={`${scope}:scenarios`}
+        companyId={selectedCompanyId} userId={identity.localImplicit ? null : identity.userId} scope={`${scope}:${identity.authorityEpoch}`} />}
+      {visible.some(item => item.key === "experiments") && <ExperienceExperimentResults key={`${scope}:experiments`}
         companyId={selectedCompanyId} userId={identity.localImplicit ? null : identity.userId} scope={`${scope}:${identity.authorityEpoch}`} />}
       {visible.length === 0 ? (
         <p role="status">{t("insightDirectory.unavailable")}</p>

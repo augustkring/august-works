@@ -2784,5 +2784,29 @@
       "iterate": "Revidér og test igen",
       "abstain": "Tilbagehold en konklusion"
     }
+  },
+  "insightForecasts": {
+    "heading": "Gemte prognoser",
+    "boundary": "Disse gemte estimater afhænger af den erklærede model og kildehistorik. Opfyldte backtestkrav fastslår ikke fremtidig præcision.",
+    "unavailable": "Prognoserne kunne ikke læses med din aktuelle adgang. Prøv igen.",
+    "empty": "Ingen udgivet prognose er tilgængelig i dette udvalg.",
+    "expired": "Denne prognoseevidens er udløbet. Gennemgå aktuel evidens, før du bruger den.",
+    "noRun": "Ingen gemt kørsel for denne udgivne model vises i dette udvalg.",
+    "needsReview": "Prognosen er uafklaret eller kræver ny validering. Dens estimater er tilbageholdt.",
+    "cutoff": "Skæringstidspunkt for input: {{time}} (UTC)",
+    "recorded": "Beregning gemt {{time}} (UTC)",
+    "pastPeriods": "Nogle estimerede perioder var allerede begyndt, da denne beregning blev gemt. Betragt ikke dette som en prognose lavet før disse perioder.",
+    "nativeModel": "August Works-baselineberegning. Intet prognoseinterval er tilgængeligt.",
+    "statisticalModel": "Statistisk model. Dens softwareoprindelse fastslår ikke kalibrering for din virksomhed.",
+    "period": "Estimeret periode: {{from}} til {{until}} (UTC; slutpunktet er ikke medregnet)",
+    "value": "Estimat: {{value}} ({{unit}})",
+    "interval": "{{level}} %-modelinterval: {{lower}} til {{upper}} {{unit}}",
+    "intervalBoundary": "Modelintervallets niveau beviser ikke empirisk dækningsgrad for denne population.",
+    "noInterval": "Intet prognoseinterval er tilgængeligt.",
+    "morePoints": "Flere estimerede perioder er tilgængelige i den fulde prognose.",
+    "limitations": "Gennemgå erklærede fejltilfælde og begrænsninger",
+    "moreRuns": "Flere kørsler kan være tilgængelige i prognosevisningen. Dette udvalg er ikke sorteret efter dato.",
+    "moreForecasts": "Flere prognoser kan være tilgængelige uden for dette udvalg.",
+    "inspect": "Gennemgå prognoser og deres kildeevidens"
   }
 }

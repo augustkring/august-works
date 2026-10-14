@@ -718,7 +718,10 @@
         "ui/src/api/insight-experiment-results.ts",
         "packages/shared/src/experience-experiment-results.ts",
         "server/src/services/business-experiments/recording.ts",
-        "server/src/routes/business-experiments.ts"
+        "server/src/routes/business-experiments.ts",
+        "ui/src/components/ExperienceForecastResults.tsx",
+        "ui/src/api/insight-forecast-results.ts",
+        "packages/shared/src/experience-forecast-results.ts"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/shell.json"
