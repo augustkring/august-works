@@ -13,6 +13,7 @@ const types = new Set([
   "core.switch",
   "core.merge",
   "core.parallel",
+  "core.wait",
 ]);
 export function customerWorkflowLaunchReady(
   revision: WorkflowRevision | null,
@@ -62,6 +63,7 @@ export function customerWorkflowInternalGraphReady(
       definition,
     ]),
   );
+  let waitingSeconds = 0;
   const internal = nodes.every((node) => {
     // Transform nodes can invoke governed Optimizer artifact replacements; the
     // closed customer subset must not infer their effective execution from a
@@ -73,6 +75,13 @@ export function customerWorkflowInternalGraphReady(
       (node.retryPolicy && node.retryPolicy.mode !== "none")
     )
       return false;
+    if (node.type === "core.wait") {
+      const config = node.config;
+      if (!config || typeof config !== "object" || Array.isArray(config) || Object.keys(config).length !== 1 ||
+        !("durationSeconds" in config) || typeof config.durationSeconds !== "number" || !Number.isInteger(config.durationSeconds) ||
+        config.durationSeconds < 1 || config.durationSeconds > 60) return false;
+      waitingSeconds += config.durationSeconds;
+    }
     const definition = registry.get(node.type);
     return (
       types.has(node.type) &&
@@ -81,7 +90,7 @@ export function customerWorkflowInternalGraphReady(
       definition.testMode === "safe"
     );
   });
-  if (!internal) return false;
+  if (!internal || waitingSeconds >= deadline) return false;
   // Draft saves admit incomplete topology. Do not offer a ready internal Test
   // for a graph that the native admission owner will refuse before enqueue.
   try {

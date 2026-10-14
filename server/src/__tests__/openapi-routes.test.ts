@@ -1012,6 +1012,13 @@ describe("openapi routes", () => {
     expect(review["x-paperclip-authorization"]).toMatchObject({ actor: "board", currentNativeAuthority: true, companyScoped: true });
     expect(review.parameters.find((item: { name: string }) => item.name === "expectedUserId").required).toBe(true);
     expect(review.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    const flow = spec.paths[`${root}/workflows/{workflowId}/experience/draft-flow`];
+    expect(flow.get.security).toEqual(board); expect(flow.post.security).toEqual(board);
+    expect(flow.get.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    expect(flow.post.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    expect(flow.post.requestBody.content["application/json"].schema.additionalProperties).toBe(false);
+    expect(flow.post.requestBody.content["application/json"].schema.required).toContain("expectedLastNodeId");
+    expect(flow.get.parameters.find((item: { name: string }) => item.name === "expectedUserId").required).toBe(true);
     const publish = spec.paths[`${root}/agent-configuration-drafts/{id}/publish`].post;
     expect(publish.security).toEqual(board);
     expect(publish.responses[422]).toBeDefined();

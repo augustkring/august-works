@@ -108,7 +108,7 @@ afterEach(async () => {
   container?.remove();
   vi.restoreAllMocks();
 });
-async function mount(principal = "member") {
+async function mount(principal = "member", entry = "/") {
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
   client.setQueryData(queryKeys.auth.session, v9SessionFixture(principal));
   vi.spyOn(authApi, "getSession").mockResolvedValue(v9SessionFixture(principal));
@@ -118,7 +118,7 @@ async function mount(principal = "member") {
   await act(async () =>
     root.render(
       <QueryClientProvider client={client}>
-        <MemoryRouter>
+        <MemoryRouter initialEntries={[entry]}>
           <WorkflowReview
             company={data.companyId}
             principal={principal}
@@ -172,6 +172,7 @@ it("keeps active and draft views separate, names unverified policy and only link
     ),
   ).toEqual([
     "/AW/workflows",
+    `/AW/workflows/${data.id}/draft`,
     "#workflow-step-1",
     `/AW/workflows/${data.id}/advanced`,
     `/AW/workflows/${data.id}/runs`,
@@ -348,3 +349,14 @@ it("keeps an unavailable comparison separate from an unchanged-flow result", asy
 });
 
 vi.mock("../components/WorkflowPublicationControls", () => ({ WorkflowPublicationControls: () => null }));
+
+it("returns from editing to the current draft review while preserving the active version as a separate choice", async () => {
+  vi.spyOn(workflowsApi, "experience").mockResolvedValue(data);
+  await mount("member", `/workflows/${data.id}?revision=draft`);
+  await vi.waitFor(() => expect(container.textContent).toContain("Proposed step"));
+  expect(container.textContent).not.toContain("Ask owner");
+  expect(container.querySelector(`a[href$="/workflows/${data.id}/draft"]`)).toBeTruthy();
+  const active = [...container.querySelectorAll("button")].find(button => button.textContent?.includes("Active version 2"))!;
+  expect(active).toBeTruthy(); await act(async () => active.click());
+  expect(container.textContent).toContain("Ask owner");
+});

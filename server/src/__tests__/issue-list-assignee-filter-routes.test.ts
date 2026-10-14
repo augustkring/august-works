@@ -647,6 +647,7 @@ describeEmbeddedPostgres("issue list routes assigneeAgentId filter", () => {
   it.each([
     { referer: "http://localhost:3100/issues?q=do-not-log-this", safePath: "/issues" },
     { referer: "http://localhost:3100/private-company/workflows/private-workflow/draft/steps/do-not-log-this?q=do-not-log-this", safePath: "/:company/workflows/:workflowId/draft/steps/:nodeId" },
+    { referer: "http://localhost:3100/private-company/workflows/private-workflow/draft?q=do-not-log-this", safePath: "/:company/workflows/:workflowId/draft" },
   ])("logs request_storm_detected without private query or draft-step values: $safePath", async ({ referer, safePath }) => {
     const companyId = randomUUID();
     const issueId = randomUUID();

@@ -12,7 +12,7 @@ import { useCompany } from "../context/CompanyContext";
 import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
 import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
 import { Button } from "../components/ui/button";
-import { Link, useParams } from "../lib/router";
+import { Link, useParams, useLocation } from "../lib/router";
 import { WorkflowBuilder } from "./WorkflowBuilder";
 import { WorkflowLifecycleControls } from "../components/WorkflowLifecycleControls";
 import { WorkflowOperations } from "../components/WorkflowOperations";
@@ -87,7 +87,9 @@ export function WorkflowReview({
   const authority = useV9PrivateReadAuthority(principal, true);
   const [epoch, setEpoch] = useState(0);
   const source = useRef(0);
-  const [selected, setSelected] = useState<"active" | "draft">("active");
+  const location = useLocation(), requestedRevision = new URLSearchParams(location.search).get("revision");
+  const [selected, setSelected] = useState<"active" | "draft">(requestedRevision === "draft" ? "draft" : "active");
+  useEffect(() => { if (requestedRevision === "draft" || requestedRevision === "active") setSelected(requestedRevision); }, [requestedRevision]);
   const error = useRef<HTMLDivElement>(null);
   const prefix = ["workflow-experience", company, principal, id];
   const key = [...prefix, authority.epoch, epoch];
@@ -248,6 +250,7 @@ export function WorkflowReview({
               )}
             </h2>
             {current.state === "draft" && <p>{t("workflowDraftSeparate")}</p>}
+            {current.state === "draft" && detail.canEdit && <Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${id}/draft`}>{t("workflowDraftFlow.open")}</Link>}
             {current.state === "draft" &&
               detail.active &&
               detail.comparison && (

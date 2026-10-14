@@ -81,6 +81,7 @@ import { WorkflowBuilder } from "./pages/WorkflowBuilder";
 import { WorkflowEntry } from "./pages/WorkflowReview";
 import { WorkflowRequestReceiptEntry } from "./pages/WorkflowRequestReceipt";
 import { WorkflowDraftStepEntry } from "./pages/WorkflowDraftStep";
+import { WorkflowDraftFlowEntry } from "./pages/WorkflowDraftFlow";
 import { WorkflowRunControlEntry } from "./pages/WorkflowRunControl";
 import { WorkflowRuns } from "./pages/WorkflowRuns";
 import { WorkflowRun } from "./pages/WorkflowRun";
@@ -468,6 +469,7 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
         element={<WorkflowBuilderExperimentalGate><WorkflowsEntry /></WorkflowBuilderExperimentalGate>}
       />
       <Route path="workflows/new" element={<WorkflowDescribeEntry />} />
+      <Route path="workflows/:workflowId/draft" element={<WorkflowDraftFlowEntry />} />
       <Route path="workflows/:workflowId/draft/steps/:nodeId" element={<WorkflowDraftStepEntry />} />
       <Route path="automation-artifacts" element={<AutomationArtifacts />} />
       <Route

@@ -2210,14 +2210,16 @@
       "publication": "udgivelse",
       "launch": "kørsel",
       "lifecycle": "statusændring",
-      "draft_edit": "kladdeændring"
+      "draft_edit": "kladdeændring",
+      "draft_build": "ændring af kladdeflow"
     },
     "recordedKind": {
       "test": "En testanmodning blev accepteret.",
       "publication": "Den gennemgåede revision af arbejdsgangen blev udgivet.",
       "launch": "En anmodning om kørsel blev accepteret.",
       "lifecycle": "Arbejdsgangens statusændring blev registreret.",
-      "draft_edit": "Din kladdeændring blev gemt. Publicering og kørsel kræver deres særskilte kontroller."
+      "draft_edit": "Din kladdeændring blev gemt. Publicering og kørsel kræver deres særskilte kontroller.",
+      "draft_build": "Din ændring af kladdeflowet blev gemt. Publicering og kørsel kræver deres særskilte kontroller."
     },
     "status": {
       "active": "Anmodningen satte arbejdsgangen til aktiv.",
@@ -2307,5 +2309,29 @@
       "true": "Ja",
       "false": "Nej"
     }
+  },
+  "workflowDraftFlow": {
+    "heading": "Opbyg kladdens flow",
+    "open": "Opbyg dette kladdeflow",
+    "empty": "Denne kladde har endnu ingen trin.",
+    "manualBoundary": "Vælg en manuel start for selv at køre workflowet. Tilføj trin, og test og gennemgå kladden før publicering. Brug den avancerede editor til en anden type start.",
+    "manualName": "Start, når jeg kører workflowet",
+    "start": "Tilføj en manuel start",
+    "steps": "Kladdens aktuelle trin",
+    "add": "Tilføj et trin",
+    "kind": "Hvad skal ske som det næste?",
+    "wait": "Vent i et bestemt tidsrum",
+    "approval": "Bed en person om godkendelse",
+    "approvalBoundary": "Dette tilføjer et kontrolpunkt i workflowet. Det giver ikke adgang og erstatter ikke godkendelsen, som en bestemt handling kræver.",
+    "advanced": "Dette flow kræver den avancerede editor for at bevare grene og forbindelser. Du kan stadig redigere enkelte trin fra workflowets oversigt.",
+    "limit": "Dette flow har nået grænsen på 100 trin i denne editor. Gennemgå flowet, før du tilføjer flere.",
+    "remove": "Fjern kladdens sidste trin",
+    "removeBoundary": "Fjern “{{name}}” fra slutningen af denne kladde. Den aktive version beholder sine eksisterende trin.",
+    "review": "Gennemgå og test kladden",
+    "unavailable": "Vi kunne ikke læse kladdens aktuelle flow. Kontroller din konto og redigeringsadgang, og prøv igen.",
+    "deadline": "Maksimal køretid (sekunder)",
+    "deadlineHelp": "Vælg 1 til 60 sekunder til dette første interne flow. Det er en stopgrænse, ikke et skøn over gennemførelsestiden.",
+    "deadlineError": "Angiv et helt antal sekunder fra 1 til 60.",
+    "recordedDeadline": "Køretidsgrænse: {{seconds}} sekunder."
   }
 }

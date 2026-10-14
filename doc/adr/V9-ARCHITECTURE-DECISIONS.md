@@ -1704,3 +1704,51 @@ recovery fixtures pass; they do not qualify real Human or hosted execution.
 
 Full trigger/tool/access editing, flow composition, natural-language graph
 proposals and all remaining V9 qualification stay open in the dated plan.
+
+## ADR-V9-040 — Explicit bounded flow composition uses Native revisions
+
+2026-10-14. An empty described draft can now receive an explicit manual start,
+then waits or Human approval checkpoints through a guided customer page. A
+complete single-path Native graph can append those steps or remove its exact
+last non-trigger node. Conditional/parallel, cyclic, duplicate, dangling and
+oversized shapes keep Advanced, without flattening/truncating the graph.
+Existing nodes/configuration, graph data/settings and active revision remain
+Native-owned. A checkpoint does not grant authority to a subsequent action.
+
+The bounded current review and closed command require actual verified account,
+Native read/edit grants, write role, rollout and current private authoring
+sources. Workflow/draft/publication/update/tail identity is frozen. Original
+updateDraft and its body-free own-request Activity receipt commit together,
+with final source/account checks. No workflow, graph, actor, tool or runtime
+shadow store is introduced. Exact replay survives rollout closure, but Source
+erasure can make its Original journal history unavailable without proving that
+no prior write occurred. Native current-source denial still blocks recreation.
+
+The existing receipt union adds draft_build. Content-free locators are retained
+before the single POST; both draft_build and draft_edit block any further draft
+command while either save is unknown. A same frozen explicit request can still
+replay its Native idempotency key. Foreign/late responses cannot clear it.
+Current source rechecks suppress private DOM; changed draft input requires an
+explicit fresh review. Per-step editing and original test/publication/run
+controls remain their owners. Native workflow HTTP privacy and background
+referer minimization cover the new page.
+
+Migrated Native tests exercise concurrent creation, immutable active separation,
+wait/approval addition, exact tail removal, stale/foreign/viewer denial, rollback
+and private Source erasure. Built actor/session fixtures exercise explicit
+composition and lost acknowledgement, Danish mobile form accessibility and
+rollout-closed original receipt recovery. These are software evidence, not
+real Human, authentication, provider or physical execution qualification.
+Automatic intent-to-graph proposals, actor/tool/access selection, arbitrary
+branch composition, estimates and the remaining V3 implementation stay open.
+
+The initial manual start requires an explicitly chosen 1–60 second Native
+stop limit. It is not silently defaulted or described as a completion estimate.
+The closed customer C0 profile also admits literal Native waits up to 60 seconds
+only when their conservative summed delay is strictly below that limit. Extra
+fields, dynamic durations, delayed retries, child work, models, tools, network,
+Optimizer transforms and privileged checkpoints remain excluded. Original
+timer execution/recovery is used, never a simulation or alternate scheduler.
+A migrated verified-account case observes an actual one-second wait, Original
+recovery to succeeded, the Native delay_elapsed output and an unchanged
+unpublished draft. The Original deadline remains the stop criterion.

@@ -37,6 +37,17 @@ function revision(): WorkflowRevision {
 }
 it("admits the bounded built-in internal subset without declaring completion or verification", () =>
   expect(customerWorkflowLaunchReady(revision())).toBe(true));
+it("admits only literal internal timers fitting strictly within the explicit deadline", () => {
+  const value = revision(); value.state = "draft";
+  value.graph.nodes.push({ id: "wait", name: "Wait", type: "core.wait", config: { durationSeconds: 1 }, position: { x: 0, y: 1 } });
+  value.graph.edges.push({ id: "next", source: "start", target: "wait" });
+  expect(customerWorkflowTestReady(value)).toBe(true);
+  value.graph.settings.totalDeadlineSeconds = 1; expect(customerWorkflowTestReady(value)).toBe(false);
+  value.graph.settings.totalDeadlineSeconds = 60;
+  for (const config of [{ durationSeconds: "{{trigger.duration}}" }, { durationSeconds: 61 }, { durationSeconds: 1, artifactId: "hidden" }]) {
+    value.graph.nodes[1].config = config; expect(customerWorkflowTestReady(value)).toBe(false);
+  }
+});
 it("requires both native condition paths before reporting an unpublished internal test ready", () => {
   const value = revision();
   value.state = "draft";

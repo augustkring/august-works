@@ -1177,9 +1177,18 @@
       },
       "criticality": "C3",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/WorkflowDraftFlow.tsx",
+        "ui/src/api/workflow-draft-flow.ts",
+        "server/src/services/workflows/workflow-customer-draft-flow.ts"
+      ],
+      "evidenceRefs": [
+        "server/src/__tests__/v9-workflow-draft-flow.integration.test.ts",
+        "ui/src/pages/WorkflowDraftFlow.test.tsx",
+        "tests/e2e/aw-v9-workflow-draft-step.spec.ts"
+      ],
+      "contractPath": "doc/experience/v9/contracts/workflow-draft.json"
     },
     {
       "screenId": "WORKFLOW-REVIEW",

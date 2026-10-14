@@ -12,6 +12,7 @@ import { workflowService } from "../services/workflows/workflow-service.js";
 import { workflowExecutorService } from "../services/workflows/workflow-executor.js";
 import { lockMemoryPrivacy, purgeDerivedWorkflowMemory } from "../services/memory/memory-privacy.js";
 import { lockAnalyticalCompany } from "../services/analytical-privacy.js";
+import { workflowCustomerDraftFlow } from "../services/workflows/workflow-customer-draft-flow.js";
 
 describe.sequential("Original workflow private authoring copy owner", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>;
@@ -95,6 +96,22 @@ describe.sequential("Original workflow private authoring copy owner", () => {
     expect((await workflowService(db).list(f.home, f.actor)).map(item => item.id)).toContain(created.id);
     expect(await workflowService(db).list(f.home)).toEqual([]);
     await expect(workflowService(db).getDetail(f.home, created.id)).rejects.toMatchObject({ status: 403 });
+  });
+  it("keeps private authoring sources authoritative for guided flow composition and its historical receipt", async () => {
+    await instanceSettingsService(db).updateExperimental({ experience_projection_v9: true, progressive_shell_v9: true });
+    const created = await authored(), service = workflowCustomerDraftFlow(db), view = await service.review(f.home, created.id, f.actor);
+    const input = { requestId: randomUUID(), expectedWorkflowId: created.id, expectedDraftRevisionId: view.draftRevisionId,
+      expectedPublishedRevisionId: view.publishedRevisionId, expectedUpdatedAt: view.updatedAt, expectedLastNodeId: null,
+      operation: { kind: "start_manual" as const, deadlineSeconds: 30, name: "PRIVATE start" } };
+    const saved = await service.save(f.home, created.id, input, f.actor);
+    expect(await service.receipt(f.home, created.id, input.requestId, f.actor)).toEqual(saved);
+    const [stored] = await db.select().from(workflows).where(eq(workflows.id, created.id)); expect(stored.authoringSourceRunIds).toEqual([origin.id]);
+    await eraseSource();
+    await expect(service.review(f.home, created.id, f.actor)).rejects.toMatchObject({ status: 403 });
+    // Original privacy erasure also removes its request locator from derived
+    // Activity details. Unavailable history is not evidence of no prior write.
+    await expect(service.receipt(f.home, created.id, input.requestId, f.actor)).rejects.toMatchObject({ status: 404 });
+    await expect(service.save(f.home, created.id, input, f.actor)).rejects.toMatchObject({ status: 403 });
   });
   it("requires the current owned source and verified account even for an instance-admin request snapshot", async () => {
     const created = await authored();

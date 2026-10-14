@@ -15,6 +15,7 @@ function save(rows: WorkflowRequestLocator[]) {
 }
 const same = (row: WorkflowRequestLocator, companyId: string, principal: string, workflowId: string, kind?: WorkflowRequestKind) =>
   row.companyId === companyId && row.principal === principal && row.workflowId === workflowId && (kind === undefined || row.kind === kind);
+export const isWorkflowDraftRequest = (kind: WorkflowRequestKind) => kind === "draft_edit" || kind === "draft_build";
 export function pendingWorkflowRequests(companyId: string, principal: string, workflowId: string) {
   return load().filter(row => same(row, companyId, principal, workflowId));
 }
@@ -23,9 +24,10 @@ export function pendingWorkflowRequests(companyId: string, principal: string, wo
  * replace an unconfirmed request with a fresh identity after reload. */
 export function retainWorkflowRequest(raw: WorkflowRequestLocator) {
   const row = workflowRequestLocatorSchema.parse(raw), rows = load();
-  const prior = rows.find(value => same(value, row.companyId, row.principal, row.workflowId, row.kind));
+  const prior = rows.find(value => same(value, row.companyId, row.principal, row.workflowId) &&
+    (value.kind === row.kind || isWorkflowDraftRequest(value.kind) && isWorkflowDraftRequest(row.kind)));
   if (prior) {
-    if (prior.requestId !== row.requestId) throw new Error("The Original workflow request still needs confirmation");
+    if (prior.kind !== row.kind || prior.requestId !== row.requestId) throw new Error("The Original workflow request still needs confirmation");
     return;
   }
   save([...rows, row]);

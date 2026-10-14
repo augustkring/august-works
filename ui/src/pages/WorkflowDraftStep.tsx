@@ -67,7 +67,7 @@ export function WorkflowDraftStep({ company, principal, workflow, node }: { comp
     // authority. Confirmation still requires the scoped Original HTTP receipt.
     const details = event.payload.details as { requestId?: unknown } | undefined;
     if (event.type === "activity.logged" && event.payload.action === "workflow.customer_draft_step_saved" &&
-      event.payload.actorId === principal && details?.requestId === inFlight.current) return;
+      event.payload.entityType === "workflow" && event.payload.entityId === workflow && event.payload.actorId === principal && details?.requestId === inFlight.current) return;
     if (event.type === "analytical.context.access_lost" || /workflow|membership|permission|role|privacy|erased|deleted|withdraw/i.test(`${event.payload.entityType}:${event.payload.action}`)) { setSaved(null); refresh(); }
   });
   const mutation = useMutation({ retry: false, gcTime: 0,
@@ -90,7 +90,7 @@ export function WorkflowDraftStep({ company, principal, workflow, node }: { comp
   useEffect(() => { if (Object.keys(fieldErrors).length && current()) error.current?.focus(); }, [fieldErrors]);
   function submit(event: FormEvent) {
     event.preventDefault();
-    if (!view || !form || sourceKey(view) !== form.source || !locator.ready || locator.failed || locator.pending || mutation.isPending || !current()) return;
+    if (!view || !form || sourceKey(view) !== form.source || !locator.ready || locator.failed || locator.blockedBy || mutation.isPending || !current()) return;
     const parsed = workflowDraftStepCommandSchema.safeParse({ requestId: crypto.randomUUID(), expectedWorkflowId: workflow,
       expectedDraftRevisionId: view.draftRevisionId, expectedPublishedRevisionId: view.publishedRevisionId, expectedUpdatedAt: view.updatedAt,
       expectedNodeId: node, expectedNodeType: view.nodeType, name: form.name,
@@ -115,14 +115,14 @@ export function WorkflowDraftStep({ company, principal, workflow, node }: { comp
   if (!current()) return <p role="status">{t("loading")}</p>;
   const stale = !!view && !!form && sourceKey(view) !== form.source;
   return <div className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
-    <Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${workflow}`}>{t("workflowBack")}</Link>
+    <Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${workflow}?revision=draft`}>{t("workflowRequestRecovery.back")}</Link>
     <h1 ref={heading} tabIndex={-1} className="text-2xl font-semibold">{t("workflowDraftStep.heading")}</h1>
     <p>{t("workflowDraftStep.boundary")}</p>
     {saved && fresh && <p role="status">{t(saved.changed ? "workflowDraftStep.saved" : "workflowDraftStep.unchanged", { version: saved.version })}</p>}
     {locator.failed && <p role="alert">{t("workflowRequestRecovery.storageFailed")}</p>}
-    {locator.pending && !mutation.isPending && <section className="space-y-3" aria-label={t("workflowRequestRecovery.pending")}>
+    {locator.blockedBy && !mutation.isPending && <section className="space-y-3" aria-label={t("workflowRequestRecovery.pending")}>
       <p role="status">{t("workflowDraftStep.unconfirmed")}</p>
-      <Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${workflow}/requests/draft_edit/${locator.pending}`}>{t("workflowRequestRecovery.open")}</Link>
+      <Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${workflow}/requests/${locator.blockedBy.kind}/${locator.blockedBy.requestId}`}>{t("workflowRequestRecovery.open")}</Link>
     </section>}
     {query.isError ? <div role="alert" className="space-y-3"><p>{t("workflowDraftStep.unavailable")}</p><Button className="min-h-11" onClick={refresh}>{t("tryAgain")}</Button></div>
       : !view || !form ? <p role="status">{t("loading")}</p> : <form onSubmit={submit} noValidate className="space-y-4">
@@ -132,7 +132,7 @@ export function WorkflowDraftStep({ company, principal, workflow, node }: { comp
           {invalid && <ul className="list-disc pl-5">{Object.entries(fieldErrors).map(([field, message]) => <li key={field}><a className="inline-flex min-h-11 items-center underline" href={`#draft-step-${field}`} onClick={event => { event.preventDefault(); document.getElementById(`draft-step-${field}`)?.focus(); }}>{message}</a></li>)}</ul>}
           {stale && <Button type="button" className="min-h-11" onClick={() => { initialize(view); setInvalid(false); setFieldErrors({}); mutation.reset(); }}>{t("workflowDraftStep.reviewLatest")}</Button>}
         </div>}
-        <fieldset disabled={mutation.isPending || !!locator.pending || locator.failed || stale} className="space-y-4">
+        <fieldset disabled={mutation.isPending || !!locator.blockedBy || locator.failed || stale} className="space-y-4">
           <label className="block space-y-2"><span id="draft-step-name-label">{t("workflowDraftStep.name")}</span><Input {...fieldProps("name")} className="min-h-11" required maxLength={200} value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} />{fieldError("name")}</label>
           {view.configuration.kind === "wait" && <label className="block space-y-2"><span id="draft-step-duration-label">{t("workflowDraftStep.duration")}</span>
             <Input {...fieldProps("duration")} className="min-h-11" required type="number" min={1} max={604800} step={1} value={form.duration} onChange={event => setForm({ ...form, duration: event.target.value })} />{fieldError("duration")}</label>}
@@ -162,8 +162,8 @@ export function WorkflowDraftStep({ company, principal, workflow, node }: { comp
             <Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${workflow}/advanced?${new URLSearchParams({ node })}`}>{t("workflowEditDraft")}</Link>
           </div>}
           <div className="flex flex-wrap items-center justify-between gap-3">
-            <Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${workflow}`}>{t("workflowDraftStep.cancel")}</Link>
-            <Button type="submit" className="min-h-11" disabled={!locator.ready || !!locator.pending || locator.failed || stale || mutation.isPending}>{t(mutation.isPending ? "workflowDraftStep.saving" : "workflowDraftStep.save")}</Button>
+            <Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${workflow}?revision=draft`}>{t("workflowDraftStep.cancel")}</Link>
+            <Button type="submit" className="min-h-11" disabled={!locator.ready || !!locator.blockedBy || locator.failed || stale || mutation.isPending}>{t(mutation.isPending ? "workflowDraftStep.saving" : "workflowDraftStep.save")}</Button>
           </div>
         </fieldset>
       </form>}

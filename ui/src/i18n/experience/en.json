@@ -2210,14 +2210,16 @@
       "publication": "publication",
       "launch": "run",
       "lifecycle": "status change",
-      "draft_edit": "draft change"
+      "draft_edit": "draft change",
+      "draft_build": "draft flow change"
     },
     "recordedKind": {
       "test": "A workflow test was admitted.",
       "publication": "The reviewed workflow revision was published.",
       "launch": "A workflow run was admitted.",
       "lifecycle": "The workflow status change was recorded.",
-      "draft_edit": "Your draft change was saved. Publication and execution require their separate controls."
+      "draft_edit": "Your draft change was saved. Publication and execution require their separate controls.",
+      "draft_build": "Your draft flow change was saved. Publication and execution require their separate controls."
     },
     "status": {
       "active": "This request set the workflow to active.",
@@ -2307,5 +2309,29 @@
       "true": "Yes",
       "false": "No"
     }
+  },
+  "workflowDraftFlow": {
+    "heading": "Build the draft flow",
+    "open": "Build this draft flow",
+    "empty": "This draft has no steps yet.",
+    "manualBoundary": "Choose a manual start to run the workflow yourself. Add steps, then test and review before publishing. For another kind of start, use the Advanced editor.",
+    "manualName": "Start when I run the workflow",
+    "start": "Add a manual start",
+    "steps": "Current draft steps",
+    "add": "Add a step",
+    "kind": "What should happen next?",
+    "wait": "Wait for a set time",
+    "approval": "Ask a person to approve",
+    "approvalBoundary": "This adds a workflow checkpoint. It does not grant access or replace the approval required for a particular action.",
+    "advanced": "This flow needs the Advanced editor to preserve its branches and connections. You can still edit individual steps from the workflow review.",
+    "limit": "This guided flow has reached its limit of 100 steps. Review the flow before adding more.",
+    "remove": "Remove the last draft step",
+    "removeBoundary": "Remove “{{name}}” from the end of this draft. The active version keeps its existing steps.",
+    "review": "Review and test the draft",
+    "unavailable": "We couldn’t read the current draft flow. Check your account and edit access, then try again.",
+    "deadline": "Maximum run time (seconds)",
+    "deadlineHelp": "Choose 1 to 60 seconds for this initial internal flow. This is a stop limit, not an estimate of completion time.",
+    "deadlineError": "Enter a whole number from 1 to 60 seconds.",
+    "recordedDeadline": "Run time limit: {{seconds}} seconds."
   }
 }

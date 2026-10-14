@@ -29,15 +29,16 @@
     ],
     "displayedState": [
       "Exact current draft/revision/update identity and selected Native node",
-      "Full current node name; wait duration or approval summary/consequence when their Original strict configuration is completely supported",
+      "Full current node name; complete supported wait/approval or round-trippable guided condition comparison. Unknown configurations remain Advanced.",
       "Other configuration stays with the selected Native Advanced editor; name-only edits preserve inputs, retries, conditions, branches and private config",
       "Original own-request save receipt is historical; publication and execution remain separate"
     ]
   },
   "inputs": [
-    "Step name, 1\u2013200 readable Unicode characters",
-    "Wait duration, whole seconds 1\u2013604800",
-    "Approval summary up to 1000 and consequence up to 2000 readable characters"
+    "Step name, 1–200 readable Unicode characters",
+    "Wait duration, whole seconds 1–604800",
+    "Approval summary up to 1000 and consequence up to 2000 readable characters",
+    "Guided condition source, exact 1–8 field levels, comparator and explicit text/finite-number/boolean/null literal"
   ],
   "actions": {
     "primary": {
@@ -84,7 +85,7 @@
     "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
     "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
     "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
-    "targetSize": "Custom frequent and primary controls target at least 44 \u00d7 44 CSS px.",
+    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
     "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
     "reducedMotion": "No essential animated transition or moving progress indicator.",
     "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
@@ -123,7 +124,7 @@
       "Full trigger/graph/condition/tool/access/approval-policy editing, conversation graph proposals, broader test modes and remaining lifecycle qualification stay open."
     ],
     "accessibility": [
-      "Verify visible labels, heading/error/receipt focus, keyboard, EN/DA 390px layout and automated main-region axe on built source; manual AT/200\u2013400% zoom remains open."
+      "Verify visible labels, heading/error/receipt focus, keyboard, EN/DA 390px layout and automated main-region axe on built source; manual AT/200–400% zoom remains open."
     ],
     "securityPrivacy": [
       "Verify no raw prose/configuration in request recovery storage, audit, generic HTTP/crash or background referer diagnostics; current native source and account authority remain required."

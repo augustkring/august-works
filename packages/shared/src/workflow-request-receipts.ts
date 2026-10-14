@@ -5,7 +5,7 @@ import { workflowLaunchReceiptSchema } from "./workflow-launch.js";
 import { workflowLifecycleReceiptSchema } from "./workflow-lifecycle.js";
 import { workflowDraftStepReceiptSchema } from "./workflow-draft-edit.js";
 
-export const workflowRequestKindSchema = z.enum(["test", "publication", "launch", "lifecycle", "draft_edit"]);
+export const workflowRequestKindSchema = z.enum(["test", "publication", "launch", "lifecycle", "draft_edit", "draft_build"]);
 export type WorkflowRequestKind = z.infer<typeof workflowRequestKindSchema>;
 /** Historical Original admission only. There is no claim of current state,
  * completed execution, physical propagation or independent verification. */
@@ -15,6 +15,7 @@ export const workflowRequestReceiptSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("launch"), receipt: workflowLaunchReceiptSchema }),
   z.strictObject({ kind: z.literal("lifecycle"), receipt: workflowLifecycleReceiptSchema }),
   z.strictObject({ kind: z.literal("draft_edit"), receipt: workflowDraftStepReceiptSchema }),
+  z.strictObject({ kind: z.literal("draft_build"), receipt: workflowDraftStepReceiptSchema }),
 ]);
 export type WorkflowRequestReceipt = z.infer<typeof workflowRequestReceiptSchema>;
 export const workflowRequestLocatorSchema = z.strictObject({ companyId: z.uuid(), workflowId: z.uuid(),

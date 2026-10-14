@@ -3224,8 +3224,8 @@ function issueListClientIdentity(req: Request) {
 function safeRefererPath(req: Request): string | null {
   const referer = req.header("referer");
   if (!referer) return null;
-  const privateEditorPath = (pathname: string) => /(?:^|\/)workflows\/[^/]+\/draft\/steps(?:\/|$)/i.test(pathname)
-    ? "/:company/workflows/:workflowId/draft/steps/:nodeId" : pathname;
+  const privateEditorPath = (pathname: string) => /(?:^|\/)workflows\/[^/]+\/draft(?:\/|$)/i.test(pathname)
+    ? /\/draft\/steps(?:\/|$)/i.test(pathname) ? "/:company/workflows/:workflowId/draft/steps/:nodeId" : "/:company/workflows/:workflowId/draft" : pathname;
   try {
     return privateEditorPath(new URL(referer).pathname);
   } catch {

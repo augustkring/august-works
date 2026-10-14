@@ -495,3 +495,75 @@ repeated after label polish. The first chained module/coverage invocation used
 the system pnpm after its first command and failed before module installation;
 the corrected run retains the project toolchain for all commands. No immutable
 full-scope test qualification is claimed.
+
+### Explicit Native flow composition — 2026-10-14
+
+The guided draft page now connects the empty described draft to explicit manual
+start, waits and approval checkpoints. It appends to complete single paths and
+removes only the current last non-trigger step. Branched/conditional/parallel
+or malformed/oversize flow shapes keep Advanced without flattening. Native
+revision, current grants/Source, immutable active, test/publication/execution
+and original Activity journal stay authoritative. No runtime or grant is made.
+
+Both kinds of unknown draft save now block further draft mutations, including
+cross-editor navigation. Only bounded scoped request identity is persisted.
+Current account/Source rechecks hide previous private DOM, stale drafts require
+explicit review, and final authority changes roll back revision and receipt.
+OpenAPI now matches the required strict current-account query for both editors;
+background diagnostic referers also minimize the flow editor path.
+
+The initial flow/step/client/Native group passes 20 cases in four suites. The
+current private-source/OpenAPI group passes 33 cases in two suites. The earlier
+fixture used a nonexistent erasure helper; correction then exposed that Native
+privacy also clears the Activity request locator. The fixture now expects
+unavailable historical receipt (404), and current-source read/replay remain
+denied. The first OpenAPI test revealed an optional-account documentation
+mismatch, now corrected to the actual strict controller. Production source and
+authority fences were preserved.
+
+The built wait and condition tests pass on the flow-integrated artifact. The
+new composition browser initially reached lost-save recovery but waited for a
+misspelled Danish link label; the corrected exact label run passes (14 seconds
+test, 49.8 seconds total). It uses actual migrated Native HTTP/revision/journal
+owners with a controlled verified actor/session: manual start, wait, immutable
+active baseline, explicit approval addition, deliberate lost response, exactly
+three intended POSTs, closed-rollout receipt GET, focused confirmation, cleared
+locator, Danish 390px form and zero automated main-region axe violations. The
+later classifier/event-identity polish requires integrated final qualification.
+
+Full natural-language graph proposals, actor/tool/access/branch composition,
+cost/capacity estimates, broader test modes and remaining V9 code/evidence are
+still open. Final immutable whole-suite checks and real Human/host/provider
+qualification have not passed. This is a further local checkpoint, not PR-ready
+completion of the full brief.
+
+Further flow review found that a new manual draft lacked the explicit deadline
+required by Native internal testing. The page now requires a chosen 1–60 second
+stop limit before saving the manual start, and shows the recorded limit without
+claiming an estimate. Literal Native waits have a bounded C0 profile only when
+their summed delay is strictly below that limit; hidden/dynamic config and all
+non-C0 effects remain refused. Test/Run continue through the Original admission
+and timer owners. Navigation back from either editor selects the current draft
+review instead of silently switching to active; active remains a separate view.
+
+The integrated deadline/test/retained-control/UI group passes 78 of 79 cases;
+the sole failure was a fixture reading a nonexistent step output property after
+observing the actual timer finish. The corrected fixture reads Native outputJson
+by the immutable graph’s exact step ID. Its follow-up result and final integrated
+checks are recorded below; the earlier failure is not discarded or relabeled.
+
+The corrected exact Native flow/timer suite passes all five cases, including
+actual waiting → succeeded through Original recovery and unchanged unpublished
+graph. All three built wait/condition/composition browser cases pass on the
+current application Source (51.5 seconds overall), including the explicit
+deadline field and the current draft-navigation/event-identity guards. Full
+recursive types pass. Token, module and all 70 source-coverage gates pass; those
+coverage rows still remain pending complete implementation/release evidence.
+The full checkpoint build and immutable whole-suite run remain separate checks.
+
+The full checkpoint workspace build now passes, including Native Rust/protocol/
+semantic-contract/parity safeguards and CLI. The application Source remained
+unchanged during recursive types, the final three-case browser run and build.
+GitHub master and the existing V9 draft branch still match the inspected V8 and
+5dc6bce6 base, respectively; no remote update, push or PR was made. Whole-scope
+completion and an immutable full test:run pass remain open.

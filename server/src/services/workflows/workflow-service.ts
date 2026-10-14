@@ -223,6 +223,10 @@ export function workflowService(db: Db) {
         const { workflowCustomerDraftEdit } = await import("./workflow-customer-draft-edit.js");
         return workflowRequestReceiptSchema.parse({ kind, receipt: await workflowCustomerDraftEdit(db).receipt(companyId, workflowId, requestId, authority) });
       }
+      if (kind === "draft_build") {
+        const { workflowCustomerDraftFlow } = await import("./workflow-customer-draft-flow.js");
+        return workflowRequestReceiptSchema.parse({ kind, receipt: await workflowCustomerDraftFlow(db).receipt(companyId, workflowId, requestId, authority) });
+      }
       return db.transaction(async raw => {
         const tx = raw as unknown as Db;
         await lockCustomerWorkflowReceiptAuthority(tx, companyId, authority,

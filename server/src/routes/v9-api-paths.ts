@@ -6,6 +6,7 @@ import {
   workflowIntentDraftReceiptSchema,
   workflowExperienceIndexSchema,
   workflowDraftStepReviewSchema, workflowDraftStepCommandSchema, workflowDraftStepReceiptSchema,
+  workflowDraftFlowReviewSchema, workflowDraftFlowCommandSchema,
   notificationPreferenceProposalConfirmSchema,
   notificationPreferenceProposalViewSchema,
   conversationAuthoringViewSchema,
@@ -101,6 +102,7 @@ const drafts = `${company}/agent-configuration-drafts`;
 const feedback = `${company}/customer-feedback`;
 const internal = "/api/internal/customer-feedback/{companyId}";
 const account = z.object({ expectedUserId: z.string().optional() });
+const draftAccount = z.strictObject({ expectedUserId: z.string().min(1).max(300) });
 const page = account.extend({ before: z.uuid().optional() });
 const read = (
   path: string,
@@ -190,8 +192,10 @@ export const v9ApiPaths: V9ApiOperation[] = [
   { ...write(`${company}/workflow-runs/{runId}/experience/retained-stop`, "Request Original retained run cancellation with reviewed identity/version and completed-effects acknowledgement; the Original cancellation-only reconciler owns physical propagation", workflowStopCommandSchema, workflowStopReceiptSchema), query: account },
   read(`${company}/workflow-runs/{runId}/experience/retained-stop-requests/{requestId}`, "Read only the exact Original own-request Stop admission without repeating cancellation or claiming physical completion", workflowStopReceiptSchema, account),
   read(`${company}/workflows/{workflowId}/experience/requests/{kind}/{requestId}`, "Read only the exact Original own-account workflow request receipt with current Native permission and retained Source checks; rollout withdrawal cannot replay a write", workflowRequestReceiptSchema, account),
-  read(`${company}/workflows/{workflowId}/experience/draft-steps/{nodeId}`, "Review an exact current Native draft step for explicit guided editing; private Source, verified account and current edit authority remain required", workflowDraftStepReviewSchema, account),
-  { ...write(`${company}/workflows/{workflowId}/experience/draft-steps`, "Save one exact Native draft step and its own request receipt atomically; immutable active revisions, publication and execution remain separately governed", workflowDraftStepCommandSchema, workflowDraftStepReceiptSchema), query: account },
+  read(`${company}/workflows/{workflowId}/experience/draft-steps/{nodeId}`, "Review an exact current Native draft step for explicit guided editing; private Source, verified account and current edit authority remain required", workflowDraftStepReviewSchema, draftAccount),
+  read(`${company}/workflows/{workflowId}/experience/draft-flow`, "Review the complete current Native single-path draft for bounded composition; branched flows keep Advanced, private Source and current account/edit authority remain required", workflowDraftFlowReviewSchema, draftAccount),
+  { ...write(`${company}/workflows/{workflowId}/experience/draft-flow`, "Compose an explicit Native manual/wait/approval draft step or remove its exact last step, with atomic Original revision and request receipt; no publication, execution or grants", workflowDraftFlowCommandSchema, workflowDraftStepReceiptSchema), query: draftAccount },
+  { ...write(`${company}/workflows/{workflowId}/experience/draft-steps`, "Save one exact Native draft step and its own request receipt atomically; immutable active revisions, publication and execution remain separately governed", workflowDraftStepCommandSchema, workflowDraftStepReceiptSchema), query: draftAccount },
   { ...write(`${company}/workflows/{workflowId}/experience/publication`, "Publish the exact reviewed native internal draft after its bound test; recover the immutable original publication receipt", workflowPublicationCommandSchema, workflowPublicationReceiptSchema), query: account },
   read(`${company}/agents/{agentId}/experience/pause-review`, "Review current pause source under explicit Agent configuration authority", agentPauseReviewSchema, account),
   read(`${company}/agents/{agentId}/experience/pause-requests/{requestId}`, "Read this human's Original pause receipt; no cancellation retry", agentPauseReceiptSchema.nullable(), account),
