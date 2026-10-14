@@ -41,7 +41,9 @@
       "Saved notification proposals use current owned conversation provenance and show pending/applied/discarded state. The user explicitly opens the actual account proposal, reviews category/email/delivery/timezone/quiet hours/digest and the consequence across companies, then confirms its current version and account baseline. Unknown confirmation responses permit only current reads and cannot automatically resubmit writes.",
       "Conversation setup proposals show the actual Native draft kind, current version/state and exact editor link. Historical creation created no Agent, installation, runtime or authority; the current setup owner records any later explicit Human preparation or activation. Older server coverage remains unavailable.",
       "Closed per-step executor/input-source/approval/access/idempotency declarations from the Original registry; exact valid Native delay and declared maximum attempt count. These declarations do not establish a current execution grant.",
-      "Selected Agent names are read separately through current Native agent:read and verified company membership, bound to the exact current revision and private Source. Missing or unreadable assignments remain unavailable. Agent/tool/connection events withdraw cached private review data."
+      "Selected Agent names are read separately through current Native agent:read and verified company membership, bound to the exact current revision and private Source. Missing or unreadable assignments remain unavailable. Agent/tool/connection events withdraw cached private review data.",
+      "Current review exposes exact closed Native condition fields, typed literals and operator, valid literal wait, and exact approval summary/consequence. Non-representable inputs stay Advanced; historical/conversation flow previews never receive these private bodies.",
+      "At the selected connector step: visible Native connection/tool names, missing current-account tools permission, disabled connection, catalog drift, unavailable/hidden state and the exact Original /apps/:connectionId/permissions link. A current company tools grant is not a connection/resource/approval execution grant."
     ]
   },
   "inputs": [],
@@ -112,11 +114,12 @@
     "dataShown": [
       "Current human/company-authorized workflow name and description",
       "Allowlisted native revision/step/connection declarations only",
-      "The selected Agent name only after a current separate Native read; input kinds and valid literal delay, never raw objectives, tool inputs, credentials, recipients or raw schemas."
+      "The selected Agent name only after a current separate Native read; input kinds and valid literal delay, never raw objectives, tool inputs, credentials, recipients or raw schemas.",
+      "Purpose-specific current closed condition/approval material and selected visible connection/tool metadata; current verified readers only, with the retained Native local-operator compatibility boundary stated separately."
     ],
     "dataCollected": [],
     "sensitiveFields": [
-      "Native graph configuration, prompts, credentials, inputs, schemas, variables, raw assignment IDs and results are excluded from this projection",
+      "Native graph configuration, prompts, credentials, arbitrary inputs, raw schemas, variables, raw assignment IDs and results are excluded from this projection",
       "Private authoring source run IDs are internal Native provenance and are excluded from public workflow details. Lists omit unavailable private owners; Source account/run/permission checks repeat before return."
     ],
     "loggingConstraints": "Purpose-separated workflow-experience namespace for success and rejected requests; generic logs omit account query strings, workflow/customer prose and raw errors."
@@ -141,7 +144,9 @@
       "Verify actual SDK routine draft discovery/invocation, exact replay without duplicate revisions, no target/schedule/run, later Human version distinction, source erasure and restored-payload guards, current private conversation previews and EN/DA Original links. No software fixture supplies runtime or Human usability qualification.",
       "Verify actual SDK Foundation proposal creation and exact replay, approved-base conflict, current Human/Agent read/propose authority, source and generation withdrawal, no canonical mutation, separate Human accept/approve, promoted and later edited revision provenance, late rollback, physical erasure/restore guards, English/Danish current review metadata and exact domain links.",
       "Verify one Native draft under concurrency, exact customer catalog pin/revocation, actual Agent journal writer, no Agent/installation/grant effect, refusal of copied private fields, Native low-trust and revoked-grant denial, Human-edit/replay privacy, source/generation withdrawal, late transaction rollback, SDK feature/policy gates and English/Danish current links.",
-      "Verify current Agent renaming/removal, real revision change, account un-verification and membership withdrawal, local fixture metadata refusal, Source-event suppression, exact retry/idempotency declarations and the bounded timestamp-sensitive material binding. Complete connector permission-preview details and exact configured input/actor policy qualification remain open."
+      "Verify current Agent renaming/removal, real revision change, account un-verification and membership withdrawal, local fixture metadata refusal, Source-event suppression, exact retry/idempotency declarations and the bounded timestamp-sensitive material binding. Complete connector permission-preview details and exact configured input/actor policy qualification remain open.",
+      "Verify actual Native tools grant insertion/removal, connection disable, catalog hash drift, another user’s draft invisibility despite claimed administrator, own draft and actual manager visibility, removed connection, no invocation/run effect, Original permission href, exact condition field boundaries and typed values, complete Source withdrawal, and unchanged Native draft on read.",
+      "Verify closed input forms share the same exact review guard as guided editing; padding, hidden fields or config-supplied kind never silently normalize material. Complex task/tool/artifact input and the full inline per-resource permission preview/effective execution policy remain open."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."

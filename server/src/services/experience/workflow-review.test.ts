@@ -2,6 +2,7 @@ import { expect, it } from "vitest";
 import type { WorkflowDetail, WorkflowGraphV1 } from "@paperclipai/shared";
 import { workflowNodeDefinitions } from "../workflows/workflow-node-registry.js";
 import { workflowReview } from "./workflow-review.js";
+import { projectWorkflowRevisionFlow } from "./workflow-flow.js";
 
 const graph: WorkflowGraphV1 = {
   version: 1,
@@ -106,6 +107,15 @@ it("preserves declared branching and excludes private configuration while keepin
     "createdBy",
   ])
     expect(payload).not.toContain(forbidden);
+});
+
+it("exposes closed approval material only in current review, keeping the conversation/history flow projection body-free", () => {
+  const source = detail(), node = source.draftRevision!.graph.nodes[1];
+  node.config = { summary: "PRIVATE approval", consequence: "PRIVATE consequence" };
+  expect(workflowReview(source, workflowNodeDefinitions(), false).draft?.steps[1].inputReview).toEqual({ kind: "approval", ...node.config as object });
+  const historical = projectWorkflowRevisionFlow(source.draftRevision!, workflowNodeDefinitions());
+  expect(historical.flow.steps[1].inputReview).toBeUndefined();
+  expect(JSON.stringify(historical)).not.toContain("PRIVATE");
 });
 it("keeps an active immutable revision separate from the proposed draft and suppresses archived edits", () => {
   const source = detail();

@@ -1224,7 +1224,9 @@
         "packages/db/src/migrations/0494_goofy_lionheart.sql",
         "server/src/services/experience/workflow-step-actors.ts",
         "server/src/services/experience/workflow-step-semantics.ts",
-        "server/src/services/experience/workflow-review-binding.ts"
+        "server/src/services/experience/workflow-review-binding.ts",
+        "server/src/services/workflows/workflow-step-input-review.ts",
+        "server/src/services/tool-connection-visibility.ts"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/workflow-review.json"

@@ -21,6 +21,7 @@ import {
   workflowTestCommandSchema,
   workflowRequestKindSchema,
   workflowRunControlSchema, workflowStopReceiptSchema,
+  workflowExperienceSchema,
   v9FeatureEnabled,
   type PermissionKey,
   type WorkflowCapabilities,
@@ -30,7 +31,7 @@ import { conflict, forbidden, notFound, unauthorized, unprocessable, HttpError }
 import { withExperienceAdmission } from "../services/experience/admission.js";
 import { ExperienceOverloadError } from "../services/experience/projection.js";
 import { workflowReview } from "../services/experience/workflow-review.js";
-import { readWorkflowStepActors } from "../services/experience/workflow-step-actors.js";
+import { readWorkflowStepContext } from "../services/experience/workflow-step-actors.js";
 import { workflowReviewBinding } from "../services/experience/workflow-review-binding.js";
 import { workflowDraftIntentService } from "../services/experience/workflow-draft-intent.js";
 import { workflowCustomerDraftEdit } from "../services/workflows/workflow-customer-draft-edit.js";
@@ -840,10 +841,12 @@ export function workflowRoutes(db: Db) {
     const result = workflowReview(detail, nodeRegistry.list(), edit.allowed,
       operate.allowed && rollout, run.allowed && rollout, canTest, testReceipt);
     try {
-      const assignments = await readWorkflowStepActors(db, detail, req.actor);
+      const { assignments, toolAccess } = await readWorkflowStepContext(db, detail, req.actor);
       for (const revision of [result.draft, result.active]) if (revision) for (const step of revision.steps) {
         const assignment = assignments.get(`${revision.id}:${step.nodeId}`);
         if (assignment) step.assignment = assignment;
+        const connection = toolAccess.get(`${revision.id}:${step.nodeId}`);
+        if (connection) step.toolAccess = connection;
       }
     } catch (error) {
       if (error instanceof ExperienceOverloadError) throw new HttpError(503, "Current workflow assignments are unavailable; try again");
@@ -867,7 +870,7 @@ export function workflowRoutes(db: Db) {
       if (error instanceof ExperienceOverloadError) throw new HttpError(503, "Current workflow review exceeds its read budget; try Advanced");
       throw error;
     }
-    res.json(result);
+    res.json(workflowExperienceSchema.parse(result));
   });
 
   router.get("/companies/:companyId/workflows/:workflowId/experience/draft-flow", async (req, res) => {

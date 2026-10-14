@@ -2,7 +2,7 @@ import { and, eq } from "drizzle-orm";
 import { isDeepStrictEqual } from "node:util";
 import { workflows, type Db } from "@paperclipai/db";
 import { workflowDraftStepCommandSchema, workflowDraftStepReceiptSchema, workflowDraftStepReviewSchema,
-  workflowEditableNodeIdSchema, workflowStepConfigurationChangeSchema, type WorkflowDraftStepCommand } from "@paperclipai/shared";
+  workflowEditableNodeIdSchema, type WorkflowDraftStepCommand } from "@paperclipai/shared";
 import { conflict, notFound } from "../../errors.js";
 import { workflowService } from "./workflow-service.js";
 import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
@@ -10,6 +10,7 @@ import { nativeSha256 } from "../native-runtime/canonical.js";
 import type { AuthorizationActor } from "../authorization.js";
 import { lockWorkflowDraftAccount, originalWorkflowDraftReceipt } from "./workflow-draft-authority.js";
 import { guidedConditionExpression, reviewGuidedCondition } from "./workflow-guided-condition.js";
+import { reviewWorkflowStepInput } from "./workflow-step-input-review.js";
 
 const action = "workflow.customer_draft_step_saved";
 /** Compose Original revision and Activity owners; no graph, runtime or grant
@@ -29,10 +30,7 @@ export function workflowCustomerDraftEdit(db: Db) {
         throw notFound("The current draft step is unavailable");
       const nodes = draft.graph.nodes.filter(node => node.id === nodeId);
       if (nodes.length !== 1) throw notFound("The current draft step is unavailable");
-      const node = nodes[0], config = node.config && typeof node.config === "object" && !Array.isArray(node.config) ? node.config : {};
-      const parsed = workflowStepConfigurationChangeSchema.safeParse({ kind: node.type === "core.wait" ? "wait" : node.type === "human.approval" ? "approval" : "advanced", ...config });
-      const configuration = node.type === "core.condition" ? reviewGuidedCondition(config) ?? { kind: "advanced" as const }
-        : parsed.success && parsed.data.kind !== "keep" ? parsed.data : { kind: "advanced" as const };
+      const node = nodes[0], configuration = reviewWorkflowStepInput(node);
       await lockWorkflowDraftAccount(tx, actor, companyId);
       return workflowDraftStepReviewSchema.parse({ companyId, workflowId, draftRevisionId: draft.id, publishedRevisionId: detail.publishedRevisionId,
         updatedAt: detail.updatedAt.toISOString(), version: draft.revisionNumber, nodeId, nodeType: node.type, name: node.name, configuration });
@@ -59,8 +57,7 @@ export function workflowCustomerDraftEdit(db: Db) {
       // Name-only edits preserve every original config, input, retry and branch.
       // Guided config edits refuse a shape that the review cannot fully expose.
       if (change.kind !== "keep") {
-        const config = node.config && typeof node.config === "object" && !Array.isArray(node.config) ? node.config : {};
-        if (change.kind === "condition" ? !reviewGuidedCondition(config) : !workflowStepConfigurationChangeSchema.safeParse({ kind: change.kind, ...config }).success)
+        if (reviewWorkflowStepInput(node).kind !== change.kind)
           throw conflict("This configuration needs its current Advanced editor", { code: "workflow_draft_step_conflict" });
       }
       const configuration = change.kind === "keep" ? node.config : change.kind === "wait" ? { durationSeconds: change.durationSeconds }

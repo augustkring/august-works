@@ -2395,5 +2395,16 @@
       "unknown": "Duplicate protection could not be verified."
     },
     "assignmentUnavailable": "The selected Agent is unavailable or cannot be read with your current access."
+  },
+  "workflowConnectionAccess": {
+    "label": "Your connection access",
+    "review": "Review {{name}} permissions",
+    "states": {
+      "unavailable": "The selected connection or tool is unavailable or cannot be verified with your current account.",
+      "connection_disabled": "This connection is not enabled for use. Review it before this step can use it.",
+      "catalog_changed": "The selected tool has changed or its version has not been confirmed. Review this step before publishing.",
+      "permission_required": "Your current account lacks permission to use connected tools in this company. Review the connection permissions.",
+      "execution_check": "Your account has the company permission to use tools. The exact connection, resource and approval rules are checked again when this step executes."
+    }
   }
 }

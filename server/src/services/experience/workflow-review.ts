@@ -8,12 +8,14 @@ import {
 } from "@paperclipai/shared";
 import { projectWorkflowRevisionFlow } from "./workflow-flow.js";
 import { workflowComparison } from "./workflow-comparison.js";
+import { reviewWorkflowStepInput } from "../workflows/workflow-step-input-review.js";
 import {
   customerWorkflowLaunchReady,
   customerWorkflowTestReady,
 } from "../workflows/workflow-customer-launch.js";
 
-/** Native graph projection only. Config, prompts, schemas, variables and results never leave here. */
+/** Current Source-authorized review only. Closed step input material is
+ * explicit; arbitrary config, prompts, schemas, variables and results are omitted. */
 export function workflowReview(
   detail: WorkflowDetail,
   definitions: WorkflowNodeDefinitionDescriptor[],
@@ -45,6 +47,13 @@ export function workflowReview(
     )
       throw new Error("Workflow revision binding changed");
     const { flow, nodeOrder } = projectWorkflowRevisionFlow(source, definitions);
+    // Current review owns this private material. Conversation/history flows
+    // keep the separate body-free Original flow projection.
+    for (const step of flow.steps) {
+      const node = source.graph.nodes.find(item => item.id === step.nodeId);
+      if (node && ["core.condition", "core.wait", "human.approval"].includes(node.type)) step.inputReview =
+        step.semantics?.input === "advanced" ? { kind: "advanced" } : reviewWorkflowStepInput(node);
+    }
     if (state === "draft" && flow.coverage === "complete") draftNodeOrder = nodeOrder;
     return { ...flow, state };
   }

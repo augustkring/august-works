@@ -647,3 +647,53 @@ axe violations in the test dialog. It uses a disposable local Native fixture;
 it supplies no real Human, managed-host, provider or external-action qualification.
 Complete immutable recursive types/build/test:run and the remaining whole V9
 implementation/release requirements remain open. No push or PR was made.
+
+### Closed step input and current connection access — 2026-10-14
+
+The immutable checkpoint-11 driver records actual phase/exit results separately
+and refuses changed Source. Its recursive types pass; test:run is still running.
+Later next-wave changes are not qualified by that older Source's eventual result.
+
+Current review now shows exact closed Native condition fields/operator/typed
+literal and Human approval summary/consequence. The separate historical/chat
+flow projection remains body-free. The same complete-shape input guard is reused
+by guided editing: no hidden fields, config-supplied kind or trimming of padded
+material. All non-local current readers now require actual verified membership,
+including flows without selected Agent/connector metadata. Native local operator
+compatibility remains explicit and cannot provide named verified actor evidence.
+
+Selected connector steps read bounded existing Native rows without provider
+refresh, transport, session, installation or grant effect. The Original inventory
+visibility helper is shared, preserving another creator's hidden draft boundary.
+The current exact connection/tool, Original permission link, disabled state,
+catalog drift, missing current company tools permission and later execution
+checks are distinct. The actual future connection/resource/approval grant is
+never inferred from tools:use or from a copied administrator flag.
+
+Focused Native/schema/client/input/editor/Original-visibility/OpenAPI regression
+passes 75 cases in eight suites; the actual private Source/flow/OpenAPI group
+also passes 39 cases in three suites. Initial browser verification passes four
+existing edit/composition/test cases but fails the new read-only review fixture,
+whose bridge lacked the current company's authentication snapshot. The fixture
+now derives its company IDs/membership snapshot from actual Native membership
+on every request, leaving production authorization unchanged. Its exact follow-up
+passes (45.9 seconds overall): named Agent, exact condition/approval input,
+missing permission link, English/Danish 390px review with zero main axe violations,
+no horizontal overflow, unchanged unpublished graph/no run, and actual membership
+withdrawal refusing retained private material. Final current-source browser and
+focused types/gates are recorded below when complete. No real Human/provider/
+managed-host or complete per-resource permission qualification is supplied.
+Whole V9 implementation and immutable aggregate test/build evidence remain open.
+
+The final five-case built browser group passes on current application Source
+(1.5 minutes overall), including all prior Native guided saves/lost acknowledgments
+and synthetic internal testing plus the current review/withdrawal case. The
+current eight-suite group passes all 75 cases. UI types pass. A concurrent final
+server typecheck was killed with exit 137; it is not counted as passed. The
+cgroup records OOM kills under concurrent broad/browser verification, and the
+server check is being repeated after the browser work finishes. Token/module/
+source-coverage gates pass; full immutable V9 aggregate and the open implementation
+requirements remain separate. No acceptance row is promoted to complete.
+
+The serial follow-up server typecheck passes on unchanged current application
+Source. The earlier exit-137 attempt remains recorded rather than being relabeled.

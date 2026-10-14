@@ -1,4 +1,5 @@
 import { Router, type Request, type Response } from "express";
+import { filterVisibleToolConnections } from "../services/tool-connection-visibility.js";
 import { z } from "zod";
 import { activationConnectionConsentService } from "../services/saas/activation-connection-consent.js";
 import type { Db } from "@paperclipai/db";
@@ -147,18 +148,7 @@ function classifyConnectionUpdate(
   return events;
 }
 
-export function filterVisibleToolConnections<T extends {
-  status?: string;
-  createdByUserId?: string | null;
-}>(
-  connections: T[],
-  actor: { userId?: string | null; canManageConnections: boolean },
-): T[] {
-  return connections.filter((connection) =>
-    connection.status !== "draft"
-    || actor.canManageConnections
-    || Boolean(actor.userId && connection.createdByUserId === actor.userId));
-}
+export { filterVisibleToolConnections } from "../services/tool-connection-visibility.js";
 
 export function connectionIntentOAuthOutcomeHtml(input: {
   interactionId: string;

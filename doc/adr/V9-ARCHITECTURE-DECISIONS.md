@@ -1812,3 +1812,35 @@ This supplies structural disclosure and current Agent visibility, not the full
 connection permission-preview contract, exact configured input presentation,
 effective actor policy, external test qualification or Human fitness. Those
 whole-brief requirements remain open.
+
+## ADR-43 — Current closed inputs and per-step connection access (2026-10-14)
+
+Current ordered review may show a closed Native condition's exact field levels,
+operator and typed literal, or a Human checkpoint's exact summary/consequence.
+It reuses the Original condition parser; there is no evaluator, model or guessed
+expression. Waits stay literal. Unknown/complex input remains Advanced. Guided
+editing uses the same complete-shape guard; padding, extra fields or a supplied
+kind cannot silently transform approval material. Shared response schemas bind
+input/assignment/tool metadata to their declared executor/input kind.
+
+Only the current Source-authorized review receives these bodies. Conversation
+and historical flow projection remains body-free. All non-local current review
+readers require an actual verified account and active company membership, even
+when the graph has no selected Agent or connector. Native local-operator
+compatibility supplies no verified Human or named selected-actor proof.
+
+Connector steps use bounded company-scoped Native connection/catalog SELECTs,
+not listCatalog: passive review must not refresh a provider or open transport.
+The Original inventory draft-visibility rule is extracted into one shared Native
+helper; another creator's draft remains hidden unless actual manager permission
+allows it. Reader-supplied administrator flags do not confer that permission.
+Visible exact connection/tool names and the Original permission route are shown
+at the step. Disabled, missing/hidden, catalog drift, missing current company
+tools:use and execution-check-required states are distinct. Having tools:use
+never establishes the future execution principal's exact connection/resource/
+approval grant. Current reader, Source, binding and metadata checks repeat under
+privacy locks; no invocation, install, grant or run is created.
+
+The full inline resource-specific permission decision, complex task/tool/artifact
+input presentation, effective Agent/runtime policy and external test qualification
+remain open; this checkpoint does not close the full V9 acceptance contract.

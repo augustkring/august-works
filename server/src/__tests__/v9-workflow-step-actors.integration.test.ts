@@ -1,10 +1,11 @@
 import { randomUUID } from "node:crypto";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { agents, authUsers, companies, companyMemberships, createDb, principalPermissionGrants } from "@paperclipai/db";
+import { agents, authUsers, companies, companyMemberships, createDb, principalPermissionGrants,
+  toolApplications, toolConnections, toolCatalogEntries, toolInvocations, workflowRuns } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { workflowService } from "../services/workflows/workflow-service.js";
-import { readWorkflowStepActors } from "../services/experience/workflow-step-actors.js";
+import { readWorkflowStepActors, readWorkflowStepContext } from "../services/experience/workflow-step-actors.js";
 
 describe.sequential("Current Native workflow step assignments", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>;
@@ -51,9 +52,66 @@ describe.sequential("Current Native workflow step assignments", () => {
     const f = await fixture();
     expect((await readWorkflowStepActors(db, f.detail, { type: "board", source: "local_implicit" })).get(f.key)).toEqual({ state: "unavailable", name: null });
   });
+  it("requires current verified reader authority for closed input review even when no Agent or connection metadata is requested", async () => {
+    const f = await fixture(), graph = structuredClone(f.detail.draftRevision!.graph);
+    graph.nodes = [graph.nodes[0]]; graph.edges = [];
+    await f.owner.updateDraft(f.companyId, f.detail.id, { expectedRevisionId: f.detail.draftRevisionId!, graph }, f.human);
+    f.detail = (await f.owner.getDetail(f.companyId, f.detail.id, f.actor))!;
+    expect((await readWorkflowStepContext(db, f.detail, f.actor)).assignments.size).toBe(0);
+    await db.update(authUsers).set({ emailVerified: false }).where(eq(authUsers.id, f.userId));
+    await expect(readWorkflowStepContext(db, f.detail, f.actor)).rejects.toMatchObject({ status: 403 });
+  });
   it("withholds an actual removed Agent instead of preserving its old name or substituting another assignment", async () => {
     const f = await fixture();
     await db.delete(agents).where(eq(agents.id, f.agentId));
     expect((await readWorkflowStepActors(db, f.detail, f.actor)).get(f.key)).toEqual({ state: "unavailable", name: null });
+  });
+  async function toolFixture() {
+    const f = await fixture(), applicationId = randomUUID(), connectionId = randomUUID(), entryId = randomUUID();
+    await db.insert(toolApplications).values({ id: applicationId, companyId: f.companyId, name: "Contacts", type: "mcp_http" });
+    await db.insert(toolConnections).values({ id: connectionId, companyId: f.companyId, applicationId, name: "Contact system", uid: randomUUID(),
+      transport: "mcp_remote", status: "active", enabled: true, createdByUserId: "another-user",
+      config: { privateToken: "PRIVATE credential" }, transportConfig: { url: "https://private-endpoint.invalid" } });
+    await db.insert(toolCatalogEntries).values({ id: entryId, companyId: f.companyId, applicationId, connectionId,
+      name: "contacts.lookup", toolName: "contacts.lookup", title: "Find contacts", versionHash: "version-a", schemaHash: "schema-a",
+      inputSchema: { type: "object", properties: { privateField: { type: "string", default: "PRIVATE schema" } } } });
+    const graph = structuredClone(f.detail.draftRevision!.graph);
+    graph.nodes[1] = { id: "tool", type: "connector.action", name: "Find contacts", position: { x: 0, y: 1 },
+      config: { connectionId, toolCatalogEntryId: entryId, catalogVersionHash: "version-a", catalogSchemaHash: "schema-a", input: { token: "PRIVATE input" } } };
+    graph.edges[0].target = "tool";
+    await f.owner.updateDraft(f.companyId, f.detail.id, { expectedRevisionId: f.detail.draftRevisionId!, graph }, f.human);
+    f.detail = (await f.owner.getDetail(f.companyId, f.detail.id, f.actor))!;
+    return { ...f, applicationId, connectionId, entryId, key: `${f.detail.draftRevisionId}:tool` };
+  }
+  it("shows the exact selected connection and Native permission link, distinguishing current company permission from execution authority", async () => {
+    const f = await toolFixture();
+    const read = async () => (await readWorkflowStepContext(db, f.detail, f.actor)).toolAccess.get(f.key);
+    expect(await read()).toEqual({ state: "permission_required", connectionName: "Contact system", operationName: "Find contacts",
+      previewHref: `/apps/${f.connectionId}/permissions` });
+    await db.insert(principalPermissionGrants).values({ companyId: f.companyId, principalType: "user", principalId: f.userId, permissionKey: "tools:use" });
+    expect(await read()).toMatchObject({ state: "execution_check" });
+    await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId, f.companyId), eq(principalPermissionGrants.permissionKey, "tools:use")));
+    expect(await read()).toMatchObject({ state: "permission_required" });
+    expect(JSON.stringify(await read())).not.toMatch(/PRIVATE|private-endpoint|privateField|token/);
+    expect(await db.select().from(toolInvocations).where(eq(toolInvocations.companyId, f.companyId))).toEqual([]);
+    expect(await db.select().from(workflowRuns).where(eq(workflowRuns.companyId, f.companyId))).toEqual([]);
+  });
+  it("keeps disabled, changed, missing and foreign-private-draft connection states distinct without revealing hidden identity", async () => {
+    const f = await toolFixture();
+    const read = async () => (await readWorkflowStepContext(db, f.detail, { ...f.actor, isInstanceAdmin: true })).toolAccess.get(f.key);
+    await db.update(toolConnections).set({ enabled: false }).where(eq(toolConnections.id, f.connectionId));
+    expect(await read()).toMatchObject({ state: "connection_disabled" });
+    await db.update(toolConnections).set({ enabled: true }).where(eq(toolConnections.id, f.connectionId));
+    await db.update(toolCatalogEntries).set({ versionHash: "version-b" }).where(eq(toolCatalogEntries.id, f.entryId));
+    expect(await read()).toMatchObject({ state: "catalog_changed" });
+    await db.update(toolConnections).set({ status: "draft" }).where(eq(toolConnections.id, f.connectionId));
+    expect(await read()).toEqual({ state: "unavailable", connectionName: null, operationName: null, previewHref: null });
+    await db.update(toolConnections).set({ createdByUserId: f.userId }).where(eq(toolConnections.id, f.connectionId));
+    expect(await read()).toMatchObject({ state: "connection_disabled", connectionName: "Contact system" });
+    await db.update(toolConnections).set({ createdByUserId: "another-user" }).where(eq(toolConnections.id, f.connectionId));
+    await db.insert(principalPermissionGrants).values({ companyId: f.companyId, principalType: "user", principalId: f.userId, permissionKey: "tools:manage_connections" });
+    expect(await read()).toMatchObject({ state: "connection_disabled", connectionName: "Contact system" });
+    await db.delete(toolConnections).where(eq(toolConnections.id, f.connectionId));
+    expect(await read()).toEqual({ state: "unavailable", connectionName: null, operationName: null, previewHref: null });
   });
 });

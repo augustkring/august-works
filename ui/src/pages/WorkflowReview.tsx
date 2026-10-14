@@ -342,14 +342,14 @@ export function WorkflowReview({
                           <dt className="font-medium">
                             {t("workflowOperation")}
                           </dt>
-                          <dd>{step.operation}</dd>
+                          <dd>{step.toolAccess?.operationName ?? step.operation}</dd>
                         </div>
                         {step.semantics && <>
                           <div>
                             <dt className="font-medium">{t("workflowSemantics.actor")}</dt>
-                            <dd>{step.assignment?.state === "current" ? step.assignment.name
+                            <dd>{step.toolAccess?.connectionName ?? (step.assignment?.state === "current" ? step.assignment.name
                               : step.assignment ? t("workflowSemantics.assignmentUnavailable")
-                              : t(`workflowSemantics.actors.${step.semantics.actor}`)}</dd>
+                              : t(`workflowSemantics.actors.${step.semantics.actor}`))}</dd>
                           </div>
                           <div>
                             <dt className="font-medium">{t("workflowSemantics.input")}</dt>
@@ -366,6 +366,39 @@ export function WorkflowReview({
                             <dd>{t(`workflowSemantics.policies.${step.semantics.approvalPolicy}`)}</dd>
                           </div>
                         </>}
+                        {step.toolAccess && <div>
+                          <dt className="font-medium">{t("workflowConnectionAccess.label")}</dt>
+                          <dd>
+                            <p>{t(`workflowConnectionAccess.states.${step.toolAccess.state}`)}</p>
+                            {step.toolAccess.previewHref && <Link className="inline-flex min-h-11 items-center underline"
+                              to={step.toolAccess.previewHref}>{t("workflowConnectionAccess.review", { name: step.toolAccess.connectionName })}</Link>}
+                          </dd>
+                        </div>}
+                        {step.inputReview?.kind === "condition" && <div>
+                          <dt className="font-medium">{t("workflowDraftStep.condition.heading")}</dt>
+                          <dd className="space-y-2">
+                            <p>{t(`workflowDraftStep.condition.sources.${step.inputReview.source}`)}</p>
+                            <ol className="space-y-1" aria-label={t("workflowDraftStep.condition.path")}>
+                              {step.inputReview.path.map((field, index) => <li key={index} className="break-words"><code>{JSON.stringify(field)}</code></li>)}
+                            </ol>
+                            <p>{t(`workflowDraftStep.condition.operators.${step.inputReview.operator}`)}</p>
+                            <p className="break-words">{t(`workflowDraftStep.condition.types.${step.inputReview.value === null ? "null" : typeof step.inputReview.value}`)}: <code>{JSON.stringify(step.inputReview.value)}</code></p>
+                          </dd>
+                        </div>}
+                        {step.inputReview?.kind === "approval" && <>
+                          <div>
+                            <dt className="font-medium">{t("workflowDraftStep.summary")}</dt>
+                            <dd className="whitespace-pre-wrap break-words">{step.inputReview.summary}</dd>
+                          </div>
+                          <div>
+                            <dt className="font-medium">{t("workflowDraftStep.consequence")}</dt>
+                            <dd className="whitespace-pre-wrap break-words">{step.inputReview.consequence}</dd>
+                          </div>
+                        </>}
+                        {step.inputReview?.kind === "advanced" && <div>
+                          <dt className="font-medium">{t("workflowSemantics.input")}</dt>
+                          <dd>{t("workflowSemantics.inputs.advanced")}</dd>
+                        </div>}
                         <div>
                           <dt className="font-medium">{t("workflowEffect")}</dt>
                           <dd>{t(`workflowEffects.${step.effect}`)}</dd>

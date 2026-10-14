@@ -1,6 +1,7 @@
 import { z } from "zod";
 import { workflowTestReceiptSchema } from "./workflow-test.js";
 import { WORKFLOW_NODE_IDEMPOTENCY_STRATEGIES } from "./types/workflow.js";
+import { workflowStepInputReviewSchema } from "./workflow-draft-edit.js";
 
 /** Declared Native step semantics; these facts never grant execution access. */
 export const workflowStepSemanticsSchema = z.strictObject({
@@ -14,12 +15,26 @@ export const workflowStepSemanticsSchema = z.strictObject({
 });
 export type WorkflowStepSemantics = z.infer<typeof workflowStepSemanticsSchema>;
 
+export const workflowStepToolAccessSchema = z.strictObject({
+  state: z.enum(["unavailable", "connection_disabled", "catalog_changed", "permission_required", "execution_check"]),
+  connectionName: z.string().min(1).max(200).nullable(),
+  operationName: z.string().min(1).max(200).nullable(),
+  previewHref: z.string().regex(/^\/apps\/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\/permissions$/).nullable(),
+}).superRefine((value, ctx) => {
+  if (value.state === "unavailable" ? value.connectionName !== null || value.operationName !== null || value.previewHref !== null
+    : value.connectionName === null || value.operationName === null || value.previewHref === null)
+    ctx.addIssue({ code: "custom", message: "Connection visibility is inconsistent" });
+});
+export type WorkflowStepToolAccess = z.infer<typeof workflowStepToolAccessSchema>;
+
 const stepSchema = z.strictObject({
   nodeId: z.string().min(1).max(160).optional(),
   number: z.number().int().min(1).max(100),
   name: z.string().max(160),
   operation: z.string().max(160),
   semantics: workflowStepSemanticsSchema.optional(),
+  inputReview: workflowStepInputReviewSchema.optional(),
+  toolAccess: workflowStepToolAccessSchema.optional(),
   assignment: z.strictObject({
     state: z.enum(["current", "unavailable"]),
     name: z.string().min(1).max(200).nullable(),
@@ -49,6 +64,16 @@ const stepSchema = z.strictObject({
       }),
     )
     .max(200),
+}).superRefine((step, ctx) => {
+  const input = step.inputReview;
+  if (input && input.kind !== "advanced") {
+    const expected = input.kind === "condition" ? "condition_data" : input.kind === "wait" ? "delay" : "approval_material";
+    if (step.semantics?.input !== expected) ctx.addIssue({ code: "custom", path: ["inputReview"], message: "Step input binding changed" });
+  }
+  if (step.toolAccess && step.semantics?.actor !== "connected_tool")
+    ctx.addIssue({ code: "custom", path: ["toolAccess"], message: "Connection actor binding changed" });
+  if (step.assignment && step.semantics?.actor !== "selected_agent")
+    ctx.addIssue({ code: "custom", path: ["assignment"], message: "Agent assignment binding changed" });
 });
 export const workflowExperienceRevisionSchema = z.strictObject({
   id: z.uuid(),

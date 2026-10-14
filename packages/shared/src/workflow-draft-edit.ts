@@ -25,15 +25,17 @@ export const workflowStepConfigurationChangeSchema = z.discriminatedUnion("kind"
   z.strictObject({ kind: z.literal("approval"), summary: workflowApprovalSummarySchema, consequence: workflowApprovalConsequenceSchema }),
   workflowGuidedConditionSchema,
 ]);
+export const workflowStepInputReviewSchema = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("advanced") }),
+  z.strictObject({ kind: z.literal("wait"), durationSeconds: workflowWaitSecondsSchema }),
+  z.strictObject({ kind: z.literal("approval"), summary: workflowApprovalSummarySchema, consequence: workflowApprovalConsequenceSchema }),
+  workflowGuidedConditionSchema,
+]);
+export type WorkflowStepInputReview = z.infer<typeof workflowStepInputReviewSchema>;
 export const workflowDraftStepReviewSchema = z.strictObject({
   companyId: z.uuid(), workflowId: z.uuid(), draftRevisionId: z.uuid(), publishedRevisionId: z.uuid().nullable(),
   updatedAt: z.iso.datetime(), version: z.number().int().positive(), nodeId: workflowEditableNodeIdSchema,
-  nodeType: text(160), name: workflowStepNameSchema, configuration: z.discriminatedUnion("kind", [
-    z.strictObject({ kind: z.literal("advanced") }),
-    z.strictObject({ kind: z.literal("wait"), durationSeconds: workflowWaitSecondsSchema }),
-    z.strictObject({ kind: z.literal("approval"), summary: workflowApprovalSummarySchema, consequence: workflowApprovalConsequenceSchema }),
-    workflowGuidedConditionSchema,
-  ]),
+  nodeType: text(160), name: workflowStepNameSchema, configuration: workflowStepInputReviewSchema,
 });
 export const workflowDraftStepCommandSchema = z.strictObject({
   requestId: z.uuid(), expectedWorkflowId: z.uuid(), expectedDraftRevisionId: z.uuid(), expectedPublishedRevisionId: z.uuid().nullable(),

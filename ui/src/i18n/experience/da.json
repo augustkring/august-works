@@ -2395,5 +2395,16 @@
       "unknown": "Beskyttelse mod dubletter kunne ikke verificeres."
     },
     "assignmentUnavailable": "Den valgte Agent er utilgængelig eller kan ikke læses med din aktuelle adgang."
+  },
+  "workflowConnectionAccess": {
+    "label": "Din adgang til forbindelsen",
+    "review": "Gennemgå tilladelser for {{name}}",
+    "states": {
+      "unavailable": "Den valgte forbindelse eller det valgte værktøj er utilgængeligt eller kan ikke verificeres med din aktuelle konto.",
+      "connection_disabled": "Forbindelsen er ikke aktiveret til brug. Gennemgå den, før trinnet kan bruge den.",
+      "catalog_changed": "Det valgte værktøj er ændret, eller dets version er ikke bekræftet. Gennemgå trinnet før udgivelse.",
+      "permission_required": "Din aktuelle konto mangler tilladelse til at bruge tilsluttede værktøjer i denne virksomhed. Gennemgå forbindelsens tilladelser.",
+      "execution_check": "Din konto har virksomhedens tilladelse til at bruge værktøjer. Den præcise forbindelse, ressource og godkendelsesregel kontrolleres igen, når trinnet udføres."
+    }
   }
 }

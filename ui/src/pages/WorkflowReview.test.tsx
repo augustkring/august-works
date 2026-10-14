@@ -377,3 +377,40 @@ it("explains selected actors, input, approval and duplicate protection while cur
     payload: { action: "agent.updated", entityType: "agent", entityId: "changed-agent" } }));
   expect(container.textContent).not.toContain("PRIVATE selected analyst");
 });
+
+it("puts missing current connection permission and its Original preview at the exact step without offering a grant or execution", async () => {
+  const view = structuredClone(data), step = view.active!.steps[0];
+  step.semantics = { actor: "connected_tool", input: "tool_arguments", durationSeconds: null,
+    approvalPolicy: "execution_review", access: "execution_check", maxAttempts: 1, idempotency: "provider_passthrough" };
+  const previewHref = "/apps/10000000-0000-4000-8000-000000000009/permissions";
+  step.toolAccess = { state: "permission_required", connectionName: "PRIVATE Contact system", operationName: "Find contacts", previewHref };
+  const post = vi.spyOn(workflowsApi, "startRun");
+  vi.spyOn(workflowsApi, "experience").mockResolvedValue(view);
+  await mount();
+  await vi.waitFor(() => expect(container.textContent).toContain("PRIVATE Contact system"));
+  const item = container.querySelector("#workflow-step-1")!;
+  expect(item.textContent).toContain("Find contacts");
+  expect(item.textContent).toContain("Your current account lacks permission");
+  expect(item.querySelector(`a[href$="${previewHref}"]`)?.textContent).toBe("Review PRIVATE Contact system permissions");
+  expect(post).not.toHaveBeenCalled();
+  await act(async () => live({ companyId: data.companyId, type: "activity.logged",
+    payload: { action: "tool_connection.updated", entityType: "tool_connection", entityId: "changed-connection" } }));
+  expect(container.textContent).not.toContain("PRIVATE Contact system");
+});
+
+it("keeps exact typed condition fields readable and hides private input material on current Source withdrawal", async () => {
+  const view = structuredClone(data), step = view.active!.steps[0];
+  step.operation = "Condition"; step.approval = "not_verified"; step.effect = "pure";
+  step.semantics = { actor: "workflow", input: "condition_data", durationSeconds: null,
+    approvalPolicy: "no_checkpoint", access: "no_step_grant", maxAttempts: 1, idempotency: "not_required" };
+  step.inputReview = { kind: "condition", source: "trigger", path: ["customer.name", "answer"], operator: "===", value: "PRIVATE false " };
+  vi.spyOn(workflowsApi, "experience").mockResolvedValue(view);
+  await mount();
+  await vi.waitFor(() => expect(container.textContent).toContain('"PRIVATE false "'));
+  const fields = container.querySelector('ol[aria-label="Field names, from outermost to innermost"]')!;
+  expect([...fields.querySelectorAll("li")].map(item => item.textContent)).toEqual(['"customer.name"', '"answer"']);
+  expect(container.textContent).toContain('Text: "PRIVATE false "');
+  await act(async () => live({ companyId: data.companyId, type: "analytical.context.access_lost", payload: {} }));
+  expect(container.textContent).not.toContain("PRIVATE false");
+  expect(container.textContent).not.toContain("customer.name");
+});
