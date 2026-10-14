@@ -14,6 +14,11 @@ test("package setup withdraws during session checks and requires a fresh readine
   const company = await json(await request.post("/api/companies", { data: { name: "Disposable package account fixture" } }));
   const session = await json(await request.get("/api/auth/get-session"));
   const packageId = randomUUID(), agentId = randomUUID(), versionId = randomUUID(), resourceId = randomUUID(), roleVersionId = randomUUID();
+  const automationChoices = [
+    { key: "workflow", type: "workflow_template", resourceId: randomUUID(), versionId: randomUUID(), contentHash: "b".repeat(64), name: "PRIVATE manual workflow" },
+    { key: "routine", type: "routine_template", resourceId: randomUUID(), versionId: randomUUID(), contentHash: "c".repeat(64), name: "PRIVATE manual routine" },
+  ];
+  let reviewedPins: unknown;
   const patch = { ...Object.fromEntries(V5_FEATURE_KEYS.map(key => [key, true])), enableFoundationV1: true,
     enableContextEngineV1: true, enableCollectiveMemoryV1: true, saas_deployment_profile_v6: true,
     billing_v6: true, agent_packages_v7: true, experience_projection_v9: true, progressive_shell_v9: true };
@@ -25,17 +30,20 @@ test("package setup withdraws during session checks and requires a fresh readine
   await page.route("**/api/agent-packages?*", route => route.fulfill({ json: [{ id: packageId, key: "internal-review",
     name: "PRIVATE package", description: "PRIVATE description", versionId, version: "1.0.0",
     manifest: { audience: "internal_test", purpose: "PRIVATE purpose", prohibitedUses: ["External writes"], requiredConnections: [], optionalConnections: [] },
-    components: [{ key: "role", type: "role_pack", required: true, contentHash: "a".repeat(64) }] }] }));
+    components: [{ key: "role", type: "role_pack", required: true, contentHash: "a".repeat(64) },
+      ...automationChoices.map(({ key, type, contentHash }) => ({ key, type, contentHash, required: true }))] }] }));
   await page.route(`**/api/companies/${company.id}/agent-package-options?*`, route => route.fulfill(failOptions
     ? { status: 503, json: { error: "PRIVATE-PROVIDER-ERROR customer configuration" } }
     : { json: { agents: [{ id: agentId, name: "PRIVATE worker" }], components: [{ type: "role_pack", resourceId,
-      versionId: roleVersionId, contentHash: "a".repeat(64), name: "PRIVATE role" }] } }));
+      versionId: roleVersionId, contentHash: "a".repeat(64), name: "PRIVATE role" }, ...automationChoices] } }));
   await page.route(`**/api/companies/${company.id}/agent-package-installations?*`, route => route.fulfill({ json: [{
     id: randomUUID(), packageId, installedVersionId: versionId, agentId, version: 3, status: "degraded",
     updatePolicy: "manual", readiness: { reasons: [], warnings: [] }, installedByUserId: "local-board" }] }));
   await page.route(`**/api/companies/${company.id}/agent-package-update-proposals?*`, route => route.fulfill({ json: [] }));
-  await page.route(`**/api/companies/${company.id}/agent-packages/internal-review/preview?*`, route => route.fulfill({
-    json: { readiness: { status: "ready_with_warnings", reasons: [], warnings: ["PRIVATE readiness receipt"], assessmentIds: [] } } }));
+  await page.route(`**/api/companies/${company.id}/agent-packages/internal-review/preview?*`, route => {
+    reviewedPins = route.request().postDataJSON().components;
+    return route.fulfill({ json: { readiness: { status: "ready_with_warnings", reasons: [], warnings: ["PRIVATE readiness receipt"], assessmentIds: [] } } });
+  });
   page.on("request", req => {
     if (req.method() !== "GET" && /\/agent-package/.test(req.url()) && !/\/preview\?/.test(req.url())) writes++;
   });
@@ -48,9 +56,13 @@ test("package setup withdraws during session checks and requires a fresh readine
     await main.getByRole("combobox", { name: "Agent", exact: true }).selectOption(agentId);
     const configuration = main.getByRole("region", { name: "Package configuration" });
     await configuration.getByRole("combobox", { name: "role (required)", exact: true }).selectOption(roleVersionId);
+    await expect(main.getByRole("button", { name: "Check readiness", exact: true })).toBeDisabled();
+    for (const choice of automationChoices)
+      await configuration.getByRole("combobox", { name: `${choice.key} (required)`, exact: true }).selectOption(choice.versionId);
     await configuration.getByRole("checkbox").first().check();
     await main.getByRole("button", { name: "Check readiness", exact: true }).click();
     await expect(main.getByText("PRIVATE readiness receipt", { exact: true })).toBeVisible();
+    expect(reviewedPins).toEqual(expect.arrayContaining(automationChoices.map(({ key, resourceId, versionId }) => ({ key, resourceId, versionId }))));
     await main.getByRole("combobox", { name: "Agent", exact: true }).focus();
     hold = true; await page.clock.setFixedTime(new Date(Date.now() + 31_000));
     await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange", { bubbles: true })));

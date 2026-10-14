@@ -298,7 +298,9 @@
         "ui/src/pages/HireAgent.tsx",
         "ui/src/pages/HireAgentSetup.tsx",
         "ui/src/pages/HireSavedSetups.tsx",
-        "server/src/services/agents/authoring-drafts.ts"
+        "server/src/services/agents/authoring-drafts.ts",
+        "server/src/services/agent-packages/package-service.ts",
+        "server/src/services/agent-packages/component-source-access.ts"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/hire-02.json"
@@ -340,7 +342,9 @@
         "ui/src/pages/HireAgent.tsx",
         "ui/src/pages/HireAgentSetup.tsx",
         "ui/src/pages/HireSavedSetups.tsx",
-        "server/src/services/agents/authoring-drafts.ts"
+        "server/src/services/agents/authoring-drafts.ts",
+        "server/src/services/agent-packages/package-service.ts",
+        "server/src/services/agent-packages/component-source-access.ts"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/hire-04.json"

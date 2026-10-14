@@ -53,7 +53,8 @@
     "canonicalReadDomains": [
       "Native first-party agent packages and current published release qualification",
       "Current verified user/company membership and agents:create authorization",
-      "Canonical creator-private agent configuration draft summaries for saved Hire setups"
+      "Canonical creator-private agent configuration draft summaries for saved Hire setups",
+      "Original package automation components require current workflow revision and routine conversation Source access, including both saved and current workflow targets; digests do not grant read authority."
     ],
     "canonicalWriteOperation": "Canonical agent_configuration_drafts create with frozen request ID and native package-version pin; no agent install or production publication.",
     "authorityEffect": "No grants, activation, agent mutation, external messages or runtime execution.",

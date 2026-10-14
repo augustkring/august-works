@@ -155,6 +155,21 @@ async function configure() {
       .click(),
   );
 }
+it("previews the exact currently offered workflow and routine pins without starting either", async () => {
+  const catalog = await f.catalog(), options = await f.options();
+  const automations = [
+    { key: "workflow", type: "workflow_template", resourceId: "66666666-6666-4666-8666-666666666666", versionId: "77777777-7777-4777-8777-777777777777", contentHash: "b".repeat(64), name: "Manual workflow" },
+    { key: "routine", type: "routine_template", resourceId: "88888888-8888-4888-8888-888888888888", versionId: "99999999-9999-4999-8999-999999999999", contentHash: "c".repeat(64), name: "Manual routine" },
+  ];
+  f.catalog.mockResolvedValue([{ ...catalog[0], components: [...catalog[0].components,
+    ...automations.map(({ key, type, contentHash }) => ({ key, type, contentHash, required: true }))] }]);
+  f.options.mockResolvedValue({ ...options, components: [...options.components, ...automations] });
+  await render(); await configure(); await click("Check readiness");
+  expect(f.preview.mock.calls[0]![3].components).toEqual(expect.arrayContaining(
+    automations.map(({ key, resourceId, versionId }) => ({ key, resourceId, versionId }))));
+  expect(f.install).not.toHaveBeenCalled(); expect(f.decide).not.toHaveBeenCalled();
+});
+
 it("checks readiness and installs native configuration without silently activating or granting access", async () => {
   await render();
   await configure();

@@ -1,3 +1,5 @@
+import { grantsForHumanRole } from "../services/company-member-roles.js";
+import { lockAnalyticalCompany } from "../services/analytical-privacy.js";
 import { secretService } from "../services/secrets.js";
 import { readActivationFirstValue } from "../services/saas/activation-first-value.js";
 import { lockActivationSnapshot, readActivationOwner } from "../services/saas/activation-owner.js";
@@ -466,6 +468,68 @@ const support = await getEmbeddedPostgresTestSupport();
         .rejects.toMatchObject({ status: 409, details: { code: "hire_package_mapping_required" } });
       expect(await db.select().from(companyAgentPackageInstallations)).toEqual(before);
     });
+    it("withholds another owner's conversation routine from package options and pin review", async () => {
+      const automation = await seedHireAutomationComponents(db, f), { release } = await hireFixture();
+      const [conversation] = await db.insert(issues).values({ companyId: f.home, title: "PRIVATE routine source",
+        assigneeAgentId: f.presence.id, conversationAgentId: f.presence.id, conversationUserId: f.userId,
+        conversationState: "active", status: "in_progress" }).returning();
+      const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
+        nativeIssueId: conversation!.id, runtimeMode: "native", status: "running", contextSnapshot: { conversationSessionGeneration: 0 } }).returning();
+      await db.update(routines).set({ originKind: "conversation_draft", originId: run!.id,
+        responsibleUserId: f.userId, createdByAgentId: f.presence.id }).where(eq(routines.id, automation.routine.id));
+      const other = `package-other-owner-${randomUUID()}`, now = new Date();
+      await db.insert(authUsers).values({ id: other, name: "Other owner", email: `${other}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now });
+      await db.insert(companyMemberships).values({ companyId: f.home, principalType: "user", principalId: other, status: "active", membershipRole: "owner" });
+      await db.insert(principalPermissionGrants).values(grantsForHumanRole("owner").map(grant => ({
+        companyId: f.home, principalType: "user", principalId: other, ...grant })));
+      const otherActor = { ...f.actor, userId: other, isInstanceAdmin: true };
+      const ownOptions = await service.options(f.actor, f.home);
+      expect(ownOptions.components.some(component => component.resourceId === automation.routine.id)).toBe(true);
+      const hidden = await service.options(otherActor, f.home);
+      expect(hidden.components.some(component => component.resourceId === automation.routine.id)).toBe(false);
+      const published = await service.publish(f.actor, { ...release, packageKey: `private-routine-${randomUUID()}`,
+        components: [...release.components, { key: "manual-routine", type: "routine_template", sourceVersion: "1",
+          contentHash: automation.routineHash, source: release.releaseEvidence.provenance, required: true }] });
+      const beforeAssessments = await db.select().from(readinessAssessments), beforeInstalls = await db.select().from(companyAgentPackageInstallations);
+      await expect(service.preview(otherActor, f.home, { ...installInput(), versionId: published.id,
+        components: [...installInput().components, { key: "manual-routine", resourceId: automation.routine.id, versionId: automation.routine.latestRevisionId }] }))
+        .rejects.toMatchObject({ status: 403 });
+      expect(await db.select().from(readinessAssessments)).toEqual(beforeAssessments);
+      expect(await db.select().from(companyAgentPackageInstallations)).toEqual(beforeInstalls);
+    });
+
+    it("bounds package option reads when the Original company privacy lock is busy", async () => {
+      let release!: () => void, acquired!: () => void;
+      const ready = new Promise<void>(resolve => { acquired = resolve; }), done = new Promise<void>(resolve => { release = resolve; });
+      const owner = db.transaction(async tx => { await lockAnalyticalCompany(tx, f.home); acquired(); await done; });
+      await ready;
+      try { await expect(service.options(f.actor, f.home)).rejects.toMatchObject({ cause: { code: "55P03" } }); }
+      finally { release(); await owner; }
+      expect((await service.options(f.actor, f.home)).agents.some(agent => agent.id === f.presence.id)).toBe(true);
+    });
+
+    it("offers current Native workflow and routine components without starting automation", async () => {
+      const automation = await seedHireAutomationComponents(db, f);
+      const beforeRuns = await db.select().from(workflowRuns), beforeRoutines = await db.select().from(routineRuns);
+      const beforeActivity = await db.select().from(activityLog), beforeAssessments = await db.select().from(readinessAssessments);
+      const options = await service.options(f.actor, f.home);
+      expect(options.components).toEqual(expect.arrayContaining([
+        expect.objectContaining({ type: "workflow_template", resourceId: automation.workflow.id,
+          versionId: automation.workflow.publishedRevisionId, contentHash: automation.workflowHash }),
+        expect.objectContaining({ type: "routine_template", resourceId: automation.routine.id,
+          versionId: automation.routine.latestRevisionId, contentHash: automation.routineHash }),
+      ]));
+      expect(await db.select().from(activityLog)).toEqual(beforeActivity);
+      expect(await db.select().from(readinessAssessments)).toEqual(beforeAssessments);
+      await seedHireAutomationComponents(db, { ...f, home: f.guest });
+      expect((await service.options(f.actor, f.home)).components).toEqual(options.components);
+      await db.update(workflows).set({ status: "paused" }).where(eq(workflows.id, automation.workflow.id));
+      const paused = await service.options(f.actor, f.home);
+      expect(paused.components.some(component => component.resourceId === automation.workflow.id)).toBe(false);
+      expect(await db.select().from(workflowRuns)).toEqual(beforeRuns);
+      expect(await db.select().from(routineRuns)).toEqual(beforeRoutines);
+    });
+
     it("pins exact current local automation components without starting them and refuses paused or ambiguous sources", async () => {
       const { release } = await hireFixture(), automation = await seedHireAutomationComponents(db, f);
       const published = await service.publish(f.actor, { ...release, packageKey: `automation-components-${randomUUID()}`,

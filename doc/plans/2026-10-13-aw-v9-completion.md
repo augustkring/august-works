@@ -1647,3 +1647,45 @@ Native Artifact runtime: all 271 cases pass (71.53 seconds), including the valid
 optimizer fixture, real scanner/local storage, Unix broker, SSH and sandbox.
 Current server typecheck passes (exit 0), including checkpoint 39 changes. These
 are scoped results; the full immutable three-stage run still needs repeating.
+
+### Native package setup can select authorized automation components — 2026-10-14
+
+The existing page offered five Native pin families, but its options owner
+returned only Role Packs, Skills and Playbooks. Current active published Workflow
+revisions and active current Routine revisions are now offered with their
+Original locators/hashes. Each automation passes its actual Native Source reader;
+Routine pins additionally require the current conversation Source and both saved
+and current workflow targets. Explicit pin review/installation and Hire routine
+preparation use the same guard. Role options also use the Original Source-aware
+version reader. A known hash or another company owner/admin hint supplies no
+private Source authority. No automation is copied, enabled, scheduled or run.
+
+Options use one Native analytical/memory privacy transaction with current account
+checks at entry/return, 1500 ms total/statement and 250 ms lock budgets. Inventory
+retains the existing explicit 500-per-family overflow refusal. No assessment,
+Activity, provider call, installation or grant is created by listing. No table,
+migration or new capability policy is introduced. Native publication, immutable
+release hashes and later activation admission remain authoritative. Broader
+package/knowledge downstream copy provenance remains open. HIRE-02/04 Source paths,
+the access contract, assurance map, ADR-66 and V9-031 working status are aligned;
+none of the 70 pending launch-evidence rows is accepted.
+
+The missing-option behavior is reproduced before the fix: the actual Native
+reader returns only the role and fails the expected Workflow/Routine choices
+(26.74 seconds). The focused four-case PostgreSQL group passes (29.43 seconds),
+including same-company private conversation Source denial despite another owner's
+admin hint, no assessment/installation before refusal, and real privacy-lock
+contention followed by current read recovery. The entire 112-case Native package
+suite passes (107.07 seconds). Three UI/client/supporting-contract suites pass all
+86 cases (8.09 seconds); the new UI case sends the exact current two automation
+pins to preview and performs no install/activation. Actual server and UI
+typechecks pass (exit 0). Both shipped browser cases pass (58.5 seconds): required
+automation selections/current exact preview pins, EN/DA/session masking, 390px
+layout/axe zero violations and the existing lost-response/rollout recovery. The
+updated Danish mobile screenshot is visually inspected. These remain explicit
+transport fixtures, with actual persistence/authority separately tested in Native
+PostgreSQL; they are not hosted/provider/Human qualification. Module, token and
+70-Source gates pass. The checkpoint 40 full immutable run remains separate.
+
+After the final HIRE contract/path additions, all 61 shared screen-contract cases
+pass again (0.308 seconds). Release acceptance remains pending.

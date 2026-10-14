@@ -2388,3 +2388,24 @@ committed original action; they do not create a new confirmation or terminal
 publication. Unknown delivery and post-resolution crash recovery keep Native
 settlement behavior. The capability flag is rollout admission, never permission
 or hosted/provider qualification. Software fixtures do not establish live C7.
+
+## ADR-66 — Native package automation pins require their current Source readers
+
+The specialist package options reader now includes current active published
+workflow revisions and current active routine revisions. The existing bounded
+500-per-family inventory refuses overflow. Native Source readers authorize each
+candidate before emitting its name/opaque locator/hash. Role versions also use
+their Source-aware Original reader. The same automation component guard serves
+explicit pins and Hire routine resolution, including the routine's conversation
+Source and both its immutable saved/current workflow targets. A valid digest
+is an identity constraint, never private-source authority.
+
+Options run in one Native company analytical/memory privacy transaction with a
+1500 ms total/statement budget, 250 ms lock budget and current account checks at
+entry/return. No assessment, Activity, provider call, copied automation, trigger,
+run, activation or grant is created by listing. Existing immutable revision
+pins, content hashes and Original installation/activation admission remain the
+owners. There is no new table, migration or capability map. Incompatible old
+clients may ignore the additive component families; flags remain rollout only.
+Broader downstream copy erasure, hosted qualification and whole-V9 acceptance
+remain open.

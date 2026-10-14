@@ -152,3 +152,23 @@ repair, activation, reconciliation, grant or notification.
 | Foreign/stale requester reads recovery state | C3 | Current original Human, verified membership and Agent read; stale admin ignored; actor/epoch/mounted-reader fences; strict six-field current metadata | Migrated PostgreSQL/HTTP denials, strict client foreign/expanded rejection and fresh transport test | Hosted authentication/revocation races and broader component Source closure |
 | Locator becomes a new authority or input store | C3 | Per-tab closed metadata only, 32 entries/8 KiB; corrupt storage refuses new work; reload uses GET only; feature withdrawal retains read-only entry | DOM persistence/corruption/no-write checks and built reload/rollout-closure case | Hosted retention/restore/privacy and manual accessibility |
 | Package private HTTP or cache scope spills | C3 | Normalized private namespace, no raw payload/query/error logs; private/no-store only on owned paths; new readers detach earlier coalescing | Actual logger canaries, native headers/unrelated-route probe and two-reader transport test | Hosted logging/cache retention review |
+
+## Current Native package automation choices — 2026-10-14
+
+The Native options reader adds current active published workflows and current
+active routine revisions, bounded to the existing 500-per-family inventory
+refusal. Exact Native workflow revision, routine conversation Source and the
+routine's saved/current workflow targets are authorized before metadata/hash
+disclosure. Selected role revisions use their Original Source-aware reader too.
+The same automation Source guard protects explicit pin review/installation and
+Hire preparation. Known IDs/hashes and another owner/admin hint cannot grant
+private conversation access. Options share Native analytical/memory privacy
+locks, 1500 ms total/statement and 250 ms lock budgets, and final account access;
+reads perform no assessment, Activity, installation, schedule or run. This does
+not complete all downstream package/knowledge copy provenance or release proof.
+
+Slack/Teams ordinary binary confirmations additionally use the existing Native
+action owner, issued message/interaction identity, current linked Human and
+transactional effective-rollout recheck (ADR-65). Tool/grant/credential/connection/
+document review and reason-bearing rejection remain in the full web resolver.
+Live channel and full card-family qualification remain pending.

@@ -59,6 +59,7 @@ import {
 import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { agentProviderBindingService } from "../agent-provider-bindings.js";
 import { readinessService } from "../readiness/readiness-service.js";
@@ -67,6 +68,7 @@ import { skillResolverService } from "../skill-resolver.js";
 import { playbookService } from "../playbooks.js";
 import { playbookResolverService } from "../playbook-resolver.js";
 import { workflowService } from "../workflows/workflow-service.js";
+import { assertPackageAutomationSource } from "./component-source-access.js";
 import { assertLearningAssetCurrent } from "../learning/learning-assets.js";
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { conflict, forbidden, notFound } from "../../errors.js";
@@ -229,11 +231,8 @@ export function agentPackageService(
           revisionId: pin.versionId,
           required: component.required,
         });
-      if (["workflow_template", "routine_template"].includes(component.type))
-        await assertV7Authorization(tx, actor, companyId, "workflows:read");
-      if (component.type === "workflow_template" && !await workflowService(tx).getRevision(
-        companyId, pin.resourceId, pin.versionId, { ...actor, ignoreInstanceAdmin: true, isInstanceAdmin: false }))
-        throw conflict("The Original workflow component source is unavailable");
+      if (component.type === "workflow_template" || component.type === "routine_template")
+        await assertPackageAutomationSource(tx, actor, companyId, component.type, pin.resourceId, pin.versionId);
       const [hash] = await tx.execute(
         sql`select aw_v7_package_component_hash(${companyId}::uuid,${component.type},${pin.resourceId}::uuid,${pin.versionId}::uuid) as hash`,
       );
@@ -1059,6 +1058,7 @@ export function agentPackageService(
           if (matches.length !== 1) throw conflict("Resolve the package's exact local current routine before preparing this Hire", {
             code: matches.length ? "hire_package_component_ambiguous" : "hire_package_component_unavailable" });
           const selected = matches[0]!;
+          await assertPackageAutomationSource(db, actor, companyId, "routine_template", selected.resourceId, selected.versionId);
           if (selected.targetKind === "workflow") {
             const target = selected.targetRef ? await workflowService(db).get(companyId, selected.targetRef, { ...actor, ignoreInstanceAdmin: true }) : null;
             if (!target || target.status !== "active" || !target.publishedRevisionId ||
@@ -1075,129 +1075,156 @@ export function agentPackageService(
       actor: AuthorizationActor,
       companyId: string,
     ): Promise<PackageInstallOptions> => {
-      await assertV7Enabled(db, "agent_packages_v7");
-      await access(db, actor, companyId);
-      const result: PackageInstallOptions = { agents: [], components: [] };
-      const allAgents = await db
-        .select()
-        .from(agents)
-        .where(eq(agents.companyId, companyId))
-        .limit(501);
-      if (allAgents.length > 500)
-        throw conflict("Narrow the agent inventory before installing packages");
-      for (const a of allAgents) {
-        if (a.status === "terminated") continue;
-        try {
-          await assertV7Authorization(db, actor, companyId, "agent:read", {
-            type: "agent",
-            companyId,
-            agentId: a.id,
-          });
-          result.agents.push({ id: a.id, name: a.name });
-        } catch (error) {
-          if (
-            !(
-              error &&
-              typeof error === "object" &&
-              "status" in error &&
-              [403, 404].includes(Number(error.status))
-            )
-          )
-            throw error;
-        }
-      }
-      const roles = await db
-        .select({ r: rolePacks, v: rolePackVersions })
-        .from(rolePacks)
-        .innerJoin(
-          rolePackVersions,
-          and(
-            eq(rolePackVersions.companyId, rolePacks.companyId),
-            eq(rolePackVersions.rolePackId, rolePacks.id),
-          ),
-        )
-        .where(
-          and(
-            eq(rolePacks.companyId, companyId),
-            eq(rolePackVersions.state, "published"),
-          ),
-        )
-        .limit(501);
-      const skills = await db
-        .select()
-        .from(companySkills)
-        .where(eq(companySkills.companyId, companyId))
-        .limit(501);
-      const playbooks = await playbookService(db).list(actor, companyId);
-      if (roles.length > 500 || skills.length > 500)
-        throw conflict(
-          "Narrow the component inventory before installing packages",
-        );
-      const candidates = [
-        ...roles.map((r) => ({
-          type: "role_pack",
-          resourceId: r.r.id,
-          versionId: r.v.id,
-          name: r.r.name,
-        })),
-        ...skills.flatMap((s) =>
-          s.activeVersionId
-            ? [
-                {
-                  type: "skill",
-                  resourceId: s.id,
-                  versionId: s.activeVersionId,
-                  name: s.name,
-                },
-              ]
-            : [],
-        ),
-        ...playbooks.flatMap((p) =>
-          p.approvedRevisionId
-            ? [
-                {
-                  type: "playbook",
-                  resourceId: p.id,
-                  versionId: p.approvedRevisionId,
-                  name: p.title ?? p.key,
-                },
-              ]
-            : [],
-        ),
-      ];
-      for (const c of candidates) {
-        try {
-          if (c.type === "skill")
-            await skillResolverService(db).authorizedVersion(
-              actor,
+      const started = performance.now();
+      const budget = () => { if (performance.now() - started > 1500) throw conflict("Current package choices are unavailable"); };
+      return db.transaction(async raw => {
+        const tx = raw as unknown as Db;
+        await tx.execute(sql`set local statement_timeout='1500ms'`);
+        await tx.execute(sql`set local lock_timeout='250ms'`);
+        await lockAnalyticalCompany(tx, companyId);
+        await lockMemoryPrivacy(tx, companyId);
+        await assertV7Enabled(tx, "agent_packages_v7");
+        await access(tx, actor, companyId);
+        const result: PackageInstallOptions = { agents: [], components: [] };
+        const allAgents = await tx
+          .select()
+          .from(agents)
+          .where(eq(agents.companyId, companyId))
+          .limit(501);
+        if (allAgents.length > 500)
+          throw conflict("Narrow the agent inventory before installing packages");
+        for (const a of allAgents) {
+          budget();
+          if (a.status === "terminated") continue;
+          try {
+            await assertV7Authorization(tx, actor, companyId, "agent:read", {
+              type: "agent",
               companyId,
-              c.resourceId,
-              c.versionId,
-            );
-          if (c.type === "playbook")
-            await playbookResolverService(db).validate(actor, companyId, {
-              playbookId: c.resourceId,
-              revisionId: c.versionId,
-              required: true,
+              agentId: a.id,
             });
-          const [h] = await db.execute(
-            sql`select aw_v7_package_component_hash(${companyId}::uuid,${c.type},${c.resourceId}::uuid,${c.versionId}::uuid) as hash`,
-          );
-          if (typeof h?.hash === "string")
-            result.components.push({ ...c, contentHash: h.hash });
-        } catch (error) {
-          if (
-            !(
-              error &&
-              typeof error === "object" &&
-              "status" in error &&
-              [403, 404, 409].includes(Number(error.status))
+            result.agents.push({ id: a.id, name: a.name });
+          } catch (error) {
+            if (
+              !(
+                error &&
+                typeof error === "object" &&
+                "status" in error &&
+                [403, 404].includes(Number(error.status))
+              )
             )
-          )
-            throw error;
+              throw error;
+          }
         }
-      }
-      return result;
+        const roles = await tx
+          .select({ r: rolePacks, v: rolePackVersions })
+          .from(rolePacks)
+          .innerJoin(
+            rolePackVersions,
+            and(
+              eq(rolePackVersions.companyId, rolePacks.companyId),
+              eq(rolePackVersions.rolePackId, rolePacks.id),
+            ),
+          )
+          .where(
+            and(
+              eq(rolePacks.companyId, companyId),
+              eq(rolePackVersions.state, "published"),
+            ),
+          )
+          .limit(501);
+        const skills = await tx
+          .select()
+          .from(companySkills)
+          .where(eq(companySkills.companyId, companyId))
+          .limit(501);
+        const playbooks = await playbookService(tx).list(actor, companyId);
+        const workflowOptions = await tx.select({ resourceId: workflows.id, versionId: workflowRevisions.id, name: workflows.name })
+          .from(workflows).innerJoin(workflowRevisions, and(eq(workflowRevisions.companyId, workflows.companyId),
+            eq(workflowRevisions.workflowId, workflows.id), eq(workflowRevisions.id, workflows.publishedRevisionId)))
+          .where(and(eq(workflows.companyId, companyId), eq(workflows.status, "active"), eq(workflowRevisions.state, "published"))).limit(501);
+        const routineOptions = await tx.select({ resourceId: routines.id, versionId: routineRevisions.id, name: routineRevisions.title })
+          .from(routines).innerJoin(routineRevisions, and(eq(routineRevisions.companyId, routines.companyId),
+            eq(routineRevisions.routineId, routines.id), eq(routineRevisions.id, routines.latestRevisionId)))
+          .where(and(eq(routines.companyId, companyId), eq(routines.status, "active"))).limit(501);
+        if (roles.length > 500 || skills.length > 500 || workflowOptions.length > 500 || routineOptions.length > 500)
+          throw conflict(
+            "Narrow the component inventory before installing packages",
+          );
+        const candidates = [
+          ...workflowOptions.map(row => ({ ...row, type: "workflow_template" })),
+          ...routineOptions.map(row => ({ ...row, type: "routine_template" })),
+          ...roles.map((r) => ({
+            type: "role_pack",
+            resourceId: r.r.id,
+            versionId: r.v.id,
+            name: r.r.name,
+          })),
+          ...skills.flatMap((s) =>
+            s.activeVersionId
+              ? [
+                  {
+                    type: "skill",
+                    resourceId: s.id,
+                    versionId: s.activeVersionId,
+                    name: s.name,
+                  },
+                ]
+              : [],
+          ),
+          ...playbooks.flatMap((p) =>
+            p.approvedRevisionId
+              ? [
+                  {
+                    type: "playbook",
+                    resourceId: p.id,
+                    versionId: p.approvedRevisionId,
+                    name: p.title ?? p.key,
+                  },
+                ]
+              : [],
+          ),
+        ];
+        for (const c of candidates) {
+          budget();
+          try {
+            if (c.type === "workflow_template" || c.type === "routine_template")
+              await assertPackageAutomationSource(tx, actor, companyId, c.type, c.resourceId, c.versionId);
+            if (c.type === "role_pack")
+              await rolePackService(tx).getVersion({ ...actor, ignoreInstanceAdmin: true, isInstanceAdmin: false }, companyId, c.resourceId, c.versionId);
+            if (c.type === "skill")
+              await skillResolverService(tx).authorizedVersion(
+                actor,
+                companyId,
+                c.resourceId,
+                c.versionId,
+              );
+            if (c.type === "playbook")
+              await playbookResolverService(tx).validate(actor, companyId, {
+                playbookId: c.resourceId,
+                revisionId: c.versionId,
+                required: true,
+              });
+            const [h] = await tx.execute(
+              sql`select aw_v7_package_component_hash(${companyId}::uuid,${c.type},${c.resourceId}::uuid,${c.versionId}::uuid) as hash`,
+            );
+            if (typeof h?.hash === "string")
+              result.components.push({ ...c, contentHash: h.hash });
+          } catch (error) {
+            if (
+              !(
+                error &&
+                typeof error === "object" &&
+                "status" in error &&
+                [403, 404, 409].includes(Number(error.status))
+              )
+            )
+              throw error;
+          }
+        }
+        await access(tx, actor, companyId);
+        budget();
+        return result;
+      });
     },
     catalog: async (
       actor: AuthorizationActor,
