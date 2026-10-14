@@ -2613,5 +2613,36 @@
     "scenarios": "Sammenlign betingede beregninger og deres antagelser.",
     "experiments": "Gennemgå det registrerede spørgsmål, design og den registrerede evidens.",
     "reviews": "Læs historiske opsummeringer med links til deres evidens."
+  },
+  "insightObservations": {
+    "heading": "Gemte målinger",
+    "boundary": "Et udvalg af gemte målinger. Gennemgå definitionerne og datoerne, før du sammenligner resultater.",
+    "unavailable": "De aktuelt tilgængelige målinger kunne ikke læses. Opdatér, før du bruger et tidligere resultat.",
+    "empty": "Der blev ikke returneret en udgivet måling på denne side med din aktuelle adgang.",
+    "noObservation": "Der blev ikke returneret en aktuel, gemt observation for denne definition.",
+    "currentState": "Populationen blev oprettet i perioden; dens tilstand blev observeret på det angivne tidspunkt. Dette er ikke en rekonstruktion af historisk tilstand.",
+    "externalSemantics": "Den eksterne definition bestemmer målingens tidsbetydning. Gennemgå definitionen før sammenligning.",
+    "window": "Periode: {{from}} til {{until}} ({{timezone}}; slutpunktet er ikke medregnet)",
+    "asOf": "Observeret {{time}}",
+    "expired": "Observationen er udløbet. Opdatér, før du bruger værdien.",
+    "moreObservations": "Der kan være flere observationer i den fulde målingsvisning med din aktuelle adgang. Siden rangerer ikke de nyeste resultater.",
+    "moreMetrics": "Der kan være flere målinger uden for denne afgrænsede side.",
+    "inspect": "Gennemgå definitioner og observationer",
+    "authority": {
+      "aw_native": "Beregnet af August Works",
+      "external_authoritative": "Ekstern, autoritativ måling",
+      "external_projection": "Projektion af en ekstern måling"
+    },
+    "status": {
+      "observed": "Værdien er ikke tilgængelig",
+      "undefined": "Værdien er ikke defineret; den må ikke tolkes som nul.",
+      "unavailable": "Værdien er ikke tilgængelig.",
+      "restricted": "Den aktuelle adgang tillader ikke denne værdi."
+    },
+    "units": {
+      "issue": "opgaver",
+      "project": "projekter",
+      "ratio": "forholdstal"
+    }
   }
 }

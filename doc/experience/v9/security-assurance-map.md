@@ -202,3 +202,15 @@ proposal titles, credentials and private receipt IDs are not added to them.
 Additional fixed test-run metadata remains in the instance database. Host,
 manual/Human and deployment/restore qualification are still required; software
 fixtures do not meet those gates or demonstrate provider availability.
+
+
+Insights metric observations use only current account-bound Native GETs and
+the existing Source/definition/lineage readers (ADR-72). Response identity and
+definition version/hash must agree; a frontend profile or historical observation
+is not a new reader grant. No recomputation, model call, aggregate portfolio
+claim, new snapshot or Telemetry payload is added. Ephemeral scope/revision
+queries, cancellation, refresh withdrawal and expiry govern displayed private
+names/values. Business definitions/results remain inside the current company
+and canonical retention/rights policy. Synthetic browser governance and local
+operator context do not qualify real Humans or hosted disclosure. The legacy
+local company remove/governance-retention FK gap remains explicitly open.

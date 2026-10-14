@@ -1895,3 +1895,63 @@ inferred from the bounded browser: the historical fixture has no actual run log.
 The explicitly selected shared screen-contract/schema pair passes 67 cases
 (0.490 seconds). Final token/module/70-Source gates pass. Both typecheck exit
 files contain 0. These remain software results; the full immutable run follows.
+
+
+### Insights displays retained Native metric observations — 2026-10-14 (checkpoint 47)
+
+The customer directory now reads existing metric list/detail/observation owners
+and displays a bounded result view, not only navigation. It creates no query,
+calculation, model call, observation or parallel evidence store. At most three
+published definitions and three entries from each Native first page are shown;
+Native UUID ordering is not presented as latest ranking or a complete inventory.
+The exact company/metric/published version/definition hash is checked. Bounded
+shared response schemas reject unknown numeric/status/chronology combinations,
+duplicate identities and mixed or changed definitions without private excerpts.
+Observed zero, undefined, unavailable/restricted and expired values are distinct.
+Native counts use localized customer units; native ratios are rounded percentage
+displays, preserving the actual period/as-of/current-state/authority semantics.
+
+Current parent session/projection/rollout fences unmount the private view. Its
+ephemeral company/principal/authority/revision keys and fresh cancellable
+transport do not join older reads or restore late other-account results. Metric
+activity changes withdraw the prior revision. Refetch removes retained titles/
+values until the owner settles; expiry hides the number without creating a
+measurement. No new processing purpose, source right or event payload is added.
+SHELL source/contract, ADR-72 and V9-044/092 working states are aligned; other
+insight families and semantic conversation authoring remain pending.
+
+The first API attempt reveals that UI owns no zod dependency; bounded wire
+contracts are moved to the existing shared owner rather than adding one. The
+first positive fixture used count unit count; the Original definition correctly
+requires objects, and that fixture is corrected. Eight API checks initially
+have one fixture failure; the final reader adds definition-hash/native numeric
+validation. The three-suite UI/API regression passes 19 cases (17.75 seconds),
+then 21 after revision/hash checks (21.14 seconds). Final five-file API/UI/shared
+contract regression passes 90 cases (9.12 seconds). UI typecheck passes exit 0.
+
+The actual built metric browser uses synthetic governance and business rows,
+then creates/publishes/calculates one observation through the real Native
+services. The frontend performs only GETs, leaves the observation rows exactly
+unchanged, hides raw source prose, displays the retained value/window and passes
+EN/DA 390px no-overflow/main axe zero. Initial browser passes about 1.1 minutes;
+its attempted legacy company cleanup exposes a governance FK removal gap. That
+separate incomplete owner is recorded rather than represented as an erasure
+pass or bypassed by a second cleanup owner. The disposable database owns fixture
+teardown. A two-browser regression passes the measurement case but reveals the
+directory's old first-Tab expectation; the new inspection link is first, then
+Native metric navigation. The current directory regression is recorded below.
+
+This is software metric-card support, not real-company, provider, complete
+portfolio, manual or representative Human qualification. The frozen checkpoint
+46 full typecheck passes; its full tests are running and exclude this checkpoint.
+All 70 launch-evidence rows and R0 remain pending. No PR/push is performed.
+
+Final directory browser regression passes 1 case (36.6 seconds), including
+keyboard navigation through the additional inspection link and seven restored
+links after the current-account check. The Danish mobile screenshot is inspected.
+Product copy uses the writing/UI playbooks' reader-first guidance: the customer
+sees a selection of saved measurements and an instruction to review definitions
+and dates, without internal runtime jargon.
+Final paired built browsers pass 2 cases (46.9 seconds) after copy refinement.
+The retained-measurement Danish mobile screenshot is inspected. Token gates,
+module boundaries and V9 coverage pass; coverage still reports 70 pending.

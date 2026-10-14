@@ -8,6 +8,7 @@ import { instanceSettingsApi } from "../api/instanceSettings";
 import { queryKeys } from "../lib/queryKeys";
 import { useExperienceHeading } from "../hooks/useExperienceHeading";
 import { ExperienceReadError } from "../components/ExperienceReadError";
+import { ExperienceMetricObservations } from "../components/ExperienceMetricObservations";
 const destinations: { feature: V8FeatureKey; href: string; key: string }[] = [
   { feature: "business_metrics_v8", href: "/business-metrics", key: "metrics" },
   {
@@ -63,6 +64,8 @@ export function ExperienceInsights() {
     <div className="space-y-6">
       <h1 ref={heading} tabIndex={-1} className="text-2xl font-semibold">{t("nav.insights")}</h1>
       <p>{t("insightDirectory.intro")}</p>
+      {visible.some(item => item.key === "metrics") && <ExperienceMetricObservations key={scope}
+        companyId={selectedCompanyId} userId={identity.localImplicit ? null : identity.userId} scope={`${scope}:${identity.authorityEpoch}`} />}
       {visible.length === 0 ? (
         <p role="status">{t("insightDirectory.unavailable")}</p>
       ) : (

@@ -2534,3 +2534,35 @@ checks are bounded software evidence; genuine provider/tool qualification,
 manual assistive-technology and representative Human evidence remain open.
 Automatic task effects, external send/spend, permission changes and delegation
 remain unmapped. The 70 release rows and R0 remain pending.
+
+
+## ADR-72 — Insights displays bounded retained observations from the Native metric owner
+
+The directory adds a read-only measurement view over the existing Native metric
+list/detail/observations endpoints. It never calls the calculation/query writer,
+a model or a parallel result store. At most three published metrics and three
+observations from each owner's first bounded page are shown. Original ordering
+is by Native identity; neither latest-result ranking nor a complete company
+inventory is claimed. Definition version/hash, company/metric identity and
+current published state must agree; malformed or mixed results fail without
+private error excerpts. Existing owner Source/authorization requalification is
+authoritative. Opaque model metadata or a frontend profile grants no privilege.
+
+Current session/projection/rollout loading and failure unmount private results.
+Company/principal/authority and metric activity revisions have ephemeral query
+keys; fresh transport reads detach older requests and pass cancellation through.
+During refetch, retained private titles/values are withheld; an earlier account
+cannot restore them. Expired observations suppress their numeric value on the
+client as well as through the Native reader. Observed zero is distinguished from
+undefined, unavailable and restricted values. Native object counts use customer
+units, native subset ratios display a rounded percentage, and period/current-
+state/as-of/authority semantics remain explicit. No new observation is created
+merely by visiting the page.
+
+This implements MetricInsightCard support and a partial manager journey, not
+all V8 insight families or semantic conversation authoring. Source/Tenant, host,
+manual and representative Human qualification remain open. Browser governance
+and business rows are explicit disposable software fixtures, not real-company
+or compliance evidence. Legacy local company removal fails on governance
+retention references; this discovered separate owner gap is not erased by a
+fixture cleanup or represented as a tenant-erasure pass.

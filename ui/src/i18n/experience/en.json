@@ -2613,5 +2613,36 @@
     "scenarios": "Compare conditional calculations and their assumptions.",
     "experiments": "Review the registered question, design and recorded evidence.",
     "reviews": "Read historical summaries with links to their evidence."
+  },
+  "insightObservations": {
+    "heading": "Recorded measurements",
+    "boundary": "A selection of saved measurements. Review the definitions and dates before comparing results.",
+    "unavailable": "Current authorized measurements could not be read. Refresh before using a retained result.",
+    "empty": "No published metric was returned on this authorized page.",
+    "noObservation": "No current recorded observation was returned for this definition.",
+    "currentState": "The population was created within the window; its state was observed at the recorded time. This is not a reconstruction of historical state.",
+    "externalSemantics": "The external definition owns this measurement’s time semantics. Inspect its definition before comparison.",
+    "window": "Window: {{from}} to {{until}} ({{timezone}}; end excluded)",
+    "asOf": "Observed at {{time}}",
+    "expired": "The observation expired. Refresh before using its value.",
+    "moreObservations": "More authorized observations may exist in the full measurement view. This page is not a latest-result ranking.",
+    "moreMetrics": "More metrics may exist beyond this bounded page.",
+    "inspect": "Inspect definitions and observations",
+    "authority": {
+      "aw_native": "Calculated by August Works",
+      "external_authoritative": "Externally authoritative measurement",
+      "external_projection": "Projection of an external measurement"
+    },
+    "status": {
+      "observed": "Value unavailable",
+      "undefined": "The value is undefined; do not interpret it as zero.",
+      "unavailable": "The value is unavailable.",
+      "restricted": "Current access does not permit this value."
+    },
+    "units": {
+      "issue": "tasks",
+      "project": "projects",
+      "ratio": "ratio"
+    }
   }
 }
