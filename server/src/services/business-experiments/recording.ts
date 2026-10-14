@@ -27,6 +27,16 @@ async function requireNoOtherActiveRecording(tx: Db, companyId: string, experime
 /** Bookkeeping only. No method dispatches work, changes a native task/project,
  * asserts customer consent, verifies a workflow or grants policy authority. */
 export function businessExperimentRecordingService(db: Db) {
+  async function readVersion<T>(companyId: string, actor: AuthorizationActor, id: string, versionId: string,
+    project: (pin: Awaited<ReturnType<typeof inspectBusinessExperimentVersion>>, row: typeof businessExperiments.$inferSelect) => T) {
+    return db.transaction(async raw => {
+      const tx = raw as unknown as Db;
+      await admitBusinessExperiment(tx, companyId, actor);
+      const row = await lockBusinessExperimentRoot(tx, companyId, id);
+      const pin = await inspectBusinessExperimentVersion(tx, row, actor, versionId, false, performance.now() + 30_000);
+      return project(pin, row);
+    });
+  }
   return {
     async safetyControls(companyId: string, actor: AuthorizationActor, cursor?: string) {
       return db.transaction(async raw => {
@@ -144,12 +154,30 @@ export function businessExperimentRecordingService(db: Db) {
       });
     },
     async receipts(companyId: string, actor: AuthorizationActor, id: string, versionId: string) {
-      return db.transaction(async raw => {
-        const tx = raw as unknown as Db; await admitBusinessExperiment(tx, companyId, actor); const row = await lockBusinessExperimentRoot(tx, companyId, id), pin = await inspectBusinessExperimentVersion(tx, row, actor, versionId, false, performance.now() + 30_000);
+      return readVersion(companyId, actor, id, versionId, pin => {
         return { versionId, analysis: pin.receipts.analysis ? experimentAnalysisView(pin.receipts.analysis, pin.receipts.completion!, pin.source.current) : null, interpretation: pin.receipts.interpretation ? experimentInterpretationView(pin.receipts.interpretation) : null, assignments: pin.receipts.assignments.map(assignmentView), exposures: pin.receipts.exposures.map(exposureView),
           recording: pin.receipts.execution ? { mode: pin.receipts.execution.mode, startedBy: pin.receipts.execution.startedBy, startedAt: pin.receipts.execution.startedAt.toISOString(), receiptHash: pin.receipts.execution.receiptHash } : null,
           completion: pin.receipts.completion ? { reason: pin.receipts.completion.reason, concurrentChangeReview: pin.receipts.completion.concurrentChangeReview, completedBy: pin.receipts.completion.completedBy, completedAt: pin.receipts.completion.completedAt.toISOString(), receiptHash: pin.receipts.completion.receiptHash } : null,
           exposureProvenance: "human_attestation" as const, currentQualification: pin.source.current ? "current" as const : "needs_revalidation" as const };
+      });
+    },
+    async analysisSummary(companyId: string, actor: AuthorizationActor, id: string, versionId: string) {
+      return readVersion(companyId, actor, id, versionId, (pin, row) => {
+        if (row.currentVersionId !== versionId) throw conflict("Experiment version changed; refresh before inspecting its current result");
+        const analysis = pin.receipts.analysis ? experimentAnalysisView(pin.receipts.analysis, pin.receipts.completion!, pin.source.current) : null;
+        const interpretation = pin.receipts.interpretation ? experimentInterpretationView(pin.receipts.interpretation) : null;
+        // Reuse the complete Original Source/receipt inspection. The customer
+        // result projection omits unit IDs, snapshots, assignments, exposures
+        // and operator identities; none are required to read this summary.
+        return { companyId, experimentId: id, versionId, definitionHash: pin.value.contentHash, expiresAt: pin.value.expiresAt.toISOString(),
+          currentQualification: pin.source.current ? "current" as const : "needs_revalidation" as const,
+          analysis: analysis ? { id: analysis.id, companyId: analysis.companyId, experimentId: analysis.experimentId, versionId: analysis.versionId,
+            definitionHash: analysis.definitionHash, qualityGates: analysis.qualityGates, result: analysis.result, causalAuthority: analysis.causalAuthority,
+            exposureProvenance: analysis.exposureProvenance, outcomeTimeSemantics: analysis.outcomeTimeSemantics, analyzedAt: analysis.analyzedAt,
+            receiptHash: analysis.receiptHash, currentQualification: analysis.currentQualification } : null,
+          interpretation: interpretation ? { analysisId: interpretation.analysisId, conclusion: interpretation.conclusion, rationale: interpretation.rationale,
+            executionAuthority: interpretation.executionAuthority, interpretedAt: interpretation.interpretedAt, receiptHash: interpretation.receiptHash } : null,
+        };
       });
     },
   };

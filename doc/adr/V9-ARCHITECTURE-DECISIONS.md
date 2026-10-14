@@ -2617,3 +2617,34 @@ No scenario execution, publication, model call, budget/target/decision change,
 reader grant, parallel snapshot or telemetry is introduced by viewing Insights.
 This is partial ScenarioComparisonCard software, not all insight families,
 representative Human/provider validation or whole-V9 release acceptance.
+
+
+## ADR-75 — Narrow Native experiment result projection for customer Insights
+
+The existing recording owner adds analysisSummary and a current-version GET.
+Its readVersion helper preserves the Original admission, root/retention/purpose,
+full Source, signed assignment/exposure/completion/outcome/analysis/interpretation
+and arithmetic requalification used by receipts. Existing receipt payloads stay
+unchanged. The projection omits unit IDs/snapshots/registers and structured
+operator identity fields; analysis and advisory interpretation remain Native.
+It checks the exact current protocol version, and preserves account/no-store
+routing. No new result store, computation writer, experiment, decision, model,
+rollout or permission is introduced. Reader workload/Source limits stay Native;
+maximum-source performance and real hosted qualification remain open.
+
+Insights selects at most three completed/stopped/current analytical experiments
+from the Native bounded first page. Root revision/state/version, company,
+definition hash, summary/analysis/interpretation ownership and declared metric
+roles bind the response. Duplicate or mixed evidence fails with fixed errors.
+Qualified populations must reconcile. Early integrity rejection can leave arm
+diagnostics incomplete; invalid diagnostic counts must not be presented as
+qualified zeros or hide the Native invalid status. The card withholds expired,
+unqualified, invalid or withheld-authority numbers. A numerically qualified
+but inconclusive comparison retains its honest label and conditional interval.
+Human exposure attestation/common-final-capture semantics, primary/guardrail/
+exploratory roles, arm rates, percentage-point differences and familywise
+interval coverage accompany the evidence. Human conclusions stay advisory
+and do not authorize a decision or rollout. Scope/activity revisions, fresh
+cancellable reads, refetch withdrawal and expiry govern private content.
+This is partial ExperimentResultCard software and not a qualified business
+trial, representative Human validation or all V9 release acceptance.

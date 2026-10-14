@@ -713,7 +713,12 @@
         "packages/shared/src/experience-process-findings.ts",
         "ui/src/components/ExperienceScenarioComparisons.tsx",
         "ui/src/api/insight-scenario-comparisons.ts",
-        "packages/shared/src/experience-scenario-comparisons.ts"
+        "packages/shared/src/experience-scenario-comparisons.ts",
+        "ui/src/components/ExperienceExperimentResults.tsx",
+        "ui/src/api/insight-experiment-results.ts",
+        "packages/shared/src/experience-experiment-results.ts",
+        "server/src/services/business-experiments/recording.ts",
+        "server/src/routes/business-experiments.ts"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/shell.json"

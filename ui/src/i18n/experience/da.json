@@ -2722,5 +2722,52 @@
       "customer": "kunder",
       "second": "sekunder"
     }
+  },
+  "insightExperiments": {
+    "heading": "Gemte forsøgsresultater",
+    "boundary": "Registrerede forsøg giver betinget evidens. Resultater og menneskelige konklusioner godkender ikke en udrulning og træffer ikke en forretningsbeslutning.",
+    "unavailable": "Forsøgsresultaterne kunne ikke læses med din aktuelle adgang. Prøv igen.",
+    "empty": "Intet afsluttet eller stoppet forsøg er tilgængeligt i dette udvalg.",
+    "expired": "Denne forsøgsevidens er udløbet. Gennemgå aktuel evidens, før du bruger den.",
+    "noAnalysis": "Ingen analyse er gemt for denne protokolversion.",
+    "needsReview": "Protokollen eller dens kilder kræver ny validering. Gemte resultater og konklusioner er tilbageholdt.",
+    "withheld": "Den aktuelle evidens kvalificerer ikke en talmæssig effekt eller en årsagskonklusion.",
+    "period": "Registreret periode: {{from}} til {{until}} (UTC; slutpunktet er ikke medregnet)",
+    "provenance": "Eksponering er bekræftet af mennesker. Udfald afspejler den fælles afsluttende aflæsning af objekter oprettet i den registrerede periode.",
+    "analyzed": "Analyseret {{time}} (UTC)",
+    "control": "Kontrol: {{successes}} af {{units}} ({{rate}})",
+    "treatment": "Behandling: {{successes}} af {{units}} ({{rate}})",
+    "effect": "Forskel: {{value}} procentpoint",
+    "interval": "Interval: {{lower}} til {{upper}} procentpoint; samlet dækningsgrad {{coverage}}",
+    "humanConclusion": "Gemt menneskelig konklusion",
+    "advisory": "Denne konklusion er vejledende. Handling kræver en separat, autoriseret beslutning.",
+    "limitations": "Gennemgå begrænsninger og anvendelighed",
+    "more": "Flere forsøg kan være tilgængelige uden for dette udvalg. Dette er ikke en rangering af de nyeste resultater.",
+    "inspect": "Gennemgå registrerede forsøg og evidens",
+    "status": {
+      "pass": "Analysen opfylder sine registrerede kriterier.",
+      "fail": "Analysen opfylder ikke sine registrerede kriterier.",
+      "inconclusive": "Analysen er ikke entydig.",
+      "invalid": "Analysen er ugyldig."
+    },
+    "role": {
+      "primary": "Primært udfald",
+      "guardrail": "Sikkerhedsmål",
+      "exploratory": "Udforskende"
+    },
+    "metricInterpretation": {
+      "threshold_met": "Registreret tærskel opfyldt",
+      "threshold_not_met": "Registreret tærskel ikke opfyldt",
+      "harm_excluded": "Registreret skadestærskel udelukket",
+      "harm_detected": "Registreret skadestærskel overskredet",
+      "uncertain": "Usikker i forhold til den erklærede tærskel",
+      "exploratory": "Udforskende; ikke en bekræftende konklusion"
+    },
+    "conclusion": {
+      "ship_candidate": "Kandidat til gennemgang før udrulning",
+      "do_not_ship": "Udrul ikke",
+      "iterate": "Revidér og test igen",
+      "abstain": "Tilbagehold en konklusion"
+    }
   }
 }

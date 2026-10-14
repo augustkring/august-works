@@ -359,6 +359,25 @@ suite("Native experiment final capture and human interpretation on migrated Post
     await expect(db.transaction(async raw=>{const tx=raw as unknown as typeof db;const at=new Date();await tx.insert(businessExperimentTransitions).values({companyId,experimentId:another.experiment.id,versionId:another.version.id,revision:6,fromState:"completed",toState:"analyzing",rationale,createdBy:"local-board",createdAt:at});await tx.update(businessExperiments).set({state:"analyzing",revision:6,updatedAt:at}).where(eq(businessExperiments.id,another.experiment.id));})).rejects.toMatchObject({code:"23514"});
     expect((await recording().receipts(companyId,actor,d.experiment.id,d.version.id)).analysis?.receiptHash).toBe(saved.receiptHash);
   });
+  it("projects a current analysis without participant registers or operator identities and rechecks its Source", async () => {
+    const d = await running(), unit = await enrolled(d);
+    await closure(d, "emergency_safety_stop");
+    const result = await analyzed(d);
+    const endpoint = `/api/companies/${companyId}/experiments/${d.experiment.id}/versions/${d.version.id}/analysis-summary`;
+    const response = await request(app()).get(`${endpoint}?expectedUserId=local-board`).expect(200);
+    expect(response.headers["cache-control"]).toBe("no-store");
+    expect(response.body).toMatchObject({ companyId, experimentId: d.experiment.id, versionId: d.version.id,
+      analysis: { id: result.analysis.id, causalAuthority: "withheld", result: { numericallyQualified: false, metrics: [] } } });
+    expect(response.body).not.toHaveProperty("assignments"); expect(response.body).not.toHaveProperty("exposures");
+    expect(response.body.analysis).not.toHaveProperty("analyzedBy");
+    expect(JSON.stringify(response.body)).not.toContain(unit.unit.id);
+    expect(JSON.stringify(response.body)).not.toContain(unit.assignment.id);
+    await request(app()).get(`${endpoint}?expectedUserId=another-account`).expect(409);
+    await expect(recording().analysisSummary(otherId, actor, d.experiment.id, d.version.id)).rejects.toMatchObject({ status: 404 });
+    await db.update(issues).set({ hiddenAt: new Date() }).where(eq(issues.id, unit.unit.id));
+    await request(app()).get(`/api/companies/${companyId}/experiments/${d.experiment.id}/versions/${d.version.id}/receipts`).expect(404);
+    await request(app()).get(endpoint).expect(404);
+  });
   it("public analysis routes reject pasted result/integrity fields and preserve current account/no-store",async()=>{
     const d=await running(true);await attested(d);await closure(d);const app=express();app.use(express.json());app.use((req,_res,next)=>{req.actor=actor;next();});app.use(businessExperimentRoutes(db));app.use(errorHandler);const url=`/companies/${companyId}/experiments/${d.experiment.id}/analyze`;
     const injected=await request(app).post(url).send({expectedRevision:5,versionId:d.version.id,result:"pass",integrity:{telemetryComplete:true}});expect(injected.status).toBe(400);

@@ -2023,3 +2023,57 @@ Checkpoint 49 whole-workspace typecheck passes exit 0; it does not include this
 checkpoint. The frozen checkpoint 46 full tests remain running with the old
 runtime-skills teardown failure fixed separately in checkpoint 48. All 70
 launch rows/R0 and whole-V9/final exact-head checks remain pending. No PR/push.
+
+### Insights displays Native experiment results through a narrow Original reader — 2026-10-14 (checkpoint 51)
+
+The existing recording owner gains analysisSummary using the same complete
+readVersion inspection as receipts. The new GET preserves current account,
+no-store, version, purpose, retention, signed receipt and Source controls but
+omits unit snapshots/assignment/exposure registers and structured operator
+identity fields. Existing full receipts remain unchanged. ADR-75 and SHELL
+source/contract map the partial V9-044/092 work. A frontend profile grants
+nothing. No computation writer, new result store, model, experiment, decision,
+rollout, processing purpose or telemetry event is added.
+
+The client binds current root state/revision/version, tenant, definition and
+analysis/interpretation ownership, metric keys/roles and qualified populations.
+Expired/unqualified/invalid/withheld numbers are suppressed; qualified but
+statistically inconclusive intervals keep their honest label. Registered period,
+Human-attested exposure/common final capture, rates, percentage-point effects,
+familywise intervals, primary/guardrail/exploratory roles, limitations and
+advisory Human conclusions are explicit. Fresh ephemeral scope/activity reads,
+cancellation, refetch withdrawal and expiry protect private content.
+
+Initial Native test fixtures incorrectly try cancelled completion material and
+analysis after cancellation; Original schema/state gates refuse them. The test
+uses the actual completed emergency-stop helper without relaxing production
+guards. Source withdrawal returns 404 consistently with the full receipt
+reader, not the guessed 403. Three complete Native registration/recording/
+analysis suites pass 49 cases (413.19 seconds), including new narrowed-reader
+identity/no-store/current-account/Source refusal and unchanged legacy readers.
+The maximum fixture has 4,000 units/68,000 outcomes; actual capture/read takes
+40.7/17.282 seconds on this host. This is bounded software workload evidence,
+not a production latency claim or a real experiment.
+
+Initial browser's count metrics are correctly rejected by the Original binary
+ratio contract; its fixture switches to the same registered ratio population
+as Native tests. Real Native invalid early integrity rejection exposes partial
+arm diagnostics; the client now reconciles populations only when numerically
+qualified, and preserves the invalid status without manufacturing zero effects.
+The explicit synthetic not-applied exposure receipt supports the intended
+nonconfirmatory stopped case. Final UI/API/directory suites pass 30 cases
+(11.50 seconds); server and UI typechecks pass before that last reader guard.
+Final actual built experiment/directory browsers pass 2 cases (49.8 seconds):
+Native protocol/recording/stop/analysis, no displayed numerical effect, no
+participant registers transferred, unchanged analysis rows/no frontend writes,
+EN/DA 390px/no overflow/main axe zero, actual Source withdrawal and no restored
+private result. The Danish mobile screenshot is inspected. Browser numerics
+are deliberately withheld; UI interval fixtures are not a real qualified trial.
+
+Checkpoint 50 combined insight/shared-contract regression passes 127 cases
+(37.96 seconds) and its whole build passes exit 0 with source stamp
+4edea5d79925bd409c59440372d85e8a399d2bcf. Those checks exclude this checkpoint.
+All 70 launch rows/R0 remain pending. The frozen checkpoint 46 full suite
+still contains the old teardown failure fixed in 48; final exact-head workspace
+checks, other insight families and whole-V9 implementation remain outstanding.
+No PR/push.

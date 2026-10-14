@@ -2722,5 +2722,52 @@
       "customer": "customers",
       "second": "seconds"
     }
+  },
+  "insightExperiments": {
+    "heading": "Recorded experiment results",
+    "boundary": "Registered experiments provide conditional evidence. Results and human conclusions do not authorize rollout or make a business decision.",
+    "unavailable": "Experiment results could not be read with your current access. Try again.",
+    "empty": "No completed or stopped experiment is available in this selection.",
+    "expired": "This experiment evidence has expired. Review current evidence before using it.",
+    "noAnalysis": "No analysis is recorded for this protocol version.",
+    "needsReview": "The protocol or its sources require revalidation. Retained results and conclusions are withheld.",
+    "withheld": "Current evidence does not qualify a numerical effect or causal conclusion.",
+    "period": "Registered period: {{from}} to {{until}} (UTC; end excluded)",
+    "provenance": "Exposure is human-attested. Outcomes reflect the common final capture of objects created in the registered period.",
+    "analyzed": "Analyzed at {{time}} (UTC)",
+    "control": "Control: {{successes}} of {{units}} ({{rate}})",
+    "treatment": "Treatment: {{successes}} of {{units}} ({{rate}})",
+    "effect": "Difference: {{value}} percentage points",
+    "interval": "Interval: {{lower}} to {{upper}} percentage points; familywise coverage {{coverage}}",
+    "humanConclusion": "Recorded human conclusion",
+    "advisory": "This conclusion is advisory. A separate authorized decision is required for action.",
+    "limitations": "Review limitations and applicability",
+    "more": "More experiments may be available outside this selection. This is not a latest-result ranking.",
+    "inspect": "Review registered experiments and evidence",
+    "status": {
+      "pass": "The analysis meets its registered criteria.",
+      "fail": "The analysis does not meet its registered criteria.",
+      "inconclusive": "The analysis is inconclusive.",
+      "invalid": "The analysis is invalid."
+    },
+    "role": {
+      "primary": "Primary outcome",
+      "guardrail": "Guardrail",
+      "exploratory": "Exploratory"
+    },
+    "metricInterpretation": {
+      "threshold_met": "Registered threshold met",
+      "threshold_not_met": "Registered threshold not met",
+      "harm_excluded": "Registered harm threshold excluded",
+      "harm_detected": "Registered harm threshold exceeded",
+      "uncertain": "Uncertain against the declared threshold",
+      "exploratory": "Exploratory; not a confirmatory conclusion"
+    },
+    "conclusion": {
+      "ship_candidate": "Candidate for rollout review",
+      "do_not_ship": "Do not roll out",
+      "iterate": "Revise and retest",
+      "abstain": "Withhold a conclusion"
+    }
   }
 }

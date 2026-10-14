@@ -11,6 +11,7 @@ import { ExperienceReadError } from "../components/ExperienceReadError";
 import { ExperienceMetricObservations } from "../components/ExperienceMetricObservations";
 import { ExperienceProcessFindings } from "../components/ExperienceProcessFindings";
 import { ExperienceScenarioComparisons } from "../components/ExperienceScenarioComparisons";
+import { ExperienceExperimentResults } from "../components/ExperienceExperimentResults";
 const destinations: { feature: V8FeatureKey; href: string; key: string }[] = [
   { feature: "business_metrics_v8", href: "/business-metrics", key: "metrics" },
   {
@@ -71,6 +72,8 @@ export function ExperienceInsights() {
       {visible.some(item => item.key === "process") && <ExperienceProcessFindings key={scope}
         companyId={selectedCompanyId} userId={identity.localImplicit ? null : identity.userId} scope={`${scope}:${identity.authorityEpoch}`} />}
       {visible.some(item => item.key === "scenarios") && <ExperienceScenarioComparisons key={scope}
+        companyId={selectedCompanyId} userId={identity.localImplicit ? null : identity.userId} scope={`${scope}:${identity.authorityEpoch}`} />}
+      {visible.some(item => item.key === "experiments") && <ExperienceExperimentResults key={scope}
         companyId={selectedCompanyId} userId={identity.localImplicit ? null : identity.userId} scope={`${scope}:${identity.authorityEpoch}`} />}
       {visible.length === 0 ? (
         <p role="status">{t("insightDirectory.unavailable")}</p>

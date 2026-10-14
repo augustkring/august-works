@@ -234,3 +234,17 @@ are withheld; fresh ephemeral authority/revision reads cannot restore earlier
 private results. Visiting Insights creates no calculation, commitment, grant,
 new processing purpose or telemetry event. Synthetic approved governance and
 role/browser fixtures remain explicitly bounded software evidence.
+
+
+Experiment analysis-summary (ADR-75) is a projection inside the existing Native
+recording owner and Original tenant/reader/purpose/Source/signed-receipt
+inspection. It discloses authorized aggregate results and advisory Human
+interpretation while omitting unit registers/snapshots and structured operator
+identity fields. Free business prose remains authorized private content, not
+anonymized text. The existing management-intelligence processing purpose,
+retention and Source rights apply; no new processing purpose, telemetry field
+or event, experiment, decision or rollout write is added. Identity/hash/metric
+role, authority/qualification, current scope and expiry checks govern display.
+Native participant Source withdrawal refuses this reader like the full receipt
+owner. Explicit synthetic governance/recording/manager fixtures do not qualify
+real Humans, causal business outcomes, production population or hosted access.
