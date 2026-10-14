@@ -4,6 +4,7 @@ import { useMutation, useQuery } from "@tanstack/react-query";
 import { Trans, useTranslation } from "react-i18next";
 import {
   packageInstallSchema,
+  packageDecisionSchema,
   type PackageCatalogView,
   type PackagePreview,
   type PackageInstallationView,
@@ -122,10 +123,19 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
       aiUseCaseId: useCaseId || null,
     });
   }
+  const configuredInput = (() => { try { return selected ? input() : null; } catch { return null; } })();
+  const nativeComponentTypes = ["role_pack", "skill", "playbook", "workflow_template", "routine_template"];
+  const currentInstallation = !updating || installations.data?.some(row => row.id === updating.id && row.version === updating.version && row.status !== "uninstalled");
+  const configurationReady = Boolean(configuredInput && selected && currentInstallation &&
+    options.data?.agents.some(agent => agent.id === agentId) &&
+    selected.components.filter(component => component.required && nativeComponentTypes.includes(component.type))
+      .every(component => configuredInput.components.some(pin => pin.key === component.key)) &&
+    (selected.manifest.audience !== "customer" || useCases.data?.some(purpose => purpose.id === useCaseId && purpose.status === "approved")));
+  const validReason = packageDecisionSchema.shape.reason.safeParse(reason).success;
   // An unchanged payload is insufficient after an Original source has been
   // re-read. A preview belongs to its exact input and observed source frame.
   let setupFingerprint: string | null = null;
-  if (selected) {
+  if (selected && configurationReady) {
     try {
       setupFingerprint = JSON.stringify({ input: input(), packageId: selected.id,
         updating: updating ? { id: updating.id, version: updating.version } : null,
@@ -137,6 +147,8 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
   const preview = previewReceipt?.epoch === authority.epoch && previewReceipt.setup === setupFingerprint ? previewReceipt.value : null;
   const mutation = useMutation({
     mutationFn: async (action: "preview" | "install" | "update") => authority.write(async () => {
+      if (!(action === "install" && originalInstall.current) && !configurationReady)
+        throw new Error("Current package setup is incomplete or changed");
       const captured = { companyId: companyId!, userId: userId! };
       if (action === "install" && !originalInstall.current) {
         const requestId = crypto.randomUUID(), snapshot = packageInstallSchema.parse({ ...input(), installationRequestId: requestId });
@@ -356,6 +368,7 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
             {t("packageWorkspace.agent")}
             <select
               id={`${reader}-agent`}
+              required
               className="saas-input"
               disabled={Boolean(updating)}
               value={agentId}
@@ -376,6 +389,7 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
             <label>
               {t("packageWorkspace.release")}
               <select
+                required
                 className="saas-input"
                 value={selected.versionId}
                 onChange={(e) => {
@@ -405,6 +419,7 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
             <label>
               {t("packageWorkspace.purpose")}
               <select
+                required
                 className="saas-input"
                 value={useCaseId}
                 onChange={(e) => {
@@ -443,20 +458,13 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
             {t("packageWorkspace.updateBoundary")}
           </p>
           {selected.components
-            .filter((c) =>
-              [
-                "role_pack",
-                "skill",
-                "playbook",
-                "workflow_template",
-                "routine_template",
-              ].includes(c.type),
-            )
+            .filter(c => nativeComponentTypes.includes(c.type))
             .map((c) => (
               <label key={c.key}>
                 {c.key}
                 {t(c.required ? "packageWorkspace.required" : "packageWorkspace.optional")}
                 <select
+                  required={c.required}
                   className="saas-input"
                   value={pins[c.key] ?? ""}
                   onChange={(e) => {
@@ -518,7 +526,12 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
             </div>
           )}
           <div>
-            <Button variant="outline" disabled={!agentId || mutation.isPending} onClick={() => mutation.mutate("preview")}>
+            {!configurationReady && <p id={`${reader}-configuration-help`} className="text-sm text-muted-foreground">
+              {t(!currentInstallation ? "packageWorkspace.changedInstallation" : "packageWorkspace.completeSetup")}
+            </p>}
+            <Button variant="outline" disabled={!configurationReady || mutation.isPending}
+              aria-describedby={!configurationReady ? `${reader}-configuration-help` : undefined}
+              onClick={() => mutation.mutate("preview")}>
               {t("packageWorkspace.checkReadiness")}
             </Button>
           </div>
@@ -536,12 +549,12 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
             <div className="flex gap-2">
               <Button
                 disabled={
-                  !agentId ||
+                  !configurationReady ||
                   !preview ||
                   mutation.isPending ||
                   (selected.manifest.audience === "internal_test" &&
                     !internal) ||
-                  (Boolean(updating) && (!material || !reason.trim()))
+                  (Boolean(updating) && (!material || !validReason))
                 }
                 onClick={() => mutation.mutate(updating ? "update" : "install")}
               >
@@ -557,6 +570,7 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
           {t("packageWorkspace.reason")}
           <input
             className="saas-input"
+            maxLength={packageDecisionSchema.shape.reason.maxLength ?? undefined}
             value={reason}
             onChange={(e) => setReason(e.target.value)}
           />
@@ -608,7 +622,7 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
                 )}
                 <Button
                   disabled={
-                    !reason.trim() ||
+                    !validReason ||
                     decision.isPending ||
                     row.status === "active"
                   }
@@ -618,14 +632,14 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
                 </Button>
                 <Button
                   variant="outline"
-                  disabled={!reason.trim() || decision.isPending}
+                  disabled={!validReason || decision.isPending}
                   onClick={() => decision.mutate({ row, action: "suspend" })}
                 >
                   {t("packageWorkspace.suspend")}
                 </Button>
                 <Button
                   variant="outline"
-                  disabled={!reason.trim() || decision.isPending}
+                  disabled={!validReason || decision.isPending}
                   onClick={() => decision.mutate({ row, action: "uninstall" })}
                 >
                   {t("packageWorkspace.uninstall")}

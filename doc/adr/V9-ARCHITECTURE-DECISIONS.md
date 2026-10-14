@@ -2362,3 +2362,9 @@ preview request. Completing any fresh relevant read invalidates the old preview,
 even with identical visible JSON. A late acknowledgement retains its original
 frame and cannot borrow the new one. This fingerprint stays in memory; Native
 installation/update admission remains authoritative.
+
+Package setup additionally requires currently offered Agent/component/purpose
+choices and an unchanged current installation version before readiness or a new
+dispatch. UI decision reasons use the Original shared validator. These are early
+input checks, not a replacement for Native admission. An explicit exact-input
+installation resend continues through its retained Original request identity.

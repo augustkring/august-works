@@ -2565,7 +2565,9 @@
       "accepted": "Reviewed and accepted",
       "rejected": "Rejected",
       "stale": "Outdated"
-    }
+    },
+    "completeSetup": "Choose a current company Agent and matching approved versions for all required components. Customer packages also need an approved purpose.",
+    "changedInstallation": "The installation changed. Review its current recorded setup before continuing this update."
   },
   "packageRecovery": {
     "title": "Original installation request",

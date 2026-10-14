@@ -21,6 +21,7 @@ const f = vi.hoisted(() => ({
   proposalsList: vi.fn(),
   proposalReview: vi.fn(),
   installationRequest: vi.fn(),
+  governanceList: vi.fn(),
 }));
 vi.mock("@/api/companies-query", () => ({
   useAccountIdentity: () => ({ userId: f.userId, settled: true, failed: false, localImplicit: false }),
@@ -33,7 +34,7 @@ vi.mock("@/api/agent-packages", () => ({
   packageProposalsApi: { list: f.proposalsList, review: f.proposalReview },
 }));
 vi.mock("@/api/ai-governance", () => ({
-  aiGovernanceApi: { list: async () => [] },
+  aiGovernanceApi: { list: f.governanceList },
 }));
 vi.mock("@/lib/router", () => ({
   Link: ({ children, to }: { children: React.ReactNode; to: string }) => (
@@ -87,6 +88,7 @@ beforeEach(() => {
   f.installationRequest.mockRejectedValue(new Error("Original request unconfirmed"));
   f.list.mockResolvedValue([]);
   f.proposalsList.mockResolvedValue([]);
+  f.governanceList.mockResolvedValue([]);
   f.preview.mockResolvedValue({
     readiness: {
       status: "ready_with_warnings",
@@ -362,4 +364,55 @@ it("rejects an old readiness acknowledgement when Original options finish a new 
   await act(async () => resolve({ readiness: { status: "ready", reasons: [], warnings: ["PRIVATE OLD READINESS"], assessmentIds: [] } })); await flush();
   expect(container.textContent).not.toContain("PRIVATE OLD READINESS");
   expect(Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Install for configuration")?.disabled).toBe(true);
+});
+
+it("keeps readiness unavailable while a required approved component is missing", async () => {
+  await render(); await click("Review package");
+  const agent = container.querySelector("select")!;
+  await act(async () => { agent.value = "33333333-3333-4333-8333-333333333333"; agent.dispatchEvent(new Event("change", { bubbles: true })); });
+  await flush();
+  const check = Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Check readiness")!;
+  expect(check.disabled).toBe(true); expect(f.preview).not.toHaveBeenCalled(); expect(f.install).not.toHaveBeenCalled();
+});
+it("withdraws the readiness action when the selected Agent is no longer offered by the Original options owner", async () => {
+  await render(); await configure();
+  const before = await f.options(); f.options.mockResolvedValueOnce({ ...before, agents: [] });
+  await act(async () => client.invalidateQueries({ queryKey: ["agent-package-options"] })); await flush();
+  expect(Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Check readiness")?.disabled).toBe(true);
+  expect(f.preview).not.toHaveBeenCalled(); expect(f.install).not.toHaveBeenCalled();
+});
+it("requires an actually approved current purpose before previewing a customer package", async () => {
+  const catalog = await f.catalog(); f.catalog.mockResolvedValue([{ ...catalog[0], manifest: { ...catalog[0].manifest, audience: "customer" } }]);
+  const purposeId = "40000000-0000-4000-8000-000000000001";
+  f.governanceList.mockResolvedValue([{ id: purposeId, status: "approved", purpose: { intendedPurpose: "Original reviewed purpose" } }]);
+  await render(); await click("Review package");
+  for (const value of ["33333333-3333-4333-8333-333333333333", "55555555-5555-4555-8555-555555555555"]) {
+    const select = Array.from(container.querySelectorAll("select")).find(select => Array.from(select.options).some(option => option.value === value))!;
+    await act(async () => { select.value = value; select.dispatchEvent(new Event("change", { bubbles: true })); });
+  }
+  await flush();
+  const check = () => Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Check readiness")!;
+  expect(check().disabled).toBe(true); expect(f.preview).not.toHaveBeenCalled();
+  const purpose = Array.from(container.querySelectorAll("select")).find(select => Array.from(select.options).some(option => option.value === purposeId))!;
+  await act(async () => { purpose.value = purposeId; purpose.dispatchEvent(new Event("change", { bubbles: true })); }); await flush();
+  expect(check().disabled).toBe(false);
+  f.governanceList.mockResolvedValueOnce([{ id: purposeId, status: "retired", purpose: { intendedPurpose: "Original reviewed purpose" } }]);
+  await act(async () => client.invalidateQueries({ queryKey: ["package-use-cases"] })); await flush();
+  expect(check().disabled).toBe(true); expect(f.install).not.toHaveBeenCalled();
+});
+it("requires a fresh installation review after its Original current version changes", async () => {
+  const catalog = (await f.catalog())[0];
+  const row = { id: "installation", packageId: catalog.id, installedVersionId: "20000000-0000-4000-8000-000000000003",
+    status: "degraded", version: 3, agentId: "33333333-3333-4333-8333-333333333333", aiUseCaseId: null,
+    updatePolicy: "manual", readiness: { reasons: [], warnings: [] } };
+  f.list.mockResolvedValue([row]); await render(); await click("Review update");
+  const role = Array.from(container.querySelectorAll("select")).find(select => Array.from(select.options).some(option => option.value === "55555555-5555-4555-8555-555555555555"))!;
+  await act(async () => { role.value = "55555555-5555-4555-8555-555555555555"; role.dispatchEvent(new Event("change", { bubbles: true })); }); await flush();
+  await click("Check readiness"); expect(container.textContent).toContain("Optional Slack access is unavailable");
+  f.list.mockResolvedValueOnce([{ ...row, version: 4 }]);
+  await act(async () => client.invalidateQueries({ queryKey: ["agent-package-installations"] })); await flush();
+  expect(container.textContent).not.toContain("Optional Slack access is unavailable");
+  expect(container.textContent).toContain("The installation changed");
+  expect(Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Check readiness")?.disabled).toBe(true);
+  expect(f.update).not.toHaveBeenCalled(); expect(f.decide).not.toHaveBeenCalled();
 });

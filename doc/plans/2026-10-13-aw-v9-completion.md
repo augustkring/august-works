@@ -1562,3 +1562,23 @@ passes (5.97 seconds), current UI typecheck passes (exit 0), and both built
 current-account/EN/DA/mobile and lost-response/rollout browser cases pass
 (55.0 seconds). Existing source/qualification boundaries remain; this is not a
 current whole-V9 aggregate or PR-ready result.
+
+### Native package setup requires current offered inputs — 2026-10-14
+
+The package page now refuses readiness/dispatch until its parsed setup has an
+offered Agent, every required Native component pin, a current approved purpose
+for customer packages and the unchanged current installation version for an
+update. Missing/withdrawn choices explain what needs attention in EN/DA; required
+controls expose their requirement. Native admission remains authoritative. The
+existing shared decision reason validator supplies UI bounds and validity. Exact
+unchanged installation recovery retains its Original captured-input exception;
+no new request identity or authority is introduced.
+
+Two behavioral baselines fail before the fix (missing required role and withdrawn
+Agent). The final page suite passes 18 cases including withdrawn purpose and
+changed installation version. The four-suite page/client/gate/supporting-contract
+regression passes 88 cases (12.02 seconds). UI typecheck passes (exit 0), and both
+built EN/DA/mobile/session and lost-response/rollout browser cases pass (56.3
+seconds). Token gates, module boundaries and Source coverage are checked before
+commit. The separate checkpoint 31 full run has no final aggregate yet. These
+software checks do not close the 70 pending launch-evidence surfaces or whole V9.

@@ -2565,7 +2565,9 @@
       "accepted": "Gennemgået og accepteret",
       "rejected": "Afvist",
       "stale": "Forældet"
-    }
+    },
+    "completeSetup": "Vælg en aktuel agent i virksomheden og tilsvarende godkendte versioner af alle påkrævede komponenter. Kundepakker kræver også et godkendt formål.",
+    "changedInstallation": "Installationen er ændret. Gennemgå dens aktuelle registrerede opsætning, før du fortsætter opdateringen."
   },
   "packageRecovery": {
     "title": "Oprindelig installationsanmodning",
