@@ -48,6 +48,11 @@ it("does not turn an undefined or expired result into zero", async () => {
   await act(async () => { await client.invalidateQueries({ queryKey: ["experience-insights-metric-observations"] }); });
   await flush(); expect(host.textContent).toContain("observation expired"); expect(host.textContent).not.toContain("123 tasks");
 });
+it("keeps unused definitions in the inspection view instead of repeating empty result blocks", async () => {
+  const empty = result() as any; empty.items[0].observations = [];
+  read.mockResolvedValue(empty); await render();
+  expect(host.textContent).toContain("No saved measurements are available in this selection."); expect(host.textContent).not.toContain("PRIVATE");
+});
 it("withholds private results while the actual current-authority request is unsettled", async () => {
   await render();
   let release: ((value: never) => void) | undefined;

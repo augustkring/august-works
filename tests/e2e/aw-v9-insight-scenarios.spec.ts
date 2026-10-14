@@ -51,7 +51,7 @@ test("Insights reads conditional scenario comparisons and loses private results 
     await page.goto(`/${company.issuePrefix}/insights`);
     const main = page.getByRole("main");
     await expect(main.getByRole("heading", { name: "Conditional native capacity model", exact: true })).toBeVisible();
-    await expect(main).toContainText("Value: 2 tasks"); await expect(main).toContainText("Value: 3 tasks"); await expect(main).toContainText("Change from base: 1 tasks");
+    await expect(main).toContainText("Value: 2 tasks"); await expect(main).toContainText("Value: 3 tasks"); await expect(main).toContainText("Change from base: 1 task");
     await expect(main).toContainText("does not prove its assumptions"); await expect(main).not.toContainText("PRIVATE scenario Source");
     await main.getByText("Review assumptions and unmodeled effects", { exact: true }).click();
     await expect(main).toContainText("Human-declared assumption"); await expect(main).toContainText("Declared range: 1 to 3");

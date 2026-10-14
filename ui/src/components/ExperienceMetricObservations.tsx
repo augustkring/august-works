@@ -25,6 +25,7 @@ export function ExperienceMetricObservations({ companyId, userId, scope }: { com
     return () => clearTimeout(timer);
   }, [read.data, now]);
   const time = (value: string, timezone: string) => new Intl.DateTimeFormat(i18n.language, { dateStyle: "medium", timeStyle: "short", timeZone: timezone }).format(new Date(value));
+  const recorded = read.data?.items.filter(item => item.observations.length > 0) ?? [];
   return (
     <section aria-labelledby="insight-metric-observations-title" className="space-y-4">
       <h2 id="insight-metric-observations-title" className="text-lg font-semibold">{t("insightObservations.heading")}</h2>
@@ -32,7 +33,8 @@ export function ExperienceMetricObservations({ companyId, userId, scope }: { com
       {read.isError ? <div role="alert"><p>{t("insightObservations.unavailable")}</p><button type="button" className="min-h-11 text-primary underline" onClick={() => { void read.refetch(); }}>{t("tryAgain")}</button></div>
         : read.isPending || read.isFetching ? <p role="status">{t("loading")}</p>
         : !read.data?.items.length ? <p role="status">{t("insightObservations.empty")}</p>
-        : <ul className="space-y-4">{read.data.items.map(item => (
+        : !recorded.length ? <p role="status">{t("insightObservations.noRecorded")}</p>
+        : <ul className="space-y-4">{recorded.map(item => (
           <li key={item.metricId} className="min-w-0 break-words space-y-2 border-b py-4">
             <h3 className="font-semibold">{item.name}</h3>
             <p>{item.definition.businessQuestion}</p>
@@ -47,7 +49,7 @@ export function ExperienceMetricObservations({ companyId, userId, scope }: { com
                   <p>{t("insightObservations.window", { from: time(value.from, item.definition.timezone), until: time(value.until, item.definition.timezone), timezone: item.definition.timezone })}</p>
                   <p className="font-semibold">{observed ? item.definition.calculation.kind === "native_ratio"
                     ? new Intl.NumberFormat(i18n.language, { style: "percent", maximumFractionDigits: 1 }).format(value.value!)
-                    : `${new Intl.NumberFormat(i18n.language, { maximumFractionDigits: item.definition.calculation.kind === "native_count" ? 0 : 3 }).format(value.value!)} ${item.definition.calculation.kind === "native_count" ? t(`insightObservations.units.${item.definition.calculation.population.entity}`) : item.definition.unit}`
+                    : `${new Intl.NumberFormat(i18n.language, { maximumFractionDigits: item.definition.calculation.kind === "native_count" ? 0 : 3 }).format(value.value!)} ${item.definition.calculation.kind === "native_count" ? t(`insightObservations.units.${item.definition.calculation.population.entity}`, { count: value.value! }) : item.definition.unit}`
                     : t(expired ? "insightObservations.expired" : `insightObservations.status.${value.status}`)}</p>
                   <p>{t("insightObservations.asOf", { time: time(value.asOf, item.definition.timezone) })}</p>
                 </li>;

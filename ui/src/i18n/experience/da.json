@@ -2642,8 +2642,13 @@
     "units": {
       "issue": "opgaver",
       "project": "projekter",
-      "ratio": "forholdstal"
-    }
+      "ratio": "forholdstal",
+      "issue_one": "opgave",
+      "issue_other": "opgaver",
+      "project_one": "projekt",
+      "project_other": "projekter"
+    },
+    "noRecorded": "Ingen gemte målinger er tilgængelige i dette udvalg."
   },
   "insightProcess": {
     "heading": "Gemte procesfund",
@@ -2720,7 +2725,17 @@
       "project": "projekter",
       "person": "personer",
       "customer": "kunder",
-      "second": "sekunder"
+      "second": "sekunder",
+      "issue_one": "opgave",
+      "issue_other": "opgaver",
+      "project_one": "projekt",
+      "project_other": "projekter",
+      "person_one": "person",
+      "person_other": "personer",
+      "customer_one": "kunde",
+      "customer_other": "kunder",
+      "second_one": "sekund",
+      "second_other": "sekunder"
     }
   },
   "insightExperiments": {

@@ -2077,3 +2077,23 @@ All 70 launch rows/R0 remain pending. The frozen checkpoint 46 full suite
 still contains the old teardown failure fixed in 48; final exact-head workspace
 checks, other insight families and whole-V9 implementation remain outstanding.
 No PR/push.
+
+### Result-focused empty measurement state and count grammar — 2026-10-14 (checkpoint 52)
+
+Inspection of the actual experiment mobile view reveals three unused metric
+definitions repeating empty result blocks. Insights now displays recorded
+measurements, while definitions without observations stay reachable through
+the canonical inspection link. A single scoped no-saved-measurements state
+distinguishes that case from no returned published definitions; it claims no
+complete inventory or unobserved zero. EN/DA scalar task/project and scenario
+unit labels use singular/plural grammar, including negative base differences
+via absolute count, without changing native values, compound unit dimensions,
+authority or arithmetic. This applies the writing/UI playbooks' reader-first
+empty-state guidance. Four focused UI suites pass 33 cases (8.57 seconds).
+Checkpoint 51 final current UI typecheck passes exit 0 after the diagnostic
+reader guard; 51 Native/server evidence remains recorded above. No PR/push.
+Final scenario/experiment built browser regression passes 2 cases (48.6
+seconds), including Native Source withdrawal and updated singular units.
+The shorter experiment Danish mobile screenshot is inspected. Current UI
+typecheck, token gates, module boundaries and V9 coverage pass exit 0; all
+70 evidence rows and whole-V9/final workspace acceptance remain pending.
