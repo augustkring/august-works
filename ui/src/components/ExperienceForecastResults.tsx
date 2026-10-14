@@ -17,6 +17,8 @@ export function ExperienceForecastResults({ companyId, userId, scope }: { compan
   }, [read.data, now]);
   const retained = (value: string) => Date.parse(value) > Math.max(now, Date.now());
   const number = (value: number) => new Intl.NumberFormat(i18n.language, { maximumSignificantDigits: 15 }).format(value);
+  // Keep empty families in the destination directory; disclose bounds or errors.
+  if (!read.isPending && !read.isFetching && !read.isError && read.data?.items.length === 0 && !read.data.hasMoreForecasts) return null;
   const time = (value: string) => new Intl.DateTimeFormat(i18n.language, { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value));
   return <section aria-labelledby="insight-forecast-results-title" className="space-y-4">
     <h2 id="insight-forecast-results-title" className="text-lg font-semibold">{t("insightForecasts.heading")}</h2><p>{t("insightForecasts.boundary")}</p>

@@ -24,6 +24,8 @@ export function ExperienceMetricObservations({ companyId, userId, scope }: { com
     const timer = setTimeout(() => setNow(Date.now()), Math.min(2147483647, Math.max(1, Math.min(...expires) - Date.now())));
     return () => clearTimeout(timer);
   }, [read.data, now]);
+  // Keep empty families in the destination directory; disclose bounds or errors.
+  if (!read.isPending && !read.isFetching && !read.isError && read.data?.items.length === 0 && !read.data.hasMoreMetrics) return null;
   const time = (value: string, timezone: string) => new Intl.DateTimeFormat(i18n.language, { dateStyle: "medium", timeStyle: "short", timeZone: timezone }).format(new Date(value));
   const recorded = read.data?.items.filter(item => item.observations.length > 0) ?? [];
   return (

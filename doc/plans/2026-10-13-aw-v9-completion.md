@@ -2168,3 +2168,15 @@ Complete Native review/kernel/routine regression passes 48 cases (47.64
 seconds); final token/module/coverage gates pass. The Danish mobile screenshot
 is inspected. These are software checks; all 70 release-evidence rows remain
 pending and the frozen workspace run still excludes this checkpoint.
+
+### Quiet empty insight composition — 2026-10-14 (checkpoint 55)
+
+Empty admitted families now stay in the six-destination directory instead of
+repeating six empty result sections. Loading/errors and bounded pages with
+possible further records remain explicit; actual retained results still render
+and definitions with no observation keep their scoped empty-result state.
+This is display composition only, with unchanged Native requests/authority/
+values and no claim of a complete inventory. Seven component/directory suites
+pass 49 cases (13.21 seconds). Actual built directory keyboard/current-account/
+EN-DA mobile/axe/no-write regression passes 1 case (45.4 seconds), restoring
+six destinations after the account fence. UI typecheck passes exit 0. No PR/push.

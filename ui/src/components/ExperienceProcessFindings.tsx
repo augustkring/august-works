@@ -21,6 +21,8 @@ export function ExperienceProcessFindings({ companyId, userId, scope }: { compan
     return () => clearTimeout(timer);
   }, [read.data, now]);
   const retained = (expiresAt: string) => Date.parse(expiresAt) > Math.max(now, Date.now());
+  // Keep empty families in the destination directory; disclose bounds or errors.
+  if (!read.isPending && !read.isFetching && !read.isError && read.data?.items.length === 0 && !read.data.hasMoreDefinitions) return null;
   const time = (value: string) => new Intl.DateTimeFormat(i18n.language, { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value));
   return <section aria-labelledby="insight-process-findings-title" className="space-y-4">
     <h2 id="insight-process-findings-title" className="text-lg font-semibold">{t("insightProcess.heading")}</h2>

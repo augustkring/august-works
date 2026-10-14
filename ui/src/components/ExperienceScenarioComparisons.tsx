@@ -22,6 +22,8 @@ export function ExperienceScenarioComparisons({ companyId, userId, scope }: { co
   }, [read.data, now]);
   const retained = (expiresAt: string) => Date.parse(expiresAt) > Math.max(now, Date.now());
   const number = (value: number) => new Intl.NumberFormat(i18n.language, { maximumSignificantDigits: 15 }).format(value);
+  // Keep empty families in the destination directory; disclose bounds or errors.
+  if (!read.isPending && !read.isFetching && !read.isError && read.data?.items.length === 0 && !read.data.hasMoreScenarios) return null;
   const time = (value: string) => new Intl.DateTimeFormat(i18n.language, { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value));
   const unit = (value: BusinessScenarioUnit, quantity?: number) => {
     const terms = Object.entries(value).filter(([, power]) => power !== 0);

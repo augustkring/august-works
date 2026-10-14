@@ -15,6 +15,8 @@ export function ExperienceManagementReviews({ companyId, userId, scope }: { comp
     const timer = setTimeout(() => setNow(Date.now()), Math.min(2147483647, Math.max(1, Math.min(...deadlines) - Date.now())));
     return () => clearTimeout(timer);
   }, [read.data, now]);
+  // Keep empty families in the destination directory; disclose bounds or errors.
+  if (!read.isPending && !read.isFetching && !read.isError && read.data?.items.length === 0 && !read.data.hasMoreReviews) return null;
   const time = (value: string) => new Intl.DateTimeFormat(i18n.language, { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value));
   const fact = (value: string | number | boolean | null) => value === null ? t("insightReviews.unknown") : typeof value === "boolean" ? t(value ? "insightReviews.yes" : "insightReviews.no") : typeof value === "number" ? new Intl.NumberFormat(i18n.language, { maximumSignificantDigits: 15 }).format(value) : value;
   return <section aria-labelledby="insight-management-review-title" className="space-y-4">

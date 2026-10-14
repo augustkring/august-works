@@ -18,6 +18,8 @@ export function ExperienceExperimentResults({ companyId, userId, scope }: { comp
   }, [read.data, now]);
   const number = (value: number) => new Intl.NumberFormat(i18n.language, { maximumFractionDigits: 2 }).format(value);
   const percent = (value: number) => new Intl.NumberFormat(i18n.language, { style: "percent", maximumFractionDigits: 2 }).format(value);
+  // Keep empty families in the destination directory; disclose bounds or errors.
+  if (!read.isPending && !read.isFetching && !read.isError && read.data?.items.length === 0 && !read.data.hasMoreExperiments) return null;
   const time = (value: string) => new Intl.DateTimeFormat(i18n.language, { dateStyle: "medium", timeStyle: "short", timeZone: "UTC" }).format(new Date(value));
   return <section aria-labelledby="insight-experiment-results-title" className="space-y-4">
     <h2 id="insight-experiment-results-title" className="text-lg font-semibold">{t("insightExperiments.heading")}</h2><p>{t("insightExperiments.boundary")}</p>
