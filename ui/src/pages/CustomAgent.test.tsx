@@ -187,6 +187,22 @@ async function click(label: string) {
   await act(async () => button!.click());
 }
 
+it("explains the exact Human-reviewed task scope in English and Danish without claiming execution", async () => {
+  const saved = { ...draft, content: { ...draft.content!, capabilities: [
+    { operation: "create_internal_draft" as const, autonomy: "automatic" as const },
+    { operation: "create_task" as const, autonomy: "ask_first" as const },
+  ] } };
+  vi.spyOn(agentAuthoringApi, "get").mockResolvedValue(saved);
+  vi.spyOn(agentAuthoringApi, "save").mockImplementation(async (_company, _principal, _id, input) => ({ ...saved, version: 2, step: input.step, content: input.content ?? saved.content }));
+  await mount();
+  await click("Authority");
+  await vi.waitFor(() => expect(container.textContent).toContain("an unassigned backlog task"));
+  expect(container.textContent).toContain("without creating it");
+  await act(async () => { await i18n.changeLanguage("da"); });
+  expect(container.textContent).toContain("uden tildeling i backlog");
+  expect(container.textContent).toContain("uden at oprette opgaven");
+});
+
 it("keeps the exact save request after an unknown acknowledgement and background version refresh", async () => {
   const get = vi.spyOn(agentAuthoringApi, "get").mockResolvedValue(draft);
   const save = vi

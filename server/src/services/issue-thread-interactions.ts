@@ -3,6 +3,7 @@ import { assertAgentRunWriteAllowed } from "../agent-run-cancellation.js";
 import { assertConversationConnectionIntentCurrent } from "./conversation-connection-authority.js";
 import { connectionIntentDeliveries } from "@paperclipai/db";
 import { isDeepStrictEqual } from "node:util";
+import { randomUUID } from "node:crypto";
 import {
   and,
   asc,
@@ -18,6 +19,8 @@ import {
 import type { Db } from "@paperclipai/db";
 import {
   agents,
+  authUsers,
+  companyMemberships,
   companySecretProposals,
   companies,
   documents,
@@ -90,6 +93,10 @@ import {
 import { z } from "zod";
 import { conflict, forbidden, notFound, unprocessable } from "../errors.js";
 import { getTelemetryClient } from "../telemetry.js";
+import { assertAnalyticalContextPayloadAccess } from "./analytical-context-authority.js";
+import { lockAnalyticalCompany } from "./analytical-privacy.js";
+import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
+import { assertV7Authorization } from "./v7-authorization.js";
 import {
   logActivity,
   publishActivity,
@@ -3343,6 +3350,14 @@ export function issueThreadInteractionService(
           data.kind === "request_confirmation" &&
           data.payload.secretProposal !== undefined,
       });
+      if (data.kind === "suggest_tasks" && data.payload.tasks.some(task => task.placement === "company_backlog")) {
+        if (policy.requestedResolverPolicy !== "human_only" || !data.sourceRunId)
+          throw unprocessable("A separate backlog proposal requires explicit Human review and its Native source run");
+        const [source] = await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+          eq(heartbeatRuns.companyId, issue.companyId), eq(heartbeatRuns.id, data.sourceRunId),
+          eq(heartbeatRuns.nativeIssueId, issue.id), eq(heartbeatRuns.runtimeMode, "native")));
+        if (!source) throw unprocessable("The proposal's original Native Task/run binding is unavailable");
+      }
       const normalizedData = {
         ...data,
         resolverPolicy: policy.requestedResolverPolicy,
@@ -3787,6 +3802,12 @@ export function issueThreadInteractionService(
           selectedClientKeys: input.selectedClientKeys,
         });
       const orderedTasks = buildTaskCreationOrder(selectedTasks);
+      const separateBacklog = selectedTasks.some(task => task.placement === "company_backlog");
+      if (separateBacklog && (actor.agentId || !actor.userId || !current.sourceRunId))
+        throw forbidden("A current authorized Human must approve a separate backlog task");
+      const proposalReader = actor.userId === "local-board"
+        ? { type: "board" as const, source: "local_implicit" as const }
+        : { type: "board" as const, source: "session" as const, userId: actor.userId!, ignoreInstanceAdmin: true };
       const explicitParentIds = [
         ...new Set([
           issue.id,
@@ -3829,8 +3850,30 @@ export function issueThreadInteractionService(
         SuggestTasksResultCreatedTask
       >();
       const createdWakeTargets: IssueWakeTarget[] = [];
+      const separateTaskIds = new Map(orderedTasks.filter(task => task.placement === "company_backlog")
+        .map(task => [task.clientKey, randomUUID()]));
 
       await db.transaction(async (tx) => {
+        if (separateBacklog) {
+          await lockAnalyticalCompany(tx, issue.companyId);
+          await lockMemoryPrivacy(tx as unknown as Db, issue.companyId);
+          if (proposalReader.source !== "local_implicit") {
+            const [human] = await tx.select({ id: authUsers.id }).from(authUsers).where(and(
+              eq(authUsers.id, actor.userId!), eq(authUsers.emailVerified, true))).for("share");
+            const [membership] = await tx.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+              eq(companyMemberships.companyId, issue.companyId), eq(companyMemberships.principalType, "user"),
+              eq(companyMemberships.principalId, actor.userId!), eq(companyMemberships.status, "active"))).for("share");
+            if (!human || !membership) throw forbidden("A current verified Human company member must approve this task");
+          }
+          const [sourceIssue] = await tx.select().from(issues).where(and(eq(issues.companyId, issue.companyId), eq(issues.id, issue.id))).for("share");
+          if (!sourceIssue) throw notFound("Issue not found");
+          assertIssueOpenForInteractionResolution(sourceIssue);
+          await assertV7Authorization(tx as unknown as Db, proposalReader, issue.companyId, "issue:mutate", {
+            type: "issue", companyId: issue.companyId, issueId: issue.id, projectId: sourceIssue.projectId,
+            parentIssueId: sourceIssue.parentId, status: sourceIssue.status,
+            assigneeAgentId: sourceIssue.assigneeAgentId, assigneeUserId: sourceIssue.assigneeUserId });
+          await assertAnalyticalContextPayloadAccess(tx as unknown as Db, issue.companyId, proposalReader, { runId: current.sourceRunId! });
+        }
         await assertInteractionRunWriteAllowed(tx as unknown as Db, issue, actor);
         await mutationOptions.beforeResolveInTransaction?.(tx);
         const resolvedAt = new Date();
@@ -3838,6 +3881,10 @@ export function issueThreadInteractionService(
           .update(issueThreadInteractions)
           .set({
             status: "accepted",
+            ...(separateBacklog ? { result: { version: 1, createdTasks: orderedTasks.map(task => ({
+              clientKey: task.clientKey, issueId: separateTaskIds.get(task.clientKey)!, title: task.title,
+              parentIssueId: null, parentIdentifier: null,
+            })) } } : {}),
             resolvedByAgentId: actor.agentId ?? null,
             resolvedByRunId: actor.runId ?? null,
             resolvedByUserId: actor.userId ?? null,
@@ -3868,9 +3915,8 @@ export function issueThreadInteractionService(
             );
           }
 
-          const { issue: createdIssue } = await issueService(
-            tx as unknown as Db,
-          ).createChild(parentIssueId, {
+          const createInput = {
+            ...(task.placement === "company_backlog" ? { id: separateTaskIds.get(task.clientKey)! } : {}),
             title: task.title,
             description: task.description ?? null,
             status: task.status ?? "todo",
@@ -3887,7 +3933,20 @@ export function issueThreadInteractionService(
             originRunId: interaction.sourceRunId ?? null,
             actorAgentId: actor.agentId ?? null,
             actorUserId: actor.userId ?? null,
-          } as Parameters<ReturnType<typeof issueService>["createChild"]>[1]);
+          } as Parameters<ReturnType<typeof issueService>["createChild"]>[1];
+          const owner = issueService(tx as unknown as Db);
+          const createdIssue = task.placement === "company_backlog"
+            ? await owner.create(issue.companyId, { ...createInput, allowDuplicate: true, originKind: "manual", originId: `paperclip-suggested-task:${interaction.id}` })
+            : (await owner.createChild(parentIssueId, createInput)).issue;
+          if (task.placement === "company_backlog") {
+            if (createdIssue.id !== separateTaskIds.get(task.clientKey))
+              throw conflict("The proposal's Original task identity changed");
+            const sourceChain = await tx.execute<{ source_run_id: string; source_task_id: string; invalid: boolean }>(sql`
+              select source_run_id,source_task_id,invalid from aw_runner_task_source_chain(${issue.companyId}::uuid,null,${createdIssue.id}::uuid)`);
+            if (!sourceChain.some(source => !source.invalid && source.source_run_id === current.sourceRunId && source.source_task_id === issue.id))
+              throw forbidden("The Original reviewed-task Source mapping is unavailable");
+            await assertAnalyticalContextPayloadAccess(tx as unknown as Db, issue.companyId, proposalReader, { issueId: createdIssue.id });
+          }
 
           const parentIdentifier =
             createdByClientKey.get(task.parentClientKey ?? "")?.identifier ??
@@ -3898,8 +3957,8 @@ export function issueThreadInteractionService(
             issueId: createdIssue.id,
             identifier: createdIssue.identifier ?? null,
             title: createdIssue.title,
-            parentIssueId,
-            parentIdentifier,
+            parentIssueId: task.placement === "company_backlog" ? null : parentIssueId,
+            parentIdentifier: task.placement === "company_backlog" ? null : parentIdentifier,
           });
           createdWakeTargets.push({
             id: createdIssue.id,

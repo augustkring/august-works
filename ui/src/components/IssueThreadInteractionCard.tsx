@@ -1,5 +1,6 @@
 import { createContext, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import type { Agent } from "@paperclipai/shared";
+import { useTranslation } from "react-i18next";
 import { AlertTriangle, ArrowUpRight, Bot, Check, CheckCircle2, ChevronDown, ChevronRight, CircleDashed, Clock, ExternalLink, FileText, GitBranch, ImagePlus, KeyRound, Loader2, MessageSquareQuote, MinusCircle, ShieldAlert, ThumbsUp, TriangleAlert, Wrench, X, XCircle } from "lucide-react";
 import { Link } from "@/lib/router";
 import { formatAssigneeUserLabel } from "../lib/assignees";
@@ -36,7 +37,7 @@ import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
 import { PriorityIcon } from "./PriorityIcon";
-import { IssueStatusBadge } from "./StatusBadge";
+import { SuggestedTaskInitialState } from "./SuggestedTaskInitialState";
 import { SHOW_TASK_PRIORITY_UI } from "../lib/ui-flags";
 import { Textarea } from "./ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
@@ -641,7 +642,7 @@ function TaskTreeNode({
                     {node.task.description}
                   </p>
                 ) : null}
-                {node.task.status ? <IssueStatusBadge status={node.task.status} /> : null}
+                <SuggestedTaskInitialState task={node.task} />
               </div>
             </div>
           </div>
@@ -734,6 +735,8 @@ function SuggestTasksCard({
     reason?: string,
   ) => Promise<void> | void;
 }) {
+  const { t } = useTranslation("experience");
+  const separateBacklog = interaction.payload.tasks.length === 1 && interaction.payload.tasks[0]?.placement === "company_backlog";
   const [rejecting, setRejecting] = useState(false);
   const [working, setWorking] = useState<"accept" | "reject" | null>(null);
   const [rejectReason, setRejectReason] = useState(
@@ -840,7 +843,7 @@ function SuggestTasksCard({
   return (
     <div className="space-y-3">
       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
-        <span>{totalTasks === 1 ? "1 draft issue" : `${totalTasks} draft issues`}</span>
+        <span>{separateBacklog ? t("customAgent.taskProposalCount") : totalTasks === 1 ? "1 draft issue" : `${totalTasks} draft issues`}</span>
         {interaction.payload.defaultParentId ? (
           <TaskField label="Default parent" value={interaction.payload.defaultParentId} tone="subtle" />
         ) : null}
@@ -866,10 +869,10 @@ function SuggestTasksCard({
       {interaction.status === "accepted" ? (
         <div className="rounded-sm border border-emerald-500/60 bg-emerald-500/10 px-4 py-3 text-sm text-emerald-900 dark:text-emerald-100">
           <div className="text-(length:--text-micro) font-semibold uppercase tracking-(--tracking-eyebrow) text-emerald-700">
-            Resolution summary
+            {separateBacklog ? t("customAgent.taskProposalResolution") : "Resolution summary"}
           </div>
           <p className="mt-1 leading-6">
-            {skippedCount > 0
+            {separateBacklog ? t(createdCount === 1 ? "customAgent.reviewedTaskCreated" : "customAgent.noTaskCreated") : skippedCount > 0
               ? `Created ${createdCount} draft ${createdCount === 1 ? "issue" : "issues"} and skipped ${skippedCount} during review.`
               : `Created all ${createdCount} draft ${createdCount === 1 ? "issue" : "issues"}.`}
           </p>
@@ -879,13 +882,13 @@ function SuggestTasksCard({
       {interaction.status === "rejected" ? (
         <div className="rounded-sm border border-rose-500/60 bg-rose-500/10 px-4 py-3 text-sm text-rose-900 dark:text-rose-100">
           <div className="text-(length:--text-micro) font-semibold uppercase tracking-(--tracking-eyebrow) text-rose-700">
-            Rejection reason
+            {separateBacklog ? t("customAgent.taskProposalRejectionReason") : "Rejection reason"}
           </div>
           <p className={cn(
             "mt-1 leading-6",
             !interaction.result?.rejectionReason && "text-rose-900/75",
           )}>
-            {interaction.result?.rejectionReason || "No reason provided."}
+            {interaction.result?.rejectionReason || (separateBacklog ? t("customAgent.taskProposalNoReason") : "No reason provided.")}
           </p>
         </div>
       ) : null}
@@ -895,7 +898,7 @@ function SuggestTasksCard({
           <div className="flex flex-wrap items-center justify-between gap-3">
             <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
               <span>
-                {selectedCount === totalTasks
+                {separateBacklog ? t("customAgent.taskProposalSelected", { count: selectedCount }) : selectedCount === totalTasks
                   ? `All ${totalTasks} draft ${totalTasks === 1 ? "issue" : "issues"} selected`
                   : `${selectedCount} of ${totalTasks} draft ${totalTasks === 1 ? "issue" : "issues"} selected`}
               </span>
@@ -915,10 +918,10 @@ function SuggestTasksCard({
                 {working === "accept" ? (
                   <>
                     <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                    Accepting...
+                    {separateBacklog ? t("customAgent.creatingReviewedTask") : "Accepting..."}
                   </>
                 ) : (
-                  selectedCount === totalTasks ? "Accept drafts" : "Accept selected drafts"
+                  separateBacklog ? t("customAgent.createReviewedTask") : selectedCount === totalTasks ? "Accept drafts" : "Accept selected drafts"
                 )}
               </Button>
               <Button
@@ -927,7 +930,7 @@ function SuggestTasksCard({
                 disabled={!onRejectInteraction || working !== null}
                 onClick={() => setRejecting((current) => !current)}
               >
-                Reject
+                {separateBacklog ? t("customAgent.rejectTaskProposal") : "Reject"}
               </Button>
               {selectedCount < totalTasks ? (
                 <Button
@@ -936,7 +939,7 @@ function SuggestTasksCard({
                   disabled={working !== null}
                   onClick={() => setSelectedClientKeys(new Set(interaction.payload.tasks.map((task) => task.clientKey)))}
                 >
-                  Reset selection
+                  {separateBacklog ? t("customAgent.taskProposalResetSelection") : "Reset selection"}
                 </Button>
               ) : null}
             </div>
@@ -944,10 +947,12 @@ function SuggestTasksCard({
 
           {rejecting ? (
             <div className="space-y-3">
+              {separateBacklog && <label htmlFor={`${interaction.id}-suggested-task-reason`}>{t("customAgent.taskProposalRejectionReason")}</label>}
               <Textarea
+                id={separateBacklog ? `${interaction.id}-suggested-task-reason` : undefined}
                 value={rejectReason}
                 onChange={(event) => setRejectReason(event.target.value)}
-                placeholder="Add a short reason for rejecting this suggestion"
+                placeholder={separateBacklog ? t("customAgent.taskProposalReasonPlaceholder") : "Add a short reason for rejecting this suggestion"}
                 className="min-h-24 bg-background text-sm"
               />
               <div className="flex justify-end">
@@ -960,10 +965,10 @@ function SuggestTasksCard({
                   {working === "reject" ? (
                     <>
                       <Loader2 className="mr-2 h-3.5 w-3.5 animate-spin" />
-                      Saving...
+                      {separateBacklog ? t("customAgent.taskProposalSavingRejection") : "Saving..."}
                     </>
                   ) : (
-                    "Save rejection"
+                    separateBacklog ? t("customAgent.rejectTaskProposal") : "Save rejection"
                   )}
                 </Button>
               </div>
@@ -3566,6 +3571,8 @@ export function IssueThreadInteractionCard({
   onUploadImage,
   externalReferences,
 }: IssueThreadInteractionCardProps) {
+  const { t } = useTranslation("experience");
+  const separateTask = interaction.kind === "suggest_tasks" && interaction.payload.tasks.length === 1 && interaction.payload.tasks[0]?.placement === "company_backlog";
   // Single enforcement point (PAP-424, plan from PAP-420; extended by PAP-437):
   // a card that should never be drawn — a degenerate `ask_user_questions`
   // (placeholder junk like the onboarding `Test / A` card, no genuine question)
@@ -3755,7 +3762,7 @@ export function IssueThreadInteractionCard({
             </div>
 
             <div className="mt-3 text-lg font-bold text-foreground">
-              {interaction.title
+              {separateTask ? t("customAgent.taskProposalTitle") : interaction.title
                 ?? (interaction.kind === "suggest_tasks"
                   ? "Suggested task tree"
                   : interaction.kind === "ask_user_questions"

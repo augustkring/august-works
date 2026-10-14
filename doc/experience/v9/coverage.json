@@ -524,7 +524,12 @@
       "implementationStatus": "in_progress",
       "componentPaths": [
         "ui/src/pages/CustomAgent.tsx",
-        "server/src/services/agents/authoring-drafts.ts"
+        "server/src/services/agents/authoring-drafts.ts",
+        "packages/shared/src/agent-draft-output.ts",
+        "server/src/services/agents/authoring-test-runtime.ts",
+        "server/src/services/native-runtime/aw-text-draft-backend.ts",
+        "server/src/services/issue-thread-interactions.ts",
+        "ui/src/components/SuggestedTaskInitialState.tsx"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/custom-06.json"
@@ -600,7 +605,12 @@
       "implementationStatus": "in_progress",
       "componentPaths": [
         "ui/src/pages/CustomAgent.tsx",
-        "server/src/services/agents/authoring-drafts.ts"
+        "server/src/services/agents/authoring-drafts.ts",
+        "packages/shared/src/agent-draft-output.ts",
+        "server/src/services/agents/authoring-test-runtime.ts",
+        "server/src/services/native-runtime/aw-text-draft-backend.ts",
+        "server/src/services/issue-thread-interactions.ts",
+        "ui/src/components/SuggestedTaskInitialState.tsx"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/custom-10.json"
@@ -619,7 +629,12 @@
       "implementationStatus": "in_progress",
       "componentPaths": [
         "ui/src/pages/CustomAgent.tsx",
-        "server/src/services/agents/authoring-drafts.ts"
+        "server/src/services/agents/authoring-drafts.ts",
+        "packages/shared/src/agent-draft-output.ts",
+        "server/src/services/agents/authoring-test-runtime.ts",
+        "server/src/services/native-runtime/aw-text-draft-backend.ts",
+        "server/src/services/issue-thread-interactions.ts",
+        "ui/src/components/SuggestedTaskInitialState.tsx"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/custom-11.json"
@@ -638,7 +653,12 @@
       "implementationStatus": "in_progress",
       "componentPaths": [
         "ui/src/pages/CustomAgent.tsx",
-        "server/src/services/agents/authoring-drafts.ts"
+        "server/src/services/agents/authoring-drafts.ts",
+        "packages/shared/src/agent-draft-output.ts",
+        "server/src/services/agents/authoring-test-runtime.ts",
+        "server/src/services/native-runtime/aw-text-draft-backend.ts",
+        "server/src/services/issue-thread-interactions.ts",
+        "ui/src/components/SuggestedTaskInitialState.tsx"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/custom-12.json"

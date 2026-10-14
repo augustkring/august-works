@@ -2366,6 +2366,10 @@ span.paperclip-mention-chip[data-mention-kind="external-object"] {
   color: color-mix(in srgb, var(--sc) 80%, white);
   border-color: color-mix(in srgb, var(--sc) 48%, transparent);
 }
+.status-chip[data-task-status="backlog"],
+.dark .status-chip[data-task-status="backlog"] {
+  color: var(--foreground);
+}
 .status-fill {
   background-color: var(--sc);
 }

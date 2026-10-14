@@ -3480,6 +3480,13 @@
       "when": 1791977725781,
       "tag": "0498_artifact_copy_source_index",
       "breakpoints": true
+    },
+    {
+      "idx": 499,
+      "version": "7",
+      "when": 1791999708009,
+      "tag": "0499_native_human_task_sources",
+      "breakpoints": true
     }
   ]
 }

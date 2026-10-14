@@ -9,12 +9,25 @@ import {
   respondIssueThreadInteractionSchema,
   stalledReviewDecisionSchema,
   suggestedTaskDraftSchema,
+  suggestTasksPayloadSchema,
   updateIssueSchema,
   upsertIssueDocumentSchema,
 } from "./issue.js";
 import { createAgentSchema } from "./agent.js";
 
 describe("issue validators", () => {
+  it("bounds a separate Human-reviewed backlog proposal to one unassigned standard task", () => {
+    const task = { clientKey: "one", title: "Follow up", status: "backlog", placement: "company_backlog" };
+    expect(suggestedTaskDraftSchema.parse(task)).toEqual(task);
+    const id = "00000000-0000-4000-8000-000000000001";
+    for (const patch of [
+      { status: "todo" }, { status: undefined }, { parentId: id }, { parentClientKey: "parent" },
+      { assigneeAgentId: id }, { assigneeUserId: "user" }, { projectId: id }, { goalId: id },
+      { workMode: "planning" }, { priority: "urgent" }, { hiddenInPreview: true }, { labels: ["hidden scope"] },
+    ]) expect(suggestedTaskDraftSchema.safeParse({ ...task, ...patch }).success).toBe(false);
+    expect(suggestTasksPayloadSchema.safeParse({ version: 1, tasks: [task], defaultParentId: id }).success).toBe(false);
+    expect(suggestTasksPayloadSchema.safeParse({ version: 1, tasks: [task, { clientKey: "two", title: "Another" }] }).success).toBe(false);
+  });
   it("bounds suggested-task initial states while preserving omitted legacy state", () => {
     const task = { clientKey: "one", title: "A follow-up" };
     expect(suggestedTaskDraftSchema.parse({ ...task, status: "backlog" }).status).toBe("backlog");

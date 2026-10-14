@@ -7,7 +7,7 @@
     "admin",
     "security_admin"
   ],
-  "customerOutcome": "Propose per-capability autonomy with consequential automatic actions and self-grants rejected.",
+  "customerOutcome": "Review per-capability autonomy and the exact Human-approved, separate internal backlog task scope; automatic task effects and self-grants remain blocked.",
   "entryConditions": [
     "Current verified authenticated company membership and native agents:create or target agents:configure authority; instance-admin status does not bypass membership.",
     "Draft belongs to the current creator; editing an existing agent requires current native read and configure authority.",
@@ -17,11 +17,11 @@
   "exitConditions": [
     "Only a canonical accepted draft ID/version permits a saved claim.",
     "Draft saving never changes production agent configuration, grants, runtime or scheduled work.",
-    "Testing, effective native policy mapping, publish and active monitoring remain unqualified; no success evidence is manufactured."
+    "Software controllers cover bounded internal drafts and one Human-reviewed separate backlog proposal. Automatic task creation, external send/spend and delegation remain unmapped; live provider, manual and representative Human qualification remain open."
   ],
   "content": {
     "h1": "Authority",
-    "supportingCopy": "Propose per-capability autonomy with consequential automatic actions and self-grants rejected.",
+    "supportingCopy": "Review per-capability autonomy and the exact Human-approved, separate internal backlog task scope; automatic task effects and self-grants remain blocked.",
     "customerTerms": [
       "Company",
       "Work",
@@ -31,7 +31,8 @@
     ],
     "displayedState": [
       "Native draft version, section and explicit draft status",
-      "Saved-draft blockers are distinct from unsaved local proposals and executed outcomes"
+      "Saved-draft blockers are distinct from unsaved local proposals and executed outcomes",
+      "Asks-before task scope: one separate unassigned backlog task, linked through the Original Human verdict/Task receipt and source run; tests retain the proposal as evidence and create no business task."
     ]
   },
   "inputs": [

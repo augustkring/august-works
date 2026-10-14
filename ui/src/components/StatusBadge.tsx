@@ -89,6 +89,7 @@ export function IssueStatusBadge({ status: taskStatus, externalConversationState
   const cssVar = taskStatusVar[status] ?? taskStatusVarDefault;
   return (
     <span
+      data-task-status={status}
       className={cn(
         "status-chip inline-flex items-center gap-1.5 rounded-full border px-3 py-1 text-xs font-normal leading-none whitespace-nowrap shrink-0",
         status === "cancelled" && "line-through"

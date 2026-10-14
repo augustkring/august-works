@@ -45,8 +45,15 @@ describe("Canonical authored Agent definition", () => {
     expect(authoredAgentMappingBlockers(content)).toContain("internal_draft_authority_required");
     expect(() => compileAuthoredAgentDefinition(content, randomUUID(), "a".repeat(64))).toThrow();
   });
-  it.each(["read_approved_knowledge", "create_task", "external_send", "spend"] as const)("does not turn %s into an instruction-only grant", operation => {
+  it.each(["read_approved_knowledge", "external_send", "spend"] as const)("does not turn %s into an instruction-only grant", operation => {
     const content = candidate(); content.capabilities.push({ operation, autonomy: "ask_first" });
+    expect(authoredAgentMappingBlockers(content)).toContain("capability_mapping_required");
+  });
+  it("maps only Human-reviewed task data and keeps automatic task effects blocked", () => {
+    const content = candidate(); content.capabilities.push({ operation: "create_task", autonomy: "ask_first" });
+    expect(authoredAgentMappingBlockers(content)).toEqual([]);
+    expect(compileAuthoredAgentDefinition(content, randomUUID(), "a".repeat(64)).content.capabilities).toEqual(content.capabilities);
+    content.capabilities[1]!.autonomy = "automatic";
     expect(authoredAgentMappingBlockers(content)).toContain("capability_mapping_required");
   });
   it("rejects credentials instead of publishing silently redacted instructions", () => {

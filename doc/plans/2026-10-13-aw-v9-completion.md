@@ -1819,3 +1819,79 @@ no runtime is activated and all 70 launch-evidence rows remain pending.
 
 Final Native tool/parser pair passes all 35 cases (22.49 seconds); module and
 70-Source gates also pass. Mapping remains deliberately unchanged at this checkpoint.
+
+
+### Native authored Agent task proposals with actual Human creation and Source closure — 2026-10-14 (checkpoint 46)
+
+create_task: ask_first now maps to one bounded model-data proposal, not executable
+tools. The Native text controller and representative-test controller share the
+strict grammar. The exact Agent definition/manifest is enforced at execution and
+inside Native tool transactions; malformed/widened output creates neither a
+document nor interaction while retaining the actual completed model debit.
+Known insufficient three-action Native budgets refuse before provider dispatch.
+Tests record the proposed business effect without executing it; publication
+requires the candidate's own exact representative evidence and independent
+Human review. Automatic task writes/send/spend/delegation remain unmapped.
+
+Actual integration first exposes the existing active-plan child-task SQL fence.
+That guard is preserved. Human approval instead creates one separate unassigned
+backlog task through the Original issue factory, linked from its Original
+interaction/run. The new placement is closed to one standard task with no
+assignment, parent/project/goal overrides, hidden preview or model-chosen scope.
+Explicit Human-only policy and an exact same-company Native Task/run are
+mandatory. Current verified Human/membership and Source issue share locks,
+Native authorization and privacy serialization; no instance-admin membership
+bypass or new worker/execution is admitted. Concurrent verdicts create one task.
+Original UUID/receipt preallocation and the factory are atomic, including final
+Source checks and rollback. Title-based factory coalescing cannot substitute
+an unrelated task for this exact request.
+
+Custom migration 0499 is generated with the repository Drizzle workflow; its
+table snapshot equals 0498 apart from snapshot IDs and the migration safety
+checks pass. The existing 16-hop Source function now also proves exact accepted
+Human receipt/task/creator/company/run identities. A copied genuine origin with
+an unrecorded task UUID refuses. The existing indexed privacy owner physically
+scrubs these actual tasks after Source erasure; missing Source SQL mapping
+rolls the entire approval back. No new task/approval/Source/budget ledger exists.
+ADR-71, DPC map, relevant Custom contracts and source paths are aligned.
+
+Seven initial final Native scenarios pass (26.18 seconds), including concurrent
+acceptance, Agent self-approval refusal, erased Source before approval, actual
+post-approval scrubbing and forged receipt identity. The 12-suite Native/Source/
+legacy-interaction/shared/UI regression passes 347 cases (214.45 seconds). Later
+verified-Human share locks and localized controls extend targeted coverage: the
+last-source selection passes 18 cases (41.38 seconds; 186 deliberately unselected,
+one file has no matching selected case). Final type/contract results are recorded
+below rather than inferred from an expired tool session.
+
+The shipped browser initially finds an incomplete fixture rollout and masked
+cleanup error; corrected prerequisites/actual database-client cleanup expose
+real inherited Task-host contrast failures. Token-only corrections cover the
+backlog chip text, actor avatar initials, disabled metadata and description
+affordance. The next built host passes (35.5 seconds), then the final localized
+header/cleanup artifact passes (34.5 seconds): EN/DA, 390px no overflow, scoped
+main axe zero violations, keyboard creation, actual Native API/receipt/task and
+409 repeated acceptance with exactly one business task. The final Danish
+screenshot is visually reviewed. The historical run is explicit disposable
+local_trusted software metadata, not genuine provider or representative Human
+evidence. All 70 launch rows remain pending; R0 is unchanged.
+
+Broader final repository checks still require an immutable current hash. The
+earlier checkpoint-40 general run ended without a final test result; that is
+not a pass and it does not cover checkpoints 41–46. Host/model/channel/live kill,
+manual accessibility and representative Human qualification remain outstanding,
+as do the other recorded V9 software gaps. No push or new PR is performed.
+
+Final server/UI typechecks pass (both captured exit 0). The final representative-
+test and two interaction-UI files pass 116 cases (112.68 seconds), including
+precise businessTasksCreated=0 metadata and both localized review hosts. A
+misremembered server screen-contract filename selected no fourth file; actual
+shared contract files are then run explicitly, with their result captured
+separately. Final source/token/module gates are checked before commit. The final
+localized-header browser passes 34.5 seconds, and its Danish screenshot is
+inspected. No clean-console, dark/320px/zoom/manual or hosted qualification is
+inferred from the bounded browser: the historical fixture has no actual run log.
+
+The explicitly selected shared screen-contract/schema pair passes 67 cases
+(0.490 seconds). Final token/module/70-Source gates pass. Both typecheck exit
+files contain 0. These remain software results; the full immutable run follows.

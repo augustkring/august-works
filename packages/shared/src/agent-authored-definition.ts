@@ -26,7 +26,7 @@ export const authoredAgentDefinitionSchema = z.strictObject({
 });
 export type AuthoredAgentDefinition = z.infer<typeof authoredAgentDefinitionSchema>;
 
-/** Only the actual text-only Native boundary is mapped here. Other choices
+/** Only the text-data Native draft and Human-reviewed task proposal are mapped. Other choices
  * remain drafts until their canonical runtime policy is implemented. */
 export function authoredAgentMappingBlockers(content: z.infer<typeof agentAuthoringContentSchema>) {
   const blockers: string[] = [];
@@ -40,7 +40,8 @@ export function authoredAgentMappingBlockers(content: z.infer<typeof agentAuthor
   if (!content.capabilities.some(c => c.operation === "create_internal_draft" && c.autonomy === "automatic"))
     blockers.push("internal_draft_authority_required");
   if (content.capabilities.some(c => c.autonomy !== "not_allowed" &&
-    !(["create_internal_draft", "read_approved_knowledge"].includes(c.operation) && c.autonomy === "automatic")))
+    !((["create_internal_draft", "read_approved_knowledge"].includes(c.operation) && c.autonomy === "automatic") ||
+      (c.operation === "create_task" && c.autonomy === "ask_first"))))
     blockers.push("capability_mapping_required");
   return blockers;
 }

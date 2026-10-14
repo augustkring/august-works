@@ -7,6 +7,7 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import type { Agent } from "@paperclipai/shared";
 import { ApiError } from "../api/client";
+import { i18n } from "../i18n";
 import { IssueThreadInteractionCard } from "./IssueThreadInteractionCard";
 import { ThemeProvider } from "../context/ThemeContext";
 import { TooltipProvider } from "./ui/tooltip";
@@ -520,6 +521,23 @@ describe("IssueThreadInteractionCard", () => {
     } });
     expect(host.textContent).toContain("A bounded follow-up");
     expect(host.textContent).toContain("Backlog");
+  });
+  it("localizes a separate proposal's scope and explicit creation action without translating its business title", async () => {
+    await i18n.changeLanguage("en");
+    const interaction = { ...pendingSuggestedTasksInteraction,
+      payload: { version: 1 as const, tasks: [{ clientKey: "one", title: "A bounded follow-up", status: "backlog" as const, placement: "company_backlog" as const }] } };
+    const accept = vi.fn();
+    const host = renderCard({ interaction, onAcceptInteraction: accept });
+    expect(host.textContent).toContain("Separate task linked from the original Task");
+    expect(host.textContent).toContain("Create task");
+    await act(async () => { await i18n.changeLanguage("da"); });
+    expect(host.textContent).toContain("Separat opgave med sporbarhed");
+    expect(host.textContent).toContain("A bounded follow-up");
+    const button = [...host.querySelectorAll("button")].find(item => item.textContent === "Opret opgave");
+    expect(button).toBeTruthy();
+    await act(async () => { button!.click(); });
+    expect(accept).toHaveBeenCalledWith(interaction, ["one"]);
+    await act(async () => { await i18n.changeLanguage("en"); });
   });
 
   it("shows an explicit placeholder when a rejected interaction has no reason", () => {

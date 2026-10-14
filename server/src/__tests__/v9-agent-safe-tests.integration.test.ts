@@ -22,6 +22,7 @@ import { registerNativeDraftGateway } from "../services/orchestration/native-dra
 import type { WorkerModelProfile } from "../services/orchestration/worker-model-profiles.js";
 import type { guardedRemoteHttpFetch } from "../services/remote-http-fetch.js";
 import { documentService } from "../services/documents.js";
+import { issues, issueThreadInteractions } from "@paperclipai/db";
 import { foundationService } from "../services/foundation/foundation-service.js";
 import { orchestrationService } from "../services/orchestration/orchestration-service.js";
 import { budgetService } from "../services/budgets.js";
@@ -40,6 +41,7 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
   let requiredProcedures: Awaited<ReturnType<typeof seedRequiredAuthoringProcedures>>;
   let duringCall: (() => Promise<void>) | undefined, lostResponse: boolean, excessUsage: boolean;
   let selectedKnowledgeBody: string | undefined;
+  let modelOutput: string;
   const service = () => agentAuthoringTestService(db), drafts = () => agentAuthoringService(db);
   beforeAll(async () => {
     home = await mkdtemp(join(tmpdir(), "aw-v9-safe-test-private-")); vi.stubEnv("PAPERCLIP_HOME", home);
@@ -66,7 +68,7 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     if (duringCall) await duringCall();
     if (lostResponse) throw new Error("private transport response was lost");
     return new Response(JSON.stringify({ type: "message", role: "assistant", model: body.model, stop_reason: "end_turn",
-      content: [{ type: "text", text: "Welcome to the team. This is an internal draft for review." }],
+      content: [{ type: "text", text: modelOutput }],
       usage: { input_tokens: excessUsage ? 1001 : 20, output_tokens: 12 } }), { status: 200, headers: { "content-type": "application/json" } });
   };
   beforeEach(async () => {
@@ -77,6 +79,7 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     selectedPreferenceBody = null;
     requiredProcedures = await seedRequiredAuthoringProcedures(db, f.actor, f.home, f.presence.id);
     calls = 0; duringCall = undefined; lostResponse = false; excessUsage = false;
+    modelOutput = "Welcome to the team. This is an internal draft for review.";
     const config = { provider: "aw_text_only", model: "fixture-draft-model", workerModelProfileId: randomUUID(), maxOutputTokens: 256 };
     await db.update(agents).set({ adapterType: "paperclip_runner", adapterConfig: config, status: "paused", pauseReason: "manual" }).where(eq(agents.id, f.presence.id));
     const providers = agentProviderBindingService(db), pb = await providers.create(f.actor, f.home, f.presence.id,
@@ -115,6 +118,38 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
       confirmRepresentativeTest: true, confirmCompanyVisibleResult: true };
   }
   async function execute() { const input = await command(); return { input, result: await service().start(f.actor, f.home, draft.id, input) }; }
+  async function selectReviewedTaskProposal() {
+    draft = await drafts().save(f.actor, f.home, draft.id, { requestId: randomUUID(), expectedVersion: draft.version, step: "test",
+      content: { ...draft.content!, capabilities: [
+        { operation: "create_internal_draft", autonomy: "automatic" }, { operation: "create_task", autonomy: "ask_first" },
+      ] } });
+  }
+  it("records a representative task proposal as evidence without creating a business task or approval interaction", async () => {
+    await selectReviewedTaskProposal();
+    modelOutput = JSON.stringify({ draft: "An internal welcome draft", proposedTask: { title: "A proposed welcome followup", description: "Review approved internal onboarding facts" } });
+    const { result } = await execute();
+    expect(calls).toBe(1);
+    expect(result).toMatchObject({ execution: "succeeded", verification: "not_reviewed", testQualified: false, toolsGranted: false, activatesAgent: false });
+    expect(result.result).toContain("Proposed task — not created");
+    expect(result.result).toContain("A proposed welcome followup");
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, result.runId));
+    expect(run!.resultJson).toMatchObject({ taskProposalRecorded: true, businessTasksCreated: 0, independentlyVerified: false });
+    expect(await db.select().from(issues).where(and(eq(issues.companyId, f.home), eq(issues.title, "A proposed welcome followup")))).toEqual([]);
+    expect(await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.companyId, f.home))).toEqual([]);
+    expect(await db.select().from(toolInvocations).where(eq(toolInvocations.companyId, f.home))).toEqual([]);
+  });
+  it("refuses widened task output while retaining the actual model debit without an output document", async () => {
+    await selectReviewedTaskProposal();
+    modelOutput = JSON.stringify({ draft: "Private invalid output", proposedTask: { title: "A forged task", description: "Outside scope", companyId: f.guest } });
+    const { result } = await execute();
+    expect(result).toMatchObject({ execution: "failed", testQualified: false, toolsGranted: false, activatesAgent: false });
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, result.runId));
+    expect(run!.resultJson?.outputDocumentId).toBeUndefined();
+    expect(await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.companyId, f.home))).toEqual([]);
+    const [test] = await db.select().from(agentConfigurationTests).where(eq(agentConfigurationTests.runId, result.runId));
+    expect((await db.select().from(orchestrationModelReservations).where(eq(orchestrationModelReservations.planId, test!.planId)))[0])
+      .toMatchObject({ status: "completed", maximumMinor: 3 });
+  });
   let selectedPreferenceBody: string | null = null;
   async function selectPreference() {
     const preference = await seedApprovedAuthoringPreference(db, f.home, f.presence.id, f.userId);

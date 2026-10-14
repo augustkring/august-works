@@ -22,12 +22,13 @@ import {
   X,
 } from "lucide-react";
 import type { IssueDocument } from "@paperclipai/shared";
+import { useTranslation } from "react-i18next";
 import type {
   PaperclipQuestionResponse,
   PaperclipQuestionSet,
 } from "@paperclipai/adapter-utils";
 import { IssueThreadInteractionCard } from "@/components/IssueThreadInteractionCard";
-import { IssueStatusBadge } from "@/components/StatusBadge";
+import { SuggestedTaskInitialState } from "@/components/SuggestedTaskInitialState";
 import { ConnectionIntentInteractionBody } from "@/features/connections/ConnectionIntentInteractionBody";
 import { MarkdownBody } from "@/components/MarkdownBody";
 import type { MentionOption } from "@/components/MarkdownEditor";
@@ -162,13 +163,15 @@ function InteractionShell({
   presentation: "timeline" | "takeover";
   children: ReactNode;
 }) {
+  const { t } = useTranslation("experience");
+  const separateTask = interaction.kind === "suggest_tasks" && interaction.payload.tasks.length === 1 && interaction.payload.tasks[0]?.placement === "company_backlog";
   const kind = KIND_COPY[interaction.kind];
   const Icon = kind.icon;
   const title = (
     <div className="flex min-w-0 items-center gap-2">
       <Icon aria-hidden className="h-4 w-4 shrink-0 text-muted-foreground" />
       <strong className="min-w-0 truncate text-sm font-medium text-foreground">
-        {interaction.title ?? kind.fallbackTitle}
+        {separateTask ? t("customAgent.taskProposalTitle") : interaction.title ?? kind.fallbackTitle}
       </strong>
       {interaction.kind === "request_confirmation" &&
       interaction.payload.target?.type === "issue_document" &&
@@ -1318,7 +1321,7 @@ function SuggestedTaskRow({
           <span className="block text-sm leading-5 text-foreground">
             {node.task.title}
           </span>
-          {node.task.status ? <IssueStatusBadge status={node.task.status} /> : null}
+          <SuggestedTaskInitialState task={node.task} />
           {hiddenCount > 0 ? (
             <span className="block text-xs text-muted-foreground">
               + {hiddenCount} hidden follow-up
@@ -1355,6 +1358,8 @@ function SuggestedTasksCard({
   errorMessage: (error: unknown) => string;
   draftKey?: string;
 }) {
+  const { t } = useTranslation("experience");
+  const separateBacklog = interaction.payload.tasks.length === 1 && interaction.payload.tasks[0]?.placement === "company_backlog";
   const roots = useMemo(
     () => buildSuggestedTaskTree(interaction.payload.tasks),
     [interaction.payload.tasks],
@@ -1439,7 +1444,7 @@ function SuggestedTasksCard({
   return (
     <div>
       <p className="text-sm leading-5 text-foreground">
-        Select the tasks to create.
+        {separateBacklog ? t("customAgent.reviewTaskProposal") : "Select the tasks to create."}
       </p>
       {interaction.payload.tasks.length > 10 ? (
         <label className="relative mt-3 block">
@@ -1475,13 +1480,13 @@ function SuggestedTasksCard({
             htmlFor={`${interaction.id}-reject-reason`}
             className="text-xs font-medium text-foreground"
           >
-            Why should these tasks change? (optional)
+            {separateBacklog ? t("customAgent.taskProposalRejectionReason") : "Why should these tasks change? (optional)"}
           </label>
           <Textarea
             id={`${interaction.id}-reject-reason`}
             value={reason}
             onChange={(event) => setReason(event.target.value)}
-            placeholder="Add a short note"
+            placeholder={separateBacklog ? t("customAgent.taskProposalReasonPlaceholder") : "Add a short note"}
             className={TAKEOVER_TEXTAREA_CLASS}
             autoFocus
           />
@@ -1489,7 +1494,7 @@ function SuggestedTasksCard({
       ) : null}
       <InteractionActionError message={actionError} />
       <ActionRow
-        hint={`${selected.size} of ${interaction.payload.tasks.length} selected`}
+        hint={separateBacklog ? t("customAgent.taskProposalSelected", { count: selected.size }) : `${selected.size} of ${interaction.payload.tasks.length} selected`}
       >
         {rejecting ? (
           <>
@@ -1500,7 +1505,7 @@ function SuggestedTasksCard({
               disabled={working !== null}
               onClick={() => setRejecting(false)}
             >
-              Back
+              {separateBacklog ? t("customAgent.taskProposalBack") : "Back"}
             </Button>
             <Button
               type="button"
@@ -1512,7 +1517,7 @@ function SuggestedTasksCard({
               {working === "reject" ? (
                 <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
               ) : null}
-              Send back
+              {separateBacklog ? t("customAgent.rejectTaskProposal") : "Send back"}
             </Button>
           </>
         ) : (
@@ -1524,7 +1529,7 @@ function SuggestedTasksCard({
               disabled={working !== null || !onRejectInteraction}
               onClick={() => setRejecting(true)}
             >
-              Revise
+              {separateBacklog ? t("customAgent.rejectTaskProposal") : "Revise"}
             </Button>
             <Button
               type="button"
@@ -1537,7 +1542,7 @@ function SuggestedTasksCard({
               {working === "accept" ? (
                 <Loader2 aria-hidden className="h-4 w-4 animate-spin" />
               ) : null}
-              Create selected
+              {separateBacklog ? t("customAgent.createReviewedTask") : "Create selected"}
             </Button>
           </>
         )}

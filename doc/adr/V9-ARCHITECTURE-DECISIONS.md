@@ -2484,3 +2484,53 @@ exercises the actual Agent-denied/Human-accepted path: only explicit Human
 acceptance creates the unassigned backlog child with Original source-run
 provenance. create_task runtime mapping remains closed until its full controller
 and representative-test paths use these prerequisites.
+
+
+## ADR-71 — Authored Agents propose one separate backlog task through the Original Human verdict
+
+Only create_task: ask_first joins the mapped internal-draft policy. The model
+returns strict bounded text data with at most one title/description proposal,
+never executable tools or identifiers. The private Native controller consumes
+the exact published Agent version, the current declared output, Source and
+Original model/tool budgets. A context read, draft write and Human interaction
+consume three Native tool actions; known insufficient capacity refuses before
+model dispatch. No reviewed budget is raised and no automatic provider resend
+or Agent continuation is added. The representative-test controller uses the
+same output grammar but records the proposal solely as review evidence; its
+Original run declares zero business tasks, no tools and no activation.
+
+The active bounded-plan SQL guard continues to prohibit arbitrary child tasks.
+The proposal therefore uses the Original suggest_tasks owner's new closed
+company_backlog placement: one standalone, standard, unassigned backlog task,
+linked from the Original interaction and Native source run. The model cannot
+choose that placement, assignments, project/goal overrides, permissions or
+recipients. Explicit Human-only policy and the exact same-company Native
+Task/run binding are mandatory. No worker is added to the original plan and
+there is no assignment, wake or automatic execution.
+
+The Human verdict locks the existing company/privacy boundary, current verified
+user and active membership, and current Source issue. It reuses Native issue
+mutation authorization with the complete current resource, including viewer
+denial and no instance-admin membership bypass. Current Source is revalidated
+before and after creation. Task UUID preallocation, the pending claim, Original
+receipt and Original task factory all share one transaction; failed authority,
+Source, identity or receipt checks roll everything back. Concurrent approvals
+produce one task. Accepted cards retain their task IDs and cannot recreate them.
+
+Migration 0499 extends the existing 16-hop Source chain with Human-reviewed
+origins. It requires the exact accepted Human-only interaction, its actual
+created-task receipt ID, Human creator, company and Native source Task/run.
+Copied origin strings and unrecorded task IDs fail closed. Mutable task title,
+status and assignments do not replace provenance. Existing Agent-created
+origins/cycles/bounds remain supported. The Original erasure owner includes
+these indexed origins and physically scrubs their task payloads after Source
+suppression. Missing new SQL mapping rolls approval back. No new task, approval,
+Source, queue or model ledger is introduced.
+
+Both review hosts disclose standalone placement and expose EN/DA creation and
+rejection controls. Actual shipped-host contrast failures justify token-based
+backlog text, avatar initials and Task metadata/description corrections. Those
+checks are bounded software evidence; genuine provider/tool qualification,
+manual assistive-technology and representative Human evidence remain open.
+Automatic task effects, external send/spend, permission changes and delegation
+remain unmapped. The 70 release rows and R0 remain pending.

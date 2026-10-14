@@ -7,7 +7,7 @@
     "admin",
     "security_admin"
   ],
-  "customerOutcome": "Save representative scenarios; execution and independent result verification remain unqualified.",
+  "customerOutcome": "Execute a bounded representative internal draft and optional task proposal as test evidence, then require independent Human review; no business task or execution grant is created.",
   "entryConditions": [
     "Current verified authenticated company membership and native agents:create or target agents:configure authority; instance-admin status does not bypass membership.",
     "Draft belongs to the current creator; editing an existing agent requires current native read and configure authority.",
@@ -17,11 +17,11 @@
   "exitConditions": [
     "Only a canonical accepted draft ID/version permits a saved claim.",
     "Draft saving never changes production agent configuration, grants, runtime or scheduled work.",
-    "Testing, effective native policy mapping, publish and active monitoring remain unqualified; no success evidence is manufactured."
+    "Software controllers cover bounded internal drafts and one Human-reviewed separate backlog proposal. Automatic task creation, external send/spend and delegation remain unmapped; live provider, manual and representative Human qualification remain open."
   ],
   "content": {
     "h1": "Test",
-    "supportingCopy": "Save representative scenarios; execution and independent result verification remain unqualified.",
+    "supportingCopy": "Execute a bounded representative internal draft and optional task proposal as test evidence, then require independent Human review; no business task or execution grant is created.",
     "customerTerms": [
       "Company",
       "Work",
@@ -31,7 +31,8 @@
     ],
     "displayedState": [
       "Native draft version, section and explicit draft status",
-      "Saved-draft blockers are distinct from unsaved local proposals and executed outcomes"
+      "Saved-draft blockers are distinct from unsaved local proposals and executed outcomes",
+      "Asks-before task scope: one separate unassigned backlog task, linked through the Original Human verdict/Task receipt and source run; tests retain the proposal as evidence and create no business task."
     ]
   },
   "inputs": [

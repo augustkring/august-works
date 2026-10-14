@@ -14,7 +14,8 @@ import { assertV7Enabled, assertV7Authorization } from "../v7-authorization.js";
 import { budgetService } from "../budgets.js";
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { instanceSettingsService } from "../instance-settings.js";
-import { v9FeatureEnabled } from "@paperclipai/shared";
+import { v9FeatureEnabled, authoredAgentMappingBlockers, agentDraftRequestsTaskReview,
+  parseAgentDraftOutput, agentDraftReviewDocument, AGENT_REVIEWED_TASK_OUTPUT_INSTRUCTIONS } from "@paperclipai/shared";
 import { modelReservationService, quoteModelReservation } from "../orchestration/model-reservations.js";
 import { anthropicReadOnlyCall, readOnlyModelEnvelopeBytes } from "../orchestration/read-only-model-transport.js";
 import { assertWorkerModelProfileCurrent, type WorkerModelProfile } from "../orchestration/worker-model-profiles.js";
@@ -49,8 +50,7 @@ export function authoringTestRuntime(db: Db, options: Options, profile: (company
     if (!scenario || scenario.length < 10) throw conflict("Describe the saved representative scenario in at least ten characters");
     const readiness = await agentAuthoringService(tx).reviewContent(actor, input.companyId, input.draftId);
     if (readiness.blockers.some(blocker => !["representative_test_unqualified", "native_promotion_unqualified"].includes(blocker.code))) throw conflict("Complete the saved candidate before testing");
-    if (draft.content.capabilities.some(capability =>
-      capability.autonomy !== "not_allowed" && (!["create_internal_draft", "read_approved_knowledge"].includes(capability.operation) || capability.autonomy !== "automatic")))
+    if (authoredAgentMappingBlockers(draft.content).includes("capability_mapping_required"))
       throw conflict("This qualified test transport supports internal drafts and selected read-only approved knowledge without tools or persistent memory");
     await assertV7Authorization(tx, actor, input.companyId, "agent:wake", { type: "agent", companyId: input.companyId, agentId });
     const [agent] = await tx.select().from(agents).where(and(eq(agents.companyId, input.companyId), eq(agents.id, agentId))).for("share");
@@ -92,7 +92,9 @@ export function authoringTestRuntime(db: Db, options: Options, profile: (company
     const candidateHash = authoringCandidateHash(draft), configurationHash = nativeSha256({ name: agent.name, role: agent.role, title: agent.title,
       capabilities: agent.capabilities, adapterType: agent.adapterType, adapterConfig: effectiveConfig, runtimeConfig: agent.runtimeConfig, permissions: agent.permissions,
       procedureSnapshotHash: procedures.hash });
-    const request = { model: p.tariff.model, maxOutputTokens: Math.min(8192, selected.maxOutputTokens), system,
+    const taskReview = agentDraftRequestsTaskReview(draft.content);
+    const request = { model: p.tariff.model, maxOutputTokens: Math.min(8192, selected.maxOutputTokens),
+      system: taskReview ? `${system.replace("Return only the internal draft.", "")} ${AGENT_REVIEWED_TASK_OUTPUT_INSTRUCTIONS}` : system,
       evidence: `${authoringCandidateInstructions(draft.content)}\n\n${procedures.markdown}\n\nRepresentative scenario\n${scenario}` };
     if (readOnlyModelEnvelopeBytes(request) > p.maximumEnvelopeBytes) throw forbidden("The saved candidate exceeds its qualified model envelope");
     const quote = quoteModelReservation({ tariff: p.tariff, sourceSha: options.sourceSha, inputTokensUpperBound: p.inputTokensUpperBound, maxOutputTokens: request.maxOutputTokens });
@@ -162,6 +164,8 @@ export function authoringTestRuntime(db: Db, options: Options, profile: (company
       const receipt = await broker.recordOutcome(test.companyId, reservation.id, { status: "completed", providerResponseHash: nativeSha256(result), usage: result.usage });
       outcomeRecorded = true;
       if (receipt.status !== "completed") throw forbidden("Model usage exceeded the test's reserved envelope");
+      const draftOutput = parseAgentDraftOutput(result.text, agentDraftRequestsTaskReview(state.draft.content!));
+      const outputBody = agentDraftReviewDocument(draftOutput);
       controller.signal.throwIfAborted();
       await withV7ActivityTransaction(db, async (tx, publications) => {
         await lockMemoryPrivacy(tx, test.companyId);
@@ -169,11 +173,12 @@ export function authoringTestRuntime(db: Db, options: Options, profile: (company
         if (run?.status !== "running") throw forbidden("The test was stopped before result publication");
         await qualify(tx, input);
         const output = await documentService(tx).upsertIssueDocument({ issueId: (await tx.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, test.planId)))[0]!.issueId,
-          key: "representative-draft", title: "Representative draft result", format: "markdown", body: result.text,
+          key: "representative-draft", title: "Representative draft result", format: "markdown", body: outputBody,
           createdByUserId: test.createdByUserId, createdByRunId: test.runId });
         await tx.update(heartbeatRuns).set({ status: "succeeded", finishedAt: new Date(), resultJson: {
           agentSafeTest: true, candidateHash: test.candidateHash, reservationId, outputDocumentId: output.document.id,
-          outputDocumentRevisionId: output.document.latestRevisionId, outputHash: nativeSha256(result.text),
+          outputDocumentRevisionId: output.document.latestRevisionId, outputHash: nativeSha256(outputBody),
+          taskProposalRecorded: Boolean(draftOutput.proposedTask), businessTasksCreated: 0,
           independentlyVerified: false, toolsGranted: false, activatesAgent: false,
         } }).where(eq(heartbeatRuns.id, test.runId));
         await logActivity(tx, { companyId: test.companyId, actorType: "user", actorId: test.createdByUserId, agentId: test.agentId, runId: test.runId,

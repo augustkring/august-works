@@ -172,3 +172,33 @@ action owner, issued message/interaction identity, current linked Human and
 transactional effective-rollout recheck (ADR-65). Tool/grant/credential/connection/
 document review and reason-bearing rejection remain in the full web resolver.
 Live channel and full card-family qualification remain pending.
+
+
+### Authored Agent proposals and Human-approved standalone tasks
+
+ADR-71 maps only a strict one-task data proposal through the existing Native
+model reservation, run/document, interaction verdict and Task owners. It adds
+no model tool, connection/grant, external send, persistent personalization or
+Agent task-write authority. Current Agent definition/manifest, Source, Stop,
+company/principal and original cumulative budgets remain executable guards.
+Representative tests save proposals as evidence with businessTasksCreated=0; only an
+actual explicit Human verdict creates an unassigned standalone backlog task.
+
+The purpose is internal work drafting and accountable task review. Prose is
+sensitive business/derived Source data, held in the existing private documents,
+interaction payload and Task records. Exact company, actor, source-run and
+Original receipt IDs supply audit/provenance, never a fresh reader or execution
+grant. Existing retention/rights/tenant/source deletion policy applies; no new
+retention period is invented. The Source graph remains bounded to 16 hops;
+forged receipt identity, missing owners, cycles and incomplete mappings refuse.
+Root task preallocation and receipt persistence are atomic with creation, and
+the existing privacy owner scrubs the actual Root task after Source erasure.
+Migration 0499 must precede this writer; even an older/missing mapping refuses
+the final approval rather than retaining a task without its Source chain.
+
+No new Telemetry event/field is added. Existing Original interaction events
+retain their closed kind/status/count contract; model text, Source prose,
+proposal titles, credentials and private receipt IDs are not added to them.
+Additional fixed test-run metadata remains in the instance database. Host,
+manual/Human and deployment/restore qualification are still required; software
+fixtures do not meet those gates or demonstrate provider availability.

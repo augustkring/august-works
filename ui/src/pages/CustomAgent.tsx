@@ -677,6 +677,9 @@ function DraftEditor({
         {(step === "tools" || step === "authority") && (
           <>
             <p>{t("customAgent.capabilityBoundary")}</p>
+            {content.capabilities.some(item => item.operation === "create_task" && item.autonomy === "ask_first") && (
+              <p>{t("customAgent.taskProposalBoundary")}</p>
+            )}
             {Object.entries(operationLabels).map(([raw, label]) => {
               const operation = raw as keyof typeof operationLabels,
                 selected =

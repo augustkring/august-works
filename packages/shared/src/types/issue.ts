@@ -1118,6 +1118,8 @@ export interface SuggestedTaskDraft {
   description?: string | null;
   /** Omitted legacy suggestions retain their todo default. */
   status?: "backlog" | "todo";
+  /** Human-approved standalone follow-up; no executable worker or assignee. */
+  placement?: "company_backlog";
   priority?: IssuePriority | null;
   workMode?: IssueWorkMode | null;
   assigneeAgentId?: string | null;

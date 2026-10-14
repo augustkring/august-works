@@ -282,7 +282,7 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
   // Keep their Original origin IDs after receipt/context payloads are erased.
   const originNativeTasks = childIds.length ? await db.select({ id: issues.id }).from(issues).where(and(
     eq(issues.companyId, companyId), eq(issues.originKind, "manual"), inArray(issues.originRunId, childIds),
-    sql`${issues.originId} like 'paperclip-runner:create-task:%'`,
+    sql`(${issues.originId} like 'paperclip-runner:create-task:%' or ${issues.originId} like 'paperclip-suggested-task:%')`,
   )) : [];
   // A routine execution can retain a copied description before it has its
   // own heartbeat. Scrub that actual task through the same Original owner.

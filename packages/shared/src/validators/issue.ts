@@ -1141,6 +1141,7 @@ export const suggestedTaskDraftSchema = z
     parentId: z.string().guid().nullable().optional(),
     title: z.string().trim().min(1).max(240),
     status: z.enum(["backlog", "todo"]).optional(),
+    placement: z.literal("company_backlog").optional(),
     description: multilineTextSchema
       .pipe(z.string().trim().max(20000))
       .nullable()
@@ -1156,6 +1157,12 @@ export const suggestedTaskDraftSchema = z
     hiddenInPreview: z.boolean().optional(),
   })
   .superRefine((value, ctx) => {
+    if (value.placement === "company_backlog" && (value.status !== "backlog" ||
+      value.parentId || value.parentClientKey || value.assigneeAgentId || value.assigneeUserId ||
+      value.projectId || value.goalId || value.billingCode || value.labels?.length || value.hiddenInPreview ||
+      value.workMode && value.workMode !== "standard" || value.priority && value.priority !== "medium")) {
+      ctx.addIssue({ code: "custom", message: "A separate backlog proposal has fixed scope and no assignee", path: ["placement"] });
+    }
     if (value.assigneeAgentId && value.assigneeUserId) {
       ctx.addIssue({
         code: z.ZodIssueCode.custom,
@@ -1172,6 +1179,8 @@ export const suggestTasksPayloadSchema = z
     tasks: z.array(suggestedTaskDraftSchema).min(1).max(50),
   })
   .superRefine((value, ctx) => {
+    if (value.tasks.some(task => task.placement === "company_backlog") && (value.tasks.length !== 1 || value.defaultParentId))
+      ctx.addIssue({ code: "custom", message: "A separate backlog proposal contains one task without a parent override", path: ["tasks"] });
     const seenClientKeys = new Set<string>();
     for (const [index, task] of value.tasks.entries()) {
       if (seenClientKeys.has(task.clientKey)) {
