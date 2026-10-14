@@ -418,3 +418,47 @@ types, generated database build/migration-safety, coverage and module boundaries
 pass. The complete workspace build also passes on this unchanged application
 Source. Full immutable whole-scope regression is still pending. Broader package/artifact/
 knowledge copies and explicit sharing still require complete closure.
+
+### Guided selected Native draft step editing
+
+2026-10-14. Current guided review/edit now supports a selected step name and
+complete Native wait/approval configuration without rebuilding the graph.
+Unsupported settings remain in the existing Advanced editor with exact node
+selection. Original updateDraft creates a separate revision; its active graph,
+branches and other node fields remain unchanged. Current verified account,
+actual read/edit grants, non-viewer write role, feature and source admission
+remain required. The command freezes current object/version/node/type and its
+own body-free request receipt commits atomically; late account withdrawal rolls
+back the revision and receipt. Historical draft_edit recovery survives rollout
+closure through the existing exact receipt owner and bounded per-tab locator.
+
+Native step/review/OpenAPI checks pass 46 cases in three suites. Current private
+step/client/receipt/review UI checks pass 22 cases in four suites; the subsequent
+Advanced/step/client group passes 15 cases in three suites. Server/UI types and
+token gates passed before the later selected-Advanced/referrer changes, which
+remain under final integrated checks. Background issue diagnostics now mask the
+private editor referer; both native request-storm cases pass.
+
+The current built browser passes (4.9 seconds test, 38.4 seconds including setup):
+one actual Native save despite lost response, unchanged active revision, actual
+new draft, reload/rollout closure, exact receipt GET, locator clearance, receipt
+focus, Danish 390px rendering, no horizontal overflow and zero automated
+main-region axe violations. Verified actor and UI session are controlled software
+fixtures; no real authenticated Human/provider qualification is inferred. Earlier
+fixture attempts used root dependency resolution for server-owned packages and
+omitted the database URL in cleanup. Those fixture issues are fixed. Repeated
+current scoped receipt GETs are allowed; the regression forbids replacement POSTs.
+
+Full graph/trigger/condition/tool/access/approval-policy editing, natural-language
+graph proposals, broader test modes and remaining V9 implementation/evidence
+remain open. Final immutable whole-suite qualification has not passed.
+
+The final current Native step/source/recovery/OpenAPI group passes 42 cases in
+four suites after the selected-Advanced and private referer changes. Current UI
+types pass. Full recursive types and the final checkpoint build remain pending;
+whole-V9 completion and immutable whole-suite qualification are still open.
+
+Full recursive types and the complete workspace build now also pass on the
+unchanged application Source for this guided-step checkpoint. Token, module and
+coverage gates pass. No final immutable whole-scope test pass, real Human or
+host/provider acceptance is recorded by these checkpoint checks.

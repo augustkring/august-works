@@ -219,6 +219,10 @@ export function workflowService(db: Db) {
         if (!receipt) throw notFound("The Original test request is unconfirmed");
         return workflowRequestReceiptSchema.parse({ kind, receipt });
       }
+      if (kind === "draft_edit") {
+        const { workflowCustomerDraftEdit } = await import("./workflow-customer-draft-edit.js");
+        return workflowRequestReceiptSchema.parse({ kind, receipt: await workflowCustomerDraftEdit(db).receipt(companyId, workflowId, requestId, authority) });
+      }
       return db.transaction(async raw => {
         const tx = raw as unknown as Db;
         await lockCustomerWorkflowReceiptAuthority(tx, companyId, authority,

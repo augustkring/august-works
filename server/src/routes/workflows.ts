@@ -31,6 +31,7 @@ import { withExperienceAdmission } from "../services/experience/admission.js";
 import { ExperienceOverloadError } from "../services/experience/projection.js";
 import { workflowReview } from "../services/experience/workflow-review.js";
 import { workflowDraftIntentService } from "../services/experience/workflow-draft-intent.js";
+import { workflowCustomerDraftEdit } from "../services/workflows/workflow-customer-draft-edit.js";
 import { workflowRunReview } from "../services/experience/workflow-run-review.js";
 import { currentWorkflowStopRoleAllows, readCustomerWorkflowStopReceipt } from "../services/workflows/workflow-customer-stop.js";
 import { assertV5Authorization } from "../services/v5-authorization.js";
@@ -845,6 +846,20 @@ export function workflowRoutes(db: Db) {
         throw notFound("Workflow test view is unavailable");
     }
     res.json(result);
+  });
+
+  router.get("/companies/:companyId/workflows/:workflowId/experience/draft-steps/:nodeId", async (req, res) => {
+    res.set("Cache-Control", "private, no-store"); currentDraftAccount(req);
+    try {
+      res.json(await withExperienceAdmission(() => workflowCustomerDraftEdit(db).review(z.uuid().parse(req.params.companyId),
+        z.uuid().parse(req.params.workflowId), req.params.nodeId as string, req.actor)));
+    } catch (error) {
+      if (error instanceof ExperienceOverloadError) throw new HttpError(503, "The current draft step is unavailable; try again"); throw error;
+    }
+  });
+  router.post("/companies/:companyId/workflows/:workflowId/experience/draft-steps", async (req, res) => {
+    res.set("Cache-Control", "private, no-store"); currentDraftAccount(req);
+    res.json(await workflowCustomerDraftEdit(db).save(z.uuid().parse(req.params.companyId), z.uuid().parse(req.params.workflowId), req.body, req.actor));
   });
 
   router.post("/companies/:companyId/workflows/:workflowId/experience/lifecycle",

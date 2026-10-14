@@ -2,6 +2,7 @@ import { z } from "zod";
 import { workflowTestReceiptSchema } from "./workflow-test.js";
 
 const stepSchema = z.strictObject({
+  nodeId: z.string().min(1).max(160).optional(),
   number: z.number().int().min(1).max(100),
   name: z.string().max(160),
   operation: z.string().max(160),

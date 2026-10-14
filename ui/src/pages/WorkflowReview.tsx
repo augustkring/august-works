@@ -392,6 +392,9 @@ export function WorkflowReview({
                           </dd>
                         </div>
                       </dl>
+                      {current.state === "draft" && detail.canEdit && step.nodeId && <Link
+                        className="inline-flex min-h-11 items-center underline"
+                        to={`/workflows/${id}/draft/steps/${encodeURIComponent(step.nodeId)}`}>{t("workflowDraftStep.open")}</Link>}
                     </li>
                   ))}
                 </ol>

@@ -1,0 +1,135 @@
+{
+  "screenId": "WORKFLOW-FIX",
+  "journeyId": "workflow",
+  "routeOrSurface": "/workflows/:workflowId/draft/steps/:nodeId",
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
+  "customerOutcome": "Correct one current Native draft step without rebuilding the workflow or changing its active revision.",
+  "entryConditions": [
+    "Current authenticated principal and company selection; no retained foreign-principal payload",
+    "Effective feature admission is required for new work; native membership and resource authority remain necessary"
+  ],
+  "exitConditions": [
+    "Only a canonical server-confirmed result permits a success claim",
+    "Pending, stale, unavailable or unqualified work never becomes successful or activated"
+  ],
+  "content": {
+    "h1": "Edit a draft step",
+    "supportingCopy": "Changes are saved to the draft. Test and review it before publishing.",
+    "customerTerms": [
+      "Draft step",
+      "Step name",
+      "Wait time",
+      "Approval",
+      "Active version"
+    ],
+    "displayedState": [
+      "Exact current draft/revision/update identity and selected Native node",
+      "Full current node name; wait duration or approval summary/consequence when their Original strict configuration is completely supported",
+      "Other configuration stays with the selected Native Advanced editor; name-only edits preserve inputs, retries, conditions, branches and private config",
+      "Original own-request save receipt is historical; publication and execution remain separate"
+    ]
+  },
+  "inputs": [
+    "Step name, 1–200 readable Unicode characters",
+    "Wait duration, whole seconds 1–604800",
+    "Approval summary up to 1000 and consequence up to 2000 readable characters"
+  ],
+  "actions": {
+    "primary": {
+      "label": "Save draft changes",
+      "operation": "Original updateDraft and exact own-request Activity receipt in one transaction; current node/type/revision/publication/update preconditions."
+    },
+    "secondary": [
+      "Back without saving",
+      "Review current step after conflict",
+      "Check the exact original save request",
+      "Open the existing Advanced editor with the selected Native node"
+    ],
+    "destructiveOrIrreversible": []
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Native workflow/revisions/node registry, source ownership, verified account, current read/edit grants and write-role fence"
+    ],
+    "canonicalWriteOperation": "Original workflow updateDraft; strict selected-node changes only, unchanged active revision and no test/publication/run/grant.",
+    "authorityEffect": "No permission, approval or runtime authority is inferred from a draft change.",
+    "asyncWork": "Bounded current read and transactional CAS save; one original request locator precedes POST.",
+    "receipt": "Original request/revision IDs, version and changed flag. No copied name/config/prose in its Activity receipt."
+  },
+  "states": {
+    "loading": "Announce loading only while the current identity/company request is pending.",
+    "empty": "An empty revision means no steps in that revision, not a tested process.",
+    "partial": "Oversized, duplicate, cyclic or dangling-connection flows show flow unavailable with no truncated topology.",
+    "stale": "Hide retained private data during background rechecks and live authority/privacy/version invalidations; a new query epoch rejects late prior responses.",
+    "validation_error": "Show invalid visible fields; refuse unreadable Unicode, empty names and out-of-range durations before POST.",
+    "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
+    "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
+    "recovering": "Retain only exact company/account/workflow/kind/request identity. GET the Original receipt; never replace an unknown save with a fresh request.",
+    "success": "Only the confirmed Original draft receipt permits a saved-version claim. It does not publish or start work."
+  },
+  "navigation": {
+    "back": "Return to the current Native workflow review.",
+    "cancelOrSaveExit": "Back without saving; private inputs remain only in component memory. Browser storage contains scoped request identity only.",
+    "deepLink": "/workflows/:workflowId/draft/steps/:nodeId",
+    "resume": "Re-read current account/source/version. Unconfirmed save recovery survives rollout closure; no automatic POST."
+  },
+  "accessibility": {
+    "initialFocus": "Main heading or the dialog category control; keyboard focus is visible and unobscured.",
+    "focusAfterError": "Error summary or first invalid control, with a programmatically associated explanation.",
+    "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
+    "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
+    "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
+    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
+    "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
+    "reducedMotion": "No essential animated transition or moving progress indicator.",
+    "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
+  },
+  "responsive": {
+    "wide": "Readable constrained content width with natural wrapping.",
+    "narrow": "Reflow cards and form actions without concealing utilities or consequences.",
+    "mobile": "Touch targets remain reachable; dialogs scroll within the viewport and do not obscure focus."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Current authorized selected-node name and allowlisted wait/approval configuration"
+    ],
+    "dataCollected": [
+      "Original canonical draft values and body-free Native request receipt"
+    ],
+    "sensitiveFields": [
+      "Private draft names/approval prose/configuration are excluded from logs, analytics and browser storage; every private source keeps its own reader policy"
+    ],
+    "loggingConstraints": "Whole Native workflow namespace is private. Background issue diagnostics mask the editor referer path, including customer-defined node IDs."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "Raw intent",
+      "Company facts",
+      "Feedback body/goal",
+      "Documents/prompts/results",
+      "Credentials/raw URLs/query strings/DOM/screenshots"
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Verify one separate draft under concurrent exact retries, unchanged immutable active graph/branches, strict node/config binding, stale/type/foreign/viewer denial, historical recovery with rollout closed, late-verification rollback and no grant/run/publication effect.",
+      "Verify lost acknowledgement/reload causes only exact receipt GET, current-account/Source fences reject late replies, and source/version conflicts require current review.",
+      "Full trigger/graph/condition/tool/access/approval-policy editing, conversation graph proposals, broader test modes and remaining lifecycle qualification stay open."
+    ],
+    "accessibility": [
+      "Verify visible labels, heading/error/receipt focus, keyboard, EN/DA 390px layout and automated main-region axe on built source; manual AT/200–400% zoom remains open."
+    ],
+    "securityPrivacy": [
+      "Verify no raw prose/configuration in request recovery storage, audit, generic HTTP/crash or background referer diagnostics; current native source and account authority remain required."
+    ],
+    "usability": [
+      "Representative exploratory and preregistered confirmatory Human evidence is still required; controlled software fixtures do not satisfy it."
+    ]
+  }
+}

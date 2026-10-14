@@ -49,6 +49,7 @@ export function projectWorkflowRevisionFlow(source: WorkflowRevision, definition
           const definition = registry.get(node.type);
           const retry = node.retryPolicy ?? definition?.retryPolicyDefault;
           return {
+            nodeId: node.id,
             number: index + 1,
             name: node.name.slice(0, 160),
             operation:

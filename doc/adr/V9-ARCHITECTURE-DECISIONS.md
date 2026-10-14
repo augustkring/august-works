@@ -1643,3 +1643,37 @@ foreign-reader denial, child deletion, copied-result erasure, late writes and
 restored Native rows. Checkpoint results and broader artifact/package/knowledge
 copy closure remain in the continuation plan. There is no inference of host or
 provider termination, external compensation or representative Human acceptance.
+
+## ADR-V9-038 — Guided selected-step edits compose the Original draft and receipt owners
+
+2026-10-14. A guided step editor changes the selected Native draft's name and
+fully supported wait/approval configuration. It preserves all other nodes,
+branches, inputs, retries and failure policy. Unsupported configuration stays
+in the existing Advanced editor, with the selected actual node retained in its
+deep link. The active revision remains immutable and test/publication/execution
+keep their separate Original admission. Full graph/trigger/condition/tool/access
+editing and richer test qualification remain open.
+
+Verified current account, current Native read/edit grants, write role, rollout
+and private source ownership remain necessary. Save freezes workflow/draft/
+publication/update/node/type identity. Original updateDraft and a body-free
+own-request Activity receipt commit together, with late authority checks. Exact
+replay returns its receipt after rollout withdrawal without another revision;
+changed content or a stale source is refused. The read-only request history
+adds draft_edit to the existing Original receipt union.
+
+The browser stores only the bounded scoped request locator before one POST.
+Lost/late/foreign responses cannot clear it or permit a replacement save after
+reload. Account/source changes hide prior values; fresh current reads distinguish
+saved historical versions from current state. Draft prose stays in component
+memory and its Native revision. Whole workflow HTTP logging is private, and
+background issue diagnostics also mask editor referer paths with customer node
+IDs. This is local log minimization, not a new telemetry event or contract.
+
+Native concurrent replay, immutable active separation, stale/type/foreign/viewer
+denial and late-verification rollback are tested. Built recovery exercises the
+actual migrated Native HTTP/revision/journal owners via a controlled verified
+actor bridge and controlled UI session, with one POST, rollout-closed receipt
+GET, Danish 390px layout and zero automated main-region axe violations. These
+software fixtures do not qualify real authentication, Human usability, manual
+assistive technology or hosted provider/process behavior.

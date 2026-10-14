@@ -2209,13 +2209,15 @@
       "test": "test",
       "publication": "udgivelse",
       "launch": "kørsel",
-      "lifecycle": "statusændring"
+      "lifecycle": "statusændring",
+      "draft_edit": "kladdeændring"
     },
     "recordedKind": {
       "test": "En testanmodning blev accepteret.",
       "publication": "Den gennemgåede revision af arbejdsgangen blev udgivet.",
       "launch": "En anmodning om kørsel blev accepteret.",
-      "lifecycle": "Arbejdsgangens statusændring blev registreret."
+      "lifecycle": "Arbejdsgangens statusændring blev registreret.",
+      "draft_edit": "Din kladdeændring blev gemt. Publicering og kørsel kræver deres særskilte kontroller."
     },
     "status": {
       "active": "Anmodningen satte arbejdsgangen til aktiv.",
@@ -2246,5 +2248,25 @@
     },
     "requesting": "Stopanmodningen sendes. Behold anmodningens reference, indtil dens oprindelige svar er bekræftet.",
     "recordedStatus": "Registreret kørselsstatus: {{status}}"
+  },
+  "workflowDraftStep": {
+    "open": "Rediger dette kladdetrin",
+    "heading": "Rediger et kladdetrin",
+    "boundary": "Ændringer gemmes i kladden. Den aktive version beholder sine eksisterende trin. Test og gennemgå den ændrede kladde, før du publicerer den.",
+    "name": "Trinnets navn",
+    "duration": "Ventetid (sekunder)",
+    "summary": "Hvad skal godkendes?",
+    "consequence": "Hvad sker der, hvis det godkendes?",
+    "advanced": "Du kan ændre navnet her. Brug den avancerede editor til trinnets øvrige indstillinger.",
+    "cancel": "Tilbage uden at gemme",
+    "save": "Gem kladdeændringer",
+    "saving": "Gemmer kladdeændringer…",
+    "saved": "Dine ændringer blev gemt i kladdeversion {{version}}.",
+    "unchanged": "Kladdeversion {{version}} havde allerede disse værdier.",
+    "unconfirmed": "Vi kunne ikke bekræfte denne gemning. Kontroller den oprindelige gemte anmodning, før du prøver en anden ændring.",
+    "unavailable": "Vi kunne ikke læse dette aktuelle kladdetrin. Kontroller din konto og redigeringsadgang, og prøv igen.",
+    "changed": "Kladden blev ændret, mens du redigerede. Gennemgå det aktuelle trin, før du gemmer.",
+    "reviewLatest": "Gennemgå det aktuelle trin",
+    "invalid": "Angiv et navn til trinnet og gyldige værdier i de synlige felter."
   }
 }

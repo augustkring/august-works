@@ -2209,13 +2209,15 @@
       "test": "test",
       "publication": "publication",
       "launch": "run",
-      "lifecycle": "status change"
+      "lifecycle": "status change",
+      "draft_edit": "draft change"
     },
     "recordedKind": {
       "test": "A workflow test was admitted.",
       "publication": "The reviewed workflow revision was published.",
       "launch": "A workflow run was admitted.",
-      "lifecycle": "The workflow status change was recorded."
+      "lifecycle": "The workflow status change was recorded.",
+      "draft_edit": "Your draft change was saved. Publication and execution require their separate controls."
     },
     "status": {
       "active": "This request set the workflow to active.",
@@ -2246,5 +2248,25 @@
     },
     "requesting": "Requesting Stop. Keep this request reference until its original response is confirmed.",
     "recordedStatus": "Recorded run status: {{status}}"
+  },
+  "workflowDraftStep": {
+    "open": "Edit this draft step",
+    "heading": "Edit a draft step",
+    "boundary": "Changes are saved to the draft. The active version keeps its existing steps. Test and review the changed draft before publishing it.",
+    "name": "Step name",
+    "duration": "Wait time (seconds)",
+    "summary": "What needs approval?",
+    "consequence": "What happens if it is approved?",
+    "advanced": "You can change the name here. Use the Advanced editor for this step’s other settings.",
+    "cancel": "Back without saving",
+    "save": "Save draft changes",
+    "saving": "Saving draft changes…",
+    "saved": "Your changes were saved in draft version {{version}}.",
+    "unchanged": "Draft version {{version}} already had these values.",
+    "unconfirmed": "We couldn’t confirm this save. Check the original saved request before trying another change.",
+    "unavailable": "We couldn’t read this current draft step. Check your account and edit access, then try again.",
+    "changed": "This draft changed while you were editing. Review the current step before saving.",
+    "reviewLatest": "Review the current step",
+    "invalid": "Enter a step name and valid values for the visible fields."
   }
 }

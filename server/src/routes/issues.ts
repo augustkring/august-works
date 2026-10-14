@@ -3224,10 +3224,13 @@ function issueListClientIdentity(req: Request) {
 function safeRefererPath(req: Request): string | null {
   const referer = req.header("referer");
   if (!referer) return null;
+  const privateEditorPath = (pathname: string) => /(?:^|\/)workflows\/[^/]+\/draft\/steps(?:\/|$)/i.test(pathname)
+    ? "/:company/workflows/:workflowId/draft/steps/:nodeId" : pathname;
   try {
-    return new URL(referer).pathname;
+    return privateEditorPath(new URL(referer).pathname);
   } catch {
-    return referer.split("?")[0]?.slice(0, 160) ?? null;
+    const pathname = referer.split("?")[0];
+    return pathname ? privateEditorPath(pathname).slice(0, 160) : null;
   }
 }
 
