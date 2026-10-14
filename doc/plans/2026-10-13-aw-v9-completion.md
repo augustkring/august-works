@@ -2437,3 +2437,24 @@ not a visual baseline, manual AT or representative Human trial. Current
 anonymous MCP Apps policy/browser regression also passes all nine cases.
 Remaining customer browser files and frozen 53/60 full tests remain running.
 All 70 release surfaces/R0 remain pending. No PR/push or whole-V9 completion.
+
+
+### Publish and protect the three new analytical read contracts — checkpoint 65
+
+The actual route/spec inventory found missing OpenAPI entries for the typed
+insight reader and the narrowed experiment-analysis/management-review summaries.
+All three are registered with their existing shared response schemas, current
+account/Source conflict responses and matching no-store headers. The insight
+query explicitly requires expectedUserId and a bounded closed serialized
+reference, not model content or effects. This documents existing readers; it
+adds no route, writer, grant, calculation or model call.
+
+Summary paths also enter private HTTP purpose classification and stable URL
+normalization for rejected methods and malformed scopes. Experiment/version/
+review/company IDs, current-account queries, error prose and bodies are excluded
+from generic logs. Actual Express/pino rejection cases cover both namespaces.
+OpenAPI inventory/schema and private logging pass 93 cases (10.16 seconds).
+Current server typecheck passes exit 0. The new metadata is outside frozen
+53/60 snapshots; those aggregate tests cannot establish its current-source pass.
+Customer browser remainder is running on a fixed build. All launch rows/R0 and
+whole-V9/provider/Human acceptance remain pending. No PR/push.

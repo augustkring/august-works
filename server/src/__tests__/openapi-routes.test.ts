@@ -1281,3 +1281,13 @@ it("documents original Native review, pending recovery and cancellation without 
   expect(Object.keys(response.properties).sort()).toEqual(["approvalId", "companyId", "reviewedAt", "state"]);
   expect(response.additionalProperties).toBe(false);
 });
+
+it("documents the current-account read-only insight reference and bounded closed query", () => {
+  const operation = buildOpenApiSpec().paths["/api/companies/{companyId}/experience/insight-card"]?.get;
+  expect(operation).toBeDefined();
+  const parameters = operation.parameters as Array<{ name: string; in: string; required?: boolean; schema: Record<string, unknown> }>;
+  expect(parameters.find(value => value.name === "expectedUserId")).toMatchObject({ in: "query", required: true });
+  expect(parameters.find(value => value.name === "request")).toMatchObject({ in: "query", required: true, schema: { type: "string", maxLength: 8192 } });
+  expect(operation.responses["200"].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+  for (const code of ["400", "401", "403", "404", "409"]) expect(operation.responses).toHaveProperty(code);
+});

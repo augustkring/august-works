@@ -61,6 +61,7 @@ import {
   feedbackInternalListSchema,
   feedbackInternalDetailSchema,
   experienceModelSchema,
+  experienceCardSchema,
   experienceProfileSchema,
   experienceCommandQuerySchema,
   experienceCommandsSchema,
@@ -267,6 +268,15 @@ export const v9ApiPaths: V9ApiOperation[] = [
     ),
     overloaded: true,
   },
+  read(
+    `${company}/experience/insight-card`,
+    "Resolve a retained insight reference through its current Native owner; read-only display is not authority",
+    experienceCardSchema,
+    account.extend({
+      expectedUserId: z.string().min(1).max(200),
+      request: z.string().min(1).max(8192).describe("Serialized closed experience tool-card reference; no model prose, URLs or callbacks"),
+    }).strict(),
+  ),
   {
     ...read(
       `${company}/experience/company`,

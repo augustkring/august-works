@@ -324,3 +324,15 @@ late-read/flood boundaries and automated host/View WCAG smoke. The container
 browser OS sandbox, genuine host/provider, arbitrary remote app, Native Tool
 Gateway integration, keyboard/AT/Human and full production security remain open.
 The product flag remains closed; no launch row or R0 is qualified.
+
+
+### Analytical read contracts and log purpose — checkpoint 65
+
+OpenAPI now documents the retained insight reference and narrowed experiment/
+management summary readers with their shared response schemas, actual account/
+Source conflicts and matching no-store headers. This documentation grants no
+access. Both summary namespaces additionally use private HTTP normalization,
+including malformed company scopes and rejected methods; current account/
+resource/version IDs, query/body and error prose stay out of generic logs.
+Actual complete API inventory and Express/pino canary tests pass 93 cases;
+current server types pass. Release and hosted/Human qualification remain open.
