@@ -71,6 +71,8 @@ export {
 
 export { decisionEffectTargetIssueIds } from "./types/decision.js";
 
+export { workflowAuthoringApiCommandSchema, type WorkflowAuthoringApiCommand } from "./workflow-authoring-api.js";
+
 export type {
   ConnectionAvailabilityState,
   ConnectionSearchResultItem,

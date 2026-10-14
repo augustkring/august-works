@@ -1252,3 +1252,40 @@ This addresses the demonstrated Workflow-replay Artifact copy. Conversation/
 Agent-origin Artifact sources, broader package/knowledge closure, the remainder
 of the full brief and final immutable whole-workspace verification remain open.
 No push, deployment or PR is made.
+
+### Native conversational Workflow authoring transport — 2026-10-14
+
+Adds a closed run-bound API over the existing eight Original SDK operations.
+Native search_api discovers its shared schema and run-JWT authorization; call_api
+can use it without an assigned self-MCP connection or a borrowed board principal.
+The Original typed step/edge validators and revision owners remain unchanged.
+Mutation Activity is body-free, atomic, attributed to the actual Agent/run and
+not duplicated by SDK replay. No graph replacement, publication or execution is
+introduced. Native conversation guidance links this concrete authoring path.
+
+The first seven API cases pass, including real local HTTP transport through the
+Native API client, Original saved revision preview, all eight operations, strict
+input, concurrent retry, disabled rollout, revoked Agent grants and account
+verification. The fixture injects an authenticated actor; it does not claim a
+real signed JWT or provider/model call. An added direct-HTTP Ask-mode baseline
+fails with an actual 200 instead of 403. The canonical SDK authority is corrected
+to enforce actual Native standard mode, Task/run ownership and pending Stop;
+the API also reuses the Original bounded-plan generic action refusal.
+
+A six-suite follow-up passes 2,924 cases and times out one Source-erasure case
+while a parallel server compiler is killed by the host memory limit. The exact
+Source case then passes in 1.36 seconds (24.06 seconds including import/DB setup).
+Owned stopped disposable browser homes are removed after checking active process
+arguments, cwd and file descriptors. No Source guard or timeout is relaxed.
+Two direct compiler retries also hit the host limit. These invocations omitted
+the repository script's --singleThreaded flag; a Node heap ceiling does not
+constrain TypeScript 7's native compiler. The actual server typecheck script is
+now used with its existing flag, without concurrent scoped test workers;
+it passes (exit 0). Shared typecheck, module boundaries and the 70-surface Source
+gate pass. The earlier failed aggregate is not reclassified;
+immutable checkpoint 27 has passed recursive types and is still running its
+full tests independently.
+
+This supplies the missing Native transport, not the complete Describe-to-AI
+customer journey, broad Agent capability mapping, live H6/H7/Human qualification
+or all remaining V9 scope. All 70 surfaces remain pending.

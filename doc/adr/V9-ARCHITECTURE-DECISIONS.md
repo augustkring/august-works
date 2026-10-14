@@ -2183,3 +2183,26 @@ legacy records. These are software fixtures; synthetic timing/cost values select
 a span only and establish no performance, Human or provider qualification. Direct
 conversation/Agent-authored Artifact Sources and wider package/knowledge closure
 remain separate open work.
+
+## ADR-58 — Native API discovery composes the existing Workflow authoring SDK
+
+The Original typed Workflow SDK was exposed through self-MCP but absent from
+the Native Agent API catalog. A current run can now discover and call the closed
+workflow-authoring API. It dispatches the same eight SDK operations, with no
+whole-graph replacement, caller-selected actor/run, permission grant, execution
+or publication. prepare_publish continues to return a Human request only.
+
+The authenticated run JWT must match an actual running Native run and its current
+Task/Agent owner. Existing feature admission, current verified responsible account,
+Agent/user permission intersection, exact draft CAS, Source privacy and Original
+Stop/package/commercial/governance guards remain authoritative. Generic API calls
+retain the existing bounded orchestration plan refusal. SDK writes and body-free
+Native Activity commit in one transaction; SDK replays emit no duplicate Activity.
+
+A direct HTTP baseline demonstrated that relying on call_api's Ask-mode check
+alone was insufficient: the authoring SDK admitted that write. The canonical
+authoring authority now checks actual Native standard mode, current execution
+ownership and pending Stop, including callers through other SDK transports.
+Conversation guidance points to the typed API and actual saved workflow links,
+while validation, execution and Human publication stay distinct. UI entry and
+real model/provider generation qualification remain open.

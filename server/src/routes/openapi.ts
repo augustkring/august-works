@@ -1,4 +1,5 @@
 import { experimentalApiMetadata } from "./experimental-api-metadata.js";
+import { workflowAuthoringApiCommandSchema } from "@paperclipai/shared";
 import { v5ApiPaths } from "./v5-api-paths.js";
 import { v6ApiPaths } from "./v6-api-paths.js";
 import { v7ApiPaths } from "./v7-api-paths.js";
@@ -1742,6 +1743,7 @@ function resolveOperationAuthLevel(
   const key = operationKey(method, path);
   if (PUBLIC_OPERATIONS.has(key)) return "public";
   if (key === "POST /runtime-tools/model/messages") return "worker_model";
+  if (key === "POST /api/companies/{companyId}/workflow-authoring") return "agent_run";
   if (key === "POST /api/mcp/project-tools" || key === "POST /api/companies/{companyId}/slack/tasks/{issueId}/tools" ||
     key === "POST /api/companies/{companyId}/workflow-runs/{runId}/nodes/{nodeId}/task-result" ||
     key === "POST /api/companies/{companyId}/workflow-runs/{runId}/nodes/{nodeId}/direct-result") return "agent_run";
@@ -2205,6 +2207,10 @@ function registerV4Operation(method: string, path: string, summary: string, para
   });
 }
 const v4CompanyParams = z.object({ companyId: z.string().uuid() });
+registerV4Operation("post", "/api/companies/{companyId}/workflow-authoring", "Author a workflow draft with the current Native run's typed SDK", v4CompanyParams, {
+  body: workflowAuthoringApiCommandSchema,
+  description: "Use create_workflow, add_trigger, add_step and connect_steps to save an explicit typed draft, then inspect its Original revision. Each mutation requires the exact current draft revision and current workflows:edit authority intersected with the actual responsible user. Requires a running Native Agent JWT and all existing AI authoring feature gates. test_step validates only; prepare_publish returns a Human publication request. This endpoint cannot publish, execute, grant access or replace a whole graph. After saving, return the workflow link for Human review, access, test and publish.",
+});
 const v4ArtifactParams = v4CompanyParams.extend({ artifactId: z.string().uuid() });
 const artifactBase = "/api/companies/{companyId}/automation-artifacts";
 const artifactAccountQuery = z.object({ expectedUserId: z.string().optional() }).strict();

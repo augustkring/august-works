@@ -34,6 +34,7 @@ import { workflowReview } from "../services/experience/workflow-review.js";
 import { readWorkflowStepContext } from "../services/experience/workflow-step-actors.js";
 import { workflowReviewBinding } from "../services/experience/workflow-review-binding.js";
 import { workflowDraftIntentService } from "../services/experience/workflow-draft-intent.js";
+import { applyWorkflowAuthoringApi } from "../services/workflows/workflow-authoring-api.js";
 import { workflowCustomerDraftEdit } from "../services/workflows/workflow-customer-draft-edit.js";
 import { workflowCustomerDraftFlow } from "../services/workflows/workflow-customer-draft-flow.js";
 import { readWorkflowCapabilityCatalog } from "../services/workflows/workflow-capability-visibility.js";
@@ -78,6 +79,11 @@ export function workflowRoutes(db: Db) {
   const access = accessService(db);
   const settings = instanceSettingsService(db);
   const optimizerEvaluations = optimizerEvaluationService(db);
+
+  router.post("/companies/:companyId/workflow-authoring", async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    res.json(await applyWorkflowAuthoringApi(db, req.actor, z.uuid().parse(req.params.companyId), req.body));
+  });
 
   function currentDraftAccount(req: Request) {
     const query = z.strictObject({ expectedUserId: z.string().min(1).max(300) }).parse(req.query);
