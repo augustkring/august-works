@@ -2362,6 +2362,22 @@
       "choose": "Vælg en Agent",
       "none": "Der er ingen Agent-valg tilgængelige i denne visning. Brug Avanceret til at gennemgå andre Agents.",
       "boundary": "Dette føjer en opgave til den valgte Agent til kladden. Det starter ikke arbejde og giver ikke adgang. Agent-opgaver kræver særskilt gennemgang af test og adgang før publicering; den interne test af ventetrin og betingelser kan ikke køre dem."
+    },
+    "tool": {
+      "kind": "Brug et tilsluttet værktøj",
+      "choose": "Forbindelse og operation",
+      "placeholder": "Vælg en eksisterende operation",
+      "unavailable": "Den tidligere valgte operation er ikke tilgængelig",
+      "none": "Der er ingen understøttet operation tilgængelig i denne visning. Gennemgå forbindelser og andre input i Avanceret.",
+      "boundary": "Dette gemmer den valgte operation og værdierne i kladden. Det kalder ikke værktøjet og giver ikke adgang. Tilsluttede operationer kræver særskilt gennemgang af test og adgang; den interne test af ventetrin og betingelser kan ikke køre dem.",
+      "changed": "Operationens inputdefinition er ændret. Gennemgå de aktuelle felter, før du gemmer.",
+      "inputs": "Input til operationen",
+      "include": "Medtag {{name}}",
+      "valuePlaceholder": "Vælg en værdi",
+      "chooseError": "Gennemgå og vælg en aktuel operation.",
+      "valueError": "Angiv en gyldig værdi for {{name}}.",
+      "sizeError": "Hold de medtagne værdier inden for 20 felter og samlet 8192 byte.",
+      "limit": "Denne afgrænsede liste understøtter tekst, tal og ja/nej. Gennemgå komplekse input i Avanceret og loginoplysninger i forbindelsens indstillinger under Apps. Valgfrie værdier udelades, medmindre de tilvælges."
     }
   },
   "workflowTestInputs": {

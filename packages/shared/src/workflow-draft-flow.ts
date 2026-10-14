@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { workflowStepNameSchema, workflowEditableNodeIdSchema, workflowWaitSecondsSchema, workflowApprovalSummarySchema, workflowApprovalConsequenceSchema, workflowGuidedConditionSchema, workflowAgentObjectiveSchema, workflowDraftAgentSelectionSchema } from "./workflow-draft-edit.js";
+import { workflowDraftToolChoiceSchema, workflowToolArgumentsSchema } from "./workflow-draft-tools.js";
 
 const name = workflowStepNameSchema;
 export const workflowDraftFlowOperationSchema = z.discriminatedUnion("kind", [
@@ -7,6 +8,8 @@ export const workflowDraftFlowOperationSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("append_wait"), name, durationSeconds: workflowWaitSecondsSchema }),
   z.strictObject({ kind: z.literal("append_approval"), name, summary: workflowApprovalSummarySchema, consequence: workflowApprovalConsequenceSchema }),
   z.strictObject({ kind: z.literal("append_agent_task"), name, agentId: z.uuid(), objective: workflowAgentObjectiveSchema }),
+  z.strictObject({ kind: z.literal("append_tool"), name, entryId: z.uuid(), connectionId: z.uuid(), versionHash: z.string().min(1).max(200),
+    schemaHash: z.string().min(1).max(200), inputSchemaHash: z.string().regex(/^[a-f0-9]{64}$/), input: workflowToolArgumentsSchema }),
   z.strictObject({ kind: z.literal("append_condition"), name, condition: workflowGuidedConditionSchema,
     whenTrue: z.strictObject({ name, durationSeconds: workflowWaitSecondsSchema }),
     whenFalse: z.strictObject({ name, durationSeconds: workflowWaitSecondsSchema }),
@@ -22,6 +25,7 @@ export const workflowDraftFlowReviewSchema = z.strictObject({
   updatedAt: z.iso.datetime(), version: z.number().int().positive(), availability: z.enum(["empty", "linear", "advanced"]),
   deadlineSeconds: z.number().int().min(1).max(604800).nullable(),
   agentSelection: workflowDraftAgentSelectionSchema.optional(),
+  toolSelection: z.strictObject({ coverage: z.literal("bounded"), choices: z.array(workflowDraftToolChoiceSchema).max(20) }).optional(),
   steps: z.array(z.strictObject({ nodeId: workflowEditableNodeIdSchema, name, type: z.string().min(1).max(160) })).max(100),
 }).superRefine((view, ctx) => {
   if ((view.availability === "linear") !== (view.steps.length > 0)) ctx.addIssue({ code: "custom", path: ["steps"], message: "The current flow shape changed" });

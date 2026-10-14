@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { workflowDraftFlowCommandSchema, type WorkflowDraftFlowCommand, type WorkflowDraftFlowOperation,
-  type WorkflowDraftFlowReview, type WorkflowDraftStepReceipt } from "@paperclipai/shared";
+  workflowToolArgumentErrors, type WorkflowDraftToolChoice, type WorkflowDraftFlowReview, type WorkflowDraftStepReceipt } from "@paperclipai/shared";
 import { useParams, Link } from "../lib/router";
 import { useTranslation } from "../i18n";
 import { useCompany } from "../context/CompanyContext";
@@ -25,12 +25,15 @@ export function WorkflowDraftFlowEntry() {
   if (!workflowId) return <p role="alert">{t("workflowDraftFlow.unavailable")}</p>;
   return <WorkflowDraftFlow key={JSON.stringify([selectedCompanyId, identity.userId, workflowId])} company={selectedCompanyId} principal={identity.userId} workflow={workflowId} />;
 }
-type Field = "name" | "duration" | "summary" | "consequence" | "deadline" | "path" | "value" | "earlierNode" | "trueName" | "trueDuration" | "falseName" | "falseDuration" | "agentId" | "objective";
+type Field = "name" | "duration" | "summary" | "consequence" | "deadline" | "path" | "value" | "earlierNode" | "trueName" | "trueDuration" | "falseName" | "falseDuration" | "agentId" | "objective" | "toolId" | "toolInputs" | `tool_${string}`;
 type Condition = Extract<WorkflowDraftFlowOperation, { kind: "append_condition" }>["condition"];
-type Form = { source: string; kind: "append_wait" | "append_approval" | "append_condition" | "append_agent_task"; name: string; duration: string; summary: string; consequence: string; deadline: string; agentId: string; objective: string;
+type Form = { source: string; kind: "append_wait" | "append_approval" | "append_condition" | "append_agent_task" | "append_tool"; name: string; duration: string; summary: string; consequence: string; deadline: string; agentId: string; objective: string;
+  toolId: string; toolSource: Pick<WorkflowDraftToolChoice, "connectionId" | "versionHash" | "schemaHash" | "inputSchemaHash"> | null;
+  toolValues: Record<string, { include: boolean; value: string }>;
   conditionSource: Condition["source"]; path: string; operator: Condition["operator"]; valueType: "string" | "number" | "boolean" | "null"; value: string;
   earlierNode: string; trueName: string; trueDuration: string; falseName: string; falseDuration: string };
 const sourceKey = (view: WorkflowDraftFlowReview) => JSON.stringify([view.draftRevisionId, view.updatedAt, view.steps.at(-1)?.nodeId ?? null]);
+const toolSourceKeys = ["connectionId", "versionHash", "schemaHash", "inputSchemaHash"] as const;
 
 export function WorkflowDraftFlow({ company, principal, workflow }: { company: string; principal: string; workflow: string }) {
   const { t } = useTranslation("experience"), client = useQueryClient(), { selectedCompanyId } = useCompany(), authority = useV9PrivateReadAuthority(principal, true);
@@ -49,7 +52,7 @@ export function WorkflowDraftFlow({ company, principal, workflow }: { company: s
   const state = client.getQueryState(key), fresh = current() && query.isSuccess && !query.isFetching && !state?.isInvalidated;
   const view = fresh ? query.data : null, locator = useWorkflowRequestLocator(company, principal, workflow, "draft_build", !!view);
   const initialize = (value: WorkflowDraftFlowReview) => setForm({ source: sourceKey(value), kind: "append_wait", name: "", duration: "", summary: "", consequence: "", deadline: value.deadlineSeconds === null ? "" : String(value.deadlineSeconds),
-    conditionSource: "trigger", path: "", operator: "===", valueType: "string", value: "", earlierNode: "", trueName: "", trueDuration: "", falseName: "", falseDuration: "", agentId: "", objective: "" });
+    conditionSource: "trigger", path: "", operator: "===", valueType: "string", value: "", earlierNode: "", trueName: "", trueDuration: "", falseName: "", falseDuration: "", agentId: "", objective: "", toolId: "", toolSource: null, toolValues: {} });
   useEffect(() => { if (view && !form) initialize(view); }, [view, form]);
   const refresh = () => { source.current++; setEpoch(source.current); void client.cancelQueries({ queryKey: prefix }); client.removeQueries({ queryKey: prefix }); };
   useCompanyLiveEvent(event => {
@@ -74,20 +77,35 @@ export function WorkflowDraftFlow({ company, principal, workflow }: { company: s
   useEffect(() => { if (mutation.isError && current() && !document.activeElement?.closest('a[href],button,[role="dialog"]')) error.current?.focus(); }, [mutation.isError]);
   const stale = !!view && !!form && sourceKey(view) !== form.source;
   const disabled = !view || !form || !current() || !locator.ready || locator.failed || !!locator.blockedBy || mutation.isPending || stale;
+  const selectedTool = view?.toolSelection?.choices.find(choice => choice.entryId === form?.toolId);
+  const toolCurrent = !!selectedTool && !!form?.toolSource && toolSourceKeys.every(key => selectedTool[key] === form.toolSource![key]);
+  const chooseTool = (id: string) => {
+    if (!form) return; const choice = view?.toolSelection?.choices.find(choice => choice.entryId === id);
+    setForm({ ...form, toolId: id, toolSource: choice ? { connectionId: choice.connectionId, versionHash: choice.versionHash, schemaHash: choice.schemaHash, inputSchemaHash: choice.inputSchemaHash } : null,
+      toolValues: Object.fromEntries(choice?.fields.map(field => [field.name, { include: field.required, value: "" }]) ?? []) });
+    setInvalid(false); setFieldErrors({});
+  };
   function save(operation: WorkflowDraftFlowOperation) {
     if (disabled || !view) return;
     const unavailableAgent = operation.kind === "append_agent_task" && !view.agentSelection?.choices.some(choice => choice.agentId === operation.agentId);
+    const toolErrors = operation.kind === "append_tool" && selectedTool && toolCurrent ? workflowToolArgumentErrors(selectedTool.fields, operation.input) : [];
     const parsed = workflowDraftFlowCommandSchema.safeParse({ requestId: crypto.randomUUID(), expectedWorkflowId: workflow, expectedDraftRevisionId: view.draftRevisionId,
       expectedPublishedRevisionId: view.publishedRevisionId, expectedUpdatedAt: view.updatedAt, expectedLastNodeId: view.steps.at(-1)?.nodeId ?? null, operation });
-    if (!parsed.success || unavailableAgent) {
+    if (!parsed.success || unavailableAgent || operation.kind === "append_tool" && !toolCurrent || toolErrors.length) {
       const errors: Partial<Record<Field, string>> = unavailableAgent ? { agentId: t("workflowDraftStep.errors.agentId") } : {};
+      if (operation.kind === "append_tool" && !toolCurrent) errors.toolId = t("workflowDraftFlow.tool.chooseError");
+      for (const name of toolErrors) errors[`tool_${name}`] = t("workflowDraftFlow.tool.valueError", { name: selectedTool?.fields.find(field => field.name === name)?.label ?? name });
       for (const issue of parsed.success ? [] : parsed.error.issues) {
-        const field = issue.path[1] === "condition" ? issue.path[2] === "path" && form?.conditionSource === "steps" && !form.earlierNode ? "earlierNode" : issue.path[2]
+        const field = issue.path[1] === "input" ? typeof issue.path[2] === "string" ? `tool_${issue.path[2]}` : "toolInputs"
+          : ["entryId", "connectionId", "versionHash", "schemaHash", "inputSchemaHash"].includes(String(issue.path[1])) ? "toolId"
+          : issue.path[1] === "condition" ? issue.path[2] === "path" && form?.conditionSource === "steps" && !form.earlierNode ? "earlierNode" : issue.path[2]
           : issue.path[1] === "whenTrue" ? issue.path[2] === "name" ? "trueName" : "trueDuration"
             : issue.path[1] === "whenFalse" ? issue.path[2] === "name" ? "falseName" : "falseDuration"
               : issue.path[1] === "durationSeconds" ? "duration" : issue.path[1] === "deadlineSeconds" ? "deadline" : issue.path[1];
-        if (["name", "duration", "summary", "consequence", "deadline", "path", "value", "earlierNode", "trueName", "trueDuration", "falseName", "falseDuration", "agentId", "objective"].includes(String(field)))
-          errors[field as Field] = t(field === "deadline" ? "workflowDraftFlow.deadlineError" : field === "earlierNode" ? "workflowDraftFlow.condition.stepError"
+        if (String(field).startsWith("tool_")) errors[field as Field] = t("workflowDraftFlow.tool.valueError", { name: selectedTool?.fields.find(value => `tool_${value.name}` === field)?.label ?? String(field).slice(5) });
+        else if (["name", "duration", "summary", "consequence", "deadline", "path", "value", "earlierNode", "trueName", "trueDuration", "falseName", "falseDuration", "agentId", "objective", "toolId", "toolInputs"].includes(String(field)))
+          errors[field as Field] = t(field === "toolId" ? "workflowDraftFlow.tool.chooseError" : field === "toolInputs" ? "workflowDraftFlow.tool.sizeError"
+            : field === "deadline" ? "workflowDraftFlow.deadlineError" : field === "earlierNode" ? "workflowDraftFlow.condition.stepError"
             : `workflowDraftStep.errors.${field === "trueName" || field === "falseName" ? "name" : field === "trueDuration" || field === "falseDuration" ? "duration" : String(field)}`);
       }
       setFieldErrors(errors); setInvalid(true); return;
@@ -96,6 +114,12 @@ export function WorkflowDraftFlow({ company, principal, workflow }: { company: s
   }
   function submit(event: FormEvent) { event.preventDefault(); if (!form) return;
     save(form.kind === "append_wait" ? { kind: "append_wait", name: form.name, durationSeconds: Number(form.duration) }
+      : form.kind === "append_tool" ? { kind: "append_tool", name: form.name, entryId: form.toolId, connectionId: form.toolSource?.connectionId ?? "",
+        versionHash: form.toolSource?.versionHash ?? "", schemaHash: form.toolSource?.schemaHash ?? "", inputSchemaHash: form.toolSource?.inputSchemaHash ?? "",
+        input: Object.fromEntries((selectedTool?.fields ?? []).filter(field => form.toolValues[field.name]?.include).map(field => {
+          const value = form.toolValues[field.name].value;
+          return [field.name, field.type === "string" ? value : field.type === "boolean" ? value === "true" ? true : value === "false" ? false : NaN : value.trim() ? Number(value) : NaN];
+        })) }
       : form.kind === "append_agent_task" ? { kind: "append_agent_task", name: form.name, agentId: form.agentId, objective: form.objective }
       : form.kind === "append_condition" ? { kind: "append_condition", name: form.name,
         condition: { kind: "condition", source: form.conditionSource, path: [...(form.conditionSource === "steps" ? [form.earlierNode] : []), ...form.path.split("\n")], operator: form.operator,
@@ -130,7 +154,7 @@ export function WorkflowDraftFlow({ company, principal, workflow }: { company: s
             <section aria-label={t("workflowDraftFlow.steps")}><ol className="list-decimal space-y-2 pl-6">{view.steps.map(step => <li key={step.nodeId} className="break-words"><Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${workflow}/draft/steps/${encodeURIComponent(step.nodeId)}`}>{step.name}</Link></li>)}</ol></section>
             {view.steps.length >= 100 ? <p role="status">{t("workflowDraftFlow.limit")}</p> : <form noValidate onSubmit={submit} className="space-y-4"><h2 className="text-lg font-medium">{t("workflowDraftFlow.add")}</h2>
               <fieldset disabled={disabled} className="space-y-4">
-                <label className="block space-y-2"><span>{t("workflowDraftFlow.kind")}</span><select className={selectClass} value={form.kind} onChange={event => { setForm({ ...form, kind: event.target.value as Form["kind"] }); setInvalid(false); setFieldErrors({}); }}><option value="append_wait">{t("workflowDraftFlow.wait")}</option><option value="append_approval">{t("workflowDraftFlow.approval")}</option><option value="append_agent_task">{t("workflowDraftFlow.agent.kind")}</option><option value="append_condition" disabled={view.steps.length > 97}>{t("workflowDraftFlow.condition.kind")}</option></select></label>
+                <label className="block space-y-2"><span>{t("workflowDraftFlow.kind")}</span><select className={selectClass} value={form.kind} onChange={event => { setForm({ ...form, kind: event.target.value as Form["kind"] }); setInvalid(false); setFieldErrors({}); }}><option value="append_wait">{t("workflowDraftFlow.wait")}</option><option value="append_approval">{t("workflowDraftFlow.approval")}</option><option value="append_agent_task">{t("workflowDraftFlow.agent.kind")}</option><option value="append_tool">{t("workflowDraftFlow.tool.kind")}</option><option value="append_condition" disabled={view.steps.length > 97}>{t("workflowDraftFlow.condition.kind")}</option></select></label>
                 <label className="block space-y-2"><span id="draft-flow-name-label">{t("workflowDraftStep.name")}</span><Input {...fieldProps("name")} className="min-h-11" required maxLength={200} value={form.name} onChange={event => setForm({ ...form, name: event.target.value })} />{fieldError("name")}</label>
                 {form.kind === "append_wait" ? <label className="block space-y-2"><span id="draft-flow-duration-label">{t("workflowDraftStep.duration")}</span><Input {...fieldProps("duration")} className="min-h-11" required type="number" min={1} max={604800} step={1} value={form.duration} onChange={event => setForm({ ...form, duration: event.target.value })} />{fieldError("duration")}</label> : form.kind === "append_condition" ? <section className="space-y-4" aria-label={t("workflowDraftFlow.condition.kind")}>
                   <p>{t("workflowDraftFlow.condition.boundary")}</p>
@@ -169,6 +193,42 @@ export function WorkflowDraftFlow({ company, principal, workflow }: { company: s
                   <p className="text-sm text-muted-foreground">{t("workflowDraftStep.agent.choiceBoundary")}</p>
                   <Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${workflow}/advanced`}>{t("workflowEditDraft")}</Link>
                   <label className="block space-y-2"><span id="draft-flow-objective-label">{t("workflowDraftStep.agent.objective")}</span><Textarea {...fieldProps("objective")} required maxLength={10000} value={form.objective} onChange={event => setForm({ ...form, objective: event.target.value })} />{fieldError("objective")}</label>
+                </section> : form.kind === "append_tool" ? <section className="space-y-4" aria-label={t("workflowDraftFlow.tool.kind")}>
+                  <p>{t("workflowDraftFlow.tool.boundary")}</p>
+                  <label className="block space-y-2"><span id="draft-flow-toolId-label">{t("workflowDraftFlow.tool.choose")}</span>
+                    <select {...fieldProps("toolId")} className={selectClass} required value={form.toolId} onChange={event => chooseTool(event.target.value)}>
+                      <option value="">{t("workflowDraftFlow.tool.placeholder")}</option>
+                      {form.toolId && !selectedTool && <option value={form.toolId}>{t("workflowDraftFlow.tool.unavailable")}</option>}
+                      {view.toolSelection?.choices.map(choice => <option key={choice.entryId} value={choice.entryId}>{choice.connectionName}: {choice.name}</option>)}
+                    </select>{fieldError("toolId")}
+                  </label>
+                  {!view.toolSelection?.choices.length && <p role="status">{t("workflowDraftFlow.tool.none")}</p>}
+                  {selectedTool && !toolCurrent && <div role="alert" className="space-y-2"><p>{t("workflowDraftFlow.tool.changed")}</p><Button type="button" className="min-h-11" onClick={() => chooseTool(selectedTool.entryId)}>{t("workflowDraftStep.reviewLatest")}</Button></div>}
+                  {selectedTool && toolCurrent && <>
+                    <p>{t("workflowEffect")}: {t(`workflowEffects.${selectedTool.effect}`)}</p>
+                    <p>{t(`workflowConnectionAccess.states.${selectedTool.access}`)}</p>
+                    <Link className="inline-flex min-h-11 items-center underline" to={`/apps/${selectedTool.connectionId}/permissions`}>{t("workflowConnectionAccess.review", { name: selectedTool.connectionName })}</Link>
+                    <fieldset {...fieldProps("toolInputs")} tabIndex={-1} className="space-y-4"><legend id="draft-flow-toolInputs-label" className="font-medium">{t("workflowDraftFlow.tool.inputs")}</legend>
+                      {fieldError("toolInputs")}
+                      {selectedTool.fields.map(field => {
+                        const key: Field = `tool_${field.name}`, value = form.toolValues[field.name] ?? { include: field.required, value: "" };
+                        const update = (patch: Partial<typeof value>) => setForm({ ...form, toolValues: { ...form.toolValues, [field.name]: { ...value, ...patch } } });
+                        const props = { ...fieldProps(key), "aria-describedby": [fieldErrors[key] ? `draft-flow-${key}-error` : null, field.help ? `draft-flow-${key}-help` : null].filter(Boolean).join(" ") || undefined };
+                        return <div key={field.name} className="space-y-2">
+                          {!field.required && <label className="flex min-h-11 items-center gap-3"><input type="checkbox" checked={value.include} onChange={event => update({ include: event.target.checked })} /><span>{t("workflowDraftFlow.tool.include", { name: field.label })}</span></label>}
+                          <label className="block space-y-2"><span id={`draft-flow-${key}-label`}>{field.label}</span>
+                            {field.options || field.type === "boolean" ? <select {...props} className={selectClass} disabled={!value.include} required={field.required} value={value.value} onChange={event => update({ value: event.target.value })}>
+                              <option value="">{t("workflowDraftFlow.tool.valuePlaceholder")}</option>
+                              {(field.options ?? [true, false]).map(option => <option key={String(option)} value={String(option)}>{typeof option === "boolean" ? t(option ? "workflowDraftStep.condition.true" : "workflowDraftStep.condition.false") : String(option)}</option>)}
+                            </select> : <Input {...props} className="min-h-11" disabled={!value.include} required={field.required} type={field.type === "string" ? "text" : "number"}
+                              step={field.type === "integer" ? 1 : "any"} min={field.minimum ?? undefined} max={field.maximum ?? undefined} maxLength={Math.min(field.maxLength ?? 4000, 4000)} value={value.value} onChange={event => update({ value: event.target.value })} />}
+                          </label>{fieldError(key)}{field.help && <p id={`draft-flow-${key}-help`} className="text-sm text-muted-foreground">{field.help}</p>}
+                        </div>;
+                      })}
+                    </fieldset>
+                  </>}
+                  <p className="text-sm text-muted-foreground">{t("workflowDraftFlow.tool.limit")}</p>
+                  <Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${workflow}/advanced`}>{t("workflowEditDraft")}</Link>
                 </section> : <>
                   <p>{t("workflowDraftFlow.approvalBoundary")}</p>
                   <label className="block space-y-2"><span id="draft-flow-summary-label">{t("workflowDraftStep.summary")}</span><Textarea {...fieldProps("summary")} required maxLength={1000} value={form.summary} onChange={event => setForm({ ...form, summary: event.target.value })} />{fieldError("summary")}</label>

@@ -5,6 +5,7 @@ import { and, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
+  authUsers,
   companies,
   companyMemberships,
   createDb,
@@ -59,6 +60,7 @@ describePg("V9 actual unpublished native workflow tests", () => {
     await db.delete(principalPermissionGrants);
     await db.delete(instanceUserRoles);
     await db.delete(companyMemberships);
+    await db.delete(authUsers);
     await db.delete(companies);
     await db.delete(instanceSettings);
   });
@@ -159,6 +161,8 @@ describePg("V9 actual unpublished native workflow tests", () => {
     role: "owner" | "operator" | "viewer" = "owner",
   ) {
     const userId = `test-${randomUUID()}`;
+    const now = new Date();
+    await db.insert(authUsers).values({ id: userId, name: "Test requester", email: `${userId}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now });
     await db.insert(companyMemberships).values({
       companyId: detail.companyId,
       principalType: "user",

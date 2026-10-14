@@ -961,3 +961,54 @@ task composition, zero main axe violations/no overflow, deliberate lost only POS
 unchanged active revision/no work and flags-closed Original receipt GET recovery.
 The fixtures qualify software behavior, not a real Agent/provider/Human outcome.
 The full brief and final immutable whole-workspace verification remain open.
+
+
+### Checkpoint 15 aggregate result and fixture follow-up — 2026-10-14
+
+The immutable 039e26d0b3ae91819e567af021e38437906ed1f9 aggregate run completed
+with a test failure, not a final passing verification. Recursive typecheck passed.
+General server tests passed 914 files (7 skipped), 17,123 tests (90 skipped). The
+serialized runner later stopped at four workflow-test route failures: those old
+fixtures lacked an actual verified Native user after the current-reader contract
+was tightened. The fixture now creates/deletes that real user; production authority
+is unchanged. The subsequent current four-suite group passes all 46 cases,
+including all 22 route cases. An intermediate current-source attempt failed during
+module initialization due to the new tool-projection import cycle; that cycle was
+fixed before the passing run. The old aggregate remains failed, later workspace
+stages/build were not reached, and final immutable full verification remains open.
+
+### Guided connected operation and scalar input composition — 2026-10-14
+
+The ordinary flow composer now chooses a readable current Native connection and
+operation and collects explicit scalar inputs, including omitted optional fields,
+false, enums, bounds and whitespace. The Original draft owner admits one revision
+and one edge, preserves the active version, and retains only body-free recovery
+metadata. No catalog refresh/discovery, tool invocation, run, Task, grant or
+provider call is part of saving. Current catalog and effective projected schema
+pins are checked again at publication and execution. An initialization-cycle
+regression was found and fixed with deferred Original projection lookup.
+
+The initial focused group passes 24 cases in three suites. After the import fix,
+the expanded four-suite group passes 46 cases, including the corrected route
+fixtures. Later pin, type, gate and built-browser evidence is recorded below when
+complete. This slice is not whole V9 completion or real provider/Human proof;
+full connected-action review/testing, complex inputs, natural-language proposal
+generation and the retained wider backlog remain open. No push or PR is made.
+
+The final pin group passes three suites/75 cases and fails one assertion: Native
+publication correctly refuses definition drift with 422, while the test expected
+400. The expectation is corrected to the Original status; the full affected
+Native composer suite then passes all ten cases. Gateway execution tests prove
+no additional provider-stub call after effective-schema or catalog-version drift.
+UI/server typechecks and token/module gates pass. The first browser start is
+blocked by a verified stale disposable PostgreSQL socket; after removing only
+that stopped fixture socket, the built Danish 390px connected-operation case
+passes (40.4 seconds overall), with zero main axe violations/no overflow, explicit
+false, omitted optional count, unchanged active revision/no invocation or work,
+one lost POST and flags-closed Original receipt recovery. These are scoped
+software results, not final aggregate or live provider/Human qualification.
+
+Current screen-contract validation passes 60 cases and OpenAPI routing passes 21.
+An earlier command used nonexistent test paths and ran no tests; only the actual
+subsequent suites are evidence. All 70 surfaces remain pending implementation
+and/or qualification in the source register; sourceComplete stays false.

@@ -8,7 +8,7 @@
     "admin",
     "security_admin"
   ],
-  "customerOutcome": "Build an explicit Native draft using a manual start, waits, approval checkpoints and a closed condition with two waiting branches, preserving current Source and immutable active revision.",
+  "customerOutcome": "Build an explicit Native draft using a manual start, waits, approval checkpoints, a closed condition with two waiting branches, a named Agent task or a current connected operation with explicit scalar inputs, preserving current Source and immutable active revision.",
   "entryConditions": [
     "Current authenticated principal and company selection; no retained foreign-principal payload",
     "Effective feature admission is required for new work; native membership and resource authority remain necessary"
@@ -16,7 +16,7 @@
   "exitConditions": [
     "Only a canonical server-confirmed result permits a success claim",
     "Pending, stale, unavailable or unqualified work never becomes successful or activated",
-    "This bounded editor does not complete automatic natural-language graph proposals, tool/actor/access selection, cost estimation or the full V3 Draft contract."
+    "This bounded editor does not complete automatic natural-language graph proposals, complex tool inputs, effective resource/approval policy preview, cost estimation or the full V3 Draft contract."
   ],
   "content": {
     "h1": "Build the draft flow",
@@ -52,7 +52,7 @@
     {
       "id": "operation",
       "label": "What should happen next?",
-      "dataType": "Closed choice: append_wait | append_approval | append_condition",
+      "dataType": "Closed choice: append_wait | append_approval | append_condition | append_agent_task | append_tool",
       "required": true,
       "default": "Visible wait choice for an existing linear draft",
       "help": "Manual start and removal are separate explicit actions; branched extension remains Advanced",
@@ -65,7 +65,7 @@
       "dataType": "Text",
       "required": true,
       "default": "Empty",
-      "help": "Name the proposed wait, approval or condition",
+      "help": "Name the proposed step",
       "validation": "Readable Unicode text, 1–200 characters; control characters and malformed surrogate pairs are refused",
       "autofillOrPrefill": "None; held only in memory for the current account and Source"
     },
@@ -188,6 +188,26 @@
       "help": "Required to append an Agent task; starts no work, grants no access and does not qualify a test",
       "validation": "Readable Unicode text 1–10000 characters; control characters and malformed surrogate pairs refused",
       "autofillOrPrefill": "None; explicit Human input"
+    },
+    {
+      "id": "toolId",
+      "label": "Connection and operation",
+      "dataType": "Current Native connected operation choice",
+      "required": false,
+      "default": "No operation selected",
+      "help": "Required to append a connected operation; current readable connection and stored catalog only",
+      "validation": "Current company-scoped visible entry/connection pair; active enabled connection; exact catalog version/schema and effective input schema pins; bounded 20 choices and 64 KiB projection",
+      "autofillOrPrefill": "Readable Native names, no raw ID text entry"
+    },
+    {
+      "id": "toolInputs",
+      "label": "Operation inputs",
+      "dataType": "Explicit bounded text, finite number, safe integer, boolean or scalar enum fields",
+      "required": false,
+      "default": "Blank required fields; optional fields omitted unless included",
+      "help": "No invocation, access grant or test qualification. Credentials belong in Apps connection settings; unsupported nested/reference/conditional/default schemas stay in Advanced.",
+      "validation": "Whole representable stored schema; required/type/enum/range/length checks; at most 20 fields and 8192 UTF-8 bytes; no secret-like field names. Original projected schema validation runs before save. Effective schema hash rechecked at publication and invocation.",
+      "autofillOrPrefill": "Current visible field labels/help/options only; no hidden defaults or connection credentials"
     }
   ],
   "actions": {

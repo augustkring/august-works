@@ -2033,3 +2033,27 @@ exact request locator and reads its Original receipt through rollout closure.
 Both form variants own a same-row back/primary footer. Full model-generated
 proposals, connected-tool composition, inline policy preview, C2/C3 tests and
 managed host/Human qualification remain open.
+
+
+## ADR-52 — Guided connected operations bind the current effective input definition
+
+The linear draft composer offers only current visible stored Native tool catalog
+entries with enabled active connections and a wholly representable scalar object
+schema. It does not discover, refresh, invoke, grant access or qualify a connection.
+Existing visibility filters execute before bounded ranking. Names, field metadata
+and explicit input values remain behind current workflow/connection Sources; only
+the existing body-free own-request locator is retained for recovery.
+
+The command binds entry, connection, catalog version/schema and a SHA-256 of the
+Original effective projected input schema. Required fields and complete scalar
+constraints are checked by shared input validation and Original schema validation.
+The hash is retained on connector.action and rechecked by the Original publication
+registry and connector authority before invocation, including drift without a
+catalog hash update. Legacy nodes without the optional pin retain existing behavior.
+The Original projection is dynamically imported at validation time to avoid an
+initialization cycle through tool-access and the executor's static node registry.
+
+The metadata access indicator is not a grant, effective resource policy preview,
+provider health qualification or permission to bypass approval. Complex schemas,
+credential-like fields, full tool-step editing, meaningful connected-action tests,
+resource-policy preview and automatic natural-language graph proposals remain open.

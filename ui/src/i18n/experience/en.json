@@ -2362,6 +2362,22 @@
       "choose": "Choose an Agent",
       "none": "No Agent choice is available in this view. Use Advanced to review other Agents.",
       "boundary": "This adds a task for the chosen Agent to the draft. It starts no work and grants no access. Agent tasks need a separate test and access review before publishing; the internal wait/condition test cannot run them."
+    },
+    "tool": {
+      "kind": "Use a connected tool",
+      "choose": "Connection and operation",
+      "placeholder": "Choose an existing operation",
+      "unavailable": "Previously chosen operation is unavailable",
+      "none": "No supported operation is available in this view. Review connections and other inputs in Advanced.",
+      "boundary": "This saves the chosen operation and values to the draft. It invokes no tool and grants no access. Connected operations need a separate test and access review; the internal wait/condition test cannot run them.",
+      "changed": "This operation’s input definition changed. Review the current fields before saving.",
+      "inputs": "Operation inputs",
+      "include": "Include {{name}}",
+      "valuePlaceholder": "Choose a value",
+      "chooseError": "Review and select a current operation.",
+      "valueError": "Enter a valid value for {{name}}.",
+      "sizeError": "Keep the included values within 20 fields and 8192 bytes in total.",
+      "limit": "This bounded list supports simple text, number and yes/no fields. Review complex inputs in Advanced and credentials in Apps connection settings. Optional values are omitted unless included."
     }
   },
   "workflowTestInputs": {

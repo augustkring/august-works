@@ -3380,4 +3380,5 @@ export * from "./routine-authoring.js";
 export * from "./foundation-authoring.js";
 export * from "./workflow-request-receipts.js";
 export * from "./workflow-draft-edit.js";
+export * from "./workflow-draft-tools.js";
 export * from "./workflow-draft-flow.js";

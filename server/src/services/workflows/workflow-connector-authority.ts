@@ -1,10 +1,11 @@
 import { and, eq, gt } from "drizzle-orm";
-import { agents, companyMemberships, heartbeatRuns, toolCatalogEntries, workflowRevisions, workflowRuns, workflowStepRuns, workflowWaits, type Db } from "@paperclipai/db";
+import { agents, companyMemberships, heartbeatRuns, toolCatalogEntries, toolConnections, workflowRevisions, workflowRuns, workflowStepRuns, workflowWaits, type Db } from "@paperclipai/db";
 import type { DeploymentMode } from "@paperclipai/shared";
 import type { ToolGatewaySession } from "../tool-gateway.js";
 import { conflict, forbidden } from "../../errors.js";
 import { assertMemoryRecordsRetained } from "../memory/memory-privacy.js";
 import { workflowStepIdempotencyKey } from "./workflow-execution-policy.js";
+import { nativeSha256 } from "../native-runtime/canonical.js";
 
 export interface WorkflowGatewayContext {
   companyId: string;
@@ -55,6 +56,12 @@ export async function resolveWorkflowConnectorSession(
   if (!entry || entry.connectionId !== config.connectionId || entry.status !== "active" ||
     entry.versionHash !== config.catalogVersionHash || entry.schemaHash !== config.catalogSchemaHash) {
     throw conflict("Published connector catalogue binding changed", { code: "workflow_connector_drift" });
+  }
+  if (config.projectedInputSchemaHash !== undefined) {
+    const { projectedConnectionToolInputSchema } = await import("../tool-access.js");
+    const [connection] = await db.select().from(toolConnections).where(and(eq(toolConnections.companyId, run.companyId), eq(toolConnections.id, entry.connectionId)));
+    if (!connection || config.projectedInputSchemaHash !== nativeSha256(projectedConnectionToolInputSchema(connection, entry.inputSchema ?? {}, entry.toolName)))
+      throw conflict("Published connector input definition changed", { code: "workflow_connector_drift" });
   }
   const principal = run.executionPrincipal;
   const steps = await db.select({ memoryRecordIds: workflowStepRuns.memoryRecordIds }).from(workflowStepRuns).where(and(

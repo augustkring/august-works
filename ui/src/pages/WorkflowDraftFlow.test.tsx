@@ -129,6 +129,25 @@ it("adds an explicit named Agent task, discloses test/access limits and keeps it
   } }));
   expect(sessionStorage.getItem("aw.v9.pending-workflow-request-receipts")).not.toMatch(/PRIVATE|agentId|Readable task Agent|objective/);
 });
+it("collects explicit typed tool inputs without JSON, preserving spaces and omitting optional fields from one pending command", async () => {
+  const entryId = "10000000-0000-4000-8000-000000000008", connectionId = "10000000-0000-4000-8000-000000000009";
+  vi.mocked(workflowDraftFlowApi.review).mockResolvedValue({ ...linear, toolSelection: { coverage: "bounded", choices: [{ entryId, connectionId,
+    connectionName: "Contacts", name: "Find contacts", versionHash: "v1", schemaHash: "s1", inputSchemaHash: "a".repeat(64), effect: "read", access: "permission_required",
+    fields: [{ name: "query", label: "Search text", help: null, type: "string", required: true, options: null, minLength: 1, maxLength: null, minimum: null, maximum: null },
+      { name: "count", label: "Maximum results", help: null, type: "integer", required: false, options: null, minLength: null, maxLength: null, minimum: 1, maximum: 10 }],
+  }] } });
+  await mount(); await choose("What should happen next?", "append_tool"); await field("name", "PRIVATE connected step"); await choose("Connection and operation", entryId);
+  await click("Add a step"); expect(workflowDraftFlowApi.save).not.toHaveBeenCalled();
+  expect(container.querySelector("#draft-flow-tool_query")?.getAttribute("aria-invalid")).toBe("true");
+  expect(container.querySelector("#draft-flow-tool_count")?.hasAttribute("disabled")).toBe(true);
+  await field("tool_query", " PRIVATE query "); await click("Add a step");
+  expect(workflowDraftFlowApi.save).toHaveBeenCalledOnce();
+  expect(workflowDraftFlowApi.save).toHaveBeenCalledWith(company, workflow, principal, expect.objectContaining({ operation: {
+    kind: "append_tool", name: "PRIVATE connected step", entryId, connectionId, versionHash: "v1", schemaHash: "s1", inputSchemaHash: "a".repeat(64), input: { query: " PRIVATE query " },
+  } }));
+  expect(container.textContent).toContain("invokes no tool and grants no access");
+  expect(sessionStorage.getItem("aw.v9.pending-workflow-request-receipts")).not.toMatch(/PRIVATE|query|connectionId|schemaHash/);
+});
 it("keeps the pending flow request across a Source change and same-turn late acknowledgement", async () => {
   vi.mocked(workflowDraftFlowApi.review).mockResolvedValue(linear);
   let finish!: (value: Awaited<ReturnType<typeof workflowDraftFlowApi.save>>) => void;

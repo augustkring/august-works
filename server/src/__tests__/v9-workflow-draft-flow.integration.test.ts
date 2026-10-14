@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { activityLog, agents, authUsers, companies, companyMemberships, createDb, principalPermissionGrants, workflowRevisions, workflowRuns, workflowStepRuns, issues, heartbeatRuns } from "@paperclipai/db";
+import { activityLog, agents, authUsers, companies, companyMemberships, createDb, principalPermissionGrants, workflowRevisions, workflowRuns, workflowStepRuns, issues, heartbeatRuns, toolApplications, toolConnections, toolCatalogEntries, toolInvocations, toolActionRequests } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { workflowService } from "../services/workflows/workflow-service.js";
 import { workflowCustomerDraftFlow } from "../services/workflows/workflow-customer-draft-flow.js";
@@ -133,6 +133,45 @@ describe.sequential("Original guided draft flow composition", () => {
       expect(await db.select().from(activityLog).where(eq(activityLog.companyId, f.companyId))).toEqual([]);
       expect((await db.select().from(workflowRevisions).where(eq(workflowRevisions.workflowId, f.workflow.id))).filter(row => row.state === "draft")).toHaveLength(1);
     } finally { await db.execute(sql`drop trigger aw_v9_test_flow_unverify on activity_log`); await db.execute(sql`drop function aw_v9_test_flow_unverify()`); }
+  });
+  it("pins a current connected operation and explicit scalar inputs without an invocation or grant, refusing drift and disabled connections", async () => {
+    const f = await fixture(), owner = workflowService(db);
+    await f.service.save(f.companyId, f.workflow.id, await command(f, { kind: "start_manual", deadlineSeconds: 30, name: "Start" }), f.actor);
+    const before = await owner.getDetail(f.companyId, f.workflow.id, f.actor);
+    const published = await owner.publish(f.companyId, f.workflow.id, { expectedDraftRevisionId: before!.draftRevisionId!, expectedPublishedRevisionId: null }, f.human);
+    const [app] = await db.insert(toolApplications).values({ companyId: f.companyId, name: "Contacts", type: "mcp_http" }).returning();
+    const [connection] = await db.insert(toolConnections).values({ companyId: f.companyId, applicationId: app.id, name: "Contact system", uid: randomUUID(),
+      transport: "mcp_remote", status: "active", enabled: true, config: { privateToken: "PRIVATE credential" }, transportConfig: { url: "https://uncontacted.test.invalid" } }).returning();
+    const [entry] = await db.insert(toolCatalogEntries).values({ companyId: f.companyId, applicationId: app.id, connectionId: connection.id, name: "contacts.find", toolName: "contacts.find", title: "Find contacts",
+      versionHash: "v1", schemaHash: "s1", inputSchema: { type: "object", properties: { query: { type: "string", minLength: 1 }, count: { type: "integer", minimum: 1, maximum: 10 }, enabled: { type: "boolean" } }, required: ["query"], additionalProperties: false } }).returning();
+    const view = await f.service.review(f.companyId, f.workflow.id, f.actor), choice = view.toolSelection!.choices.find(choice => choice.entryId === entry.id)!;
+    expect(choice).toMatchObject({ connectionName: "Contact system", name: "Find contacts", versionHash: "v1", schemaHash: "s1" });
+    expect(JSON.stringify(view)).not.toMatch(/PRIVATE credential|uncontacted/);
+    const operation = { kind: "append_tool" as const, name: "PRIVATE contact step", entryId: entry.id, connectionId: connection.id,
+      versionHash: choice.versionHash, schemaHash: choice.schemaHash, inputSchemaHash: choice.inputSchemaHash, input: { query: " PRIVATE query ", count: 5, enabled: false } };
+    const input = await command(f, operation);
+    await expect(f.service.save(f.companyId, f.workflow.id, { ...input, operation: { ...operation, input: { query: "Valid", count: 11 } } }, f.actor)).rejects.toMatchObject({ status: 409 });
+    await expect(f.service.save(f.companyId, f.workflow.id, { ...input, operation: { ...operation, connectionId: randomUUID() } }, f.actor)).rejects.toMatchObject({ status: 409 });
+    await db.update(toolCatalogEntries).set({ schemaHash: "s2" }).where(eq(toolCatalogEntries.id, entry.id));
+    await expect(f.service.save(f.companyId, f.workflow.id, input, f.actor)).rejects.toMatchObject({ status: 409 });
+    await db.update(toolCatalogEntries).set({ schemaHash: "s1" }).where(eq(toolCatalogEntries.id, entry.id));
+    await db.update(toolConnections).set({ enabled: false }).where(eq(toolConnections.id, connection.id));
+    await expect(f.service.save(f.companyId, f.workflow.id, input, f.actor)).rejects.toMatchObject({ status: 409 });
+    await db.update(toolConnections).set({ enabled: true }).where(eq(toolConnections.id, connection.id));
+    const [saved, duplicate] = await Promise.all([f.service.save(f.companyId, f.workflow.id, input, f.actor), f.service.save(f.companyId, f.workflow.id, input, f.actor)]);
+    expect(duplicate).toEqual(saved); const after = await owner.getDetail(f.companyId, f.workflow.id, f.actor);
+    expect(after!.publishedRevision).toEqual(published.publishedRevision);
+    expect(after!.draftRevision!.graph.nodes[1]).toMatchObject({ type: "connector.action", config: { toolCatalogEntryId: entry.id, connectionId: connection.id,
+      catalogVersionHash: "v1", catalogSchemaHash: "s1", projectedInputSchemaHash: choice.inputSchemaHash, input: operation.input } });
+    expect(await db.select().from(toolInvocations).where(eq(toolInvocations.companyId, f.companyId))).toEqual([]);
+    expect(await db.select().from(toolActionRequests).where(eq(toolActionRequests.companyId, f.companyId))).toEqual([]);
+    expect(await db.select().from(workflowRuns).where(eq(workflowRuns.companyId, f.companyId))).toEqual([]);
+    const rows = await db.select().from(activityLog).where(eq(activityLog.companyId, f.companyId));
+    expect(rows).toHaveLength(2); expect(JSON.stringify(rows.map(row => row.details))).not.toMatch(/PRIVATE|query|contacts|schemaHash|connectionId/);
+    await db.update(toolCatalogEntries).set({ inputSchema: { type: "object", properties: {} } }).where(eq(toolCatalogEntries.id, entry.id));
+    await expect(owner.publish(f.companyId, f.workflow.id, { expectedDraftRevisionId: after!.draftRevisionId!, expectedPublishedRevisionId: after!.publishedRevisionId }, f.human)).rejects.toMatchObject({ status: 422 });
+    expect((await owner.getDetail(f.companyId, f.workflow.id, f.actor))!.publishedRevisionId).toBe(published.publishedRevisionId);
+
   });
   it("tests the actual guided manual/wait draft through the Original timer owner without publishing or external work", async () => {
     const f = await fixture(), owner = workflowService(db), executor = workflowExecutorService(db);
