@@ -3689,6 +3689,7 @@ export function issueThreadInteractionService(
             interactionId,
             data,
             actor,
+            mutationOptions,
           );
         case "request_confirmation": {
           await assertIssueWorkspaceFinalizedForAccept({
@@ -3746,6 +3747,7 @@ export function issueThreadInteractionService(
       interactionId: string,
       input: AcceptIssueThreadInteraction,
       actor: InteractionActor,
+      mutationOptions: InteractionResolutionMutationOptions = {},
     ) => {
       assertIssueOpenForInteractionResolution(issue);
       const current = await db
@@ -3830,6 +3832,7 @@ export function issueThreadInteractionService(
 
       await db.transaction(async (tx) => {
         await assertInteractionRunWriteAllowed(tx as unknown as Db, issue, actor);
+        await mutationOptions.beforeResolveInTransaction?.(tx);
         const resolvedAt = new Date();
         const [claimed] = await tx
           .update(issueThreadInteractions)
@@ -3870,7 +3873,7 @@ export function issueThreadInteractionService(
           ).createChild(parentIssueId, {
             title: task.title,
             description: task.description ?? null,
-            status: "todo",
+            status: task.status ?? "todo",
             workMode: task.workMode ?? "standard",
             priority: task.priority ?? "medium",
             assigneeAgentId: task.assigneeAgentId ?? null,
@@ -3919,6 +3922,7 @@ export function issueThreadInteractionService(
           .returning();
 
         await touchIssue(tx, issue.id);
+        await mutationOptions.afterResolveInTransaction?.(tx, hydrateInteraction(updated));
         current.status = updated.status;
         current.result = updated.result;
         current.resolvedByAgentId = updated.resolvedByAgentId;

@@ -27,6 +27,7 @@ import type {
   PaperclipQuestionSet,
 } from "@paperclipai/adapter-utils";
 import { IssueThreadInteractionCard } from "@/components/IssueThreadInteractionCard";
+import { IssueStatusBadge } from "@/components/StatusBadge";
 import { ConnectionIntentInteractionBody } from "@/features/connections/ConnectionIntentInteractionBody";
 import { MarkdownBody } from "@/components/MarkdownBody";
 import type { MentionOption } from "@/components/MarkdownEditor";
@@ -1317,6 +1318,7 @@ function SuggestedTaskRow({
           <span className="block text-sm leading-5 text-foreground">
             {node.task.title}
           </span>
+          {node.task.status ? <IssueStatusBadge status={node.task.status} /> : null}
           {hiddenCount > 0 ? (
             <span className="block text-xs text-muted-foreground">
               + {hiddenCount} hidden follow-up

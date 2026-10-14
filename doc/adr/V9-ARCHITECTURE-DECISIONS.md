@@ -2449,3 +2449,19 @@ displays no analytical object/result, performs no analytical write or model call
 and grants no authority; each Native destination keeps its current Source,
 permission, qualification and effect policy. Actual V8 insight result cards and
 conversation authoring remain separate pending work.
+
+
+## ADR-69 — Reviewed task proposals retain their explicit initial state and atomic hooks
+
+The Original suggest_tasks interaction accepts an optional initial backlog/todo
+state. Omitted state keeps the legacy todo behavior; running and terminal states
+are rejected by the shared schema. Both existing review surfaces show an explicit
+state before acceptance. The Original child-issue creator retains assignee,
+parent, company and source-run ownership; no new task or approval ledger exists.
+
+acceptInteraction forwards its existing transaction hooks through suggest_tasks.
+Current-authority checks execute before claiming the interaction; receipt hooks
+execute after Original child creation/result persistence inside the same database
+transaction. Either failure rolls back the verdict and all created tasks. A
+terminal interaction cannot create the same proposal again. These are Native
+prerequisites, not evidence that Custom Agents can yet propose or create tasks.

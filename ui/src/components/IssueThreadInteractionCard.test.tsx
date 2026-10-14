@@ -513,6 +513,15 @@ describe("IssueThreadInteractionCard", () => {
     expect(host.textContent).toContain("Child task");
   });
 
+  it("shows the proposed backlog state before a Human accepts task creation", () => {
+    const host = renderCard({ interaction: {
+      ...pendingSuggestedTasksInteraction,
+      payload: { version: 1, tasks: [{ clientKey: "one", title: "A bounded follow-up", status: "backlog" }] },
+    } });
+    expect(host.textContent).toContain("A bounded follow-up");
+    expect(host.textContent).toContain("Backlog");
+  });
+
   it("shows an explicit placeholder when a rejected interaction has no reason", () => {
     const host = renderCard({
       interaction: {

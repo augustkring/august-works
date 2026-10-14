@@ -1140,6 +1140,7 @@ export const suggestedTaskDraftSchema = z
     parentClientKey: z.string().trim().min(1).max(120).nullable().optional(),
     parentId: z.string().guid().nullable().optional(),
     title: z.string().trim().min(1).max(240),
+    status: z.enum(["backlog", "todo"]).optional(),
     description: multilineTextSchema
       .pipe(z.string().trim().max(20000))
       .nullable()

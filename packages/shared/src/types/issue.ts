@@ -1116,6 +1116,8 @@ export interface SuggestedTaskDraft {
   parentId?: string | null;
   title: string;
   description?: string | null;
+  /** Omitted legacy suggestions retain their todo default. */
+  status?: "backlog" | "todo";
   priority?: IssuePriority | null;
   workMode?: IssueWorkMode | null;
   assigneeAgentId?: string | null;

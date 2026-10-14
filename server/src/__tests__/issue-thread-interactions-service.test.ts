@@ -102,6 +102,52 @@ describeEmbeddedPostgres("issueThreadInteractionService", () => {
     return { companyId, goalId, issueId };
   }
 
+  it("creates an explicitly reviewed backlog suggestion only once and preserves legacy todo defaults", async () => {
+    const { companyId, goalId, issueId } = await seedConfirmationIssue();
+    const source = { id: issueId, companyId, goalId, projectId: null };
+    const proposed = await interactionsSvc.create(source, {
+      kind: "suggest_tasks", resolverPolicy: "human_only", continuationPolicy: "none",
+      payload: { version: 1, tasks: [
+        { clientKey: "reviewed", title: "A reviewed backlog task", status: "backlog" },
+        { clientKey: "legacy", title: "A legacy suggestion" },
+      ] },
+    }, { userId: "local-board" });
+    expect(await db.select().from(issues)).toHaveLength(1);
+    const accepted = await interactionsSvc.acceptInteraction(source, proposed.id, {}, { userId: "local-board" });
+    expect(accepted.createdIssues).toEqual([
+      expect.objectContaining({ status: "backlog", assigneeAgentId: null }),
+      expect.objectContaining({ status: "todo", assigneeAgentId: null }),
+    ]);
+    const receipt = accepted.interaction.result;
+    await expect(interactionsSvc.acceptInteraction(source, proposed.id, {}, { userId: "local-board" }))
+      .rejects.toThrow();
+    expect(await db.select().from(issues)).toHaveLength(3);
+    expect((await interactionsSvc.getById(proposed.id))?.result).toEqual(receipt);
+  });
+
+  it("runs suggestion authority checks and receipt hooks inside the same atomic task-creation transaction", async () => {
+    const { companyId, goalId, issueId } = await seedConfirmationIssue();
+    const source = { id: issueId, companyId, goalId, projectId: null };
+    const proposed = await interactionsSvc.create(source, {
+      kind: "suggest_tasks", resolverPolicy: "human_only", continuationPolicy: "none",
+      payload: { version: 1, tasks: [{ clientKey: "reviewed", title: "A bounded follow-up" }] },
+    }, { userId: "local-board" });
+    await expect(interactionsSvc.acceptInteraction(source, proposed.id, {}, { userId: "local-board" }, {
+      beforeResolveInTransaction: async () => { throw new Error("current Source access withdrawn"); },
+    })).rejects.toThrow("current Source access withdrawn");
+    expect((await interactionsSvc.getById(proposed.id))?.status).toBe("pending");
+    expect(await db.select().from(issues)).toHaveLength(1);
+    await expect(interactionsSvc.acceptInteraction(source, proposed.id, {}, { userId: "local-board" }, {
+      afterResolveInTransaction: async (tx, interaction) => {
+        expect(interaction.status).toBe("accepted");
+        expect(await tx.select().from(issues)).toHaveLength(2);
+        throw new Error("receipt persistence unavailable");
+      },
+    })).rejects.toThrow("receipt persistence unavailable");
+    expect((await interactionsSvc.getById(proposed.id))?.status).toBe("pending");
+    expect(await db.select().from(issues)).toHaveLength(1);
+  });
+
   async function attachPlanDocument(companyId: string, issueId: string) {
     const documentId = randomUUID();
     const revisionId = randomUUID();

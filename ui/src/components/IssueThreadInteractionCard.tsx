@@ -36,6 +36,7 @@ import { Button } from "./ui/button";
 import { Checkbox } from "./ui/checkbox";
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "./ui/collapsible";
 import { PriorityIcon } from "./PriorityIcon";
+import { IssueStatusBadge } from "./StatusBadge";
 import { SHOW_TASK_PRIORITY_UI } from "../lib/ui-flags";
 import { Textarea } from "./ui/textarea";
 import { Tooltip, TooltipContent, TooltipTrigger } from "./ui/tooltip";
@@ -640,6 +641,7 @@ function TaskTreeNode({
                     {node.task.description}
                   </p>
                 ) : null}
+                {node.task.status ? <IssueStatusBadge status={node.task.status} /> : null}
               </div>
             </div>
           </div>

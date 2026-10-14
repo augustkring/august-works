@@ -1770,3 +1770,30 @@ module and Source gates pass. The separate checkpoint 40 full run is ongoing.
 
 After final SHELL contract/source additions, the directory/current transport/
 screen-contract group passes all 68 cases (4.49 seconds).
+
+
+### Reviewed task proposal prerequisites — 2026-10-14 (checkpoint 44)
+
+Two actual Native baselines fail (22.22 seconds): explicit backlog is discarded
+and the interaction's transaction authority hook is bypassed. The shared
+proposal contract now accepts only optional backlog/todo; the Original creator
+honors it and preserves omitted legacy todo. Both existing interaction review
+surfaces display explicitly proposed state. No new task/approval owner exists.
+The existing before/after resolution callbacks now also wrap suggest_tasks in
+the same transaction as the claim, child tasks and retained Original receipt.
+Actual rollback cases cover authority withdrawal and receipt failure. Repeated
+acceptance refuses and leaves the receipt and task count unchanged.
+
+All four Native-service/shared-validator/interaction-UI suites pass 182 cases
+(42.51 seconds). Server and UI typechecks pass (exit 0). Token, module-boundary and
+70-Source gates pass. An initial guessed module-gate command did not exist;
+the actual registered check:module-boundaries command then passed. This enables a bounded Native
+prerequisite; authored Agent task generation/mapping remains pending. No launch
+evidence row is accepted and no provider, permission or runtime is activated.
+
+The separate frozen checkpoint-40 verification has no final test result: its
+process and tool session disappeared after the log stopped at 16:44 UTC. No
+new cgroup OOM kill was recorded; the termination cause is unconfirmed. Its
+repository-wide typecheck passed; full tests and build remain unverified. The
+previous 'ongoing' notes describe the observations at those earlier checkpoints.
+A new final immutable run is required; no full-suite success is claimed.
