@@ -57,6 +57,8 @@ export async function inspectAnalyticalContextPins(tx:Db,companyId:string,actor:
 /** Follow only persisted native child relationships. A copied Task/run ID or
  * initiating principal is never an analytical reader grant. */
 export async function assertLearnedWorkflowPayloadAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,scope:{issueId:string}|{runId:string}|{workflowRunId:string},readScope?:NativeReadScope) {
+ if("workflowRunId" in scope){const {assertWorkflowRunAuthoringSources}=await import("./workflows/workflow-authoring-sources.js");
+  await assertWorkflowRunAuthoringSources(db,companyId,scope.workflowRunId,actor,readScope);}
  const deadline=performance.now()+30000;
  const budget=()=>{if(performance.now()>deadline)throw new HttpError(403,"Complete analytical Workflow source review exceeded its budget",{code:"analytical_source_access_lost"});};
  const match="workflowRunId" in scope?eq(workflowStepRuns.workflowRunId,scope.workflowRunId):"issueId" in scope?sql`exists(select 1 from workflow_waits w where w.company_id=${companyId}::uuid and w.workflow_run_id=${workflowStepRuns.workflowRunId} and w.node_id=${workflowStepRuns.nodeId} and w.reference_type='issue' and w.reference_id=${scope.issueId}) or exists(select 1 from issues i where i.company_id=${companyId}::uuid and i.id=${scope.issueId}::uuid and i.origin_kind='workflow_task' and i.origin_run_id=${workflowStepRuns.workflowRunId}::text)`:
@@ -71,6 +73,8 @@ export async function assertLearnedWorkflowPayloadAccess(db:Db,companyId:string,
  if(assets.length>256)throw new HttpError(403,"Analytical Workflow source access is unavailable",{code:"analytical_source_access_lost"});
  if(!assets.length)return;
  const {assertLearnedAssetAnalyticalSources}=await import("./learning/learning-analytical-sources.js");
+ const {assertWorkflowRunAuthoringSources}=await import("./workflows/workflow-authoring-sources.js");
+ for(const source of await sourceRuns){budget();await assertWorkflowRunAuthoringSources(db,companyId,source.id,actor,readScope);}
  for(const revisionId of new Set(assets.map(asset=>asset.revisionId))){
   budget();const [receipt]=await db.execute<{lost:boolean}>(sql`select not aw_learning_asset_current(${companyId}::uuid,'workflow_revision',${revisionId}::uuid) as lost`);
   if(receipt?.lost)throw new HttpError(403,"Native Workflow Source is unavailable",{code:"analytical_source_access_lost"});

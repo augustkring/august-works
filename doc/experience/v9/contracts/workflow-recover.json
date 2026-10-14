@@ -126,7 +126,8 @@
     ],
     "securityPrivacy": [
       "Original current account/permissions and retained Sources are required. Missing receipts cannot prove no prior admission.",
-      "No recovery GET executes work or creates a new request identity. Explicit known Native pre-effect refusals release only their exact tuple; conflict with an already recorded request is not absence proof."
+      "No recovery GET executes work or creates a new request identity. Explicit known Native pre-effect refusals release only their exact tuple; conflict with an already recorded request is not absence proof.",
+      "Verify private subworkflow results retain current source authority through actual public ancestors and child removal; copied run/step/wait/review/activity payloads are erased and late/restore writes stay unavailable. Retained IDs supply no source-sharing or runtime grant."
     ],
     "usability": [
       "Representative exploratory/pre-registered confirmatory Human evidence remains required; software fixtures cannot supply it."

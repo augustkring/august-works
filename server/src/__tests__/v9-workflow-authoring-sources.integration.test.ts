@@ -52,6 +52,28 @@ describe.sequential("Original workflow private authoring copy owner", () => {
     const published = await owner.publish(f.home, changed.id, { expectedDraftRevisionId: changed.draftRevisionId!, expectedPublishedRevisionId: null }, human());
     return { created, changed, published };
   }
+  async function privateValueWorkflow() {
+    const owner = workflowService(db), childDraft = await authored();
+    const childChanged = await owner.updateDraft(f.home, childDraft.id, { expectedRevisionId: childDraft.draftRevisionId!, graph: {
+      version: 1, nodes: [
+        { id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} },
+        { id: "value", type: "core.transform", name: "Prepare value", position: { x: 0, y: 1 }, config: { mapping: { value: "PRIVATE child result" } } },
+      ], edges: [{ id: "next", source: "start", target: "value" }], variables: [], settings: {},
+    } }, human());
+    return owner.publish(f.home, childDraft.id, { expectedDraftRevisionId: childChanged.draftRevisionId!, expectedPublishedRevisionId: null }, human());
+  }
+  async function parentWorkflow(child: { id: string; publishedRevisionId: string | null }) {
+    const owner = workflowService(db);
+    const parentDraft = await owner.create(f.home, { name: "Public parent configuration" }, human());
+    const parentChanged = await owner.updateDraft(f.home, parentDraft.id, { expectedRevisionId: parentDraft.draftRevisionId!, graph: {
+      version: 1, nodes: [
+        { id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} },
+        { id: "child", type: "core.subworkflow", name: "Run child", position: { x: 0, y: 1 }, config: {
+          workflowId: child.id, revisionId: child.publishedRevisionId!, inputMapping: {}, timeoutSeconds: 60, cancellationPolicy: "propagate" } },
+      ], edges: [{ id: "next", source: "start", target: "child" }], variables: [], settings: {},
+    } }, human());
+    return owner.publish(f.home, parentDraft.id, { expectedDraftRevisionId: parentChanged.draftRevisionId!, expectedPublishedRevisionId: null }, human());
+  }
   async function eraseSource() {
     await db.transaction(async raw => {
       const tx = raw as unknown as typeof db;
@@ -92,6 +114,46 @@ describe.sequential("Original workflow private authoring copy owner", () => {
     const created = await authored();
     await expect(workflowService(db).getDetail(f.home, created.id, { type: "agent", source: "agent_key", companyId: f.home,
       agentId: f.presence.id, runId: origin.id, onBehalfOfUserId: f.userId })).rejects.toMatchObject({ status: 403 });
+  });
+  it("retains the private child result's current source reader on its actual public parent run", async () => {
+    const child = await privateValueWorkflow(), parent = await parentWorkflow(child);
+    const engine = workflowExecutorService(db), completed = await engine.startManualRun(f.home, parent.id, { input: {} }, human(), randomUUID());
+    expect(completed.run.status).toBe("succeeded");
+    expect(JSON.stringify(completed.steps)).toContain("PRIVATE child result");
+    expect(completed.run).not.toHaveProperty("authoringSourceWorkflowIds");
+    const [storedParent] = await db.select().from(workflowRuns).where(eq(workflowRuns.id, completed.run.id));
+    expect(storedParent.authoringSourceWorkflowIds).toEqual([child.id]);
+    const otherUser = `parent-reader-${randomUUID()}`, now = new Date();
+    await db.insert(authUsers).values({ id: otherUser, name: "Other workflow reader", email: `${otherUser}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now });
+    await db.insert(companyMemberships).values({ companyId: f.home, principalType: "user", principalId: otherUser, membershipRole: "owner", status: "active" });
+    await db.insert(principalPermissionGrants).values({ companyId: f.home, principalType: "user", principalId: otherUser, permissionKey: "workflows:read" });
+    await expect(engine.getRun(f.home, completed.run.id, { type: "board", source: "session", userId: otherUser })).rejects.toMatchObject({ status: 403 });
+    await db.delete(workflowRuns).where(and(eq(workflowRuns.companyId, f.home), eq(workflowRuns.parentWorkflowRunId, completed.run.id)));
+    await expect(engine.getRun(f.home, completed.run.id, { type: "board", source: "session", userId: otherUser })).rejects.toMatchObject({ status: 403 });
+    await expect(db.update(workflowRuns).set({ authoringSourceWorkflowIds: [] }).where(eq(workflowRuns.id, completed.run.id))).rejects.toBeTruthy();
+    await eraseSource();
+    expect(JSON.stringify(await db.select().from(workflowStepRuns).where(eq(workflowStepRuns.workflowRunId, completed.run.id)))).not.toContain("PRIVATE child result");
+    const [copiedStep] = await db.select().from(workflowStepRuns).where(and(eq(workflowStepRuns.workflowRunId, completed.run.id), eq(workflowStepRuns.nodeId, "child")));
+    await db.update(workflowStepRuns).set({ outputJson: { value: "PRIVATE child result restored" } }).where(eq(workflowStepRuns.id, copiedStep.id));
+    expect((await db.select().from(workflowStepRuns).where(eq(workflowStepRuns.id, copiedStep.id)))[0].outputJson).toBeNull();
+    await db.delete(workflowRuns).where(eq(workflowRuns.id, completed.run.id));
+    await db.insert(workflowRuns).values({ id: completed.run.id, companyId: f.home, workflowId: parent.id,
+      workflowRevisionId: parent.publishedRevisionId!, source: "manual", status: "succeeded", finishedAt: new Date(),
+      triggerPayload: { value: "PRIVATE restored parent" }, authoringSourceWorkflowIds: [] });
+    expect((await db.select().from(workflowRuns).where(eq(workflowRuns.id, completed.run.id)))[0].triggerPayload).toEqual({});
+    await expect(engine.getRun(f.home, completed.run.id, f.actor)).rejects.toMatchObject({ status: 403 });
+  });
+  it("propagates the actual private grandchild source to both public ancestors without changing their configurations", async () => {
+    const child = await privateValueWorkflow(), middle = await parentWorkflow(child), outer = await parentWorkflow(middle);
+    const completed = await workflowExecutorService(db).startManualRun(f.home, outer.id, { input: {} }, human(), randomUUID());
+    expect(completed.run.status).toBe("succeeded"); expect(JSON.stringify(completed.steps)).toContain("PRIVATE child result");
+    const executions = await db.select().from(workflowRuns).where(eq(workflowRuns.companyId, f.home));
+    expect(executions).toHaveLength(3);
+    for (const execution of executions) expect(execution.authoringSourceWorkflowIds).toEqual([child.id]);
+    await eraseSource();
+    const steps = await db.select().from(workflowStepRuns).where(eq(workflowStepRuns.companyId, f.home));
+    expect(JSON.stringify(steps)).not.toContain("PRIVATE child result");
+    for (const parent of [middle, outer]) expect((await workflowService(db).getDetail(f.home, parent.id, f.actor))!.status).toBe("active");
   });
   it("erases published and later Human drafts and their actual Native task copies, retaining unavailable identities", async () => {
     const { published } = await changedAndPublished(), engine = workflowExecutorService(db);

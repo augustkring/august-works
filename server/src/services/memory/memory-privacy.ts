@@ -133,7 +133,7 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
 
   await db.execute(sql`select aw_erase_skill_harness_sources(${companyId}::uuid)`);
   const sourceWorkflowRuns = await db.select({ id: workflowRuns.id }).from(workflowRuns).where(and(
-    eq(workflowRuns.companyId, companyId), sql`aw_workflow_authoring_source_erased(${companyId}::uuid,${workflowRuns.workflowId})`,
+    eq(workflowRuns.companyId, companyId), sql`aw_workflow_run_authoring_source_erased(${companyId}::uuid,${workflowRuns.id})`,
     inArray(workflowRuns.status, ["queued", "running", "waiting", "recovering", "cancelling"]),
   ));
   if (sourceWorkflowRuns.length) {
@@ -143,9 +143,10 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
   // The Native workflow retains private authoring dependencies across all
   // later Human revisions. Erase before enumerating its descendant runs/tasks.
   await db.execute(sql`select aw_erase_workflow_authoring_sources(${companyId}::uuid)`);
+  await db.execute(sql`select aw_erase_workflow_run_authoring_sources(${companyId}::uuid)`);
   const affected = await db.select().from(workflowStepRuns).where(and(eq(workflowStepRuns.companyId, companyId),
     or(sql`exists(select 1 from workflow_runs owner where owner.company_id=${companyId}::uuid and owner.id=${workflowStepRuns.workflowRunId}
-      and aw_workflow_authoring_source_erased(${companyId}::uuid,owner.workflow_id))`,
+      and aw_workflow_run_authoring_source_erased(${companyId}::uuid,owner.id))`,
       recordIds.length?sql`${workflowStepRuns.memoryRecordIds} ?| ARRAY[${sql.join(recordIds.map((id) => sql`${id}`), sql`, `)}]::text[]`:undefined,
       sourceAssets?.workflowRevisionIds.length?sql`exists(select 1 from ${workflowRuns} w where w.company_id=${companyId}::uuid and w.id=${workflowStepRuns.workflowRunId} and w.workflow_revision_id in (${sql.join(sourceAssets.workflowRevisionIds.map(id=>sql`${id}::uuid`),sql`, `)}))`:undefined,
       sourceAssets?.artifactVersionIds.length?sql`exists(select 1 from workflow_step_runs source_step

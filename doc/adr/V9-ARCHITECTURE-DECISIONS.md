@@ -1615,3 +1615,31 @@ actual Native queued heartbeat cancellation service. Queue admission is controll
 by the software fixture; this does not qualify host/provider process termination,
 external-effect compensation, complete sharing semantics or representative Human
 usability. Exact checkpoint results remain in the dated continuation plan.
+
+## ADR-V9-037 — Private child output retains its copy owner on actual ancestor runs
+
+2026-10-14. A public parent workflow can hold a private child's result. The Native
+run retains private workflow source IDs captured through actual child creation
+and propagated through the existing parent chain. Capture is atomic, scoped to
+the company, bounded to 32 private roots and sixteen ancestors; existing relations
+are backfilled without truncation. Child removal cannot drop retained sources.
+These IDs are internal and omitted from public run DTOs; they grant no access.
+
+Run, task and heartbeat readers follow the Original copy owner and current
+source-owning authority. Inspection shares one bounded deadline. Subworkflow
+result recovery keeps the stored execution principal and repeats current source
+admission. Native package component resolution also reads the exact Original
+workflow revision through current source authority before accepting its pin.
+
+The existing privacy transaction admits cancellation of affected live ancestors
+through the Original owner and erases copied run/step/wait/review/activity and
+downstream task/heartbeat payloads. Public ancestor configurations remain separate.
+Permanent run markers and monotonic provenance fence late results and restored
+payloads, even when a restore omits its source list. Retained control is a separate
+purpose from private result reading.
+
+PostgreSQL cases exercise actual private child execution, two public ancestors,
+foreign-reader denial, child deletion, copied-result erasure, late writes and
+restored Native rows. Checkpoint results and broader artifact/package/knowledge
+copy closure remain in the continuation plan. There is no inference of host or
+provider termination, external compensation or representative Human acceptance.

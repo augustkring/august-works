@@ -1210,7 +1210,9 @@
         "server/src/services/learning/learning-analytical-sources.ts",
         "server/src/services/memory/memory-privacy.ts",
         "packages/db/src/schema/workflows.ts",
-        "packages/db/src/migrations/0493_tidy_kat_farrell.sql"
+        "packages/db/src/migrations/0493_tidy_kat_farrell.sql",
+        "server/src/services/analytical-context-authority.ts",
+        "packages/db/src/migrations/0494_goofy_lionheart.sql"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/workflow-review.json"
@@ -1443,7 +1445,9 @@
         "server/src/services/learning/learning-analytical-sources.ts",
         "server/src/services/memory/memory-privacy.ts",
         "packages/db/src/schema/workflows.ts",
-        "packages/db/src/migrations/0493_tidy_kat_farrell.sql"
+        "packages/db/src/migrations/0493_tidy_kat_farrell.sql",
+        "server/src/services/analytical-context-authority.ts",
+        "packages/db/src/migrations/0494_goofy_lionheart.sql"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/workflow-recover.json"

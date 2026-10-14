@@ -191,8 +191,9 @@ async function persistWorkflowActivity(
 }
 
 function mapRun(row: typeof workflowRuns.$inferSelect): WorkflowRun {
+  const { authoringSourceWorkflowIds: _privateCopyOwners, ...publicRow } = row;
   return {
-    ...row,
+    ...publicRow,
     status: row.status as WorkflowRun["status"],
     source: row.source as WorkflowRun["source"],
     triggerPayload: (row.triggerPayload ?? {}) as Record<string, unknown>,
@@ -6057,10 +6058,12 @@ async function resolveSubworkflowWait(db: Db, run: typeof workflowRuns.$inferSel
     await workflowExecutorService(db, runtimeDeps).cancelRun(run.companyId, child.id, { reason: "Parent subworkflow timeout" },
       { principal: { type: "system", service: "workflow-subworkflow" } });
   }
-  const actor: WorkflowRunActor = { principal: { type: "system", service: "workflow-subworkflow" }, responsibleUserId: run.responsibleUserId };
+  const actor: WorkflowRunActor = { principal: run.executionPrincipal ?? { type: "system", service: "workflow-subworkflow" },
+    runId: run.executionAgentRunId, responsibleUserId: run.responsibleUserId };
   let errorCode = !child ? "workflow_subworkflow_missing" : expired ? "workflow_subworkflow_timeout" : "workflow_subworkflow_failed";
   let succeeded = child?.status === "succeeded" && (!wait.timeoutAt || Boolean(child.finishedAt && child.finishedAt <= wait.timeoutAt));
-  const detail = succeeded ? await getRunDetail(db, run.companyId, child!.id) : null;
+  const detail = succeeded ? await getRunDetail(db, run.companyId, child!.id,
+    learningActorFromPrincipal(run.companyId, actor.principal, actor.runId), "task") : null;
   const childRevision = succeeded ? await revisionForRun(db, child!) : null;
   const terminalNodes = new Set(childRevision?.graph.nodes.filter((item) => !childRevision.graph.edges.some((edge) => edge.source === item.id)).map((item) => item.id) ?? []);
   const resultSteps = detail?.steps.filter((item) => item.status === "succeeded" && terminalNodes.has(item.nodeId)) ?? [];
@@ -7904,7 +7907,7 @@ async function finalizeWorkflowRunCancellation(
 export async function requestErasedWorkflowRunCancellation(db: Db, companyId: string, runId: string) {
   const [run] = await db.select({ workflowId: workflowRuns.workflowId }).from(workflowRuns)
     .where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.id, runId)));
-  const [source] = run ? await db.execute<{ erased: boolean }>(sql`select aw_workflow_authoring_source_erased(${companyId}::uuid,${run.workflowId}::uuid) as erased`) : [];
+  const [source] = run ? await db.execute<{ erased: boolean }>(sql`select aw_workflow_run_authoring_source_erased(${companyId}::uuid,${runId}::uuid) as erased`) : [];
   if (source?.erased !== true) throw forbidden("Original workflow source erasure is required for cancellation");
   return requestWorkflowRunCancellation(db, companyId, runId, "Source payload erased",
     { principal: { type: "system", service: "workflow-source-erasure" } }, undefined, undefined, true);

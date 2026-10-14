@@ -229,6 +229,9 @@ export function agentPackageService(
         });
       if (["workflow_template", "routine_template"].includes(component.type))
         await assertV7Authorization(tx, actor, companyId, "workflows:read");
+      if (component.type === "workflow_template" && !await workflowService(tx).getRevision(
+        companyId, pin.resourceId, pin.versionId, { ...actor, ignoreInstanceAdmin: true, isInstanceAdmin: false }))
+        throw conflict("The Original workflow component source is unavailable");
       const [hash] = await tx.execute(
         sql`select aw_v7_package_component_hash(${companyId}::uuid,${component.type},${pin.resourceId}::uuid,${pin.versionId}::uuid) as hash`,
       );

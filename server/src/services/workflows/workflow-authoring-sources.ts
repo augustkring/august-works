@@ -1,6 +1,6 @@
 import { AsyncLocalStorage } from "node:async_hooks";
 import { and, eq, sql } from "drizzle-orm";
-import { authUsers, heartbeatRuns, issues, workflows, type Db } from "@paperclipai/db";
+import { authUsers, heartbeatRuns, issues, workflowRuns, workflows, type Db } from "@paperclipai/db";
 import { z } from "zod";
 import { forbidden } from "../../errors.js";
 import { assertAnalyticalContextPayloadAccess } from "../analytical-context-authority.js";
@@ -86,4 +86,29 @@ export async function assertWorkflowAuthoringSources(db: Db, companyId: string, 
     } finally { state.active.delete(key); }
   };
   return review.getStore() ? inspect() : review.run(state, inspect);
+}
+
+/** A public parent can hold a private child's result. Follow the actual Native
+ * copy references retained on that run, including after child-run removal. */
+export async function assertWorkflowRunAuthoringSources(db: Db, companyId: string, runId: string,
+  actor?: AuthorizationActor, readScope?: NativeReadScope) {
+  const [run] = await db.select({ ids: workflowRuns.authoringSourceWorkflowIds }).from(workflowRuns)
+    .where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.id, runId)));
+  if (!run) throw forbidden("The workflow run copy owner is unavailable");
+  const [marker] = await db.execute<{ erased: boolean }>(sql`select aw_workflow_run_authoring_source_erased(${companyId}::uuid,${runId}::uuid) as erased`);
+  if (marker?.erased !== false) throw forbidden("The workflow run's private copy source was erased or withdrawn");
+  const parsed = sources.safeParse(run.ids);
+  if (!parsed.success || new Set(parsed.data).size !== parsed.data.length)
+    throw forbidden("Complete workflow run copy provenance is unavailable");
+  const state = review.getStore() ?? { active: new Set<string>(), deadline: performance.now() + 8000 };
+  const inspect = async () => {
+    for (const id of parsed.data) {
+      if (performance.now() > state.deadline) throw forbidden("Complete workflow run source review exceeded its budget");
+      await assertWorkflowAuthoringSources(db, companyId, id, actor, readScope);
+    }
+  };
+  if (review.getStore()) await inspect(); else await review.run(state, inspect);
+  const [current] = await db.select({ ids: workflowRuns.authoringSourceWorkflowIds }).from(workflowRuns)
+    .where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.id, runId)));
+  if (JSON.stringify(current?.ids) !== JSON.stringify(parsed.data)) throw forbidden("Current workflow run copy provenance changed");
 }

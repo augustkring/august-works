@@ -394,3 +394,27 @@ Parent workflow result copies, broader package/artifact copies and explicit
 sharing remain under continuation alongside guided graph/step/access/approval
 authoring, wider Agent capability/transport/selection, sharing, external outcome
 reconciliation and whole-V9 qualification still require continuation.
+
+### Private subworkflow result copies on ancestor runs
+
+2026-10-14. The first actual private-child run exposed an inherited result reader
+that supplied no initiating principal. It now uses the parent's stored Original
+execution principal and repeats current source admission. Native run capture
+retains private child workflow IDs across the actual ancestor chain. Source IDs
+are absent from public DTOs and cannot be removed through a later run update.
+The Original privacy owner follows these references to admit cancellation and
+erase copied payloads, preserving public parent configurations. Permanent run
+markers also fence a restore that omits its previous source list.
+
+The Native executor/source regression passes 61 cases in two suites before the
+additional ancestor/restore cases. The source/package regression passes 114
+cases in two suites, including those later cases. Actual private output traverses
+two public ancestors; another current workflow reader is refused, child removal
+preserves source admission, copied results are erased, and late/restored values
+remain unavailable. Queue and model/host qualification are not inferred. The
+current retained-control/lifecycle/publication/recovery/source group passes 33
+cases in four suites after the final bounded inspection change. Current server
+types, generated database build/migration-safety, coverage and module boundaries
+pass. The complete workspace build also passes on this unchanged application
+Source. Full immutable whole-scope regression is still pending. Broader package/artifact/
+knowledge copies and explicit sharing still require complete closure.
