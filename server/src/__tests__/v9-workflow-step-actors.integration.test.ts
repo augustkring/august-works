@@ -120,6 +120,8 @@ describe.sequential("Current Native workflow step assignments", () => {
     await f.owner.updateDraft(f.companyId, f.detail.id, { expectedRevisionId: f.detail.draftRevisionId!, graph: many }, f.human);
     f.detail = (await f.owner.getDetail(f.companyId, f.detail.id, f.actor))!;
     await expect(read()).rejects.toThrow("Complete connected input review exceeds the read budget");
+    const selected = await readWorkflowStepContext(db, f.detail, f.actor, { revisionId: f.detail.draftRevisionId!, nodeId: "tool-0" });
+    expect(selected.toolInputs.size).toBe(1); expect(selected.toolInputs.get(`${f.detail.draftRevisionId}:tool-0`)?.kind).toBe("connected_tool");
     await f.owner.updateDraft(f.companyId, f.detail.id, { expectedRevisionId: f.detail.draftRevisionId!, graph: single }, f.human);
     f.detail = (await f.owner.getDetail(f.companyId, f.detail.id, f.actor))!; f.key = `${f.detail.draftRevisionId}:tool`;
     await db.update(toolCatalogEntries).set({ inputSchema: { ...schema, properties: { query: { type: "string", minLength: 3 } } } }).where(eq(toolCatalogEntries.id, f.entryId));

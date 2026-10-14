@@ -194,3 +194,23 @@ it("withholds retained private step material while its original conversation iss
   expect(container.querySelector("form")).toBeNull();
   expect(workflowDraftEditApi.save).not.toHaveBeenCalled(); expect(pendingWorkflowRequests(company, principal, workflow)).toEqual([]);
 });
+
+it("edits current scalar operation values, validates before POST, preserves false and omits an unchecked value without retaining bodies", async () => {
+  const fieldDefinition = (name: string, type: "string" | "boolean" | "integer", required = false) => ({ name, label: name, help: null, type, required,
+    options: null, minLength: name === "query" ? 1 : null, maxLength: null, minimum: type === "integer" ? 1 : null, maximum: type === "integer" ? 10 : null });
+  vi.mocked(workflowDraftEditApi.review).mockResolvedValue({ ...review, nodeType: "connector.action", toolAccess: { state: "permission_required", connectionName: "Contact system", operationName: "Find contacts", previewHref: "/apps/10000000-0000-4000-8000-000000000001/permissions" }, configuration: { kind: "connected_tool", inputSchemaHash: "a".repeat(64),
+    fields: [fieldDefinition("query", "string", true), fieldDefinition("enabled", "boolean"), fieldDefinition("count", "integer")], values: { query: "PRIVATE before", enabled: false } } });
+  await mount(); expect((container.querySelector("#draft-step-tool_enabled") as HTMLSelectElement).value).toBe("false");
+  expect((container.querySelector("#draft-step-tool_count") as HTMLInputElement).disabled).toBe(true);
+  const includeCount = [...container.querySelectorAll("label")].find(label => label.textContent === "Include count")!.querySelector("input")!;
+  await act(async () => includeCount.click()); await field("tool_count", "11"); await submit();
+  expect(container.querySelector("#draft-step-tool_count")?.getAttribute("aria-invalid")).toBe("true");
+  await act(async () => includeCount.click());
+  expect(container.querySelector("#draft-step-tool_count-error")).toBeNull(); expect(container.textContent).not.toContain("Enter a valid value for count");
+  await field("tool_query", ""); await submit();
+  expect(workflowDraftEditApi.save).not.toHaveBeenCalled(); expect(pendingWorkflowRequests(company, principal, workflow)).toEqual([]);
+  expect(container.querySelector("#draft-step-tool_query")?.getAttribute("aria-invalid")).toBe("true");
+  await field("tool_query", " PRIVATE after "); await submit();
+  expect(vi.mocked(workflowDraftEditApi.save).mock.calls[0][3].configuration).toEqual({ kind: "connected_tool", inputSchemaHash: "a".repeat(64), input: { query: " PRIVATE after ", enabled: false } });
+  expect(sessionStorage.getItem("aw.v9.pending-workflow-request-receipts")).not.toMatch(/PRIVATE|inputSchemaHash|query|enabled/);
+});

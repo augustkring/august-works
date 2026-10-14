@@ -1,5 +1,5 @@
 import { z } from "zod";
-import { workflowToolArgumentsSchema, workflowToolFieldSchema, workflowToolArgumentErrors } from "./workflow-draft-tools.js";
+import { workflowToolArgumentsSchema, workflowToolFieldSchema, workflowToolArgumentErrors, workflowStepToolAccessSchema } from "./workflow-draft-tools.js";
 
 const text = (max: number) => z.string().trim().min(1).max(max).refine(value => !/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/u.test(value) &&
   !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u.test(value), "Use valid readable text");
@@ -23,12 +23,13 @@ export const workflowGuidedConditionSchema = z.strictObject({
 });
 export const workflowStepConfigurationChangeSchema = z.discriminatedUnion("kind", [
   z.strictObject({ kind: z.literal("keep") }),
+  z.strictObject({ kind: z.literal("connected_tool"), inputSchemaHash: z.string().regex(/^[a-f0-9]{64}$/), input: workflowToolArgumentsSchema }),
   z.strictObject({ kind: z.literal("wait"), durationSeconds: workflowWaitSecondsSchema }),
   z.strictObject({ kind: z.literal("approval"), summary: workflowApprovalSummarySchema, consequence: workflowApprovalConsequenceSchema }),
   z.strictObject({ kind: z.literal("agent_task"), objective: workflowAgentObjectiveSchema, agentId: z.uuid().optional() }),
   workflowGuidedConditionSchema,
 ]);
-export const workflowConnectedInputReviewSchema = z.strictObject({ kind: z.literal("connected_tool"),
+export const workflowConnectedInputReviewSchema = z.strictObject({ kind: z.literal("connected_tool"), inputSchemaHash: z.string().regex(/^[a-f0-9]{64}$/),
   fields: z.array(workflowToolFieldSchema).max(20), values: workflowToolArgumentsSchema,
 }).superRefine((value, ctx) => {
   if (new Set(value.fields.map(field => field.name)).size !== value.fields.length || workflowToolArgumentErrors(value.fields, value.values).length)
@@ -53,8 +54,13 @@ export const workflowDraftStepReviewSchema = z.strictObject({
   companyId: z.uuid(), workflowId: z.uuid(), draftRevisionId: z.uuid(), publishedRevisionId: z.uuid().nullable(),
   updatedAt: z.iso.datetime(), version: z.number().int().positive(), nodeId: workflowEditableNodeIdSchema,
   nodeType: text(160), name: workflowStepNameSchema, configuration: workflowStepInputReviewSchema,
-  agentSelection: workflowDraftAgentSelectionSchema.optional(),
+  agentSelection: workflowDraftAgentSelectionSchema.optional(), toolAccess: workflowStepToolAccessSchema.optional(),
 }).superRefine((value, ctx) => {
+  if (value.toolAccess && value.nodeType !== "connector.action")
+    ctx.addIssue({ code: "custom", path: ["toolAccess"], message: "Connection choice binding changed" });
+  if (value.configuration.kind === "connected_tool" && (value.nodeType !== "connector.action" ||
+    !value.toolAccess || !["permission_required", "execution_check"].includes(value.toolAccess.state)))
+    ctx.addIssue({ code: "custom", path: ["configuration"], message: "Connected input binding changed" });
   if (value.agentSelection && (value.nodeType !== "agent.task" || value.configuration.kind !== "agent_task"))
     ctx.addIssue({ code: "custom", path: ["agentSelection"], message: "Agent choice binding changed" });
 });

@@ -1050,3 +1050,65 @@ The final shared typecheck, token/module/source gates and 21-case OpenAPI suite
 pass. All 70 surfaces remain pending implementation and/or qualification. The
 separate checkpoint-22 aggregate continues on its immutable source; it does not
 qualify this subsequent change or the whole brief.
+
+
+### Guided correction of saved connected-operation inputs — 2026-10-14
+
+The selected Native draft editor now reviews the actual current readable
+connection/operation and its scalar fields, keeps false/whitespace/omission,
+validates before a pending locator/POST, and writes only explicit values through
+Original updateDraft. Current input-definition, connection visibility, graph/node
+and account Sources remain required. No mapping, connection swap, grant, run,
+Task, tool invocation, test qualification or publication is part of the command.
+The complete current review and explicit selected-step read keep distinct bounded
+requests to the same owner. Form state also binds configuration kind/hash.
+
+Initial inherited Native/shared tests pass 18 cases in three suites, and the
+inherited client/shared group passes 29 cases in three suites. With the new actual
+Native and client regressions, 44 cases in five suites pass. The Source/selected
+budget follow-up passes 34 cases in four suites. The final shared/client binding
+group passes 46 cases in four suites. The first built browser pair passes current
+composition and fails the new edit fixture: its route glob matches the GET child
+path but misses the actual POST collection path, so the write reaches the separate
+local-board host and is correctly refused. The fixture glob is corrected; no
+production authority is weakened. Current later checks are recorded below.
+
+The immutable checkpoint-22 aggregate has also exposed three failures in the old
+V7 Optimizer/Artifact source-copy cases. Their independent diagnosis is in
+progress; no final aggregate success or whole-V9 readiness is asserted.
+
+The next browser pair again passes composition and exposes a 503 during selected
+review. A new actual four-concurrent-read baseline rejects one request: the new
+inner context read consumes another global admission slot under the already
+admitted HTTP request. The outer admission signal/deadline is now shared with
+that inner owner. No slot limit, Source check or deadline is relaxed. All four
+readers and the 20-case Native/shared follow-up pass. The built pair then passes
+both cases (54.0 seconds overall).
+
+Manual screenshot inspection catches mobile footer wrapping to separate rows and
+an obsolete error after a bad optional field is excluded. The selected-step footer
+now retains left/right columns and wraps long translated labels within them; the
+shared form clears excluded-field errors. All 31 affected client/shared cases
+pass. The next pair passes the selected edit but times out the current review
+under concurrent typecheck load; its 503 is retained as a failed run, not hidden
+by raising the admission deadline. After types complete, the serial built pair
+passes both cases (55.2 seconds overall), including explicit same-row bounding
+boxes, zero main axe violations/no overflow, actual current input/revision/copy
+owners, unchanged publication/no work and Original lost-only-POST recovery.
+Shared/UI and direct server compiler checks all pass on this current source, as
+do the final token/module/source gates. Earlier full server preparation/typecheck
+also passed. OpenAPI/screen contracts pass 81 cases. Whole-V9 qualification and
+final immutable whole-workspace verification remain open.
+
+The three Optimizer failures in the immutable checkpoint-22 run are independently
+reproduced as the Original Linux sandbox process-budget refusal: this host has
+more than 4,096 same-UID processes/threads, mostly old children adopted by its
+non-reaping PID 1. The production guard is unchanged. A non-root, same-UID
+user/PID namespace with its own /proc and normal process limits passes a preflight
+spawn, then all five exact Optimizer source-copy cases (36 other cases not
+selected), on the same immutable d61d34270bd80edf07d63268fcbf09c52470dd4d source.
+The reproducible prefix is unshare --user --map-current-user --pid --fork
+--mount-proc; isolated home/temp paths belong only to this verification. The
+original aggregate is still running and will retain its actual failure, not be
+reclassified by a scoped namespace pass. This is software/sandbox evidence, not
+managed Agent, model-provider, staging, channel-host or representative Human proof.

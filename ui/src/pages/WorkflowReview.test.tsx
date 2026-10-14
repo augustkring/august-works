@@ -440,7 +440,8 @@ it("reviews named saved tool values including false, empty text and omission, wi
     type, required: false, options: null, minLength: null, maxLength: null, minimum: null, maximum: null });
   step.semantics = { actor: "connected_tool", input: "tool_arguments", durationSeconds: null,
     approvalPolicy: "execution_review", access: "execution_check", maxAttempts: 1, idempotency: "provider_passthrough" };
-  step.inputReview = { kind: "connected_tool", fields: [field("query", "string"), field("enabled", "boolean"), field("empty", "string"), field("count", "integer")],
+  step.toolAccess = { state: "permission_required", connectionName: "Contact system", operationName: "Find contacts", previewHref: "/apps/10000000-0000-4000-8000-000000000001/permissions" };
+  step.inputReview = { kind: "connected_tool", inputSchemaHash: "a".repeat(64), fields: [field("query", "string"), field("enabled", "boolean"), field("empty", "string"), field("count", "integer")],
     values: { query: " PRIVATE literal ", enabled: false, empty: "" } };
   const get = vi.spyOn(workflowsApi, "experience").mockResolvedValue(view), post = vi.spyOn(workflowsApi, "startRun");
   await mount(); await vi.waitFor(() => expect(container.textContent).toContain('" PRIVATE literal "'));

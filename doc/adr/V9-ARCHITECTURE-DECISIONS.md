@@ -2076,3 +2076,36 @@ matching current revision/node; historical conversation projections stay body-fr
 The UI preserves distinctions between false, empty text and omitted optional
 fields and withdraws the fields on existing Source events. Input editing remains
 with Advanced until the selected-step editor has equivalent current binding.
+
+
+## ADR-54 — Selected tool input edits reuse the current Source read and Original draft owner
+
+The selected-step review requests exactly one current revision/node from the
+Original context owner while retaining full workflow/account/Source binding.
+Its current scalar fields, values, input hash and Native connection access DTO
+are required together. The full workflow review retains its complete 64 KiB
+bound; asking explicitly for one step does not silently truncate that whole view.
+Original schema validation material remains internal and is never serialized.
+
+A strict connected_tool command carries only the retained input-definition hash
+and explicit primitive values. It cannot select a new connection/tool, add a
+mapping or grant, change Native defaults, run a test or publish. The current read
+owner and Original schema validator check the proposed input; unknown fields are
+refused even when the upstream schema permits arbitrary extra fields. Original
+updateDraft and its body-free own-request journal own revision/CAS/recovery.
+
+Composition and editing share one accessible scalar field component. The editor
+binds retained form state to configuration kind and current definition hash as
+well as revision/node. Shared response validation refuses private connected input
+material without the matching visible current connection/actor/input semantics.
+Complex schemas, legacy unpinned inputs, definition drift and input mappings stay
+Advanced. Connection changes, full effective resource/approval-policy preview,
+connected-action tests and automatic graph proposals remain separate open work.
+
+The selected-step HTTP review passes its existing admission signal/remaining
+budget into the inner Source read. It consumes one global request slot; Native
+authority, cancellation/deadline and the four-request bound are unchanged. A
+baseline of four actual concurrent reads rejects one because the inner owner
+previously counted the same request again. All four pass after sharing admission.
+The same-row mobile footer allows long translated labels to wrap within their
+respective columns. Excluding an optional field also removes its obsolete error.

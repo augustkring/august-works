@@ -1,7 +1,9 @@
+import { withExperienceAdmission } from "../services/experience/admission.js";
+import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { activityLog, agents, agentIdentities, authUsers, companies, companyMemberships, createDb, principalPermissionGrants, workflowRevisions, workflowRuns, heartbeatRuns, issues } from "@paperclipai/db";
+import { activityLog, agents, agentIdentities, authUsers, companies, companyMemberships, createDb, principalPermissionGrants, workflowRevisions, workflowRuns, heartbeatRuns, issues, toolApplications, toolConnections, toolCatalogEntries, toolInvocations, toolActionRequests } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { workflowService } from "../services/workflows/workflow-service.js";
 import { workflowCustomerDraftEdit } from "../services/workflows/workflow-customer-draft-edit.js";
@@ -143,6 +145,45 @@ describe.sequential("Original guided workflow draft step owner", () => {
     expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.companyId))).toEqual([]);
     const assignmentRows = await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.companyId), eq(activityLog.action, "workflow.customer_draft_step_saved")));
     expect(assignmentRows).toHaveLength(2); expect(JSON.stringify(assignmentRows.map(row => row.details))).not.toMatch(/PRIVATE|Second analyst|objective|agentId/);
+  });
+  it("edits only current pinned scalar tool inputs, refusing definition/connection drift and retaining one private-body-free receipt without execution", async () => {
+    const f = await fixture(), owner = workflowService(db), human = { principal: { type: "user" as const, userId: f.userId } };
+    const [application] = await db.insert(toolApplications).values({ companyId: f.companyId, name: "Contacts", type: "mcp_http" }).returning();
+    const [connection] = await db.insert(toolConnections).values({ companyId: f.companyId, applicationId: application.id, name: "Contact system", uid: randomUUID(), transport: "mcp_remote", status: "active", enabled: true, config: { token: "PRIVATE credential" } }).returning();
+    const schema = { type: "object", properties: { query: { type: "string", minLength: 1 }, count: { type: "integer", minimum: 1, maximum: 10 }, enabled: { type: "boolean" } }, required: ["query"], additionalProperties: true };
+    const [entry] = await db.insert(toolCatalogEntries).values({ companyId: f.companyId, applicationId: application.id, connectionId: connection.id, name: "contacts.find", toolName: "contacts.find", title: "Find contacts", versionHash: "v1", schemaHash: "s1", inputSchema: schema }).returning();
+    const before = (await owner.getDetail(f.companyId, f.published.id, f.actor))!, graph = structuredClone(before.draftRevision!.graph);
+    graph.nodes[1] = { ...graph.nodes[1], type: "connector.action", name: "PRIVATE find step", config: { toolCatalogEntryId: entry.id, connectionId: connection.id, catalogVersionHash: "v1", catalogSchemaHash: "s1", projectedInputSchemaHash: nativeSha256(schema), input: { query: "PRIVATE before", enabled: true, count: 3 } } };
+    await owner.updateDraft(f.companyId, f.published.id, { expectedRevisionId: before.draftRevisionId!, graph }, human);
+    const view = await f.service.review(f.companyId, f.published.id, "wait", f.actor);
+    expect(view.configuration).toMatchObject({ kind: "connected_tool", inputSchemaHash: nativeSha256(schema), values: { query: "PRIVATE before", enabled: true, count: 3 } });
+    expect(view.toolAccess).toMatchObject({ connectionName: "Contact system", operationName: "Find contacts" });
+    expect(JSON.stringify(view)).not.toContain("PRIVATE credential");
+    const reads = await Promise.allSettled(Array.from({ length: 4 }, () => withExperienceAdmission((signal, remainingMs) =>
+      f.service.review(f.companyId, f.published.id, "wait", f.actor, { signal, remainingMs }))));
+    expect(reads.map(result => result.status)).toEqual(["fulfilled", "fulfilled", "fulfilled", "fulfilled"]);
+
+    const change = { kind: "connected_tool" as const, inputSchemaHash: nativeSha256(schema), input: { query: " PRIVATE after ", enabled: false } };
+    const input = workflowDraftStepCommandSchema.parse({ requestId: randomUUID(), expectedWorkflowId: view.workflowId, expectedDraftRevisionId: view.draftRevisionId,
+      expectedPublishedRevisionId: view.publishedRevisionId, expectedUpdatedAt: view.updatedAt, expectedNodeId: "wait", expectedNodeType: "connector.action", name: view.name, configuration: change });
+    for (const values of [{ query: "", count: 2 }, { query: "Valid", count: 11 }, { query: "Valid", unreviewed: "PRIVATE" }])
+      await expect(f.service.save(f.companyId, f.published.id, { ...input, configuration: { ...change, input: values } }, f.actor)).rejects.toMatchObject({ status: 409 });
+    await expect(f.service.save(f.companyId, f.published.id, { ...input, configuration: { ...change, inputSchemaHash: "a".repeat(64) } }, f.actor)).rejects.toMatchObject({ status: 409 });
+    await db.update(toolCatalogEntries).set({ inputSchema: { ...schema, required: [] } }).where(eq(toolCatalogEntries.id, entry.id));
+    expect((await f.service.review(f.companyId, f.published.id, "wait", f.actor)).configuration).toEqual({ kind: "advanced" });
+    await expect(f.service.save(f.companyId, f.published.id, input, f.actor)).rejects.toMatchObject({ status: 409 });
+    await db.update(toolCatalogEntries).set({ inputSchema: schema }).where(eq(toolCatalogEntries.id, entry.id));
+    await db.update(toolConnections).set({ enabled: false }).where(eq(toolConnections.id, connection.id));
+    await expect(f.service.save(f.companyId, f.published.id, input, f.actor)).rejects.toMatchObject({ status: 409 });
+    await db.update(toolConnections).set({ enabled: true }).where(eq(toolConnections.id, connection.id));
+    const [saved, duplicate] = await Promise.all([f.service.save(f.companyId, f.published.id, input, f.actor), f.service.save(f.companyId, f.published.id, input, f.actor)]);
+    expect(duplicate).toEqual(saved);
+    const after = (await owner.getDetail(f.companyId, f.published.id, f.actor))!;
+    expect(after.publishedRevision).toEqual(before.publishedRevision); expect(after.draftRevision!.graph).toEqual({ ...graph, nodes: graph.nodes.map(node => node.id === "wait" ? { ...node, config: { ...node.config as Record<string, unknown>, input: change.input } } : node) });
+    for (const table of [toolInvocations, toolActionRequests, workflowRuns, heartbeatRuns, issues])
+      expect(await db.select().from(table).where(eq(table.companyId, f.companyId))).toEqual([]);
+    const events = await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.companyId), eq(activityLog.action, "workflow.customer_draft_step_saved")));
+    expect(events).toHaveLength(1); expect(JSON.stringify(events.map(event => event.details))).not.toMatch(/PRIVATE|query|inputSchemaHash|connectionId/);
   });
   it("changes a selected condition through the Original language while retaining both active branches and the exact receipt", async () => {
     const f = await fixture(), owner = workflowService(db), human = { principal: { type: "user" as const, userId: f.userId } };

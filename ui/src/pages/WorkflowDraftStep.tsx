@@ -1,6 +1,7 @@
+import { WorkflowToolFields, workflowToolFormInitial, workflowToolFormInput, type WorkflowToolFormValues } from "../components/WorkflowToolFields";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { workflowDraftStepCommandSchema, workflowEditableNodeIdSchema, type WorkflowDraftStepReview,
+import { workflowDraftStepCommandSchema, workflowEditableNodeIdSchema, workflowToolArgumentErrors, type WorkflowDraftStepReview,
   type WorkflowDraftStepCommand, type WorkflowDraftStepReceipt } from "@paperclipai/shared";
 import { useParams, Link } from "../lib/router";
 import { useTranslation } from "../i18n";
@@ -27,11 +28,11 @@ export function WorkflowDraftStepEntry() {
   return <WorkflowDraftStep key={JSON.stringify([selectedCompanyId, identity.userId, workflowId, nodeId])}
     company={selectedCompanyId} principal={identity.userId} workflow={workflowId} node={nodeId!} />;
 }
-type Form = { source: string; name: string; duration: string; summary: string; consequence: string; objective: string; agentId: string;
+type Form = { toolValues: WorkflowToolFormValues; source: string; name: string; duration: string; summary: string; consequence: string; objective: string; agentId: string;
   conditionSource: "trigger" | "variables" | "steps"; path: string; operator: "===" | "!==" | ">" | ">=" | "<" | "<=";
   valueType: "string" | "number" | "boolean" | "null"; value: string };
-type Field = "name" | "duration" | "summary" | "consequence" | "objective" | "agentId" | "path" | "value";
-const sourceKey = (view: WorkflowDraftStepReview) => JSON.stringify([view.draftRevisionId, view.updatedAt, view.nodeId, view.nodeType]);
+type Field = `tool_${string}` | "toolInputs" | "name" | "duration" | "summary" | "consequence" | "objective" | "agentId" | "path" | "value";
+const sourceKey = (view: WorkflowDraftStepReview) => JSON.stringify([view.draftRevisionId, view.updatedAt, view.nodeId, view.nodeType, view.configuration.kind, view.configuration.kind === "connected_tool" ? view.configuration.inputSchemaHash : null]);
 
 export function WorkflowDraftStep({ company, principal, workflow, node }: { company: string; principal: string; workflow: string; node: string }) {
   const { t } = useTranslation("experience"), client = useQueryClient(), { selectedCompanyId } = useCompany(), authority = useV9PrivateReadAuthority(principal, true);
@@ -51,7 +52,7 @@ export function WorkflowDraftStep({ company, principal, workflow, node }: { comp
     }) });
   const state = client.getQueryState(key), fresh = current() && query.isSuccess && !query.isFetching && !state?.isInvalidated;
   const view = fresh ? query.data : null, locator = useWorkflowRequestLocator(company, principal, workflow, "draft_edit", !!view);
-  const initialize = (value: WorkflowDraftStepReview) => setForm({ source: sourceKey(value), name: value.name,
+  const initialize = (value: WorkflowDraftStepReview) => setForm({ toolValues: value.configuration.kind === "connected_tool" ? workflowToolFormInitial(value.configuration.fields, value.configuration.values) : {}, source: sourceKey(value), name: value.name,
     duration: value.configuration.kind === "wait" ? String(value.configuration.durationSeconds) : "",
     summary: value.configuration.kind === "approval" ? value.configuration.summary : "",
     consequence: value.configuration.kind === "approval" ? value.configuration.consequence : "",
@@ -91,26 +92,39 @@ export function WorkflowDraftStep({ company, principal, workflow, node }: { comp
   const heading = useExperienceHeading(`${company}:${principal}:${workflow}:${node}`, !fresh, query.isError);
   useEffect(() => { if ((invalid || mutation.isError) && current() && !document.activeElement?.closest('a[href],button,[role="dialog"]')) error.current?.focus(); }, [invalid, mutation.isError]);
   useEffect(() => { if (Object.keys(fieldErrors).length && current()) error.current?.focus(); }, [fieldErrors]);
+  const updateToolValues = (toolValues: WorkflowToolFormValues) => {
+    if (!form) return;
+    setForm({ ...form, toolValues });
+    const errors = Object.fromEntries(Object.entries(fieldErrors).filter(([key]) => !key.startsWith("tool_") || toolValues[key.slice(5)]?.include));
+    setFieldErrors(errors); if (!Object.keys(errors).length) setInvalid(false);
+  };
   function submit(event: FormEvent) {
     event.preventDefault();
     if (!view || !form || sourceKey(view) !== form.source || !locator.ready || locator.failed || locator.blockedBy || mutation.isPending || !current()) return;
     if (view.configuration.kind === "agent_task" && form.agentId && !view.agentSelection?.choices.some(choice => choice.agentId === form.agentId)) {
       setFieldErrors({ agentId: t("workflowDraftStep.errors.agentId") }); setInvalid(true); return;
     }
+    const toolReview = view.configuration.kind === "connected_tool" ? view.configuration : null;
+    const toolInput = toolReview ? workflowToolFormInput(toolReview.fields, form.toolValues) : {};
+    const toolErrors = toolReview ? workflowToolArgumentErrors(toolReview.fields, toolInput) : [];
     const parsed = workflowDraftStepCommandSchema.safeParse({ requestId: crypto.randomUUID(), expectedWorkflowId: workflow,
       expectedDraftRevisionId: view.draftRevisionId, expectedPublishedRevisionId: view.publishedRevisionId, expectedUpdatedAt: view.updatedAt,
       expectedNodeId: node, expectedNodeType: view.nodeType, name: form.name,
-      configuration: view.configuration.kind === "wait" ? { kind: "wait", durationSeconds: Number(form.duration) }
+      configuration: view.configuration.kind === "connected_tool" ? { kind: "connected_tool", inputSchemaHash: view.configuration.inputSchemaHash, input: toolInput }
+        : view.configuration.kind === "wait" ? { kind: "wait", durationSeconds: Number(form.duration) }
         : view.configuration.kind === "approval" ? { kind: "approval", summary: form.summary, consequence: form.consequence }
         : view.configuration.kind === "agent_task" ? { kind: "agent_task", objective: form.objective, ...(form.agentId ? { agentId: form.agentId } : {}) }
         : view.configuration.kind === "condition" ? { kind: "condition", source: form.conditionSource, path: form.path.split("\n"), operator: form.operator,
           value: form.valueType === "null" ? null : form.valueType === "boolean" ? form.value === "true" : form.valueType === "number" ? form.value.trim() ? Number(form.value) : NaN : form.value }
         : { kind: "keep" } });
-    if (!parsed.success) {
+    if (!parsed.success || toolErrors.length) {
       const errors: Partial<Record<Field, string>> = {};
-      for (const issue of parsed.error.issues) {
-        const field = issue.path[0] === "name" ? "name" : issue.path[1] === "durationSeconds" ? "duration" : issue.path[1];
-        if (["name", "duration", "summary", "consequence", "objective", "agentId", "path", "value"].includes(String(field))) errors[field as Field] = t(`workflowDraftStep.errors.${String(field)}`);
+      for (const name of toolErrors) errors[`tool_${name}`] = t("workflowDraftFlow.tool.valueError", { name: toolReview?.fields.find(field => field.name === name)?.label ?? name });
+      for (const issue of parsed.success ? [] : parsed.error.issues) {
+        const field = issue.path[0] === "name" ? "name" : issue.path[1] === "input" ? typeof issue.path[2] === "string" ? `tool_${issue.path[2]}` : "toolInputs" : issue.path[1] === "durationSeconds" ? "duration" : issue.path[1];
+        if (String(field).startsWith("tool_")) errors[field as Field] = t("workflowDraftFlow.tool.valueError", { name: toolReview?.fields.find(value => `tool_${value.name}` === field)?.label ?? String(field).slice(5) });
+        else if (field === "toolInputs") errors.toolInputs = t("workflowDraftFlow.tool.sizeError");
+        else if (["name", "duration", "summary", "consequence", "objective", "agentId", "path", "value"].includes(String(field))) errors[field as Field] = t(`workflowDraftStep.errors.${String(field)}`);
       }
       setFieldErrors(errors); setInvalid(true); return;
     }
@@ -179,12 +193,19 @@ export function WorkflowDraftStep({ company, principal, workflow, node }: { comp
                 : <Input {...fieldProps("value")} className="min-h-11" type={form.valueType === "number" ? "number" : "text"} step="any" maxLength={1000} value={form.value} onChange={event => setForm({ ...form, value: event.target.value })} />}{fieldError("value")}</label>}
             {form.valueType === "null" && fieldError("value")}
           </section>}
+          {view.configuration.kind === "connected_tool" && <section className="space-y-4" aria-label={t("workflowDraftFlow.tool.inputs")}>
+            {view.toolAccess && <div className="space-y-2"><p>{view.toolAccess.connectionName}: {view.toolAccess.operationName}</p><p>{t(`workflowConnectionAccess.states.${view.toolAccess.state}`)}</p>
+              {view.toolAccess.previewHref && <Link className="inline-flex min-h-11 items-center underline" to={view.toolAccess.previewHref}>{t("workflowConnectionAccess.review", { name: view.toolAccess.connectionName })}</Link>}</div>}
+            <p>{t("workflowDraftStep.tool.boundary")}</p>
+            <WorkflowToolFields idPrefix="draft-step" fields={view.configuration.fields} values={form.toolValues} errors={fieldErrors} onChange={updateToolValues} />
+            <Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${workflow}/advanced?${new URLSearchParams({ node })}`}>{t("workflowEditDraft")}</Link>
+          </section>}
           {view.configuration.kind === "advanced" && <div className="space-y-2"><p>{t("workflowDraftStep.advanced")}</p>
             <Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${workflow}/advanced?${new URLSearchParams({ node })}`}>{t("workflowEditDraft")}</Link>
           </div>}
-          <div className="flex flex-wrap items-center justify-between gap-3">
-            <Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${workflow}?revision=draft`}>{t("workflowDraftStep.cancel")}</Link>
-            <Button type="submit" className="min-h-11" disabled={!locator.ready || !!locator.blockedBy || locator.failed || stale || mutation.isPending}>{t(mutation.isPending ? "workflowDraftStep.saving" : "workflowDraftStep.save")}</Button>
+          <div className="grid grid-cols-2 items-center gap-3">
+            <Link className="inline-flex min-h-11 min-w-0 max-w-full items-center justify-self-start underline" to={`/workflows/${workflow}?revision=draft`}>{t("workflowDraftStep.cancel")}</Link>
+            <Button type="submit" className="h-auto min-h-11 min-w-0 max-w-full justify-self-end whitespace-normal" disabled={!locator.ready || !!locator.blockedBy || locator.failed || stale || mutation.isPending}>{t(mutation.isPending ? "workflowDraftStep.saving" : "workflowDraftStep.save")}</Button>
           </div>
         </fieldset>
       </form>}

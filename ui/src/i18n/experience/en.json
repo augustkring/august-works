@@ -2252,6 +2252,7 @@
     "recordedStatus": "Recorded run status: {{status}}"
   },
   "workflowDraftStep": {
+    "tool": { "boundary": "Saving updates only this draft step’s input values. It runs no operation, changes no connection or access, and leaves publishing and testing as separate decisions." },
     "open": "Edit this draft step",
     "heading": "Edit a draft step",
     "boundary": "Changes are saved to the draft. The active version keeps its existing steps. Test and review the changed draft before publishing it.",

@@ -40,11 +40,24 @@ it("accepts only the Original local permission route and suppresses hidden conne
 });
 
 it("binds scalar tool input review to the connected-tool actor and its declared input semantics", () => {
-  const inputReview = { kind: "connected_tool", fields: [{ name: "query", label: "Search", help: null, type: "string", required: true,
+  const inputReview = { kind: "connected_tool", inputSchemaHash: "a".repeat(64), fields: [{ name: "query", label: "Search", help: null, type: "string", required: true,
     options: null, minLength: null, maxLength: null, minimum: null, maximum: null }], values: { query: " PRIVATE text " } };
-  const current = { ...step, semantics: { ...semantics, actor: "connected_tool", input: "tool_arguments" }, inputReview };
+  const toolAccess = { state: "permission_required", connectionName: "Contacts", operationName: "Find", previewHref: "/apps/10000000-0000-4000-8000-000000000001/permissions" };
+  const current = { ...step, semantics: { ...semantics, actor: "connected_tool", input: "tool_arguments" }, toolAccess, inputReview };
   expect(workflowExperienceRevisionSchema.parse({ ...revision, steps: [current] }).steps[0].inputReview).toEqual(inputReview);
+  for (const state of ["connection_disabled", "catalog_changed"])
+    expect(workflowExperienceRevisionSchema.safeParse({ ...revision, steps: [{ ...current, toolAccess: { ...toolAccess, state } }] }).success).toBe(false);
+  expect(workflowExperienceRevisionSchema.safeParse({ ...revision, steps: [{ ...current, toolAccess: undefined }] }).success).toBe(false);
   for (const change of [{ actor: "human" }, { input: "approval_material" }])
     expect(workflowExperienceRevisionSchema.safeParse({ ...revision, steps: [{ ...current, semantics: { ...current.semantics, ...change } }] }).success).toBe(false);
   expect(workflowExperienceRevisionSchema.safeParse({ ...revision, steps: [{ ...current, inputReview: { ...inputReview, values: { unknown: "PRIVATE" } } }] }).success).toBe(false);
+});
+
+it("accepts only pinned explicit scalar tool edits, keeping connection selection, mappings, defaults and grants outside that command", () => {
+  const value = { requestId: revision.id, expectedWorkflowId: revision.id, expectedDraftRevisionId: revision.id,
+    expectedPublishedRevisionId: null, expectedUpdatedAt: "2026-10-14T00:00:00.000Z", expectedNodeId: "tool", expectedNodeType: "connector.action", name: "Find contacts",
+    configuration: { kind: "connected_tool", inputSchemaHash: "a".repeat(64), input: { query: " PRIVATE literal ", enabled: false } } };
+  expect(workflowDraftStepCommandSchema.parse(value).configuration).toEqual(value.configuration);
+  for (const extra of [{ connectionId: revision.id }, { inputMapping: { query: "{{trigger.private}}" } }, { grants: ["tools:use"] }, { inputSchemaHash: "old" }])
+    expect(workflowDraftStepCommandSchema.safeParse({ ...value, configuration: { ...value.configuration, ...extra } }).success).toBe(false);
 });

@@ -21,8 +21,9 @@ type Assignment = NonNullable<WorkflowExperienceRevision["steps"][number]["assig
 export async function readWorkflowStepActors(db: Db, detail: WorkflowDetail, rawActor: AuthorizationActor) {
   return (await readWorkflowStepContext(db, detail, rawActor)).assignments;
 }
-export function readWorkflowStepContext(db: Db, detail: WorkflowDetail, rawActor: AuthorizationActor) {
-  return withExperienceAdmission(async (signal, remainingMs) => db.transaction(async raw => {
+export interface WorkflowStepReadAdmission { signal: AbortSignal; remainingMs: () => number }
+export function readWorkflowStepContext(db: Db, detail: WorkflowDetail, rawActor: AuthorizationActor, selected?: { revisionId: string; nodeId: string }, admission?: WorkflowStepReadAdmission) {
+  const read = async (signal: AbortSignal, remainingMs: () => number) => db.transaction(async raw => {
     const tx = raw as unknown as Db, companyId = detail.companyId;
     await tx.execute(sql`select set_config('statement_timeout',${`${remainingMs()}ms`},true),set_config('lock_timeout','250ms',true)`);
     await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
@@ -30,14 +31,14 @@ export function readWorkflowStepContext(db: Db, detail: WorkflowDetail, rawActor
     const references: Array<{ key: string; id: string | null }> = [];
     const toolReferences: Array<{ key: string; connectionId: string | null; entryId: string | null; version: unknown; schema: unknown; config: Record<string, unknown> }> = [];
     for (const revision of [detail.draftRevision, detail.publishedRevision]) {
-      if (!revision) continue;
+      if (!revision || selected && selected.revisionId !== revision.id) continue;
       if (revision.graph.nodes.length > 100) continue; // The flow owner marks oversized revisions unavailable.
-      for (const node of revision.graph.nodes) if (["agent.task", "agent.external"].includes(node.type)) {
+      for (const node of revision.graph.nodes) if ((!selected || selected.nodeId === node.id) && ["agent.task", "agent.external"].includes(node.type)) {
         const config = node.config as Record<string, unknown> | null;
         const id = config && typeof config === "object" && !Array.isArray(config) ? z.uuid().safeParse(config.agentId) : null;
         references.push({ key: `${revision.id}:${node.id}`, id: id?.success ? id.data : null });
       }
-      for (const node of revision.graph.nodes) if (node.type === "connector.action") {
+      for (const node of revision.graph.nodes) if ((!selected || selected.nodeId === node.id) && node.type === "connector.action") {
         const config = node.config && typeof node.config === "object" && !Array.isArray(node.config) ? node.config as Record<string, unknown> : {};
         const connectionId = z.uuid().safeParse(config.connectionId), entryId = z.uuid().safeParse(config.toolCatalogEntryId);
         toolReferences.push({ key: `${revision.id}:${node.id}`, connectionId: connectionId.success ? connectionId.data : null,
@@ -47,7 +48,9 @@ export function readWorkflowStepContext(db: Db, detail: WorkflowDetail, rawActor
     const assignments = new Map<string, Assignment>();
     const toolAccess = new Map<string, WorkflowStepToolAccess>();
     const toolInputs = new Map<string, WorkflowStepInputReview>();
-    const result = { assignments, toolAccess, toolInputs };
+    // Internal Original validation material: callers serialize only explicit DTO maps.
+    const toolInputSchemas = new Map<string, Record<string, unknown>>();
+    const result = { assignments, toolAccess, toolInputs, toolInputSchemas };
     const unavailable: WorkflowStepToolAccess = { state: "unavailable", connectionName: null, operationName: null, previewHref: null };
     // Historical/local fixtures may read the original flow, but cannot invent
     // a verified Human identity for selected-agent metadata.
@@ -86,6 +89,7 @@ export function readWorkflowStepContext(db: Db, detail: WorkflowDetail, rawActor
     async function tool(reference: typeof toolReferences[number]): Promise<WorkflowStepToolAccess> {
       signal.throwIfAborted();
       toolInputs.set(reference.key, { kind: "advanced" });
+      toolInputSchemas.delete(reference.key);
       if (!reference.connectionId || !reference.entryId) return unavailable;
       const [connection] = await tx.select().from(toolConnections)
         .where(and(eq(toolConnections.companyId, companyId), eq(toolConnections.id, reference.connectionId))).for("share");
@@ -106,8 +110,8 @@ export function readWorkflowStepContext(db: Db, detail: WorkflowDetail, rawActor
         if (!projectionChanged && connection.status === "active" && connection.enabled && entry.status === "active" &&
           entry.version === reference.version && entry.schema === reference.schema &&
           !Object.keys(reference.config).some(key => !["toolCatalogEntryId", "connectionId", "catalogVersionHash", "catalogSchemaHash", "projectedInputSchemaHash", "input"].includes(key))) {
-          const fields = workflowToolFields(schema), review = fields && workflowConnectedInputReviewSchema.safeParse({ kind: "connected_tool", fields, values: reference.config.input });
-          if (review && review.success) toolInputs.set(reference.key, review.data);
+          const fields = workflowToolFields(schema), review = fields && workflowConnectedInputReviewSchema.safeParse({ kind: "connected_tool", inputSchemaHash: reference.config.projectedInputSchemaHash, fields, values: reference.config.input });
+          if (review && review.success) { toolInputs.set(reference.key, review.data); toolInputSchemas.set(reference.key, schema); }
         }
       }
 
@@ -143,5 +147,8 @@ export function readWorkflowStepContext(db: Db, detail: WorkflowDetail, rawActor
       cause = failure.cause;
     }
     throw error;
-  }));
+  });
+  // One customer request occupies one global slot, including a selected-step
+  // read nested inside its already admitted Original draft review.
+  return admission ? read(admission.signal, admission.remainingMs) : withExperienceAdmission(read);
 }

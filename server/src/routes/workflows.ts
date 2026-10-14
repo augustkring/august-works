@@ -890,8 +890,8 @@ export function workflowRoutes(db: Db) {
   router.get("/companies/:companyId/workflows/:workflowId/experience/draft-steps/:nodeId", async (req, res) => {
     res.set("Cache-Control", "private, no-store"); currentDraftAccount(req);
     try {
-      res.json(await withExperienceAdmission(() => workflowCustomerDraftEdit(db).review(z.uuid().parse(req.params.companyId),
-        z.uuid().parse(req.params.workflowId), req.params.nodeId as string, req.actor)));
+      res.json(await withExperienceAdmission((signal, remainingMs) => workflowCustomerDraftEdit(db).review(z.uuid().parse(req.params.companyId),
+        z.uuid().parse(req.params.workflowId), req.params.nodeId as string, req.actor, { signal, remainingMs })));
     } catch (error) {
       if (error instanceof ExperienceOverloadError) throw new HttpError(503, "The current draft step is unavailable; try again"); throw error;
     }

@@ -65,3 +65,15 @@ export function workflowToolArgumentErrors(fields: WorkflowToolField[], values: 
   }
   return [...new Set(errors)];
 }
+
+export const workflowStepToolAccessSchema = z.strictObject({
+  state: z.enum(["unavailable", "connection_disabled", "catalog_changed", "permission_required", "execution_check"]),
+  connectionName: z.string().min(1).max(200).nullable(),
+  operationName: z.string().min(1).max(200).nullable(),
+  previewHref: z.string().regex(/^\/apps\/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\/permissions$/).nullable(),
+}).superRefine((value, ctx) => {
+  if (value.state === "unavailable" ? value.connectionName !== null || value.operationName !== null || value.previewHref !== null
+    : value.connectionName === null || value.operationName === null || value.previewHref === null)
+    ctx.addIssue({ code: "custom", message: "Connection visibility is inconsistent" });
+});
+export type WorkflowStepToolAccess = z.infer<typeof workflowStepToolAccessSchema>;

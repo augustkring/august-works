@@ -15,17 +15,8 @@ export const workflowStepSemanticsSchema = z.strictObject({
 });
 export type WorkflowStepSemantics = z.infer<typeof workflowStepSemanticsSchema>;
 
-export const workflowStepToolAccessSchema = z.strictObject({
-  state: z.enum(["unavailable", "connection_disabled", "catalog_changed", "permission_required", "execution_check"]),
-  connectionName: z.string().min(1).max(200).nullable(),
-  operationName: z.string().min(1).max(200).nullable(),
-  previewHref: z.string().regex(/^\/apps\/[0-9a-fA-F]{8}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{4}-[0-9a-fA-F]{12}\/permissions$/).nullable(),
-}).superRefine((value, ctx) => {
-  if (value.state === "unavailable" ? value.connectionName !== null || value.operationName !== null || value.previewHref !== null
-    : value.connectionName === null || value.operationName === null || value.previewHref === null)
-    ctx.addIssue({ code: "custom", message: "Connection visibility is inconsistent" });
-});
-export type WorkflowStepToolAccess = z.infer<typeof workflowStepToolAccessSchema>;
+import { workflowStepToolAccessSchema } from "./workflow-draft-tools.js";
+export { workflowStepToolAccessSchema, type WorkflowStepToolAccess } from "./workflow-draft-tools.js";
 
 const stepSchema = z.strictObject({
   nodeId: z.string().min(1).max(160).optional(),
@@ -70,6 +61,8 @@ const stepSchema = z.strictObject({
     const expected = input.kind === "condition" ? "condition_data" : input.kind === "wait" ? "delay" : input.kind === "agent_task" ? "task_brief" : input.kind === "connected_tool" ? "tool_arguments" : "approval_material";
     if (step.semantics?.input !== expected || input.kind === "connected_tool" && step.semantics?.actor !== "connected_tool") ctx.addIssue({ code: "custom", path: ["inputReview"], message: "Step input binding changed" });
   }
+  if (input?.kind === "connected_tool" && (!step.toolAccess || !["permission_required", "execution_check"].includes(step.toolAccess.state)))
+    ctx.addIssue({ code: "custom", path: ["inputReview"], message: "Current connection input visibility changed" });
   if (step.toolAccess && step.semantics?.actor !== "connected_tool")
     ctx.addIssue({ code: "custom", path: ["toolAccess"], message: "Connection actor binding changed" });
   if (step.assignment && step.semantics?.actor !== "selected_agent")

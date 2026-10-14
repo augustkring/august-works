@@ -1,3 +1,4 @@
+import { WorkflowToolFields, workflowToolFormInitial, workflowToolFormInput, type WorkflowToolFormValues } from "../components/WorkflowToolFields";
 import { useEffect, useRef, useState, type FormEvent } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { workflowDraftFlowCommandSchema, type WorkflowDraftFlowCommand, type WorkflowDraftFlowOperation,
@@ -29,7 +30,7 @@ type Field = "name" | "duration" | "summary" | "consequence" | "deadline" | "pat
 type Condition = Extract<WorkflowDraftFlowOperation, { kind: "append_condition" }>["condition"];
 type Form = { source: string; kind: "append_wait" | "append_approval" | "append_condition" | "append_agent_task" | "append_tool"; name: string; duration: string; summary: string; consequence: string; deadline: string; agentId: string; objective: string;
   toolId: string; toolSource: Pick<WorkflowDraftToolChoice, "connectionId" | "versionHash" | "schemaHash" | "inputSchemaHash"> | null;
-  toolValues: Record<string, { include: boolean; value: string }>;
+  toolValues: WorkflowToolFormValues;
   conditionSource: Condition["source"]; path: string; operator: Condition["operator"]; valueType: "string" | "number" | "boolean" | "null"; value: string;
   earlierNode: string; trueName: string; trueDuration: string; falseName: string; falseDuration: string };
 const sourceKey = (view: WorkflowDraftFlowReview) => JSON.stringify([view.draftRevisionId, view.updatedAt, view.steps.at(-1)?.nodeId ?? null]);
@@ -82,7 +83,7 @@ export function WorkflowDraftFlow({ company, principal, workflow }: { company: s
   const chooseTool = (id: string) => {
     if (!form) return; const choice = view?.toolSelection?.choices.find(choice => choice.entryId === id);
     setForm({ ...form, toolId: id, toolSource: choice ? { connectionId: choice.connectionId, versionHash: choice.versionHash, schemaHash: choice.schemaHash, inputSchemaHash: choice.inputSchemaHash } : null,
-      toolValues: Object.fromEntries(choice?.fields.map(field => [field.name, { include: field.required, value: "" }]) ?? []) });
+      toolValues: workflowToolFormInitial(choice?.fields ?? []) });
     setInvalid(false); setFieldErrors({});
   };
   function save(operation: WorkflowDraftFlowOperation) {
@@ -112,14 +113,17 @@ export function WorkflowDraftFlow({ company, principal, workflow }: { company: s
     }
     setInvalid(false); setFieldErrors({}); setSaved(null); inFlight.current = parsed.data.requestId; mutation.mutate(parsed.data);
   }
+  const updateToolValues = (toolValues: WorkflowToolFormValues) => {
+    if (!form) return;
+    setForm({ ...form, toolValues });
+    const errors = Object.fromEntries(Object.entries(fieldErrors).filter(([key]) => !key.startsWith("tool_") || toolValues[key.slice(5)]?.include));
+    setFieldErrors(errors); if (!Object.keys(errors).length) setInvalid(false);
+  };
   function submit(event: FormEvent) { event.preventDefault(); if (!form) return;
     save(form.kind === "append_wait" ? { kind: "append_wait", name: form.name, durationSeconds: Number(form.duration) }
       : form.kind === "append_tool" ? { kind: "append_tool", name: form.name, entryId: form.toolId, connectionId: form.toolSource?.connectionId ?? "",
         versionHash: form.toolSource?.versionHash ?? "", schemaHash: form.toolSource?.schemaHash ?? "", inputSchemaHash: form.toolSource?.inputSchemaHash ?? "",
-        input: Object.fromEntries((selectedTool?.fields ?? []).filter(field => form.toolValues[field.name]?.include).map(field => {
-          const value = form.toolValues[field.name].value;
-          return [field.name, field.type === "string" ? value : field.type === "boolean" ? value === "true" ? true : value === "false" ? false : NaN : value.trim() ? Number(value) : NaN];
-        })) }
+        input: workflowToolFormInput(selectedTool?.fields ?? [], form.toolValues) }
       : form.kind === "append_agent_task" ? { kind: "append_agent_task", name: form.name, agentId: form.agentId, objective: form.objective }
       : form.kind === "append_condition" ? { kind: "append_condition", name: form.name,
         condition: { kind: "condition", source: form.conditionSource, path: [...(form.conditionSource === "steps" ? [form.earlierNode] : []), ...form.path.split("\n")], operator: form.operator,
@@ -208,24 +212,8 @@ export function WorkflowDraftFlow({ company, principal, workflow }: { company: s
                     <p>{t("workflowEffect")}: {t(`workflowEffects.${selectedTool.effect}`)}</p>
                     <p>{t(`workflowConnectionAccess.states.${selectedTool.access}`)}</p>
                     <Link className="inline-flex min-h-11 items-center underline" to={`/apps/${selectedTool.connectionId}/permissions`}>{t("workflowConnectionAccess.review", { name: selectedTool.connectionName })}</Link>
-                    <fieldset {...fieldProps("toolInputs")} tabIndex={-1} className="space-y-4"><legend id="draft-flow-toolInputs-label" className="font-medium">{t("workflowDraftFlow.tool.inputs")}</legend>
-                      {fieldError("toolInputs")}
-                      {selectedTool.fields.map(field => {
-                        const key: Field = `tool_${field.name}`, value = form.toolValues[field.name] ?? { include: field.required, value: "" };
-                        const update = (patch: Partial<typeof value>) => setForm({ ...form, toolValues: { ...form.toolValues, [field.name]: { ...value, ...patch } } });
-                        const props = { ...fieldProps(key), "aria-describedby": [fieldErrors[key] ? `draft-flow-${key}-error` : null, field.help ? `draft-flow-${key}-help` : null].filter(Boolean).join(" ") || undefined };
-                        return <div key={field.name} className="space-y-2">
-                          {!field.required && <label className="flex min-h-11 items-center gap-3"><input type="checkbox" checked={value.include} onChange={event => update({ include: event.target.checked })} /><span>{t("workflowDraftFlow.tool.include", { name: field.label })}</span></label>}
-                          <label className="block space-y-2"><span id={`draft-flow-${key}-label`}>{field.label}</span>
-                            {field.options || field.type === "boolean" ? <select {...props} className={selectClass} disabled={!value.include} required={field.required} value={value.value} onChange={event => update({ value: event.target.value })}>
-                              <option value="">{t("workflowDraftFlow.tool.valuePlaceholder")}</option>
-                              {(field.options ?? [true, false]).map(option => <option key={String(option)} value={String(option)}>{typeof option === "boolean" ? t(option ? "workflowDraftStep.condition.true" : "workflowDraftStep.condition.false") : String(option)}</option>)}
-                            </select> : <Input {...props} className="min-h-11" disabled={!value.include} required={field.required} type={field.type === "string" ? "text" : "number"}
-                              step={field.type === "integer" ? 1 : "any"} min={field.minimum ?? undefined} max={field.maximum ?? undefined} maxLength={Math.min(field.maxLength ?? 4000, 4000)} value={value.value} onChange={event => update({ value: event.target.value })} />}
-                          </label>{fieldError(key)}{field.help && <p id={`draft-flow-${key}-help`} className="text-sm text-muted-foreground">{field.help}</p>}
-                        </div>;
-                      })}
-                    </fieldset>
+                    <WorkflowToolFields idPrefix="draft-flow" fields={selectedTool.fields} values={form.toolValues} errors={fieldErrors}
+                      onChange={updateToolValues} />
                   </>}
                   <p className="text-sm text-muted-foreground">{t("workflowDraftFlow.tool.limit")}</p>
                   <Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${workflow}/advanced`}>{t("workflowEditDraft")}</Link>

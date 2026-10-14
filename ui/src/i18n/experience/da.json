@@ -2252,6 +2252,7 @@
     "recordedStatus": "Registreret kørselsstatus: {{status}}"
   },
   "workflowDraftStep": {
+    "tool": { "boundary": "Når du gemmer, opdateres kun dette kladdetrins inputværdier. Det kører ingen operation og ændrer ikke forbindelse eller adgang. Publicering og test er særskilte beslutninger." },
     "open": "Rediger dette kladdetrin",
     "heading": "Rediger et kladdetrin",
     "boundary": "Ændringer gemmes i kladden. Den aktive version beholder sine eksisterende trin. Test og gennemgå den ændrede kladde, før du publicerer den.",

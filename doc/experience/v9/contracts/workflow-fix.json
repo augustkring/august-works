@@ -32,7 +32,8 @@
       "Full current node name; complete supported wait/approval, round-trippable guided condition comparison or bounded Agent task objective and completion setting. Complex output requirements and unknown configurations remain Advanced.",
       "Other configuration stays with the selected Native Advanced editor; name-only edits preserve inputs, retries, conditions, branches and private config",
       "Original own-request save receipt is historical; publication and execution remain separate",
-      "A supported Agent task shows its current readable Agent name and a bounded list of up to 32 currently readable Native Agent choices; absence does not assert that no other Agent exists."
+      "A supported Agent task shows its current readable Agent name and a bounded list of up to 32 currently readable Native Agent choices; absence does not assert that no other Agent exists.",
+      "A current pinned scalar connector step shows the exact readable connection/operation and its Native permission link. The ordinary form edits explicit values, omits unchecked optional fields, preserves false and whitespace, and leaves the connection, catalog pins, graph, mappings, active version and execution authority unchanged. Current effective schema and Source changes refuse the save; unsupported or hidden configuration stays Advanced."
     ]
   },
   "inputs": [
@@ -105,6 +106,16 @@
       "help": "Choose a current named Agent to change only this draft assignment; no grant, runtime qualification or execution is implied",
       "validation": "UUID bound by the server to an actual same-company Agent with current Native read authority, compatible task adapter and active/idle/running status; rechecked under row locks",
       "autofillOrPrefill": "Existing Agent is preserved unless a new choice is explicit; readable current name only"
+    },
+    {
+      "id": "toolInputs",
+      "label": "Operation inputs",
+      "dataType": "Current named scalar fields and explicit optional inclusion",
+      "required": false,
+      "default": "Exact current saved values; absent optional fields remain omitted",
+      "help": "Only a current visible active pinned connector without mappings or unrepresented config is editable here. Credentials remain in Apps settings; no operation, grant, test or publication is performed.",
+      "validation": "At most 20 fields and 8192 UTF-8 bytes; complete required/type/enum/range/length and Original schema checks. Current Native revision, node type, effective schema hash and connection visibility are rechecked before mutation; unreviewed fields are refused even if additionalProperties is allowed.",
+      "autofillOrPrefill": "Current Source-bound scalar values only; memory for this account/revision/definition, no browser body persistence"
     }
   ],
   "actions": {
