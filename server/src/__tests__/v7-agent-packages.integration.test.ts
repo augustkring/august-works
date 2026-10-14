@@ -11,6 +11,7 @@ import { experienceMeasuresRoutes } from "../routes/experience-measures.js";
 import { readPackageMaintenanceAttention } from "../services/experience/maintenance-attention.js";
 import { readCoreMaintenance } from "../services/experience/core-maintenance.js";
 import * as coreMaintenance from "../services/experience/core-maintenance.js";
+import { agentPackageRoutes } from "../routes/agent-packages.js";
 import { experienceService } from "../services/experience/service.js";
 import express from "express";
 import request from "supertest";
@@ -598,6 +599,18 @@ const support = await getEmbeddedPostgresTestSupport();
       await enableStewards();
       await instanceSettingsService(db).updateExperimental({ experience_projection_v9: true, maintenance_autopilot_v9: true });
     }
+    it("retains private no-store headers on Original package reads and refused writes", async () => {
+      const app = express(); app.use(express.json());
+      app.use((req, _res, next) => { req.actor = f.actor as typeof req.actor; next(); });
+      app.use("/api", agentPackageRoutes(db)); app.use(errorHandler);
+      const responses = [
+        await request(app).get(`/api/agent-packages?expectedUserId=${f.userId}`).expect(200),
+        await request(app).get(`/api/companies/${f.home}/agent-package-installations?expectedUserId=${f.userId}`).expect(200),
+        await request(app).get(`/api/companies/${f.home}/agent-package-installations?expectedUserId=foreign-account`).expect(409),
+        await request(app).post(`/api/companies/${f.home}/agent-packages/${input.key}/install?expectedUserId=${f.userId}`).send({}).expect(400),
+      ];
+      for (const response of responses) expect(response.headers["cache-control"]).toBe("private, no-store");
+    });
     async function reviewedMaintenance(installedId: string, next: { id: string; contentHash: string }) {
       const [current] = await db.select().from(companyAgentPackageInstallations).where(eq(companyAgentPackageInstallations.id, installedId));
       return { expectedInstallationVersion: current!.version, expectedInstalledVersionId: current!.installedVersionId,

@@ -4,6 +4,9 @@ import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { beforeEach, afterEach, it, expect, vi } from "vitest";
 import { AgentPackages } from "./AgentPackages";
+import { queryKeys } from "../lib/queryKeys";
+import { v9SessionFixture } from "../hooks/v9-session.test-support";
+import "../i18n";
 vi.mock("../components/MaintenanceHistoryLink", () => ({ MaintenanceHistoryLink: () => null }));
 const f = vi.hoisted(() => ({
   userId: "owner-a",
@@ -17,7 +20,7 @@ const f = vi.hoisted(() => ({
   update: vi.fn(),
 }));
 vi.mock("@/api/companies-query", () => ({
-  useAccountIdentity: () => ({ userId: f.userId }),
+  useAccountIdentity: () => ({ userId: f.userId, settled: true, failed: false, localImplicit: false }),
 }));
 vi.mock("@/context/CompanyContext", () => ({
   useCompany: () => ({ selectedCompanyId: f.companyId }),
@@ -96,6 +99,8 @@ beforeEach(() => {
       mutations: { retry: false },
     },
   });
+  client.setQueryDefaults(queryKeys.auth.session, { gcTime: Infinity });
+  client.setQueryData(queryKeys.auth.session, v9SessionFixture(f.userId));
 });
 afterEach(async () => {
   await act(async () => root.unmount());
@@ -178,6 +183,7 @@ it("discards readiness returned after an account or company change", async () =>
   await click("Check readiness");
   f.userId = "owner-b";
   f.companyId = "company-b";
+  await act(async () => client.setQueryData(queryKeys.auth.session, v9SessionFixture(f.userId)));
   await render();
   await act(async () =>
     resolve({
@@ -193,4 +199,54 @@ it("discards readiness returned after an account or company change", async () =>
   expect(container.textContent).not.toContain("Old account readiness");
   expect(f.install).not.toHaveBeenCalled();
   expect(f.list).toHaveBeenCalledWith("company-b", "owner-b");
+});
+
+it("withdraws private setup during a current-session check and restores same-person unsent inputs without an old readiness receipt", async () => {
+  await render(); await configure(); await click("Check readiness");
+  expect(container.textContent).toContain("Optional Slack access is unavailable");
+  let resolve!: (value: unknown) => void;
+  let checking!: Promise<unknown>;
+  await act(async () => { checking = client.fetchQuery({ queryKey: queryKeys.auth.session,
+    queryFn: () => new Promise(done => { resolve = done; }), staleTime: 0 }); });
+  await flush();
+  expect(container.textContent).not.toContain("Internal Review");
+  expect(container.textContent).not.toContain("Optional Slack access is unavailable");
+  expect(container.querySelector("select")).toBeNull();
+  expect(container.querySelector("main")).toBeNull();
+  await act(async () => { resolve(v9SessionFixture(f.userId)); await checking; });
+  await flush();
+  expect(container.textContent).toContain("Configure Internal Review");
+  expect(container.querySelector("select")?.value).toBe("33333333-3333-4333-8333-333333333333");
+  expect(container.textContent).not.toContain("Optional Slack access is unavailable");
+  expect(Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Install for configuration")?.disabled).toBe(true);
+  expect(f.install).not.toHaveBeenCalled();
+});
+it("rejects a late private catalog from an earlier session and hides raw Native error text", async () => {
+  let resolve!: (value: unknown) => void;
+  const rows = await f.catalog();
+  f.catalog.mockResolvedValue([]).mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+  await render();
+  await act(async () => client.setQueryData(queryKeys.auth.session, { ...v9SessionFixture(f.userId), session: { ...v9SessionFixture(f.userId).session, id: "new-session" } }));
+  await flush(); await act(async () => resolve(rows)); await flush();
+  expect(container.textContent).not.toContain("Internal Review");
+  f.options.mockRejectedValueOnce(Error("PRIVATE-PROVIDER-ERROR credentials and customer configuration"));
+  await act(async () => client.invalidateQueries({ queryKey: ["agent-package-options"] }));
+  await flush();
+  expect(container.textContent).not.toContain("PRIVATE-PROVIDER-ERROR");
+  expect(container.querySelector('[role="alert"]')?.textContent).toContain("This request could not be confirmed");
+  expect(container.textContent).not.toContain("Company agent");
+  expect(container.querySelector("select")).toBeNull();
+  expect(f.install).not.toHaveBeenCalled();
+});
+
+it("withdraws a selected immutable version when the Original catalog no longer admits it", async () => {
+  await render(); await configure(); await click("Check readiness");
+  expect(container.textContent).toContain("Configure Internal Review");
+  f.catalog.mockResolvedValueOnce([]);
+  await act(async () => client.invalidateQueries({ queryKey: ["agent-packages"] })); await flush();
+  expect(container.textContent).not.toContain("Configure Internal Review");
+  expect(container.textContent).not.toContain("Optional Slack access is unavailable");
+  expect(container.querySelector("select")).toBeNull();
+  expect(container.querySelector('[role="alert"]')?.textContent).toContain("selected package version could not be confirmed");
+  expect(f.install).not.toHaveBeenCalled();
 });

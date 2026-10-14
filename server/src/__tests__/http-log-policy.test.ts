@@ -7,6 +7,20 @@ import {
   shouldSilenceHttpSuccessLog,
 } from "../middleware/http-log-policy.js";
 
+it("protects Original package setup and refused methods without classifying adjacent namespaces", () => {
+  for (const company of ["", "PRIVATE-company"])
+    for (const namespace of ["agent-packages", "agent-package-options", "agent-package-installations", "agent-package-evaluations", "agent-package-update-proposals"])
+      for (const suffix of ["", "/PRIVATE-record/review", "/PRIVATE-record/unknown"])
+        for (const method of ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]) {
+          const url = `/api/companies/${company}/${namespace}${suffix}?expectedUserId=PRIVATE-account`;
+          expect(isPrivateExperienceHttpRequest(method, url)).toBe(true);
+          expect(isSecretSensitiveHttpRequest(method, url)).toBe(true);
+          expect(privateExperienceLogUrl(url)).not.toContain("PRIVATE");
+        }
+  expect(isPrivateExperienceHttpRequest("POST", "/api/companies/id/agent-packages-other/id")).toBe(false);
+  expect(isPrivateExperienceHttpRequest("GET", "/api/agent-packages-other/id")).toBe(false);
+});
+
 it("protects Original private graph/run owner writes and malformed rejected routes", () => {
   for (const company of ["", "PRIVATE-company"]) {
     for (const namespace of ["workflows", "workflow-runs"]) {

@@ -2496,5 +2496,10 @@
     "why": "Du installerede pakken og har adgang til at gennemgå agentens aktuelle opsætning.",
     "consequence": "Gennemgå aktuelle afhængigheder og kvalificering i pakkeindstillingerne, før du bruger den. En gennemgang opdaterer eller aktiverer ikke pakken.",
     "evidence": "Den aktuelle installerede pakke kræver gennemgang."
-  }
+  },
+  "packageWorkspaceTitle": "Specialistpakker",
+  "packageWorkspaceUnavailable": "Din aktuelle konto kunne ikke kontrolleres. Kontrollér kontoen, før du gennemgår opsætningen.",
+  "packageWorkspaceReadOrWriteUnavailable": "Anmodningen kunne ikke bekræftes. Hent pakkens oprindelige status igen, før du foretager en ny ændring.",
+  "packageWorkspaceRefresh": "Kontrollér pakkens oprindelige status",
+  "packageWorkspaceVersionUnavailable": "Den valgte pakkeversion kunne ikke bekræftes i det aktuelle katalog. Gennemgå en tilgængelig version, før du fortsætter."
 }

@@ -2285,3 +2285,29 @@ changed or canonically suspended installations. The existing shared deadline,
 private-source partial state, eight-reader bound and global critical-card priority
 remain unchanged. Generic unknown-outcome reconciliation, component source closure
 and hosted/Human qualification are independent requirements.
+
+## ADR-63 — Native package workspace retains inputs, never a prior read's authority
+
+The existing package workspace now binds its reads, dispatch and acknowledgements
+to the Original current session. Same-person unsent setup remains in memory;
+a different principal/company remounts it. Mounted-reader query identities and
+zero cache lifetime prevent an old surface's request from answering a new one.
+Pending/failed session or Source reads withdraw private content. Selection retains
+only release locators and resolves its prose from the current Native catalog.
+Readiness receipts belong to the current authority epoch and cannot survive a
+session recheck. Existing Native permission/version/qualification checks retain
+every effect, including explicit local-operator behavior. Reading current state
+never retries an installation/update/decision. Unknown installation reconciliation
+and complete bilingual form copy remain separate open work.
+
+The shared private authority subscribes only to Original session cache events;
+unrelated query construction cannot serve as an authority notification. The
+workspace uses the existing Layout main landmark, restores a surviving Agent
+control after private rechecks and leaves active Native dialog focus alone.
+Secondary readiness checking is outside the cancel/primary footer row.
+
+All Original package HTTP namespaces, including global publication/catalog paths,
+use private/no-store responses and the existing private HTTP log purpose. Refused
+methods, malformed scopes, input/error prose and identifiers are normalized before
+logging. Actual logger canaries demonstrated the prior leak. Native Activity keeps
+its own purpose; this changes no Telemetry schema or authorization grant.

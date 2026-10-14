@@ -21,6 +21,7 @@ export function agentPackageRoutes(
 ) {
   const router = Router(),
     service = agentPackageService(db, options);
+  router.use((_req, res, next) => { res.setHeader("Cache-Control", "private, no-store"); next(); });
   function account(req: Request) {
     if (
       typeof req.query.expectedUserId === "string" &&
@@ -39,7 +40,6 @@ export function agentPackageRoutes(
   }
   router.get("/agent-packages", async (req, res) => {
     account(req);
-    res.setHeader("Cache-Control", "no-store");
     res.json(await service.catalog(req.actor));
   });
   router.post(
@@ -87,7 +87,6 @@ export function agentPackageRoutes(
     validate(specialistEvaluationSchema),
     async (req, res) => {
       const companyId = company(req);
-      res.setHeader("Cache-Control", "no-store");
       res.json(
         await evaluateSpecialistPackage(db, req.actor, companyId, req.body),
       );

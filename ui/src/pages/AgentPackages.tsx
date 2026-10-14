@@ -1,6 +1,7 @@
 import { MaintenanceHistoryLink } from "../components/MaintenanceHistoryLink";
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
 import {
   packageInstallSchema,
   type PackageCatalogView,
@@ -10,12 +11,25 @@ import {
 import { aiGovernanceApi } from "@/api/ai-governance";
 import { agentPackagesApi, packageProposalsApi } from "@/api/agent-packages";
 import { useCompany } from "@/context/CompanyContext";
-import { useAccountIdentity } from "@/api/companies-query";
+import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
+import { useV9PrivateReadAuthority } from "../hooks/useV9PrivateReadAuthority";
 import { Link } from "@/lib/router";
 import { Button } from "@/components/ui/button";
 export function AgentPackages() {
-  const { selectedCompanyId: companyId } = useCompany(),
-    { userId } = useAccountIdentity();
+  const { selectedCompanyId: companyId } = useCompany(), identity = useV9CurrentAccount(), { t } = useTranslation("experience");
+  // Keep the same person's unsent setup in memory through a session recheck;
+  // changing either principal or company remounts the whole private workspace.
+  if (!companyId) return <p role="status">{t("selectCompany")}</p>;
+  if (!identity.userId) return <p role={identity.failed ? "alert" : "status"}>{t(identity.failed ? "packageWorkspaceUnavailable" : "loading")}</p>;
+  return <AgentPackagesWorkspace key={`${companyId}:${identity.userId}`} companyId={companyId} userId={identity.userId}
+    principal={identity.localImplicit ? "local-board" : identity.userId} allowLocalImplicit={identity.localImplicit} />;
+}
+function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplicit }: {
+  companyId: string; userId: string; principal: string; allowLocalImplicit: boolean;
+}) {
+  const authority = useV9PrivateReadAuthority(principal, allowLocalImplicit), reader = useId(), { t } = useTranslation("experience");
+  const surface = useRef<HTMLElement>(null), heading = useRef<HTMLHeadingElement>(null), focused = useRef(false);
+  const restoreFocus = useRef<string | true | null>(null);
   const scope = useRef({ companyId, userId });
   scope.current = { companyId, userId };
   const [updating, setUpdating] = useState<PackageInstallationView | null>(
@@ -23,40 +37,45 @@ export function AgentPackages() {
     ),
     [material, setMaterial] = useState(false),
     [useCaseId, setUseCaseId] = useState("");
-  const [selected, setSelected] = useState<PackageCatalogView | null>(null),
+  const [selection, setSelection] = useState<Pick<PackageCatalogView, "id" | "versionId"> | null>(null),
     [updatePolicy, setUpdatePolicy] = useState<"manual" | "auto_low_risk">(
       "manual",
     ),
     [agentId, setAgentId] = useState(""),
     [pins, setPins] = useState<Record<string, string>>({}),
     [internal, setInternal] = useState(false),
-    [preview, setPreview] = useState<PackagePreview | null>(null),
+    [previewReceipt, setPreviewReceipt] = useState<{ value: PackagePreview; epoch: number } | null>(null),
     [reason, setReason] = useState("");
-  const enabled = Boolean(companyId && userId);
+  const preview = previewReceipt?.epoch === authority.epoch ? previewReceipt.value : null;
+  const setPreview = (value: PackagePreview | null) => setPreviewReceipt(value ? { value, epoch: authority.epoch } : null);
+  const enabled = authority.readReady;
   const catalog = useQuery({
-    queryKey: ["agent-packages", userId],
-    queryFn: () => agentPackagesApi.catalog(userId!),
-    enabled,
+    queryKey: ["agent-packages", userId, companyId, authority.epoch, reader],
+    queryFn: () => authority.read(() => agentPackagesApi.catalog(userId)),
+    enabled, retry: false, gcTime: 0,
   });
+  const selected = selection ? catalog.data?.find(row => row.id === selection.id && row.versionId === selection.versionId) ?? null : null;
+  const setSelected = (value: PackageCatalogView | null) => setSelection(value ? { id: value.id, versionId: value.versionId } : null);
   const options = useQuery({
-    queryKey: ["agent-package-options", userId, companyId],
-    queryFn: () => agentPackagesApi.options(companyId!, userId!),
-    enabled,
+    queryKey: ["agent-package-options", userId, companyId, authority.epoch, reader],
+    queryFn: () => authority.read(() => agentPackagesApi.options(companyId, userId)),
+    enabled, retry: false, gcTime: 0,
   });
   const useCases = useQuery({
-    queryKey: ["package-use-cases", userId, companyId],
-    queryFn: () => aiGovernanceApi.list(companyId!, userId!),
+    queryKey: ["package-use-cases", userId, companyId, authority.epoch, reader],
+    queryFn: () => authority.read(() => aiGovernanceApi.list(companyId, userId)),
     enabled: enabled && selected?.manifest.audience === "customer",
+    retry: false, gcTime: 0,
   });
   const proposals = useQuery({
-    queryKey: ["package-update-proposals", userId, companyId],
-    queryFn: () => packageProposalsApi.list(companyId!, userId!),
-    enabled,
+    queryKey: ["package-update-proposals", userId, companyId, authority.epoch, reader],
+    queryFn: () => authority.read(() => packageProposalsApi.list(companyId, userId)),
+    enabled, retry: false, gcTime: 0,
   });
   const installations = useQuery({
-    queryKey: ["agent-package-installations", userId, companyId],
-    queryFn: () => agentPackagesApi.list(companyId!, userId!),
-    enabled,
+    queryKey: ["agent-package-installations", userId, companyId, authority.epoch, reader],
+    queryFn: () => authority.read(() => agentPackagesApi.list(companyId, userId)),
+    enabled, retry: false, gcTime: 0,
   });
   useEffect(() => {
     setSelected(null);
@@ -97,7 +116,7 @@ export function AgentPackages() {
     });
   }
   const mutation = useMutation({
-    mutationFn: async (action: "preview" | "install" | "update") => {
+    mutationFn: async (action: "preview" | "install" | "update") => authority.write(async () => {
       const captured = { companyId: companyId!, userId: userId! };
       return {
         captured,
@@ -122,8 +141,10 @@ export function AgentPackages() {
                 input(),
               ),
       };
-    },
-    onSuccess: ({ captured, action, result }) => {
+    }),
+    onSuccess: (ack) => {
+      if (!authority.confirmed(ack)) return;
+      const { captured, action, result } = ack;
       if (
         captured.companyId !== scope.current.companyId ||
         captured.userId !== scope.current.userId
@@ -146,7 +167,7 @@ export function AgentPackages() {
     }: {
       row: PackageInstallationView;
       action: "activate" | "suspend" | "uninstall";
-    }) => {
+    }) => authority.write(async () => {
       const captured = { companyId: companyId!, userId: userId! };
       return {
         captured,
@@ -158,8 +179,10 @@ export function AgentPackages() {
           { expectedVersion: row.version, reason },
         ),
       };
-    },
-    onSuccess: ({ captured }) => {
+    }),
+    onSuccess: (ack) => {
+      if (!authority.confirmed(ack)) return;
+      const { captured } = ack;
       if (
         captured.companyId === scope.current.companyId &&
         captured.userId === scope.current.userId
@@ -176,7 +199,7 @@ export function AgentPackages() {
     }: {
       id: string;
       decision: "accept" | "reject";
-    }) => {
+    }) => authority.write(async () => {
       const captured = { companyId: companyId!, userId: userId! };
       await packageProposalsApi.review(
         captured.companyId,
@@ -185,8 +208,9 @@ export function AgentPackages() {
         decision,
       );
       return captured;
-    },
+    }),
     onSuccess: (captured) => {
+      if (!authority.confirmed(captured)) return;
       if (
         captured.companyId === scope.current.companyId &&
         captured.userId === scope.current.userId
@@ -205,21 +229,50 @@ export function AgentPackages() {
     installations.error ??
     mutation.error ??
     decision.error;
+  const readFailed = catalog.isError || options.isError || installations.isError || proposals.isError ||
+    selected?.manifest.audience === "customer" && useCases.isError;
+  const reading = catalog.isPending || options.isPending || installations.isPending || proposals.isPending ||
+    catalog.isFetching || options.isFetching || installations.isFetching || proposals.isFetching ||
+    selected?.manifest.audience === "customer" && (useCases.isPending || useCases.isFetching);
+  const visible = authority.readReady && !readFailed && !reading;
+  if (!visible && surface.current?.contains(document.activeElement)) restoreFocus.current = document.activeElement?.id || true;
+  useEffect(() => {
+    if (!visible) return;
+    if (document.activeElement?.closest('[role="dialog"], [role="alertdialog"]')) {
+      focused.current = true; restoreFocus.current = null; return;
+    }
+    if (!focused.current || restoreFocus.current) {
+      const target = typeof restoreFocus.current === "string" ? document.getElementById(restoreFocus.current) : null;
+      (target && surface.current?.contains(target) ? target : heading.current)?.focus();
+      focused.current = true; restoreFocus.current = null;
+    }
+  }, [visible]);
+  const refreshOriginal = async () => {
+    if (!authority.canRead()) { await authority.recheck().catch(() => {}); return; }
+    await Promise.allSettled([catalog.refetch(), options.refetch(), installations.refetch(), proposals.refetch(),
+      ...(selected?.manifest.audience === "customer" ? [useCases.refetch()] : [])]);
+  };
+  if (!visible) return <section ref={surface} className="saas-page">
+    <h1 className="saas-title">{t("packageWorkspaceTitle")}</h1>
+    <p role={authority.failed || readFailed ? "alert" : "status"}>{t(authority.failed ? "packageWorkspaceUnavailable" : readFailed ? "packageWorkspaceReadOrWriteUnavailable" : "loading")}</p>
+    {(authority.failed || readFailed) && <Button disabled={authority.rechecking || reading} onClick={() => void refreshOriginal()}>{t("packageWorkspaceRefresh")}</Button>}
+  </section>;
   return (
-    <main className="saas-page">
+    <section ref={surface} className="saas-page">
       <Link to="/agents" className="saas-link">
         Agents
       </Link>
-      <h1 className="saas-title">Specialist packages</h1>
+      <h1 ref={heading} tabIndex={-1} className="saas-title">{t("packageWorkspaceTitle")}</h1>
       <p>
         Maintained specialists use your existing company knowledge and access.
         Installing configures a role; activation requires current readiness and
         runtime checks. Model and runtime usage are billed separately.
       </p>
       {error && (
-        <p role="alert" className="saas-error">
-          {error.message}
-        </p>
+        <div className="space-y-2">
+          <p role="alert" className="saas-error">{t("packageWorkspaceReadOrWriteUnavailable")}</p>
+          <Button variant="outline" onClick={() => void refreshOriginal()}>{t("packageWorkspaceRefresh")}</Button>
+        </div>
       )}
       {(catalog.isPending || options.isPending) && (
         <p role="status">Loading available specialists…</p>
@@ -229,6 +282,7 @@ export function AgentPackages() {
           No qualified specialist releases are available in this deployment yet.
         </p>
       )}
+      {selection && !selected && <p role="alert">{t("packageWorkspaceVersionUnavailable")}</p>}
       {!selected &&
         catalog.data?.map((p) => (
           <section className="saas-section" key={p.versionId}>
@@ -265,6 +319,7 @@ export function AgentPackages() {
           <label>
             Agent
             <select
+              id={`${reader}-agent`}
               className="saas-input"
               disabled={Boolean(updating)}
               value={agentId}
@@ -437,6 +492,11 @@ export function AgentPackages() {
               ))}
             </div>
           )}
+          <div>
+            <Button variant="outline" disabled={!agentId || mutation.isPending} onClick={() => mutation.mutate("preview")}>
+              Check readiness
+            </Button>
+          </div>
           <div className="saas-row">
             <Button
               variant="outline"
@@ -449,13 +509,6 @@ export function AgentPackages() {
               Cancel
             </Button>
             <div className="flex gap-2">
-              <Button
-                variant="outline"
-                disabled={!agentId || mutation.isPending}
-                onClick={() => mutation.mutate("preview")}
-              >
-                Check readiness
-              </Button>
               <Button
                 disabled={
                   !agentId ||
@@ -615,6 +668,6 @@ export function AgentPackages() {
           </div>
         ))}
       </section>
-    </main>
+    </section>
   );
 }

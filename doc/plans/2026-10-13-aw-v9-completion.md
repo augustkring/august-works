@@ -1436,3 +1436,48 @@ no effect controls, scoped axe with zero violations and no overflow. The final
 screenshot is visually inspected. Browser projections remain explicit fixtures;
 Native software evidence does not qualify hosted automation, Humans or package
 component Source closure. Module/Source gates pass; all 70 surfaces remain pending.
+
+### Current-session Native package workspace and private HTTP purpose — 2026-10-14
+
+The existing package owner now withdraws private catalog/options/installations/
+proposals and copied readiness while current session or Source checks are pending
+or failed. Same-person unsent setup remains in memory; another company/account
+remounts it. Release selection stores locators and resolves the current Original
+catalog, so a withdrawn version's old prose never becomes a current form. Native
+current-session read/dispatch/acknowledgement fences preserve existing APIs and
+explicit local operator policy. Private errors use fixed copy and a safe Original
+read action. Reads never replay writes. The Native Layout owns the sole main;
+the readiness check moves above the same-row cancel/primary footer. Surviving
+Agent control focus returns after session recovery; Native dialogs retain focus.
+
+Five actual logger canary baselines fail: unclassified package paths disclose
+submitted text/identifiers through rejected HTTP logging. All Original package
+namespaces now use the existing content-free private-purpose classifier for all
+methods and malformed scopes. Actual Native HTTP tests confirm private/no-store
+on catalog/list reads, refused current-account reads and invalid writes (one pass,
+106 deliberately unselected, 21.53 seconds). Four initial UI cases pass; a further
+actual catalog-withdrawal case passes with no stale form, preview or install.
+The first nine-suite private-reader/logging regression passes 190 cases. After
+Source selection/focus/footer work, ten suites pass all 251 cases (26.74 seconds),
+including the 60 screen-contract checks. Existing React act warnings in shared
+fixture teardown are not represented as clean browser-console qualification.
+Actual server/UI typechecks pass; UI is checked again after selection changes.
+
+The first browser cannot resolve a root workspace import and executes no case.
+After fixing the import it times out on field selectors; cleanup's closed-context
+error also obscures the original timeout. The repeat uses actual accessible
+combobox names, without relaxing behavioral assertions, and passes (45.8 seconds).
+An artifact repeat passes (48.4 seconds): real built session withdrawal, preserved
+Agent selection and focus, rejected old readiness, one main, 390px footer centers
+within one pixel, no overflow, scoped axe zero violations, safe Source failure and
+zero installation/activation/decision dispatch. The screenshot is visually
+inspected. Catalog/preview fixtures qualify presentation/session boundaries;
+Native persistence/policy/HTTP remains independently tested, not hosted/Human proof.
+Complete bilingual form copy and lost-install-response recovery remain open.
+
+Read-only GitHub refresh confirms PR #38 is still a draft at the original 5dc6
+head and master remains merged V8 b761. GitHub lists zero environments and zero
+deployments. Actions variable/secret-name metadata returns 403 and is unavailable,
+not empty; no values are read. No staging URL or live qualification is inferred.
+The fixed checkpoint 31 broad run has passed recursive types and is still running
+its full tests. No current whole-V9 aggregate or PR-ready claim is made.

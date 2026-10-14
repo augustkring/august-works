@@ -12,6 +12,11 @@ import {
 
 describe("V9 private HTTP purpose", () => {
   it.each([
+    ["GET", "/api/agent-packages/private-record?expectedUserId=private-principal"],
+    ["POST", "/api/companies/private-company/agent-packages/private-record/install?expectedUserId=private-principal"],
+    ["PATCH", "/api/companies//agent-package-update-proposals/private-record/review?expectedUserId=private-principal"],
+    ["GET", "/api/companies/private-company/agent-package-options?expectedUserId=private-principal"],
+    ["GET", "/api/companies/private-company/agent-package-installations?expectedUserId=private-principal"],
     ["PATCH", "/api/companies/private-company/workflows/private-record/draft?expectedUserId=private-principal"],
     ["POST", "/api/companies/private-company/workflows/private-record/publish?expectedUserId=private-principal"],
     ["PUT", "/api/companies//workflows/private-record/unknown?expectedUserId=private-principal"],

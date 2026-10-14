@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useSyncExternalStore } from "react";
-import { useQueryClient } from "@tanstack/react-query";
+import { hashKey, useQueryClient } from "@tanstack/react-query";
 import { hasCurrentV9Session, useV9CurrentAccount } from "./useV9CurrentAccount";
 import { queryKeys } from "../lib/queryKeys";
 
@@ -8,7 +8,11 @@ import { queryKeys } from "../lib/queryKeys";
  * data; it grants no company or platform-operator permission. */
 export function useV9PrivateReadAuthority(principal: string, allowLocalImplicit = false) {
   const identity = useV9CurrentAccount(), client = useQueryClient();
-  const subscribe = useCallback((changed: () => void) => client.getQueryCache().subscribe(changed), [client]);
+  const subscribe = useCallback((changed: () => void) => client.getQueryCache().subscribe(event => {
+    // This authority observes the Original session only. Building an unrelated
+    // private reader during another surface's render must not notify this one.
+    if (event.query.queryHash === hashKey(queryKeys.auth.session)) changed();
+  }), [client]);
   const sessionCurrent = useSyncExternalStore(subscribe,
     () => hasCurrentV9Session(client, principal, identity.sessionId, allowLocalImplicit),
     () => false);

@@ -2496,5 +2496,10 @@
     "why": "You installed this package and can review its current Agent configuration.",
     "consequence": "Review its current dependencies and qualification in the package settings before relying on it. Reviewing does not update or activate the package.",
     "evidence": "The current installed package needs review."
-  }
+  },
+  "packageWorkspaceTitle": "Specialist packages",
+  "packageWorkspaceUnavailable": "Your current account could not be checked. Check your account before reviewing this setup.",
+  "packageWorkspaceReadOrWriteUnavailable": "This request could not be confirmed. Refresh the original package state before another change.",
+  "packageWorkspaceRefresh": "Check original package state",
+  "packageWorkspaceVersionUnavailable": "The selected package version could not be confirmed in the current catalog. Review an available version before continuing."
 }

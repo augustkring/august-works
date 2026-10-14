@@ -74,3 +74,26 @@ window. No duration or analytics collection policy is invented here. Keep the
 legacy instance preference until its migration criteria are satisfied. Afterward,
 remove the obsolete owner and its dead CSS/API branches together. V9 legacy
 retirement and the full state matrix remain open.
+
+## Native specialist package owner — 2026-10-14
+
+The retained `/agents/packages` owner is now the navigation destination for
+bounded own-installation M0 revalidation cards. Its same-person unsent setup stays
+in memory through session checks; changing principal/company remounts it. Only
+current session/catalog/options/installations/proposals are rendered, failed or
+pending reads hide retained private content, and a selected release is resolved
+from the current Original catalog rather than a copied DTO. An old readiness
+receipt cannot enable installation after a new authority epoch. Current request
+and acknowledgement fences retain explicit local-operator behavior through the
+Original Native APIs. Reading current state never replays a mutation. Generic
+error copy excludes raw Native/provider prose. The Native Layout owns the sole
+main landmark; cancel and the primary action share a mobile footer row, with the
+secondary readiness check above. Session recovery restores an existing Agent
+control and does not steal a Native dialog's focus.
+
+All package namespaces now use private, no-store responses and the existing
+content-free private HTTP log policy, including rejected methods and malformed
+scopes. The strict Native integration test and actual logger canary tests cover
+those boundaries. Full bilingual form copy, the installation unknown-response
+journey and wider package component Source closure remain open; this change does
+not establish complete legacy parity, live package qualification or retirement.
