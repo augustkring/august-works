@@ -4,6 +4,7 @@ import request from "supertest";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
+  authUsers,
   agents,
   companies,
   companyMemberships,
@@ -48,6 +49,7 @@ describePg("Workflow routes", () => {
     await db.delete(workflowRevisions);
     await db.delete(principalPermissionGrants);
     await db.delete(companyMemberships);
+    await db.delete(authUsers);
     await db.delete(agents);
     await db.delete(companies);
     await db.delete(instanceSettings);
@@ -263,13 +265,17 @@ describePg("Workflow routes", () => {
     const company = await seedCompany();
     await enableWorkflows();
     const created = await request(app(localBoard)).post(`/api/companies/${company.id}/workflows`).send({ name: "Read only" }).expect(201);
-    const userId = "workflow-private-viewer";
+    const userId = randomUUID(), now = new Date();
+    await db.insert(authUsers).values({ id: userId, name: "Workflow viewer", email: `${userId}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now });
     await db.insert(companyMemberships).values({ companyId: company.id, principalType: "user", principalId: userId, status: "active", membershipRole: "viewer" });
     await db.insert(principalPermissionGrants).values({ companyId: company.id, principalType: "user", principalId: userId, permissionKey: "workflows:read", scope: null });
     const actor: Express.Request["actor"] = { type: "board", userId, source: "session", isInstanceAdmin: false, companyIds: [company.id] };
     const http = request(app(actor));
     const url = `/api/companies/${company.id}/workflows/${created.body.id}/experience?expectedUserId=${userId}`;
     await http.get(url).expect(200).expect((response) => expect(response.body.canEdit).toBe(false));
+    await db.update(authUsers).set({ emailVerified: false }).where(eq(authUsers.id, userId));
+    await http.get(url).expect(403);
+    await db.update(authUsers).set({ emailVerified: true }).where(eq(authUsers.id, userId));
     await db.delete(principalPermissionGrants).where(eq(principalPermissionGrants.principalId, userId));
     await http.get(url).expect(403);
     await db.insert(principalPermissionGrants).values({ companyId: company.id, principalType: "user", principalId: userId, permissionKey: "workflows:read", scope: null });

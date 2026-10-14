@@ -1909,3 +1909,28 @@ objectives. New task work, grants, publication, model dispatch and execution are
 separate Native operations. The existing selected-step authority fence withdraws
 material on Agent/account/Source changes. This adds ordinary task-brief editing;
 full Agent selection, model proposals and C2/C3 qualified tests remain open.
+
+## ADR-47 — Authorize catalog resources before ranking and disclosure
+
+Date: 2026-10-14. Status: implemented; broader copy provenance remains open.
+
+The workflow capability HTTP reader previously invoked the trusted inventory
+resolver without its resource-authorization callback. Workflow read access could
+therefore reveal another creator's draft connection metadata. The runtime catalog
+also copied published workflow names from rows without the private workflow owner.
+
+Catalog disclosure now composes the Original Agent resource read, connection
+creator/manager visibility and Automation Artifact current-version/Source read
+before ranking. Actual Native company/membership/grants and final admission are
+checked; copied administrator/represented-user hints cannot borrow draft visibility.
+Current Agent/catalog identity and version metadata are re-bound under row locks.
+The HTTP catalog uses one Native analytical/memory privacy transaction and the
+existing four-request/1500ms admission budget, returns no-store and fails unavailable
+on deadline/lock pressure. The runtime catalog retains its Original execution
+permission/tool-policy checks and reads each published workflow through getDetail
+with its actual actor, under Native privacy locks. Inventory is never an execution
+or approval grant and performs no provider discovery, refresh, invocation or write.
+
+Canonical Source owners currently implemented remain authoritative. This does not
+claim complete workflow-to-Artifact/package/knowledge copy provenance, host
+qualification or complete workflow Agent/tool selection in the default editor.

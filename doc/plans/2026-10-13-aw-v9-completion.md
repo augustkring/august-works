@@ -826,3 +826,34 @@ were reclaimed from the tmpfs; the current serial follow-up passes server types.
 No application authority was weakened to accommodate either fixture or tooling
 failure. Current whole-suite checkpoint 15 remains on its earlier immutable
 Source, independently of this implementation, and cannot qualify this later code.
+
+### Resource-authorized capability metadata — 2026-10-14
+
+The Original HTTP workflow catalog omitted the inventory's authorization callback,
+and the runtime catalog appended published workflow names without reading the
+private workflow Source owner. These disclosure paths now use actual Native Agent
+read, draft-connection creator/manager visibility, current Artifact version/Source
+read and private workflow getDetail before returning metadata. Ranking happens
+after resource filtering; no execution or approval grant is created. Current Agent
+identity/name/adapter/status and tool catalog pins are checked under shared row
+locks. HTTP reads use the existing bounded admission and a single Native privacy
+transaction; overload is unavailable rather than a fabricated empty search.
+
+Native regressions prove foreign draft metadata withholding despite claimed admin,
+actual creator/manager access, permission withdrawal, public active connection
+visibility, current membership/cross-company refusal, private published workflow
+owner/foreign-reader separation and erasure. The first group passes 24 of 25 cases:
+its old workflow review fixture had membership/grants but no real verified auth
+user, violating the earlier current-reader contract. The fixture now creates the
+actual verified user and explicitly checks unverified-account refusal; production
+authority was not weakened. The four-suite follow-up passes all 38 cases before
+final metadata re-binding/budget refinements. Final current tests/types follow.
+Whole-V9 implementation, broader copy closure and live/Human evidence remain open.
+
+The final current four-suite group passes all 38 cases after metadata re-binding
+and bounded admission refinements; serial server typecheck also passes. Module
+and 70-surface source gates pass. No provider discovery/refresh/invocation, tool
+permission consumption, telemetry change, grant or external communication was
+introduced. Checkpoint 15 continues independently on earlier immutable Source;
+its old review fixture lacks the verified user fixed here and its aggregate must
+be assessed on its own result. This checkpoint is not whole-V9 PR readiness.

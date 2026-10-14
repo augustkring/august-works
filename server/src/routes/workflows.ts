@@ -36,6 +36,7 @@ import { workflowReviewBinding } from "../services/experience/workflow-review-bi
 import { workflowDraftIntentService } from "../services/experience/workflow-draft-intent.js";
 import { workflowCustomerDraftEdit } from "../services/workflows/workflow-customer-draft-edit.js";
 import { workflowCustomerDraftFlow } from "../services/workflows/workflow-customer-draft-flow.js";
+import { readWorkflowCapabilityCatalog } from "../services/workflows/workflow-capability-visibility.js";
 import { workflowRunReview } from "../services/experience/workflow-run-review.js";
 import { currentWorkflowStopRoleAllows, readCustomerWorkflowStopReceipt } from "../services/workflows/workflow-customer-stop.js";
 import { assertV5Authorization } from "../services/v5-authorization.js";
@@ -45,7 +46,6 @@ import {
   instanceSettingsService,
   issueService,
   logActivity,
-  workflowCapabilityResolverService,
   workflowDataSelectorService,
   workflowExecutorService,
   workflowNodeRegistryService,
@@ -71,7 +71,6 @@ export function workflowRoutes(db: Db) {
   const router = Router();
   const svc = workflowService(db);
   const nodeRegistry = workflowNodeRegistryService(db);
-  const capabilityResolver = workflowCapabilityResolverService(db);
   const dataSelector = workflowDataSelectorService(db);
   const executor = workflowExecutorService(db);
   const optimizerSuggestions = optimizerSuggestionService(db);
@@ -385,7 +384,8 @@ export function workflowRoutes(db: Db) {
     const companyId = req.params.companyId as string;
     await assertPermission(req, companyId, "workflows:read");
     const query = workflowCapabilitySearchQuerySchema.parse(req.query);
-    res.json(await capabilityResolver.search(companyId, query));
+    res.set("Cache-Control", "private, no-store");
+    res.json(await readWorkflowCapabilityCatalog(db, companyId, req.actor, query));
   });
 
   router.post(

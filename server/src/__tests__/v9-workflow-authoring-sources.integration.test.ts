@@ -13,6 +13,7 @@ import { workflowExecutorService } from "../services/workflows/workflow-executor
 import { lockMemoryPrivacy, purgeDerivedWorkflowMemory } from "../services/memory/memory-privacy.js";
 import { lockAnalyticalCompany } from "../services/analytical-privacy.js";
 import { workflowCustomerDraftFlow } from "../services/workflows/workflow-customer-draft-flow.js";
+import { capabilityResolverService } from "../services/capability-resolver.js";
 
 describe.sequential("Original workflow private authoring copy owner", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>;
@@ -83,6 +84,20 @@ describe.sequential("Original workflow private authoring copy owner", () => {
       await purgeDerivedWorkflowMemory(tx, f.home, [], new Date(), { workflowRevisionIds: [], artifactVersionIds: [], runIds: [origin.id] });
     });
   }
+  it("keeps private published workflow names out of another Human's runtime capability inventory", async () => {
+    const { published } = await changedAndPublished(), resolver = capabilityResolverService(db);
+    expect((await resolver.search(f.actor, f.home, "PRIVATE workflow")).map(row => row.ref)).toContain(published.id);
+    const userId = randomUUID(), now = new Date();
+    await db.insert(authUsers).values({ id: userId, name: "Other owner", email: `${userId}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now });
+    await db.insert(companyMemberships).values({ companyId: f.home, principalType: "user", principalId: userId, membershipRole: "owner", status: "active" });
+    await db.insert(principalPermissionGrants).values(["workflows:read", "workflows:run"].map(permissionKey => ({ companyId: f.home, principalType: "user", principalId: userId, permissionKey })));
+    const foreign = { type: "board" as const, source: "session" as const, userId, isInstanceAdmin: true, companyIds: [f.home] };
+    await expect(workflowService(db).getDetail(f.home, published.id, foreign)).rejects.toMatchObject({ status: 403 });
+    const inventory = await resolver.search(foreign, f.home, "PRIVATE workflow");
+    expect(inventory.map(row => row.ref)).not.toContain(published.id); expect(JSON.stringify(inventory)).not.toContain("PRIVATE workflow");
+    await eraseSource();
+    expect((await resolver.search(f.actor, f.home, "PRIVATE workflow")).map(row => row.ref)).not.toContain(published.id);
+  });
   it("retains exact source identities through Human changes and publication without exposing them in public details", async () => {
     const { created, changed, published } = await changedAndPublished();
     const [stored] = await db.select().from(workflows).where(eq(workflows.id, created.id));
