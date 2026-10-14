@@ -369,7 +369,7 @@ export function workflowService(db: Db) {
         if (performance.now() > deadline) throw forbidden("Workflow overview source review exceeded its budget");
         const status = detail.status === "active" && !detail.publishedRevisionId ? "draft" : detail.status;
         const { routineService } = await import("../routines.js");
-        const scheduled = status === "active" ? await routineService(nativeDb).nextWorkflowSchedule(companyId, workflowId) : null;
+        const scheduled = status === "active" ? await routineService(nativeDb, { sourceActor: authority }).nextWorkflowSchedule(companyId, workflowId) : null;
         // Recheck current native authorization/rollout after asynchronous source reads.
         await assertV5Authorization(nativeDb, authority, companyId, "workflows:read");
         const currentFlags = await instanceSettingsService(nativeDb).getExperimental();

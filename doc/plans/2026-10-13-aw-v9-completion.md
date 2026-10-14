@@ -697,3 +697,43 @@ requirements remain separate. No acceptance row is promoted to complete.
 
 The serial follow-up server typecheck passes on unchanged current application
 Source. The earlier exit-137 attempt remains recorded rather than being relabeled.
+
+### Private routine ownership and derived schedule metadata — 2026-10-14
+
+A valid Native regression demonstrates that another company viewer with a copied
+administrator flag could receive a private conversation routine's next workflow
+schedule. The first fixture attempt used the wrong cron parameter and is not a
+production reproduction; after correcting cronExpression, the recorded baseline
+returns the private date when refusal is expected. Adding only the schedule's
+existing Source helper still reproduces the leak: that helper checked provenance
+but did not bind a plain conversation's actual current reader when no analytical
+pins were present.
+
+The Original routine Source owner now binds its actual responsible verified
+Human and owned Agent×Human conversation, intersects current Native company/
+Agent/issue authority and checks Source/account again before returning. Current
+Agent JWT reads require the actual active run and responsible Human; Agent keys,
+claimed responsible-user hints, local identity and copied administrator flags
+cannot borrow private Source access. Trusted dispatch retains its saved Native
+responsible-user composition; HTTP readers continue supplying actual req.actor.
+
+The schedule read selects only required Native Source metadata and checks that
+owner, with no saved-Human fallback for passive private schedule presentation.
+Workflow operations pass their real caller. Unreadable private schedules fail
+as unavailable instead of becoming a false no-schedule assertion. Routine lists
+omit unavailable private owners while retaining authorized public routines.
+Routine update events also withdraw cached workflow review/operations data.
+The initial integrated Source/schedule/lifecycle group passes 60 cases in two
+suites; broader current verification follows. Whole V9 remains incomplete.
+
+The broader five-suite check passes 162 of 163 cases. Its sole failure is the
+existing route fixture's mocked telemetry callback after successful routine
+creation; no telemetry production code was changed. The exact route suite passes
+all 16 cases in isolation. The full combined current-source group is being
+repeated to distinguish fixture/module-state behavior from the privacy change;
+neither the failed aggregate nor the isolated pass is called a complete result.
+
+The current combined follow-up passes all 163 cases in five suites, including
+Original route and service coverage. Current focused UI/server types also pass.
+The Source, schedule, direct read/list and client invalidation changes remain
+read/authority composition; no telemetry caller or contract was changed.

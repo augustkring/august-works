@@ -122,7 +122,7 @@ export function WorkflowReview({
       typeof event.payload.action === "string" ? event.payload.action : "";
     if (
       event.type === "activity.logged" &&
-      !/workflow|agent|connection|tool|permission|membership|privacy|erased|deleted|withdraw/i.test(
+      !/workflow|routine|agent|connection|tool|permission|membership|privacy|erased|deleted|withdraw/i.test(
         action,
       ) &&
       event.payload.entityType !== "company_membership"

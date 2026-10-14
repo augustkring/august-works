@@ -414,3 +414,15 @@ it("keeps exact typed condition fields readable and hides private input material
   expect(container.textContent).not.toContain("PRIVATE false");
   expect(container.textContent).not.toContain("customer.name");
 });
+
+it("withdraws derived schedule metadata when its Native routine changes", async () => {
+  vi.mocked(workflowsApi.operations).mockResolvedValue({ companyId: data.companyId, workflowId: data.id,
+    updatedAt: data.updatedAt, publishedRevisionId: data.active!.id, status: "active",
+    nextTrigger: { state: "scheduled", at: "2099-01-01T08:00:00Z" }, recent: { runs: [], hasMore: false }, blockers: { runs: [], hasMore: false } });
+  vi.spyOn(workflowsApi, "experience").mockResolvedValue(data);
+  await mount();
+  await vi.waitFor(() => expect(container.textContent).toContain("2099"));
+  await act(async () => live({ companyId: data.companyId, type: "activity.logged",
+    payload: { action: "routine.updated", entityType: "routine", entityId: "changed-routine" } }));
+  expect(container.textContent).not.toContain("2099");
+});

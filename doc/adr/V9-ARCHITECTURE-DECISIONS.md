@@ -1844,3 +1844,24 @@ privacy locks; no invocation, install, grant or run is created.
 The full inline resource-specific permission decision, complex task/tool/artifact
 input presentation, effective Agent/runtime policy and external test qualification
 remain open; this checkpoint does not close the full V9 acceptance contract.
+
+## ADR-44 — Private routine ownership includes derived schedule metadata (2026-10-14)
+
+The Original conversation-routine Source owner must bind the actual current
+responsible verified Human and its Agent×Human conversation even when the run
+has no analytical context pins. Company membership and a claimed administrator
+flag are not that private reader. Current Agent JWT reads resolve the actual
+active responsible run; Agent keys and caller-supplied Human hints cannot borrow
+it. Native company/Agent/issue access, Source erasure and account checks repeat.
+Trusted scheduler composition remains explicit and is excluded from passive
+private schedule reads, which require a real caller.
+
+A next-run time is derived private metadata. nextWorkflowSchedule checks the
+selected routine's Original Source, and workflow operations supply their current
+Native actor. Refused private metadata produces unavailable status, never a false
+assertion that no enabled schedule exists. Routine collections filter private
+unavailable owners before enriching their triggers/runs; public rows remain
+visible. Routine changes withdraw cached workflow review and operation data.
+No schedule, trigger, dispatch, grant, queue or Source store is created by this
+read composition. Broader copied workflow/routine artifact provenance and full
+schedule authoring remain separate open requirements.

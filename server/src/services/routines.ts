@@ -70,7 +70,7 @@ import {
   syncRoutineVariablesWithTemplate,
 } from "@paperclipai/shared";
 import { trackRoutineRun } from "@paperclipai/shared/telemetry";
-import { conflict, forbidden, notFound, unauthorized, unprocessable } from "../errors.js";
+import { conflict, forbidden, notFound, unauthorized, unprocessable, HttpError } from "../errors.js";
 import { logger } from "../middleware/logger.js";
 import { getTelemetryClient } from "../telemetry.js";
 import { getConfiguredSecretProvider } from "../secrets/configured-provider.js";
@@ -2477,7 +2477,10 @@ export function routineService(
     // Read only the earliest enabled, configured native schedule. This is not
     // a promise that admission, activity gates or execution will succeed.
     nextWorkflowSchedule: async (companyId: string, workflowId: string): Promise<Date | null> => {
-      const [row] = await db.select({ at: routineTriggers.nextRunAt }).from(routineTriggers)
+      const [row] = await db.select({ at: routineTriggers.nextRunAt, source: {
+        id: routines.id, companyId: routines.companyId, originKind: routines.originKind, originId: routines.originId,
+        createdByAgentId: routines.createdByAgentId, responsibleUserId: routines.responsibleUserId,
+      } }).from(routineTriggers)
         .innerJoin(routines, and(eq(routines.companyId, routineTriggers.companyId), eq(routines.id, routineTriggers.routineId)))
         .where(and(eq(routines.companyId, companyId), eq(routines.executionTargetKind, "workflow"),
           eq(routines.executionTargetRef, workflowId), eq(routines.status, "active"),
@@ -2485,7 +2488,13 @@ export function routineService(
           eq(routineTriggers.archived, false), eq(routineTriggers.setupPending, false),
           isNotNull(routineTriggers.nextRunAt)))
         .orderBy(asc(routineTriggers.nextRunAt), asc(routineTriggers.id)).limit(1);
-      return row?.at ?? null;
+      if (!row) return null;
+      // A schedule is private derived metadata too. Read-only presentation
+      // cannot borrow the saved responsible Human used by trusted dispatch.
+      if (row.source.originKind === "conversation_draft" && !deps.sourceActor)
+        throw forbidden("The current private schedule reader is required");
+      await assertRoutineSourceAccess(db, row.source, deps.sourceActor);
+      return row.at;
     },
 
     list: async (
@@ -2496,13 +2505,17 @@ export function routineService(
       conditions.push(sql`not aw_conversation_routine_source_erased(${companyId}::uuid,${routines.id})`);
       if (filters?.projectId) conditions.push(eq(routines.projectId, filters.projectId));
 
-      const rows = await db
+      const candidates = await db
         .select()
         .from(routines)
         .where(and(...conditions))
         .orderBy(desc(routines.updatedAt), asc(routines.title));
+      const rows: typeof candidates = [];
+      for (const row of candidates) {
+        try { await assertRoutineSourceAccess(db, row, deps.sourceActor); rows.push(row); }
+        catch (error) { if (error instanceof HttpError && [403, 404].includes(error.status)) continue; throw error; }
+      }
       const routineIds = rows.map((row) => row.id);
-      for (const row of rows) await assertRoutineSourceAccess(db, row, deps.sourceActor);
       const [triggersByRoutine, latestRunByRoutine, activeIssueByRoutine, managedByRoutine] = await Promise.all([
         listTriggersForRoutineIds(companyId, routineIds),
         listLatestRunByRoutineIds(companyId, routineIds),

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { activityLog, companyMemberships, createDb, documents, heartbeatRuns, issues, memoryDeletionMarkers, principalPermissionGrants, routineDocuments, routineRevisions, routineRuns, routines, routineTriggers, toolPolicies } from "@paperclipai/db";
+import { activityLog, authUsers, companyMemberships, createDb, documents, heartbeatRuns, issues, memoryDeletionMarkers, principalPermissionGrants, routineDocuments, routineRevisions, routineRuns, routines, routineTriggers, toolPolicies } from "@paperclipai/db";
 import { createToolGatewayService } from "../services/tool-gateway.js";
 import { conversationAuthoringService } from "../services/experience/conversation-authoring.js";
 import { createRoutineTriggerSchema, createRoutineSchema } from "@paperclipai/shared";
@@ -13,6 +13,8 @@ import { issueService } from "../services/issues.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
+import { workflowService } from "../services/workflows/workflow-service.js";
+import { assertRoutineSourceAccess } from "../services/routine-source-authority.js";
 
 describe("Conversation routine drafts use the Original owner without execution authority", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>;
@@ -120,6 +122,50 @@ describe("Conversation routine drafts use the Original owner without execution a
     expect(JSON.stringify(current)).not.toContain("PRIVATE");
     await db.update(issues).set({ conversationSessionGeneration: 1 }).where(eq(issues.id, conversationId));
     expect((await read()).savedRoutines).toEqual([]);
+  });
+  it("requires the actual private routine reader before exposing a next workflow schedule, including through operations", async () => {
+    await instanceSettingsService(db).updateExperimental({ enableWorkflowsV1: true, enableWorkflowBuilderV1: true, progressive_shell_v9: true });
+    const workflowOwner = workflowService(db), human = { principal: { type: "user" as const, userId: f.userId } };
+    const workflow = await workflowOwner.create(f.home, { name: "Public schedule target" }, human);
+    const draft = await workflowOwner.updateDraft(f.home, workflow.id, { expectedRevisionId: workflow.draftRevisionId!, graph: {
+      version: 1, nodes: [{ id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} }],
+      edges: [], variables: [], settings: { totalDeadlineSeconds: 30 },
+    } }, human);
+    await workflowOwner.publish(f.home, workflow.id, { expectedDraftRevisionId: draft.draftRevisionId!, expectedPublishedRevisionId: null }, human);
+    const saved = await create(), owner = routineService(db, { sourceActor: f.actor });
+    await owner.update(saved.routineId, { baseRevisionId: saved.currentRevisionId!, status: "active",
+      executionTarget: { kind: "workflow", workflowId: workflow.id } }, { userId: f.userId });
+    const created = await owner.createTrigger(saved.routineId, createRoutineTriggerSchema.parse({ kind: "schedule", enabled: true,
+      cronExpression: "0 8 * * *", timezone: "UTC" }), { userId: f.userId });
+    const at = new Date("2099-01-01T08:00:00Z");
+    await db.update(routineTriggers).set({ nextRunAt: at }).where(eq(routineTriggers.id, created.trigger.id));
+    expect(await owner.nextWorkflowSchedule(f.home, workflow.id)).toEqual(at);
+    const otherId = `other-${randomUUID()}`, now = new Date();
+    await db.insert(authUsers).values({ id: otherId, name: "Other company viewer", email: `${otherId}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now });
+    await db.insert(companyMemberships).values({ companyId: f.home, principalType: "user", principalId: otherId, membershipRole: "viewer", status: "active" });
+    await db.insert(principalPermissionGrants).values({ companyId: f.home, principalType: "user", principalId: otherId, permissionKey: "workflows:read" });
+    const other = { type: "board" as const, source: "session" as const, userId: otherId, isInstanceAdmin: true };
+    await expect(routineService(db, { sourceActor: other }).getDetail(saved.routineId)).rejects.toMatchObject({ status: 403 });
+    const publicRoutine = await routineService(db, { sourceActor: f.actor }).create(f.home,
+      createRoutineSchema.parse({ title: "Public paused routine", status: "paused" }), { userId: f.userId });
+    expect((await routineService(db, { sourceActor: other }).list(f.home)).map(row => row.id)).toEqual([publicRoutine.id]);
+    await expect(routineService(db, { sourceActor: other }).nextWorkflowSchedule(f.home, workflow.id)).rejects.toMatchObject({ status: 403 });
+    await expect(routineService(db).nextWorkflowSchedule(f.home, workflow.id)).rejects.toMatchObject({ status: 403 });
+    await expect(workflowOwner.operations(f.home, workflow.id, other)).rejects.toMatchObject({ status: 403 });
+    expect((await workflowOwner.operations(f.home, workflow.id, f.actor)).nextTrigger).toEqual({ state: "scheduled", at: at.toISOString() });
+  });
+  it("binds private routine readers to actual verified Human and active Agent run without borrowing a claimed responsible user", async () => {
+    const saved = await create(), [routine] = await db.select().from(routines).where(eq(routines.id, saved.routineId));
+    const agent = { type: "agent" as const, source: "agent_jwt" as const, agentId: f.presence.id, companyId: f.home, runId };
+    await assertRoutineSourceAccess(db, routine!, agent);
+    await expect(assertRoutineSourceAccess(db, routine!, { ...agent, onBehalfOfUserId: "another-user" })).rejects.toMatchObject({ status: 403 });
+    await expect(assertRoutineSourceAccess(db, routine!, { ...agent, source: "agent_key", onBehalfOfUserId: f.userId })).rejects.toMatchObject({ status: 403 });
+    await expect(assertRoutineSourceAccess(db, routine!, { type: "board", source: "local_implicit", userId: f.userId, isInstanceAdmin: true })).rejects.toMatchObject({ status: 403 });
+    await db.update(heartbeatRuns).set({ status: "succeeded" }).where(eq(heartbeatRuns.id, runId));
+    await expect(assertRoutineSourceAccess(db, routine!, agent)).rejects.toMatchObject({ status: 403 });
+    await assertRoutineSourceAccess(db, routine!, f.actor);
+    await db.update(authUsers).set({ emailVerified: false }).where(eq(authUsers.id, f.userId));
+    await expect(assertRoutineSourceAccess(db, routine!, f.actor)).rejects.toMatchObject({ status: 403 });
   });
   it("rolls back the real routine and revision if current membership is withdrawn after insertion", async () => {
     await db.execute(sql`create function aw_v9_test_withdraw_routine_author() returns trigger language plpgsql as $$
