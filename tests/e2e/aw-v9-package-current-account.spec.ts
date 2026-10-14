@@ -30,8 +30,10 @@ test("package setup withdraws during session checks and requires a fresh readine
     ? { status: 503, json: { error: "PRIVATE-PROVIDER-ERROR customer configuration" } }
     : { json: { agents: [{ id: agentId, name: "PRIVATE worker" }], components: [{ type: "role_pack", resourceId,
       versionId: roleVersionId, contentHash: "a".repeat(64), name: "PRIVATE role" }] } }));
-  for (const suffix of ["agent-package-installations", "agent-package-update-proposals"])
-    await page.route(`**/api/companies/${company.id}/${suffix}?*`, route => route.fulfill({ json: [] }));
+  await page.route(`**/api/companies/${company.id}/agent-package-installations?*`, route => route.fulfill({ json: [{
+    id: randomUUID(), packageId, installedVersionId: versionId, agentId, version: 3, status: "degraded",
+    updatePolicy: "manual", readiness: { reasons: [], warnings: [] }, installedByUserId: "local-board" }] }));
+  await page.route(`**/api/companies/${company.id}/agent-package-update-proposals?*`, route => route.fulfill({ json: [] }));
   await page.route(`**/api/companies/${company.id}/agent-packages/internal-review/preview?*`, route => route.fulfill({
     json: { readiness: { status: "ready_with_warnings", reasons: [], warnings: ["PRIVATE readiness receipt"], assessmentIds: [] } } }));
   page.on("request", req => {
@@ -59,16 +61,22 @@ test("package setup withdraws during session checks and requires a fresh readine
     await expect(main.getByRole("combobox", { name: "Agent", exact: true })).toBeFocused();
     await expect(main).not.toContainText("PRIVATE readiness receipt");
     await expect(main.getByRole("button", { name: "Install for configuration", exact: true })).toBeDisabled();
+    await page.getByRole("combobox", { name: "Language", exact: true }).selectOption("da");
+    await expect(main.getByRole("heading", { name: "Specialistpakker", exact: true })).toBeVisible();
+    await expect(main.getByRole("region", { name: "Pakkeopsætning" })).toBeVisible();
+    await expect(main).toContainText("Status: Kræver opmærksomhed. Opdateringer kræver gennemgang.");
+    await expect(main.getByRole("combobox", { name: "Agent", exact: true })).toHaveValue(agentId);
+    await expect(main.getByRole("link", { name: "Forbindelser", exact: true })).toBeVisible();
     await page.setViewportSize({ width: 390, height: 844 });
-    const back = await main.getByRole("button", { name: "Cancel", exact: true }).boundingBox();
-    const primary = await main.getByRole("button", { name: "Install for configuration", exact: true }).boundingBox();
+    const back = await main.getByRole("button", { name: "Annuller", exact: true }).boundingBox();
+    const primary = await main.getByRole("button", { name: "Installer til opsætning", exact: true }).boundingBox();
     expect(Math.abs(back!.y + back!.height / 2 - primary!.y - primary!.height / 2)).toBeLessThan(1);
     await page.addScriptTag({ path: axePath });
     expect(await page.evaluate(async () => (await (window as unknown as { axe: { run(scope: string): Promise<{ violations: unknown[] }> } }).axe.run("main")).violations)).toEqual([]);
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: test.info().outputPath("package-current-account-mobile.png"), fullPage: true });
     failOptions = true; await page.reload();
-    await expect(main.getByRole("alert")).toContainText("This request could not be confirmed");
+    await expect(main.getByRole("alert")).toContainText("Anmodningen kunne ikke bekræftes");
     await expect(main).not.toContainText("PRIVATE"); expect(writes).toBe(0);
   } finally {
     hold = false; release?.();

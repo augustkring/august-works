@@ -2311,3 +2311,9 @@ use private/no-store responses and the existing private HTTP log purpose. Refuse
 methods, malformed scopes, input/error prose and identifiers are normalized before
 logging. Actual logger canaries demonstrated the prior leak. Native Activity keeps
 its own purpose; this changes no Telemetry schema or authorization grant.
+
+Fixed package form and lifecycle labels use EN/DA reference copy. Native Source
+prose remains unchanged; translating a label cannot rewrite an approved purpose,
+warning or procedure. Proposal acceptance describes a recorded review separately
+from activation. Installed action groups wrap on narrow layouts while the form's
+cancel/primary footer retains its row. Locale changes create no work or grant.

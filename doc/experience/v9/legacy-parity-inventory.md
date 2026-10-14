@@ -94,6 +94,8 @@ control and does not steal a Native dialog's focus.
 All package namespaces now use private, no-store responses and the existing
 content-free private HTTP log policy, including rejected methods and malformed
 scopes. The strict Native integration test and actual logger canary tests cover
-those boundaries. Full bilingual form copy, the installation unknown-response
-journey and wider package component Source closure remain open; this change does
+those boundaries. Fixed package form copy/status labels now cover EN/DA, including the internal
+evaluation and activation boundaries; Original descriptions, warnings and reasons
+retain their Source language. The installation unknown-response journey and wider
+package component Source closure remain open; this change does
 not establish complete legacy parity, live package qualification or retirement.

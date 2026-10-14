@@ -1,7 +1,7 @@
 import { MaintenanceHistoryLink } from "../components/MaintenanceHistoryLink";
 import { useEffect, useId, useRef, useState } from "react";
 import { useMutation, useQuery } from "@tanstack/react-query";
-import { useTranslation } from "react-i18next";
+import { Trans, useTranslation } from "react-i18next";
 import {
   packageInstallSchema,
   type PackageCatalogView,
@@ -260,13 +260,11 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
   return (
     <section ref={surface} className="saas-page">
       <Link to="/agents" className="saas-link">
-        Agents
+        {t("packageWorkspace.agents")}
       </Link>
       <h1 ref={heading} tabIndex={-1} className="saas-title">{t("packageWorkspaceTitle")}</h1>
       <p>
-        Maintained specialists use your existing company knowledge and access.
-        Installing configures a role; activation requires current readiness and
-        runtime checks. Model and runtime usage are billed separately.
+        {t("packageWorkspace.intro")}
       </p>
       {error && (
         <div className="space-y-2">
@@ -275,11 +273,11 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
         </div>
       )}
       {(catalog.isPending || options.isPending) && (
-        <p role="status">Loading available specialists…</p>
+        <p role="status">{t("packageWorkspace.loading")}</p>
       )}
       {catalog.data?.length === 0 && (
         <p>
-          No qualified specialist releases are available in this deployment yet.
+          {t("packageWorkspace.empty")}
         </p>
       )}
       {selection && !selected && <p role="alert">{t("packageWorkspaceVersionUnavailable")}</p>}
@@ -292,8 +290,7 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
             <p>{p.description}</p>
             {p.manifest.audience === "internal_test" && (
               <p>
-                Internal evaluation only. Customer outcome qualification is
-                pending.
+                {t("packageWorkspace.internalOnly")}
               </p>
             )}
             <Button
@@ -307,17 +304,17 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
                 setUseCaseId("");
               }}
             >
-              Review package
+              {t("packageWorkspace.review")}
             </Button>
           </section>
         ))}
       {selected && (
-        <section className="saas-section" aria-label="Package configuration">
-          <h2 className="saas-subtitle">Configure {selected.name}</h2>
+        <section className="saas-section" aria-label={t("packageWorkspace.configuration")}>
+          <h2 className="saas-subtitle">{t("packageWorkspace.configure", { name: selected.name })}</h2>
           <p>{selected.manifest.purpose}</p>
-          <p>Prohibited uses: {selected.manifest.prohibitedUses.join("; ")}</p>
+          <p>{t("packageWorkspace.prohibited", { uses: selected.manifest.prohibitedUses.join("; ") })}</p>
           <label>
-            Agent
+            {t("packageWorkspace.agent")}
             <select
               id={`${reader}-agent`}
               className="saas-input"
@@ -328,7 +325,7 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
                 setPreview(null);
               }}
             >
-              <option value="">Choose an existing company agent</option>
+              <option value="">{t("packageWorkspace.chooseAgent")}</option>
               {options.data?.agents.map((a) => (
                 <option key={a.id} value={a.id}>
                   {a.name}
@@ -338,7 +335,7 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
           </label>
           {updating && (
             <label>
-              Release
+              {t("packageWorkspace.release")}
               <select
                 className="saas-input"
                 value={selected.versionId}
@@ -367,7 +364,7 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
           )}
           {selected.manifest.audience === "customer" && (
             <label>
-              Reviewed purpose
+              {t("packageWorkspace.purpose")}
               <select
                 className="saas-input"
                 value={useCaseId}
@@ -376,7 +373,7 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
                   setPreview(null);
                 }}
               >
-                <option value="">Choose an approved intended purpose</option>
+                <option value="">{t("packageWorkspace.choosePurpose")}</option>
                 {useCases.data
                   ?.filter((u) => u.status === "approved")
                   .map((u) => (
@@ -388,7 +385,7 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
             </label>
           )}
           <label>
-            Update policy
+            {t("packageWorkspace.updatePolicy")}
             <select
               className="saas-input"
               value={updatePolicy}
@@ -397,16 +394,14 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
                 setPreview(null);
               }}
             >
-              <option value="manual">Review every update</option>
+              <option value="manual">{t("packageWorkspace.manualUpdates")}</option>
               <option value="auto_low_risk">
-                Configure unchanged-content updates automatically
+                {t("packageWorkspace.automaticUpdates")}
               </option>
             </select>
           </label>
           <p className="text-muted-foreground">
-            Automatic updates preserve capabilities and access. New activation
-            is required; changes to purpose, knowledge, components or
-            permissions always need review.
+            {t("packageWorkspace.updateBoundary")}
           </p>
           {selected.components
             .filter((c) =>
@@ -421,7 +416,7 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
             .map((c) => (
               <label key={c.key}>
                 {c.key}
-                {c.required ? " (required)" : " (optional)"}
+                {t(c.required ? "packageWorkspace.required" : "packageWorkspace.optional")}
                 <select
                   className="saas-input"
                   value={pins[c.key] ?? ""}
@@ -430,7 +425,7 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
                     setPreview(null);
                   }}
                 >
-                  <option value="">Choose a matching approved version</option>
+                  <option value="">{t("packageWorkspace.chooseVersion")}</option>
                   {options.data?.components
                     .filter(
                       (p) =>
@@ -445,19 +440,12 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
               </label>
             ))}
           <p>
-            Required connections:{" "}
-            {selected.manifest.requiredConnections.join(", ") || "None"}.
-            Optional connections:{" "}
-            {selected.manifest.optionalConnections.join(", ") || "None"}.
+            {t("packageWorkspace.connections", { required: selected.manifest.requiredConnections.join(", ") || t("packageWorkspace.none"),
+              optional: selected.manifest.optionalConnections.join(", ") || t("packageWorkspace.none") })}
           </p>
           <p>
-            Installation creates no connection or permission grants. The
-            selected Role Pack is pinned to this agent. Grant any needed access
-            in{" "}
-            <Link className="saas-link" to="/connections">
-              Connections
-            </Link>
-            .
+            <Trans ns="experience" i18nKey="packageWorkspace.accessBoundary"
+              components={{ connections: <Link className="saas-link" to="/connections" /> }} />
           </p>
           {selected.manifest.audience === "internal_test" && (
             <label>
@@ -466,8 +454,7 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
                 checked={internal}
                 onChange={(e) => setInternal(e.target.checked)}
               />
-              I understand this package is for internal evaluation and can only
-              read.
+              {t("packageWorkspace.internalConsent")}
             </label>
           )}
           {updating && (
@@ -477,13 +464,12 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
                 checked={material}
                 onChange={(e) => setMaterial(e.target.checked)}
               />
-              I have reviewed the purpose, policies and component changes and
-              authorize this update. Activation will be checked separately.
+              {t("packageWorkspace.updateConsent")}
             </label>
           )}
           {preview && (
             <div role="status">
-              <p>Readiness: {preview.readiness.status.replaceAll("_", " ")}</p>
+              <p>{t("packageWorkspace.readiness", { status: t(`packageWorkspace.readinessStatus.${preview.readiness.status}`, { defaultValue: t("packageWorkspace.unknown") }) })}</p>
               {[
                 ...preview.readiness.reasons,
                 ...preview.readiness.warnings,
@@ -494,7 +480,7 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
           )}
           <div>
             <Button variant="outline" disabled={!agentId || mutation.isPending} onClick={() => mutation.mutate("preview")}>
-              Check readiness
+              {t("packageWorkspace.checkReadiness")}
             </Button>
           </div>
           <div className="saas-row">
@@ -506,7 +492,7 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
                 setUpdating(null);
               }}
             >
-              Cancel
+              {t("packageWorkspace.cancel")}
             </Button>
             <div className="flex gap-2">
               <Button
@@ -520,18 +506,16 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
                 }
                 onClick={() => mutation.mutate(updating ? "update" : "install")}
               >
-                {updating
-                  ? "Save reviewed update"
-                  : "Install for configuration"}
+                {t(updating ? "packageWorkspace.saveUpdate" : "packageWorkspace.install")}
               </Button>
             </div>
           </div>
         </section>
       )}
       <section className="saas-section">
-        <h2 className="saas-subtitle">Installed packages</h2>
+        <h2 className="saas-subtitle">{t("packageWorkspace.installed")}</h2>
         <label>
-          Decision reason
+          {t("packageWorkspace.reason")}
           <input
             className="saas-input"
             value={reason}
@@ -543,10 +527,10 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
             <MaintenanceHistoryLink installationId={row.id} />
             <h3>
               {catalog.data?.find((p) => p.id === row.packageId)?.name ??
-                "Installed package"}
+                t("packageWorkspace.installedPackage")}
             </h3>
             <p>
-              Status: {row.status.replaceAll("_", " ")}. Updates require review.
+              {t("packageWorkspace.installationStatus", { status: t(`maintenanceInstallationStatus.${row.status}`, { defaultValue: t("packageWorkspace.unknown") }) })}
             </p>
             {[
               ...(row.readiness?.reasons ?? []),
@@ -555,7 +539,7 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
               <p key={i}>{r}</p>
             ))}
             {row.status !== "uninstalled" && (
-              <div className="flex gap-2">
+              <div className="flex flex-wrap gap-2">
                 {catalog.data?.some(
                   (p) =>
                     p.id === row.packageId &&
@@ -580,7 +564,7 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
                       setMaterial(false);
                     }}
                   >
-                    Review update
+                    {t("packageWorkspace.reviewUpdate")}
                   </Button>
                 )}
                 <Button
@@ -591,21 +575,21 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
                   }
                   onClick={() => decision.mutate({ row, action: "activate" })}
                 >
-                  Check and activate
+                  {t("packageWorkspace.activate")}
                 </Button>
                 <Button
                   variant="outline"
                   disabled={!reason.trim() || decision.isPending}
                   onClick={() => decision.mutate({ row, action: "suspend" })}
                 >
-                  Suspend
+                  {t("packageWorkspace.suspend")}
                 </Button>
                 <Button
                   variant="outline"
                   disabled={!reason.trim() || decision.isPending}
                   onClick={() => decision.mutate({ row, action: "uninstall" })}
                 >
-                  Uninstall package
+                  {t("packageWorkspace.uninstall")}
                 </Button>
               </div>
             )}
@@ -613,38 +597,29 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
         ))}
       </section>
       <section className="saas-section">
-        <h2 className="saas-subtitle">Proposed updates</h2>
+        <h2 className="saas-subtitle">{t("packageWorkspace.proposed")}</h2>
         {proposals.data?.map((p) => (
           <div key={p.id}>
             <p>
-              {p.reason} · {p.status}
+              {p.reason} · {t(`packageWorkspace.proposalStatus.${p.status}`, { defaultValue: t("packageWorkspace.unknown") })}
             </p>
             {p.afterManifest && (
               <div>
-                <p>Purpose: {p.afterManifest.purpose}</p>
+                <p>{t("packageWorkspace.proposalPurpose", { purpose: p.afterManifest.purpose })}</p>
                 <p>
-                  Risk envelope: {p.beforeManifest?.maximumRisk} →{" "}
-                  {p.afterManifest.maximumRisk}.{" "}
-                  {p.material
-                    ? "Material configuration review required."
-                    : "Execution policies are unchanged."}
+                  {t("packageWorkspace.risk", { before: p.beforeManifest?.maximumRisk ?? t("packageWorkspace.unknown"), after: p.afterManifest.maximumRisk })}{" "}
+                  {t(p.material ? "packageWorkspace.materialReview" : "packageWorkspace.unchangedPolicies")}
                 </p>
                 <p>
-                  Required access:{" "}
-                  {p.afterManifest.requiredConnections.join(", ") || "None"}.
-                  Prohibited uses: {p.afterManifest.prohibitedUses.join("; ")}
+                  {t("packageWorkspace.proposalAccess", { required: p.afterManifest.requiredConnections.join(", ") || t("packageWorkspace.none"), uses: p.afterManifest.prohibitedUses.join("; ") })}
                 </p>
-                <p>Limits: {p.afterManifest.knownLimitations.join("; ")}</p>
+                <p>{t("packageWorkspace.limits", { limits: p.afterManifest.knownLimitations.join("; ") })}</p>
               </div>
             )}
             {p.status === "pending" && p.proposal && (
               <div>
                 <p>
-                  Proposed version:{" "}
-                  {catalog.data?.find(
-                    (v) => v.versionId === p.proposal?.versionId,
-                  )?.version ?? "Reviewed release"}
-                  . Approval saves configuration; activation stays separate.
+                  {t("packageWorkspace.proposedVersion", { version: catalog.data?.find(v => v.versionId === p.proposal?.versionId)?.version ?? t("packageWorkspace.reviewedRelease") })}
                 </p>
                 <Button
                   disabled={proposalReview.isPending}
@@ -652,7 +627,7 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
                     proposalReview.mutate({ id: p.id, decision: "accept" })
                   }
                 >
-                  Accept evaluated update
+                  {t("packageWorkspace.acceptUpdate")}
                 </Button>
                 <Button
                   variant="outline"
@@ -661,7 +636,7 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
                     proposalReview.mutate({ id: p.id, decision: "reject" })
                   }
                 >
-                  Reject update
+                  {t("packageWorkspace.rejectUpdate")}
                 </Button>
               </div>
             )}

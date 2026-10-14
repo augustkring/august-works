@@ -1481,3 +1481,25 @@ deployments. Actions variable/secret-name metadata returns 403 and is unavailabl
 not empty; no values are read. No staging URL or live qualification is inferred.
 The fixed checkpoint 31 broad run has passed recursive types and is still running
 its full tests. No current whole-V9 aggregate or PR-ready claim is made.
+
+### Native package fixed copy and lifecycle labels cover EN/DA — 2026-10-14
+
+The retained package owner now localizes its fixed form labels, controls, consent,
+cost/access explanations, readiness and current/historical lifecycle labels.
+Original package descriptions, warnings and reasons retain their Source language.
+A reviewed proposal does not claim activation. Installed action groups wrap on
+narrow layouts; form cancel and primary remain on one row. Locale selection
+preserves unsent selections and creates no installation, decision or grant.
+
+The existing five UI cases pass after replacing fixed strings. Two additional
+Danish configuration/lifecycle cases pass (seven total, 5.38 seconds), including
+preserved selections, Native Source prose, access link and no effects. Current UI
+typecheck passes (exit 0); four-suite locale/card/screen-contract regression passes
+all 81 cases (7.65 seconds). Source inspection finds no remaining alphabetic fixed
+JSX text on this page. The built browser passes (50.2 seconds): EN configuration,
+actual session withdrawal/recovery, old readiness refusal, DA form and degraded
+installation, 390px wrapped installation actions, same-row footer centers within
+one pixel, no overflow, scoped axe zero violations, Source-failure masking and
+zero install/activation/decision calls. The final Danish screenshot is inspected.
+The explicit catalog/preview/installation fixtures remain software evidence only;
+all 70 release-evidence surfaces and lost-install-response recovery remain open.
