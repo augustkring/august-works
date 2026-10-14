@@ -1689,3 +1689,49 @@ PostgreSQL; they are not hosted/provider/Human qualification. Module, token and
 
 After the final HIRE contract/path additions, all 61 shared screen-contract cases
 pass again (0.308 seconds). Release acceptance remains pending.
+
+### Offline attention quality portfolio over reviewed conditions — 2026-10-14
+
+Adds a separate explicit offline evaluator under the existing frozen pilot
+protocol, without collecting application events or opening a provider/channel.
+Its closed bounded annotations start from canonical conditions, not emitted
+alerts. It measures reviewed useful/warranted delivery, authorized/actionable
+surfacing, confirmed misses/late delivery, repeated decision value, unresolved
+age and condition-to-actionable delivery. Unknown delivery/resolution, partial
+inventory, missing/open windows and unreviewed judgments have separate counts.
+Uncertain earlier delivery produces upper-bound latency buckets. Every declared
+journey/role/surface/assistive/consequence slice remains separate; no aggregate
+score can hide a high-consequence miss. Empty precision is null.
+
+The descriptive receipt binds canonical observation/protocol and the complete
+frozen source/artifact/configuration/schema/policy/model/tool hashes. It omits
+input labels/raw observation timestamps and always refuses population/GA
+qualification. The new blank template cannot execute without the actual frozen
+protocol/time. Existing approved study collection, Native source authorization,
+independent adjudication, sample rationale, uncertainty and retention/rights
+procedures remain necessary. File validation is not proof that a study occurred.
+The brief specifies fourteen critical journeys; no participant count is invented.
+
+The operator CLI reuses the unchanged existing owned-file reader (now exported),
+requires Unix private-file/no-follow/UID semantics, applies 256 KiB/16 MiB input
+and 1000-condition/32-attempt bounds, and exclusively creates a private 0600
+receipt. Symlinks, expanded/private fields, mismatched protocol, inconsistent
+chronology, undeclared cells, duplicate identities, readable-by-others source
+and output overwrite fail closed with fixed errors/no excerpts. No Native
+mutation, table, runtime event, session replay, external analytics, provider call
+or additional region is introduced. The operation's DPC, ADR-67, original pilot
+protocol and V9-013/085 working statuses are aligned. Production interruption/
+dismiss-reason telemetry and actual reviewed Human/provider evidence remain open.
+
+Initial mathematics passes ten synthetic cases. Canonical input identity, actual
+CLI canaries, unknown resolution and invalid blank-template cases extend the
+existing pilot/private-file regression to 43 passing cases (0.355 seconds), all
+on final source. The existing shard regression separately passes 13 cases
+(0.650 seconds). Node syntax, module and 70-Source coverage checks pass. The
+coverage workflow is parsed and its four explicit Node test files/read-only
+permissions verified using installed js-yaml; the first parser attempt could
+not resolve the unrelated yaml package and is corrected without installing a
+dependency. Existing trusted action pins are reused in that touched CI job; no
+workflow is dispatched. All 70 launch-evidence rows remain pending. Checkpoint
+40 broad types pass and its full tests are still running on their frozen hash;
+that run does not include later checkpoints 41/42.

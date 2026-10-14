@@ -96,3 +96,18 @@ deduplication, source field leakage, local file ownership/modes/symlinks and out
 overwrite refusal. Reference guidance: brief §48.1–48.3/§67.10; UX playbook primary
 outcomes and guardrails; Playbook 05 representative claim-specific evidence;
 Playbook 07 purpose, minimization, retention and rights.
+
+## Attention portfolio extension — 2026-10-14
+
+The [reviewed attention evaluator](../operations/aw-v9-attention-evaluation.md)
+uses this exact frozen protocol and its declared slices for a separate bounded
+annotation artifact. It keeps required canonical conditions in recall
+denominators even when no alert was emitted. Useful/warranted interruption,
+actionable authorized delivery, duplicates, actual action windows, unknown
+delivery/resolution and independent review are distinct. Uncertain timing is
+reported as an upper bound. Consequence slices remain separate. Only descriptive
+sample fractions/buckets are produced; population recall and GA stay unavailable.
+The blank template and synthetic tests are not observations or Human evidence.
+No event collection, session replay, Native permission grant or provider send is
+introduced. The operation's Data Processing Contract is recorded with its file
+access, retention/rights owner, purpose, minimized fields and review triggers.

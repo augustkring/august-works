@@ -99,8 +99,9 @@
     "test:aw-v4-pilot-readiness": "node --test scripts/check-aw-v4-pilot-readiness.test.mjs",
     "check:aw-v7-pilot-readiness": "node scripts/check-aw-v7-pilot-readiness.mjs",
     "test:aw-v7-pilot-readiness": "node --test scripts/check-aw-v7-pilot-readiness.test.mjs",
-    "test:aw-v9-pilot": "node --test scripts/__tests__/aw-v9-pilot.test.mjs scripts/__tests__/aw-v9-pilot-files.test.mjs",
-    "validate:aw-v9-pilot": "node scripts/validate-aw-v9-pilot.mjs"
+    "test:aw-v9-pilot": "node --test scripts/__tests__/aw-v9-pilot.test.mjs scripts/__tests__/aw-v9-pilot-files.test.mjs scripts/__tests__/aw-v9-attention.test.mjs scripts/__tests__/aw-v9-attention-files.test.mjs",
+    "validate:aw-v9-pilot": "node scripts/validate-aw-v9-pilot.mjs",
+    "validate:aw-v9-attention": "node scripts/validate-aw-v9-attention.mjs"
   },
   "devDependencies": {
     "@playwright/test": "^1.62.1",

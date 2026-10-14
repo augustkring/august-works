@@ -2409,3 +2409,25 @@ owners. There is no new table, migration or capability map. Incompatible old
 clients may ignore the additive component families; flags remain rollout only.
 Broader downstream copy erasure, hosted qualification and whole-V9 acceptance
 remain open.
+
+## ADR-67 — Attention quality is evaluated against reviewed conditions, not sent alerts
+
+The optional operator-invoked offline evaluator consumes the existing frozen
+pilot protocol and bounded private condition/delivery annotations. Required
+canonical conditions remain in the denominator when no alert was sent; empty
+precision is null. Current authorization/actionability, independent usefulness
+and warranted-interruption judgments, actual action windows and repeated
+decision value are separate. Unknown delivery, resolution, partial inventory,
+open/missing windows and unreviewed data cannot become confirmed misses or
+exact latency/age. Uncertain earlier delivery yields latency upper-bound
+buckets. Journey/role/surface/assistive/consequence slices are not pooled.
+
+Canonical annotation/protocol and complete frozen source/configuration/policy/
+model/tool hashes bind the descriptive receipt without retaining input labels
+or raw observation times. Owned regular 0600 input and exclusive/no-follow 0600
+output use the existing pilot file reader; no application event collection,
+provider call, Native action/authority, database, session replay or export is
+introduced. The Data Processing Contract requires the existing approved study
+source/retention/rights procedure. The scorer cannot certify those facts or
+enforce Native tenant authorization on supplied artifacts. Output always
+refuses population/GA claims; synthetic cases are software evidence only.

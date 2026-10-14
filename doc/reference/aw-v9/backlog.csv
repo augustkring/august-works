@@ -11,7 +11,7 @@ V9-009,2173,Home projection service,in_progress
 V9-010,2175,Home UI / accessible empty/loading/failure states,in_progress
 V9-011,2177,Needs You naming/IA migration over attention,in_progress
 V9-012,2179,unified ActionCard renderer base,in_progress
-V9-013,2181,attention precision + critical recall/miss/late/duplicate metrics + dismiss reason telemetry,not_started
+V9-013,2181,attention precision + critical recall/miss/late/duplicate metrics + dismiss reason telemetry,in_progress
 V9-014,2183,notification preference schema extension,in_progress
 V9-015,2185,quiet hours/digest scheduler,in_progress
 V9-016,2187,Slack/Teams/email delivery policy adapters,not_started
@@ -83,7 +83,7 @@ V9-081,2317,accessible auth/onboarding tests,in_progress
 V9-082,2319,charts/generative UI nonvisual alternatives,not_started
 V9-083,2321,localization key migration for V9 surfaces,in_progress
 V9-084,2323,Danish/English reference locale QA if launch scope requires,in_progress
-V9-085,2325,UX event Data Processing Contracts + allow-listed schema/redaction/leakage tests,not_started
+V9-085,2325,UX event Data Processing Contracts + allow-listed schema/redaction/leakage tests,in_progress
 V9-086,2327,Time-to-first-outcome funnel,not_started
 V9-087,2329,interruption/attention telemetry,not_started
 V9-088,2331,maintenance/support effort telemetry,not_started

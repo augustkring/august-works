@@ -10,7 +10,9 @@ on:
       - 'doc/reference/aw-v9/brief/**'
       - 'scripts/check-aw-v9-coverage.mjs'
       - 'scripts/validate-aw-v9-pilot.mjs'
+      - 'scripts/validate-aw-v9-attention.mjs'
       - 'scripts/__tests__/aw-v9-pilot*.test.mjs'
+      - 'scripts/__tests__/aw-v9-attention*.test.mjs'
       - 'scripts/__tests__/helpers/v9-pilot-fixtures.mjs'
       - 'scripts/e2e-shard.mjs'
       - 'scripts/__tests__/e2e-shard.test.mjs'
@@ -25,13 +27,17 @@ jobs:
   coverage:
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+      - uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
         with:
           node-version: '24'
       - run: node scripts/check-aw-v9-coverage.mjs
-      - name: Check frozen pilot protocol and private artifact validation
-        run: node --test scripts/__tests__/aw-v9-pilot.test.mjs scripts/__tests__/aw-v9-pilot-files.test.mjs
+      - name: Check frozen pilot and attention samples with private artifact validation
+        run: >-
+          node --test scripts/__tests__/aw-v9-pilot.test.mjs scripts/__tests__/aw-v9-pilot-files.test.mjs
+          scripts/__tests__/aw-v9-attention.test.mjs scripts/__tests__/aw-v9-attention-files.test.mjs
   components:
     name: V9 component accessibility
     runs-on: ubuntu-24.04

@@ -5,7 +5,7 @@ import { fileURLToPath } from "node:url";
 import { summarizePilot } from "../evals/aw-v9/pilot-harness.mjs";
 
 const fail = () => { throw new Error("V9 pilot validation failed; inspect the owned protocol/observation artifacts"); };
-async function readOwnedJson(path, limit) {
+export async function readOwnedJson(path, limit) {
   const handle = await open(path, constants.O_RDONLY | constants.O_NOFOLLOW);
   try {
     const info = await handle.stat();
