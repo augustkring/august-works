@@ -2355,3 +2355,10 @@ turn unknown into failure. The private/no-store middleware is restricted to
 package-owned paths; unrelated routes retain their own headers. Hosted mixed
 version/restore, wider component Source closure and Human qualification remain
 open. The supporting contract does not replace any of the 70 launch surfaces.
+
+Package readiness additionally binds the exact parsed setup and the observed
+Original catalog/options/purpose/installation source frame captured before the
+preview request. Completing any fresh relevant read invalidates the old preview,
+even with identical visible JSON. A late acknowledgement retains its original
+frame and cannot borrow the new one. This fingerprint stays in memory; Native
+installation/update admission remains authoritative.

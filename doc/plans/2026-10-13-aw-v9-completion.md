@@ -1545,3 +1545,20 @@ These are explicit transport fixtures; actual Native binding and readonly HTTP
 are independently verified in PostgreSQL, not claimed as hosted/Human proof.
 The checkpoint 31 broad test run is still separate and has no final aggregate.
 All 70 release-evidence surfaces and wider V9 scope remain pending. No PR/push.
+
+### Package readiness cannot borrow a freshly read Source frame — 2026-10-14
+
+Two actual React Query behavioral baselines reproduce stale readiness after an
+unchanged options refresh and after options settle while the preview is pending.
+The preview now carries its original exact parsed setup and catalog/options/
+purpose/installation observation frame alongside the account epoch. Fresh reads
+invalidate it even when their JSON is unchanged; an old acknowledgement cannot
+be assigned a new frame. This in-memory binding creates no new persistence,
+server authority or qualification claim. The Native owner still rechecks every
+installation/update.
+
+Both baselines fail before the fix. The entire 14-case package page suite then
+passes (5.97 seconds), current UI typecheck passes (exit 0), and both built
+current-account/EN/DA/mobile and lost-response/rollout browser cases pass
+(55.0 seconds). Existing source/qualification boundaries remain; this is not a
+current whole-V9 aggregate or PR-ready result.

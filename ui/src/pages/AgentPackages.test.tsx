@@ -345,3 +345,21 @@ it("does not clear the original locator merely because an installation transport
   expect(container.textContent).not.toContain("An installation is recorded");
   expect(f.decide).not.toHaveBeenCalled();
 });
+
+it("withdraws readiness after a fresh Original options read even when its visible JSON is unchanged", async () => {
+  await render(); await configure(); await click("Check readiness");
+  expect(Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Install for configuration")?.disabled).toBe(false);
+  await act(async () => client.invalidateQueries({ queryKey: ["agent-package-options"] })); await flush();
+  expect(container.textContent).not.toContain("Optional Slack access is unavailable");
+  expect(Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Install for configuration")?.disabled).toBe(true);
+  expect(f.install).not.toHaveBeenCalled();
+});
+it("rejects an old readiness acknowledgement when Original options finish a new read during its request", async () => {
+  let resolve!: (value: unknown) => void;
+  f.preview.mockImplementationOnce(() => new Promise(done => { resolve = done; }));
+  await render(); await configure(); await click("Check readiness");
+  await act(async () => client.invalidateQueries({ queryKey: ["agent-package-options"] })); await flush();
+  await act(async () => resolve({ readiness: { status: "ready", reasons: [], warnings: ["PRIVATE OLD READINESS"], assessmentIds: [] } })); await flush();
+  expect(container.textContent).not.toContain("PRIVATE OLD READINESS");
+  expect(Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Install for configuration")?.disabled).toBe(true);
+});

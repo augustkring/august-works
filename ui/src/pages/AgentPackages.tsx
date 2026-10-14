@@ -51,10 +51,10 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
     [agentId, setAgentId] = useState(""),
     [pins, setPins] = useState<Record<string, string>>({}),
     [internal, setInternal] = useState(false),
-    [previewReceipt, setPreviewReceipt] = useState<{ value: PackagePreview; epoch: number } | null>(null),
+    [previewReceipt, setPreviewReceipt] = useState<{ value: PackagePreview; epoch: number; setup: string } | null>(null),
     [reason, setReason] = useState("");
-  const preview = previewReceipt?.epoch === authority.epoch ? previewReceipt.value : null;
-  const setPreview = (value: PackagePreview | null) => setPreviewReceipt(value ? { value, epoch: authority.epoch } : null);
+  const setPreview = (value: PackagePreview | null, setup?: string | null) =>
+    setPreviewReceipt(value && setup ? { value, epoch: authority.epoch, setup } : null);
   const enabled = authority.readReady && !recovery.requestId && !recovery.unavailable;
   const catalog = useQuery({
     queryKey: ["agent-packages", userId, companyId, authority.epoch, reader],
@@ -122,6 +122,19 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
       aiUseCaseId: useCaseId || null,
     });
   }
+  // An unchanged payload is insufficient after an Original source has been
+  // re-read. A preview belongs to its exact input and observed source frame.
+  let setupFingerprint: string | null = null;
+  if (selected) {
+    try {
+      setupFingerprint = JSON.stringify({ input: input(), packageId: selected.id,
+        updating: updating ? { id: updating.id, version: updating.version } : null,
+        catalog: catalog.dataUpdatedAt, options: options.dataUpdatedAt,
+        installations: updating ? installations.dataUpdatedAt : null,
+        purpose: selected.manifest.audience === "customer" ? useCases.dataUpdatedAt : null });
+    } catch { /* Incomplete inputs cannot carry a reusable readiness receipt. */ }
+  }
+  const preview = previewReceipt?.epoch === authority.epoch && previewReceipt.setup === setupFingerprint ? previewReceipt.value : null;
   const mutation = useMutation({
     mutationFn: async (action: "preview" | "install" | "update") => authority.write(async () => {
       const captured = { companyId: companyId!, userId: userId! };
@@ -135,6 +148,7 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
       return {
         captured,
         action,
+        setup: setupFingerprint,
         result:
           action === "update"
             ? await agentPackagesApi.update(
@@ -165,7 +179,7 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
         captured.userId !== scope.current.userId
       )
         return;
-      if (action === "preview") setPreview(result as PackagePreview);
+      if (action === "preview") setPreview(result as PackagePreview, ack.setup);
       else {
         // Even a transport acknowledgement is reconciled through the exact
         // Original request reader before its pending locator can be cleared.
