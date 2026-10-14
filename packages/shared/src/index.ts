@@ -3389,3 +3389,5 @@ export * from "./workflow-draft-flow.js";
 export * from "./experience-metric-observations.js";
 
 export * from "./experience-process-findings.js";
+
+export * from "./experience-scenario-comparisons.js";

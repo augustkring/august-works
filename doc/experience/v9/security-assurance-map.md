@@ -224,3 +224,13 @@ withdrawal and retention expiry govern private facts/interpretations. No new
 analysis, transition, reader grant, telemetry event, copied snapshot store or
 processing purpose is created. Synthetic governance/activity/browser roles do
 not qualify hosted access or Human usability.
+
+
+Scenario cards (ADR-74) read Original conditional models/results with current
+Source/purpose/lineage qualification. Native list draft revisions never replace
+the exact published model. Company/version/run/input/definition and declared
+output/unit identity are checked. Unqualified or expired/inconclusive values
+are withheld; fresh ephemeral authority/revision reads cannot restore earlier
+private results. Visiting Insights creates no calculation, commitment, grant,
+new processing purpose or telemetry event. Synthetic approved governance and
+role/browser fixtures remain explicitly bounded software evidence.

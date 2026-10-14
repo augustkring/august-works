@@ -1996,3 +1996,30 @@ screenshot is inspected. Synthetic governance/activity/role data are software
 evidence, not real-company, provider, representative Human or compliance proof.
 All 70 launch rows and R0 remain pending; whole-V9 and final exact-head workspace
 checks are outstanding. No PR/push.
+
+### Insights displays retained Native scenario comparisons — 2026-10-14 (checkpoint 50)
+
+ADR-74/SHELL mapping extends the existing V9-044/092 work. Original scenario
+list/detail/run owners provide exact published conditional models. Latest
+proposed list versions cannot replace publication. Current qualification,
+identity/hash/declared-case/output/unit checks bind the displayed result.
+No run, publication, model, budget/target/decision or commitment is created.
+Current scope/revision reads, cancellation, refetch withdrawal and expiry
+protect private data. Unqualified, inconclusive and data-not-ready numbers
+are withheld. Nominal values, base changes, units/constraints, case changes,
+assumptions/ranges/confidence, uncertainty and unmodeled effects are inspectable
+in EN/DA; simulation diagnostics remain in the full Native scenario view.
+
+Three UI/API/directory suites pass 26 cases (8.39 seconds); UI typecheck passes
+exit 0. Actual built scenario/directory browsers pass 2 cases (56.5 seconds):
+Original metric definition/observation feeds a Human-published conditional
+scenario with retained 2/3 task outputs; UI performs GETs only and leaves the
+Native run rows unchanged. EN/DA 390px has no overflow/main axe zero; hiding
+the real Source makes its Native result GET return 403 and reload cannot
+restore the comparison. The Danish mobile screenshot is inspected. Explicit
+synthetic approved purpose/business rows and manager projection are not
+representative Human, provider, real-company or compliance qualification.
+Checkpoint 49 whole-workspace typecheck passes exit 0; it does not include this
+checkpoint. The frozen checkpoint 46 full tests remain running with the old
+runtime-skills teardown failure fixed separately in checkpoint 48. All 70
+launch rows/R0 and whole-V9/final exact-head checks remain pending. No PR/push.

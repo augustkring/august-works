@@ -2591,3 +2591,29 @@ severity are explicit in EN/DA. Native prose is business data, not translated
 into a newly manufactured finding. No new telemetry or processing purpose is
 introduced. This is partial ProcessFindingCard software support, not all V8
 cards, representative Human qualification or launch acceptance.
+
+
+## ADR-74 — Insights presents bounded conditional comparisons from Native scenarios
+
+Scenario list/detail/run GETs retain the Original model, assumptions, inputs,
+qualification and arithmetic authority. The list may return the latest proposed
+revision; the card deliberately selects the exact current published definition
+from the Native bounded detail. Company/root/version/run identities, definition
+and input hashes, declared case names/kinds, complete output keys and canonical
+unit vectors must match. Mixed, duplicate or altered evidence fails with fixed
+errors. It reads at most three published scenarios and one matching retained
+run from each Native twenty-run UUID page; this is no latest ranking or full
+inventory. Older or missing bounded versions are not silently substituted.
+
+Current account/authority/feature fences, activity revisions, cancellation,
+refetch withdrawal and expiry protect private model/result content. A version
+or run needing revalidation withholds all numbers; so do inconclusive and
+data-not-ready results. The view shows conditional nominal values, changes from
+base, declared units/constraints, case interventions or hypothetical conditions,
+Human/evidence-supported assumptions and ranges, uncertainty rationale and
+unmodeled effects. Simulation diagnostics remain in the full canonical view.
+Publication does not prove assumptions, causality or approve commitments.
+No scenario execution, publication, model call, budget/target/decision change,
+reader grant, parallel snapshot or telemetry is introduced by viewing Insights.
+This is partial ScenarioComparisonCard software, not all insight families,
+representative Human/provider validation or whole-V9 release acceptance.

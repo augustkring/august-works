@@ -2673,5 +2673,54 @@
       "medium": "Middel alvorlighed",
       "high": "Høj alvorlighed"
     }
+  },
+  "insightScenarios": {
+    "heading": "Gemte scenariesammenligninger",
+    "boundary": "Disse betingede beregninger afhænger af erklærede antagelser. Udgivelsen af en model beviser ikke dens antagelser og godkender ikke en beslutning.",
+    "unavailable": "Scenariesammenligningerne kunne ikke læses med din aktuelle adgang. Prøv igen.",
+    "empty": "Intet udgivet scenarie er tilgængeligt i dette udvalg.",
+    "expired": "Denne scenarieevidens er udløbet. Gennemgå aktuel evidens, før du bruger den.",
+    "needsReview": "Modellen eller dens input kræver ny validering. Gennemgå scenariet, før du bruger resultaterne.",
+    "noRun": "Intet resultat for denne udgivne model vises i dette udvalg.",
+    "recorded": "Beregnet {{time}} (UTC)",
+    "nominalOnly": "De nominelle værdier vises. Gennemgå hele scenariet for simuleringsdiagnostik og betingede stikprøveintervaller.",
+    "value": "Værdi: {{value}} {{unit}}",
+    "change": "Ændring fra basis: {{value}} {{unit}}",
+    "moreOutputs": "Flere output er tilgængelige i det fulde scenarie.",
+    "assumptions": "Gennemgå antagelser og effekter uden for modellen",
+    "range": "Erklæret interval: {{minimum}} til {{maximum}} {{unit}}",
+    "moreRuns": "Flere kørsler kan være tilgængelige i scenarievisningen. Dette udvalg er ikke sorteret efter dato.",
+    "moreScenarios": "Flere scenarier kan være tilgængelige uden for dette udvalg.",
+    "inspect": "Gennemgå scenarier og deres antagelser",
+    "status": {
+      "inconclusive": "Denne beregning er ikke entydig. Gennemgå evidensen, før du bruger et resultat.",
+      "data_not_ready": "De nødvendige data var ikke klar. Intet beregnet resultat vises."
+    },
+    "kind": {
+      "base": "Basis",
+      "option": "Mulighed",
+      "stress": "Belastningsscenarie"
+    },
+    "constraint": {
+      "satisfied": "Erklæret begrænsning opfyldt",
+      "violated": "Erklæret begrænsning overskredet",
+      "not_declared": "Ingen begrænsning erklæret"
+    },
+    "changes": {
+      "intervention": "Antaget indgreb: {{name}} = {{value}}",
+      "hypothetical_condition": "Hypotetisk betingelse: {{name}} = {{value}}"
+    },
+    "confidence": {
+      "human_asserted": "Menneskeligt erklæret antagelse",
+      "evidence_supported": "Evidensunderstøttet antagelse"
+    },
+    "units": {
+      "dimensionless": "uden enhed",
+      "issue": "opgaver",
+      "project": "projekter",
+      "person": "personer",
+      "customer": "kunder",
+      "second": "sekunder"
+    }
   }
 }

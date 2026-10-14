@@ -2673,5 +2673,54 @@
       "medium": "Medium severity",
       "high": "High severity"
     }
+  },
+  "insightScenarios": {
+    "heading": "Recorded scenario comparisons",
+    "boundary": "These conditional calculations depend on declared assumptions. Publishing a model does not prove its assumptions or approve a decision.",
+    "unavailable": "Scenario comparisons could not be read with your current access. Try again.",
+    "empty": "No published scenario is available in this selection.",
+    "expired": "This scenario evidence has expired. Review current evidence before using it.",
+    "needsReview": "The model or its inputs require revalidation. Review the scenario before using its results.",
+    "noRun": "No result for this published model appears in this selection.",
+    "recorded": "Calculated at {{time}} (UTC)",
+    "nominalOnly": "Nominal values are shown. Review the full scenario for simulation diagnostics and conditional sample ranges.",
+    "value": "Value: {{value}} {{unit}}",
+    "change": "Change from base: {{value}} {{unit}}",
+    "moreOutputs": "More outputs are available in the full scenario.",
+    "assumptions": "Review assumptions and unmodeled effects",
+    "range": "Declared range: {{minimum}} to {{maximum}} {{unit}}",
+    "moreRuns": "More runs may be available in the scenario view. This selection is not ordered by recency.",
+    "moreScenarios": "More scenarios may be available outside this selection.",
+    "inspect": "Review scenarios and their assumptions",
+    "status": {
+      "inconclusive": "This calculation is inconclusive. Review the evidence before using a result.",
+      "data_not_ready": "The required data was not ready. No calculated result is presented."
+    },
+    "kind": {
+      "base": "Base",
+      "option": "Option",
+      "stress": "Stress case"
+    },
+    "constraint": {
+      "satisfied": "Declared constraint satisfied",
+      "violated": "Declared constraint violated",
+      "not_declared": "No constraint declared"
+    },
+    "changes": {
+      "intervention": "Assumed intervention: {{name}} = {{value}}",
+      "hypothetical_condition": "Hypothetical condition: {{name}} = {{value}}"
+    },
+    "confidence": {
+      "human_asserted": "Human-declared assumption",
+      "evidence_supported": "Evidence-supported assumption"
+    },
+    "units": {
+      "dimensionless": "without unit",
+      "issue": "tasks",
+      "project": "projects",
+      "person": "people",
+      "customer": "customers",
+      "second": "seconds"
+    }
   }
 }
