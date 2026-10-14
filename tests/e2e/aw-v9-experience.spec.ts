@@ -344,7 +344,7 @@ test("V9 Home, feedback recovery and rollback preserve native state", async ({
   }
 });
 
-test("V9 workflow review keeps active and draft revisions separate and preserves Advanced rollback", async ({
+test("V9 workflow review preserves the account gate, separates revisions and keeps Advanced rollback", async ({
   page,
   request,
 }) => {
@@ -376,9 +376,11 @@ test("V9 workflow review keeps active and draft revisions separate and preserves
     );
     const path = `/${company.issuePrefix}/workflows/${created.id}`;
     await page.goto(`/${company.issuePrefix}/workflows`);
-    await expect(
-      page.getByRole("button", { name: /Review deal opportunities/ }),
-    ).toContainText("draft");
+    // The customer index requires a verified account. This local-board fixture
+    // must not borrow that admission; Original detail/rollback remain separate.
+    await expect(page.getByRole("main").getByRole("status")).toContainText(
+      "Sign in with a verified account to describe a workflow.",
+    );
     await page.goto(path);
     await expect(
       page.getByRole("heading", {

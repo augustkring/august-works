@@ -2866,6 +2866,8 @@
       "forecast": "Gemt prognoseestimat"
     },
     "evidence": {
+      "created_in_window_current_state": "Populationen blev oprettet i perioden; dens tilstand blev observeret på det angivne tidspunkt. Dette genskaber ikke en historisk tilstand.",
+      "external_provider_defined": "Udbyderen definerer målingens tidsgrundlag. Gennemgå dens kilde og kvalifikation.",
       "native_metric_observation": "Gemt måling",
       "observed": "Observeret",
       "undefined": "Udefineret; ikke nul",

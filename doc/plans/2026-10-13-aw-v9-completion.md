@@ -2318,3 +2318,38 @@ claiming to prevent the browser's initial structured-clone memory allocation.
 Final bounded-data prototype regression passes all 9 cases with no skips;
 server typecheck and token/module/coverage checks pass. All 70 surfaces remain
 pending implementation/evidence. These checks do not qualify the product host.
+
+
+### Workflow account-gate regression and honest metric time semantics — checkpoint 61
+
+A combined browser run on frozen checkpoint 60 passed 29 cases, then an older
+workflow test expected the retired local-board workflow-list button. The current
+customer index correctly requires a verified account. The test now verifies that
+gate, then checks the Original canonical detail, immutable active/draft revisions,
+run checkpoint, safe controls and Advanced rollback. No product admission or
+account check is weakened. Corrected actual browser case passes (28.2 seconds;
+1.2 minutes including setup). Original fixture publication is not qualification
+of the customer Test/Publish journey.
+
+Metric chat evidence additionally carries the Original definition's declared
+timeSemantics. EN/DA explains created-in-window/current-state observations rather
+than implying historical reconstruction; provider-defined semantics remain an
+explicit provider declaration. No numeric value, calculation, Source, grant,
+writer or retention policy changes. Focused Native metric case passes (32.58
+seconds). After installing this worktree's own frozen offline dependencies,
+complete Native metric and four shared/renderer suites pass 55 cases (47.56
+seconds). Shared first-party aliases now resolve this worktree rather than the
+frozen checkpoint 60 worktree; existing identical-source ignored build outputs
+were copied as bootstrap artifacts, not treated as new-source build evidence.
+
+A follow-on browser batch passed the image recovery case, then the operator
+erasure fixture timed out (60 seconds) with an empty company selection. A
+trace-enabled isolated run passes (9.1 seconds), and two repeated image/erasure
+pairs pass all four cases (1.0 minute). The original timeout remains an unresolved
+software-test flake; no product guard, deadline or fixture authority was relaxed.
+The first broad run was also deliberately interrupted to disable inherited Native
+telemetry (exit 130; not a pass), and an immediate restart briefly found the
+owned port still closing. Subsequent disposable browser runs explicitly set
+PAPERCLIP_TELEMETRY_DISABLED=1 and DO_NOT_TRACK=1. No provider/Human qualification
+is inferred. Frozen 53/60 full tests remain running and exclude this delta.
+All 70 launch rows/R0 remain pending. No PR/push.

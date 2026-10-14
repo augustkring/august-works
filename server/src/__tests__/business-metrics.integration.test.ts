@@ -31,7 +31,9 @@ suite("governed native metric owner on migrated PostgreSQL", () => {
     const observation = await owner.query(companyId, actor, { metricId: created.metric.id, versionId: created.version.id, from: "2026-01-01T00:00:00Z", until: "2026-01-02T00:00:00Z", dimensions: [], maxRows: 5000 });
     const resourceId = `metric:${observation.id}`, wire = { schemaVersion: 1, component: "MetricInsightCard", companyId, cardId: `insight:${resourceId}`, source: { companyId, domain: "insight", resourceId, version: `${observation.definitionHash}:${observation.inputHash}` } };
     const card = await currentInsightToolCard(db, actor, companyId, wire);
-    expect(card.evidence).toContain("recorded_value:0|objects"); expect(card.actions.every(action => action.operation === "open")).toBe(true);
+    expect(card.evidence).toContain("recorded_value:0|objects");
+    expect(card.evidence).toContain("created_in_window_current_state");
+    expect(card.actions.every(action => action.operation === "open")).toBe(true);
     const changed = await owner.createVersion(companyId, actor, created.metric.id, { expectedRevision: 2, definition: { ...created.version.definition, name: "Current changed definition" } });
     await owner.publish(companyId, actor, created.metric.id, { expectedRevision: 3, versionId: changed.id });
     await expect(currentInsightToolCard(db, actor, companyId, wire)).rejects.toMatchObject({ status: 409 });

@@ -2866,6 +2866,8 @@
       "forecast": "Recorded forecast estimate"
     },
     "evidence": {
+      "created_in_window_current_state": "The population was created within the window; its state was observed at the recorded time. This is not a reconstruction of historical state.",
+      "external_provider_defined": "The provider defines the measurement's time semantics. Inspect its source and qualification.",
       "native_metric_observation": "Recorded measurement",
       "observed": "Observed",
       "undefined": "Undefined; not zero",

@@ -2776,3 +2776,15 @@ credential/deployment boundary, actual authorized MCP resources and same-
 connection app visibility through the ordinary Tool Gateway's current tenant/
 Source/grants/policy/approval/budget/audit owner, plus browser/AT/Human/abuse
 qualification. No prototype bridge, hash or UI label becomes an authority token.
+
+
+## ADR-82 — Metric chat evidence preserves the Original declared time semantics
+
+A retained Native metric's window does not reconstruct its historical state.
+The chat reader carries the Original definition's timeSemantics alongside its
+window/as-of/status/value evidence. EN/DA makes created-in-window/current-state
+semantics explicit; provider-defined semantics are a declaration to inspect,
+not a new qualification. No calculation, numeric value, Source or authority is
+changed. The customer workflow index's verified-account admission also remains
+unchanged; the older local-board browser test now checks that gate rather than
+expecting the earlier list UI.

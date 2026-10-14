@@ -50,7 +50,7 @@ export async function currentInsightToolCard(db: Db, actor: AuthorizationActor, 
       if (defined.metric.publishedVersionId !== value.versionId) throw conflict("The Native metric definition changed; refresh its current owner");
       title = defined.version.definition.name; version = `${value.definitionHash}:${value.inputHash}`; observedAt = value.asOf;
       expiresAt = value.expiresAt;
-      evidence = ["native_metric_observation", value.status, `window:${value.from}|${value.until}`, `as_of:${value.asOf}`,
+      evidence = ["native_metric_observation", value.status, defined.version.definition.timeSemantics, `window:${value.from}|${value.until}`, `as_of:${value.asOf}`,
         value.status === "observed" && value.value !== null ? `recorded_value:${value.value}|${defined.version.definition.unit}` : "value_unavailable"];
       href = "/business-metrics";
     } else if (family === "process") {
