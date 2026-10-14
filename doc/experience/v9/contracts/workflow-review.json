@@ -115,7 +115,7 @@
     "dataShown": [
       "Current human/company-authorized workflow name and description",
       "Allowlisted native revision/step/connection declarations only",
-      "The selected Agent name only after a current separate Native read; input kinds and valid literal delay, never raw objectives, tool inputs, credentials, recipients or raw schemas.",
+      "Selected Agent and connection names require current Native reads. Current purpose-specific review may show closed Source-bound task briefs, conditions, approval material and supported scalar tool values; arbitrary configuration, connection credentials and hidden schema material remain excluded.",
       "Purpose-specific current closed condition/approval material and selected visible connection/tool metadata; current verified readers only, with the retained Native local-operator compatibility boundary stated separately."
     ],
     "dataCollected": [],

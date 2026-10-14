@@ -1161,3 +1161,37 @@ cases; their overlapping counts are not added into a whole-workspace result.
 The updated inspection contract initially rejects an unregistered privacy key
 (59 other cases pass). The rule is moved into the existing sensitiveFields list;
 all 60 contract cases then pass. There is no contract-schema relaxation.
+
+
+### Stable Native copy owners across restore writes — 2026-10-14
+
+An actual Native baseline fails: an old private step copy can be reassigned to
+a clean public run after its Source was erased. A custom Drizzle-generated 0496
+migration and snapshot keep canonical company/identity and parent ownership
+stable on workflows, revisions, executions, steps, waits, reviews and Artifact
+versions. New references require the actual same-company parent; ordinary
+same-owner updates add no parent locking. Legitimate parent-run deletion/SET NULL
+behavior is retained. Original erasure and payload guards remain authoritative.
+No provenance, execution, permission or qualification state is invented.
+
+The first actual Source/restore suite passes all 16 cases. After avoiding
+redundant parent locks on ordinary updates, the full same suite again passes 16.
+Five broader workflow/service/executor/wait/guided-draft suites pass 85 cases in
+the non-root process context. After extending the same identity rule to Artifact
+versions, the three Source/flow/selected-step suites pass 32 cases, including
+actual refused reparenting, clean public output and retained private review
+body erasure. Final migration/type/Artifact evidence follows when complete.
+The default review privacy contract also now describes the implemented current
+purpose-specific input material, instead of its older blanket exclusion.
+
+This closes the demonstrated retargeting path. Artifact provenance for copied
+private descendant run results, broader package/knowledge sources, remaining
+whole-V9 work and final immutable whole-workspace verification remain open.
+
+Current four-suite Artifact/account/scenario/evaluation regression passes all 35
+cases in the non-root process context. Its expected unsafe runtime-cache cleanup
+warning remains a refusal, not a claim of successful physical workspace deletion.
+DB migration numbering/safety and DB/server typechecks pass. The 60-case screen
+contract suite and module/70-surface source gates pass. The generated 0496 snapshot
+is retained with its journal entry. No existing guard is disabled, and all 70
+surfaces remain pending implementation and/or qualification.

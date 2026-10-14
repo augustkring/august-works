@@ -5,7 +5,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { activityLog, automationArtifacts, automationArtifactVersions, authUsers, companyMemberships, createDb, heartbeatRuns, issues, memoryDeletionMarkers, memoryJobs,
-  principalPermissionGrants, workflowRevisions, workflowRuns, workflowStepRuns, workflows, workflowWaits } from "@paperclipai/db";
+  principalPermissionGrants, workflowRevisions, workflowRuns, workflowStepRuns, workflowRunReviews, workflows, workflowWaits } from "@paperclipai/db";
 import { seedV5Presences, enableV5ForTest } from "./helpers/v5-fixtures.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
@@ -143,6 +143,9 @@ describe.sequential("Original workflow private authoring copy owner", () => {
     await expect(db.update(automationArtifacts).set({ originWorkflowId: null }).where(eq(automationArtifacts.id, artifact.artifact.id))).rejects.toMatchObject({ cause: { code: "23514" } });
     await eraseSource();
     await expect(artifacts.getDetail(f.home, artifact.artifact.id, human())).rejects.toMatchObject({ status: 403 });
+    const cleanArtifact = await artifacts.create(f.home, { name: "Public Artifact target", kind: "expression", language: null,
+      riskClass: "C0", sideEffectClass: "pure", sourceCode: "input.value", inputSchema: {}, outputSchema: {}, dependencyManifest: {}, testSpec: {} }, human());
+    await expect(db.update(automationArtifactVersions).set({ artifactId: cleanArtifact.artifact.id }).where(eq(automationArtifactVersions.id, revised.latestVersion!.id))).rejects.toMatchObject({ cause: { code: "23514" } });
     const [erased] = await db.select().from(automationArtifacts).where(eq(automationArtifacts.id, artifact.artifact.id));
     expect(erased).toMatchObject({ name: "Source-erased artifact", description: null, status: "deprecated", inputSchema: {}, outputSchema: {}, originWorkflowId: workflow.id });
     const versions = await db.select().from(automationArtifactVersions).where(eq(automationArtifactVersions.artifactId, artifact.artifact.id));
@@ -260,6 +263,30 @@ describe.sequential("Original workflow private authoring copy owner", () => {
     await eraseSource();
     await expect(optimizerTraceService(db).normalizeWorkflowRun(f.home, completed.run.id, f.actor)).rejects.toMatchObject({ status: 403 });
     await expect(getWorkflowRunReview(db, f.home, completed.run.id, f.actor)).rejects.toMatchObject({ status: 403 });
+  });
+  it("cannot restore erased private copies by moving their Original run/review/step/wait ownership to a clean public run", async () => {
+    const child = await privateValueWorkflow(), parent = await parentWorkflow(child), owner = workflowService(db), engine = workflowExecutorService(db);
+    const privateRun = await engine.startManualRun(f.home, parent.id, { input: {} }, human(), randomUUID());
+    expect(privateRun.run.status).toBe("succeeded");
+    await reviewWorkflowRun(db, f.home, privateRun.run.id, { humanCorrection: true, correctedOutputs: { child: { value: "PRIVATE correction" } }, reason: "PRIVATE review reason" }, human());
+    const clean = await owner.create(f.home, { name: "Public restore target" }, human());
+    const draft = await owner.updateDraft(f.home, clean.id, { expectedRevisionId: clean.draftRevisionId!, graph: { version: 1,
+      nodes: [{ id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} }], edges: [], variables: [], settings: {} } }, human());
+    const published = await owner.publish(f.home, clean.id, { expectedDraftRevisionId: draft.draftRevisionId!, expectedPublishedRevisionId: null }, human());
+    const publicRun = await engine.startManualRun(f.home, clean.id, { input: {} }, human(), randomUUID());
+    expect(publicRun.run.status).toBe("succeeded");
+    await eraseSource();
+    const [step] = await db.select().from(workflowStepRuns).where(and(eq(workflowStepRuns.workflowRunId, privateRun.run.id), eq(workflowStepRuns.nodeId, "child")));
+    const [wait] = await db.select().from(workflowWaits).where(eq(workflowWaits.workflowRunId, privateRun.run.id));
+    const [review] = await db.select().from(workflowRunReviews).where(eq(workflowRunReviews.workflowRunId, privateRun.run.id));
+    expect(step).toBeTruthy(); expect(wait).toBeTruthy(); expect(review).toBeTruthy();
+    await expect(db.update(workflowStepRuns).set({ workflowRunId: publicRun.run.id, inputJson: { value: "PRIVATE step restored" }, outputJson: { value: "PRIVATE result restored" } }).where(eq(workflowStepRuns.id, step.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+    await expect(db.update(workflowWaits).set({ workflowRunId: publicRun.run.id, resolutionJson: { value: "PRIVATE wait restored" } }).where(eq(workflowWaits.id, wait.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+    await expect(db.update(workflowRunReviews).set({ workflowRunId: publicRun.run.id, correctedOutputs: { child: { value: "PRIVATE review restored" } } }).where(eq(workflowRunReviews.id, review.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+    await expect(db.update(workflowRuns).set({ workflowId: clean.id, workflowRevisionId: published.publishedRevisionId!, triggerPayload: { value: "PRIVATE run restored" } }).where(eq(workflowRuns.id, privateRun.run.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+    await expect(db.update(workflowRevisions).set({ workflowId: clean.id, graph: { version: 1, nodes: [], edges: [], variables: [], settings: {} } }).where(eq(workflowRevisions.id, child.publishedRevisionId!))).rejects.toMatchObject({ cause: { code: "23514" } });
+    expect(JSON.stringify(await engine.getRun(f.home, publicRun.run.id, f.actor))).not.toContain("PRIVATE");
+    expect((await db.select().from(workflowRunReviews).where(eq(workflowRunReviews.id, review.id)))[0].correctedOutputs).toEqual({});
   });
   it("propagates the actual private grandchild source to both public ancestors without changing their configurations", async () => {
     const child = await privateValueWorkflow(), middle = await parentWorkflow(child), outer = await parentWorkflow(middle);

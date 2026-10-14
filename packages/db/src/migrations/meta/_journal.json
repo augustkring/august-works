@@ -3459,6 +3459,13 @@
       "when": 1791966398292,
       "tag": "0495_artifact_workflow_sources",
       "breakpoints": true
+    },
+    {
+      "idx": 496,
+      "version": "7",
+      "when": 1791975412867,
+      "tag": "0496_workflow_copy_identity",
+      "breakpoints": true
     }
   ]
 }

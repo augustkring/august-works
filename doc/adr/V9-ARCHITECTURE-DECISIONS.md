@@ -2131,3 +2131,22 @@ Broader Artifact copies of private descendant results still need durable provena
 capture on their own canonical owner; guarding current replay reads alone does not
 complete that closure. No host/provider or representative Human qualification is
 inferred from these software regressions.
+
+
+## ADR-56 — Native copy ownership cannot be retargeted during restore
+
+A real PostgreSQL baseline moves an erased private step to an unrelated public
+execution without error. Native run Sources are attached to their actual owner;
+changing that FK would lose the boundary. Custom generated migration 0496 keeps
+company/identity and saved workflow, revision, execution, step, wait, review and
+Artifact-version parent ownership stable. New children verify an actual scoped
+parent; existing same-owner updates avoid new parent locks and preserve lease/
+cleanup ordering. Existing Source erasure/payload guards still run after this
+identity guard. Parent-run ancestry fields that use legitimate ON DELETE SET
+NULL behavior are not made immutable by this guard.
+
+The actual restore regression refuses step/wait/review/run/revision and Artifact
+version reparenting, while a clean public execution remains free of private
+payload. No graph/runtime, permission, Source-completeness or qualification store
+is introduced. This closes the demonstrated owner-retargeting path; it does not
+attest every backup/host restore or complete broader copied Artifact provenance.
