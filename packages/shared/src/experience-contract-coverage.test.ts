@@ -7,6 +7,13 @@ const root = resolve(import.meta.dirname, "../../.."),
     readFileSync(resolve(root, "doc/experience/v9/coverage.json"), "utf8"),
   );
 describe("Resolved V9 screen contracts", () => {
+  it("validates Original package request recovery as a supporting Native contract without replacing the 70 launch surfaces", () => {
+    const parsed = experienceScreenContractSchema.parse(JSON.parse(readFileSync(
+      resolve(root, "doc/experience/v9/contracts/native-package-installation-request.json"), "utf8")));
+    expect(parsed.screenId).toBe("NATIVE-PACKAGE-INSTALLATION-REQUEST");
+    expect(parsed.journeyId).toBe("package-recovery");
+    expect(manifest.screens).toHaveLength(70);
+  });
   for (const screen of manifest.screens.filter(
     (screen: { contractPath?: string }) => screen.contractPath,
   )) {

@@ -76,6 +76,7 @@ import { Memory } from "./pages/Memory";
 import { Governance } from "./pages/Governance";
 import { WorkflowsEntry } from "./pages/WorkflowIndex";
 import { WorkflowDescribeEntry } from "./pages/WorkflowDescribe";
+import { PackageInstallationReceiptEntry } from "./pages/PackageInstallationReceipt";
 import { AutomationArtifacts } from "./pages/AutomationArtifacts";
 import { WorkflowBuilder } from "./pages/WorkflowBuilder";
 import { WorkflowEntry } from "./pages/WorkflowReview";
@@ -455,7 +456,8 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       <Route path="orchestration" element={<V7FeatureGate feature="orchestration_v7"><OrchestrationEntry /></V7FeatureGate>} />
       <Route path="orchestration/:planId/control" element={<OrchestrationControlEntry />} />
       <Route path="agents/packages/installations/:installationId/maintenance" element={<MaintenanceHistoryEntry />} />
-      <Route path="agents/packages" element={<V7FeatureGate feature="agent_packages_v7"><DeferredRouteSurface><AgentPackages /></DeferredRouteSurface></V7FeatureGate>} />
+      <Route path="agents/packages/requests/:requestId" element={<PackageInstallationReceiptEntry />} />
+      <Route path="agents/packages" element={<V7FeatureGate feature="agent_packages_v7" unavailable={<PackageInstallationReceiptEntry pendingOnly />}><DeferredRouteSurface><AgentPackages /></DeferredRouteSurface></V7FeatureGate>} />
       <Route path="ai-governance" element={<V7FeatureGate feature="ai_use_cases_v7"><AIGovernance /></V7FeatureGate>} />
       <Route path="work-signals" element={<V7FeatureGate feature="work_signals_v7"><WorkSignals /></V7FeatureGate>} />
       <Route path="memory/learning" element={<V7FeatureGate feature="learning_engine_v7"><OrganizationalLearning /></V7FeatureGate>} />

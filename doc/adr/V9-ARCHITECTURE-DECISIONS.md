@@ -2317,3 +2317,41 @@ prose remains unchanged; translating a label cannot rewrite an approved purpose,
 warning or procedure. Proposal acceptance describes a recorded review separately
 from activation. Installed action groups wrap on narrow layouts while the form's
 cancel/primary footer retains its row. Locale changes create no work or grant.
+
+## ADR-64 — Exact Native installation request read-back owns recovery
+
+New form installations retain one request UUID before dispatch and capture the
+exact parsed input in memory. An explicit resend reuses that input/key through
+the Original installation owner; it is never automatic or reconstructed from a
+stored locator. Even a transport success must be read back through the Original
+request binding before pending identity can be cleared. Existing Native immutable
+company/installing-principal/Agent/request ID/hash constraints and the exact
+company/principal/request index remain the owner; no second installation ledger
+or schema migration is introduced.
+
+The new bounded reader returns only current installation status/version, opaque
+locators and observation time. It requires the Original installing Human, current
+verified membership and Agent read, with existing explicit Native local-operator
+behavior. Ignore stale instance-admin claims. It creates no assessment, Activity,
+installation, activation, model call or grant, and remains readable after the new
+work flag closes. Its status is current metadata, not historical status or proof
+of a running Agent/business result. Absence remains unconfirmed.
+
+Per-tab recovery retains only company/principal/request locators, with closed
+32-entry/8 KiB bounds. Unknown outcomes have no automatic expiration or new-key
+retry. Corrupt/unavailable storage refuses dispatch. Actor/session/reader epochs
+and new private transport reads reject late context; package GETs detach earlier
+coalescing. Restored locators have no setup/resend capability. The supporting
+recovery route and pending-only rollout fallback share the same reader. A visible
+unchanged resend is an Original installation operation, not a read.
+
+Safe change: old callers may continue omitting the optional request ID. New
+callers require the existing immutable binding and new read endpoint; an older
+incompatible server remains unconfirmed rather than launching a new request.
+Native updates/uninstall retain initial identity; current read-back can therefore
+show a later state explicitly. Keep new-install feature gates and all Native
+permission/admission/pin checks. Rollback does not clear unresolved locators or
+turn unknown into failure. The private/no-store middleware is restricted to
+package-owned paths; unrelated routes retain their own headers. Hosted mixed
+version/restore, wider component Source closure and Human qualification remain
+open. The supporting contract does not replace any of the 70 launch surfaces.

@@ -15,6 +15,8 @@ import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
 import { useV9PrivateReadAuthority } from "../hooks/useV9PrivateReadAuthority";
 import { Link } from "@/lib/router";
 import { Button } from "@/components/ui/button";
+import { PackageInstallationReceipt } from "./PackageInstallationReceipt";
+import { clearPendingPackageInstallation, readPendingPackageInstallation, retainPendingPackageInstallation } from "../lib/pending-package-installations";
 export function AgentPackages() {
   const { selectedCompanyId: companyId } = useCompany(), identity = useV9CurrentAccount(), { t } = useTranslation("experience");
   // Keep the same person's unsent setup in memory through a session recheck;
@@ -32,6 +34,11 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
   const restoreFocus = useRef<string | true | null>(null);
   const scope = useRef({ companyId, userId });
   scope.current = { companyId, userId };
+  const [recovery, setRecovery] = useState<{ requestId: string | null; unavailable: boolean }>(() => {
+    try { return { requestId: readPendingPackageInstallation(companyId, principal), unavailable: false }; }
+    catch { return { requestId: null, unavailable: true }; }
+  });
+  const originalInstall = useRef<{ requestId: string; key: string; input: ReturnType<typeof packageInstallSchema.parse> } | null>(null);
   const [updating, setUpdating] = useState<PackageInstallationView | null>(
       null,
     ),
@@ -48,7 +55,7 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
     [reason, setReason] = useState("");
   const preview = previewReceipt?.epoch === authority.epoch ? previewReceipt.value : null;
   const setPreview = (value: PackagePreview | null) => setPreviewReceipt(value ? { value, epoch: authority.epoch } : null);
-  const enabled = authority.readReady;
+  const enabled = authority.readReady && !recovery.requestId && !recovery.unavailable;
   const catalog = useQuery({
     queryKey: ["agent-packages", userId, companyId, authority.epoch, reader],
     queryFn: () => authority.read(() => agentPackagesApi.catalog(userId)),
@@ -118,6 +125,13 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
   const mutation = useMutation({
     mutationFn: async (action: "preview" | "install" | "update") => authority.write(async () => {
       const captured = { companyId: companyId!, userId: userId! };
+      if (action === "install" && !originalInstall.current) {
+        const requestId = crypto.randomUUID(), snapshot = packageInstallSchema.parse({ ...input(), installationRequestId: requestId });
+        try { retainPendingPackageInstallation(companyId, principal, requestId); }
+        catch (error) { setRecovery({ requestId: null, unavailable: true }); throw error; }
+        originalInstall.current = { requestId, key: selected!.key, input: structuredClone(snapshot) };
+        setRecovery({ requestId, unavailable: false });
+      }
       return {
         captured,
         action,
@@ -134,7 +148,8 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
                   reason,
                 },
               )
-            : await agentPackagesApi[action](
+            : action === "install" ? await agentPackagesApi.install(companyId, userId, originalInstall.current!.key, originalInstall.current!.input)
+            : await agentPackagesApi.preview(
                 captured.companyId,
                 captured.userId,
                 selected!.key,
@@ -152,6 +167,9 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
         return;
       if (action === "preview") setPreview(result as PackagePreview);
       else {
+        // Even a transport acknowledgement is reconciled through the exact
+        // Original request reader before its pending locator can be cleared.
+        if (action === "install") { setSelected(null); setPreview(null); return; }
         setSelected(null);
         setPreview(null);
         setUpdating(null);
@@ -252,6 +270,13 @@ function AgentPackagesWorkspace({ companyId, userId, principal, allowLocalImplic
     await Promise.allSettled([catalog.refetch(), options.refetch(), installations.refetch(), proposals.refetch(),
       ...(selected?.manifest.audience === "customer" ? [useCases.refetch()] : [])]);
   };
+  if (recovery.requestId) return <PackageInstallationReceipt company={companyId} principal={principal} userId={userId}
+    requestId={recovery.requestId} allowLocalImplicit={allowLocalImplicit} inFlight={mutation.isPending}
+    retryOriginal={originalInstall.current ? () => mutation.mutate("install") : undefined}
+    onResolved={() => { clearPendingPackageInstallation(companyId, principal, recovery.requestId!);
+      originalInstall.current = null; setRecovery({ requestId: null, unavailable: false }); setSelected(null); setPreview(null);
+      mutation.reset(); }} />;
+  if (recovery.unavailable) return <p role="alert">{t("packageRecovery.storageUnavailable")}</p>;
   if (!visible) return <section ref={surface} className="saas-page">
     <h1 className="saas-title">{t("packageWorkspaceTitle")}</h1>
     <p role={authority.failed || readFailed ? "alert" : "status"}>{t(authority.failed ? "packageWorkspaceUnavailable" : readFailed ? "packageWorkspaceReadOrWriteUnavailable" : "loading")}</p>

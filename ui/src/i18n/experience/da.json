@@ -2566,5 +2566,21 @@
       "rejected": "Afvist",
       "stale": "Forældet"
     }
+  },
+  "packageRecovery": {
+    "title": "Oprindelig installationsanmodning",
+    "boundary": "Kontrollér den oprindelige anmodning, før du starter en ny opsætning. Denne visning læser registreret status; den installerer, aktiverer eller tildeler ikke adgang.",
+    "saving": "Afventer svar på den oprindelige installation…",
+    "unconfirmed": "Den oprindelige installation kunne ikke bekræftes. En manglende registrering beviser ikke, at anmodningen fejlede. Behold anmodningen, og kontrollér igen.",
+    "current": "Aktuel oprindelig installation",
+    "recorded": "Der er registreret en installation for denne anmodning",
+    "status": "Aktuel status: {{status}}. Installationsversion {{version}}. Dette beviser ikke, at en agent kører, eller at et forretningsresultat er verificeret.",
+    "check": "Kontrollér oprindelig anmodning",
+    "retryOriginal": "Send den samme anmodning igen",
+    "retryBoundary": "Dette sender den samme opsætningsanmodning igen. Din aktuelle adgang og nødvendige kontroller gælder stadig.",
+    "storageUnavailable": "Den oprindelige anmodningsreference kunne ikke gemmes eller kontrolleres. Start ikke en ny installation, før den oprindelige status er gennemgået.",
+    "leave": "Hjem",
+    "return": "Tilbage til pakker",
+    "retryViewBoundary": "Kontrollér den oprindelige anmodning, før du starter en ny opsætning. Du kan kun genafsende den uændrede anmodning fra denne åbne formular. Genafsendelse kræver stadig din aktuelle adgang og de oprindelige kontroller; den kan ikke aktivere agenten eller tildele adgang."
   }
 }

@@ -6,6 +6,7 @@ import {
   packageUpdateSchema,
   packageReleaseSchema,
   specialistEvaluationSchema,
+  packageInstallationRequestQuerySchema,
 } from "@paperclipai/shared";
 import {
   agentPackageService,
@@ -21,7 +22,12 @@ export function agentPackageRoutes(
 ) {
   const router = Router(),
     service = agentPackageService(db, options);
-  router.use((_req, res, next) => { res.setHeader("Cache-Control", "private, no-store"); next(); });
+  router.use((req, res, next) => {
+    if (/^\/agent-packages(?:\/|$)/i.test(req.path) ||
+      /^\/companies\/[^/]*\/(?:agent-packages|agent-package-options|agent-package-installations|agent-package-evaluations|agent-package-update-proposals)(?:\/|$)/i.test(req.path))
+      res.setHeader("Cache-Control", "private, no-store");
+    next();
+  });
   function account(req: Request) {
     if (
       typeof req.query.expectedUserId === "string" &&
@@ -114,6 +120,10 @@ export function agentPackageRoutes(
     "/companies/:companyId/agent-package-installations",
     async (req, res) => res.json(await service.list(req.actor, company(req))),
   );
+  router.get("/companies/:companyId/agent-package-installations/requests/:requestId", async (req, res) => {
+    packageInstallationRequestQuerySchema.parse(req.query);
+    res.json(await service.installationRequest(req.actor, company(req), req.params.requestId as string));
+  });
   router.get(
     "/companies/:companyId/agent-package-installations/:id",
     async (req, res) =>

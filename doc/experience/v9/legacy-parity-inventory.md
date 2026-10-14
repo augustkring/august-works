@@ -99,3 +99,12 @@ evaluation and activation boundaries; Original descriptions, warnings and reason
 retain their Source language. The installation unknown-response journey and wider
 package component Source closure remain open; this change does
 not establish complete legacy parity, live package qualification or retirement.
+
+The Native installation unknown-response journey now retains an original locator
+before dispatch, uses exact Original read-back before clearing it and supports
+readonly recovery after reload/feature closure. Optional resend is available only
+from the original unchanged in-memory request. See ADR-64 and
+`doc/operations/aw-v9-package-request-recovery.md` for the separate processing
+purpose and supporting Screen Contract. Hosted mixed-version/restore, wider
+package component Source closure and the complete legacy state/AT/Human matrix
+remain open.

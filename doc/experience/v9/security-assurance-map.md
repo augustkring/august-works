@@ -143,3 +143,12 @@ repair, activation, reconciliation, grant or notification.
 
 
 | Personal account privacy and original deletion recovery | C3; original auth, SaaS preference/session/deletion owners | Successful current original session/capabilities, exact user/session, fresh original list/source and current Native password/ownership/billing checks | Private DOM withdrawn during rechecks; same-person input retained; current-cache/epoch fences; same-turn coalescing; bounded credential-free per-tab original-key locator; a refused retry does not erase an earlier unknown outcome; no automatic irreversible replay | 63 focused UI/API/storage/provider checks pass on the recorded source; current strict UI/build/browser, Native integrated regression and hosted/manual/representative acceptance remain pending |
+
+## Original Native package request recovery — 2026-10-14
+
+| Failure boundary | Class | Canonical control | Source verification | Remaining evidence |
+|---|---|---|---|---|
+| Lost acknowledgement creates another installation | C2/C3 | Existing immutable Native request binding/unique index; locator before POST; exact captured resend; acknowledgement alone never clears pending identity | Actual Native concurrent install/retained request/withdrawal/uninstall tests; DOM exact replay and controlled lost-response browser | Hosted transport/mixed-version and representative Human recovery |
+| Foreign/stale requester reads recovery state | C3 | Current original Human, verified membership and Agent read; stale admin ignored; actor/epoch/mounted-reader fences; strict six-field current metadata | Migrated PostgreSQL/HTTP denials, strict client foreign/expanded rejection and fresh transport test | Hosted authentication/revocation races and broader component Source closure |
+| Locator becomes a new authority or input store | C3 | Per-tab closed metadata only, 32 entries/8 KiB; corrupt storage refuses new work; reload uses GET only; feature withdrawal retains read-only entry | DOM persistence/corruption/no-write checks and built reload/rollout-closure case | Hosted retention/restore/privacy and manual accessibility |
+| Package private HTTP or cache scope spills | C3 | Normalized private namespace, no raw payload/query/error logs; private/no-store only on owned paths; new readers detach earlier coalescing | Actual logger canaries, native headers/unrelated-route probe and two-reader transport test | Hosted logging/cache retention review |

@@ -1503,3 +1503,45 @@ one pixel, no overflow, scoped axe zero violations, Source-failure masking and
 zero install/activation/decision calls. The final Danish screenshot is inspected.
 The explicit catalog/preview/installation fixtures remain software evidence only;
 all 70 release-evidence surfaces and lost-install-response recovery remain open.
+
+### Exact Original installation recovery closes the lost-response UI gap — 2026-10-14
+
+Adds the Original immutable request lookup with current real-account/creator/
+Agent read, a 1500 ms/250 ms bounded locked read and a strict six-field metadata
+DTO. Reads are independent of new-install rollout and never create assessments,
+Activity, installations, activation or grants. The current state is separate from
+historical status and running/business proof. New clients retain one per-tab
+locator before their first POST, capture unchanged input in memory and never
+create a new retry key automatically. Even acknowledged writes require Original
+read-back. Restored locators cannot reconstruct/resend setup. The standalone
+supporting route and pending-only feature-withdrawal fallback use that reader;
+only the original open form can explicitly resend its unchanged request. Private
+GETs detach earlier transport coalescing, while current actor/epoch/lifetime
+fences remain. The operation's purpose/retention/bounds and supporting contract
+are recorded without replacing the 70 launch-surface rows.
+
+Two initial actual Native install/request/rollout/uninstall/authority cases pass
+(24.21 seconds; 107 deliberately unselected). The first UI group passes seven
+cases; lost-ACK, exact-input retry, remount/no POST and corrupt storage bring it
+to 11. A six-suite client/gate/private-logging/contract group passes 166 cases.
+The five-suite whole Native package/client/UI/contract group passes all 189 cases
+(89.78 seconds), before the final header scope probe. That probe initially fails
+because its test-only route was registered in the wrong fixture; it is moved to
+the correct app. The package middleware now limits private/no-store headers to
+its owned namespaces. The final targeted transport/Native/OpenAPI/client/contract
+group passes 29 cases (27.67 seconds; 168 deliberately unselected), including the
+unrelated-route probe, current verified-account/malformed query denials and the
+actual two-fresh-fetch case. An extra UI case verifies that a foreign/successful
+transport body cannot clear pending identity. The final UI/client/gate/supporting
+contract group passes all 82 cases (16.26 seconds).
+
+Shared/actual server/UI typechecks pass, including the final source (exit 0).
+Both built EN/DA/mobile/current-session and lost-response/rollout cases pass first
+(51.2 seconds) and on the final source (55.6 seconds). They prove one captured
+POST, metadata-only tab storage, GET-only reload after flag closure, no restored
+resend, explicit confirmed clearing, no extra installation, one main, mobile
+reflow and scoped axe zero violations. Final screenshots are visually inspected.
+These are explicit transport fixtures; actual Native binding and readonly HTTP
+are independently verified in PostgreSQL, not claimed as hosted/Human proof.
+The checkpoint 31 broad test run is still separate and has no final aggregate.
+All 70 release-evidence surfaces and wider V9 scope remain pending. No PR/push.

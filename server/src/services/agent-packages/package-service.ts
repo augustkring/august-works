@@ -6,6 +6,7 @@ import { entitlementService } from "../billing/entitlements.js";
 import { randomUUID } from "node:crypto";
 import { and, asc, desc, eq, ne, sql } from "drizzle-orm";
 import {
+  authUsers, companyMemberships,
   agents,
   activityLog,
   agentPackages,
@@ -42,6 +43,7 @@ import {
   packageInstallSchema,
   packageUpdateSchema,
   packageDecisionSchema,
+  packageInstallationRequestLocatorSchema, packageInstallationRequestReceiptSchema,
   type PackageCatalogView,
   type PackageInstallationView,
   type PackageRelease,
@@ -1538,6 +1540,42 @@ export function agentPackageService(
     },
     get: async (actor: AuthorizationActor, companyId: string, id: string) =>
       view(await installation(db, actor, companyId, id)),
+    /** Read the Original retained request binding without a new install,
+     * assessment or feature admission. Current status is not historical proof. */
+    installationRequest: async (actor: AuthorizationActor, companyId: string, requestId: string) => {
+      const locator = packageInstallationRequestLocatorSchema.parse({ companyId, requestId });
+      const principal = v7HumanActorId(actor), current = { ...actor, ignoreInstanceAdmin: true, isInstanceAdmin: false };
+      const started = performance.now();
+      const budget = () => { if (performance.now() - started > 1500) throw conflict("Original installation request review expired"); };
+      return db.transaction(async rawTx => {
+        const tx = rawTx as unknown as Db;
+        await tx.execute(sql`set local statement_timeout='1500ms'`);
+        await tx.execute(sql`set local lock_timeout='250ms'`);
+        await lockMemoryPrivacy(tx, companyId);
+        async function authority(agentId?: string) {
+          budget(); await access(tx, current, locator.companyId);
+          if (actor.source !== "local_implicit") {
+            const [member] = await tx.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+              eq(companyMemberships.companyId, locator.companyId), eq(companyMemberships.principalType, "user"),
+              eq(companyMemberships.principalId, principal), eq(companyMemberships.status, "active"))).for("share");
+            const [user] = await tx.select({ verified: authUsers.emailVerified }).from(authUsers).where(eq(authUsers.id, principal)).for("share");
+            if (!member || !user?.verified) throw forbidden("Current verified installation requester is required");
+          }
+          if (agentId) await assertV7Authorization(tx, current, locator.companyId, "agent:read", { type: "agent", companyId: locator.companyId, agentId });
+          budget();
+        }
+        await authority();
+        const [row] = await tx.select({ id: companyAgentPackageInstallations.id, agentId: companyAgentPackageInstallations.agentId,
+          version: companyAgentPackageInstallations.version, status: companyAgentPackageInstallations.status,
+          requestId: companyAgentPackageInstallations.installationRequestId }).from(companyAgentPackageInstallations).where(and(
+          eq(companyAgentPackageInstallations.companyId, locator.companyId), eq(companyAgentPackageInstallations.installedByUserId, principal),
+          eq(companyAgentPackageInstallations.installationRequestId, locator.requestId))).for("share");
+        if (!row) throw notFound("The Original installation request could not be confirmed", { code: "PACKAGE_INSTALL_REQUEST_UNCONFIRMED" });
+        await authority(row.agentId);
+        return packageInstallationRequestReceiptSchema.parse({ companyId: locator.companyId, requestId: row.requestId,
+          installationId: row.id, installationVersion: row.version, installationStatus: row.status, observedAt: new Date().toISOString() });
+      });
+    },
     decide: async (
       actor: AuthorizationActor,
       companyId: string,

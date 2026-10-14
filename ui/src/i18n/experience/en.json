@@ -2566,5 +2566,21 @@
       "rejected": "Rejected",
       "stale": "Outdated"
     }
+  },
+  "packageRecovery": {
+    "title": "Original installation request",
+    "boundary": "Check the original request before another setup. This view reads recorded state; it does not install, activate or grant access.",
+    "saving": "Waiting for the original installation response…",
+    "unconfirmed": "The original installation could not be confirmed. A missing record does not prove that the request failed. Keep this request and check again.",
+    "current": "Current original installation",
+    "recorded": "An installation is recorded for this request",
+    "status": "Current status: {{status}}. Installation version {{version}}. This does not prove that an Agent is running or that a business outcome was verified.",
+    "check": "Check original request",
+    "retryOriginal": "Send the same request again",
+    "retryBoundary": "This resends the same setup request. Your current access and required checks still apply.",
+    "storageUnavailable": "The original request locator could not be retained or checked. Do not start another installation until the original state is reviewed.",
+    "leave": "Home",
+    "return": "Return to packages",
+    "retryViewBoundary": "Check the original request before another setup. You can resend only the unchanged request retained by this open form. Resending still requires your current access and the original checks; it cannot activate the Agent or grant access."
   }
 }

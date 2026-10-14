@@ -10,7 +10,7 @@ import { i18n } from "../i18n";
 vi.mock("../components/MaintenanceHistoryLink", () => ({ MaintenanceHistoryLink: () => null }));
 const f = vi.hoisted(() => ({
   userId: "owner-a",
-  companyId: "company-a",
+  companyId: "10000000-0000-4000-8000-000000000001",
   catalog: vi.fn(),
   options: vi.fn(),
   list: vi.fn(),
@@ -20,6 +20,7 @@ const f = vi.hoisted(() => ({
   update: vi.fn(),
   proposalsList: vi.fn(),
   proposalReview: vi.fn(),
+  installationRequest: vi.fn(),
 }));
 vi.mock("@/api/companies-query", () => ({
   useAccountIdentity: () => ({ userId: f.userId, settled: true, failed: false, localImplicit: false }),
@@ -46,7 +47,7 @@ let container: HTMLDivElement, root: Root, client: QueryClient;
 beforeEach(() => {
   vi.clearAllMocks();
   f.userId = "owner-a";
-  f.companyId = "company-a";
+  f.companyId = "10000000-0000-4000-8000-000000000001";
   const hash = "a".repeat(64);
   f.catalog.mockResolvedValue([
     {
@@ -82,6 +83,8 @@ beforeEach(() => {
       },
     ],
   });
+  sessionStorage.clear();
+  f.installationRequest.mockRejectedValue(new Error("Original request unconfirmed"));
   f.list.mockResolvedValue([]);
   f.proposalsList.mockResolvedValue([]);
   f.preview.mockResolvedValue({
@@ -108,6 +111,7 @@ beforeEach(() => {
 afterEach(async () => {
   await act(async () => root.unmount());
   client.clear();
+  sessionStorage.clear();
   container.remove();
   await act(async () => i18n.changeLanguage("en"));
 });
@@ -158,7 +162,7 @@ it("checks readiness and installs native configuration without silently activati
   );
   await click("Install for configuration");
   expect(f.preview.mock.calls[0]!.slice(0, 3)).toEqual([
-    "company-a",
+    "10000000-0000-4000-8000-000000000001",
     "owner-a",
     "internal-review",
   ]);
@@ -186,7 +190,7 @@ it("discards readiness returned after an account or company change", async () =>
   await configure();
   await click("Check readiness");
   f.userId = "owner-b";
-  f.companyId = "company-b";
+  f.companyId = "10000000-0000-4000-8000-000000000002";
   await act(async () => client.setQueryData(queryKeys.auth.session, v9SessionFixture(f.userId)));
   await render();
   await act(async () =>
@@ -202,7 +206,7 @@ it("discards readiness returned after an account or company change", async () =>
   await flush();
   expect(container.textContent).not.toContain("Old account readiness");
   expect(f.install).not.toHaveBeenCalled();
-  expect(f.list).toHaveBeenCalledWith("company-b", "owner-b");
+  expect(f.list).toHaveBeenCalledWith("10000000-0000-4000-8000-000000000002", "owner-b");
 });
 
 it("withdraws private setup during a current-session check and restores same-person unsent inputs without an old readiness receipt", async () => {
@@ -282,4 +286,62 @@ it("localizes current installed and historical proposal status without claiming 
   expect(container.textContent).toContain("Risikogrænse: C1 → C2.");
   expect(container.textContent).not.toContain("Risk envelope");
   expect(f.decide).not.toHaveBeenCalled(); expect(f.proposalReview).not.toHaveBeenCalled();
+});
+
+it("retains only the original locator after a lost install response and reconciles without another write", async () => {
+  f.install.mockRejectedValueOnce(Error("PRIVATE lost acknowledgement"));
+  await render(); await configure(); await click("Check readiness"); await click("Install for configuration");
+  expect(f.install).toHaveBeenCalledTimes(1);
+  const original = f.install.mock.calls[0]![3];
+  expect(original.installationRequestId).toMatch(/^[a-f0-9-]{36}$/);
+  const saved = sessionStorage.getItem("aw.v9.pending-package-installation-requests")!;
+  expect(saved).toContain(original.installationRequestId);
+  expect(saved).not.toMatch(/PRIVATE|components|internal-review|agentId|updatePolicy|33333333/);
+  expect(container.textContent).toContain("original installation could not be confirmed");
+  expect(container.textContent).not.toContain("PRIVATE lost acknowledgement");
+  expect(container.querySelector("select")).toBeNull();
+  f.installationRequest.mockResolvedValueOnce({ companyId: f.companyId, requestId: original.installationRequestId,
+    installationId: "20000000-0000-4000-8000-000000000001", installationVersion: 1, installationStatus: "configuring", observedAt: "2026-10-14T14:00:00Z" });
+  await click("Check original request");
+  expect(container.textContent).toContain("An installation is recorded for this request");
+  expect(f.install).toHaveBeenCalledTimes(1); expect(f.decide).not.toHaveBeenCalled();
+  await click("Return to packages");
+  expect(sessionStorage.getItem("aw.v9.pending-package-installation-requests")).toBeNull();
+  expect(f.install).toHaveBeenCalledTimes(1);
+});
+it("retries only the exact same in-memory request and rejects another setup while it is unresolved", async () => {
+  f.install.mockRejectedValue(Error("unknown acknowledgement"));
+  await render(); await configure(); await click("Check readiness"); await click("Install for configuration");
+  const first = structuredClone(f.install.mock.calls[0]![3]);
+  await click("Send the same request again");
+  expect(f.install).toHaveBeenCalledTimes(2); expect(f.install.mock.calls[1]![3]).toEqual(first);
+  expect(container.querySelector("select")).toBeNull();
+  expect(Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Return to packages")?.disabled).toBe(true);
+  expect(f.decide).not.toHaveBeenCalled();
+});
+it("recovers a stored locator after remount without rebuilding configuration or posting", async () => {
+  const requestId = "20000000-0000-4000-8000-000000000001";
+  sessionStorage.setItem("aw.v9.pending-package-installation-requests", JSON.stringify([{ companyId: f.companyId, principal: f.userId, requestId }]));
+  await render();
+  expect(f.installationRequest).toHaveBeenCalledWith(f.companyId, f.userId, requestId, expect.any(AbortSignal));
+  expect(container.textContent).toContain("Original installation request");
+  expect(f.install).not.toHaveBeenCalled(); expect(f.preview).not.toHaveBeenCalled();
+  expect(f.catalog).not.toHaveBeenCalled();
+});
+it("refuses new work when original locator storage is corrupt", async () => {
+  sessionStorage.setItem("aw.v9.pending-package-installation-requests", '{"PRIVATE configuration":true}');
+  await render();
+  expect(container.querySelector('[role="alert"]')?.textContent).toContain("original request locator could not be retained or checked");
+  expect(container.textContent).not.toContain("PRIVATE configuration");
+  expect(f.install).not.toHaveBeenCalled(); expect(f.catalog).not.toHaveBeenCalled();
+});
+
+it("does not clear the original locator merely because an installation transport returned success", async () => {
+  f.install.mockResolvedValueOnce({ companyId: "20000000-0000-4000-8000-000000000099", status: "active" });
+  await render(); await configure(); await click("Check readiness"); await click("Install for configuration");
+  expect(f.installationRequest).toHaveBeenCalledTimes(1);
+  expect(sessionStorage.getItem("aw.v9.pending-package-installation-requests")).not.toBeNull();
+  expect(container.textContent).toContain("original installation could not be confirmed");
+  expect(container.textContent).not.toContain("An installation is recorded");
+  expect(f.decide).not.toHaveBeenCalled();
 });

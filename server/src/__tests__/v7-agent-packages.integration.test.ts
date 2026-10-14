@@ -30,6 +30,7 @@ import {
 } from "../services/stewards/core-stewards.js";
 import { evaluateSpecialistPackage } from "../services/agent-packages/specialist-evaluation.js";
 import {
+  authUsers,
   readinessAssessments,
   knowledgeQualityFindings,
   companyMemberships,
@@ -132,6 +133,7 @@ import {
   packageChangeIsMaterial,
   packageReleaseBlockers,
 } from "../services/agent-packages/package-policy.js";
+import { V9_FEATURE_KEYS } from "@paperclipai/shared";
 const support = await getEmbeddedPostgresTestSupport();
 (support.supported ? describe : describe.skip)(
   "V7 native internal package installation and activation",
@@ -570,6 +572,44 @@ const support = await getEmbeddedPostgresTestSupport();
       const other = await seedV5Presences(db);
       await expect(service.install(other.actor, other.home, body, input.packageKey)).rejects.toMatchObject({status: 404});
     });
+    it("reads a retained installation request without replay after withdrawal, uninstall and rollout closure", async () => {
+      const body = { ...installInput(), installationRequestId: randomUUID() };
+      const installed = await service.install(f.actor, f.home, body, input.packageKey);
+      const before = await db.select().from(activityLog).where(eq(activityLog.entityId, installed.id));
+      const first = await service.installationRequest(f.actor, f.home, body.installationRequestId);
+      expect(first).toMatchObject({ companyId: f.home, requestId: body.installationRequestId,
+        installationId: installed.id, installationVersion: 1, installationStatus: "configuring" });
+      expect(Object.keys(first).sort()).toEqual(["companyId", "installationId", "installationStatus", "installationVersion", "observedAt", "requestId"]);
+      expect(await db.select().from(activityLog).where(eq(activityLog.entityId, installed.id))).toEqual(before);
+      await service.revoke(f.actor, versionId);
+      const current = await service.get(f.actor, f.home, installed.id);
+      await service.decide(f.actor, f.home, installed.id, "uninstall", { expectedVersion: current.version, reason: "Retire the original recorded installation" });
+      await instanceSettingsService(db).updateExperimental({ ...Object.fromEntries(V9_FEATURE_KEYS.map(key => [key, false])),
+        core_stewards_v7: false, agent_packages_v7: false });
+      expect(await service.installationRequest(f.actor, f.home, body.installationRequestId)).toMatchObject({ installationId: installed.id, installationStatus: "uninstalled" });
+      const app = express(); app.use(express.json());
+      app.use((req, _res, next) => { req.actor = f.actor as typeof req.actor; next(); });
+      app.use("/api", agentPackageRoutes(db)); app.use(errorHandler);
+      const response = await request(app).get(`/api/companies/${f.home}/agent-package-installations/requests/${body.installationRequestId}?expectedUserId=${f.userId}`).expect(200);
+      expect(response.headers["cache-control"]).toBe("private, no-store");
+      expect(response.body.installationStatus).toBe("uninstalled");
+      await request(app).get(`/api/companies/${f.home}/agent-package-installations/requests/${body.installationRequestId}?expectedUserId=foreign`).expect(409);
+      await request(app).get(`/api/companies/${f.home}/agent-package-installations/requests/${body.installationRequestId}`).expect(400);
+      await request(app).get(`/api/companies/${f.home}/agent-package-installations/requests/not-a-uuid?expectedUserId=${f.userId}`).expect(400);
+    });
+    it("keeps absent or foreign installation requests unconfirmed and preserves current requester/Agent authority", async () => {
+      const body = { ...installInput(), installationRequestId: randomUUID() };
+      await service.install(f.actor, f.home, body, input.packageKey);
+      await expect(service.installationRequest(f.actor, f.home, randomUUID())).rejects.toMatchObject({ status: 404, details: { code: "PACKAGE_INSTALL_REQUEST_UNCONFIRMED" } });
+      await expect(service.installationRequest(f.actor, f.guest, body.installationRequestId)).rejects.toMatchObject({ status: 404 });
+      const other = await seedV5Presences(db);
+      await expect(service.installationRequest({ ...other.actor, isInstanceAdmin: true }, f.home, body.installationRequestId)).rejects.toMatchObject({ status: 403 });
+      await db.update(authUsers).set({ emailVerified: false }).where(eq(authUsers.id, f.userId));
+      await expect(service.installationRequest(f.actor, f.home, body.installationRequestId)).rejects.toMatchObject({ status: 403 });
+      await db.update(authUsers).set({ emailVerified: true }).where(eq(authUsers.id, f.userId));
+      await db.update(companyMemberships).set({ status: "suspended" }).where(and(eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
+      await expect(service.installationRequest({ ...f.actor, isInstanceAdmin: true }, f.home, body.installationRequestId)).rejects.toMatchObject({ status: 403 });
+    });
     async function run() {
       return (
         await db
@@ -602,14 +642,17 @@ const support = await getEmbeddedPostgresTestSupport();
     it("retains private no-store headers on Original package reads and refused writes", async () => {
       const app = express(); app.use(express.json());
       app.use((req, _res, next) => { req.actor = f.actor as typeof req.actor; next(); });
-      app.use("/api", agentPackageRoutes(db)); app.use(errorHandler);
+      app.use("/api", agentPackageRoutes(db));
+      app.get("/api/non-package-probe", (_req, res) => res.json({ ok: true }));
+      app.use(errorHandler);
       const responses = [
         await request(app).get(`/api/agent-packages?expectedUserId=${f.userId}`).expect(200),
         await request(app).get(`/api/companies/${f.home}/agent-package-installations?expectedUserId=${f.userId}`).expect(200),
         await request(app).get(`/api/companies/${f.home}/agent-package-installations?expectedUserId=foreign-account`).expect(409),
-        await request(app).post(`/api/companies/${f.home}/agent-packages/${input.key}/install?expectedUserId=${f.userId}`).send({}).expect(400),
+        await request(app).post(`/api/companies/${f.home}/agent-packages/${input.packageKey}/install?expectedUserId=${f.userId}`).send({}).expect(400),
       ];
       for (const response of responses) expect(response.headers["cache-control"]).toBe("private, no-store");
+      expect((await request(app).get("/api/non-package-probe").expect(200)).headers["cache-control"]).toBeUndefined();
     });
     async function reviewedMaintenance(installedId: string, next: { id: string; contentHash: string }) {
       const [current] = await db.select().from(companyAgentPackageInstallations).where(eq(companyAgentPackageInstallations.id, installedId));

@@ -8,10 +8,24 @@ import type {
   SpecialistEvaluationInput,
   SpecialistEvaluationReport,
 } from "@paperclipai/shared";
-import { api } from "./client";
+import { api, detachInflightGet } from "./client";
+import { packageInstallationRequestReceiptSchema } from "@paperclipai/shared";
 const scope = (path: string, userId: string) =>
   `${path}?expectedUserId=${encodeURIComponent(userId)}`;
+function currentRead<T>(path: string, userId: string, signal?: AbortSignal) {
+  const url = scope(path, userId);
+  // A new private reader must not join a request begun before its session check.
+  detachInflightGet(url);
+  return api.get<T>(url, { signal, cache: "no-store" });
+}
 export const agentPackagesApi = {
+  async installationRequest(companyId: string, userId: string, requestId: string, signal?: AbortSignal) {
+    const receipt = packageInstallationRequestReceiptSchema.parse(await currentRead(
+      `/companies/${encodeURIComponent(companyId)}/agent-package-installations/requests/${encodeURIComponent(requestId)}`, userId, signal));
+    signal?.throwIfAborted();
+    if (receipt.companyId !== companyId || receipt.requestId !== requestId) throw new Error("Original installation request context changed");
+    return receipt;
+  },
   evaluate: (
     companyId: string,
     userId: string,
@@ -22,14 +36,14 @@ export const agentPackagesApi = {
       input,
     ),
   catalog: (userId: string) =>
-    api.get<PackageCatalogView[]>(scope("/agent-packages", userId)),
+    currentRead<PackageCatalogView[]>("/agent-packages", userId),
   options: (companyId: string, userId: string) =>
-    api.get<PackageInstallOptions>(
-      scope(`/companies/${companyId}/agent-package-options`, userId),
+    currentRead<PackageInstallOptions>(
+      `/companies/${companyId}/agent-package-options`, userId,
     ),
   list: (companyId: string, userId: string) =>
-    api.get<PackageInstallationView[]>(
-      scope(`/companies/${companyId}/agent-package-installations`, userId),
+    currentRead<PackageInstallationView[]>(
+      `/companies/${companyId}/agent-package-installations`, userId,
     ),
   preview: (
     companyId: string,
@@ -99,8 +113,8 @@ export interface PackageUpdateProposalView {
 }
 export const packageProposalsApi = {
   list: (companyId: string, userId: string) =>
-    api.get<PackageUpdateProposalView[]>(
-      scope(`/companies/${companyId}/agent-package-update-proposals`, userId),
+    currentRead<PackageUpdateProposalView[]>(
+      `/companies/${companyId}/agent-package-update-proposals`, userId,
     ),
   review: (
     companyId: string,
