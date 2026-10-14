@@ -1,10 +1,11 @@
 import { describe, expect, it } from "vitest";
-import type { AskUserQuestionsInteraction } from "@paperclipai/shared";
+import type { AskUserQuestionsInteraction, RequestConfirmationInteraction } from "@paperclipai/shared";
 import { TelegramAdapter } from "@chat-adapter/telegram";
 import { Actions, Button, Card, CardText } from "chat";
 import {
   createChatQuestionOptionActionToken,
   nativeChatQuestion,
+  nativeChannelConfirmation,
   TELEGRAM_CALLBACK_DATA_LIMIT_BYTES,
   telegramCallbackDataByteLength,
   telegramChatSdkCallbackData,
@@ -140,5 +141,22 @@ describe("Telegram question action payloads", () => {
     expect(
       telegramCallbackDataByteLength(actionId, interactionId),
     ).toBeGreaterThan(TELEGRAM_CALLBACK_DATA_LIMIT_BYTES);
+  });
+});
+
+const binaryConfirmation: RequestConfirmationInteraction = { ...closedQuestion(), result: null, kind: "request_confirmation",
+  payload: { version: 1, prompt: "Continue preparing this draft?" } };
+
+describe("V9 binary channel confirmation admission", () => {
+  it.each(["slack", "microsoft-teams"])("requires rollout for %s and keeps Original binary limits", provider => {
+    expect(nativeChannelConfirmation(binaryConfirmation, provider, false)).toBeNull();
+    expect(nativeChannelConfirmation(binaryConfirmation, provider, true)).toBe(binaryConfirmation);
+    expect(nativeChannelConfirmation({ ...binaryConfirmation, payload: { ...binaryConfirmation.payload, rejectRequiresReason: true } }, provider, true)).toBeNull();
+    expect(nativeChannelConfirmation({ ...binaryConfirmation, payload: { ...binaryConfirmation.payload, target: { type: "issue_document", issueId: binaryConfirmation.issueId, key: "plan", documentId: "11111111-1111-4111-8111-111111111111", revisionId: "22222222-2222-4222-8222-222222222222" } } }, provider, true)).toBeNull();
+  });
+  it("retains Telegram behavior and refuses unmapped hosts", () => {
+    expect(nativeChannelConfirmation(binaryConfirmation, "telegram", false)).toBe(binaryConfirmation);
+    for (const provider of ["github", "discord", "imessage-photon", "unknown"])
+      expect(nativeChannelConfirmation(binaryConfirmation, provider, true)).toBeNull();
   });
 });

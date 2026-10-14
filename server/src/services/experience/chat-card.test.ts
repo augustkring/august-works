@@ -25,6 +25,16 @@ describe("V9 semantic content through the installed Slack and Teams adapters", (
     expect(p.text).toContain(context.consequence); expect(p.text).toContain(context.whyYou);
     expect(rendered).not.toContain(companyId);
   });
+  it.each(["slack", "microsoft-teams"] as const)("renders binary confirmation callbacks and their exact Original value on %s", provider => {
+    const publication = projectSafeChatPublication({ classification: "external", source: "issue_interaction", text: "Review this draft",
+      interaction: { id, card: { kind: "confirmation", title: "Continue?", experience: { ...context, kind: "confirmation" },
+        actions: [{ type: "callback", actionId: "pcq:continue", label: "Continue", style: "primary" },
+          { type: "callback", actionId: "pcq:stop", label: "Stop", style: "danger" }] } } });
+    const card = safeCardForPublication(publication, provider)!;
+    const rendered = JSON.stringify(provider === "slack" ? cardToBlockKit(card) : cardToAdaptiveCard(card));
+    for (const text of ["Continue?", "pcq:continue", "pcq:stop", "Continue", "Stop", id]) expect(rendered).toContain(text);
+    expect(rendered).not.toContain(companyId);
+  });
   it("uses the Original sanitizer for semantic text and its plain fallback", () => {
     const p = payload({ ...context, whyYou: "@channel token: PRIVATE_CANARY", evidence: ["<analysis>PRIVATE_REASONING</analysis>Pending"] });
     const serialized = JSON.stringify(p);

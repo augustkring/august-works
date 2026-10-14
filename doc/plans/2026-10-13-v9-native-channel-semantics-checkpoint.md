@@ -29,3 +29,27 @@ The fixture now pins its contributing row inside the window and asserts that bou
 Only the existing question/confirmation send and settlement owners are connected in this slice. Approval, permission, workflow and other families still require their complete canonical settlement/recovery mapping. Remote erasure, unknown sends, independent C7 evidence and real Slack/Teams qualification remain unqualified. The full V9 coverage manifest and release gates remain pending.
 
 Reference guidance: the supplied agentic AI, API integration, verification, privacy, UX and UI playbooks inform the typed component boundary, current Native authority, derived-data limits, real-adapter evidence and clear pending/terminal state distinctions. They remain guidance beside the V9 brief.
+
+## Binary Slack and Teams confirmation extension — 2026-10-14
+
+Ordinary binary confirmations now reuse the existing Native action-token owner
+on Slack and Teams when effective action_cards_v9 is enabled. A callback must
+match its issued message/action/interaction and current linked Human. New hosts
+recheck rollout under a shared settings lock inside Native response commit,
+alongside existing current endpoint/destination/membership/link authorization.
+Disabling rollout does not replay or reverse a committed response; terminal
+settlement remains available. Telegram eligibility and settlement are retained.
+
+| Native request | Slack / Teams behavior |
+| --- | --- |
+| Closed or modal question | Existing Original option/form owner and current answer policy |
+| Ordinary binary confirmation | Original one-use accept/reject callbacks under V9 admission |
+| Rejection requires reason | Existing full web review |
+| Tool action, credential/connection authorization, document review | Existing full web review; binary callbacks are refused |
+| Resolved, cancelled or expired request | Original actionless terminal edit/follow-up |
+
+This adds no general approval, permission grant or cross-channel business
+projection. Live host/provider, complete card-family, manual accessibility and
+representative Human evidence remain pending. Source metadata is kept inside the
+publication boundary; only the existing sanitized semantic text and necessary
+opaque action/interaction callback identity reach the provider adapter.

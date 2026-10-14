@@ -1,3 +1,5 @@
+import { instanceSettings } from "@paperclipai/db";
+import { v9FeatureEnabled } from "@paperclipai/shared";
 import { safeCardForPublication } from "./chat-card-rendering.js";
 import { withSlackBoardLease } from "./slack-board-lease.js";
 import { mirrorSlackBoardComment, slackBoardReplyBindings } from "./slack-board-messages.js";
@@ -329,6 +331,7 @@ import {
   enqueueTerminalIssueInteractionChatPublications,
   nativeChatQuestion,
   nativeTelegramConfirmation,
+  nativeChannelConfirmation,
   TELEGRAM_CALLBACK_DATA_LIMIT_BYTES,
   telegramChatSdkCallbackData,
 } from "./chat-interaction-publications.js";
@@ -10418,8 +10421,15 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
       expectedUserId: string;
       principalId: string;
       runtimeContext: LifecycleRuntimeFence;
+      v9Confirmation?: boolean;
     },
   ): Promise<void> {
+    if (input.v9Confirmation) {
+      const [settings] = await tx.select({ experimental: instanceSettings.experimental })
+        .from(instanceSettings).where(eq(instanceSettings.singletonKey, "default")).for("share");
+      if (!v9FeatureEnabled(settings?.experimental ?? {}, "action_cards_v9"))
+        throw forbidden("This chat action is no longer authorized", { code: "chat_action_authorization_changed" });
+    }
     const endpoint = await runtimeCallbackEndpoint(
       tx,
       input.endpointId,
@@ -19471,7 +19481,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
       !conversation ||
       !publication ||
       !endpoint ||
-      endpoint.provider !== "telegram" ||
+      !["telegram", "slack", "microsoft-teams"].includes(endpoint.provider) ||
       publication.conversationId !== conversation.id ||
       publication.payload.interactionId !== token.interactionId
     ) {
@@ -20571,8 +20581,8 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
     }
     if (interaction.kind === "request_confirmation") {
       if (
-        event.provider !== "telegram" ||
-        !nativeTelegramConfirmation(interaction)
+        !nativeChannelConfirmation(interaction, event.provider,
+          event.provider === "telegram" || v9FeatureEnabled(await instanceSettingsService(db).getExperimental(), "action_cards_v9"))
       ) {
         return deny(safelyKnown);
       }
@@ -20658,6 +20668,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
                   expectedUserId: principal.userId!,
                   principalId: principal.principal.id,
                   runtimeContext,
+                  v9Confirmation: event.provider !== "telegram",
                 });
               },
               afterResolveInTransaction: async (tx, resolved) => {
@@ -20708,6 +20719,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
                   expectedUserId: principal.userId!,
                   principalId: principal.principal.id,
                   runtimeContext,
+                  v9Confirmation: event.provider !== "telegram",
                 });
               },
               afterResolveInTransaction: async (tx, resolved) => {

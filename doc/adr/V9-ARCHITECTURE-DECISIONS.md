@@ -2368,3 +2368,23 @@ choices and an unchanged current installation version before readiness or a new
 dispatch. UI decision reasons use the Original shared validator. These are early
 input checks, not a replacement for Native admission. An explicit exact-input
 installation resend continues through its retained Original request identity.
+
+## ADR-65 — Slack and Teams binary confirmations use the Original action owner
+
+With effective action_cards_v9, Slack and Teams may use the existing Native
+binary-confirmation action ledger and callback resolver, as Telegram already
+does. The pinned Chat SDK renders the same accept/reject labels and opaque
+action identities. Existing current external principal/link, endpoint, destination,
+message, interaction and Native resolution authorization remain required. New
+host callbacks additionally share-lock and recheck effective rollout inside the
+Original resolution transaction. Disabling rollout refuses uncommitted actions;
+already committed responses still settle through their durable Original owner.
+
+The existing exclusion policy remains: required rejection reasons, tool actions,
+secret proposals, connection authorization and document review require the full
+Native web path. No new approval type, grant, arbitrary tool dispatch, provider
+send owner or callback token table is introduced. Repeated callbacks read the
+committed original action; they do not create a new confirmation or terminal
+publication. Unknown delivery and post-resolution crash recovery keep Native
+settlement behavior. The capability flag is rollout admission, never permission
+or hosted/provider qualification. Software fixtures do not establish live C7.

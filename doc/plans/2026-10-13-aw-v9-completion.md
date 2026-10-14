@@ -1582,3 +1582,39 @@ built EN/DA/mobile/session and lost-response/rollout browser cases pass (56.3
 seconds). Token gates, module boundaries and Source coverage are checked before
 commit. The separate checkpoint 31 full run has no final aggregate yet. These
 software checks do not close the 70 pending launch-evidence surfaces or whole V9.
+
+### Native binary confirmation actions reach Slack and Teams — 2026-10-14
+
+New Slack/Teams binary confirmations reuse the Original opaque action-token
+ledger and Native accept/reject transaction under effective action_cards_v9.
+Current identity, endpoint/destination/membership/link and exact issued
+message/interaction remain required. New host actions recheck rollout under a
+shared settings lock at Native commit. Telegram keeps its original eligibility
+without depending on the added V9 callback settings read. Committed responses
+still reconcile after rollout closure. Tool/grant/credential/connection/document
+review and reason-bearing rejection remain on their full Native web path.
+
+With the new host mapping disabled, both actual PostgreSQL baselines fail at the
+expected missing two Original callback actions (25.08 seconds). The initial
+fixture incorrectly treated an absent optional action array as false; that is
+corrected to inspect an empty list. A later extra assertion incorrectly looked
+for confirmations in the question-only delivery table; the confirmation's
+Original idempotent terminal publication is asserted instead. Both real host
+fixtures and existing Telegram post-commit-crash/terminal/one-use recovery plus
+complex-question fallback then pass: four cases, 29.69 seconds, 1040 deliberately
+unselected. Three contract/rendering/sanitizer suites pass 27 cases (9.37
+seconds), including exact installed Slack Block Kit/Teams Adaptive Card callback
+values. Server typecheck passes after correcting the test's inherited question
+result type (exit 0). Module and 70-Source coverage gates pass. Live C7, complete
+approval/permission families and Human/provider evidence remain pending.
+
+The separate frozen checkpoint 31 full run has now failed in its general server
+phase: 911 files passed, seven failed, seven skipped; 17112 cases passed, 47
+failed, 90 skipped, seven unhandled errors. The driver correctly did not proceed
+to later phases or build. Initial diagnosis identifies overlong owned Unix
+socket paths, an optimizer fixture supplying nonexistent legacy run IDs to the
+new provenance guard, and a Discord handshake session-read assertion. Exact
+causes/fixes require their own verification; this is not a full passing result.
+
+The final Telegram settings-read short circuit is included in a repeated Native
+regression: four cases pass (28.37 seconds; 1040 deliberately unselected).

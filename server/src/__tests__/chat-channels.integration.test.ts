@@ -39668,6 +39668,88 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     expect(stillPending.status).toBe("pending");
   });
 
+  it.each(["slack", "microsoft-teams"] as const)(
+    "V9 binary confirmations on %s retain Native identity, rollout and one-use resolution",
+    async provider => {
+      await instanceSettingsService(db).updateExperimental({ action_cards_v9: false });
+      onTestFinished(() => instanceSettingsService(db).updateExperimental({ action_cards_v9: false }));
+      const fixture = await seedCompany();
+      const { callbacks, endpoint, service, wakeup } = provider === "slack"
+        ? await configuredSlackEndpoint(fixture) : await configuredTeamsEndpoint(fixture);
+      const externalUserId = `v9-confirm-${randomUUID()}`;
+      const conversationId = `v9-confirm-${randomUUID()}`;
+      const serviceUrl = "https://smba.trafficmanager.net/amer/";
+      const thread = makeThread({ channelId: conversationId, isDM: true,
+        id: provider === "slack" ? `slack:${conversationId}:9000.1` : `teams:${Buffer.from(conversationId).toString("base64url")}:${Buffer.from(serviceUrl).toString("base64url")}` });
+      await deliverMessage({ callbacks, endpointId: endpoint.id, provider, thread: thread.thread,
+        trigger: "direct_message", message: makeMessage({ id: "9000.1", userId: externalUserId,
+          text: "Prepare an internal confirmation", raw: { serviceUrl, from: { aadObjectId: externalUserId } } }) });
+      await qualifySetupRoundTrip(service, endpoint.id, externalUserId);
+      await service.test(endpoint.id, "owner-user");
+      const [conversation] = await service.listConversations(endpoint.id);
+      expect(conversation).toBeDefined();
+      const [principal] = await db.select().from(chatExternalPrincipals).where(and(
+        eq(chatExternalPrincipals.companyId, fixture.companyId), eq(chatExternalPrincipals.provider, provider),
+        eq(chatExternalPrincipals.externalId, externalUserId)));
+      expect(principal).toBeDefined();
+      const intent = await service.createLinkIntent(endpoint.id, principal.id, 1800);
+      await service.confirmIdentityLink(new URL(intent.confirmationUrl).searchParams.get("token")!, "owner-user");
+      const createConfirmation = async (reason = false) => {
+        const interaction = await issueThreadInteractionService(db).create(
+          { id: conversation.issueId, companyId: fixture.companyId },
+          { kind: "request_confirmation", continuationPolicy: "wake_assignee", title: "Internal draft review",
+            payload: { version: 1, prompt: "Continue preparing the internal draft?", acceptLabel: "Continue", rejectLabel: "Stop",
+              ...(reason ? { rejectRequiresReason: true } : {}) } }, { agentId: fixture.assignedAgentId });
+        await service.processPendingPublications();
+        const [publication] = await db.select().from(chatPublications).where(and(eq(chatPublications.endpointId, endpoint.id),
+          eq(chatPublications.idempotencyKey, `interaction:${interaction.id}:${endpoint.id}`)));
+        return { interaction, publication };
+      };
+      const before = await createConfirmation();
+      expect((before.publication.payload.card?.actions ?? []).some(action => action.type === "callback")).toBe(false);
+      await issueThreadInteractionService(db).skipInteraction(
+        { id: conversation.issueId, companyId: fixture.companyId }, before.interaction.id, {}, { userId: "owner-user" });
+      await instanceSettingsService(db).updateExperimental({ experience_projection_v9: true, action_cards_v9: true });
+      const { interaction, publication } = await createConfirmation();
+      expect(publication.state).toBe("published");
+      expect(publication.payload.card?.experience?.source.resourceId).toBe(interaction.id);
+      const actions = await db.select().from(chatActions).where(and(eq(chatActions.endpointId, endpoint.id),
+        eq(chatActions.kind, "confirmation_response"), sql`${chatActions.payload}->>'interactionId' = ${interaction.id}`));
+      expect(actions).toHaveLength(2);
+      const accept = actions.find(action => action.payload.decision === "accept")!;
+      const event = { endpointId: endpoint.id, provider, event: { actionId: accept.providerActionId, adapter: {} as never,
+        messageId: publication.providerMessageId!, openModal: async () => undefined,
+        raw: { serviceUrl, from: { aadObjectId: externalUserId } }, thread: thread.thread, threadId: thread.thread.id,
+        user: { userId: externalUserId, userName: "reviewer", fullName: "Reviewer", isBot: false, isMe: false, isSystem: false },
+        value: interaction.id } };
+      const status = async () => (await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.id, interaction.id)))[0];
+      wakeup.mockClear();
+      await callbacks.onAction!({ ...event, event: { ...event.event, value: randomUUID() } });
+      expect((await status()).status).toBe("pending");
+      await instanceSettingsService(db).updateExperimental({ action_cards_v9: false });
+      await callbacks.onAction!(event);
+      expect((await status()).status).toBe("pending");
+      expect(wakeup).not.toHaveBeenCalled();
+      await instanceSettingsService(db).updateExperimental({ action_cards_v9: true });
+      await db.update(companyMemberships).set({ status: "suspended" }).where(and(
+        eq(companyMemberships.companyId, fixture.companyId), eq(companyMemberships.principalId, "owner-user")));
+      await callbacks.onAction!(event);
+      expect((await status()).status).toBe("pending");
+      await db.update(companyMemberships).set({ status: "active" }).where(and(
+        eq(companyMemberships.companyId, fixture.companyId), eq(companyMemberships.principalId, "owner-user")));
+      await callbacks.onAction!(event);
+      expect(await status()).toMatchObject({ status: "accepted", resolvedByUserId: "owner-user" });
+      await callbacks.onAction!(event);
+      const terminalPublications = await db.select().from(chatPublications)
+        .where(eq(chatPublications.idempotencyKey, `interaction-resolution:${interaction.id}:${endpoint.id}`));
+      expect(terminalPublications).toHaveLength(1);
+      const [settled] = await db.select().from(chatActions).where(eq(chatActions.id, accept.id));
+      expect(settled).toMatchObject({ status: "processed", result: { code: "confirmation_resolution_committed_by_provider" } });
+      const complex = await createConfirmation(true);
+      expect((complex.publication.payload.card?.actions ?? []).some(action => action.type === "callback")).toBe(false);
+    },
+  );
+
   it("renders safe Telegram confirmations as opaque one-use buttons and wakes the resolved task", async () => {
     const fixture = await seedCompany();
     let injectSettlementCrash = true;

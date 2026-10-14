@@ -187,6 +187,17 @@ export function nativeTelegramConfirmation(
   return interaction;
 }
 
+/** Existing binary Native confirmation policy, with V9 admission for new hosts.
+ * A provider callback is never authority for tools, grants or document review. */
+export function nativeChannelConfirmation(
+  interaction: IssueThreadInteraction,
+  provider: string,
+  actionCardsEnabled: boolean,
+): RequestConfirmationInteraction | null {
+  return provider === "telegram" || actionCardsEnabled && ["slack", "microsoft-teams"].includes(provider)
+    ? nativeTelegramConfirmation(interaction) : null;
+}
+
 function textForQuestionInteraction(
   interaction: AskUserQuestionsInteraction,
   taskUrl: string | null,
@@ -322,8 +333,8 @@ export async function enqueueIssueInteractionChatPublications(
         }))
       : [];
     const confirmation =
-      endpoint.provider === "telegram" && endpoint.capabilities.actions === true
-        ? nativeTelegramConfirmation(interaction)
+      endpoint.capabilities.actions === true
+        ? nativeChannelConfirmation(interaction, endpoint.provider, Boolean(semantic))
         : null;
     const confirmationActionTokens = confirmation
       ? (["accept", "reject"] as const).map((decision) => ({
