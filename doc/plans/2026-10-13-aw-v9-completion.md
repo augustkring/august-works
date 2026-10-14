@@ -1112,3 +1112,52 @@ The reproducible prefix is unshare --user --map-current-user --pid --fork
 original aggregate is still running and will retain its actual failure, not be
 reclassified by a scoped namespace pass. This is software/sandbox evidence, not
 managed Agent, model-provider, staging, channel-host or representative Human proof.
+
+### Original Optimizer workflow-run Source identity — 2026-10-14
+
+A new Native baseline fails: another same-company reader receives a normalized
+trace from a public parent run containing an actually private child result.
+Existing candidate/replay code passed that Workflow Run ID to a heartbeat-run
+lookup. The existing Original current revision and complete Workflow copied-
+payload owners now receive the correct workflowRunId and current actor. Traces,
+correction reads/mutations, counts before ranking, compilation and persisted
+binding reuse repeat those Source checks. The Native transaction/privacy owners
+and journal remain unchanged; no initiating-user snapshot or administrator claim
+becomes a grant. Actual child-run deletion does not remove the parent's retained
+private Source references.
+
+Both initial and expanded Native/normalizer/suggestion groups pass 24 cases in
+three suites. Evaluation/promotion integrations pass ten cases in two suites in
+a non-root process namespace. The following three actual drift/Source/route suites
+pass all 38 cases. An attempted extra selector named a nonexistent live-drift file;
+only the two actual selected suites are claimed for that first command, and the
+real optimizer-drift.integration.test.ts is included in the later three-suite run.
+
+The five-profile V7 Source group passes four cases and rejects workflow_signal:
+its old fixture used a membership-only local-reviewer without an actual source
+reader and omitted the current actor when asking for suggestions. It now uses
+the already-authoritative local operator principal consistently with the rest of
+that explicit software fixture, and supplies the current operator to suggestions.
+This creates no Human/customer proof and changes no production permission. The
+exact workflow-signal follow-up passes (40 other cases not selected). Final full
+five-profile/type/gate evidence follows when complete.
+
+This closes the demonstrated current Optimizer read boundary. Durable Artifact
+lineage for copied descendant results, restore-resistant copy ownership, broader
+package/knowledge copies, the wider brief and final immutable whole-workspace
+verification remain open. No push or PR is made.
+
+The final five-profile attempt initially passes three and fails two alternate-
+consumer checks because the fixture cleanup had also removed local-reviewer's
+membership, still needed by those separate runtime-binding probes. That fixture
+mistake is corrected: the alternate operator now has an actual verified Native
+user row and active membership; source review still uses the actual local
+operator. The final exact five-profile group passes all five cases (36 others
+not selected) in the isolated non-root process context, 72.9 seconds overall.
+Current server compiler and module/70-surface source gates pass. This final group
+is separate from the prior ten evaluation/promotion and 38 drift/Source/route
+cases; their overlapping counts are not added into a whole-workspace result.
+
+The updated inspection contract initially rejects an unregistered privacy key
+(59 other cases pass). The rule is moved into the existing sensitiveFields list;
+all 60 contract cases then pass. There is no contract-schema relaxation.

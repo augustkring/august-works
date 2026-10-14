@@ -118,7 +118,8 @@
       "Strict reviewed workflow/revision/timestamp/request tuple and explicit consequence acknowledgement; no free-text reason or private result payload."
     ],
     "sensitiveFields": [
-      "Run/step inputs, outputs, errors, credentials, actor assignments, approval resolutions, reference IDs, wait tokens and hidden reasoning remain excluded"
+      "Run/step inputs, outputs, errors, credentials, actor assignments, approval resolutions, reference IDs, wait tokens and hidden reasoning remain excluded",
+      "Optimizer traces, corrections and suggestion counts use the actual current Workflow Run and complete copied-payload Source owners, including retained private child references after child-run deletion. A stored initiating principal or claimed administrator is not a current read grant."
     ],
     "loggingConstraints": "Purpose-separated workflow-run-experience namespace for success and rejected requests; generic logs omit account query strings, raw errors and private payloads."
   },

@@ -1,3 +1,6 @@
+import { optimizerSuggestionService } from "../services/optimizer/optimizer-suggestions.js";
+import { optimizerTraceService } from "../services/optimizer/optimizer-trace.js";
+import { getWorkflowRunReview, reviewWorkflowRun } from "../services/optimizer/optimizer-run-review.js";
 import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
@@ -231,6 +234,32 @@ describe.sequential("Original workflow private authoring copy owner", () => {
       triggerPayload: { value: "PRIVATE restored parent" }, authoringSourceWorkflowIds: [] });
     expect((await db.select().from(workflowRuns).where(eq(workflowRuns.id, completed.run.id)))[0].triggerPayload).toEqual({});
     await expect(engine.getRun(f.home, completed.run.id, f.actor)).rejects.toMatchObject({ status: 403 });
+  });
+  it("retains the public parent's private child Source in Original Optimizer traces and review reads after child-run removal", async () => {
+    const child = await privateValueWorkflow(), parent = await parentWorkflow(child);
+    const completed = await workflowExecutorService(db).startManualRun(f.home, parent.id, { input: {} }, human(), randomUUID());
+    expect(completed.run.status).toBe("succeeded");
+    const otherUser = randomUUID(), now = new Date();
+    await db.insert(authUsers).values({ id: otherUser, name: "Foreign optimizer reader", email: `${otherUser}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now });
+    await db.insert(companyMemberships).values({ companyId: f.home, principalType: "user", principalId: otherUser, membershipRole: "owner", status: "active" });
+    await db.insert(principalPermissionGrants).values({ companyId: f.home, principalType: "user", principalId: otherUser, permissionKey: "workflows:read" });
+    const foreign = { type: "board" as const, source: "session" as const, userId: otherUser, isInstanceAdmin: true };
+    const reviewInput = { humanCorrection: true, correctedOutputs: { child: { value: "PRIVATE optimizer correction" } }, reason: "PRIVATE correction reason" };
+    await reviewWorkflowRun(db, f.home, completed.run.id, reviewInput, human());
+    await expect(optimizerTraceService(db).normalizeWorkflowRun(f.home, completed.run.id, foreign)).rejects.toMatchObject({ status: 403 });
+    await expect(getWorkflowRunReview(db, f.home, completed.run.id, foreign)).rejects.toMatchObject({ status: 403 });
+    await expect(optimizerSuggestionService(db).forWorkflow(f.home, parent.id, foreign)).rejects.toMatchObject({ status: 403 });
+    expect(await optimizerSuggestionService(db).forWorkflow(f.home, parent.id, f.actor)).toMatchObject({ state: "insufficient_runs", terminalRunCount: 1 });
+    await expect(optimizerTraceService(db).normalizeWorkflowRun(f.home, completed.run.id)).rejects.toMatchObject({ status: 403 });
+
+    await expect(reviewWorkflowRun(db, f.home, completed.run.id, reviewInput, { principal: { type: "user", userId: otherUser } })).rejects.toMatchObject({ status: 403 });
+    expect(await optimizerTraceService(db).normalizeWorkflowRun(f.home, completed.run.id, f.actor)).toMatchObject({ runId: completed.run.id });
+    expect(await getWorkflowRunReview(db, f.home, completed.run.id, f.actor)).toMatchObject({ correctedOutputs: reviewInput.correctedOutputs });
+    await db.delete(workflowRuns).where(and(eq(workflowRuns.companyId, f.home), eq(workflowRuns.parentWorkflowRunId, completed.run.id)));
+    await expect(optimizerTraceService(db).normalizeWorkflowRun(f.home, completed.run.id, foreign)).rejects.toMatchObject({ status: 403 });
+    await eraseSource();
+    await expect(optimizerTraceService(db).normalizeWorkflowRun(f.home, completed.run.id, f.actor)).rejects.toMatchObject({ status: 403 });
+    await expect(getWorkflowRunReview(db, f.home, completed.run.id, f.actor)).rejects.toMatchObject({ status: 403 });
   });
   it("propagates the actual private grandchild source to both public ancestors without changing their configurations", async () => {
     const child = await privateValueWorkflow(), middle = await parentWorkflow(child), outer = await parentWorkflow(middle);

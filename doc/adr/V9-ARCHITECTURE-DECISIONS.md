@@ -2109,3 +2109,25 @@ baseline of four actual concurrent reads rejects one because the inner owner
 previously counted the same request again. All four pass after sharing admission.
 The same-row mobile footer allows long translated labels to wrap within their
 respective columns. Excluding an optional field also removes its obsolete error.
+
+## ADR-55 — Optimizer reads use actual workflow-run Source identity
+
+An Optimizer workflow run is not a heartbeat/Agent run. Candidate/replay input
+reads now compose the Original current revision and complete copied Workflow
+payload owners using workflowRunId. Trace normalization and correction reads/
+mutations also require those Sources, including the actual persisted private
+child references after child-run removal. A stored initiating principal and a
+claimed administrator do not supply current Source access.
+
+Current actor identity flows from the Original route to suggestions/normalization
+and correction reads. Complete Source admission precedes counts, shapes, ranking,
+compilation and stored evaluation reuse. Suggestion materialization and trace/
+review operations keep Original analytical-then-memory privacy transaction order;
+final reads and mutating journal paths repeat Source checks. No new Source store,
+permission engine, graph/runtime or qualification flag is introduced.
+
+The existing Native run/review copy erasure and restore guards remain authoritative.
+Broader Artifact copies of private descendant results still need durable provenance
+capture on their own canonical owner; guarding current replay reads alone does not
+complete that closure. No host/provider or representative Human qualification is
+inferred from these software regressions.

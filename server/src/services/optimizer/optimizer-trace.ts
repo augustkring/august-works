@@ -1,3 +1,7 @@
+import { assertOptimizerRunSources } from "./optimizer-source-authority.js";
+import type { AuthorizationActor } from "../authorization.js";
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
+import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { createHash } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 
@@ -145,7 +149,10 @@ export function optimizerTraceService(db: Db) {
     normalizeWorkflowRun: async (
       companyId: string,
       runId: string,
-    ): Promise<OptimizerTrace> => {
+      actor?: AuthorizationActor,
+    ): Promise<OptimizerTrace> => db.transaction(async raw => {
+      const db = raw as unknown as Db;
+      await lockAnalyticalCompany(db, companyId); await lockMemoryPrivacy(db, companyId);
       const run = await db
         .select()
         .from(workflowRuns)
@@ -157,6 +164,7 @@ export function optimizerTraceService(db: Db) {
         )
         .then((rows) => rows[0] ?? null);
       if (!run) throw notFound("Workflow run not found");
+      await assertOptimizerRunSources(db, companyId, runId, actor);
       if (run.source === "test") throw conflict("Internal workflow tests cannot become production optimization evidence", {
         code: "optimizer_trace_test_run",
       });
@@ -259,6 +267,7 @@ export function optimizerTraceService(db: Db) {
 
       const [review] = await db.select().from(workflowRunReviews).where(and(eq(workflowRunReviews.companyId, companyId), eq(workflowRunReviews.workflowRunId, runId)));
       const metadata = runSourceMetadata(run.triggerPayload);
+      await assertOptimizerRunSources(db, companyId, runId, actor);
       return {
         companyId: run.companyId,
         workflowId: run.workflowId,
@@ -272,7 +281,7 @@ export function optimizerTraceService(db: Db) {
         ...(review ? { humanCorrection: review.humanCorrection } : {}),
         createdAt: run.finishedAt.toISOString(),
       };
-    },
+    }),
   };
 }
 

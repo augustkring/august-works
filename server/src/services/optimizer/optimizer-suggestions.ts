@@ -1,3 +1,7 @@
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
+import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
+import { assertOptimizerRunSources } from "./optimizer-source-authority.js";
+import type { AuthorizationActor } from "../authorization.js";
 import { and, desc, eq, ne, inArray } from "drizzle-orm";
 
 import type { Db } from "@paperclipai/db";
@@ -29,6 +33,7 @@ type TraceNormalizer = {
   normalizeWorkflowRun: (
     companyId: string,
     runId: string,
+    actor?: AuthorizationActor,
   ) => Promise<OptimizerTrace>;
 };
 
@@ -282,14 +287,17 @@ export function optimizerSuggestionService(
   db: Db,
   options: OptimizerSuggestionServiceOptions = {},
 ) {
-  const traceNormalizer = options.traceNormalizer ?? optimizerTraceService(db);
   const detector = options.detector ?? detectOptimizerCandidates;
 
   return {
     forWorkflow: async (
       companyId: string,
       workflowId: string,
-    ): Promise<OptimizerSuggestionResponse | null> => {
+      actor?: AuthorizationActor,
+    ): Promise<OptimizerSuggestionResponse | null> => db.transaction(async raw => {
+      const db = raw as unknown as Db;
+      await lockAnalyticalCompany(db, companyId); await lockMemoryPrivacy(db, companyId);
+      const traceNormalizer = options.traceNormalizer ?? optimizerTraceService(db);
       const workflow = await db
         .select({
           id: workflows.id,
@@ -332,6 +340,8 @@ export function optimizerSuggestionService(
         .orderBy(desc(workflowRuns.finishedAt), desc(workflowRuns.createdAt))
         .limit(MAX_SOURCE_RUNS);
 
+      // Source filtering precedes counts, ranking and shape normalization.
+      for (const run of runs) await assertOptimizerRunSources(db, companyId, run.id, actor);
       if (runs.length < MIN_OBSERVATION_COUNT) {
         return response({
           state: "insufficient_runs",
@@ -345,7 +355,7 @@ export function optimizerSuggestionService(
 
       const traces = await Promise.all(
         runs.map((run) =>
-          traceNormalizer.normalizeWorkflowRun(companyId, run.id),
+          traceNormalizer.normalizeWorkflowRun(companyId, run.id, actor),
         ),
       );
       const correctionEvidenceCount = traces.filter(
@@ -373,6 +383,7 @@ export function optimizerSuggestionService(
           isBoundOptimizerSuggestion(suggestion),
       );
       const suggestions = await materializeDetectedSuggestions(db, detected);
+      for (const run of runs) await assertOptimizerRunSources(db, companyId, run.id, actor);
 
       return response({
         state: suggestions.length > 0 ? "ready" : "no_candidate",
@@ -382,6 +393,6 @@ export function optimizerSuggestionService(
         correctionEvidenceCount,
         suggestions,
       });
-    },
+    }),
   };
 }

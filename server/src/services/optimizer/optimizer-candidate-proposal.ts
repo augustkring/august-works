@@ -1,5 +1,5 @@
 import {lockAnalyticalCompany} from "../analytical-privacy.js";
-import {assertAnalyticalContextPayloadAccess} from "../analytical-context-authority.js";
+import { assertOptimizerRunSources } from "./optimizer-source-authority.js";
 import {assertLearningAssetCurrent} from "../learning/learning-assets.js";
 import type {AuthorizationActor} from "../authorization.js";
 import { and, desc, eq, ne } from "drizzle-orm";
@@ -45,7 +45,7 @@ async function proposeRetainedCandidate(db: Db, companyId: string, workflowId: s
   const samples: { input: Record<string, unknown>; output: Record<string, unknown> }[] = [];
   let nodeId: string | null = null;
   for (const run of runs) {
-    await assertAnalyticalContextPayloadAccess(db,companyId,sourceActor,{runId:run.id});
+    await assertOptimizerRunSources(db, companyId, run.id, sourceActor);
     const [review] = await db.select().from(workflowRunReviews).where(and(eq(workflowRunReviews.companyId, companyId), eq(workflowRunReviews.workflowRunId, run.id)));
     if (!review) continue;
     const steps = await db.select().from(workflowStepRuns).where(and(eq(workflowStepRuns.companyId, companyId), eq(workflowStepRuns.workflowRunId, run.id)));

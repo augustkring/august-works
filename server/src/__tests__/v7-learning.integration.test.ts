@@ -212,14 +212,19 @@ const support = await getEmbeddedPostgresTestSupport();
       currentDraft=(await domainProposal(created.id,`workflow://${created.id}/${currentDraft}`,{targetDomain:"workflow",draft:{expectedRevisionId:currentDraft,graph,changeSummary:"Native verified outcomes and current signal inform the exact transform"}},[signal!.pin])).candidateId;
     }
     const published = await service.publish(companyId, created.id, { expectedDraftRevisionId: currentDraft, expectedPublishedRevisionId: null, approvalId: null }, principal);
+    // A separate real Native fixture identity exercises runtime consumer rebinding;
+    // the source-authoritative local operator reviews these synthetic outcomes.
+    const reviewerNow = new Date();
+    await db.insert(authUsers).values({ id: "local-reviewer", name: "Alternate test operator", email: `local-reviewer@${companyId}.test.invalid`,
+      emailVerified: true, createdAt: reviewerNow, updatedAt: reviewerNow }).onConflictDoNothing();
     await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: "local-reviewer", status: "active", membershipRole: "owner" });
     const executor = workflowExecutorService(db);
     // These are actual local engine runs reviewed against the declared fixture contract, not customer pilot evidence.
     for (let index = 1; index <= 3; index++) {
       const run = await executor.startManualRun(companyId, created.id, { input: { value: index } }, principal, `learning-source-${index}`);
-      await reviewWorkflowRun(db, companyId, run.run.id, { humanCorrection: false, correctedOutputs: {}, reason: "Verified the saved engine output against the copy contract" }, { principal: { type: "user", userId: "local-reviewer" } });
+      await reviewWorkflowRun(db, companyId, run.run.id, { humanCorrection: false, correctedOutputs: {}, reason: "Verified the saved engine output against the copy contract" }, principal);
     }
-    const suggestion = (await optimizerSuggestionService(db).forWorkflow(companyId, created.id))!.suggestions.find(item => item.operationTypes.length === 1 && item.operationTypes[0] === "core.transform")!;
+    const suggestion = (await optimizerSuggestionService(db).forWorkflow(companyId, created.id, owner))!.suggestions.find(item => item.operationTypes.length === 1 && item.operationTypes[0] === "core.transform")!;
     const request = await proposeOptimizerCandidate(db, companyId, created.id, suggestion.id,owner);
     if(generated){
       // Native TypeScript classification prerequisite, not a model suggestion.
