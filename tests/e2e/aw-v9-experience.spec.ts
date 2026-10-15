@@ -1,5 +1,7 @@
 import { expect, test, type APIResponse } from "@playwright/test";
 
+test.use({ trace: "retain-on-failure" });
+
 async function json(response: APIResponse) {
   expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(
     true,

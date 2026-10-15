@@ -7,14 +7,16 @@ export function useExperienceHeading(
   failed: boolean,
 ) {
   const heading = useRef<HTMLHeadingElement>(null);
-  const focused = useRef<string | null>(null);
+  const focused = useRef<{ scope: string; element: HTMLHeadingElement } | null>(null);
   useLayoutEffect(() => {
     if (failed) {
       focused.current = null;
       return;
     }
-    if (loading || !heading.current || focused.current === scope) return;
-    focused.current = scope;
+    if (loading || !heading.current || (focused.current?.scope === scope && focused.current.element === heading.current)) return;
+    // Private rechecks can remove and remount the heading in the same scope.
+    // The old DOM element cannot retain focus on behalf of its replacement.
+    focused.current = { scope, element: heading.current };
     // An asynchronous first result must not redirect a keyboard gesture
     // already started on a utility, navigation link or other current control.
     // Layout timing also prevents a delayed passive effect from taking focus

@@ -138,3 +138,32 @@ All 86 current cases pass in the seven affected UI files, including both
 previously failing regressions. Full affected UI types and token gates pass.
 The final browser rebuild/result and complete configured CI remain exact-head
 PR verification records. Superseded CI runs are not credited to this source.
+
+
+### Restore orientation after a private heading remount
+
+Current CI on `38be08a85` found a Home heading-focus failure at the first entry.
+Its retained browser artifact is `12003061383`, SHA-256
+`b834ff3d0e71cd84124f66aca25ba6a86b709d5be4f9f2bd95202d832b5306cc`.
+The log records two successful Home reads before the failed focus assertion.
+Cleanup then restores flags, so the later error screenshot is not proof of an
+initial read failure. No trace was present in that artifact.
+
+A deterministic regression reproduces one concrete defect: a private recheck
+unmounts the focused heading, but its scope-only marker suppresses focus on the
+new DOM element. The shared heading owner now records the actual element as
+well as the scope. A remounted current heading receives orientation; an active
+utility still keeps its keyboard gesture. The failing first-entry artifact is
+consistent with this defect but does not independently establish that entire
+sequence. The assertion and five-second focus deadline remain unchanged.
+Future failures in the affected browser file retain traces.
+
+The first deterministic regression fails before the correction. All 114 current
+cases in twelve affected UI/focus files pass afterward. Full affected UI types
+and token gates pass. The exact built Home/feedback/rollback journey is repeated
+three times; its result and final configured CI are recorded in the PR.
+
+The separate Docker-context failure on that head occurs before the check:
+public ECR returns HTTP 429 while resolving the pinned Node image manifest.
+The image pin and gate remain unchanged. A current successful check is still
+required; the external refusal is not credited as a pass.
