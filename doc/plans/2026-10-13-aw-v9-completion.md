@@ -2887,3 +2887,16 @@ first serialized0 worker was OOM-killed after 66/83 live-run-route assertions;
 all 83 pass on unchanged code with a bounded 4GiB Node heap. Original failure and
 complete-lane retry logs are separate. Other complete current checks still run.
 No PR/push or release claim. All 70 evidence rows, source completion and R0 stay open.
+
+
+### 85 — Collect invite-resolution modules before the behavior deadline
+
+The current serialized0 retry passed 41 suites then timed out while the first
+invite-resolution case imported its cold access graph inside a 20-second test.
+Collect stable route/middleware imports first, retaining fresh apps and the same
+DNS/probe mocks, network/refusal assertions and 20-second behavior budget. All
+seven cases pass (22.72s import; 94ms behavior). No production source changes.
+See [the collection/continuation note](2026-10-15-aw-v9-invite-source-collection.md).
+Preserve both earlier failed lane logs and the 41 exact prior passes, prove their
+test files unchanged and continue the remaining 38 suites with source identity.
+Full final qualification remains pending. No PR/push or release claim.

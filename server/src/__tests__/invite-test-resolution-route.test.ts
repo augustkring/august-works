@@ -1,6 +1,8 @@
 import express from "express";
 import request from "supertest";
 import { beforeEach, describe, expect, it, vi } from "vitest";
+import { accessRoutes } from "../routes/access.js";
+import { errorHandler } from "../middleware/index.js";
 
 function createSelectChain(rows: unknown[]) {
   const query = {
@@ -51,10 +53,8 @@ async function createApp(
     requestHead: ReturnType<typeof vi.fn>;
   },
 ) {
-  const [access, middleware] = await Promise.all([
-    import("../routes/access.js"),
-    import("../middleware/index.js"),
-  ]);
+  // Collect the stable route graph before the 20s behavior budget. Every case
+  // still creates its own app and controls its exact DNS/probe fixture.
   const app = express();
   app.use((req, _res, next) => {
     (req as any).actor = { type: "anon" };
@@ -62,7 +62,7 @@ async function createApp(
   });
   app.use(
     "/api",
-    access.accessRoutes(db as any, {
+    accessRoutes(db as any, {
       deploymentMode: "local_trusted",
       deploymentExposure: "private",
       bindHost: "127.0.0.1",
@@ -70,7 +70,7 @@ async function createApp(
       inviteResolutionNetwork: network,
     }),
   );
-  app.use(middleware.errorHandler);
+  app.use(errorHandler);
   return app;
 }
 
