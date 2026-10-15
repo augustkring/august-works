@@ -21,7 +21,9 @@ import { queryKeys } from "../lib/queryKeys";
 
 export function WorkflowDraftStepEntry() {
   const identity = useV9CurrentAccount(), { selectedCompanyId } = useCompany(), { workflowId, nodeId } = useParams(), { t } = useTranslation("experience");
-  if (!identity.settled) return <p role={identity.failed ? "alert" : "status"}>{t(identity.failed ? "workflowLoadFailed" : "loading")}</p>;
+  // Retain only the same principal's unsent form through a session recheck.
+  // The child withdraws private fields and rereads the Native draft before use.
+  if (!identity.settled && !identity.userId) return <p role={identity.failed ? "alert" : "status"}>{t(identity.failed ? "workflowLoadFailed" : "loading")}</p>;
   if (!selectedCompanyId) return <p role="status">{t("selectCompany")}</p>;
   if (identity.localImplicit || !identity.userId) return <p role="alert">{t("workflowIntent.accountRequired")}</p>;
   if (!workflowId || !workflowEditableNodeIdSchema.safeParse(nodeId).success) return <p role="alert">{t("workflowDraftStep.unavailable")}</p>;
@@ -133,7 +135,10 @@ export function WorkflowDraftStep({ company, principal, workflow, node }: { comp
   const fieldProps = (field: Field) => ({ id: `draft-step-${field}`, "aria-labelledby": `draft-step-${field}-label`, "aria-invalid": !!fieldErrors[field], "aria-describedby": fieldErrors[field] ? `draft-step-${field}-error` : undefined });
   const fieldError = (field: Field) => fieldErrors[field] ? <p id={`draft-step-${field}-error`} className="text-sm text-destructive">{fieldErrors[field]}</p> : null;
   const selectClass = "min-h-11 w-full min-w-0 rounded-md border border-input bg-background px-3 text-base focus-visible:outline focus-visible:outline-ring";
-  if (!current()) return <p role="status">{t("loading")}</p>;
+  if (!current()) return authority.failed ? <div role="alert" className="space-y-3">
+    <p>{t("workflowLoadFailed")}</p>
+    <Button className="min-h-11" onClick={() => void authority.recheck().catch(() => {})}>{t("tryAgain")}</Button>
+  </div> : <p role="status">{t("loading")}</p>;
   const stale = !!view && !!form && sourceKey(view) !== form.source;
   return <div className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
     <Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${workflow}?revision=draft`}>{t("workflowRequestRecovery.back")}</Link>

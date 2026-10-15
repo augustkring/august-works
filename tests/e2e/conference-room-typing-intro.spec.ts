@@ -127,7 +127,9 @@ async function assertFirstTaskExists(page: Page, companyName: string) {
     (candidate: { title: string }) => candidate.title === FIRST_TASK_TITLE,
   );
   expect(firstTask).toBeTruthy();
-  await expect(page.getByText(FIRST_TASK_TITLE).first()).toBeVisible({
+  // The progressive sidebar can retain a hidden task label. Assert the actual
+  // task detail heading instead of whichever text node appears first.
+  await expect(page.getByRole("main").getByRole("heading", { name: FIRST_TASK_TITLE, exact: true })).toBeVisible({
     timeout: 15_000,
   });
 }

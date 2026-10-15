@@ -2,9 +2,9 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { WorkflowDraftStep } from "./WorkflowDraftStep";
+import { WorkflowDraftStep, WorkflowDraftStepEntry } from "./WorkflowDraftStep";
 import { workflowDraftEditApi } from "../api/workflow-draft-edit";
 import { authApi } from "../api/auth";
 import { queryKeys } from "../lib/queryKeys";
@@ -31,8 +31,11 @@ beforeEach(async () => {
   container = document.createElement("div"); document.body.appendChild(container); root = createRoot(container);
 });
 afterEach(async () => { await act(async () => root.unmount()); client.clear(); container.remove(); sessionStorage.clear(); vi.restoreAllMocks(); });
-async function mount() {
-  await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter><WorkflowDraftStep company={company} principal={principal} workflow={workflow} node="wait" /></MemoryRouter></QueryClientProvider>));
+async function mount(entry = false) {
+  await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[`/workflows/${workflow}/draft/steps/wait`]}>
+    {entry ? <Routes><Route path="/workflows/:workflowId/draft/steps/:nodeId" element={<WorkflowDraftStepEntry />} /></Routes>
+      : <WorkflowDraftStep company={company} principal={principal} workflow={workflow} node="wait" />}
+  </MemoryRouter></QueryClientProvider>));
   await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); });
 }
 async function submit() { await act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }))); await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); }); }
@@ -41,6 +44,55 @@ async function field(id: string, value: string) {
   const proto = input.tagName === "INPUT" ? HTMLInputElement.prototype : HTMLTextAreaElement.prototype;
   await act(async () => { Object.getOwnPropertyDescriptor(proto, "value")!.set!.call(input, value); input.dispatchEvent(new Event("input", { bubbles: true })); });
 }
+it("preserves an unsent step name through entry-level session and private-source rechecks", async () => {
+  await mount(true); await field("name", "PRIVATE revised step");
+  let finishSession!: (value: ReturnType<typeof v9SessionFixture>) => void;
+  let finishRead!: (value: typeof review) => void;
+  vi.mocked(authApi.getSession).mockImplementationOnce(() => new Promise(resolve => { finishSession = resolve; }));
+  vi.mocked(workflowDraftEditApi.review).mockImplementationOnce(() => new Promise(resolve => { finishRead = resolve; }));
+  await act(async () => { void client.refetchQueries({ queryKey: queryKeys.auth.session, exact: true }); });
+  expect(container.querySelector("form")).toBeNull(); expect(container.textContent).not.toContain("PRIVATE");
+  await act(async () => finishSession(v9SessionFixture(principal)));
+  await vi.waitFor(() => expect(finishRead).toBeTypeOf("function"));
+  expect(container.querySelector("form")).toBeNull();
+  await act(async () => finishRead(review));
+  await vi.waitFor(() => expect(container.querySelector<HTMLInputElement>("#draft-step-name")?.value).toBe("PRIVATE revised step"));
+  await field("duration", "7"); await submit();
+  expect(workflowDraftEditApi.save).toHaveBeenCalledExactlyOnceWith(company, workflow, principal,
+    expect.objectContaining({ name: "PRIVATE revised step", configuration: { kind: "wait", durationSeconds: 7 } }));
+});
+it("requires explicit review when the Native revision changes during a same-person recheck", async () => {
+  await mount(true); await field("name", "PRIVATE revised step");
+  vi.mocked(workflowDraftEditApi.review).mockResolvedValueOnce({ ...review,
+    draftRevisionId: "10000000-0000-4000-8000-000000000005", version: 4 });
+  await act(async () => { await client.refetchQueries({ queryKey: queryKeys.auth.session, exact: true }); });
+  await vi.waitFor(() => expect(container.querySelector("fieldset")?.disabled).toBe(true));
+  expect(container.querySelector<HTMLInputElement>("#draft-step-name")?.value).toBe("PRIVATE revised step");
+  expect(workflowDraftEditApi.save).not.toHaveBeenCalled();
+  const reviewLatest = [...container.querySelectorAll("button")].find(button => button.textContent === i18n.t("experience:workflowDraftStep.reviewLatest"));
+  expect(reviewLatest).toBeTruthy(); await act(async () => reviewLatest!.click());
+  expect(container.querySelector<HTMLInputElement>("#draft-step-name")?.value).toBe(review.name);
+  expect(container.querySelector("fieldset")?.disabled).toBe(false);
+});
+it("recovers a hidden unsent step through the original session owner after a failed account read", async () => {
+  await mount(true); await field("name", "PRIVATE revised step");
+  vi.mocked(authApi.getSession).mockRejectedValueOnce(new Error("PRIVATE account failure"));
+  await act(async () => { await client.refetchQueries({ queryKey: queryKeys.auth.session, exact: true }); });
+  await vi.waitFor(() => expect(container.querySelector('[role="alert"]')).toBeTruthy());
+  expect(container.querySelector("form")).toBeNull(); expect(container.textContent).not.toContain("PRIVATE");
+  const retry = [...container.querySelectorAll("button")].find(button => button.textContent === "Try again");
+  expect(retry).toBeTruthy(); await act(async () => retry!.click());
+  await vi.waitFor(() => expect(container.querySelector<HTMLInputElement>("#draft-step-name")?.value).toBe("PRIVATE revised step"));
+  expect(workflowDraftEditApi.review).toHaveBeenCalledTimes(2);
+  expect(workflowDraftEditApi.save).not.toHaveBeenCalled();
+});
+it("discards the previous principal's unsent step when another account becomes current", async () => {
+  await mount(true); await field("name", "PRIVATE revised step");
+  await act(async () => client.setQueryData(queryKeys.auth.session, v9SessionFixture("other-editor")));
+  await vi.waitFor(() => expect(container.querySelector<HTMLInputElement>("#draft-step-name")?.value).toBe(review.name));
+  expect(workflowDraftEditApi.review).toHaveBeenCalledWith(company, workflow, "other-editor", "wait", expect.any(AbortSignal));
+  expect(workflowDraftEditApi.save).not.toHaveBeenCalled();
+});
 
 it("retains the exact scoped locator before one POST and recovers lost acknowledgement without another write after reload", async () => {
   const save = vi.mocked(workflowDraftEditApi.save);

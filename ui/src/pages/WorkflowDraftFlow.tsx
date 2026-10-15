@@ -20,7 +20,8 @@ import { Textarea } from "../components/ui/textarea";
 
 export function WorkflowDraftFlowEntry() {
   const identity = useV9CurrentAccount(), { selectedCompanyId } = useCompany(), { workflowId } = useParams(), { t } = useTranslation("experience");
-  if (!identity.settled) return <p role={identity.failed ? "alert" : "status"}>{t(identity.failed ? "workflowLoadFailed" : "loading")}</p>;
+  // Keep same-principal unsent input mounted; the child still fences each read.
+  if (!identity.settled && !identity.userId) return <p role={identity.failed ? "alert" : "status"}>{t(identity.failed ? "workflowLoadFailed" : "loading")}</p>;
   if (!selectedCompanyId) return <p role="status">{t("selectCompany")}</p>;
   if (identity.localImplicit || !identity.userId) return <p role="alert">{t("workflowIntent.accountRequired")}</p>;
   if (!workflowId) return <p role="alert">{t("workflowDraftFlow.unavailable")}</p>;
@@ -134,7 +135,10 @@ export function WorkflowDraftFlow({ company, principal, workflow }: { company: s
     "aria-describedby": fieldErrors[field] ? `draft-flow-${field}-error` : undefined });
   const fieldError = (field: Field) => fieldErrors[field] ? <p id={`draft-flow-${field}-error`} className="text-sm text-destructive">{fieldErrors[field]}</p> : null;
   const selectClass = "min-h-11 w-full rounded-md border border-input bg-background px-3 text-base focus-visible:outline focus-visible:outline-ring";
-  if (!current()) return <p role="status">{t("loading")}</p>;
+  if (!current()) return authority.failed ? <div role="alert" className="space-y-3">
+    <p>{t("workflowLoadFailed")}</p>
+    <Button className="min-h-11" onClick={() => void authority.recheck().catch(() => {})}>{t("tryAgain")}</Button>
+  </div> : <p role="status">{t("loading")}</p>;
   return <div className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
     <Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${workflow}?revision=draft`}>{t("workflowRequestRecovery.back")}</Link>
     <h1 ref={heading} tabIndex={-1} className="text-2xl font-semibold">{t("workflowDraftFlow.heading")}</h1><p>{t("workflowDraftStep.boundary")}</p>

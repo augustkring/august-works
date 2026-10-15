@@ -2,9 +2,9 @@
 import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { WorkflowRunControl } from "./WorkflowRunControl";
+import { WorkflowRunControl, WorkflowRunControlEntry } from "./WorkflowRunControl";
 import { workflowRunControlApi } from "../api/workflow-run-control";
 import { authApi } from "../api/auth";
 import { queryKeys } from "../lib/queryKeys";
@@ -21,14 +21,37 @@ Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 let root: Root, container: HTMLDivElement, client: QueryClient;
 beforeEach(async () => { window.sessionStorage.clear(); await i18n.changeLanguage("en"); });
 afterEach(async () => { if (root) await act(async () => root.unmount()); container?.remove(); client?.clear(); vi.restoreAllMocks(); });
-async function mount(strict = false) {
+async function mount(strict = false, entry = false) {
   vi.spyOn(authApi, "getSession").mockResolvedValue(v9SessionFixture("controller"));
   client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: 0 } } });
   client.setQueryDefaults(queryKeys.auth.session, { gcTime: Infinity }); client.setQueryData(queryKeys.auth.session, v9SessionFixture("controller"));
   container = document.createElement("div"); document.body.append(container); root = createRoot(container);
-  const surface = <QueryClientProvider client={client}><MemoryRouter><WorkflowRunControl company={id(1)} principal="controller" workflow={id(2)} run={id(3)} /></MemoryRouter></QueryClientProvider>;
+  const surface = <QueryClientProvider client={client}><MemoryRouter initialEntries={[`/workflows/${id(2)}/runs/${id(3)}/control`]}>
+    {entry ? <Routes><Route path="/workflows/:workflowId/runs/:runId/control" element={<WorkflowRunControlEntry />} /></Routes>
+      : <WorkflowRunControl company={id(1)} principal="controller" workflow={id(2)} run={id(3)} />}
+  </MemoryRouter></QueryClientProvider>;
   await act(async () => root.render(strict ? <StrictMode>{surface}</StrictMode> : surface));
 }
+it("retains an unsent Stop acknowledgement through its entry's current-account and Native-run recheck", async () => {
+  const get = vi.spyOn(workflowRunControlApi, "get").mockResolvedValue(view);
+  const request = vi.spyOn(workflowRunControlApi, "stop");
+  await mount(false, true);
+  await vi.waitFor(() => expect(container.querySelector('input[type="checkbox"]')).toBeTruthy());
+  await act(async () => container.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click());
+  let finishSession!: (value: ReturnType<typeof v9SessionFixture>) => void;
+  let finishRead!: (value: typeof view) => void;
+  vi.mocked(authApi.getSession).mockImplementationOnce(() => new Promise(resolve => { finishSession = resolve; }));
+  get.mockImplementationOnce(() => new Promise(resolve => { finishRead = resolve; }));
+  await act(async () => { void client.refetchQueries({ queryKey: queryKeys.auth.session, exact: true }); });
+  expect(container.querySelector('input[type="checkbox"]')).toBeNull();
+  await act(async () => finishSession(v9SessionFixture("controller")));
+  await vi.waitFor(() => expect(finishRead).toBeTypeOf("function"));
+  expect(container.querySelector('input[type="checkbox"]')).toBeNull();
+  await act(async () => finishRead(view));
+  await vi.waitFor(() => expect(container.querySelector<HTMLInputElement>('input[type="checkbox"]')?.checked).toBe(true));
+  expect(request).not.toHaveBeenCalled();
+  expect(pendingWorkflowStop(id(1), "controller", id(2), id(3))).toBeNull();
+});
 async function requestStop() {
   await vi.waitFor(() => expect(container.querySelector('input[type="checkbox"]')).not.toBeNull());
   await act(async () => container.querySelector<HTMLInputElement>('input[type="checkbox"]')!.click());

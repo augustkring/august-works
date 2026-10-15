@@ -34,6 +34,8 @@ for (const edit of ["wait", "condition"] as const) test(`guided Native ${edit} e
   const address = bridge.address(); if (!address || typeof address === "string") throw new Error("Controlled fixture listener unavailable");
   const bridgeBase = `http://127.0.0.1:${address.port}`;
   let saved: { requestId: string; draftRevisionId: string } | null = null, posts = 0, receipts = 0;
+  let holdSession = false, holdReview = false;
+  const sessionReads: Array<() => void> = [], draftReads: Array<() => void> = [];
   try {
     await json(await request.patch("/api/instance/settings/experimental", { data: { enableWorkflowsV1: true, enableWorkflowBuilderV1: true, experience_projection_v9: true, progressive_shell_v9: true } }));
     const base = `/api/companies/${company.id}/workflows`, created = await json(await request.post(base, { data: { name: "Guided waiting flow" } }));
@@ -52,9 +54,13 @@ for (const edit of ["wait", "condition"] as const) test(`guided Native ${edit} e
         { id: "no", source: "condition", target: "no", sourceHandle: "false", label: "false" },
       ], variables: [], settings: {} } } }));
     const published = await json(await request.post(`${base}/${created.id}/publish`, { data: { expectedDraftRevisionId: drafted.draftRevisionId, expectedPublishedRevisionId: null, approvalId: null } }));
-    await page.route("**/api/auth/get-session", route => route.fulfill({ json: { ...session, user: { ...session.user, id: userId, emailVerified: true }, session: { ...session.session, userId, localImplicit: false } } }));
+    await page.route("**/api/auth/get-session", async route => {
+      if (holdSession) await new Promise<void>(resolve => sessionReads.push(resolve));
+      await route.fulfill({ json: { ...session, user: { ...session.user, id: userId, emailVerified: true }, session: { ...session.session, userId, localImplicit: false } } });
+    });
     await page.route(`**${base}/${created.id}/experience/draft-steps**`, async route => {
       const url = new URL(route.request().url());
+      if (route.request().method() === "GET" && holdReview) await new Promise<void>(resolve => draftReads.push(resolve));
       const response = await route.fetch({ url: bridgeBase + url.pathname + url.search });
       if (route.request().method() === "POST") { posts++; expect(posts).toBe(1); saved = await json(response); await route.abort("failed"); }
       else await route.fulfill({ response });
@@ -67,6 +73,15 @@ for (const edit of ["wait", "condition"] as const) test(`guided Native ${edit} e
     await page.goto(`/${company.issuePrefix}/workflows/${created.id}/draft/steps/${edit}`);
     await expect(page.getByRole("heading", { level: 1, name: "Edit a draft step", exact: true })).toBeVisible();
     await page.getByRole("textbox", { name: "Step name", exact: true }).fill("Revised draft step");
+    holdSession = true; holdReview = true;
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange", { bubbles: true })));
+    await expect.poll(() => sessionReads.length).toBeGreaterThan(0);
+    await expect(page.getByRole("textbox", { name: "Step name", exact: true })).toHaveCount(0);
+    holdSession = false; for (const release of sessionReads.splice(0)) release();
+    await expect.poll(() => draftReads.length).toBeGreaterThan(0);
+    await expect(page.getByRole("textbox", { name: "Step name", exact: true })).toHaveCount(0);
+    holdReview = false; for (const release of draftReads.splice(0)) release();
+    await expect(page.getByRole("textbox", { name: "Step name", exact: true })).toHaveValue("Revised draft step");
     if (edit === "wait") await page.getByRole("spinbutton", { name: "Wait time (seconds)", exact: true }).fill("7");
     else {
       await page.getByRole("spinbutton", { name: "Compare with", exact: true }).fill("");
@@ -98,6 +113,9 @@ for (const edit of ["wait", "condition"] as const) test(`guided Native ${edit} e
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: info.outputPath("guided-draft-recovery-da-mobile.png"), fullPage: true });
   } finally {
+    holdSession = false; holdReview = false;
+    for (const release of sessionReads.splice(0)) release();
+    for (const release of draftReads.splice(0)) release();
     await new Promise<void>((resolve, reject) => bridge.close(err => err ? reject(err) : resolve()));
     await request.patch("/api/instance/settings/experimental", { data: flags }).catch(() => {});
     await request.delete(`/api/companies/${company.id}`).catch(() => {});

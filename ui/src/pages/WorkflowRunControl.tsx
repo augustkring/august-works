@@ -15,7 +15,8 @@ import { Button } from "../components/ui/button";
 
 export function WorkflowRunControlEntry() {
   const { selectedCompanyId } = useCompany(), identity = useV9CurrentAccount(), { workflowId, runId } = useParams(), { t } = useTranslation("experience");
-  if (!identity.settled) return <p role={identity.failed ? "alert" : "status"}>{t(identity.failed ? "workflowRunControl.unavailable" : "loading")}</p>;
+  // Preserve same-principal unsent acknowledgement; the child fences its use.
+  if (!identity.settled && !identity.userId) return <p role={identity.failed ? "alert" : "status"}>{t(identity.failed ? "workflowRunControl.unavailable" : "loading")}</p>;
   if (!selectedCompanyId) return <p role="status">{t("selectCompany")}</p>;
   if (identity.localImplicit || !identity.userId) return <p role="alert">{t("workflowIntent.accountRequired")}</p>;
   if (!workflowRunControlSchema.shape.workflowId.safeParse(workflowId).success || !workflowRunControlSchema.shape.runId.safeParse(runId).success)
@@ -77,7 +78,10 @@ export function WorkflowRunControl({ company, principal, workflow, run }: { comp
   }, [receipt?.requestId, company, principal, workflow, run]);
   useEffect(() => { if (current() && (storageFailed || recover.isError)) error.current?.focus(); }, [storageFailed, recover.isError]);
   const busy = create.isPending || recover.isPending;
-  if (!current()) return <p role="status">{t("loading")}</p>;
+  if (!current()) return authority.failed ? <div role="alert" className="space-y-3">
+    <p>{t("workflowRunControl.unavailable")}</p>
+    <Button className="min-h-11" onClick={() => void authority.recheck().catch(() => {})}>{t("tryAgain")}</Button>
+  </div> : <p role="status">{t("loading")}</p>;
   return <div className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
     <Link className="inline-flex min-h-11 items-center underline" to={`/workflows/${workflow}`}>{t("workflowRequestRecovery.back")}</Link>
     <h1 ref={heading} tabIndex={-1} className="text-2xl font-semibold">{t(receipt ? "workflowRunControl.recorded" : "workflowRunControl.heading")}</h1>

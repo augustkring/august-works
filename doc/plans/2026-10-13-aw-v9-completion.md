@@ -2594,3 +2594,34 @@ reason during both held reads, restores it for the same verified account, then
 records one unknown Stop request and recovers only its Original receipt after
 rollout withdrawal. UI typecheck, token, module and source-coverage checks pass.
 Current whole-workspace qualification remains pending.
+
+### Workflow form continuity and the original CI locator — checkpoint 71
+
+Checkpoint 70 passes full workspace types/build and all 7,927 UI cases in 804
+suites without skips. Its full production-browser run records 88 passes and
+one condition-edit failure: the changed expression is saved with the old name.
+The route entry discards unsent input during session rechecking. New entry-level
+regressions reproduce that reset in the step editor, flow builder and retained
+workflow Stop acknowledgement. Same-principal keyed workspaces now stay mounted;
+Original authority still hides private fields and requires a fresh source read.
+Changed Native revisions remain blocked until explicit latest-source review,
+while another authenticated principal receives a new empty workspace.
+
+All 47 cases across the four related forms pass, including the previous
+orchestration Stop regression. UI typecheck and token/module/source gates pass.
+The actual Native HTTP browser fixture now forces session and draft-read holds
+before validating and saving its edited fields. Current built verification is
+pending. See [the scoped plan](2026-10-15-aw-v9-workflow-form-continuity.md).
+
+The original PR-38 browser report also confirms two onboarding locator failures:
+the visible main task heading exists, but first-text selects a hidden sidebar
+label. With progressive navigation explicitly enabled, both copied-original
+cases fail and both corrected cases pass. The source test now selects the exact
+main heading; Native persistence and landing assertions remain unchanged.
+The old feedback timeout remains recorded separately, with no invented cause.
+
+Frozen checkpoint-69 general shard 1 now passes all 9,571 selected cases with
+22 skips (459 passing suites, three skipped; 4,022.93 seconds). The remaining
+runner groups continue. Native server/packages/build inputs are unchanged by
+the UI corrections. No complete current whole-suite or V9 release pass is
+inferred. Source completeness, all 70 launch rows and R0 remain open; no PR/push.

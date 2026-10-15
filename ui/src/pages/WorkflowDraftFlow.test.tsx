@@ -2,9 +2,9 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, expect, it, vi } from "vitest";
-import { WorkflowDraftFlow } from "./WorkflowDraftFlow";
+import { WorkflowDraftFlow, WorkflowDraftFlowEntry } from "./WorkflowDraftFlow";
 import { workflowDraftFlowApi } from "../api/workflow-draft-flow";
 import { authApi } from "../api/auth";
 import { queryKeys } from "../lib/queryKeys";
@@ -29,7 +29,10 @@ beforeEach(async () => {
 });
 afterEach(async () => { await act(async () => root.unmount()); client.clear(); container.remove(); sessionStorage.clear(); vi.restoreAllMocks(); });
 async function flush() { await act(async () => { await new Promise(resolve => setTimeout(resolve, 20)); }); }
-async function mount() { await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter><WorkflowDraftFlow company={company} principal={principal} workflow={workflow} /></MemoryRouter></QueryClientProvider>)); await flush(); }
+async function mount(entry = false) { await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[`/workflows/${workflow}/draft/flow`]}>
+  {entry ? <Routes><Route path="/workflows/:workflowId/draft/flow" element={<WorkflowDraftFlowEntry />} /></Routes>
+    : <WorkflowDraftFlow company={company} principal={principal} workflow={workflow} />}
+</MemoryRouter></QueryClientProvider>)); await flush(); }
 async function click(label: string) { const button = [...container.querySelectorAll("button")].find(button => button.textContent === label)!; expect(button).toBeTruthy(); await act(async () => button.click()); await flush(); }
 async function field(id: string, value: string) { const input = container.querySelector<HTMLInputElement | HTMLTextAreaElement>(`#draft-flow-${id}`)!;
   await act(async () => { Object.getOwnPropertyDescriptor(input instanceof HTMLTextAreaElement ? HTMLTextAreaElement.prototype : HTMLInputElement.prototype, "value")!.set!.call(input, value); input.dispatchEvent(new Event("input", { bubbles: true })); }); }
@@ -37,6 +40,23 @@ async function choose(label: string, value: string) {
   const parent = [...container.querySelectorAll("label")].find(item => item.querySelector("span")?.textContent === label)!, select = parent.querySelector("select")!;
   await act(async () => { Object.getOwnPropertyDescriptor(HTMLSelectElement.prototype, "value")!.set!.call(select, value); select.dispatchEvent(new Event("change", { bubbles: true })); });
 }
+it("retains an unsent flow step through the real entry's session and private-review recheck", async () => {
+  vi.mocked(workflowDraftFlowApi.review).mockResolvedValue(linear);
+  await mount(true); await field("name", "PRIVATE unsent flow step");
+  let finishSession!: (value: ReturnType<typeof v9SessionFixture>) => void;
+  let finishReview!: (value: typeof linear) => void;
+  vi.mocked(authApi.getSession).mockImplementationOnce(() => new Promise(resolve => { finishSession = resolve; }));
+  vi.mocked(workflowDraftFlowApi.review).mockImplementationOnce(() => new Promise(resolve => { finishReview = resolve; }));
+  await act(async () => { void client.refetchQueries({ queryKey: queryKeys.auth.session, exact: true }); });
+  expect(container.querySelector("form")).toBeNull(); expect(container.textContent).not.toContain("PRIVATE");
+  await act(async () => finishSession(v9SessionFixture(principal)));
+  await vi.waitFor(() => expect(finishReview).toBeTypeOf("function"));
+  expect(container.querySelector("form")).toBeNull();
+  await act(async () => finishReview(linear));
+  await vi.waitFor(() => expect(container.querySelector<HTMLInputElement>("#draft-flow-name")?.value).toBe("PRIVATE unsent flow step"));
+  expect(workflowDraftFlowApi.save).not.toHaveBeenCalled();
+  expect(pendingWorkflowRequests(company, principal, workflow)).toEqual([]);
+});
 it("saves only an explicit manual start, retaining one original nonce through unknown response and reload", async () => {
   await mount(); await field("deadline", "30"); await click("Add a manual start"); expect(workflowDraftFlowApi.save).toHaveBeenCalledOnce();
   expect(workflowDraftFlowApi.save).toHaveBeenCalledWith(company, workflow, principal, expect.objectContaining({ expectedLastNodeId: null, operation: { kind: "start_manual", deadlineSeconds: 30, name: "Start when I run the workflow" } }));

@@ -361,3 +361,14 @@ The existing request/version/permission/acknowledgement and original receipt
 owners remain authoritative. Ten actual-account-hook DOM cases and the forced production-UI browser boundary
 pass. Broader current-source qualification remains pending. No draft reason or
 acknowledgement is added to browser persistence.
+
+### Workflow form continuity under Original account rechecking — checkpoint 71
+
+Step editing, flow composition and retained run Stop keep only same-principal
+unsent React state while their Original current-account/private-source fences
+withdraw the private DOM. Changed Native source versions block saving until
+explicit review; another principal remounts the workspace. Original-session
+retry performs no mutation. Native CAS, scopes, receipts and one-request guards
+are unchanged. Four related DOM suites pass all 47 cases; current forced
+Native-HTTP browser qualification remains pending. No extra browser persistence,
+notification, grant, execution or physical-erasure authority is introduced.
