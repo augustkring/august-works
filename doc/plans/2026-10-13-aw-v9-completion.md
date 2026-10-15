@@ -2675,3 +2675,25 @@ and 2 also pass all 261 selected cases each. Together with the frozen Native
 partitions 1 and 3, the unchanged 1,044-case file has disjoint selected-case
 coverage; no filtered-out test is counted twice. The complete source, workspace
 and browser aggregates remain pending. All 70 launch rows/R0 remain open.
+
+### Correct the shared mocked-graph initialization phase — checkpoint 74
+
+The checkpoint-73 continuation later skips all 12 closed-workspace route cases
+when the same shared graph-loading beforeAll exceeds 30 seconds. The helper
+now registers and awaits its stable actual graph during collection; all seven
+remaining callers await it at module scope. Their per-test mock/cache resets,
+actors, requests, assertions and behavior timeouts are unchanged. The readonly
+value remains, and a forgotten await is rejected by current server types.
+
+All seven affected HTTP/service suites pass all 225 cases without skips or
+unhandled errors. Current server typecheck passes. The previous aggregate stays
+failed; remaining suites still need their recorded continuation. See [the scope
+plan](2026-10-15-aw-v9-module-graph-collection.md).
+
+Checkpoint 71 has now passed full workspace types/build, all 7,933 UI cases in
+804 suites and all 89 V9 production-browser cases. Checkpoint 72, which adds the
+Native async quarantine-observer correction, also passes full types/build and
+all 89 production-browser cases. Its actual Runtime and chat-project suites
+pass 138 and ten cases respectively. These identified software snapshots do not
+accept hosted/provider, manual accessibility or representative Human evidence.
+Source completeness, all 70 launch rows and R0 remain open. No PR/push.

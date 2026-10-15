@@ -267,14 +267,16 @@ async function requestApp(
   }
 }
 
+const routeModules = await hoistModuleGraph(registerModuleMocks, async () => {
+  const [{ errorHandler }, { agentRoutes }] = await Promise.all([
+    vi.importActual<typeof import("../middleware/index.js")>("../middleware/index.js"),
+    vi.importActual<typeof import("../routes/agents.js")>("../routes/agents.js"),
+  ]);
+  return { errorHandler, agentRoutes };
+});
+
 describe.sequential("agent permission routes", () => {
-  const routeModules = hoistModuleGraph(registerModuleMocks, async () => {
-    const [{ errorHandler }, { agentRoutes }] = await Promise.all([
-      vi.importActual<typeof import("../middleware/index.js")>("../middleware/index.js"),
-      vi.importActual<typeof import("../routes/agents.js")>("../routes/agents.js"),
-    ]);
-    return { errorHandler, agentRoutes };
-  });
+
 
   function createApp(actor: Record<string, unknown>, dbOptions: { requireBoardApprovalForNewAgents?: boolean } = {}) {
     const { errorHandler, agentRoutes } = routeModules.value;

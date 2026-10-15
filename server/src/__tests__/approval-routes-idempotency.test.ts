@@ -44,7 +44,7 @@ function registerModuleMocks() {
   }));
 }
 
-const routeModules = hoistModuleGraph(registerModuleMocks, async () => {
+const routeModules = await hoistModuleGraph(registerModuleMocks, async () => {
   const { errorHandler } = await import("../middleware/index.js");
   const { approvalRoutes } = await import("../routes/approvals.js");
   return { errorHandler, approvalRoutes };
