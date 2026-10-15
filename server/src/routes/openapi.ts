@@ -12150,7 +12150,7 @@ for (const operation of v9ApiPaths) {
       400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound,
       409: { description: "Current account, native source, original request or expected version changed" },
       ...(operation.blocked || operation.unavailable ? { 422: { description: operation.blocked ? "Publication remains unqualified; no production change" : "Current capability, schema or qualification is unavailable" } } : {}),
-      ...(operation.rateLimited ? { 429: { description: "Native submitting-principal feedback budget exceeded" } } : {}),
+      ...(operation.rateLimited ? { 429: { description: "Native submitting-principal rate limit exceeded" } } : {}),
       ...(operation.overloaded ? { 503: { description: "Bounded projection admission unavailable; retry after the returned delay" } } : {}),
     },
   });

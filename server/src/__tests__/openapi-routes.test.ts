@@ -20,6 +20,7 @@ const apiPrefixes: Record<string, string> = {
   "maintenance-history.ts": "/api",
   "experience.ts": "/api",
   "experience-measures.ts": "/api",
+  "experience-observations.ts": "/api",
   "business-events.ts": "/api",
   "business-metrics.ts": "/api",
   "business-forecasting.ts": "/api",
@@ -1290,4 +1291,26 @@ it("documents the current-account read-only insight reference and bounded closed
   expect(parameters.find(value => value.name === "request")).toMatchObject({ in: "query", required: true, schema: { type: "string", maxLength: 8192 } });
   expect(operation.responses["200"].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
   for (const code of ["400", "401", "403", "404", "409"]) expect(operation.responses).toHaveProperty(code);
+});
+
+
+it("documents private local observations, mandatory current-person binding and strict consent/input contracts", () => {
+  const spec = buildOpenApiSpec() as unknown as { paths: Record<string, Record<string, any>> };
+  const base = "/api/companies/{companyId}/experience/observations";
+  for (const [path, method] of [[base, "post"], [base + "/preference", "get"], [base + "/preference", "post"], [base + "/summary", "get"]] as const) {
+    const operation = spec.paths[path]![method];
+    expect(operation.parameters).toContainEqual(expect.objectContaining({ name: "expectedUserId", in: "query", required: true }));
+    expect(operation.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    expect(operation.responses[200].content["application/json"].schema.additionalProperties).toBe(false);
+  }
+  const observation = spec.paths[base]!.post.requestBody.content["application/json"].schema;
+  expect(observation.additionalProperties).toBe(false);
+  expect(observation.required).toContain("preferenceVersion");
+  expect(observation.properties).not.toHaveProperty("properties");
+  expect(observation.properties).not.toHaveProperty("userId");
+  expect(observation.properties).not.toHaveProperty("url");
+  const choice = spec.paths[base + "/preference"]!.post.requestBody.content["application/json"].schema;
+  expect(choice.additionalProperties).toBe(false);
+  expect(choice.required).toEqual(expect.arrayContaining(["requestId", "enabled", "expectedVersion"]));
+  expect(spec.paths[base]!.post.responses[429]).toBeTruthy();
 });

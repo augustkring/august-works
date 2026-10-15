@@ -1,5 +1,7 @@
 import { z } from "zod";
 import {
+  experienceObservationSchema, experienceObservationReceiptSchema, experienceObservationPreferenceSchema,
+  experienceObservationPreferenceCommandSchema, experienceObservationPreferenceReceiptSchema, experienceObservationSummarySchema,
   orchestrationExperienceSchema,
   orchestrationControlViewSchema, orchestrationControlCommandSchema, orchestrationControlReceiptSchema,
   workflowIntentDraftCommandSchema,
@@ -183,6 +185,10 @@ export const v9ApiPaths: V9ApiOperation[] = [
     cacheControl: "no-store",
   },
   read(`${company}/conversations/{conversationId}/authoring`, "Read current canonical workflow proposals saved by this owned conversation's Original authoring runs", conversationAuthoringViewSchema),
+  read(`${company}/experience/observations/preference`, "Read only the current person's local observation choice; withdrawal remains available after rollout or membership loss", experienceObservationPreferenceSchema, draftAccount),
+  { ...write(`${company}/experience/observations/preference`, "Change the current person's optional local observation choice; explicit opt-in requires current rollout/membership/version; withdrawal erases own samples", experienceObservationPreferenceCommandSchema, experienceObservationPreferenceReceiptSchema), query: draftAccount },
+  { ...write(`${company}/experience/observations`, "Record strict finite local metadata only under current rollout, membership and personal consent version; at most 128 retained new samples per rolling day", experienceObservationSchema, experienceObservationReceiptSchema), query: draftAccount, rateLimited: true },
+  read(`${company}/experience/observations/summary`, "Read only the current person's unexpired opt-in observation counts; no population, effort or successful-outcome inference", experienceObservationSummarySchema, draftAccount),
   read(`${company}/experience/analytics`, "Read bounded native experience measures without private payloads", experienceMeasuresSchema,
     z.strictObject({ expectedUserId: z.string().min(1).max(300) })),
   read(`${company}/memory/experience/maintenance`, "Read original memory maintenance history or one exact job without asserting current deletion completion", memoryMaintenanceHistorySchema, memoryMaintenanceHistoryQuerySchema),

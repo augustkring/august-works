@@ -102,3 +102,25 @@ exist. A closed rollout also prevents personal identity/preference reads.
 Activation retains its explicit scoped observer. The routing/Layout/observation
 follow-up passes 53 cases before the added rollout-off regression. No full
 UI pass is claimed from the stopped run.
+
+
+A company live event for the current person's preference change now resets the
+private preference query before the next render. It carries no consent value;
+only a fresh Native read can reopen collection. Company authority changes also
+close that fence. The new regression rejects foreign-company events and proves
+that another tab's own-choice change suppresses an immediate visibility sample.
+The settings/collector/account/activation group passes all 49 cases.
+
+Current-head CI found the new route file missing from the exact OpenAPI route
+inventory. The route prefix and all four typed private operations are now
+registered in the existing V9 document owner. Current-person query binding,
+strict body/response schemas, no-store responses and the sampling 429 response
+are covered by the complete 23-case OpenAPI group. No unknown-route exclusion
+or coverage assertion was relaxed. The 429 description is purpose-neutral so
+it correctly covers both feedback and observation limits.
+
+Integration source `e92a4859d` passes complete workspace types and build. Its
+full default test run was interrupted with SIGTERM (143) after CI identified
+the known API-registry omission; it is not a catalog pass. Checks continue on
+the corrected source. This distinguishes a stopped verification run from the
+actual failing route-coverage assertion in CI.

@@ -10,6 +10,8 @@ import { authApi } from "../api/auth";
 import { queryKeys } from "../lib/queryKeys";
 import { v9SessionFixture } from "../hooks/v9-session.test-support";
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
+const live = vi.hoisted(() => ({ handler: null as null | ((event: { companyId: string; type: string; payload: Record<string, unknown> }) => void) }));
+vi.mock("../context/LiveUpdatesProvider", () => ({ useCompanyLiveEvent: (handler: typeof live.handler) => { live.handler = handler; } }));
 const company = "10000000-0000-4000-8000-000000000001";
 let root: Root, host: HTMLDivElement, client: QueryClient;
 async function mount(enabled = true) {
@@ -31,6 +33,7 @@ async function render(navigation = "1") { await act(async () => root.render(<Que
 afterEach(async () => {
   if (root) await act(async () => root.unmount());
   await client?.cancelQueries(); client?.clear(); host?.remove(); vi.restoreAllMocks();
+  live.handler = null;
 });
 it("collects only consented finite metadata and excludes hidden intervals", async () => {
   const record = await mount(); await vi.waitFor(() => expect(record).toHaveBeenCalledTimes(1));
@@ -76,4 +79,25 @@ it("does not read personal identity or preferences while rollout is off", async 
   await act(async () => root.render(<QueryClientProvider client={client}><ExperienceObservationCollector /></QueryClientProvider>));
   await vi.waitFor(() => expect(instanceSettingsApi.getExperimental).toHaveBeenCalled());
   expect(session).not.toHaveBeenCalled(); expect(preference).not.toHaveBeenCalled(); expect(record).not.toHaveBeenCalled();
+});
+
+it("closes collection on another tab's own-choice event without trusting its payload as consent", async () => {
+  const record = await mount(); await vi.waitFor(() => expect(record).toHaveBeenCalledTimes(1));
+  const get = vi.mocked(experienceObservationsApi.get), before = get.mock.calls.length;
+  const payload = { action: "experience_observation_preference.updated", actorId: "owner", entityType: "experience_observation_preference" };
+  await act(async () => live.handler!({ companyId: "foreign-company", type: "activity.logged", payload }));
+  expect(get).toHaveBeenCalledTimes(before);
+  get.mockResolvedValue({ companyId: company, contractId: "aw.local-experience-observations.v1", enabled: false, version: 4,
+    collectionAvailable: true, retentionDays: 35, dailyLimit: 128, lastRequestId: null });
+  await act(async () => {
+    live.handler!({ companyId: company, type: "activity.logged", payload });
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  await vi.waitFor(() => expect(get).toHaveBeenCalledTimes(before + 1));
+  await act(async () => {
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "visible" });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  expect(record).toHaveBeenCalledTimes(1);
 });
