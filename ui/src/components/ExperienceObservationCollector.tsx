@@ -1,6 +1,7 @@
 import { useEffect } from "react";
 import { useQueryClient } from "@tanstack/react-query";
-import { experienceObservationDuration, type ExperienceObservation } from "@paperclipai/shared";
+import { experienceObservationDuration, v9FeatureEnabled, type ExperienceObservation,
+  type ExperienceObservationPreference, type InstanceExperimentalSettings } from "@paperclipai/shared";
 import { useLocation } from "../lib/router";
 import { useCompany } from "../context/CompanyContext";
 import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
@@ -38,9 +39,13 @@ export function ObservationScope({ company, principal, surface, navigation, step
     if (!ready || !version) return;
     let alive = true, visibleSince: number | null = null;
     const admitted = () => {
-      const state = client.getQueryState(key), flags = client.getQueryState(queryKeys.instance.experimentalSettings);
+      const state = client.getQueryState<ExperienceObservationPreference>(key);
+      const flags = client.getQueryState<InstanceExperimentalSettings>(queryKeys.instance.experimentalSettings);
       return alive && authority.canRead() && state?.status === "success" && state.fetchStatus === "idle" && !state.isInvalidated &&
-        flags?.status === "success" && flags.fetchStatus === "idle" && !flags.isInvalidated;
+        state.data?.enabled && state.data.collectionAvailable && state.data.version === version &&
+        flags?.status === "success" && flags.fetchStatus === "idle" && !flags.isInvalidated &&
+        !!flags.data && v9FeatureEnabled(flags.data, "experience_analytics_v9") &&
+        (flags.data.enableStreamlinedUi !== false) === variant.enabled;
     };
     const emit = (kind: ExperienceObservation["kind"], durationBucket: ExperienceObservation["durationBucket"]) => {
       if (!admitted()) return;

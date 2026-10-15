@@ -59,6 +59,19 @@ it("drops samples when the current preference is withdrawn or invalidated before
   });
   expect(record).toHaveBeenCalledTimes(1);
 });
+it.each(["withdrawn", "new-version", "rollout-closed"] as const)("drops a closing interval when %s reaches the cache before React commits", async change => {
+  const record = await mount(); await vi.waitFor(() => expect(record).toHaveBeenCalledTimes(1));
+  await act(async () => {
+    if (change === "rollout-closed") client.setQueryData(queryKeys.instance.experimentalSettings,
+      { experience_analytics_v9: false, enableStreamlinedUi: false });
+    else client.setQueriesData({ queryKey: ["experience-observation-preference", company, "owner"] },
+      { companyId: company, contractId: "aw.local-experience-observations.v1", enabled: change !== "withdrawn", version: 4,
+        collectionAvailable: true, retentionDays: 35, dailyLimit: 128, lastRequestId: null });
+    Object.defineProperty(document, "visibilityState", { configurable: true, value: "hidden" });
+    document.dispatchEvent(new Event("visibilitychange"));
+  });
+  expect(record).toHaveBeenCalledTimes(1);
+});
 it("does not retry a failed sample or expose its error in customer UI", async () => {
   const record = vi.spyOn(experienceObservationsApi, "record").mockRejectedValue(new Error("PRIVATE-SAMPLE-ERROR"));
   await mount(false);

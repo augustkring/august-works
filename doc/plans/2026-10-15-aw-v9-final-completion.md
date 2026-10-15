@@ -235,3 +235,22 @@ by that check). This is not described as Greptile 5/5 or Human acceptance. PR 39
 is ready for review; current-head CI and the catalog check must finish before a
 merge-ready claim. The follow-up changes only these test fixtures and this
 record, preserving the production source verified on `898eebe83`.
+
+### Dispatch-time observation choice after a fast read
+
+CI on `7142c8b5b` exposed an additional observation collector failure: the
+cross-tab withdrawal case saw a second attempted sample. An old effect checked
+query freshness but not the newly resolved preference value. A fast read could
+therefore finish before React committed the new render, reopening that old
+effect's dispatch check. The Native owner already rejects withdrawn or stale
+consent versions; the client must also drop the attempt.
+
+Every dispatch now checks the current cached personal choice, collection
+availability, exact consent version, effective rollout and shell variant, in
+addition to current identity and non-invalidated idle reads. Three deterministic
+regressions change the cache before a visibility event and React commit. They
+cover withdrawal, a newer consent version and rollout closure. The first new
+regression fails on the uncorrected production source; all 52 cases across the
+collector, choice controls, account and activation suites pass with the fix.
+The complete UI typecheck passes. Current-source broad verification and CI must
+still complete; the earlier failed UI job is not credited as a passing run.
