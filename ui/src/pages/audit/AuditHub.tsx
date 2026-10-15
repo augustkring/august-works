@@ -2,7 +2,7 @@ import { useCallback, useEffect } from "react";
 import { History } from "lucide-react";
 import { EmptyState } from "@/components/EmptyState";
 import { PageTabBar } from "@/components/PageTabBar";
-import { Tabs } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { useBreadcrumbs } from "@/context/BreadcrumbContext";
 import { useCompany } from "@/context/CompanyContext";
 import { useNavigate, useSearchParams } from "@/lib/router";
@@ -78,7 +78,7 @@ export function AuditHub({ section }: { section: AuditSection }) {
   );
 
   if (!selectedCompanyId) {
-    return <EmptyState icon={History} message="Select an organization to view Audit." />;
+    return <EmptyState icon={History} message="Select a company to view Audit." />;
   }
 
   return (
@@ -87,7 +87,7 @@ export function AuditHub({ section }: { section: AuditSection }) {
         <h1 className="text-3xl font-semibold tracking-tight text-foreground">Audit</h1>
         <p className="mt-2 max-w-3xl text-sm leading-6 text-muted-foreground">
           Review what happened, inspect agent runs, and understand the costs and budget controls
-          behind your organization.
+          behind your company.
         </p>
       </div>
 
@@ -99,8 +99,7 @@ export function AuditHub({ section }: { section: AuditSection }) {
         }}
       >
         <PageTabBar items={AUDIT_SECTIONS} value={section} align="start" />
-      </Tabs>
-
+      <TabsContent value={section}>
       {section === "activity" && routineId ? (
         <RoutineAuditActivity companyId={selectedCompanyId} routineId={routineId} />
       ) : section === "activity" ? (
@@ -128,6 +127,8 @@ export function AuditHub({ section }: { section: AuditSection }) {
       ) : (
         <Costs embedded initialTab="overview" hideBudgetsTab />
       )}
+      </TabsContent>
+      </Tabs>
     </div>
   );
 }

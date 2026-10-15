@@ -186,3 +186,24 @@ finish. V9-008/087/088 move only to in_progress. This measures finite interface
 categories and coarse visible intervals, not Human interruptions, successful
 outcomes, support labour or a representative legacy-usage window. Release
 readiness and the outstanding qualification requirements remain unchanged.
+
+
+### Canonical owner and visual/accessibility follow-up
+
+Agents, Skills and Costs now share their existing Native implementations across
+classic/current route boundaries. Compatibility shims retain classic behavior,
+old paths and the instance preference, while removing over 7,500 duplicated
+implementation lines. Real browser verification exposed and corrected missing
+tab/panel bindings and status-label contrast failures. Costs groups unchanged
+metric values in definition lists instead of nested metric cards. Its labels
+and machine-value typography use the existing token system. Default status
+hues and fills remain; separate text tones pass the actual CSS contrast probe
+for all 11 hues on three surfaces in both themes. Personal observation-choice
+state is excluded from the company audit publication.
+
+The [scoped record](2026-10-15-aw-v9-canonical-surface-completion.md) records
+63 passing focused cases, the failed browser observations and their corrections,
+the subsequently passing Native classic/current browser checks, and the final
+follow-up still required. V9-066/068/069/071/073 move only to in_progress.
+Classic retirement, host/provider access and representative Human qualification
+remain separate, open requirements.

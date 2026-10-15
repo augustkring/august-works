@@ -26,7 +26,7 @@ import { PageSkeleton } from "../components/PageSkeleton";
 import { OrgChart } from "./OrgChart";
 import { relativeTime, cn, agentRouteRef, agentUrl } from "../lib/utils";
 import { PageTabBar } from "../components/PageTabBar";
-import { Tabs } from "@/components/ui/tabs";
+import { Tabs, TabsContent } from "@/components/ui/tabs";
 import { Button } from "@/components/ui/button";
 import { AlertTriangle, Bot, Plus, List, Network } from "lucide-react";
 import { AGENT_ROLE_LABELS, type Agent, type Environment, type EnvironmentCapabilities } from "@paperclipai/shared";
@@ -194,7 +194,7 @@ function filterOrgTree(nodes: OrgNode[], tab: FilterTab, builtInAgentIds: Set<st
 
 export type AgentsView = "list" | "org";
 
-export function Agents({ initialView = "list" }: { initialView?: AgentsView } = {}) {
+export function Agents({ initialView = "list", presentation = "auto" }: { initialView?: AgentsView; presentation?: "auto" | "classic" } = {}) {
   const agentChat = useAgentChatEnabled();
   const { selectedCompanyId } = useCompany();
   const { openNewAgent } = useDialogActions();
@@ -202,7 +202,8 @@ export function Agents({ initialView = "list" }: { initialView?: AgentsView } = 
   const navigate = useNavigate();
   const location = useLocation();
   const { isMobile } = useSidebar();
-  const { enabled: streamlinedUiEnabled } = useStreamlinedUiEnabled();
+  const streamlined = useStreamlinedUiEnabled();
+  const streamlinedUiEnabled = presentation === "classic" ? false : streamlined.enabled;
   const pathSegment = location.pathname.split("/").pop() ?? "all";
   const requestedTab: FilterTab = isFilterTab(pathSegment) ? pathSegment : "all";
   const [view, setView] = useState<AgentsView>(() => streamlinedUiEnabled ? initialView : "org");
@@ -301,6 +302,8 @@ export function Agents({ initialView = "list" }: { initialView?: AgentsView } = 
     return map;
   }, [runs]);
 
+  const agentMap = useMemo(() => new Map((agents ?? []).map(agent => [agent.id, agent])), [agents]);
+
   const environmentsById = useMemo(() => {
     const map = new Map<string, Environment>();
     for (const environment of environments ?? []) map.set(environment.id, environment);
@@ -334,7 +337,7 @@ export function Agents({ initialView = "list" }: { initialView?: AgentsView } = 
   }, [builtInAgentsEnabled, instanceSettings, navigate, requestedTab, selectedCompanyId]);
 
   if (!selectedCompanyId) {
-    return <EmptyState icon={Bot} message="Select an organization to view agents." />;
+    return <EmptyState icon={Bot} message="Select a company to view agents." />;
   }
 
   if (isLoading) {
@@ -390,8 +393,8 @@ export function Agents({ initialView = "list" }: { initialView?: AgentsView } = 
         key={agent.id}
         title={agent.name}
         titleClassName="flex-1 @5xl:flex-none @5xl:w-56"
-        titleTextClassName="truncate"
-        subtitleClassName="truncate"
+        titleTextClassName={streamlinedUiEnabled ? "truncate" : "whitespace-normal break-words @5xl:truncate @5xl:whitespace-nowrap"}
+        subtitleClassName={streamlinedUiEnabled ? "truncate" : "whitespace-normal break-words @5xl:truncate @5xl:whitespace-nowrap"}
         subtitle={`${roleLabels[agent.role] ?? agent.role}${agent.title ? ` - ${agent.title}` : ""}`}
         to={agentUrl(agent)}
         className={cn(
@@ -478,20 +481,18 @@ export function Agents({ initialView = "list" }: { initialView?: AgentsView } = 
   };
 
   return (
-    <div className={cn(
+    <Tabs value={tab} onValueChange={(value) => navigate(`/agents/${value}`)} className={cn(
       "@container",
       effectiveView === "org"
         ? "flex h-full min-h-0 flex-col gap-4"
         : "space-y-4",
     )}>
       <div className="flex flex-wrap items-center justify-between gap-3">
-        <Tabs value={tab} onValueChange={(v) => navigate(`/agents/${v}`)}>
           <PageTabBar
             items={visibleTabItems}
             value={tab}
             onValueChange={(v) => navigate(`/agents/${v}`)}
           />
-        </Tabs>
         <div className="flex items-center gap-2">
           {!forceListView ? <div className="flex items-center overflow-hidden rounded-md border border-border" role="group" aria-label="Agent view">
               <Button
@@ -527,6 +528,7 @@ export function Agents({ initialView = "list" }: { initialView?: AgentsView } = 
         </div>
       </div>
 
+      <TabsContent value={tab} className={cn("min-h-0", effectiveView === "org" ? "flex h-full flex-1 flex-col gap-4" : "space-y-4")}>
       {filtered.length > 0 && (
         <p className="text-xs text-muted-foreground">{filtered.length} agent{filtered.length !== 1 ? "s" : ""}</p>
       )}
@@ -557,7 +559,27 @@ export function Agents({ initialView = "list" }: { initialView?: AgentsView } = 
 
       {/* Org chart view */}
       {effectiveView === "org" && filteredOrg.length > 0 && (
-        <OrgChart embedded orgTree={filteredOrg} agents={agents ?? []} />
+        streamlinedUiEnabled ? <OrgChart embedded orgTree={filteredOrg} agents={agents ?? []} /> : (
+        <div className="py-1">
+          {filteredOrg.map((node) => (
+            <OrgTreeNode
+              key={node.id}
+              node={node}
+              depth={0}
+              agentMap={agentMap}
+              liveRunByAgent={liveRunByAgent}
+              environmentByAgentId={environmentByAgentId}
+              environmentDataLoading={environmentDataLoading}
+              showEnvironment={showEnvironmentColumn}
+              tab={tab}
+              memberships={membershipsQuery.data}
+              membershipMutation={membershipMutation}
+              builtInByAgentId={builtInByAgentId}
+              onConfigureBuiltIn={setConfigureState}
+            />
+          ))}
+        </div>
+        )
       )}
 
       {effectiveView === "org" && orgTree && orgTree.length > 0 && filteredOrg.length === 0 && (
@@ -583,7 +605,8 @@ export function Agents({ initialView = "list" }: { initialView?: AgentsView } = 
           />
         </Suspense>
       )}
-    </div>
+      </TabsContent>
+    </Tabs>
   );
 }
 

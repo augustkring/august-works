@@ -64,14 +64,14 @@ V9-062,2279,maintenance cost/retry budgets,in_progress
 V9-063,2281,support diagnostic bundle,in_progress
 V9-064,2283,self-service error recovery cards,in_progress
 V9-065,2285,V6 support session customer UX,in_progress
-V9-066,2287,design token audit/consolidation,not_started
+V9-066,2287,design token audit/consolidation,in_progress
 V9-067,2289,Storybook V9 state matrix,in_progress
-V9-068,2291,premium shell typography/layout refinement,not_started
-V9-069,2293,card/surface reduction pass,not_started
+V9-068,2291,premium shell typography/layout refinement,in_progress
+V9-069,2293,card/surface reduction pass,in_progress
 V9-070,2295,motion/reduced-motion pass,in_progress
-V9-071,2297,dark-mode recomposition audit,not_started
+V9-071,2297,dark-mode recomposition audit,in_progress
 V9-072,2299,`.production`/legacy parity inventory,in_progress
-V9-073,2301,migrate canonical Agents/Skills/Costs surfaces,not_started
+V9-073,2301,migrate canonical Agents/Skills/Costs surfaces,in_progress
 V9-074,2303,retire redundant onboarding variants,not_started
 V9-075,2305,retire streamlined legacy flag after migration,not_started
 V9-076,2307,route-level lazy loading/performance pass,in_progress

@@ -108,3 +108,18 @@ from the original unchanged in-memory request. See ADR-64 and
 purpose and supporting Screen Contract. Hosted mixed-version/restore, wider
 package component Source closure and the complete legacy state/AT/Human matrix
 remain open.
+
+
+## 2026-10-15 canonical owner follow-up
+
+Agents, CompanySkills and Costs now retain their `.production` import
+boundaries as shims over their canonical Native implementations. The classic
+Agent tree/mobile list and Skills tabs/rails/Studio remain selectable; current
+Agents retains its interactive chart. The shared owners preserve Native reads,
+mutations and embedded/standalone Costs variants. This consolidates duplicate
+code, not the distinct customer modes or their supported route contract.
+
+See [the implementation and evidence limits](../../plans/2026-10-15-aw-v9-canonical-surface-completion.md).
+Final retirement of the classic mode/flag still requires the stated parity,
+usage/support window and exact-artifact qualification. Authenticated SaaS and
+explicit local onboarding remain distinct, supported workflows.

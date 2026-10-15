@@ -89,21 +89,18 @@ function MetricTile({
   label: string;
   value: string;
   subtitle: string;
-  icon: ComponentType<{ className?: string }>;
+  icon: ComponentType<{ className?: string; "aria-hidden"?: boolean }>;
 }) {
   return (
-    <Card className="block p-4">
-      <div className="flex items-center justify-between gap-3">
-        <div className="min-w-0">
-          <div className="text-(length:--text-micro) uppercase tracking-(--tracking-eyebrow) text-muted-foreground">{label}</div>
-          <div className="mt-2 text-2xl font-semibold tabular-nums">{value}</div>
-          <div className="mt-1 text-xs leading-5 text-muted-foreground">{subtitle}</div>
-        </div>
-        <div className="flex h-9 w-9 shrink-0 items-center justify-center rounded-md border border-border">
-          <Icon className="h-4 w-4 text-muted-foreground" />
-        </div>
-      </div>
-    </Card>
+    <div className="space-y-2">
+      <dt className="flex items-center justify-between gap-3 text-sm font-medium text-muted-foreground">
+        {label}<Icon className="h-4 w-4 shrink-0" aria-hidden={true} />
+      </dt>
+      <dd className="space-y-1">
+        <div className="font-mono text-2xl font-semibold tabular-nums">{value}</div>
+        <p className="text-sm leading-5 text-muted-foreground">{subtitle}</p>
+      </dd>
+    </div>
   );
 }
 
@@ -128,7 +125,8 @@ function FinanceSummaryCard({
           Account-level charges that do not map to a single inference request.
         </CardDescription>
       </CardHeader>
-      <CardContent className="grid gap-3 px-5 pb-5 pt-2 sm:grid-cols-2 xl:grid-cols-4">
+      <CardContent className="px-5 pb-5 pt-2">
+      <dl className="grid gap-x-6 gap-y-5 sm:grid-cols-2 xl:grid-cols-4">
         <MetricTile
           label="Debits"
           value={formatCents(debitCents)}
@@ -153,6 +151,7 @@ function FinanceSummaryCard({
           subtitle="Estimated debits that are not yet invoice-authoritative"
           icon={Coins}
         />
+      </dl>
       </CardContent>
     </Card>
   );
@@ -551,7 +550,7 @@ export function Costs({
   }), [budgetPolicies]);
 
   if (!selectedCompanyId) {
-    return <EmptyState icon={DollarSign} message="Select an organization to view costs." />;
+    return <EmptyState icon={DollarSign} message="Select a company to view costs." />;
   }
 
   const showCustomPrompt = preset === "custom" && !customReady;
@@ -606,7 +605,7 @@ export function Costs({
             </div>
           ) : null}
 
-          <div className="grid gap-3 lg:grid-cols-4">
+          <dl className="grid grid-cols-2 gap-x-6 gap-y-5 border-y border-border py-4 lg:grid-cols-4">
             <MetricTile
               label="Inference spend"
               value={formatCents(spendData?.summary.spendCents ?? 0)}
@@ -641,7 +640,7 @@ export function Costs({
               subtitle={`${formatCents(financeData?.summary.estimatedDebitCents ?? 0)} estimated in range`}
               icon={ArrowUpRight}
             />
-          </div>
+          </dl>
         </div>
       ) : null}
 
@@ -875,7 +874,8 @@ export function Costs({
                     Hard-stop spend limits for agents and projects. Provider subscription quota stays separate and appears under Providers.
                   </CardDescription>
                 </CardHeader>
-                <CardContent className="grid gap-3 px-5 pb-5 pt-0 md:grid-cols-4">
+                <CardContent className="px-5 pb-5 pt-0">
+                <dl className="grid grid-cols-2 gap-x-6 gap-y-5 md:grid-cols-4">
                   <MetricTile
                     label="Active incidents"
                     value={String(activeBudgetIncidents.length)}
@@ -900,6 +900,7 @@ export function Costs({
                     subtitle="Project execution blocked by budget"
                     icon={DollarSign}
                   />
+                </dl>
                 </CardContent>
               </Card>
 
@@ -937,10 +938,10 @@ export function Costs({
                   return (
                     <section key={scopeType} className="space-y-3">
                       <div>
-                        <h2 className="text-lg font-semibold capitalize">{scopeType === "company" ? "organization" : scopeType} budgets</h2>
+                        <h2 className="text-lg font-semibold capitalize">{scopeType} budgets</h2>
                         <p className="text-sm text-muted-foreground">
                           {scopeType === "company"
-                            ? "Organization-wide monthly policy."
+                            ? "Company-wide monthly policy."
                             : scopeType === "agent"
                               ? "Recurring monthly spend policies for individual agents."
                               : "Lifetime spend policies for execution-bound projects."}
@@ -969,7 +970,7 @@ export function Costs({
                 {budgetPolicies.length === 0 ? (
                   <Card>
                     <CardContent className="px-5 py-8 text-sm text-muted-foreground">
-                      No budget policies yet. Set agent and project budgets from their detail pages, or use the existing organization monthly budget control.
+                      No budget policies yet. Set agent and project budgets from their detail pages, or use the existing company monthly budget control.
                     </CardContent>
                   </Card>
                 ) : null}

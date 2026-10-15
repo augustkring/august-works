@@ -2358,12 +2358,14 @@ span.paperclip-mention-chip[data-mention-kind="external-object"] {
    reads on dark surfaces. A single hue covers both modes. */
 .status-chip {
   background-color: color-mix(in srgb, var(--sc) 15%, white);
-  color: color-mix(in srgb, var(--sc) 82%, black);
+  /* Text tone is separate from the base status hue: amber and green must
+     remain readable at the actual small chip label size. */
+  color: color-mix(in srgb, var(--sc) 60%, black);
   border-color: var(--sc);
 }
 .dark .status-chip {
   background-color: color-mix(in srgb, var(--sc) 22%, transparent);
-  color: color-mix(in srgb, var(--sc) 80%, white);
+  color: color-mix(in srgb, var(--sc) 65%, white);
   border-color: color-mix(in srgb, var(--sc) 48%, transparent);
 }
 .status-chip[data-task-status="backlog"],

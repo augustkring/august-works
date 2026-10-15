@@ -50,6 +50,7 @@ const support = await getEmbeddedPostgresTestSupport();
     const audit = await db.select().from(activityLog).where(eq(activityLog.companyId, companyId));
     expect(audit.map(row => row.action)).toEqual(["experience_observation_preference.updated"]);
     expect(JSON.stringify(audit)).not.toContain("PRIVATE-NAME");
+    expect(audit[0]!.details).toEqual({ purpose: "aw.local-experience-observations.v1" });
   });
   it("withdraws and erases after membership and rollout withdrawal; historical opt-in cannot re-enable", async () => {
     const original = command(); await service.update(actor(), companyId, original);
