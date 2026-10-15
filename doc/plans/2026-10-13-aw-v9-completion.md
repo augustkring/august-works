@@ -2900,3 +2900,24 @@ See [the collection/continuation note](2026-10-15-aw-v9-invite-source-collection
 Preserve both earlier failed lane logs and the 41 exact prior passes, prove their
 test files unchanged and continue the remaining 38 suites with source identity.
 Full final qualification remains pending. No PR/push or release claim.
+
+
+### 86 — Keep an own bound-notification reset available after rollout rollback
+
+Reproduce and fix the missing reset after disabling channel rollout and reloading.
+The current own preference can still be read under its existing transactional-
+notice capability; no new destination or outbound delivery is admitted by this
+read. Hide default choices with the rollout off, retain an existing bound choice
+as unavailable and require an explicit default reset. Preserve the exact uncertain
+reset through flag/session rechecks. Do not falsely label an initially unavailable
+choice as an intervening source change.
+
+All 31 final UI/API and eleven actual PostgreSQL cases pass. The built account
+browser now passes exact request recovery, narrow two-theme/WCAG checks, rollback
+reload, explicit reset and subsequent reload with no extra command or Native work.
+Keep the initial red DOM case, dependency-import failure with no cases, two strict
+browser-selector failures and the final corrected evidence distinct. See [the
+scope and verification note](2026-10-15-aw-v9-notification-rollout-reset.md).
+The broader regression still qualifies its recorded checkpoints; this later small
+UI delta has separate current evidence. Final types/token/coverage and integrated
+review remain pending. All release/field gaps remain open. No PR/push.

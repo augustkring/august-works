@@ -46,8 +46,23 @@ async function select(value: string, index = 0) { await act(async () => { const 
 const ownTarget = () => select(`${target.identityLinkId}:${target.conversationId}`);
 const receipt = (command: NotificationChannelUpdate): NotificationChannelPreferenceReceipt => ({ companyId, userId: "owner", category: "work_update",
   requestId: command.requestId, version: 1, channel: "slack", preferenceApplied: true, authorityGranted: false, messageSent: false, executionStarted: false });
-it("makes no private destination read when the new rollout is disabled", async () => {
-  await mount({ enabled: false }); expect(host.textContent).toBe(""); expect(saasApi.notificationChannelPreference).not.toHaveBeenCalled();
+it("keeps new destination controls hidden when rollback finds only the current default preference", async () => {
+  await mount({ enabled: false, view: { ...initial, targets: [] } });
+  await vi.waitFor(() => expect(saasApi.notificationChannelPreference).toHaveBeenCalledWith(companyId, "owner", "work_update", expect.any(AbortSignal)));
+  await vi.waitFor(() => expect(host.textContent).toBe("")); expect(host.querySelector("select")).toBeNull();
+});
+it("allows an existing bound choice to be explicitly reset after rollout is disabled and the page reloads", async () => {
+  await mount({ enabled: false, view: { ...initial, version: 3, channel: "slack", availability: "unavailable", targets: [] } });
+  await vi.waitFor(() => expect(host.querySelector("select")?.value).toBe("unavailable"));
+  expect(host.textContent).toContain("not redirected to email");
+  expect(host.textContent).not.toContain("Your preference or destination changed");
+  const update = vi.spyOn(saasApi, "updateNotificationChannel").mockImplementation(async (_company, _user, _category, command) => ({
+    ...receipt(command), channel: "default", version: 4,
+  }));
+  vi.mocked(saasApi.notificationChannelPreference).mockResolvedValue({ ...initial, version: 4, targets: [], baselineHash: "c".repeat(64) });
+  await select("default"); await act(async () => button("Save delivery preference").click());
+  await vi.waitFor(() => expect(host.textContent).toContain("Preference version 4 was saved"));
+  expect(update.mock.calls[0]![3]).toMatchObject({ expectedVersion: 3, choice: { channel: "default" } });
 });
 it("retries the exact save after a lost acknowledgement and reports preference rather than delivery", async () => {
   await mount(); await ownTarget(); await select("da", 1);
@@ -74,6 +89,20 @@ it("recovers an Original receipt without posting another preference command", as
   await act(async () => button("Check saved preference").click());
   await vi.waitFor(() => expect(host.textContent).toContain("Preference version 1 was saved"));
   expect(update).toHaveBeenCalledTimes(1); expect(recovery).toHaveBeenCalledTimes(1);
+});
+it("retains the exact uncertain reset through a rollback-settings recheck", async () => {
+  await mount({ enabled: false, view: { ...initial, version: 3, channel: "slack", availability: "unavailable", targets: [] } });
+  await vi.waitFor(() => expect(host.querySelector("select")?.value).toBe("unavailable"));
+  const update = vi.spyOn(saasApi, "updateNotificationChannel").mockRejectedValue(new Error("lost reset acknowledgement"));
+  await select("default"); await act(async () => button("Save delivery preference").click());
+  await vi.waitFor(() => expect(button("Retry the same save")).toBeTruthy());
+  const original = update.mock.calls[0]![3], fresh = deferred<typeof flags>(); let recheck!: Promise<unknown>;
+  await act(async () => { recheck = client.fetchQuery({ queryKey: queryKeys.instance.experimentalSettings, queryFn: () => fresh.promise }); });
+  await vi.waitFor(() => expect(host.querySelector("select")).toBeNull());
+  await act(async () => { fresh.resolve({ ...flags, notification_channels_v9: false }); await recheck; });
+  await vi.waitFor(() => expect(button("Retry the same save")).toBeTruthy());
+  await act(async () => button("Retry the same save").click());
+  await vi.waitFor(() => expect(update).toHaveBeenCalledTimes(2)); expect(update.mock.calls[1]![3]).toEqual(original);
 });
 it("retains an unavailable saved destination without selecting email or allowing an implicit reset", async () => {
   await mount({ view: { ...initial, version: 3, channel: "slack", availability: "unavailable", targets: [] } });

@@ -2,6 +2,7 @@ import { useEffect, useId, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { NotificationChannelCategory, NotificationChannelPreferenceView, NotificationChannelUpdate,
   NotificationChannelPreferenceReceipt } from "@paperclipai/shared";
+import { v6FeatureEnabled } from "@paperclipai/shared";
 import { saasApi } from "@/api/saas";
 import { useV9AccountScope } from "@/hooks/useV9AccountScope";
 import { useV9FeatureEnabled } from "@/hooks/useV9FeatureEnabled";
@@ -16,8 +17,12 @@ type Props = { companyId: string; principal: string; category: NotificationChann
 const targetKey = (target: { identityLinkId: string; conversationId: string }) => `${target.identityLinkId}:${target.conversationId}`;
 export function NotificationChannelSettings(props: Props) {
   const feature = useV9FeatureEnabled("notification_channels_v9"), [seen, setSeen] = useState(false);
-  useEffect(() => { if (feature.enabled) setSeen(true); }, [feature.enabled]);
-  if ((!seen && !feature.enabled) || !props.companyId) return null;
+  // Rollout controls new destinations and outbound admission. Reading the own
+  // preference must survive rollback/reload so an existing choice can be reset.
+  const canReadPreference = feature.query.isSuccess && !feature.query.isFetching && !!feature.query.data &&
+    v6FeatureEnabled(feature.query.data, "transactional_email_v6");
+  useEffect(() => { if (canReadPreference) setSeen(true); }, [canReadPreference]);
+  if ((!seen && !canReadPreference) || !props.companyId) return null;
   return <ChannelScope key={`${props.companyId}:${props.principal}:${props.category}`} {...props} feature={feature} />;
 }
 function ChannelScope({ companyId, principal, category, sourceReady, sourceQueryKey, feature }: Props & {
@@ -70,6 +75,8 @@ function ChannelScope({ companyId, principal, category, sourceReady, sourceQuery
   const selected = visible ? read.data.targets.find(target => targetKey(target) === choice) : undefined;
   const sameSource = visible && baseline?.baselineHash === read.data.baselineHash &&
     (choice === "default" || selected?.targetHash === choiceHash);
+  const sourceChanged = visible && baseline && (baseline.baselineHash !== read.data.baselineHash ||
+    choice !== "default" && choice !== "unavailable" && selected?.targetHash !== choiceHash);
   function accept(value: NotificationChannelPreferenceReceipt) {
     if (!canRead()) return;
     setReceipt(value); attempt.current = null; setUnknown(false); setFailure(false); setBaseline(null);
@@ -102,13 +109,14 @@ function ChannelScope({ companyId, principal, category, sourceReady, sourceQuery
   }, onSuccess: value => { if (value) accept(value); else if (canRead()) { setUnknown(true); setFailure(true); } },
   onError: () => { if (alive.current) setFailure(true); } });
   const pending = save.isPending || check.isPending;
+  if (!feature.enabled && visible && read.data.channel === "default" && !unknown && !pending && !receipt) return null;
   return <section aria-labelledby={label} className="space-y-3">
     <h4 id={label} className="font-medium">{t("notificationChannels.heading", { category: t(`notifications.category.${category}`) })}</h4>
     {!visible ? <><p role={read.isError ? "alert" : "status"}>{t(read.isError ? "notificationChannels.unavailable" : "notificationChannels.loading")}</p>
       {read.isError && ready ? <Button variant="outline" className="min-h-11" onClick={() => { void read.refetch(); }}>{t("tryAgain")}</Button> : null}</> : <>
       <p>{t("notificationChannels.boundary")}</p>
       {read.data.availability === "unavailable" ? <p role="status">{t("notificationChannels.destinationUnavailable")}</p> : null}
-      {!sameSource && baseline && !unknown ? <p role="status">{t("notificationChannels.changed")} <Button variant="outline" className="min-h-11"
+      {sourceChanged && !unknown ? <p role="status">{t("notificationChannels.changed")} <Button variant="outline" className="min-h-11"
         onClick={() => adopt(read.data)}>{t("notificationChannels.reviewCurrent")}</Button></p> : null}
       <label className="block space-y-2"><span>{t("notificationChannels.destination")}</span>
         <select className="min-h-11 w-full rounded-md border border-input bg-background px-3" value={choice}

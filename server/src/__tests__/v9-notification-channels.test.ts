@@ -158,6 +158,11 @@ describePg("Original own-account bound notification channels", () => {
       expect(await owner.receipt(source.company.id, source.userId, "work_update", requestId)).toBeNull();
       expect(await owner.receipt(source.company.id, source.userId, "work_update", receipt.requestId)).toEqual(receipt);
       expect((await owner.view(source.company.id, source.userId, "work_update")).channel).toBe("slack");
+      const current = await owner.view(source.company.id, source.userId, "work_update");
+      expect(current).toMatchObject({ channel: "slack", availability: "unavailable", target: null, targets: [] });
+      expect(await owner.update(source.company.id, source.userId, "work_update", { requestId: randomUUID(), deliveryLocale: "en",
+        expectedVersion: current.version, expectedBaselineHash: current.baselineHash, choice: { channel: "default" } }))
+        .toMatchObject({ channel: "default", version: 2, messageSent: false, authorityGranted: false });
     } finally { await instanceSettingsService(db).updateExperimental({ notification_channels_v9: true }); }
   });
   it("suppresses both new and previously queued email after binding while mandatory security retains its owner", async () => {

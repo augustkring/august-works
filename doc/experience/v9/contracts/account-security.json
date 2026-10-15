@@ -12,7 +12,8 @@
   "entryConditions": [
     "Current successful nonimplicit original session; matching user/session and current original SaaS capabilities.",
     "Each private list requires a fresh original Native read after an account epoch changes. Notification policy edits also require the existing effective notification_policy_v9 flag and current preference read.",
-    "Optional linked-chat delivery requires the effective notification_channels_v9 flag, current Original notification preferences and the own verified private Slack/Teams identity/conversation proof. Email settings do not grant chat access."
+    "Optional linked-chat delivery requires the effective notification_channels_v9 flag, current Original notification preferences and the own verified private Slack/Teams identity/conversation proof. Email settings do not grant chat access.",
+    "After channel rollout rollback, the current verified owner can still read and explicitly reset an existing company-bound preference through the Original notification owner. The rollout flag continues to gate all new private destinations and outbound delivery; default choices stay hidden while off."
   ],
   "exitConditions": [
     "Navigate away; personal deletion recovery retains only its principal and original UUID in bounded per-tab Core storage.",

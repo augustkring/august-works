@@ -62,3 +62,10 @@ is off by default behind `notification_channels_v9`, with the existing notificat
 policy and transactional-notification prerequisites. Live activation still requires
 migration/rollback, retention/restore, endpoint/recipient, provider/host and manual/
 representative qualification. Those results must be recorded separately.
+
+Rollout rollback does not remove the owner's reset path. With the existing
+transactional-notice/account capability, a current own read may return the saved
+choice even while the new rollout is disabled; no destination options or new
+outbound authority follow. The UI hides default state, retains unavailable bound
+state and permits only an explicit Original default reset. Revalidation preserves
+an uncertain reset's exact request identity. No silent email fallback is inferred.
