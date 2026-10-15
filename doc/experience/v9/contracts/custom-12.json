@@ -7,7 +7,7 @@
     "admin",
     "security_admin"
   ],
-  "customerOutcome": "Show current qualification blockers. Publication remains disabled in source and rejected by the native HTTP owner.",
+  "customerOutcome": "Review the current Native before/after configuration and qualification blockers, then explicitly confirm publication and activation when the Original owner admits the exact review.",
   "entryConditions": [
     "Current verified authenticated company membership and native agents:create or target agents:configure authority; instance-admin status does not bypass membership.",
     "Draft belongs to the current creator; editing an existing agent requires current native read and configure authority.",
@@ -21,7 +21,7 @@
   ],
   "content": {
     "h1": "Publish",
-    "supportingCopy": "Show current qualification blockers. Publication remains disabled in source and rejected by the native HTTP owner.",
+    "supportingCopy": "Review the current Native before/after configuration and qualification blockers, then explicitly confirm publication and activation when the Original owner admits the exact review.",
     "customerTerms": [
       "Company",
       "Work",
@@ -35,11 +35,32 @@
       "Asks-before task scope: one separate unassigned backlog task, linked through the Original Human verdict/Task receipt and source run; tests retain the proposal as evidence and create no business task."
     ]
   },
-  "inputs": [],
+  "inputs": [
+    {
+      "id": "confirmPublication",
+      "label": "Confirm publication",
+      "dataType": "boolean",
+      "required": true,
+      "default": "false",
+      "help": "Confirm the exact reviewed configuration change.",
+      "validation": "Both confirmations must be true for the current admitted Native review hash and draft version; reset on authority, feature, draft or review changes.",
+      "autofillOrPrefill": "Never preselected."
+    },
+    {
+      "id": "confirmActivation",
+      "label": "Confirm activation",
+      "dataType": "boolean",
+      "required": true,
+      "default": "false",
+      "help": "Confirm that the Agent may become active after publication.",
+      "validation": "Both confirmations must be true for the current admitted Native review hash and draft version; reset on authority, feature, draft or review changes.",
+      "autofillOrPrefill": "Never preselected."
+    }
+  ],
   "actions": {
     "primary": {
-      "label": "Publish agent (disabled)",
-      "operation": "Native publish HTTP operation rejects unqualified promotion; no side effect occurs"
+      "label": "Review publication; then Publish agent after both confirmations",
+      "operation": "Current Native publication review and exact draft version/review hash gate the Original publish command. Unknown acknowledgement requires Original receipt recovery before another effect."
     },
     "secondary": [
       "Save & exit after canonical acknowledgement",
@@ -56,10 +77,10 @@
       "Native agent configuration baseline, current company membership and permissions",
       "Approved native Foundation revisions and existing presence runtime bindings"
     ],
-    "canonicalWriteOperation": "Creator-scoped agent configuration create/save/discard with request hash, row version, database scope/version fences, native audit and post-commit publication",
-    "authorityEffect": "No grants, agent mutation, external messages, runtime provisioning or work execution. Native publication mapping and representative execution are unqualified.",
+    "canonicalWriteOperation": "Creator-scoped draft save/discard, Original publication review and explicit publication/activation with exact draft version/review hash, request identity, transaction fences and Native audit.",
+    "authorityEffect": "Saving a draft does not change the active agent. Admitted explicit publication promotes the reviewed configuration and activates the Native Agent through existing owners. It does not grant arbitrary external send/spend/delegation or prove a first-value outcome.",
     "asyncWork": "Bounded native references and 25-row native timestamp/ID pagination; unknown acknowledgements retain immutable client request bodies/keys. V9 account observation rechecks on return inside the ordinary 30-second freshness window, without restarting reads for nested observers. Same-turn QueryClient fetch guards and authority epochs fence Native transport and late acknowledgements.",
-    "receipt": "Current creator-owned canonical draft ID/version; never an inferred active version or first-value receipt."
+    "receipt": "Original publication receipt binds company, draft, target Agent, request identity and published version; recover it after an unknown acknowledgement or reload. Publication and activation do not establish a first-value receipt."
   },
   "states": {
     "loading": "Announce loading only while the current identity/company request is pending.",
@@ -119,7 +140,8 @@
   },
   "acceptance": {
     "functional": [
-      "Verify canonical state, version conflicts, safe replay, unavailable states and principal/company switching on the exact artifact."
+      "Verify canonical state, version conflicts, safe replay, unavailable states and principal/company switching on the exact artifact.",
+      "Verify the current review and draft hash, both explicit confirmations, Native blockers, replay/unknown-acknowledgement recovery and unchanged live revision before publication. Full provider/host qualification remains open."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."

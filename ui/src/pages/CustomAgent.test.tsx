@@ -3,7 +3,7 @@ import { v9SessionFixture } from "../hooks/v9-session.test-support";
 import { act, StrictMode } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, Routes, Route } from "react-router-dom";
+import { MemoryRouter, Routes, Route, Link } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import {
   V5_FEATURE_KEYS,
@@ -70,16 +70,17 @@ afterEach(async () => {
   await i18n.changeLanguage("en");
   vi.restoreAllMocks();
 });
-async function render(start = false) {
+async function render(start = false, target?: string) {
   await act(async () =>
     root.render(
       <StrictMode>
         <QueryClientProvider client={client}>
           <MemoryRouter
             initialEntries={[
-              start ? "/AW/agents/custom" : `/AW/agents/custom/${id}/identity`,
+              start ? `/AW/agents/custom${target ? `?agentId=${target}` : ""}` : `/AW/agents/custom/${id}/identity`,
             ]}
           >
+            {start && <Link to="/AW/agents/custom?agentId=10000000-0000-4000-8000-000000000004">Change another agent</Link>}
             <Routes>
               <Route
                 path="/AW/agents/custom/:draftId/:screen?"
@@ -98,7 +99,7 @@ async function render(start = false) {
     ),
   );
 }
-async function mount(start = false) {
+async function mount(start = false, target?: string) {
   client = new QueryClient({
     defaultOptions: { queries: { retry: false, gcTime: 0 } },
   });
@@ -121,7 +122,7 @@ async function mount(start = false) {
     knowledge: [],
     runtimes: [],
   });
-  await render(start);
+  await render(start, target);
   if (start) {
     await vi.waitFor(() =>
       expect(container.textContent).toContain("Your saved drafts"),
@@ -455,4 +456,55 @@ it("saves only explicitly selected approved preference IDs without invoking tool
   await vi.waitFor(() => expect(save).toHaveBeenCalledTimes(1));
   expect(save.mock.calls[0]![3].content).toMatchObject({ memory:"approved_work_preferences", memoryRecordIds:[preferenceId] });
   expect(JSON.stringify(save.mock.calls[0]![3])).not.toContain("Approved concise work");
+});
+
+
+it("separates an unknown draft-creation attempt from a newly selected Agent target", async () => {
+  const firstAgent = "10000000-0000-4000-8000-000000000003";
+  const secondAgent = "10000000-0000-4000-8000-000000000004";
+  vi.spyOn(agentAuthoringApi, "list").mockResolvedValue({ items: [], nextCursor: null });
+  const create = vi.spyOn(agentAuthoringApi, "create").mockRejectedValue(new Error("Acknowledgement lost"));
+  await mount(true, firstAgent);
+  await click(i18n.t("customAgent.createRevision", { ns: "experience" }));
+  await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+  await vi.waitFor(() => expect(container.querySelector('[role="alert"]')).not.toBeNull());
+  // A retry of the same intent must preserve its immutable request identity.
+  await click(i18n.t("customAgent.retryCreate", { ns: "experience" }));
+  await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(2));
+  expect(create.mock.calls[1]![2]).toEqual(create.mock.calls[0]![2]);
+  await act(async () => {
+    const link = Array.from(container.querySelectorAll("a")).find(item => item.textContent === "Change another agent")!;
+    link.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
+  });
+  await vi.waitFor(() => expect(container.querySelector("h1")?.textContent).toBe("Change agent"));
+  await vi.waitFor(() => expect(container.textContent).toContain("Your saved drafts"));
+  // Exercise whichever action the UI currently offers; the command must target
+  // the newly selected Agent, even if the old attempt had an unknown outcome.
+  const retry = i18n.t("customAgent.retryCreate", { ns: "experience" });
+  await click(Array.from(container.querySelectorAll("button")).some(item => item.textContent === retry)
+    ? retry : i18n.t("customAgent.createRevision", { ns: "experience" }));
+  await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(3));
+  expect(create.mock.calls[2]![2].agentId).toBe(secondAgent);
+  expect(create.mock.calls[2]![2].requestId).not.toBe(create.mock.calls[0]![2].requestId);
+});
+
+
+it("ignores a late draft-creation acknowledgement after selecting another Agent", async () => {
+  vi.spyOn(agentAuthoringApi, "list").mockResolvedValue({ items: [], nextCursor: null });
+  let complete!: (value: AgentAuthoringDraftView) => void;
+  const create = vi.spyOn(agentAuthoringApi, "create").mockImplementationOnce(() => new Promise(resolve => { complete = resolve; }))
+    .mockRejectedValue(new Error("Acknowledgement lost"));
+  await mount(true, "10000000-0000-4000-8000-000000000003");
+  await click(i18n.t("customAgent.createRevision", { ns: "experience" }));
+  await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(1));
+  await act(async () => {
+    const link = Array.from(container.querySelectorAll("a")).find(item => item.textContent === "Change another agent")!;
+    link.dispatchEvent(new MouseEvent("click", { bubbles: true, cancelable: true, button: 0 }));
+  });
+  await vi.waitFor(() => expect(container.textContent).toContain("Your saved drafts"));
+  await act(async () => complete({ ...draft, agentId: "10000000-0000-4000-8000-000000000003" }));
+  expect(container.querySelector("h1")?.textContent).toBe("Change agent");
+  await click(i18n.t("customAgent.createRevision", { ns: "experience" }));
+  await vi.waitFor(() => expect(create).toHaveBeenCalledTimes(2));
+  expect(create.mock.calls[1]![2].agentId).toBe("10000000-0000-4000-8000-000000000004");
 });

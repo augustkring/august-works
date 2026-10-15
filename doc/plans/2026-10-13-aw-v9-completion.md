@@ -2712,3 +2712,19 @@ All five contracts pass the shared strict schema. Source inventory passes; all
 40 supplied reference hashes and byte counts match. The release check correctly
 exits 1 for incomplete source and missing exact-artifact acceptance.
 All 70 launch rows and R0 remain open. No PR/push.
+
+
+### 76 — Separate Agent draft-creation attempts by target
+
+A routed regression proves an unknown draft-create acknowledgement can retain
+Agent A's immutable command after the URL selects Agent B. Key the start surface
+by company, principal and target. Same-intent retries retain the exact command;
+a target change starts a separate attempt and rejects late old-surface navigation.
+Native ownership, admission, request hashing and active configuration are unchanged.
+
+English/Danish change-entry headings now describe editing. Saved-draft copy and
+CUSTOM-12 describe current review, two confirmations, version/hash fences and
+Original receipt recovery instead of obsolete blanket publication rejection.
+Four focused suites pass all 38 cases; UI types, token gates, inventory and both
+strict changed contracts pass. See [the bounded change plan](2026-10-15-aw-v9-agent-target-continuity.md).
+Broader verification and all release/field qualification remain open. No PR/push.

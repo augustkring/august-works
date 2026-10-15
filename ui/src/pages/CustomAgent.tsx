@@ -155,8 +155,8 @@ function DraftStart({
         to="/advanced"
         className="inline-flex min-h-11 items-center underline"
       >{t("customAgent.advanced")}</Link>
-      <h1 className="text-2xl font-semibold">{t("customAgent.title")}</h1>
-      <p>{t("customAgent.intro")}</p>
+      <h1 className="text-2xl font-semibold">{t(search.get("agentId") ? "customAgent.changeTitle" : "customAgent.title")}</h1>
+      <p>{t(search.get("agentId") ? "customAgent.changeIntro" : "customAgent.intro")}</p>
       <p className="text-muted-foreground">{t("customAgent.draftBoundary")}</p>
       {enabled ? (
         <Button
@@ -973,6 +973,7 @@ function DraftEditor({
 }
 
 export function CustomAgent() {
+  const [search] = useSearchParams();
   const { t } = useTranslation("experience");
   const { selectedCompanyId: company } = useCompany(),
     { userId: principal } = useV9CurrentAccount(),
@@ -998,7 +999,7 @@ export function CustomAgent() {
     />
   ) : (
     <DraftStart
-      key={`${company}:${principal}`}
+      key={`${company}:${principal}:${search.get("agentId") ?? "new"}`}
       company={company}
       principal={principal}
       enabled={enabled}

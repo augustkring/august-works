@@ -18,7 +18,7 @@
     "Keep stale, unknown, refused and unqualified outcomes distinct; preserve the exact original request for recovery."
   ],
   "content": {
-    "h1": "Create custom agent",
+    "h1": "Change agent / Rediger agent",
     "supportingCopy": "Edit, test and review a separate draft while the active Agent revision remains unchanged until explicit Native publication.",
     "customerTerms": [
       "Company",
@@ -79,7 +79,7 @@
     "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
     "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
     "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
-    "targetSize": "Custom frequent and primary controls target at least 44 \u00d7 44 CSS px.",
+    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
     "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
     "reducedMotion": "No essential animated transition or moving progress indicator.",
     "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
