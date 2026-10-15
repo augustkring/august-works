@@ -84,7 +84,7 @@ V9-082,2319,charts/generative UI nonvisual alternatives,in_progress
 V9-083,2321,localization key migration for V9 surfaces,in_progress
 V9-084,2323,Danish/English reference locale QA if launch scope requires,in_progress
 V9-085,2325,UX event Data Processing Contracts + allow-listed schema/redaction/leakage tests,in_progress
-V9-086,2327,Time-to-first-outcome funnel,not_started
+V9-086,2327,Time-to-first-outcome funnel,in_progress
 V9-087,2329,interruption/attention telemetry,not_started
 V9-088,2331,maintenance/support effort telemetry,not_started
 V9-089,2333,optional PostHog adapter + DPA/privacy feature gate,not_started

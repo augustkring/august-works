@@ -35,6 +35,39 @@ do not drop them to improve completion. A task-start timer is not a usable-accou
 TTFO timer. If that native baseline is unavailable, record `not_recorded` and a
 null duration; the confirmatory TTFO finding remains inconclusive.
 
+## Recorded first-outcome funnel — 2026-10-15
+
+The pilot summarizer now reports a descriptive first-outcome funnel over the
+already validated observations. It counts observation cells (participant ×
+journey × role × surface × assistive condition), not unique people or a
+population conversion rate. Overall counts and every declared critical slice
+retain their own denominators, including empty slices.
+
+Stages distinguish attempted cells, recorded successful outcomes, successful
+outcomes with satisfied security/privacy and accessibility checks, outcomes
+admitted by the protocol's independence rule, and those with an actual recorded
+usable-account timing baseline. A failed attempt's duration cannot shorten TTFO.
+An unreviewed outcome or missing usable baseline cannot enter the TTFO sample.
+An empty timing sample returns null quantiles and `not_observed`, never zero
+minutes or an inferred usable baseline. P50/P90 use the nearest-rank definition
+on the admitted observed sample; they are not population estimates.
+
+`reviewedOutcomesWithoutRecordedAssistance` counts only what the existing
+assistance observation records. It does not establish no support contact,
+self-service activation rate or support minutes. No new event is collected,
+no new provider is enabled and no source observation field is added. Slice
+summaries remain private study artifacts under the original purpose, access
+and retention contract; small slices are not anonymous merely because labels
+are omitted. Review the scoped output before any external sharing.
+
+All 49 pilot/attention validator and private-file cases pass, including six new
+funnel cases. These are synthetic software tests; no study was run and no
+participant, Native oracle or privacy approval was fabricated. Live analytics
+collection, the current-account product funnel and representative baseline/
+confirmatory qualification remain separate outstanding work. V9-086 is now in
+progress, with this offline measurement capability and the existing separate
+current-owner activation projection; it is not complete.
+
 Before confirmatory collection, use the pilot to freeze population/critical slices,
 material pass/fail/inconclusive claims, sample/repetition rationale, uncertainty,
 required independence, named risk/waiver role and production follow-up references.
