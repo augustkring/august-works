@@ -77,6 +77,8 @@ describe("AppErrorBoundary", () => {
 
     expect(container.textContent).toContain("August Works hit an error");
     expect(container.textContent).not.toContain("Maximum update depth exceeded");
+    expect(container.querySelectorAll("main")).toHaveLength(1);
+    expect(document.activeElement).toBe(container.querySelector("main h1"));
     expect(
       Array.from(container.querySelectorAll("button")).some(
         (button) => button.textContent === "Reload page",

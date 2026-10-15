@@ -10,9 +10,10 @@ export function ErrorRecoverySurface({ scope, onBack }: {
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
   const copy = (document.documentElement.lang.toLowerCase().split("-")[0] === "da" ? da : en).errorRecovery;
+  const Region = scope === "app" ? "main" : "section";
   useLayoutEffect(() => { heading.current?.focus(); }, []);
   return (
-    <section className="mx-auto w-full max-w-2xl space-y-4 px-4 py-10" aria-labelledby="error-recovery-heading">
+    <Region className="mx-auto w-full max-w-2xl space-y-4 px-4 py-10" aria-labelledby="error-recovery-heading">
       <h1 id="error-recovery-heading" ref={heading} tabIndex={-1} className="text-lg font-semibold">{copy[scope]}</h1>
       <p className="text-sm text-muted-foreground">{copy.explanation}</p>
       <p className="text-sm text-muted-foreground">{copy.unknownOutcome}</p>
@@ -22,6 +23,6 @@ export function ErrorRecoverySurface({ scope, onBack }: {
       </div>
       <p className="text-sm text-muted-foreground">{copy.supportExplanation}</p>
       <a href="mailto:support@blentera.com" className="inline-flex min-h-11 items-center underline focus-visible:outline focus-visible:outline-ring">{copy.support}</a>
-    </section>
+    </Region>
   );
 }

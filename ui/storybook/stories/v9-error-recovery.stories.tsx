@@ -17,7 +17,7 @@ const meta: Meta<typeof RecoveryPreview> = {
   title: "August Works/V9/Error recovery",
   component: RecoveryPreview,
   parameters: { layout: "fullscreen" },
-  decorators: [(Story) => <main><Story /></main>],
+  decorators: [(Story, context) => context.args.scope === "app" ? <Story /> : <main><Story /></main>],
 };
 export default meta;
 type Story = StoryObj<typeof RecoveryPreview>;

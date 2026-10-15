@@ -3037,3 +3037,21 @@ representative users, provider qualification or completed V9 launch acceptance.
 Current-head remote CI and the repository's required independent review remain
 necessary before merge. The fork currently exposes CodeRabbit and no Greptile
 review; CONTRIBUTING's explicit Greptile 5/5 condition is not fabricated.
+
+## Checkpoint 91 — preserve the root recovery landmark
+
+The provider-free app fallback now owns the main landmark because a shell crash
+removes the old main. A routed-page fallback remains a labelled section inside
+the existing Layout main. The app-boundary regression checks exactly one main
+and focus on its heading; Storybook now exercises the actual app-owned landmark
+rather than supplying one in its wrapper.
+
+All five affected suites pass all 28 cases after this change. The full affected
+UI typecheck passes. Storybook rebuild passes, and both browser tests pass again
+(55.5s), including full axe checks, both themes, EN/DA, reduced motion and 320px
+reflow. This is the final recovery source; subsequent verification must retain
+this identity. The preceding complete workspace type command passes on its
+committed source; the corresponding full build is still running at this record.
+The root-landmark delta is separately type/component/browser qualified, and the
+final remote CI must check it before merge. Original failed commands and partial
+or superseded CI runs are retained and are not final-head passes.
