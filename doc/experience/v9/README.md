@@ -83,3 +83,17 @@ projects current original Apps setup for published requirements and rechecks it
 before the original onboarding step advances to review. Recorded connection
 setup remains distinct from Agent authority, credential resolution and a safe
 first task. Qualification on this authored scope remains pending.
+
+
+## Partial Native mappings for the remaining five screen rows
+
+The Apps, Agent change, Agent retirement, workflow access and workflow approval
+rows now have V3 screen contracts and actual Native/UI source paths. They were
+previously unmapped, even where bounded software already existed. Their status
+is in_progress, with explicit remaining implementation and qualification in
+their acceptance sections. None has release evidence or verified status.
+
+These mappings do not establish full provider/channel coverage, live-edit/legacy
+convergence, automatic reassignment/external cleanup, material permission/policy
+editing or complete approval-card settlement. Existing Native owners remain
+authoritative. All 70 launch rows and R0 remain open.

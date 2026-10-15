@@ -825,9 +825,17 @@
       },
       "criticality": "C3",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/apps/Browse.tsx",
+        "ui/src/pages/apps/AppsConnect.tsx",
+        "ui/src/pages/apps/AppsReview.tsx",
+        "ui/src/pages/apps/AppDetail.tsx",
+        "server/src/services/connection-intents.ts",
+        "server/src/services/tool-access.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/apps.json"
     },
     {
       "screenId": "AGENT-MONITOR",
@@ -859,9 +867,17 @@
       },
       "criticality": "C3",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/CustomAgent.tsx",
+        "ui/src/components/AgentDraftReview.tsx",
+        "ui/src/components/AgentDraftSafeTest.tsx",
+        "ui/src/components/AgentDraftPublication.tsx",
+        "server/src/services/agents/authoring-drafts.ts",
+        "server/src/services/agents/authoring-publication.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/agent-change.json"
     },
     {
       "screenId": "AGENT-RETIRE",
@@ -874,9 +890,15 @@
       },
       "criticality": "C3",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/AgentRetirement.tsx",
+        "ui/src/api/agent-retirement.ts",
+        "server/src/services/agents/retirement.ts",
+        "packages/shared/src/agent-retirement.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/agent-retire.json"
     },
     {
       "screenId": "ORCHESTRATION",
@@ -1323,9 +1345,17 @@
       },
       "criticality": "C3",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/WorkflowReview.tsx",
+        "ui/src/pages/WorkflowDraftStep.tsx",
+        "ui/src/pages/WorkflowDraftFlow.tsx",
+        "server/src/services/workflows/workflow-draft-tools.ts",
+        "server/src/services/tool-access.ts",
+        "server/src/services/tool-gateway.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/workflow-access.json"
     },
     {
       "screenId": "WORKFLOW-APPROVAL",
@@ -1338,9 +1368,17 @@
       },
       "criticality": "C3",
       "owner": "August Works product and engineering",
-      "implementationStatus": "pending",
-      "componentPaths": [],
-      "evidenceRefs": []
+      "implementationStatus": "in_progress",
+      "componentPaths": [
+        "ui/src/pages/WorkflowReview.tsx",
+        "ui/src/pages/WorkflowDraftStep.tsx",
+        "ui/src/pages/WorkflowDraftFlow.tsx",
+        "ui/src/pages/WorkflowBuilder.tsx",
+        "server/src/services/workflows/workflow-execution-policy.ts",
+        "server/src/services/approvals.ts"
+      ],
+      "evidenceRefs": [],
+      "contractPath": "doc/experience/v9/contracts/workflow-approval.json"
     },
     {
       "screenId": "WORKFLOW-TEST",

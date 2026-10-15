@@ -2697,3 +2697,18 @@ all 89 production-browser cases. Its actual Runtime and chat-project suites
 pass 138 and ten cases respectively. These identified software snapshots do not
 accept hosted/provider, manual accessibility or representative Human evidence.
 Source completeness, all 70 launch rows and R0 remain open. No PR/push.
+
+### Reconcile five unmapped screen rows — checkpoint 75
+
+The coverage audit finds 65 in-progress rows and five pending rows without a
+contract/path, despite existing bounded Native source for Apps, Agent change,
+Agent retirement and workflow access/approval review. Five strict V3 screen
+contracts now map those actual owners and UI paths. They remain partial and
+in_progress, with explicit open implementation/qualification in acceptance.
+No evidence or verified/release status is added. See [the scoped reconciliation
+plan](2026-10-15-aw-v9-screen-contract-reconciliation.md).
+
+All five contracts pass the shared strict schema. Source inventory passes; all
+40 supplied reference hashes and byte counts match. The release check correctly
+exits 1 for incomplete source and missing exact-artifact acceptance.
+All 70 launch rows and R0 remain open. No PR/push.
