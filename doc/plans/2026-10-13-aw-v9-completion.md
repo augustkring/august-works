@@ -2531,3 +2531,26 @@ The corrected actual HTTP suite passes all three cases: 32.71 seconds total,
 the lease implementation passes exit 0. The frozen 65 aggregate remains failed;
 its unrun workspace groups and remaining serialized suites are not passed.
 Current build and production-browser qualification are next.
+
+### Report retained dependencies through the legacy removal owner — checkpoint 69
+
+Read-back of the original checkpoint-47 failure confirms the exact governance
+obligation company FK. The legacy DELETE's transaction preserves the records
+but produces a generic 500. Its service now translates a PostgreSQL FK refusal
+after rollback into a fixed 409 and company_removal_requires_governed_cleanup.
+It exposes no SQL/constraint/private prose and creates no purge, bypass or new
+deletion authority. Ordinary removal and non-FK failures retain their semantics.
+
+The [scoped plan](2026-10-15-aw-v9-governed-company-removal.md) records the Native
+rollback/bare-company/unrelated-failure checks below. This work is
+isolated in another worktree while the unchanged checkpoint-68 baseline runs.
+That baseline cannot be claimed as this patch's complete verification. All
+70 launch rows/R0 and whole-V9 acceptance remain pending. No PR/push.
+
+Scoped Native removal verification passes all three selected cases (32.38
+seconds; 26 unrelated cases excluded): retained company/project/governance rows
+survive exactly, the bare company still removes, and a non-FK connection failure
+propagates unchanged. No erasure or latest-source full-test pass is inferred.
+The strengthened repeat passes all three cases (27.17 seconds), including no
+copied database cause and exact public error details. Affected types remain
+pending separately from the frozen baseline.

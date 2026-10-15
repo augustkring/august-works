@@ -212,8 +212,12 @@ claim, new snapshot or Telemetry payload is added. Ephemeral scope/revision
 queries, cancellation, refresh withdrawal and expiry govern displayed private
 names/values. Business definitions/results remain inside the current company
 and canonical retention/rights policy. Synthetic browser governance and local
-operator context do not qualify real Humans or hosted disclosure. The legacy
-local company remove/governance-retention FK gap remains explicitly open.
+operator context do not qualify real Humans or hosted disclosure. Legacy local
+removal now reports dependency refusals as a fixed 409 after rollback. Actual
+Native cases preserve the company/project/governance rows, retain bare-company
+removal and propagate unrelated failures. Governed erasure remains with its
+existing owner; broader qualification is tracked in the
+[removal plan](../../plans/2026-10-15-aw-v9-governed-company-removal.md).
 
 
 Process findings on Insights (ADR-73) preserve Original Source/purpose/lineage

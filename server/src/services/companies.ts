@@ -611,6 +611,20 @@ export function companyService(db: Db) {
           .where(eq(companies.id, id))
           .returning();
         return rows[0] ?? null;
+      }).catch((error: unknown) => {
+        // Classification follows transaction rollback. A dependency refusal
+        // never authorizes a second deletion path or exposes database details.
+        let cause: unknown = error;
+        for (let depth = 0; depth < 3 && cause && typeof cause === "object"; depth++) {
+          const pg = cause as { code?: string; cause?: unknown };
+          if (pg.code === "23503")
+            throw conflict(
+              "This company still has dependent records. Complete governed cleanup before removing it.",
+              { code: "company_removal_requires_governed_cleanup" },
+            );
+          cause = pg.cause;
+        }
+        throw error;
       }),
 
     stats: () =>

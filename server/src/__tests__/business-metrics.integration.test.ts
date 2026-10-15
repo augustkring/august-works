@@ -6,6 +6,7 @@ import { businessMetricDefinitionSchema, queryBusinessMetricSchema } from "@pape
 import { currentAnalyticalPurpose } from "../services/analytical-purpose.js";
 import { eraseExpiredAnalyticalLineage } from "../services/analytical-retention.js";
 import { businessMetricService } from "../services/business-metrics/service.js";
+import { companyService } from "../services/companies.js";
 import { currentInsightToolCard } from "../services/experience/insight-tool-card.js";
 import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
@@ -24,6 +25,34 @@ suite("governed native metric owner on migrated PostgreSQL", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
   let db: ReturnType<typeof createDb>;
   let companyId: string; let otherCompanyId: string; let policyId: string; let projectId: string;
+  it("refuses legacy company removal with a private conflict and rolls back all retained dependencies", async () => {
+    const beforeCompany = await db.select().from(companies).where(eq(companies.id, companyId));
+    const beforeProject = await db.select().from(projects).where(eq(projects.id, projectId));
+    const beforeGovernance = await db.select().from(governanceObligations).where(eq(governanceObligations.companyId, companyId));
+    expect(beforeProject).toHaveLength(1); expect(beforeGovernance.length).toBeGreaterThan(0);
+    const refused = companyService(db).remove(companyId);
+    await expect(refused).rejects.toMatchObject({
+      status: 409,
+      message: "This company still has dependent records. Complete governed cleanup before removing it.",
+      details: { code: "company_removal_requires_governed_cleanup" },
+    });
+    await expect(refused).rejects.not.toHaveProperty("cause");
+    await expect(refused).rejects.toHaveProperty("details", { code: "company_removal_requires_governed_cleanup" });
+    expect(await db.select().from(companies).where(eq(companies.id, companyId))).toEqual(beforeCompany);
+    expect(await db.select().from(projects).where(eq(projects.id, projectId))).toEqual(beforeProject);
+    expect(await db.select().from(governanceObligations).where(eq(governanceObligations.companyId, companyId))).toEqual(beforeGovernance);
+  });
+  it("still removes a bare legacy company without dependent governance", async () => {
+    expect((await companyService(db).remove(otherCompanyId))?.id).toBe(otherCompanyId);
+    expect(await db.select().from(companies).where(eq(companies.id, otherCompanyId))).toHaveLength(0);
+    expect(await db.select().from(companies).where(eq(companies.id, companyId))).toHaveLength(1);
+  });
+  it("preserves unrelated legacy company-removal failures", async () => {
+    const service = companyService(db), failure = Object.assign(new Error("Synthetic connection failure"), { code: "08006" });
+    const transaction = vi.spyOn(db, "transaction").mockRejectedValueOnce(failure);
+    try { await expect(service.remove(companyId)).rejects.toBe(failure); }
+    finally { transaction.mockRestore(); }
+  });
   it("resolves a saved observed zero through the Native chat reader and withdraws a superseded metric version", async () => {
     await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental({ action_cards_v9: true, experience_projection_v9: true, progressive_shell_v9: true });
     const owner = businessMetricService(db), created = await owner.create(companyId, actor, { key: "chat_zero", definition: { ...metricDefinition(policyId), valueType: "count", unit: "objects", calculation: { kind: "native_count", population: { entity: "issue", statuses: ["done"], projectId } } } });
