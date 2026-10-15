@@ -61,12 +61,18 @@ test("erasure uses separate keyboard C3, reads an unknown reply, survives accoun
     throw Error(`Unexpected owned software operator request: ${req.method()} ${url.pathname}`);
   });
   async function openQueue() {
-    await page.getByRole("textbox", { name: "Company ID", exact: true }).fill(company.id);
-    const open = page.getByRole("button", { name: "Open queue", exact: true }); await open.focus(); await open.press("Enter");
+    const input = page.getByRole("textbox", { name: "Company ID", exact: true });
+    await input.fill(company.id);
+    await expect(input).toHaveValue(company.id);
+    const open = page.getByRole("button", { name: "Open queue", exact: true });
+    await expect(open).toBeEnabled();
+    await open.focus(); await open.press("Enter");
   }
+  let journeyCompleted = false;
   try {
     await page.goto("/saas/feedback"); await openQueue();
-    const select = page.getByRole("button", { name: `${feedback.feedbackId} · RECEIVED`, exact: true }); await select.focus(); await select.press("Enter");
+    const select = page.getByRole("button", { name: `${feedback.feedbackId} · RECEIVED`, exact: true });
+    await expect(select).toBeVisible(); await select.focus(); await select.press("Enter");
     await expect(page.getByText(body, { exact: true })).toBeVisible();
     const eraseButton = page.getByRole("button", { name: "Erase expired case", exact: true }); await expect(eraseButton).toBeEnabled();
     await eraseButton.focus(); await eraseButton.press("Enter");
@@ -95,9 +101,18 @@ test("erasure uses separate keyboard C3, reads an unknown reply, survives accoun
     await page.screenshot({ path: info.outputPath("v9-erasure-history-mobile.png"), fullPage: true });
     const native = await json(await request.get(`/api/companies/${company.id}/customer-feedback/${feedback.id}?expectedUserId=local-board`));
     expect(native.body).toBe(body); // Software replies did not erase the Native fixture.
+    journeyCompleted = true;
   } finally {
     holdSession = false; releaseSession?.();
-    await json(await request.patch("/api/instance/settings/experimental", { data: flags }));
-    await json(await request.delete(`/api/companies/${company.id}`));
+    try {
+      await json(await request.patch("/api/instance/settings/experimental", { data: flags }));
+      await json(await request.delete(`/api/companies/${company.id}`));
+    } catch (error) {
+      // Playwright closes this request context after a test deadline. Keep
+      // the original action/assertion failure instead of replacing it with
+      // an unrelated cleanup failure. Successful journeys still require cleanup.
+      if (journeyCompleted) throw error;
+      info.annotations.push({ type: "cleanup", description: "The failed journey could not finish disposal of its isolated software fixture." });
+    }
   }
 });

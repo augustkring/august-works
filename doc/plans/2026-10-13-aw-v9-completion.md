@@ -3055,3 +3055,33 @@ committed source; the corresponding full build is still running at this record.
 The root-landmark delta is separately type/component/browser qualified, and the
 final remote CI must check it before merge. Original failed commands and partial
 or superseded CI runs are retained and are not final-head passes.
+
+## Checkpoint 92 — current CI UI scheduling and diagnostic corrections
+
+Production source remains checkpoint91. GitHub on that source passes the full
+workspace type command, build, Rust/runtime suites, isolated server suites,
+V9 contract/component workflow, Sentry, review policy and the complete V6
+migration/archive/host-restore/Terraform workflow. Those are individual recorded
+results; the overall PR attempt remains failed/pending because of the two UI
+harness observations below. Final-head CI still controls merge qualification.
+
+The workspace UI shard failed the existing environment form's assertion. Its
+custom act was only a flushSync wrapper; use React's real async act so its
+routing/effect work is flushed. All four existing cases pass and the complete UI
+typecheck passes. The twenty-turn loop, five-second behavior deadline and driver
+assertions are unchanged. No production environment code changes.
+
+The erasure browser timed out before its first feedback row, then cleanup
+obscured the original error. Its exact original cause is not established. Three
+unchanged traced local repetitions pass. The stronger version additionally
+checks the entered company, enabled queue action and visible row before keyboard
+navigation; it passes three traced repetitions in 51.3s total. It neither repeats
+input/mutations nor weakens the one-minute deadline or any erasure/account/reload
+assertion. Failed cleanup cannot replace an existing primary error; successful
+journeys still require successful cleanup. The original failed report/artifact
+is retained. See the dated current-CI harness plan for exact artifact identity.
+
+An individual unchanged CI job rerun was requested before the parent completed;
+GitHub refused it because the workflow was active. No rerun is credited as a
+pass. The updated test-only source goes through a new integrated CI attempt.
+CodeRabbit's 100-file limit and missing required Greptile review remain explicit.

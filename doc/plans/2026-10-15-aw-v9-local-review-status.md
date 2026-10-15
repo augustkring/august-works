@@ -1,5 +1,11 @@
 # August Works V9 — lokal reviewstatus 15. oktober 2026
 
+> Historisk status ved checkpoint88, før publicering. PR #38 er siden opdateret
+> og åbnet for review. Checkpoint89–92 i hovedledgeret beskriver recoveryrettelser,
+> fuld lokal type/build-verifikation og aktuel CI-triage. Produktionskoden er
+> publiceret; ingen samlet ny CI- eller V9-releaseaccept udledes af denne ældre
+> status. Den aktuelle backlog er 96 in_progress / 24 not_started.
+
 De samlede lokale ændringer er klar til gennemgang i den eksisterende draft-PR
 #38. Hele V9 er **ikke færdig eller releasegodkendt**. Readiness er fortsat
 `R0_SPECIFIED`, `sourceComplete=false`, uden accepterende person/releaseidentitet.
