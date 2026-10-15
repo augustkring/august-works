@@ -5,6 +5,7 @@ import { foundationService } from "../services/foundation/foundation-service.js"
 import { agentRetirementService } from "../services/agents/retirement.js";
 import { agentIdentityService } from "../services/agent-identities.js";
 import { agentService } from "../services/agents.js";
+import { readAgentMonitor } from "../services/experience/agent-monitor.js";
 import { agentAuthoringPublicationService } from "../services/agents/authoring-publication.js";
 import { agentAuthoringPackageSetupService } from "../services/agents/authoring-package-setup.js";
 import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
@@ -16,7 +17,7 @@ import { join } from "node:path";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, desc, eq, sql } from "drizzle-orm";
 import { agentPresenceRuntimeBindings, agentConfigRevisions, agentExecutionManifests, memoryJobs, activityLog, agentConfigurationDrafts, agentConfigurationTests, agents, authUsers, billingAccounts, billingAccountCompanies, companyMemberships, companySkills, companySkillVersions, principalPermissionGrants, createDb, documents, heartbeatRuns, orchestrationPlans, orchestrationModelReservations, orchestrationWorkers, toolInvocations, verificationRuns } from "@paperclipai/db";
-import { agentAuthoringContentSchema, type AgentAuthoringDraftView, type AgentDraftTestCommand, AUTHORED_AGENT_DEFINITION_KEY, agentDraftPublicationCommandSchema, type AgentDraftPublicationCommand, type VerificationReviewInput } from "@paperclipai/shared";
+import { CUSTOM_AGENT_STEPS, agentAuthoringContentSchema, type AgentAuthoringDraftView, type AgentDraftTestCommand, AUTHORED_AGENT_DEFINITION_KEY, agentDraftPublicationCommandSchema, type AgentDraftPublicationCommand, type VerificationReviewInput } from "@paperclipai/shared";
 import { agentAuthoringService } from "../services/agents/authoring-drafts.js";
 import { agentAuthoringTestService } from "../services/agents/authoring-tests.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
@@ -222,6 +223,42 @@ const support = await getEmbeddedPostgresTestSupport(), sourceSha = "a".repeat(4
     expect(fresh.content?.runtimeCandidateId).toBeUndefined();
     registerNativeDraftConformance(db, undefined);
   });
+  it("completes the custom-agent authoring lifecycle without changing the active version during a later draft", async () => {
+    const original = await agent();
+    // Every builder stage uses the same real versioned draft owner. Provider
+    // transport is the suite's explicit deterministic fixture, never live proof.
+    for (const step of CUSTOM_AGENT_STEPS.filter(value => value !== "monitor")) {
+      draft = await drafts().save(f.actor, f.home, draft.id, { requestId: randomUUID(), expectedVersion: draft.version, step, content: draft.content! });
+      const current = await agent();
+      expect(current.adapterConfig).toEqual(original.adapterConfig);
+      expect(current.runtimeConfig).toEqual(original.runtimeConfig);
+    }
+    await qualify();
+    const first = await publish(), active = await agent();
+    await instanceSettingsService(db).updateExperimental({ experience_projection_v9: true, progressive_shell_v9: true });
+    expect(await readAgentMonitor(db, f.actor, f.home, f.presence.id)).toMatchObject({ agentId: f.presence.id, lifecycle: "active", nativeStatus: "idle" });
+    expect(first).toMatchObject({ publishedVersion: 1, authorityGranted: false, executionStarted: false });
+    expect(calls).toBe(1);
+    const next = await drafts().create(f.actor, f.home, { requestId: randomUUID(), agentId: f.presence.id });
+    draft = await drafts().save(f.actor, f.home, next.id, { requestId: randomUUID(), expectedVersion: next.version,
+      step: "test", content: { ...draft.content!, internalDescription: "A separate follow-up draft" } });
+    await qualify();
+    expect(calls).toBe(2);
+    expect((await agent()).runtimeConfig).toEqual(active.runtimeConfig);
+    expect((await agent()).adapterConfig).toEqual(active.adapterConfig);
+    expect(await publications().receipt(f.actor, f.home, draft.id)).toBeNull();
+    expect(await db.select().from(agentConfigRevisions).where(eq(agentConfigRevisions.agentId, f.presence.id))).toHaveLength(1);
+    await agentIdentityService(db).rehome(f.actor, f.home, f.identity.id, f.guest);
+    await agentService(db).pause(f.presence.id);
+    expect(await readAgentMonitor(db, f.actor, f.home, f.presence.id)).toMatchObject({ lifecycle: "paused", nativeStatus: "paused" });
+    const retirement = agentRetirementService(db), review = await retirement.get(f.actor, f.home, f.presence.id);
+    expect(review.canRetire).toBe(true);
+    await retirement.retire(f.actor, f.home, f.presence.id, { requestId: randomUUID(), expectedSourceToken: review.sourceToken,
+      confirmRetirement: true, pendingWorkPolicy: "require_settled", accessPolicy: "detach_agent_only", retentionPolicy: "existing_company_policy" });
+    expect(await agent()).toMatchObject({ status: "terminated", runtimeConfig: active.runtimeConfig, permissions: {} });
+    expect(await db.select().from(toolInvocations).where(eq(toolInvocations.companyId, f.home))).toEqual([]);
+  });
+
   it("publishes the exact verified candidate once and recovers its Original receipt without another model call", async () => {
     await qualify(); const input = await publicationCommand();
     const runCount = (await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home))).length;

@@ -12,6 +12,7 @@ export const createApprovalSchema = z.object({
 export type CreateApproval = z.infer<typeof createApprovalSchema>;
 
 export const resolveApprovalSchema = z.object({
+  expectedReviewHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   decisionNote: multilineTextSchema.optional().nullable(),
 });
 

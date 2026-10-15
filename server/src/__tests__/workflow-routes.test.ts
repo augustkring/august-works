@@ -90,6 +90,29 @@ describePg("Workflow routes", () => {
     isInstanceAdmin: true,
   };
 
+  it("rejects a changed review account before reads or gateway decisions and keeps errors private", async () => {
+    const company = await seedCompany();
+    for (const decision of [null, "approve", "reject"]) {
+      const path = `/api/companies/${company.id}/workflow-runs/${randomUUID()}/tool-reviews${decision ? `/${randomUUID()}/${decision}` : ""}?expectedUserId=another-user`;
+      const response = decision ? await request(app(localBoard)).post(path).send({}) : await request(app(localBoard)).get(path);
+      expect(response.status).toBe(409);
+      expect(response.body.details.code).toBe("ACCOUNT_CHANGED");
+      expect(response.headers["cache-control"]).toBe("private, no-store");
+    }
+    expect(await db.select().from(workflowRuns)).toHaveLength(0);
+  });
+
+  it("keeps Original unbound review callers compatible with the workflow rollout gate", async () => {
+    const company = await seedCompany();
+    const path = `/api/companies/${company.id}/workflow-runs/${randomUUID()}/tool-reviews`;
+    for (const query of ["", "?expectedUserId=local-board"]) {
+      const response = await request(app(localBoard)).get(path + query);
+      expect(response.status).toBe(404);
+      expect(response.body.details.code).toBe("workflows_disabled");
+      expect(response.headers["cache-control"]).toBe("private, no-store");
+    }
+  });
+
   it("fails closed while Workflows V1 is disabled", async () => {
     const company = await seedCompany();
     await request(app(localBoard))

@@ -11,7 +11,8 @@
   "customerOutcome": "Edit, test and review a separate draft while the active Agent revision remains unchanged until explicit Native publication.",
   "entryConditions": [
     "Resolve the current Original account, company and per-operation Native authority. Profile/navigation is not a grant.",
-    "Effective rollout and current-source requirements remain independent; suppress private state during uncertain account or source checks."
+    "Effective rollout and current-source requirements remain independent; suppress private state during uncertain account or source checks.",
+    "The existing Agent change entry requires current-session authority and fresh admission, including after an asynchronous unsaved-change decision. A later draft/test leaves the active published version unchanged."
   ],
   "exitConditions": [
     "Only the Original server-confirmed result permits a completion claim.",
@@ -79,7 +80,7 @@
     "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
     "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
     "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
-    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
+    "targetSize": "Custom frequent and primary controls target at least 44 \u00d7 44 CSS px.",
     "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
     "reducedMotion": "No essential animated transition or moving progress indicator.",
     "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
@@ -114,7 +115,7 @@
   "acceptance": {
     "functional": [
       "Verify the specified Native baseline/version, current actor, no implicit effect, exact replay and lost-response recovery on the exact artifact.",
-      "Full active-Agent edit/legacy caller convergence and material target/provider qualification remain open. A bounded publication fixture does not accept the full change lifecycle."
+      "The existing change entry and combined draft/test/publication/monitor/pause/retire software lifecycle have scoped executable checks. Live target/provider qualification, representative Human evidence and conditional legacy retirement remain open."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."

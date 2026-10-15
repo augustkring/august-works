@@ -9,6 +9,7 @@ These are unchanged user-supplied references staged during the initial preparati
 - [Source manifest and direct review ranges](source-corpus.json)
 - [Additional writing corpus](writing-corpus.json) — the three WR-00/01/02 V2 references supplied on 2026-10-13, retained unchanged with content hashes.
 - [120-item implementation backlog](backlog.csv) — broad-item working status; reconcile it with dated implementation checkpoints and use wave dependencies, not numerical order.
+- [Agent and workflow journey follow-up](../../plans/2026-10-15-aw-v9-journey-completion.md) — current implementation and scoped verification after PR 39.
 - [Current V9 implementation ledger](../../plans/2026-10-13-aw-v9-completion.md) and [70-surface coverage manifest](../../experience/v9/coverage.json) — implementation progress is separate from release evidence.
 - [Extracted Blentera logo package](../../assets/branding/blentera/v1.0/Blentera_Logo_Package_PRODUCTION_MASTER/README.md)
 

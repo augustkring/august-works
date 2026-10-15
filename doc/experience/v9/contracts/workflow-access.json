@@ -29,7 +29,8 @@
     ],
     "displayedState": [
       "The exact step and connection state, required operation/scope and authorized preview link.",
-      "The permission-preview labels in \u00a778.9; provider consent, draft publication and a historic grant do not establish current use authority."
+      "The permission-preview labels in \u00a778.9; provider consent, draft publication and a historic grant do not establish current use authority.",
+      "The Native permissions link focuses the exact UUID catalog entry. Existing Apps permissions remain the grant writer; opening the focused editor grants nothing."
     ]
   },
   "inputs": [],
@@ -114,7 +115,7 @@
   "acceptance": {
     "functional": [
       "Verify the specified Native baseline/version, current actor, no implicit effect, exact replay and lost-response recovery on the exact artifact.",
-      "Full material grant editing, complete connection/provider matrices and hosted revocation races remain open. A current metadata link is not a grant receipt."
+      "The existing Native permissions editor owns material grants. The workflow link focuses the exact catalog entry. Complete connection/provider matrices and hosted revocation qualification remain open; a link is not a grant receipt."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."

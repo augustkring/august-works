@@ -529,12 +529,23 @@ export function workflowRoutes(db: Db) {
         eq(toolActionRequests.companyId, companyId), requestId ? eq(toolActionRequests.id, requestId) : undefined));
   }
 
+  // Preserve Original callers while binding customer reviews to the account
+  // that displayed the action. This middleware runs before any read or effect.
+  router.use("/companies/:companyId/workflow-runs/:runId/tool-reviews", (req, res, next) => {
+    res.set("Cache-Control", "private, no-store");
+    if (req.query.expectedUserId !== undefined) {
+      const expected = z.string().min(1).max(300).parse(req.query.expectedUserId);
+      const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+      if (!principal || expected !== principal) throw conflict("Account changed; reload", { code: "ACCOUNT_CHANGED" });
+    }
+    next();
+  });
+
   router.get("/companies/:companyId/workflow-runs/:runId/tool-reviews", async (req, res) => {
     await assertWorkflowsEnabled();
     const companyId = req.params.companyId as string;
     await assertPermission(req, companyId, "workflows:read");
     const permission = await decidePermission(req, companyId, "workflows:publish");
-    res.setHeader("Cache-Control", "no-store");
     res.json({ canReview: req.actor.type === "board" && permission.allowed,
       reviews: await toolReviewForRun(companyId, req.params.runId as string) });
   });

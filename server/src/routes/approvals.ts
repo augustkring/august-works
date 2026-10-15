@@ -1,4 +1,7 @@
 import { Router, type Request } from "express";
+import { z } from "zod";
+import { conflict } from "../errors.js";
+import { approvalReviewHash } from "../services/approval-review.js";
 import { eq } from "drizzle-orm";
 import { heartbeatRuns, type Db } from "@paperclipai/db";
 import {
@@ -45,6 +48,15 @@ export function approvalRoutes(
   options: { pluginWorkerManager?: PluginWorkerManager } = {},
 ) {
   const router = Router();
+  router.use("/approvals/:id", (req, res, next) => {
+    res.set("Cache-Control", "private, no-store");
+    if (req.query.expectedUserId !== undefined) {
+      const expected = z.string().min(1).max(300).parse(req.query.expectedUserId);
+      const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+      if (!principal || expected !== principal) throw conflict("Account changed; reload", { code: "ACCOUNT_CHANGED" });
+    }
+    next();
+  });
   const svc = approvalService(db);
   const access = accessService(db);
   const heartbeat = heartbeatService(db, {
@@ -216,7 +228,7 @@ export function approvalRoutes(
     const approval = await getAccessibleResource(req, res, svc.getById(id), "Approval not found");
     if (!approval) return;
     if (!(await assertApprovalAccessAllowed(req, res, approval.companyId))) return;
-    res.json(redactApprovalPayload(approval));
+    res.json({ ...redactApprovalPayload(approval), ...(req.query.expectedUserId === undefined ? {} : { reviewHash: approvalReviewHash(approval) }) });
   });
 
   router.post("/companies/:companyId/approvals", validate(createApprovalSchema), async (req, res) => {
@@ -291,7 +303,9 @@ export function approvalRoutes(
       return;
     }
     const decidedByUserId = req.actor.userId ?? "board";
-    const { approval, applied } = await svc.approve(id, decidedByUserId, req.body.decisionNote);
+    const { approval, applied } = req.body.expectedReviewHash === undefined
+      ? await svc.approve(id, decidedByUserId, req.body.decisionNote)
+      : await svc.approve(id, decidedByUserId, req.body.decisionNote, req.body.expectedReviewHash);
 
     if (applied) {
       const linkedIssues = await issueApprovalsSvc.listIssuesForApproval(approval.id);
@@ -407,7 +421,9 @@ export function approvalRoutes(
       return;
     }
     const decidedByUserId = req.actor.userId ?? "board";
-    const { approval, applied } = await svc.reject(id, decidedByUserId, req.body.decisionNote);
+    const { approval, applied } = req.body.expectedReviewHash === undefined
+      ? await svc.reject(id, decidedByUserId, req.body.decisionNote)
+      : await svc.reject(id, decidedByUserId, req.body.decisionNote, req.body.expectedReviewHash);
 
     if (applied) {
       const linkedIssues = await issueApprovalsSvc.listIssuesForApproval(approval.id);

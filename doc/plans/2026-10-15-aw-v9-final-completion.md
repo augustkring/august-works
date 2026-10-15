@@ -348,3 +348,13 @@ The global 120-second deadline and production guards remain unchanged.
 
 Both built-browser cases pass against the real local API in 57 seconds with
 this correction. Full configured CI must still verify the resulting source.
+
+### Follow-up after PR 39
+
+PR 39 merged as master `515cc1015df8fe18e633d01575a5559a3727d09d`. Its
+merge tree matches its verified head. Current implementation continues in
+[the agent and workflow journey record](2026-10-15-aw-v9-journey-completion.md).
+That record corrects the reported missing-feature list against the actual
+existing Native owners and separates software verification from live and Human
+acceptance. V9-091 and V9-093 are in progress because their executable software
+journey checks have started; neither is a completed live pilot.

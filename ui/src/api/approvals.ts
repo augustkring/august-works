@@ -1,6 +1,8 @@
 import type { Approval, ApprovalComment, Issue } from "@paperclipai/shared";
 import { api } from "./client";
 
+const account = (principal?: string) => principal ? `?${new URLSearchParams({ expectedUserId: principal })}` : "";
+
 export const approvalsApi = {
   list: (companyId: string, status?: string) =>
     api.get<Approval[]>(
@@ -8,11 +10,11 @@ export const approvalsApi = {
     ),
   create: (companyId: string, data: Record<string, unknown>) =>
     api.post<Approval>(`/companies/${companyId}/approvals`, data),
-  get: (id: string) => api.get<Approval>(`/approvals/${id}`),
-  approve: (id: string, decisionNote?: string) =>
-    api.post<Approval>(`/approvals/${id}/approve`, { decisionNote }),
-  reject: (id: string, decisionNote?: string) =>
-    api.post<Approval>(`/approvals/${id}/reject`, { decisionNote }),
+  get: (id: string, principal?: string, signal?: AbortSignal) => api.get<Approval>(`/approvals/${id}${account(principal)}`, { signal, cache: "no-store" }),
+  approve: (id: string, decisionNote?: string, principal?: string, expectedReviewHash?: string) =>
+    api.post<Approval>(`/approvals/${id}/approve${account(principal)}`, { decisionNote, ...(expectedReviewHash ? { expectedReviewHash } : {}) }),
+  reject: (id: string, decisionNote?: string, principal?: string, expectedReviewHash?: string) =>
+    api.post<Approval>(`/approvals/${id}/reject${account(principal)}`, { decisionNote, ...(expectedReviewHash ? { expectedReviewHash } : {}) }),
   requestRevision: (id: string, decisionNote?: string) =>
     api.post<Approval>(`/approvals/${id}/request-revision`, { decisionNote }),
   resubmit: (id: string, payload?: Record<string, unknown>) =>

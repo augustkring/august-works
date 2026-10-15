@@ -115,7 +115,7 @@ export function readWorkflowStepContext(db: Db, detail: WorkflowDetail, rawActor
         }
       }
 
-      return { connectionName, operationName, previewHref: `/apps/${connection.id}/permissions`,
+      return { connectionName, operationName, previewHref: `/apps/${connection.id}/permissions?focus=${reference.entryId}`,
         state: connection.status !== "active" || !connection.enabled ? "connection_disabled"
           : entry.status !== "active" || entry.version !== reference.version || !reference.schema || entry.schema !== reference.schema || projectionChanged ? "catalog_changed"
             : !canUse ? "permission_required" : "execution_check" };

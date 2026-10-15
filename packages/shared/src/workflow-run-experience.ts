@@ -33,6 +33,8 @@ export const workflowRunExperienceSchema = z
               status: z.enum(WORKFLOW_STEP_RUN_STATUSES),
               execution: z.enum(["agent", "tool", "not_recorded"]),
               approvalCheckpoint: z.boolean(),
+              toolReviewNodeId: z.string().min(1).max(160).optional(),
+              approvalReview: z.strictObject({ id: z.uuid(), nodeId: z.string().min(1).max(160) }).optional(),
               payloadUnavailable: z.boolean(),
               branchChoice: z.discriminatedUnion("state", [
                 z.strictObject({ state: z.literal("not_applicable") }),
@@ -53,6 +55,14 @@ export const workflowRunExperienceSchema = z
     ]),
   })
   .superRefine((view, ctx) => {
+    if (view.trace.state === "available") for (const [index, attempt] of view.trace.attempts.entries()) {
+      if (attempt.toolReviewNodeId !== undefined && (view.status !== "waiting" || attempt.status !== "waiting" ||
+        attempt.payloadUnavailable || !attempt.waitingFor.includes("tool_action")))
+        ctx.addIssue({ code: "custom", path: ["trace", "attempts", index, "toolReviewNodeId"], message: "Action review is not currently waiting" });
+      if (attempt.approvalReview !== undefined && (view.status !== "waiting" || attempt.status !== "waiting" ||
+        attempt.payloadUnavailable || !attempt.waitingFor.includes("human_interaction")))
+        ctx.addIssue({ code: "custom", path: ["trace", "attempts", index, "approvalReview"], message: "Approval review is not currently waiting" });
+    }
     const receipt = view.stopReceipt;
     if (
       receipt &&

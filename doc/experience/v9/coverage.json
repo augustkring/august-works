@@ -874,7 +874,8 @@
         "ui/src/components/AgentDraftSafeTest.tsx",
         "ui/src/components/AgentDraftPublication.tsx",
         "server/src/services/agents/authoring-drafts.ts",
-        "server/src/services/agents/authoring-publication.ts"
+        "server/src/services/agents/authoring-publication.ts",
+        "ui/src/components/AgentRevisionEntry.tsx"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/agent-change.json"
@@ -1352,7 +1353,9 @@
         "ui/src/pages/WorkflowDraftFlow.tsx",
         "server/src/services/workflows/workflow-draft-tools.ts",
         "server/src/services/tool-access.ts",
-        "server/src/services/tool-gateway.ts"
+        "server/src/services/tool-gateway.ts",
+        "server/src/services/experience/workflow-step-actors.ts",
+        "ui/src/pages/apps/app-detail/PermissionsPanel.tsx"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/workflow-access.json"
@@ -1375,7 +1378,11 @@
         "ui/src/pages/WorkflowDraftFlow.tsx",
         "ui/src/pages/WorkflowBuilder.tsx",
         "server/src/services/workflows/workflow-execution-policy.ts",
-        "server/src/services/approvals.ts"
+        "server/src/services/approvals.ts",
+        "ui/src/pages/WorkflowRunExperience.tsx",
+        "ui/src/components/workflows/WorkflowToolReview.tsx",
+        "server/src/services/experience/workflow-run-review.ts",
+        "server/src/services/approval-review.ts"
       ],
       "evidenceRefs": [],
       "contractPath": "doc/experience/v9/contracts/workflow-approval.json"
