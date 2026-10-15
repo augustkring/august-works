@@ -44,10 +44,17 @@ async function mount() {
   container = document.createElement("div"); document.body.append(container); root = createRoot(container); await render();
 }
 async function click(label: string) { const button = [...container.querySelectorAll("button")].find(value => value.textContent === label)!;
-  expect(button).toBeDefined(); await act(async () => button.click()); }
+  expect(button).toBeDefined(); await vi.waitFor(() => expect(button.disabled).toBe(false)); await act(async () => button.click()); }
 async function authorize() {
-  await vi.waitFor(() => expect(container.querySelector<HTMLInputElement>('input[type="checkbox"]')?.disabled).toBe(false));
-  await act(async () => { for (const box of container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')) box.click(); });
+  // A newly rendered review still has a consent-reset effect to commit. Retry
+  // only these local selections until both confirmations enable the action.
+  await vi.waitFor(async () => {
+    const boxes = [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')];
+    expect(boxes).toHaveLength(2); expect(boxes.every(box => !box.disabled)).toBe(true);
+    await act(async () => { for (const box of boxes) if (!box.checked) box.click(); });
+    expect(boxes.every(box => box.checked)).toBe(true);
+    expect([...container.querySelectorAll("button")].find(button => button.textContent === "Request managed runtime")!.disabled).toBe(false);
+  });
 }
 it("requires both reviewed confirmations and recovers an unknown request only through its Original receipt", async () => {
   const post = vi.spyOn(agentAuthoringApi, "confirmManagedRuntime").mockRejectedValue(new Error("PRIVATE backend response"));
@@ -55,6 +62,7 @@ it("requires both reviewed confirmations and recovers an unknown request only th
   await mount(); await vi.waitFor(() => expect(container.textContent).toContain("Request managed runtime"));
   expect([...container.querySelectorAll("button")].find(button => button.textContent === "Request managed runtime")!.disabled).toBe(true);
   await authorize(); await click("Request managed runtime");
+  await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
   await vi.waitFor(() => expect(container.textContent).toContain("could not be confirmed"));
   expect(container.textContent).not.toContain("PRIVATE");
   await click("Check provisioning status");

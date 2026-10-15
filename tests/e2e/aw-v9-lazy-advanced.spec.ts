@@ -9,10 +9,18 @@ test("advanced planning code and data load when the admitted route opens", async
   const paths: string[] = [];
   page.on("request", request => paths.push(new URL(request.url()).pathname));
   try {
+    // This probes an existing company's admitted route, not the agentless
+    // onboarding overlay. Keep the Native fixture unable to schedule work.
+    const agent = await json(await request.post(`/api/companies/${company.id}/agents`, { data: {
+      name: "Paused route loading fixture", adapterType: "process", adapterConfig: { command: "/usr/bin/true" },
+      runtimeConfig: { heartbeat: { enabled: false } }, budgetMonthlyCents: 0,
+    } }));
+    expect((await json(await request.post(`/api/agents/${agent.id}/pause`, { data: {} }))).status).toBe("paused");
     await json(await request.patch("/api/instance/settings/experimental", { data: { business_metrics_v8: false, adaptive_planning_v8: false, planning_optimizer_v8: false } }));
     await page.goto(`/${company.issuePrefix}/dashboard`);
     await expect(page.locator("main")).toBeVisible();
-    await expect(page.getByRole("heading", { level: 1 })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Dashboard", level: 1, exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Create your first agent", exact: true })).not.toBeVisible();
     expect(paths.filter(path => /\/assets\/(?:BusinessMetrics|CrossProjectPlanning)-/.test(path))).toEqual([]);
     expect(paths.filter(path => path.includes(`/companies/${company.id}/adaptive-planning/`))).toEqual([]);
     const initialNavigation = await page.evaluate(() => {

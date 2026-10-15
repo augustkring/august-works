@@ -266,3 +266,24 @@ the accepted receipt to return with the fresh paused state and exactly one
 pause write. No production monitor or pause behavior changes. Both complete
 monitor/pause suites pass all 17 cases with this correction. Broader current
 CI and catalog results remain pending.
+
+### Remaining browser admission and local consent fixtures
+
+CI on `2c3bd8b5d` exposes two further fixture errors. The advanced lazy-loading
+case creates an agentless company, then its global H1 locator races the correct
+first-agent onboarding overlay. It now seeds one Native process agent with
+heartbeat disabled and zero budget, pauses it through the Original API, checks
+the named Dashboard heading and absence of that overlay, and retains every
+advanced chunk/data loading assertion. The built browser case passes in 59.8
+seconds; production admission and the test deadline are unchanged.
+
+The managed-runtime component test could click a disabled action while a newly
+read review's consent-reset effect committed. Its helper now selects only
+unchecked local confirmations, verifies both remain checked and waits for the
+enabled action. The Native provisioning request is dispatched once, never
+retried by the helper, and the unknown-response case explicitly checks that one
+dispatch before receipt recovery. All 21 monitor/pause/runtime cases pass. These
+follow-ups change tests and this record only, not the production source whose
+811 UI files / 7,974 cases, complete build and both built EN/DA observation
+journeys pass on `05b7d0654`. Current-head CI and the remaining local default
+catalog groups still control the final software-verification statement.
