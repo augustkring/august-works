@@ -110,6 +110,10 @@ function buildDeflateZip(entryPath: string, text: string): Uint8Array {
   return new Uint8Array(Buffer.concat([local, body, central, eocd]));
 }
 
+// Generate the unchanged dense input during collection. The 5s test budget
+// covers transfer selection/reading, not 64 MB fixture compression under load.
+const densePackageZip = buildDeflateZip("dense-package/NOTES.md", "paperclip agent docs\n".repeat(3_200_000));
+
 describe("resolveChunkedImportZip", () => {
 
   it("returns null for a zip at or under the threshold", async () => {
@@ -126,7 +130,7 @@ describe("resolveChunkedImportZip", () => {
     // ~64 MB of repetitive text DEFLATEs to a tiny file: far under the raw
     // 48 MB threshold, but the inline body would carry the inflated entries,
     // so the estimated request size sends the zip down the chunked path.
-    const zipBytes = buildDeflateZip("dense-package/NOTES.md", "paperclip agent docs\n".repeat(3_200_000));
+    const zipBytes = densePackageZip;
     await writeFile(zipPath, zipBytes);
 
     const resolved = await resolveChunkedImportZip(zipPath);

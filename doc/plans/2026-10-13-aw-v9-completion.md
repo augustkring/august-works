@@ -2883,7 +2883,7 @@ See [the clock and verification note](2026-10-15-aw-v9-connected-policy-clock.md
 
 Correct the notification plan's migration count: 499 SQL files/journal entries,
 through migration 0500. The production tree is identical to checkpoint83. Its
-first serialized0 worker was OOM-killed after 66/83 live-run-route assertions;
+first serialized0 worker exited unexpectedly after 66/83 live-run-route assertions;
 all 83 pass on unchanged code with a bounded 4GiB Node heap. Original failure and
 complete-lane retry logs are separate. Other complete current checks still run.
 No PR/push or release claim. All 70 evidence rows, source completion and R0 stay open.
@@ -2921,3 +2921,23 @@ scope and verification note](2026-10-15-aw-v9-notification-rollout-reset.md).
 The broader regression still qualifies its recorded checkpoints; this later small
 UI delta has separate current evidence. Final types/token/coverage and integrated
 review remain pending. All release/field gaps remain open. No PR/push.
+
+
+### 87 — Keep dense ZIP preparation outside the CLI behavior deadline
+
+The complete checkpoint85 UI project passes 806 suites/7,951 cases. Its following
+CLI phase failed during cold server startup/Corepack resolution and construction
+of a 64 MB dense ZIP under a five-second test clock. Prebuild owned SDK prerequisites
+and use the installed Corepack cache with networking disabled. Move only creation
+of the unchanged compressed fixture to collection, retaining every actual threshold,
+root/hash/chunk assertion and the five-second deadline. Both affected files pass
+all 18 cases; repeat the full CLI project. See [the fixture/evidence note](2026-10-15-aw-v9-cli-import-fixture.md).
+
+The final checkpoint86 full workspace typecheck and production build pass with
+exit zero. All 91 current V9 browser cases pass the complete repeat; the initial
+87-pass/four-crash attempt and screenshots remain failed evidence. No crash cause
+is asserted. Earlier worker/memory wording is narrowed: an unexpected worker exit
+was established, but a hierarchical OOM count alone does not identify its cause.
+Same-source 83-case bounded-heap rerun passed. Extra signalled typechecking is not
+counted despite a raw wrapper zero. Remaining broad server/CLI results still run.
+No PR/push; source completion, all 70 release rows and R0 remain open.
