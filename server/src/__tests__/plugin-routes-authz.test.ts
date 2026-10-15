@@ -43,6 +43,13 @@ vi.mock("../services/live-events.js", () => ({
   publishGlobalLiveEvent: vi.fn(),
 }));
 
+// Load the mocked module graph during collection, outside the unchanged test
+// behavior budget. Each test still receives a fresh app and cleared mocks.
+const [{ pluginRoutes }, { errorHandler }] = await Promise.all([
+  import("../routes/plugins.js"),
+  import("../middleware/index.js"),
+]);
+
 async function createApp(
   actor: Record<string, unknown>,
   loaderOverrides: Record<string, unknown> = {},
@@ -54,11 +61,6 @@ async function createApp(
     captureJsonContext?: (context: unknown, body: unknown) => void;
   } = {},
 ) {
-  const [{ pluginRoutes }, { errorHandler }] = await Promise.all([
-    import("../routes/plugins.js"),
-    import("../middleware/index.js"),
-  ]);
-
   const loader = {
     installPlugin: vi.fn(),
     ...loaderOverrides,

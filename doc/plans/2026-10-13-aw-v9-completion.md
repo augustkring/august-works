@@ -2745,3 +2745,16 @@ its fixture aggregate is not evidence of actual run outcomes. Current full build
 browser checks remain pending, along with manual assistive technology and broader
 chart/generative-host qualification. See [the bounded plan](2026-10-15-aw-v9-chart-data-alternatives.md).
 All 70 launch evidence rows, source completion and R0 remain open. No PR/push.
+
+
+### 78 — Collect the plugin authorization graph before its behavior budget
+
+The next serialized shard failed its first plugin-routes-authz case at 20 seconds
+while createApp imported the graph. The same imports now resolve during module
+collection; fresh apps, mock reset, authorization assertions and the 20-second
+behavior limit are unchanged. All 38 cases pass: import/collection 28.24 seconds,
+behavior 453 ms. Production ownership and permissions do not change.
+
+Retain the original failure and continue the exact remaining shard/workspaces.
+See [the scoped verification note](2026-10-15-aw-v9-plugin-route-collection.md).
+Source completeness, all 70 launch rows and R0 remain open. No PR/push.
