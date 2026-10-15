@@ -94,7 +94,7 @@ export function experienceObservationService(db: Db) {
       const receipt = experienceObservationPreferenceReceiptSchema.parse({ companyId, requestId: input.requestId, enabled: input.enabled, version, observationsErased: !input.enabled });
       await tx.insert(commands).values({ companyId, userId, requestId: input.requestId, requestHash, receipt });
       await logActivity(tx, { companyId, actorType: "user", actorId: userId, action: "experience_observation_preference.updated",
-        entityType: "experience_observation_preference", entityId: userId, details: { purpose: EXPERIENCE_OBSERVATION_CONTRACT_ID } }, publications);
+        entityType: "experience_observation_preference", entityId: userId, details: {} }, publications);
       return receipt;
     });
     for (const publication of publications) publishActivity(publication);

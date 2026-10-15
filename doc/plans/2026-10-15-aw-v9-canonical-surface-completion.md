@@ -68,3 +68,14 @@ The added legacy alias-switch regression, final direct types, updated
 PostgreSQL audit check and exact committed-source browser follow-up must finish
 before PR-ready claims. These changes advance V9-066/068/069/071/073; they do
 not establish representative Human usability, a hosted usage window or GA.
+
+
+The final focused follow-up passes all 81 cases on migrated PostgreSQL and the
+actual UI owners. Native audit redaction correctly masked the contract string
+under a generic detail key; the audit event is now even smaller: its Original
+action identifies the processing purpose and details are empty. The regression
+asserts the empty detail object, preserving Native redaction instead of weakening
+it. Browser theme fixtures now boot through the supported persisted theme
+preference; manual root-class changes can conflict with ThemeProvider's pending
+OS update and do not establish a coherent product theme. The corrected final
+browser run must finish before recording acceptance.

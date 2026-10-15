@@ -60,8 +60,13 @@ for (const mode of ["classic", "current"] as const) test(`${mode} canonical Agen
     expect(new URL(page.url()).hash).toBe("#usage");
     await expect(main.getByRole("tab", { name: "Overview", exact: true })).toHaveAttribute("aria-selected", "true");
     for (const theme of ["light", "dark"] as const) {
+      // Boot through the actual persisted theme preference. Mutating the root
+      // class behind ThemeProvider can race its pending OS-theme update.
+      await page.evaluate(value => localStorage.setItem("paperclip.theme", value), theme);
       await page.emulateMedia({ colorScheme: theme, reducedMotion: "reduce" });
-      await page.evaluate(value => document.documentElement.classList.toggle("dark", value === "dark"), theme);
+      await page.reload();
+      await expect(page.locator("html")).toHaveClass(theme === "dark" ? /dark/ : /^(?!.*\bdark\b)/);
+      await expect(main.getByRole("heading", { name: "Costs", exact: true })).toBeVisible();
       await page.setViewportSize({ width: 390, height: 844 });
       await page.addScriptTag({ path: axePath });
       const violations = await page.evaluate(async () => (await (window as unknown as { axe: { run(scope: string): Promise<{ violations: unknown[] }> } }).axe.run("main")).violations);
