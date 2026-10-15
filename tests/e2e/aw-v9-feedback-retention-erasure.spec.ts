@@ -2,6 +2,8 @@ import { createRequire } from "node:module";
 import { randomUUID } from "node:crypto";
 import { expect, test, type APIResponse } from "@playwright/test";
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
+// This software fixture needs its first failure trace: the suite has no retries.
+test.use({ trace: "retain-on-failure" });
 async function json(response: APIResponse) {
   expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(true); return response.json();
 }

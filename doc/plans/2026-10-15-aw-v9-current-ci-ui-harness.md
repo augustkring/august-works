@@ -28,6 +28,10 @@ Preserve a primary journey failure if disposal also fails after context closure.
 Annotate incomplete disposal of the isolated software fixture. A successful
 journey still fails if its cleanup fails. Three traced repetitions of this
 stronger journey pass in 51.3s total. Root-cause uncertainty remains explicit.
+Retain the first failed journey's trace. The shared on-first-retry setting
+produces no trace when the suite correctly keeps retries disabled. These traces
+contain only the isolated software fixture and use the existing failure-artifact
+retention. Passing runs do not retain a new trace.
 
 ## Evidence and final gate
 
