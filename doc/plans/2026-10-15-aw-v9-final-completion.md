@@ -254,3 +254,15 @@ regression fails on the uncorrected production source; all 52 cases across the
 collector, choice controls, account and activation suites pass with the fix.
 The complete UI typecheck passes. Current-source broad verification and CI must
 still complete; the earlier failed UI job is not credited as a passing run.
+
+### Await the private monitor's actual pending view
+
+The other CI UI shard on `05b7d0654` reports the existing accepted-pause
+monitor test reading the old DOM after its held replacement request starts.
+Request invocation precedes React Query's batched notification. The fixture
+now waits for both the held request and the required hidden private view,
+before releasing the replacement result. The same assertions still require
+the accepted receipt to return with the fresh paused state and exactly one
+pause write. No production monitor or pause behavior changes. Both complete
+monitor/pause suites pass all 17 cases with this correction. Broader current
+CI and catalog results remain pending.

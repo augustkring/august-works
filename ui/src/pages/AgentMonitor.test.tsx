@@ -109,8 +109,13 @@ it("preserves the accepted pause receipt through a private monitor recheck", asy
   await vi.waitFor(() => expect(button(container, "Pause agent")).toBeTruthy()); await act(async () => button(container, "Pause agent").click());
   const dialog = document.querySelector('[role="alertdialog"]')!;
   await act(async () => dialog.querySelector<HTMLInputElement>('input[value="drain"]')!.click()); await act(async () => button(dialog, "Pause agent").click());
-  await vi.waitFor(() => expect(release).toBeTypeOf("function"));
-  expect(container.textContent).not.toContain("Monitor Native agent"); expect(container.textContent).not.toContain("The pause is recorded");
+  // Starting the held read precedes React Query's batched render notification.
+  // Observe the withdrawn private view as well, before resolving that read.
+  await vi.waitFor(() => {
+    expect(release).toBeTypeOf("function");
+    expect(container.textContent).not.toContain("Monitor Native agent");
+    expect(container.textContent).not.toContain("The pause is recorded");
+  });
   await act(async () => release({ ...data, pauseReason: "manual" }));
   await vi.waitFor(() => expect(container.textContent).toContain("The pause is recorded"));
   expect(container.textContent).toContain("Paused — new autonomous work is blocked"); expect(pause).toHaveBeenCalledTimes(1);
