@@ -117,7 +117,16 @@ function CurrentToolReview({ companyId, principal, runId, nodeId, attemptId, che
     },
     onError: error => {
       const details = error instanceof ApiError ? error.body as { details?: { code?: unknown } } | null : null;
-      if (checkpoint && error instanceof ApiError && error.status === 409 && details?.details?.code === "approval_review_changed") {
+      if (error instanceof ApiError && error.status === 409 && details?.details?.code === "ACCOUNT_CHANGED") {
+        // Native checks this before reads or effects. Withdraw the disproved
+        // session immediately; do not keep its private preview on screen.
+        try { sessionStorage.removeItem(storageKey); } catch { /* No effect was admitted. */ }
+        attempt.current = null;
+        setEpoch(++generation.current);
+        void client.cancelQueries({ queryKey: prefix });
+        client.removeQueries({ queryKey: prefix });
+        void client.invalidateQueries({ queryKey: queryKeys.auth.session, exact: true });
+      } else if (checkpoint && error instanceof ApiError && error.status === 409 && details?.details?.code === "approval_review_changed") {
         try { sessionStorage.removeItem(storageKey); } catch { /* No effect was admitted. */ }
         attempt.current = null;
         if (current()) { setUnconfirmed(false); setReviewChanged(true); void client.resetQueries({ queryKey: key, exact: true }); }

@@ -124,3 +124,17 @@ admission even though the Native contract returns an authorization error; its
 corrected case uses that refusal and flushes the query notification. The first
 fixture/type failures remain failed records. The final built-browser result and
 complete configured current-head CI are recorded in the PR verification section.
+
+### Native account refusal withdraws the private review
+
+Two new failing regressions demonstrated that an explicit Native
+`ACCOUNT_CHANGED` refusal left the old tool or Human checkpoint preview visible.
+The server emits this refusal before reads or effects. The control now removes
+that refused attempt's locator, withdraws its private query generation and
+invalidates the disproved Original session. It never replays a decision.
+Unknown transport replies retain their existing recovery fence.
+
+All 86 current cases pass in the seven affected UI files, including both
+previously failing regressions. Full affected UI types and token gates pass.
+The final browser rebuild/result and complete configured CI remain exact-head
+PR verification records. Superseded CI runs are not credited to this source.

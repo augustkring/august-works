@@ -167,3 +167,20 @@ it("refreshes an explicitly refused changed checkpoint without replaying its dec
   expect(button("Approve step").disabled).toBe(false);
   expect(write).toHaveBeenCalledTimes(1);
 });
+
+it.each([false, true])("withdraws private review data on an explicit Native account refusal (checkpoint=%s)", async human => {
+  const refusal = new ApiError("Account changed", 409, { details: { code: "ACCOUNT_CHANGED" } });
+  if (human) {
+    vi.spyOn(approvalsApi, "get").mockResolvedValue(approval());
+    vi.spyOn(approvalsApi, "approve").mockRejectedValue(refusal);
+  } else {
+    vi.spyOn(workflowsApi, "toolReviews").mockResolvedValue(result);
+    vi.spyOn(workflowsApi, "resolveToolReview").mockRejectedValue(refusal);
+  }
+  await render(human ? checkpoint : undefined);
+  await act(async () => button(human ? "Approve step" : "Approve action").click());
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+  expect(container.textContent).not.toContain(human ? "Exact Native checkpoint" : "PRIVATE Current action");
+  expect(client.getQueryState(queryKeys.auth.session)?.isInvalidated).toBe(true);
+  expect(Object.keys(sessionStorage).some(key => key.startsWith("aw.v9.workflow-tool-decision:"))).toBe(false);
+});
