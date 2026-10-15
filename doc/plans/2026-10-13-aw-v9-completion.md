@@ -2974,3 +2974,32 @@ release gate is complete. All 70 evidence rows, sourceComplete=false and R0 stay
 open; current-head remote CI/independent review and the remaining source/field
 qualification still need their recorded evidence. The existing remote draft PR38
 is unchanged. No push, PR create/edit, merge, deployment or real provider send.
+
+## Checkpoint 89 — publish verified candidate and close render-error recovery gap
+
+The user requested completion through PR/CI and merge preparation. Published
+checkpoint88 to the existing PR38 branch and marked the PR ready for review;
+the bot had skipped draft review. Replaced its stale body using all repository
+PR-template sections. The gh GraphQL edit hit retired Projects Classic; the
+same concrete update succeeded through the REST API. No duplicate PR was made.
+Current GitHub CI now tests the published source. Source coverage, component
+accessibility, Sentry and review-policy workflows passed that candidate; the
+large product/server/type/build matrix remains running, not credited as passed.
+
+Actual source audit found the root and route render boundaries displaying raw
+exception prose, English-only recovery and no support destination. The new
+provider-independent EN/DA surface focuses the heading, uses token-based 44px
+controls, preserves route-change reset/Back, warns about unsaved input and
+unconfirmed preceding writes, and provides plain support mailto. No mutation is
+retried or report sent. Original governed error capture remains unchanged; the
+boundaries' own console calls omit raw exceptions. Failure state is boolean and
+never stringifies arbitrary thrown objects. V9-064 moves to in_progress because
+this concrete software slice is implemented, not because all domain recovery or
+field qualification is accepted.
+
+Initial five affected suites passed 27 cases, and the boolean-state follow-up
+passed the same 27. A separate private-error canary assertion was then added;
+the final five suites pass all 28 cases. Token and source gates
+pass. See the dated provider-independent recovery plan. R0/launch evidence is
+not changed by a push or a recovery component. Final CI and open review findings
+must be checked on the exact final head before merge.

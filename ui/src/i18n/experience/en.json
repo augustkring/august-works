@@ -2954,5 +2954,15 @@
     "checkOriginal": "Check saved preference",
     "retrySame": "Retry the same save",
     "save": "Save delivery preference"
+  },
+  "errorRecovery": {
+    "app": "August Works hit an error",
+    "page": "This page hit an error",
+    "explanation": "You can reload the page to try again. Unsaved changes on this page may be lost.",
+    "unknownOutcome": "If you submitted a change before this error, check its original status after returning. This error does not confirm whether the change was saved.",
+    "back": "Go back",
+    "reload": "Reload page",
+    "supportExplanation": "If the problem continues, contact support. Do not include passwords, credentials or private work in your email. No report is sent automatically.",
+    "support": "Contact support"
   }
 }

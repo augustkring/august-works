@@ -77,8 +77,8 @@ describe("RouteErrorBoundary", () => {
     });
 
     expect(container.textContent).toContain("This page hit an error");
-    expect(container.textContent).toContain("Maximum update depth exceeded");
-    expect(container.querySelector("pre")).not.toBeNull();
+    expect(container.textContent).not.toContain("Maximum update depth exceeded");
+    expect(container.querySelector("pre")).toBeNull();
 
     act(() => {
       root.unmount();

@@ -62,7 +62,7 @@ V9-060,2275,maintenance receipt UI/history,in_progress
 V9-061,2277,maintenance escalation → Needs You,in_progress
 V9-062,2279,maintenance cost/retry budgets,in_progress
 V9-063,2281,support diagnostic bundle,in_progress
-V9-064,2283,self-service error recovery cards,not_started
+V9-064,2283,self-service error recovery cards,in_progress
 V9-065,2285,V6 support session customer UX,in_progress
 V9-066,2287,design token audit/consolidation,not_started
 V9-067,2289,Storybook V9 state matrix,in_progress

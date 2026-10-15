@@ -75,8 +75,8 @@ describe("AppErrorBoundary", () => {
       );
     });
 
-    expect(container.textContent).toContain("Paperclip hit an error");
-    expect(container.textContent).toContain("Maximum update depth exceeded");
+    expect(container.textContent).toContain("August Works hit an error");
+    expect(container.textContent).not.toContain("Maximum update depth exceeded");
     expect(
       Array.from(container.querySelectorAll("button")).some(
         (button) => button.textContent === "Reload page",
@@ -98,8 +98,8 @@ describe("AppErrorBoundary", () => {
       );
     });
 
-    expect(container.textContent).toContain("Paperclip hit an error");
-    expect(container.textContent).toContain("effect exploded");
+    expect(container.textContent).toContain("August Works hit an error");
+    expect(container.textContent).not.toContain("effect exploded");
 
     act(() => {
       root.unmount();
@@ -123,6 +123,20 @@ describe("AppErrorBoundary", () => {
     });
   });
 
+  it("keeps private exception prose out of the recovery surface and its own console call", () => {
+    const privateError = new Error("private-customer-canary@example.test credential=private-canary");
+    function PrivateFailure(): never { throw privateError; }
+    const root = createRoot(container);
+    try {
+      act(() => root.render(<AppErrorBoundary><PrivateFailure /></AppErrorBoundary>));
+      expect(container.textContent).not.toContain("private-canary");
+      expect(container.textContent).not.toContain("private-customer-canary");
+      expect(captureBrowserExceptionMock).toHaveBeenCalledWith(privateError, expect.objectContaining({ boundary: "app" }));
+      expect(consoleErrorSpy.mock.calls.filter(args => args[0] === "App shell crashed")).toEqual([["App shell crashed"]]);
+      expect(container.querySelector("a")?.getAttribute("href")).toBe("mailto:support@blentera.com");
+    } finally { act(() => root.unmount()); }
+  });
+
   it("preserves the original DOM insertion error and its failing component", () => {
     function BrokenDomInsertion() {
       useEffect(() => {
@@ -138,7 +152,7 @@ describe("AppErrorBoundary", () => {
       expect.objectContaining({ name: "NotFoundError" }),
       { boundary: "app", componentStack: expect.stringContaining("BrokenDomInsertion") },
     );
-    expect(container.textContent).toContain("Paperclip hit an error");
+    expect(container.textContent).toContain("August Works hit an error");
     act(() => root.unmount());
   });
 

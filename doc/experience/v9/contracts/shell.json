@@ -83,7 +83,7 @@
     "partial": "Retain trustworthy available results and name unavailable dependencies or sources.",
     "stale": "Remove executable actions and refresh canonical state; preserved input is not evidence of current authority.",
     "validation_error": "Preserve other entered values, identify the field problem and associate it programmatically with the control.",
-    "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
+    "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route. App/route render failures show no raw exception prose, focus the localized provider-independent recovery heading, preserve browser Back and an explicit reload, warn about unsaved changes and unresolved prior writes, and offer a plain support mailto without a private report.",
     "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
     "recovering": "Re-resolve canonical state/version and the original request identity before permitting another effect.",
     "success": "Announce only the server-confirmed canonical result. First value additionally requires independently verified native artifact/run binding."
@@ -136,7 +136,8 @@
   "acceptance": {
     "functional": [
       "Verify canonical state, version conflicts, safe replay, unavailable states and principal/company switching on the exact artifact.",
-      "Run existing App route suites and aw-v9-lazy-advanced.spec.ts; verify unused chunks/data are not requested before the surface is needed, admitted direct navigation and reload work, and current gates remain in force."
+      "Run existing App route suites and aw-v9-lazy-advanced.spec.ts; verify unused chunks/data are not requested before the surface is needed, admitted direct navigation and reload work, and current gates remain in force.",
+      "Run AppErrorBoundary, RouteErrorBoundary and ErrorRecoverySurface tests for raw-error exclusion, recovery after route change, EN/DA fallback without providers, focus and explicit support. Keep original governed error capture unchanged."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."

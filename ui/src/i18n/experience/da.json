@@ -2954,5 +2954,15 @@
     "checkOriginal": "Tjek gemt valg",
     "retrySame": "Gentag samme gemning",
     "save": "Gem leveringsvalg"
+  },
+  "errorRecovery": {
+    "app": "Der opstod en fejl i August Works",
+    "page": "Der opstod en fejl på siden",
+    "explanation": "Du kan genindlæse siden og prøve igen. Ændringer på siden, som ikke er gemt, kan gå tabt.",
+    "unknownOutcome": "Hvis du sendte en ændring før fejlen, skal du kontrollere dens oprindelige status, når du vender tilbage. Fejlen bekræfter ikke, om ændringen blev gemt.",
+    "back": "Gå tilbage",
+    "reload": "Genindlæs siden",
+    "supportExplanation": "Kontakt support, hvis problemet fortsætter. Medtag ikke adgangskoder, legitimationsoplysninger eller privat arbejde i din email. Der sendes ingen rapport automatisk.",
+    "support": "Kontakt support"
   }
 }
