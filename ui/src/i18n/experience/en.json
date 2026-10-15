@@ -2902,5 +2902,37 @@
       "selected_sources_not_complete_census": "Explicitly selected sources; not a complete census",
       "human_agenda_not_decision_or_approval": "Human agenda; not a decision or approval"
     }
+  },
+  "activityCharts": {
+    "viewData": "View {{chart}} as data",
+    "noRuns": "No runs",
+    "title": {
+      "runActivity": "Run activity",
+      "priority": "Task priority",
+      "taskStatus": "Task status",
+      "successRate": "Run success rate"
+    },
+    "columns": {
+      "date": "Date",
+      "total": "Total",
+      "succeeded": "Succeeded",
+      "recovered": "Recovered",
+      "failed": "Failed",
+      "other": "Other",
+      "failureReasons": "Failure reasons",
+      "critical": "Critical",
+      "high": "High",
+      "medium": "Medium",
+      "low": "Low",
+      "todo": "To do",
+      "in_progress": "In progress",
+      "in_review": "In review",
+      "done": "Done",
+      "blocked": "Blocked",
+      "cancelled": "Cancelled",
+      "backlog": "Backlog",
+      "succeededIncludingRecovery": "Succeeded, including recovery",
+      "successRate": "Success rate"
+    }
   }
 }

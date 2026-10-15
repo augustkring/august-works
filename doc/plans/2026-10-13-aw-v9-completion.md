@@ -2728,3 +2728,20 @@ Original receipt recovery instead of obsolete blanket publication rejection.
 Four focused suites pass all 38 cases; UI types, token gates, inventory and both
 strict changed contracts pass. See [the bounded change plan](2026-10-15-aw-v9-agent-target-continuity.md).
 Broader verification and all release/field qualification remain open. No PR/push.
+
+
+### 77 — Accessible data alternatives for Native activity charts
+
+The four shared activity charts now expose their current series in named native
+tables with scoped headers, exact dates, keyboard-reachable scroll containers
+and English/Danish labels. Values come from the same parent-owned input, with
+no new query or collection. Recovered runs retain their existing success-rate
+meaning; no-run days are explicit. Unknown Native status categories are retained
+as escaped, counted series instead of silently omitted.
+
+Focused UI/locale verification passes 15 cases; UI types and token gates pass.
+The new built-host browser case covers keyboard, values, 320px and both themes;
+its fixture aggregate is not evidence of actual run outcomes. Current full build/
+browser checks remain pending, along with manual assistive technology and broader
+chart/generative-host qualification. See [the bounded plan](2026-10-15-aw-v9-chart-data-alternatives.md).
+All 70 launch evidence rows, source completion and R0 remain open. No PR/push.

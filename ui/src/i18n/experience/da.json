@@ -2902,5 +2902,37 @@
       "selected_sources_not_complete_census": "Udvalgte kilder; ikke en fuld optælling",
       "human_agenda_not_decision_or_approval": "Menneskelig dagsorden; ikke en beslutning eller godkendelse"
     }
+  },
+  "activityCharts": {
+    "viewData": "Vis {{chart}} som data",
+    "noRuns": "Ingen kørsler",
+    "title": {
+      "runActivity": "Kørselsaktivitet",
+      "priority": "Opgaveprioritet",
+      "taskStatus": "Opgavestatus",
+      "successRate": "Kørslernes succesrate"
+    },
+    "columns": {
+      "date": "Dato",
+      "total": "I alt",
+      "succeeded": "Lykkedes",
+      "recovered": "Genoprettet",
+      "failed": "Mislykkedes",
+      "other": "Andre",
+      "failureReasons": "Fejlårsager",
+      "critical": "Kritisk",
+      "high": "Høj",
+      "medium": "Mellem",
+      "low": "Lav",
+      "todo": "Skal udføres",
+      "in_progress": "I gang",
+      "in_review": "Til gennemgang",
+      "done": "Færdig",
+      "blocked": "Blokeret",
+      "cancelled": "Annulleret",
+      "backlog": "Backlog",
+      "succeededIncludingRecovery": "Lykkedes, inkl. genoprettelse",
+      "successRate": "Succesrate"
+    }
   }
 }
