@@ -6,7 +6,7 @@
   "releaseIdentity": null,
   "inheritedPredecessorGates": "H6-01..H6-18; H7-01..H7-03; native_openshell_host_bridge; credential_use_broker_and_revocation; pre_spend_model_reservation",
   "coverageManifest": "doc/experience/v9/coverage.json",
-  "ledger": "doc/plans/2026-10-09-aw-v9-build.md",
+  "ledger": "doc/plans/2026-10-13-aw-v9-completion.md",
   "evidence": [],
   "pendingEvidence": [
     "migrated PostgreSQL tenant/current-authority contracts",

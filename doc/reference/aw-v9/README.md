@@ -9,7 +9,7 @@ These are unchanged user-supplied references staged during the initial preparati
 - [Source manifest and direct review ranges](source-corpus.json)
 - [Additional writing corpus](writing-corpus.json) — the three WR-00/01/02 V2 references supplied on 2026-10-13, retained unchanged with content hashes.
 - [120-item implementation backlog](backlog.csv) — broad-item working status; reconcile it with dated implementation checkpoints and use wave dependencies, not numerical order.
-- [Current V9 implementation ledger](../../plans/2026-10-09-aw-v9-build.md) and [70-surface coverage manifest](../../experience/v9/coverage.json) — implementation progress is separate from release evidence.
+- [Current V9 implementation ledger](../../plans/2026-10-13-aw-v9-completion.md) and [70-surface coverage manifest](../../experience/v9/coverage.json) — implementation progress is separate from release evidence.
 - [Extracted Blentera logo package](../../assets/branding/blentera/v1.0/Blentera_Logo_Package_PRODUCTION_MASTER/README.md)
 
 All 36 playbooks were structurally scanned in full and their central principles directly reviewed. Selected security/privacy/frontend chapters received additional direct review. Full specialist chapters remain references for the relevant implementation slice; this is not an attestation that every playbook line was read. External assertions have not been independently requalified.

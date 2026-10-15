@@ -350,3 +350,14 @@ including malformed company scopes and rejected methods; current account/
 resource/version IDs, query/body and error prose stay out of generic logs.
 Actual complete API inventory and Express/pino canary tests pass 93 cases;
 current server types pass. Release and hosted/Human qualification remain open.
+
+### Stop draft continuity under current-account withdrawal — checkpoint 70
+
+The route keeps only same-principal/company/plan unsent React state during a
+session recheck. Original private-read authority removes the private DOM until
+both current session and a fresh Native control read succeed. Another principal
+remounts the workspace. Session failure allows original-session retry only.
+The existing request/version/permission/acknowledgement and original receipt
+owners remain authoritative. Ten actual-account-hook DOM cases and the forced production-UI browser boundary
+pass. Broader current-source qualification remains pending. No draft reason or
+acknowledgement is added to browser persistence.

@@ -13,7 +13,12 @@ test("work Stop recovers one Original request after lost response and rollout wi
   const session = await json(await request.get("/api/auth/get-session")), plan = "10000000-0000-4000-8000-000000000002", task = "10000000-0000-4000-8000-000000000003";
   const base = `/api/companies/${company.id}/experience/orchestration/${plan}`;
   let posts = 0, reads = 0, saved: Record<string, unknown> | null = null, stopped = false;
-  await page.route("**/api/auth/get-session", route => route.fulfill({ json: { ...session, session: { ...session.session, localImplicit: false } } }));
+  let holdSession = false, holdControl = false;
+  const sessions: Array<() => void> = [], controls: Array<() => void> = [];
+  await page.route("**/api/auth/get-session", async route => {
+    if (holdSession) await new Promise<void>(resolve => sessions.push(resolve));
+    await route.fulfill({ json: { ...session, session: { ...session.session, localImplicit: false } } });
+  });
   await page.route(`**${base}/control?**`, async route => {
     expect(new URL(route.request().url()).searchParams.get("expectedUserId")).toBe(session.user.id);
     if (route.request().method() === "POST") {
@@ -24,6 +29,7 @@ test("work Stop recovers one Original request after lost response and rollout wi
       stopped = true; await route.abort("failed"); return;
     }
     expect(route.request().method()).toBe("GET");
+    if (holdControl) await new Promise<void>(resolve => controls.push(resolve));
     await route.fulfill({ headers: { "Cache-Control": "no-store" }, json: { companyId: company.id, planId: plan, taskId: task,
       version: stopped ? 2 : 1, status: stopped ? "cancelled" : "draft", canPause: !stopped, canStop: !stopped } });
   });
@@ -38,7 +44,19 @@ test("work Stop recovers one Original request after lost response and rollout wi
     await expect(page.getByRole("heading", { level: 1, name: "Pause or stop work", exact: true })).toBeVisible();
     await expect(page.getByRole("textbox", { name: "Reason", exact: true })).toBeVisible();
     await page.getByRole("textbox", { name: "Reason", exact: true }).fill("PRIVATE reviewed work-control rationale");
-    await page.getByRole("checkbox").check(); await page.getByRole("button", { name: "Request Stop", exact: true }).focus();
+    await page.getByRole("checkbox").check();
+    holdSession = true; holdControl = true;
+    await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange", { bubbles: true })));
+    await expect.poll(() => sessions.length).toBeGreaterThan(0);
+    await expect(page.getByRole("textbox", { name: "Reason", exact: true })).toHaveCount(0);
+    holdSession = false; for (const release of sessions.splice(0)) release();
+    await expect.poll(() => controls.length).toBeGreaterThan(0);
+    await expect(page.getByRole("textbox", { name: "Reason", exact: true })).toHaveCount(0);
+    holdControl = false; for (const release of controls.splice(0)) release();
+    await expect(page.getByRole("textbox", { name: "Reason", exact: true })).toHaveValue("PRIVATE reviewed work-control rationale");
+    await expect(page.getByRole("checkbox")).toBeChecked();
+    await expect(page.getByRole("button", { name: "Request Stop", exact: true })).toBeEnabled();
+    await page.getByRole("button", { name: "Request Stop", exact: true }).focus();
     await page.keyboard.press("Enter");
     await expect(page.getByRole("main")).toContainText("This request is unconfirmed");
     expect(posts).toBe(1); expect(reads).toBe(0);
@@ -61,6 +79,9 @@ test("work Stop recovers one Original request after lost response and rollout wi
     expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
     await page.screenshot({ path: info.outputPath("work-control-original-receipt-da-mobile.png"), fullPage: true });
   } finally {
+    holdSession = false; holdControl = false;
+    for (const release of sessions.splice(0)) release();
+    for (const release of controls.splice(0)) release();
     await request.patch("/api/instance/settings/experimental", { data: flags }).catch(() => {});
     await request.delete(`/api/companies/${company.id}`).catch(() => {});
   }

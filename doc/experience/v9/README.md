@@ -22,7 +22,7 @@ passes release just because the brief describes it. Evidence entries have
 `kind`, `status`, `artifactSha` and repository `path` fields.
 
 See [architecture decisions](../../adr/V9-ARCHITECTURE-DECISIONS.md),
-[implementation ledger](../../plans/2026-10-09-aw-v9-build.md) and
+[implementation ledger](../../plans/2026-10-13-aw-v9-completion.md) and
 [source readiness](../../../evals/aw-v9/readiness.json). Operator activation and
 hosted qualification remain separate from source coverage.
 
@@ -59,8 +59,9 @@ The original first-result binding supports metadata for an already existing C1
 Task/run/output that has current independent human worker verification. The
 [ONB-11](contracts/onb-11.json) and [ONB-12](contracts/onb-12.json) contracts retain
 the explicit completion/revocation boundary. Actual Native tests and built-browser
-software fixtures pass; preparation/execution of a first job, Free Core delivery,
-artifact correction and full launch acceptance remain open.
+software fixtures pass; the Original first-task preparation/continue/stop implementation is tracked in the
+current ledger. Qualified Free Core delivery, artifact correction and full launch
+acceptance remain open.
 
 The supporting [current-owner activation measures contract](contracts/native-activation-measures.json)
 projects content-free buckets from original onboarding and independent review.

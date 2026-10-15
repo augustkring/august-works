@@ -2554,3 +2554,43 @@ propagates unchanged. No erasure or latest-source full-test pass is inferred.
 The strengthened repeat passes all three cases (27.17 seconds), including no
 copied database cause and exact public error details. Affected types remain
 pending separately from the frozen baseline.
+
+### Preserve the Stop review through a session check — checkpoint 70
+
+Current checkpoint 69 passes full workspace types and build, the 29-case Native
+metric suite and compiled-server startup/OpenAPI/actual-HTTP removal checks.
+The latter confirms protected DELETE 409 with unchanged governed rows and bare
+DELETE 200. Neither outcome grants physical-erasure authority.
+
+Its production browser repeat ends with 88 passes and one failure: the Stop
+reason disappears when its route entry unmounts on a same-account session
+recheck. The deterministic entry-level DOM regression fails before this patch.
+Keeping the existing keyed workspace mounted preserves unsent React state;
+the Native authority fence still hides private fields until the current session
+and a new private read complete. Different principals remount; session failure
+provides explicit original-session retry without any control write.
+
+All ten actual-account-hook DOM cases pass. The built browser now deliberately
+holds the session and subsequent private read, asserts withdrawal and restored
+same-person input, then exercises its existing keyboard/receipt/recovery checks.
+See [the scoped plan](2026-10-15-aw-v9-control-draft-recovery.md).
+
+The frozen checkpoint-69 broad repeat continues separately. Its earlier failed
+workspace suite passes all 66 cases in isolation; the secrets/arbiter diagnostic
+passes all 122. The expired Optimizer case passes in isolation. Their original
+aggregate failures remain recorded and their cause is not asserted from reruns.
+The managed environment interrupted the prior browser/diagnostic processes;
+missing exit statuses remain incomplete. Inactive synthetic test databases were
+removed after owner/process checks to restore disk headroom; user data and
+original source/error logs were not removed.
+
+Reference/experience/readiness ledger links now point to this continuation.
+The first-task preparation/continue/stop implementation is distinguished from
+still-unqualified Free Core delivery. All reference hashes remain unchanged.
+Whole V9, all 70 launch rows and R0 remain open. No PR/push.
+
+The forced built-browser case passes exit 0. It deliberately hides the unsent
+reason during both held reads, restores it for the same verified account, then
+records one unknown Stop request and recovers only its Original receipt after
+rollout withdrawal. UI typecheck, token, module and source-coverage checks pass.
+Current whole-workspace qualification remains pending.
