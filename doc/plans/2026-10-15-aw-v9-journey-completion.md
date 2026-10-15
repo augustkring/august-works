@@ -186,3 +186,27 @@ local UI catalog and combined built Home/support/workflow browser verification
 also run; their final results and current-head CI are recorded in the PR. The
 support browser file retains traces on failure. No focus assertion or deadline
 is changed.
+
+### Use React's actual commit boundary in the environment-form fixture
+
+On `b7a424e64`, the primary PR matrix passes after one unchanged retry of the
+existing CLI company-import/export startup test. Its first attempt reaches the
+successful doctor checks but misses the existing 30-second health deadline.
+The exact local CLI test passes with that same deadline (46.63 seconds for the
+complete export/import case). The unchanged GitHub retry passes as well. The
+first timeout remains a failed record; its underlying cause is not established.
+
+The additional V4 workspace shard then fails the existing environment-form
+Cancel assertion in `CompanyEnvironments.test.tsx`. This separate fixture still
+has its own function named act: it runs the callback and timers without entering
+React's act scope. Timers do not establish that a concurrent React navigation
+has committed. Replace that helper with React's real async act. Preserve every
+assertion, the twenty-turn driver and the existing test deadline.
+
+All 32 cases in that file pass with the corrected helper. Full affected UI types
+and token gates pass. This follow-up changes only the test fixture and this
+record. Production source remains the reviewed `b7a424e64` tree, whose full local
+UI catalog passes 813 files / 8,005 cases and whose combined built-browser scope
+passes seven cases. The final committed test source still requires complete CI
+and available review before merge; earlier failed or superseded runs do not pass
+that requirement.
