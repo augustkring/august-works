@@ -287,3 +287,20 @@ follow-ups change tests and this record only, not the production source whose
 811 UI files / 7,974 cases, complete build and both built EN/DA observation
 journeys pass on `05b7d0654`. Current-head CI and the remaining local default
 catalog groups still control the final software-verification statement.
+
+### Preserve full company identity in channel fixtures
+
+The primary PR matrix, including all eight browser shards, passes on
+`cf59a1f5e`. Its additional V4 server regression finds a fixture collision:
+two different company UUIDs share the first seven hexadecimal characters,
+producing the same `issue_prefix`. The database correctly refuses the second
+company under `companies_issue_prefix_idx`; this is not a delivery failure.
+
+The shared channel fixture now retains every UUID character in its prefix.
+It keeps the existing unique constraint, and distinct canonical company IDs
+remain distinct across the file's retained companies and optional external
+test-database runs. No Native company, issue or channel writer changes. The
+exact failed GitHub receipt case and both V9 Slack/Teams binary-confirmation
+cases pass against migrated PostgreSQL with that fixture (three cases; the
+other 1,045 cases are excluded by the filter, not credited as executed).
+The full configured regression matrix must still verify the final test source.
