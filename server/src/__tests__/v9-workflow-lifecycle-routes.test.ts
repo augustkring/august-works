@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import express from "express";
 import request from "supertest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
@@ -1334,13 +1334,31 @@ describePg("V9 native workflow lifecycle", () => {
   it("refuses a foreign historical revision instead of returning a partial healthy overview", async () => {
     const detail = await seed(),
       sibling = await seed();
-    await db.insert(workflowRuns).values({
+    const legacyRun = {
       companyId: detail.companyId,
       workflowId: detail.id,
       workflowRevisionId: sibling.publishedRevisionId!,
-      source: "manual",
-      status: "queued",
+      source: "manual" as const,
+      status: "queued" as const,
       triggerPayload: { secret: "PRIVATE-FOREIGN" },
+    };
+    // Current Native writes must reject this invalid identity before it exists.
+    await expect(db.insert(workflowRuns).values(legacyRun)).rejects.toMatchObject({
+      cause: expect.objectContaining({ code: "23514" }),
+    });
+    // Simulate a pre-0496 historical row only in this owned disposable fixture.
+    // Restore the exact write guard before committing or issuing any HTTP read;
+    // all other triggers/constraints remain enabled, including tenant checks.
+    await db.transaction(async tx => {
+      await tx.execute(sql`alter table workflow_runs disable trigger aaa_workflow_copy_identity_guard`);
+      try {
+        await tx.insert(workflowRuns).values(legacyRun);
+      } finally {
+        await tx.execute(sql`alter table workflow_runs enable trigger aaa_workflow_copy_identity_guard`);
+      }
+    });
+    await expect(db.insert(workflowRuns).values(legacyRun)).rejects.toMatchObject({
+      cause: expect.objectContaining({ code: "23514" }),
     });
     const response = await http()
       .get(

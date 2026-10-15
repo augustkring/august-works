@@ -2788,3 +2788,19 @@ cases pass: import 29.47 seconds, request behavior 576 ms. No production change.
 Retain the original failure. The two remaining serialized suites and other
 non-server workspaces still need their continuation. See [the scoped note](2026-10-15-aw-v9-workspace-runtime-route-collection.md).
 Source completeness, all 70 launch rows and R0 remain open. No PR/push.
+
+
+### 81 — Preserve current workflow write guards while testing legacy reads
+
+The V9 lifecycle negative fixture failed at insertion because migration 0496 now
+rejects a foreign revision with SQLSTATE 23514. The test now asserts that write
+denial, seeds the pre-0496 anomaly by temporarily disabling only its named guard
+in an owned disposable transaction, restores the guard before commit and proves
+the write denial again before the original private 404/read assertions. No
+production schema, authorization or service behavior changes.
+
+All 37 lifecycle cases pass. A first edited run had a missing sql import and is
+retained as failed; it does not count as a product regression or green result.
+See [the fixture and verification note](2026-10-15-aw-v9-workflow-legacy-read-fixture.md).
+The two remaining serialized suites and workspace/general continuation are pending.
+All 70 launch evidence rows, source completion and R0 remain open. No PR/push.
