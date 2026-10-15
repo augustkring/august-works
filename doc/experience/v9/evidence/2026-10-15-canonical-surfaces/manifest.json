@@ -1,0 +1,88 @@
+{
+  "version": 1,
+  "qualification": "local_built_software_observation",
+  "sourceCommit": "606df893fbb4f1eedb39db985ffa2430a13a31e7",
+  "sourceTree": "614b330963c485b37c5450da2eaf56d2c0db847f",
+  "equivalentProductionSourceCommit": "e92a4859d7fead036ee68b22053f2f475f5b7f4f",
+  "uiArtifact": {
+    "algorithm": "sha256 of sorted relative path + NUL + file sha256 hex + LF",
+    "sha256": "3b41af4c9a765c2fff4cec35037e099b26b1ddd787beb9b5a7d4d3f1559de081",
+    "files": 525
+  },
+  "command": "pnpm exec playwright test --config tests/e2e/playwright.config.ts aw-v9-canonical-surfaces.spec.ts aw-v9-local-observations.spec.ts --workers=1",
+  "result": {
+    "passed": 4,
+    "failed": 0,
+    "elapsed": "1.5 minutes"
+  },
+  "environment": {
+    "node": "24.19.0",
+    "browser": "system Chromium",
+    "execution": "owned non-root isolated disposable instance",
+    "backgroundLoad": "workspace typecheck running concurrently"
+  },
+  "fixtures": [
+    "Native paused zero-budget process Agent; heartbeat disabled",
+    "Native local company Skill",
+    "Personal-session and observation API UI fixtures; actual authorization and erasure separately tested on migrated PostgreSQL"
+  ],
+  "checks": [
+    "Native Agents/Skills read and legacy alias navigation",
+    "Actual main accessibility checks for Agents/Skills",
+    "Narrow light/dark Costs accessibility and overflow",
+    "Original deep-link query/hash preservation",
+    "EN/DA explicit consent, lost acknowledgement reconciliation and withdrawal",
+    "Dashboard observation uses finite schema fields",
+    "No task, heartbeat, model or provider execution"
+  ],
+  "limits": [
+    "Not a representative Human usability study or manual AT acceptance",
+    "Not a live Slack/Teams/provider or hosted qualification",
+    "Default palettes only; no operator-custom-palette guarantee",
+    "Not final release artifact or GA evidence",
+    "Source tree equality does not imply compiled artifact equality when build commit metadata changes"
+  ],
+  "gaAllowed": false,
+  "screenshots": [
+    {
+      "file": "current-agents-light.png",
+      "sha256": "8d5330cb9d4002a78b8463d5b299f08122d36677e9cb72e58b2aca589fae8038",
+      "bytes": 40904
+    },
+    {
+      "file": "current-costs-dark-narrow.png",
+      "sha256": "ba382c4066f28ce30d9d5349991591aed6e7a74565ad0f134f178adba2da4765",
+      "bytes": 115896
+    },
+    {
+      "file": "current-costs-light-narrow.png",
+      "sha256": "d661ef8bfa9c204e3fa808d2b327e3b6dfa08940ae793e955a72b943c5e4ee25",
+      "bytes": 115464
+    },
+    {
+      "file": "current-skills-light.png",
+      "sha256": "971f95fa5f7f038c350cf9c8822f22710b4cb7449acaffb28208c07572adc399",
+      "bytes": 47407
+    },
+    {
+      "file": "classic-agents-light.png",
+      "sha256": "8407b2f814a9b4c7b97030a67b1782eaf142502ea83f7fca95f41b5734d02bc0",
+      "bytes": 42632
+    },
+    {
+      "file": "classic-costs-dark-narrow.png",
+      "sha256": "4aae3a3e816b44b1e8fb1c6d1983fabe1b5341a028701fd1402327b775aaa383",
+      "bytes": 102252
+    },
+    {
+      "file": "classic-costs-light-narrow.png",
+      "sha256": "0ad73b03bce489e05fb77062e18ed6d82759588f93ba28bfe221feed77acf8af",
+      "bytes": 104599
+    },
+    {
+      "file": "classic-skills-light.png",
+      "sha256": "73986621a3a7c718c050dcafb5e72bd61947adf1bdf574a7df27caf3c6082d2a",
+      "bytes": 120483
+    }
+  ]
+}

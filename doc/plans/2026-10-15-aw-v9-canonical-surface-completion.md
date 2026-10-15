@@ -79,3 +79,16 @@ it. Browser theme fixtures now boot through the supported persisted theme
 preference; manual root-class changes can conflict with ThemeProvider's pending
 OS update and do not establish a coherent product theme. The corrected final
 browser run must finish before recording acceptance.
+
+
+The final committed-source browser follow-up passes all four cases in 1.5
+minutes on `606df893fbb4f1eedb39db985ffa2430a13a31e7`. Its entire source tree is
+identical to integration source `e92a4859d7fead036ee68b22053f2f475f5b7f4f`.
+The supported cold theme fixture, legacy catalog-to-installed switch, actual
+Native reads and EN/DA consent paths all pass. Eight screenshots and the exact
+compiled UI hash are retained in
+[evidence/2026-10-15-canonical-surfaces](../experience/v9/evidence/2026-10-15-canonical-surfaces/manifest.json).
+The compiled artifact is specific to its build commit; source-tree equality is
+not presented as compiled-artifact equality. All 81 focused cases and both CSS
+browser probes pass. Current integration workspace types pass; build and full
+catalog checks remain running. PR 39 is a draft while these checks finish.
