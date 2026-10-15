@@ -14,6 +14,28 @@ import { createLocalDiskStorageProvider } from "../../storage/local-disk-provide
 import { createStorageService } from "../../storage/service.js";
 import { setupRunnerPrpWebSocketServer, runnerPrpWebSocketInternals } from "../../realtime/runner-prp-ws.js";
 import { PaperclipRunnerToolAuthority } from "../../services/native-runtime/paperclip-runner-tool-authority.js";
+import { applyTaskDrain, getTaskDrainStatus, heartbeatService, startTaskDrain, stopTaskDrain } from "../../services/heartbeat.js";
+
+let fixtureAdmissionHolds = 0;
+let restoreRunAdmission = () => {};
+
+/** API authority fixtures supply run rows, not live model executions. */
+function holdNewFixtureRuns() {
+  if (fixtureAdmissionHolds++ === 0) {
+    const previous = getTaskDrainStatus();
+    startTaskDrain({});
+    restoreRunAdmission = () => {
+      if (previous.draining) applyTaskDrain({ startedAt: previous.startedAt!, expiresAt: previous.expiresAt });
+      else stopTaskDrain();
+    };
+  }
+  let released = false;
+  return () => {
+    if (released) return;
+    released = true;
+    if (--fixtureAdmissionHolds === 0) restoreRunAdmission();
+  };
+}
 
 export type RunnerConnectionScenario = "fresh" | "pending" | "declined" | "custom" | "foreign" | "stale_owner" | "ready";
 const CONNECTION_SCENARIOS: readonly RunnerConnectionScenario[] = ["fresh", "pending", "declined", "custom", "foreign", "stale_owner", "ready"];
@@ -40,6 +62,7 @@ export async function startRunnerApiTestServer() {
   if (!address || typeof address === "string") throw new Error("Missing eval listener");
   const apiUrl = `http://127.0.0.1:${address.port}`;
   setupRunnerPrpWebSocketServer(http, { apiUrl });
+  const releaseRunAdmission = holdNewFixtureRuns();
   return {
     db, root, apiUrl, storage,
     async fixture(options: { mode?: "standard" | "ask" | "planning"; apiToolsEnabled?: boolean; reset?: boolean; conversation?: boolean; connectionScenario?: RunnerConnectionScenario } = {}) {
@@ -176,13 +199,21 @@ export async function startRunnerApiTestServer() {
       };
     },
     async close() {
-      runnerPrpWebSocketInternals.resetForTests();
-      await app.locals.paperclipShutdown();
-      for (const socket of sockets) socket.destroy();
-      http.closeAllConnections();
-      await new Promise<void>((resolve) => http.close(() => resolve()));
-      await temporary.cleanup();
-      await rm(root, { recursive: true, force: true });
+      try {
+        runnerPrpWebSocketInternals.resetForTests();
+        await app.locals.paperclipShutdown();
+        for (const socket of sockets) socket.destroy();
+        http.closeAllConnections();
+        await new Promise<void>((resolve) => http.close(() => resolve()));
+        // Even a held wake can still be in its asynchronous prologue. Await it
+        // before destroying the database; do not invent Stop ownership for the
+        // synthetic run rows or suppress a late database failure.
+        await heartbeatService(db).drainActiveRunExecutions();
+        await temporary.cleanup();
+        await rm(root, { recursive: true, force: true });
+      } finally {
+        releaseRunAdmission();
+      }
     },
   };
 }

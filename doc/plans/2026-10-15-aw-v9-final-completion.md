@@ -304,3 +304,29 @@ exact failed GitHub receipt case and both V9 Slack/Teams binary-confirmation
 cases pass against migrated PostgreSQL with that fixture (three cases; the
 other 1,045 cases are excluded by the filter, not credited as executed).
 The full configured regression matrix must still verify the final test source.
+
+### Keep API authority fixtures separate from autonomous execution
+
+The complete local general-server invocation on `898eebe83` finishes with 920
+passing files / 17,305 passing cases, seven skipped files / 90 skipped cases,
+and one unhandled rejection. Its exit is 1, not a passing default catalog.
+The rejection belongs to `chat-project-tools.test.ts`: a route-triggered
+background run calls its authoritative log reader after the fixture closes
+PostgreSQL. The actual API assertions passed; the fixture lifetime did not.
+
+The shared real-API helper supplies synthetic running rows for authorization,
+not live cancellation coordinators. It now holds new autonomous run admission
+through the existing Native task-drain owner for its lifetime. Reference-counted
+holds preserve any previous drain state until the last fixture closes. Current
+API identities, permissions, Original writes and assertions remain unchanged.
+Shutdown awaits the existing Native wake/execution drain before destroying its
+database and restores the prior admission state in finally. No late error is
+ignored and no synthetic Stop ownership is invented.
+
+All five helper consumers pass all 42 cases with this correction, with no
+unhandled error. Complete server types pass after tests finish, including their
+runner/vendor prerequisites. Earlier attempts encountered a running-binary
+copy conflict and exhausted disposable database space; those failures remain
+in their logs and are not credited as passes. Completed owned fixture roots
+were removed after checking process/file references. The final configured CI
+must still verify this test-only source; no production behavior changes here.
