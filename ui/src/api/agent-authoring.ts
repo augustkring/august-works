@@ -27,7 +27,7 @@ import {
   type AgentDraftPrepare,
   type AgentDraftSave,
 } from "@paperclipai/shared";
-import { api } from "./client";
+import { api, detachInflightGet } from "./client";
 const root = (company: string) =>
   `/companies/${company}/agent-configuration-drafts`;
 const scope = (path: string, principal: string) =>
@@ -171,13 +171,9 @@ export const agentAuthoringApi = {
     agentId: string,
     signal?: AbortSignal,
   ) => {
-    const result = agentDraftAdmissionSchema.parse(
-      await api.get(
-        scope(`${root(company)}/admission`, principal) +
-          `&agentId=${encodeURIComponent(agentId)}`,
-        { signal, cache: "no-store" },
-      ),
-    );
+    const path = scope(`${root(company)}/admission`, principal) + `&agentId=${encodeURIComponent(agentId)}`;
+    detachInflightGet(path);
+    const result = agentDraftAdmissionSchema.parse(await api.get(path, { signal, cache: "no-store" }));
     if (result.companyId !== company || result.agentId !== agentId)
       throw new Error("Agent draft context changed");
     return result;

@@ -32,6 +32,7 @@ function CurrentRevisionEntry({
     client = useQueryClient();
   const principal = identity.userId;
   const authority = useV9PrivateReadAuthority(principal ?? "");
+  const navigationPending = useRef(false);
   const alive = useRef(true),
     scope = useRef("");
   scope.current = `${company}:${principal}:${agentId}`;
@@ -84,12 +85,21 @@ function CurrentRevisionEntry({
         className="min-h-11"
         variant="outline"
         onClick={() => {
-          if (!current()) return;
+          if (navigationPending.current || !current()) return;
           const requestedScope = scope.current;
-          void Promise.resolve(beforeNavigate()).then((allowed) => {
-            if (allowed && alive.current && scope.current === requestedScope && current())
-              navigate(`/agents/custom?agentId=${encodeURIComponent(agentId)}`);
-          });
+          navigationPending.current = true;
+          void (async () => {
+            try {
+              if (!await beforeNavigate() || !alive.current || scope.current !== requestedScope || !current()) return;
+              // The Human decision may outlive the server-side admission. Fetch
+              // its current Native owner again before handing off to the draft.
+              await client.fetchQuery({ queryKey: key, retry: false, staleTime: 0,
+                queryFn: ({ signal }) => authority.read(() => agentAuthoringApi.admission(company, principal!, agentId, signal)) });
+              if (alive.current && scope.current === requestedScope && current())
+                navigate(`/agents/custom?agentId=${encodeURIComponent(agentId)}`);
+            } catch { /* Failed admission never permits a handoff; the query hides the entry. */ }
+            finally { navigationPending.current = false; }
+          })();
         }}
       >
         {t("agentRevisionCreate")}

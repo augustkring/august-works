@@ -1,5 +1,5 @@
 import type { Approval, ApprovalComment, Issue } from "@paperclipai/shared";
-import { api } from "./client";
+import { api, detachInflightGet } from "./client";
 
 const account = (principal?: string) => principal ? `?${new URLSearchParams({ expectedUserId: principal })}` : "";
 
@@ -10,7 +10,11 @@ export const approvalsApi = {
     ),
   create: (companyId: string, data: Record<string, unknown>) =>
     api.post<Approval>(`/companies/${companyId}/approvals`, data),
-  get: (id: string, principal?: string, signal?: AbortSignal) => api.get<Approval>(`/approvals/${id}${account(principal)}`, { signal, cache: "no-store" }),
+  get: (id: string, principal?: string, signal?: AbortSignal) => {
+    const path = `/approvals/${id}${account(principal)}`;
+    detachInflightGet(path);
+    return api.get<Approval>(path, { signal, cache: "no-store" });
+  },
   approve: (id: string, decisionNote?: string, principal?: string, expectedReviewHash?: string) =>
     api.post<Approval>(`/approvals/${id}/approve${account(principal)}`, { decisionNote, ...(expectedReviewHash ? { expectedReviewHash } : {}) }),
   reject: (id: string, decisionNote?: string, principal?: string, expectedReviewHash?: string) =>

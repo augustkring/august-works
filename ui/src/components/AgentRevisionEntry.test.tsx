@@ -139,3 +139,29 @@ it("rechecks the actual session after an asynchronous unsaved-change decision", 
   expect(state.navigate).not.toHaveBeenCalled();
   expect(container.querySelector("button")).toBeNull();
 });
+
+it("refetches Native admission after the Human decision even without a revocation event", async () => {
+  const read = vi.spyOn(agentAuthoringApi, "admission").mockResolvedValueOnce({ companyId: company, agentId, canCreateDraft: true })
+    .mockRejectedValueOnce(new Error("PRIVATE admission revoked"));
+  let proceed!: (allowed: boolean) => void;
+  await mount(() => new Promise(resolve => { proceed = resolve; }));
+  await vi.waitFor(() => expect(container.querySelector("button")).not.toBeNull());
+  await act(async () => container.querySelector("button")!.click());
+  await act(async () => proceed(true));
+  await act(async () => { await new Promise(resolve => setTimeout(resolve, 0)); });
+  expect(read).toHaveBeenCalledTimes(2); expect(state.navigate).not.toHaveBeenCalled();
+  expect(container.querySelector("button")).toBeNull();
+});
+it("does not hand off after a late admission read crosses an unresolved session", async () => {
+  let refreshed!: (value: { companyId: string; agentId: string; canCreateDraft: true }) => void;
+  vi.spyOn(agentAuthoringApi, "admission").mockResolvedValueOnce({ companyId: company, agentId, canCreateDraft: true })
+    .mockImplementationOnce(() => new Promise(resolve => { refreshed = resolve; }));
+  await mount(() => true);
+  await vi.waitFor(() => expect(container.querySelector("button")).not.toBeNull());
+  await act(async () => container.querySelector("button")!.click());
+  await act(async () => {
+    await client.invalidateQueries({ queryKey: queryKeys.auth.session, exact: true, refetchType: "none" });
+    refreshed({ companyId: company, agentId, canCreateDraft: true });
+  });
+  expect(state.navigate).not.toHaveBeenCalled(); expect(container.querySelector("button")).toBeNull();
+});

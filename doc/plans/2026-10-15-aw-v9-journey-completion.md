@@ -101,3 +101,26 @@ software checks, not representative Human trials or provider delivery proof.
 - `R0_SPECIFIED`, `sourceComplete: false`, the 70-surface release manifest and
   outstanding Native predecessor gates remain unchanged. This plan records
   specific implementation closure, not whole-V9 acceptance.
+
+## Current review follow-up
+
+The available independent review found one valid Agent-entry issue: a cached
+admission could outlive the Human unsaved-change decision without receiving a
+revocation event. The entry now fetches Native admission after that decision.
+It checks the current session and requested scope again after the read. A
+withdrawn admission or a late answer across a session check cannot hand off.
+Concurrent clicks do not open multiple pending handoffs.
+
+Tool reviews, Human approval reads and Agent admission detach an older in-flight
+GET before starting a new private read. A current source generation cannot join
+the transport started before that generation, including for the same account
+and URL. Existing callers can settle under their own authority fence; detachment
+neither cancels their operation nor creates a write.
+
+All 84 current cases pass in seven UI files, including real fetch-coalescing
+regressions and the revoked/late admission checks. Full affected UI types and
+token gates pass. The earlier follow-up fixture incorrectly supplied a false
+admission even though the Native contract returns an authorization error; its
+corrected case uses that refusal and flushes the query notification. The first
+fixture/type failures remain failed records. The final built-browser result and
+complete configured current-head CI are recorded in the PR verification section.
