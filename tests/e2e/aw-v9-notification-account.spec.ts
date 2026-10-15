@@ -40,6 +40,10 @@ test("private notification updates wait for the current account and a fresh orig
     await page.goto(`/${company.issuePrefix}/inbox`);
     const updates = page.getByRole("region", { name: "Account and runtime updates", exact: true });
     await expect(updates.getByRole("link", { name: notification.title })).toBeVisible();
+    // The revalidation signal represents returning to a visible tab. Do not
+    // dispatch it while a loaded headless tab is still reported as hidden.
+    await page.bringToFront();
+    await expect.poll(() => page.evaluate(() => document.visibilityState)).toBe("visible");
     const priorReads = reads;
     holdSession = true; holdList = true;
     await page.evaluate(() => document.dispatchEvent(new Event("visibilitychange", { bubbles: true })));

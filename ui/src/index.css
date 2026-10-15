@@ -2358,12 +2358,14 @@ span.paperclip-mention-chip[data-mention-kind="external-object"] {
    reads on dark surfaces. A single hue covers both modes. */
 .status-chip {
   background-color: color-mix(in srgb, var(--sc) 15%, white);
-  color: color-mix(in srgb, var(--sc) 82%, black);
+  /* Text tone is separate from the base status hue: amber and green must
+     remain readable at the actual small chip label size. */
+  color: color-mix(in srgb, var(--sc) 60%, black);
   border-color: var(--sc);
 }
 .dark .status-chip {
   background-color: color-mix(in srgb, var(--sc) 22%, transparent);
-  color: color-mix(in srgb, var(--sc) 80%, white);
+  color: color-mix(in srgb, var(--sc) 65%, white);
   border-color: color-mix(in srgb, var(--sc) 48%, transparent);
 }
 .status-chip[data-task-status="backlog"],
@@ -3063,6 +3065,28 @@ span.paperclip-mention-chip[data-mention-kind="external-object"] {
 }
 @media (prefers-reduced-motion: reduce) {
   .announcement-well { animation: none; }
+}
+
+/* Shared primitives (dialogs, sheets, spinners and Tailwind utilities) also
+   honor reduced motion. Keep a finite animation lifecycle so presence owners
+   can finish teardown on animationend; remove loops, delays and smooth CSS
+   scrolling. Existing static alternatives above retain their final states. */
+:root {
+  --a11y-reduced-motion-lifecycle: 0.01ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: var(--a11y-reduced-motion-lifecycle) !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+  /* Autofill's long background transition prevents a browser color flash;
+     it is not movement and must retain its existing browser workaround. */
+  *:not(:-webkit-autofill), *::before, *::after {
+    transition-duration: var(--a11y-reduced-motion-lifecycle) !important;
+    transition-delay: 0ms !important;
+  }
 }
 
 /* Native disclosure marker is replaced by the connection-health chevron. */

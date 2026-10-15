@@ -98,6 +98,11 @@ describe("AuditHub", () => {
     render("activity");
 
     expect(container.querySelectorAll('[role="tab"]')).toHaveLength(5);
+    const active = container.querySelector('[role="tab"][aria-selected="true"]')!;
+    const panel = document.getElementById(active.getAttribute("aria-controls")!);
+    expect(panel?.getAttribute("role")).toBe("tabpanel");
+    expect(panel?.getAttribute("aria-labelledby")).toBe(active.id);
+    expect(panel?.querySelector('[data-testid="audit-feed"]')).not.toBeNull();
     expect(container.textContent).toContain("Activity");
     expect(container.textContent).toContain("Runs");
     expect(container.textContent).toContain("Costs");

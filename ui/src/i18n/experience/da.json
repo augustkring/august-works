@@ -2964,5 +2964,18 @@
     "reload": "Genindlæs siden",
     "supportExplanation": "Kontakt support, hvis problemet fortsætter. Medtag ikke adgangskoder, legitimationsoplysninger eller privat arbejde i din email. Der sendes ingen rapport automatisk.",
     "support": "Kontakt support"
+  },
+  "observations": {
+    "heading": "Frivillige lokale brugsobservationer",
+    "disclosure": "Hvis du vælger det til, gemmer denne installation grove sidekategorier, grænsefladetilstand og intervaller for synlig visningstid for din konto i denne virksomhed i højst 35 dage. Der indsamles ikke sidetekst, prompts, navne, e-mailadresser eller URL’er, og intet sendes til en analyseudbyder. Observationerne beskriver grænsefladen, ikke dit arbejde eller opnåede resultater. Fravalg sletter dine observationer fra den aktive database. Driftsbackups følger installationens opbevaringspolitik.",
+    "loading": "Kontrollerer dit aktuelle valg…",
+    "failed": "Dit aktuelle valg kunne ikke kontrolleres.",
+    "on": "Lokale observationer er slået til for denne virksomhed.",
+    "off": "Lokale observationer er slået fra, eller indsamling er utilgængelig.",
+    "unknown": "Resultatet kunne ikke bekræftes. Kontrollér dit aktuelle valg, før du slår funktionen til igen. Du kan altid anmode om fravalg.",
+    "erased": "Dine observationer blev slettet fra den aktive database.",
+    "withdraw": "Slå fra og slet observationer",
+    "check": "Kontrollér aktuelt valg",
+    "enable": "Tillad lokale observationer"
   }
 }

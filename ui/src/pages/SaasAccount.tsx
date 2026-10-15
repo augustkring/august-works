@@ -1,3 +1,4 @@
+import { ExperienceObservationSettings } from "../components/ExperienceObservationSettings";
 import { Fragment } from "react";
 import { NotificationChannelSettings } from "../components/NotificationChannelSettings";
 import { useCompany } from "@/context/CompanyContext";
@@ -169,6 +170,7 @@ function AccountSecurityScope({ principal, companyId }: { principal: string; com
       }}>{t("account.retry")}</Button>}
     </div>}
     {privateReady && <>
+      {companyId && <ExperienceObservationSettings key={`${companyId}:${principal}`} companyId={companyId} principal={principal} />}
       <p className="saas-muted">{t("account.sessionsExplanation")}</p>
       {sessions.isFetching && <p role="status">{t("account.sessionsLoading")}</p>}
       {(sessions.isError || revoke.isError) && <p role="alert" className="saas-error">{t("account.sessionsFailed")}

@@ -1081,7 +1081,9 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     await db.insert(companies).values({
       id: companyId,
       name: `Chat Test ${companyId.slice(0, 8)}`,
-      issuePrefix: `C${companyId.replaceAll("-", "").slice(0, 7).toUpperCase()}`,
+      // Keep the full company identity, including with a retained external test
+      // database. Seven hexadecimal characters allowed unrelated IDs to collide.
+      issuePrefix: `C${companyId.replaceAll("-", "").toUpperCase()}`,
       requireBoardApprovalForNewAgents: false,
     });
     const now = new Date();

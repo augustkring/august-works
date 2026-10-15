@@ -1,3 +1,4 @@
+import { preferredScrollBehavior } from "../../lib/scroll-behavior";
 import { useEffect, useMemo, useRef, useState } from "react";
 import type { CSSProperties } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -134,7 +135,7 @@ function MarkdownWorkProductRow({
   }, [openRequestId]);
   useEffect(() => {
     if (openRequestId === undefined || !expanded) return;
-    headerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    headerRef.current?.scrollIntoView({ behavior: preferredScrollBehavior(), block: "center" });
   }, [expanded, openRequestId]);
   // Deep links land before the user clicks, so the deep-link expansion has to
   // request materialization the same way a manual expand does.
@@ -281,7 +282,7 @@ function DocumentRow({
   }, [onOpen, openRequestId]);
   useEffect(() => {
     if (onOpen || openRequestId === undefined || !expanded) return;
-    headerRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    headerRef.current?.scrollIntoView({ behavior: preferredScrollBehavior(), block: "center" });
   }, [expanded, onOpen, openRequestId]);
   if (onOpen) {
     return (

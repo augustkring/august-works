@@ -6,7 +6,7 @@ V9-004,2163,authorization/staleness + Experience Orchestrator degradation/freshn
 V9-005,2165,experience profile resolver,in_progress
 V9-006,2167,progressive shell + Advanced entry,in_progress
 V9-007,2169,sidebar route compatibility + deep-link tests,in_progress
-V9-008,2171,legacy shell usage telemetry,not_started
+V9-008,2171,legacy shell usage telemetry,in_progress
 V9-009,2173,Home projection service,in_progress
 V9-010,2175,Home UI / accessible empty/loading/failure states,in_progress
 V9-011,2177,Needs You naming/IA migration over attention,in_progress
@@ -64,18 +64,18 @@ V9-062,2279,maintenance cost/retry budgets,in_progress
 V9-063,2281,support diagnostic bundle,in_progress
 V9-064,2283,self-service error recovery cards,in_progress
 V9-065,2285,V6 support session customer UX,in_progress
-V9-066,2287,design token audit/consolidation,not_started
+V9-066,2287,design token audit/consolidation,in_progress
 V9-067,2289,Storybook V9 state matrix,in_progress
-V9-068,2291,premium shell typography/layout refinement,not_started
-V9-069,2293,card/surface reduction pass,not_started
-V9-070,2295,motion/reduced-motion pass,not_started
-V9-071,2297,dark-mode recomposition audit,not_started
+V9-068,2291,premium shell typography/layout refinement,in_progress
+V9-069,2293,card/surface reduction pass,in_progress
+V9-070,2295,motion/reduced-motion pass,in_progress
+V9-071,2297,dark-mode recomposition audit,in_progress
 V9-072,2299,`.production`/legacy parity inventory,in_progress
-V9-073,2301,migrate canonical Agents/Skills/Costs surfaces,not_started
+V9-073,2301,migrate canonical Agents/Skills/Costs surfaces,in_progress
 V9-074,2303,retire redundant onboarding variants,not_started
 V9-075,2305,retire streamlined legacy flag after migration,not_started
 V9-076,2307,route-level lazy loading/performance pass,in_progress
-V9-077,2309,long-session memory/render performance,not_started
+V9-077,2309,long-session memory/render performance,in_progress
 V9-078,2311,mobile critical action surface,in_progress
 V9-079,2313,WCAG automated gates,in_progress
 V9-080,2315,keyboard/screen-reader critical journey tests,in_progress
@@ -84,9 +84,9 @@ V9-082,2319,charts/generative UI nonvisual alternatives,in_progress
 V9-083,2321,localization key migration for V9 surfaces,in_progress
 V9-084,2323,Danish/English reference locale QA if launch scope requires,in_progress
 V9-085,2325,UX event Data Processing Contracts + allow-listed schema/redaction/leakage tests,in_progress
-V9-086,2327,Time-to-first-outcome funnel,not_started
-V9-087,2329,interruption/attention telemetry,not_started
-V9-088,2331,maintenance/support effort telemetry,not_started
+V9-086,2327,Time-to-first-outcome funnel,in_progress
+V9-087,2329,interruption/attention telemetry,in_progress
+V9-088,2331,maintenance/support effort telemetry,in_progress
 V9-089,2333,optional PostHog adapter + DPA/privacy feature gate,not_started
 V9-090,2335,onboarding exploratory usability pilot harness + confirmatory-validation preregistration,in_progress
 V9-091,2337,Slack-only employee journey E2E,not_started

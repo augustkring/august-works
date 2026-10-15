@@ -9,6 +9,8 @@ on:
       - 'ui/src/**'
       - 'doc/reference/aw-v9/brief/**'
       - 'scripts/check-aw-v9-coverage.mjs'
+      - 'scripts/aw-v9-reduced-motion.test.mjs'
+      - 'scripts/aw-v9-status-contrast.test.mjs'
       - 'scripts/validate-aw-v9-pilot.mjs'
       - 'scripts/validate-aw-v9-attention.mjs'
       - 'scripts/__tests__/aw-v9-pilot*.test.mjs'
@@ -57,6 +59,7 @@ jobs:
       - run: pnpm run preflight:workspace-links
       - run: pnpm --filter @paperclipai/plugin-sdk ensure-build-deps
       - run: pnpm exec playwright install --with-deps chromium
+      - run: node --test scripts/aw-v9-reduced-motion.test.mjs scripts/aw-v9-status-contrast.test.mjs
       - run: pnpm build-storybook
       - run: pnpm exec playwright test --config tests/e2e/aw-v9-storybook.config.ts tests/e2e/aw-v9-storybook.spec.ts
       - name: Retain component failure evidence

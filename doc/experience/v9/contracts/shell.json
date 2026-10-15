@@ -102,7 +102,7 @@
     "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
     "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
     "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
-    "reducedMotion": "No essential animated transition or moving progress indicator.",
+    "reducedMotion": "No essential animated transition or moving progress indicator. Shared CSS animations and pseudo-elements collapse loops/delays while retaining finite presence teardown; JavaScript scroll requests read the current reduced-motion preference at dispatch.",
     "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
   },
   "responsive": {

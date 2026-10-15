@@ -12,6 +12,8 @@ import {
 
 describe("V9 private HTTP purpose", () => {
   it.each([
+    ["POST", "/api/companies/private-company/experience/observations?expectedUserId=private-principal"],
+    ["POST", "/api/companies//experience/observations/preference?expectedUserId=private-principal"],
     ["GET", "/api/companies/private-company/experiments/private-record/versions/private-version/analysis-summary?expectedUserId=private-principal"],
     ["POST", "/api/companies//experiments/private-record/versions/private-version/analysis-summary?expectedUserId=private-principal"],
     ["GET", "/api/companies/private-company/management-reviews/private-record/summary?expectedUserId=private-principal"],

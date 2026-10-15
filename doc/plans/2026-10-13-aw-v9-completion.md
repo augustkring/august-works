@@ -3085,3 +3085,13 @@ An individual unchanged CI job rerun was requested before the parent completed;
 GitHub refused it because the workflow was active. No rerun is credited as a
 pass. The updated test-only source goes through a new integrated CI attempt.
 CodeRabbit's 100-file limit and missing required Greptile review remain explicit.
+
+## Checkpoint 93 — post-merge motion, long-session resources and channel fallback
+
+PR 38 merged to master `e5124bd126c5d53ad2de7924687b5a06ed290048` after
+its exact source passed configured CI. Remaining implementation continues in
+[the final-completion ledger](2026-10-15-aw-v9-final-completion.md). This
+checkpoint corrects shared reduced motion, JavaScript scrolling, toast and
+virtualized-row resource retention, and semantic channel text fallbacks.
+V9-070 and V9-077 are now in progress. Full V9 source and release acceptance
+remain open; no live/manual/Human evidence is inferred from these corrections.

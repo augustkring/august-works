@@ -121,6 +121,39 @@ export function validateObservation(raw, protocol, expectedDigest) {
   return row;
 }
 
+/** A descriptive funnel over already validated, privacy-scoped observations.
+ * A failed attempt's duration must never become Time to First Useful Outcome.
+ * Counts refer to observation cells, not distinct people or population rates. */
+function firstOutcomeFunnel(journey, selected) {
+  const attempted = selected.filter(row => row.outcome !== "not_attempted");
+  const succeeded = attempted.filter(row => row.outcome === "success");
+  const checked = succeeded.filter(row => row.securityPrivacy === "satisfied" && row.accessibility === "satisfied");
+  const reviewed = checked.filter(row => !journey.independenceRequired || row.independentReview);
+  const timed = reviewed.filter(row => row.timingBaseline === "usable_account" && row.durationMs !== null);
+  const durations = timed.map(row => row.durationMs).sort((a, b) => a - b);
+  const percentile = fraction => durations.length ? durations[Math.ceil(durations.length * fraction) - 1] : null;
+  return {
+    unit: "participant_journey_role_surface_assistive_cell",
+    observations: selected.length,
+    attempted: attempted.length,
+    recordedSuccesses: succeeded.length,
+    privacyAccessibilityCheckedSuccesses: checked.length,
+    policyReviewedSuccesses: reviewed.length,
+    independenceRequired: journey.independenceRequired,
+    usableAccountTimedOutcomes: timed.length,
+    reviewedOutcomesWithoutTimingBaseline: reviewed.length - timed.length,
+    reviewedOutcomesWithoutRecordedAssistance: reviewed.filter(row => row.assistanceCount === 0).length,
+    censoredAttempts: attempted.filter(row => row.censored).length,
+    timeToFirstUsefulOutcome: {
+      status: durations.length ? "observed_sample" : "not_observed",
+      sampleSize: durations.length,
+      p50Ms: percentile(0.5),
+      p90Ms: percentile(0.9),
+      quantileMethod: "nearest_rank",
+    },
+  };
+}
+
 /** No mutation of readiness.json and no GA certificate. Confirmatory findings
  * require frozen rules and every predeclared role/surface/assistive slice. */
 export function summarizePilot(protocol, observations, expectedDigest) {
@@ -153,7 +186,14 @@ export function summarizePilot(protocol, observations, expectedDigest) {
       measuredDurations: durations.length, observedDurationP50Ms: durations.length ? durations[Math.ceil(durations.length * 0.5) - 1] : null,
       observedDurationP90Ms: durations.length ? durations[Math.ceil(durations.length * 0.9) - 1] : null,
       effortObservedMedian: median(attempted.map(row => row.effort)), confidenceObservedMedian: median(attempted.map(row => row.confidence)),
-      assistanceCount: attempted.reduce((sum, row) => sum + row.assistanceCount, 0), incidents: selected.reduce((sum, row) => sum + row.incidents.length, 0) };
+      assistanceCount: attempted.reduce((sum, row) => sum + row.assistanceCount, 0), incidents: selected.reduce((sum, row) => sum + row.incidents.length, 0),
+      ...(journey.id === "first_outcome" ? { firstOutcomeFunnel: {
+        overall: firstOutcomeFunnel(journey, selected),
+        criticalSlices: journey.criticalSlices.map(slice => ({ ...slice,
+          ...firstOutcomeFunnel(journey, selected.filter(row => row.role === slice.role && row.surface === slice.surface && row.assistive === slice.assistive)),
+        })),
+      } } : {}),
+    };
   });
   return { schemaVersion: 1, phase: plan.phase, protocolSha256: expectedDigest, sourceCommit: plan.sourceCommit,
     artifactSha256: plan.artifactSha256, configurationSha256: plan.configurationSha256, schemaSha256: plan.schemaSha256,

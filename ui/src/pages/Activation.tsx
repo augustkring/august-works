@@ -1,3 +1,4 @@
+import { ObservationScope } from "../components/ExperienceObservationCollector";
 import { ActivationConnectionConsent } from "../components/ActivationConnectionConsent";
 import { useEffect, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -316,6 +317,8 @@ function ActivationScope({
     );
   return (
     <main className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
+      {companyId && current && <ObservationScope key={`${companyId}:${principal}:${epoch}`} company={companyId} principal={principal}
+        surface="activation" navigation={String(screen)} step={ACTIVATION_STEPS[screen - 3] ?? null} />}
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
         <span className="font-semibold">August Works</span>
         <ExperienceLanguageSelect />

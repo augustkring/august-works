@@ -1,3 +1,4 @@
+import { preferredScrollBehavior } from "../lib/scroll-behavior";
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type { QueryClient, QueryKey } from "@tanstack/react-query";
@@ -815,7 +816,7 @@ export function IssueDocumentsSection({
     if (!element) return;
     hasScrolledToHashRef.current = true;
     setHighlightDocumentKey(documentKey);
-    element.scrollIntoView({ behavior: "smooth", block: "center" });
+    element.scrollIntoView({ behavior: preferredScrollBehavior(), block: "center" });
     const timer = setTimeout(() => setHighlightDocumentKey((current) => current === documentKey ? null : current), 3000);
     return () => clearTimeout(timer);
   }, [documentSubject.legacyPlanDocument, location.hash, sortedDocuments]);

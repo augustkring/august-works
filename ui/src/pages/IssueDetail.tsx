@@ -1,3 +1,4 @@
+import { preferredScrollBehavior } from "../lib/scroll-behavior";
 import { useUserPreferences } from "../hooks/useUserPreferences";
 import { WorkflowAuthoringHandoff } from "../components/WorkflowAuthoringHandoff";
 import { DispositionRecoveryProvider } from "../components/DispositionRecoveryNotice";
@@ -6099,7 +6100,7 @@ export function TaskDetailSurface({ conversation, tasksTab }: { tasksTab?: TaskS
         }
         return;
       }
-      element.scrollIntoView({ behavior: "smooth", block: "center" });
+      element.scrollIntoView({ behavior: preferredScrollBehavior(), block: "center" });
       element.classList.add("ring-2", "ring-primary/50", "transition-shadow");
       timer = setTimeout(
         () =>

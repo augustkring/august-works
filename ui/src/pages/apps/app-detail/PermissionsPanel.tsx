@@ -1,3 +1,4 @@
+import { preferredScrollBehavior } from "../../../lib/scroll-behavior";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { Ban, Check, FlaskConical, Loader2, RefreshCw, Search, ShieldQuestion } from "lucide-react";
@@ -441,7 +442,7 @@ function ActionRow({
   const title = action.title ?? action.toolName;
 
   useEffect(() => {
-    if (focused) rowRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    if (focused) rowRef.current?.scrollIntoView({ behavior: preferredScrollBehavior(), block: "center" });
   }, [focused]);
 
   return (

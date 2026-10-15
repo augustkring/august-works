@@ -1,3 +1,4 @@
+import { preferredScrollBehavior } from "../lib/scroll-behavior";
 import { useCallback, useEffect, useState } from "react";
 import { ArrowDown } from "lucide-react";
 import { createPortal } from "react-dom";
@@ -80,12 +81,12 @@ export function ScrollToBottom() {
     const target = resolveScrollTarget();
 
     if (target.type === "element") {
-      target.element.scrollTo({ top: target.element.scrollHeight, behavior: "smooth" });
+      target.element.scrollTo({ top: target.element.scrollHeight, behavior: preferredScrollBehavior() });
       return;
     }
 
     const scroller = document.scrollingElement ?? document.documentElement;
-    window.scrollTo({ top: scroller.scrollHeight, behavior: "smooth" });
+    window.scrollTo({ top: scroller.scrollHeight, behavior: preferredScrollBehavior() });
   }, []);
 
   if (!visible) return null;

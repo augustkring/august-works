@@ -1,3 +1,4 @@
+import { preferredScrollBehavior } from "../lib/scroll-behavior";
 import { isExperienceCardToolName } from "@paperclipai/shared";
 import { ExperienceToolCard } from "./ExperienceToolCard";
 import { DispositionRecoveryNotice, useDispositionRecoverySnapshot } from "./DispositionRecoveryNotice";
@@ -4130,15 +4131,26 @@ function useIssueThreadVirtualizer({
 
   const itemStarts: number[] = [];
   const itemSizes: number[] = [];
+  const currentItemKeys = new Set<React.Key>();
   let nextStart = scrollMargin;
   for (let index = 0; index < count; index += 1) {
     const key = getItemKey(index);
+    currentItemKeys.add(key);
     const size = measuredSizeByKeyRef.current.get(key) ?? estimatedSize;
     itemStarts.push(nextStart);
     itemSizes.push(size);
     nextStart += size + gap;
   }
   const totalSize = Math.max(0, nextStart - scrollMargin - gap);
+
+  // Removed messages and replaced thread snapshots must not accumulate
+  // measurements for the lifetime of the mounted shell. Keep current offscreen
+  // rows so virtualized scroll positions remain stable.
+  useLayoutEffect(() => {
+    for (const key of measuredSizeByKeyRef.current.keys()) {
+      if (!currentItemKeys.has(key)) measuredSizeByKeyRef.current.delete(key);
+    }
+  });
 
   const viewportHeight = () =>
     mode.kind === "window" ? window.innerHeight : mode.element.clientHeight;
@@ -4404,14 +4416,14 @@ const VirtualizedIssueChatThreadListInner = forwardRef<
         if (index < 0 || index >= messages.length) return;
         virtualizer.scrollToIndex(index, {
           align: options?.align ?? "center",
-          behavior: options?.behavior ?? "smooth",
+          behavior: preferredScrollBehavior(options?.behavior),
         });
       },
       scrollToLatest: (options) => {
         if (messages.length === 0) return;
         virtualizer.scrollToIndex(messages.length - 1, {
           align: "end",
-          behavior: options?.behavior ?? "smooth",
+          behavior: preferredScrollBehavior(options?.behavior),
         });
       },
       measure: () => {
@@ -4801,14 +4813,14 @@ const IssueChatComposer = forwardRef<
   function focusComposer() {
     if (typeof composerContainerRef.current?.scrollIntoView === "function") {
       composerContainerRef.current.scrollIntoView({
-        behavior: "smooth",
+        behavior: preferredScrollBehavior(),
         block: "end",
       });
     }
     requestAnimationFrame(() => {
       window.scrollBy({
         top: COMPOSER_FOCUS_SCROLL_PADDING_PX,
-        behavior: "smooth",
+        behavior: preferredScrollBehavior(),
       });
       editorRef.current?.focus();
     });
@@ -6073,7 +6085,7 @@ export function IssueChatThread({
       if (!virtualizedThreadRef.current) return false;
       virtualizedThreadRef.current.scrollToIndex(virtualIndex, {
         align: options?.align ?? "center",
-        behavior: options?.behavior ?? "smooth",
+        behavior: preferredScrollBehavior(options?.behavior),
       });
       return true;
     }
@@ -6081,7 +6093,7 @@ export function IssueChatThread({
     const element = document.getElementById(anchorId);
     if (!element) return false;
     element.scrollIntoView({
-      behavior: options?.behavior ?? "smooth",
+      behavior: preferredScrollBehavior(options?.behavior),
       block:
         options?.align === "start"
           ? "start"
@@ -6133,7 +6145,7 @@ export function IssueChatThread({
         requestAnimationFrame(() => {
           scrollToThreadAnchor(anchorId, {
             align: "start",
-            behavior: "smooth",
+            behavior: preferredScrollBehavior(),
           });
         });
       }
@@ -6222,7 +6234,7 @@ export function IssueChatThread({
       if (cancelled || lastScrolledHashRef.current === hash) return;
       const didScroll = scrollToThreadAnchor(targetId, {
         align: "center",
-        behavior: "smooth",
+        behavior: preferredScrollBehavior(),
       });
       if (!didScroll) return;
       if (
@@ -6281,11 +6293,11 @@ export function IssueChatThread({
 
   function jumpToLatestFallback() {
     if (useVirtualizedThread) {
-      virtualizedThreadRef.current?.scrollToLatest({ behavior: "smooth" });
+      virtualizedThreadRef.current?.scrollToLatest({ behavior: preferredScrollBehavior() });
       return;
     }
     bottomAnchorRef.current?.scrollIntoView({
-      behavior: "smooth",
+      behavior: preferredScrollBehavior(),
       block: "end",
     });
   }
@@ -6320,7 +6332,7 @@ export function IssueChatThread({
 
     const initial = scrollToThreadAnchor(
       latestCommentAnchor,
-      { align: "end", behavior: "smooth" },
+      { align: "end", behavior: preferredScrollBehavior() },
       messageSnapshot,
     );
     if (!initial) {
@@ -6416,7 +6428,7 @@ export function IssueChatThread({
       const offBottom = elBottom - containerBottom;
 
       if (Math.abs(offBottom) > TOLERANCE_PX) {
-        el.scrollIntoView({ behavior: "smooth", block: "end" });
+        el.scrollIntoView({ behavior: preferredScrollBehavior(), block: "end" });
       }
 
       const currentScrollTop = container?.scrollTop ?? window.scrollY;
