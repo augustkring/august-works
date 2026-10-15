@@ -1220,7 +1220,7 @@
     "retryDeletion": "Retry the same deletion request",
     "deletionUnconfirmed": "Your deletion request is not confirmed. Retry the same request; its details and request key are preserved for this account. If your session has ended, use the normal sign-in page to check account access.",
     "deletionFailed": "Account deletion was refused. Check your password, organization ownership and billing responsibilities before trying again.",
-    "preferencesHeading": "Email preferences",
+    "preferencesHeading": "Notification preferences",
     "preferencesExplanation": "Security emails remain enabled. In-app updates remain available when optional email is disabled.",
     "preferencesLoading": "Loading current email preferences…",
     "preferencesFailed": "Current email preferences could not be confirmed. Refresh before saving.",
@@ -2934,5 +2934,25 @@
       "succeededIncludingRecovery": "Succeeded, including recovery",
       "successRate": "Success rate"
     }
+  },
+  "notificationChannels": {
+    "language": "Language of linked-chat notices",
+    "heading": "{{category}} · linked chat delivery",
+    "loading": "Checking your current delivery preference…",
+    "unavailable": "Your delivery preference is unavailable. Check your account and try again.",
+    "boundary": "Only a verified private chat linked to your account is offered. It receives an account-update notice and sign-in link, without task content, prompts, documents or credentials. Timing and quiet hours still apply. Security notices keep their required delivery.",
+    "destinationUnavailable": "The saved private destination is unavailable. Updates stay in August Works; they are not redirected to email.",
+    "changed": "Your preference or destination changed. Review the current setting before saving.",
+    "reviewCurrent": "Review current setting",
+    "destination": "Where future updates arrive",
+    "default": "Use email and in-app settings",
+    "limited": "This list shows up to 30 current private destinations.",
+    "noDestination": "No verified private chat is available. Connect and verify your chat account first.",
+    "saved": "Preference version {{version}} was saved. This does not confirm message delivery.",
+    "unknown": "This save is unconfirmed. Check the saved preference or retry the same save before making another change.",
+    "failed": "The preference could not be confirmed. Your choice is still here.",
+    "checkOriginal": "Check saved preference",
+    "retrySame": "Retry the same save",
+    "save": "Save delivery preference"
   }
 }

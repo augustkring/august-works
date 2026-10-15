@@ -9,6 +9,7 @@ import {
   companies,
   companyMemberships,
   saasNotificationPreferences,
+  notificationChannelPreferences,
 } from "@paperclipai/db";
 import { notificationPolicySchema, type PublicOriginConfig } from "@paperclipai/shared";
 import { publicAppUrl } from "../../aw-deployment.js";
@@ -77,6 +78,12 @@ export function transactionalEmail(
     if (!recipient || recipient.email.trim().toLowerCase() !== payload.recipient ||
       recipientHash(recipient.email, config.outbox.recipientHashKey) !== row.recipientHash)
       return { channel: "in_app_only" as const };
+    if (row.purpose !== "security") {
+      const [bound] = await db.select({ channel: notificationChannelPreferences.channel }).from(notificationChannelPreferences)
+        .where(and(eq(notificationChannelPreferences.companyId, row.companyId), eq(notificationChannelPreferences.userId, row.userId),
+          eq(notificationChannelPreferences.category, row.purpose as "billing" | "runtime" | "approval" | "work_update"))).limit(1);
+      if (bound && bound.channel !== "default") return { channel: "in_app_only" as const };
+    }
     const [preference] = await db.select().from(saasNotificationPreferences)
       .where(and(eq(saasNotificationPreferences.userId, row.userId), eq(saasNotificationPreferences.category, row.purpose))).limit(1);
     const parsed = preference?.deliveryPolicy ? notificationPolicySchema.safeParse(preference.deliveryPolicy) : null;

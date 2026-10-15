@@ -41,6 +41,10 @@ export const V9_FEATURES = {
     "Interruption policy",
     "Canonical notifications with dedupe and quiet hours.",
   ],
+  notification_channels_v9: [
+    "Bound notification channels",
+    "Explicit own-account Slack/Teams delivery through current Native identity and receipt owners.",
+  ],
   customer_feedback_v9: [
     "Customer Feedback",
     "Native company-scoped product feedback with safe-context defaults.",
@@ -72,7 +76,8 @@ type Prerequisite =
   | "agent_packages_v7"
   | "core_stewards_v7"
   | "free_core_commercial_v7"
-  | "server_onboarding_v6";
+  | "server_onboarding_v6"
+  | "transactional_email_v6";
 export const V9_FEATURE_DEPENDENCIES: Record<
   V9FeatureKey,
   readonly Prerequisite[]
@@ -86,6 +91,7 @@ export const V9_FEATURE_DEPENDENCIES: Record<
   action_cards_v9: ["experience_projection_v9"],
   maintenance_autopilot_v9: ["experience_projection_v9", "core_stewards_v7"],
   notification_policy_v9: [],
+  notification_channels_v9: ["notification_policy_v9", "transactional_email_v6"],
   customer_feedback_v9: [],
   experience_analytics_v9: [],
   ag_ui_v9: ["action_cards_v9"],

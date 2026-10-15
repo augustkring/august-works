@@ -1,3 +1,4 @@
+import { notificationChannelCategorySchema, notificationChannelUpdateSchema } from "@paperclipai/shared";
 import { v7FeatureEnabled, v9FeatureEnabled, activationCommandSchema } from "@paperclipai/shared";
 import { notificationPreferenceProposalService } from "../services/notification-preference-proposals.js";
 import { notificationService } from "../services/notifications/notifications.js";
@@ -5,7 +6,7 @@ import { activationService } from "../services/saas/activation.js";
 import { activationConnectionConsentService } from "../services/saas/activation-connection-consent.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { z } from "zod";
-import { Router, type Request } from "express";
+import { Router, type Request, type Response } from "express";
 import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import {
   authSecurityEvents,
@@ -36,7 +37,7 @@ import {
   type PermissionKey,
   type V6FeatureKey,
 } from "@paperclipai/shared";
-import { conflict, forbidden, notFound, unauthorized } from "../errors.js";
+import { badRequest, conflict, forbidden, notFound, unauthorized } from "../errors.js";
 import { accessService } from "../services/access.js";
 import { logActivity } from "../services/activity-log.js";
 import type { SaasPlatform } from "../services/saas/platform.js";
@@ -308,6 +309,30 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
     res.setHeader("Cache-Control","no-store");
     res.json(await notificationPreferenceProposalService(db).apply(req.actor,companyId,id,req.body,
       tx=>notificationService(tx,platform.email)));
+  });
+  // Native own-account preferences. No endpoint, text, grant or actor can be
+  // supplied by the caller; every target and receipt stays with its owner.
+  async function notificationChannelContext(req: Request, res: Response) {
+    const companyId = z.uuid().parse(req.params.companyId);
+    const category = notificationChannelCategorySchema.parse(req.params.category);
+    if (typeof req.query.expectedUserId !== "string") throw badRequest("Current account identity is required");
+    const actor = await company(req, companyId);
+    await gate("transactional_email_v6");
+    res.setHeader("Cache-Control", "no-store");
+    return { companyId, category, userId: actor.id };
+  }
+  router.get("/companies/:companyId/notifications/channel-preferences/:category", async (req, res) => {
+    const context = await notificationChannelContext(req, res);
+    res.json(await platform.notifications.channelPolicy.view(context.companyId, context.userId, context.category));
+  });
+  router.post("/companies/:companyId/notifications/channel-preferences/:category", async (req, res) => {
+    const context = await notificationChannelContext(req, res);
+    res.json(await platform.notifications.channelPolicy.update(context.companyId, context.userId, context.category,
+      notificationChannelUpdateSchema.parse(req.body)));
+  });
+  router.get("/companies/:companyId/notifications/channel-preferences/:category/receipts/:requestId", async (req, res) => {
+    const context = await notificationChannelContext(req, res);
+    res.json(await platform.notifications.channelPolicy.receipt(context.companyId, context.userId, context.category, z.uuid().parse(req.params.requestId)));
   });
   router.get("/saas/account/notification-preferences", async (req, res) => {
     const actor = await user(req);

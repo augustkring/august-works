@@ -3487,6 +3487,13 @@
       "when": 1791999708009,
       "tag": "0499_native_human_task_sources",
       "breakpoints": true
+    },
+    {
+      "idx": 500,
+      "version": "7",
+      "when": 1792041243233,
+      "tag": "0500_bound_notification_channels",
+      "breakpoints": true
     }
   ]
 }

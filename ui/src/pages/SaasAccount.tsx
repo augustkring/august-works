@@ -1,3 +1,5 @@
+import { Fragment } from "react";
+import { NotificationChannelSettings } from "../components/NotificationChannelSettings";
 import { useCompany } from "@/context/CompanyContext";
 import { useState, useRef, useEffect } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
@@ -211,9 +213,13 @@ function AccountSecurityScope({ principal, companyId }: { principal: string; com
           onChange={event => preference.mutate({ category: item.category, emailEnabled: event.target.checked })} />
       </label>)}
     </section>}
-    {policySeen && policyItems.map(item => <NotificationPolicySettings key={item.category} item={item} companyId={companyId ?? ""} principal={principal}
-      sourceReady={preferencesVisible && !interruptionPolicy.query.isFetching} sourceQueryKey={preferenceKey}
-      onSaved={() => { if (preferencesCurrent()) void preferences.refetch(); }} />)}
+    {policySeen && policyItems.map(item => <Fragment key={item.category}>
+      <NotificationPolicySettings item={item} companyId={companyId ?? ""} principal={principal}
+        sourceReady={preferencesVisible && !interruptionPolicy.query.isFetching} sourceQueryKey={preferenceKey}
+        onSaved={() => { if (preferencesCurrent()) void preferences.refetch(); }} />
+      {item.category !== "security" && <NotificationChannelSettings companyId={companyId ?? ""} principal={principal} category={item.category}
+        sourceReady={preferencesVisible && !interruptionPolicy.query.isFetching} sourceQueryKey={preferenceKey} />}
+    </Fragment>)}
   </section>;
 }
 

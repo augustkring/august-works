@@ -1,4 +1,5 @@
 import { sql } from "drizzle-orm";
+import { saasNotifications } from "./saas_lifecycle.js";
 import {
   boolean,
   check,
@@ -336,6 +337,7 @@ export const chatIdentityLinks = pgTable(
       table.companyId,
       table.paperclipUserId,
     ),
+    uniqueIndex("chat_identity_links_company_id_uq").on(table.companyId, table.id),
     uniqueIndex("chat_identity_links_endpoint_principal_uq").on(
       table.endpointId,
       table.principalId,
@@ -648,6 +650,7 @@ export const chatActions = pgTable(
       .notNull()
       .references(() => companies.id, { onDelete: "cascade" }),
     endpointId: uuid("endpoint_id").notNull(),
+    notificationId: uuid("notification_id"),
     deliveryId: uuid("delivery_id").references(() => chatDeliveries.id, {
       onDelete: "set null",
     }),
@@ -669,6 +672,16 @@ export const chatActions = pgTable(
       .defaultNow(),
   },
   (table) => [
+    foreignKey({
+      columns: [table.companyId, table.notificationId],
+      foreignColumns: [saasNotifications.companyId, saasNotifications.id],
+      name: "chat_actions_company_notification_fk",
+    }).onDelete("cascade"),
+    check("chat_actions_notification_source_ck", sql`(
+      ${table.notificationId} is null and (${table.payload}->>'authorizationMode') is distinct from 'notification'
+    ) or (
+      ${table.notificationId} is not null and ${table.kind} = 'provider_effect' and (${table.payload}->>'authorizationMode') is not distinct from 'notification'
+    )`),
     uniqueIndex("chat_actions_provider_action_uq").on(
       table.endpointId,
       table.providerActionId,

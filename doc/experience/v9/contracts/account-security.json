@@ -11,7 +11,8 @@
   "customerOutcome": "Review current personal sessions, organization deletion receipts and notification preferences, and explicitly request deletion through the original Native account owner without renewing an unknown request.",
   "entryConditions": [
     "Current successful nonimplicit original session; matching user/session and current original SaaS capabilities.",
-    "Each private list requires a fresh original Native read after an account epoch changes. Notification policy edits also require the existing effective notification_policy_v9 flag and current preference read."
+    "Each private list requires a fresh original Native read after an account epoch changes. Notification policy edits also require the existing effective notification_policy_v9 flag and current preference read.",
+    "Optional linked-chat delivery requires the effective notification_channels_v9 flag, current Original notification preferences and the own verified private Slack/Teams identity/conversation proof. Email settings do not grant chat access."
   ],
   "exitConditions": [
     "Navigate away; personal deletion recovery retains only its principal and original UUID in bounded per-tab Core storage.",
@@ -22,14 +23,15 @@
     "supportingCopy": "Session revocation signs a device out. Account deletion requires current password, literal confirmation and export acknowledgement. An unresolved request is not proof that no effect occurred.",
     "customerTerms": [
       "Sessions",
-      "Email preferences",
+      "Notification preferences",
       "Delete account",
       "Retry the same deletion request"
     ],
     "displayedState": [
       "Current Native session metadata, personal preferences and owned organization deletion status.",
       "No private fields or old rows while current access is checking or refused.",
-      "A recovered locator never displays a receipt, restores a password or triggers a mutation."
+      "A recovered locator never displays a receipt, restores a password or triggers a mutation.",
+      "A company-bound channel preference receipt confirms only the saved version, never message delivery. Missing destinations remain unavailable without email fallback; an uncertain save retains its exact Original request for retry or receipt lookup."
     ]
   },
   "inputs": [

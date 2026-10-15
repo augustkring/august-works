@@ -1220,7 +1220,7 @@
     "retryDeletion": "Gentag samme sletteanmodning",
     "deletionUnconfirmed": "Din sletteanmodning er ikke bekræftet. Gentag samme anmodning; oplysningerne og anmodningsnøglen bevares for denne konto. Hvis din session er afsluttet, kan du kontrollere kontoadgangen på den normale login-side.",
     "deletionFailed": "Kontosletningen blev afvist. Kontroller din adgangskode, organisationsejerskab og faktureringsansvar, før du prøver igen.",
-    "preferencesHeading": "E-mailpræferencer",
+    "preferencesHeading": "Notifikationsindstillinger",
     "preferencesExplanation": "Sikkerhedsmails forbliver aktiveret. Opdateringer i appen er stadig tilgængelige, når valgfrie e-mails er deaktiveret.",
     "preferencesLoading": "Henter aktuelle e-mailpræferencer…",
     "preferencesFailed": "De aktuelle e-mailpræferencer kunne ikke bekræftes. Opdater dem, før du gemmer.",
@@ -2934,5 +2934,25 @@
       "succeededIncludingRecovery": "Lykkedes, inkl. genoprettelse",
       "successRate": "Succesrate"
     }
+  },
+  "notificationChannels": {
+    "language": "Sprog i beskeder til tilknyttet chat",
+    "heading": "{{category}} · levering i tilknyttet chat",
+    "loading": "Tjekker dit aktuelle leveringsvalg…",
+    "unavailable": "Dit leveringsvalg er ikke tilgængeligt. Tjek din konto, og prøv igen.",
+    "boundary": "Du kan kun vælge en bekræftet privat chat, der er tilknyttet din konto. Den modtager en besked om en kontoopdatering og et loginlink uden opgaveindhold, prompts, dokumenter eller legitimationsoplysninger. Tidspunkter og stilleperioder gælder stadig. Sikkerhedsbeskeder beholder deres påkrævede levering.",
+    "destinationUnavailable": "Den gemte private modtager er ikke tilgængelig. Opdateringer bliver i August Works og omdirigeres ikke til e-mail.",
+    "changed": "Dit valg eller din modtager er ændret. Gennemgå den aktuelle indstilling, før du gemmer.",
+    "reviewCurrent": "Gennemgå aktuel indstilling",
+    "destination": "Hvor fremtidige opdateringer kommer frem",
+    "default": "Brug indstillinger for e-mail og i appen",
+    "limited": "Listen viser op til 30 aktuelle private modtagere.",
+    "noDestination": "Ingen bekræftet privat chat er tilgængelig. Forbind og bekræft først din chatkonto.",
+    "saved": "Version {{version}} af dit valg er gemt. Det bekræfter ikke, at en besked er leveret.",
+    "unknown": "Denne gemning er uafklaret. Tjek det gemte valg, eller gentag samme gemning, før du ændrer noget andet.",
+    "failed": "Dit valg kunne ikke bekræftes. Det, du har valgt, er bevaret.",
+    "checkOriginal": "Tjek gemt valg",
+    "retrySame": "Gentag samme gemning",
+    "save": "Gem leveringsvalg"
   }
 }

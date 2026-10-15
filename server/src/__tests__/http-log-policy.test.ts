@@ -7,6 +7,17 @@ import {
   shouldSilenceHttpSuccessLog,
 } from "../middleware/http-log-policy.js";
 
+it("protects bound notification destinations, exact receipts and malformed/refused HTTP methods", () => {
+  for (const company of ["", "PRIVATE-company"]) for (const suffix of ["", "/work_update", "/work_update/receipts/PRIVATE-request", "/unknown"])
+    for (const method of ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]) {
+      const url = `/api/companies/${company}/notifications/channel-preferences${suffix}?expectedUserId=PRIVATE-account`;
+      expect(isPrivateExperienceHttpRequest(method, url)).toBe(true);
+      expect(isSecretSensitiveHttpRequest(method, url)).toBe(true);
+      expect(privateExperienceLogUrl(url)).toBe("/api/companies/:companyId/notifications/channel-preferences/:operation");
+    }
+  expect(isPrivateExperienceHttpRequest("GET", "/api/companies/id/notifications/channel-preferences-other")).toBe(false);
+});
+
 it("protects Original package setup and refused methods without classifying adjacent namespaces", () => {
   for (const company of ["", "PRIVATE-company"])
     for (const namespace of ["agent-packages", "agent-package-options", "agent-package-installations", "agent-package-evaluations", "agent-package-update-proposals"])

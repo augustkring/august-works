@@ -8,6 +8,13 @@ import {
 import { instanceExperimentalSettingsSchema } from "./validators/instance.js";
 
 describe("V9 admission", () => {
+  it("enables bound notification delivery only through its explicit rollout and effective prerequisites", () => {
+    const previous = { notification_policy_v9: true, transactional_email_v6: true, saas_deployment_profile_v6: true };
+    expect(v9FeatureEnabled(previous, "notification_channels_v9")).toBe(false);
+    expect(v9FeatureEnabled({ ...previous, notification_channels_v9: true }, "notification_channels_v9")).toBe(true);
+    for (const prerequisite of ["notification_policy_v9", "transactional_email_v6", "saas_deployment_profile_v6"])
+      expect(v9FeatureEnabled({ ...previous, notification_channels_v9: true, [prerequisite]: false }, "notification_channels_v9")).toBe(false);
+  });
   it("keeps predecessor settings compatible and every new capability off", () => {
     const settings = instanceExperimentalSettingsSchema.parse({});
     expect(

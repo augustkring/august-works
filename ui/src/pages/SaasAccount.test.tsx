@@ -182,7 +182,7 @@ it("hides private cached data after an actual session failure and exposes an ori
 it("uses Danish account labels without changing the Native API subject", async () => {
   await mount(); await act(async () => { await i18n.changeLanguage("da"); });
   expect(host.querySelector("h1")?.textContent).toBe("Kontosikkerhed");
-  expect(host.textContent).toContain("Tilbagekald session"); expect(host.textContent).toContain("E-mailpræferencer");
+  expect(host.textContent).toContain("Tilbagekald session"); expect(host.textContent).toContain("Notifikationsindstillinger");
   expect(saasApi.sessions).toHaveBeenCalledWith("owner", expect.any(AbortSignal));
 });
 

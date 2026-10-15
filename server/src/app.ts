@@ -1,3 +1,4 @@
+import { purgeExpiredNotificationChannelCommands } from "./services/notifications/channel-retention.js";
 import { customerSupportRoutes } from "./routes/customer-support.js";
 import { maintenanceHistoryRoutes } from "./routes/maintenance-history.js";
 import { experienceMeasuresRoutes } from "./routes/experience-measures.js";
@@ -656,6 +657,7 @@ export async function createApp(
     pluginWorkerManager: workerManager,
   });
   const chatChannels = chatChannelService(db, {
+    notificationDelivery: opts.saasPlatform?.notifications?.channelDelivery,
     deferWebhookProcessing: true,
     heartbeat: connectionIntentHeartbeat,
     publicBaseUrl: opts.authPublicBaseUrl,
@@ -1299,7 +1301,10 @@ export async function createApp(
   };
   const chatReconciliation = createChatReconciliationCoordinator({
     reconcileProviderRuntimes: () => chatChannels.reconcileProviderRuntimes(),
-    processPendingDeliveries: () => chatChannels.processPendingDeliveries(),
+    processPendingDeliveries: async () => {
+      await purgeExpiredNotificationChannelCommands(db);
+      return chatChannels.processPendingDeliveries();
+    },
     processFailedGitHubWebhookDeliveries: () =>
       chatChannels.processFailedGitHubWebhookDeliveries(),
     projectRunMilestones: () =>

@@ -1,3 +1,5 @@
+import { notificationChannelPolicy } from "./channel-policy.js";
+import { notificationChannelDelivery } from "./channel-delivery.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { conflict } from "../../errors.js";
 import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
@@ -8,12 +10,13 @@ import {
   companyMemberships,
   saasNotifications,
   saasNotificationPreferences,
+  notificationChannelPreferences,
   type Db,
 } from "@paperclipai/db";
 import { z } from "zod";
 import { badRequest, forbidden, notFound } from "../../errors.js";
 import type { transactionalEmail, EmailDb } from "./transactional-email.js";
-import { notificationPreferenceUpdateSchema, notificationPolicySchema, v9FeatureEnabled } from "@paperclipai/shared";
+import { notificationPreferenceUpdateSchema, notificationPolicySchema, v9FeatureEnabled, type PublicOriginConfig } from "@paperclipai/shared";
 import { routeNotification } from "./interruption-policy.js";
 import { instanceSettingsService } from "../instance-settings.js";
 export const NOTIFICATION_CATEGORIES = [
@@ -42,6 +45,7 @@ export async function notificationPreferenceBaseline(db:Db,userId:string,categor
 export function notificationService(
   db: Db,
   email: ReturnType<typeof transactionalEmail>,
+  origins?: PublicOriginConfig,
 ) {
   async function membership(
     companyId: string,
@@ -133,6 +137,14 @@ export function notificationService(
           ),
         )
         .limit(1);
+      // A bound channel is an explicit company-specific choice. Unavailable or
+      // withdrawn transport stays in-app; it must not fall back to email.
+      if (category !== "security") {
+        const [bound] = await writer.select({ channel: notificationChannelPreferences.channel }).from(notificationChannelPreferences)
+          .where(and(eq(notificationChannelPreferences.companyId, companyId), eq(notificationChannelPreferences.userId, recipient.userId),
+            eq(notificationChannelPreferences.category, category))).limit(1);
+        if (bound && bound.channel !== "default") continue;
+      }
       const delivery=routeNotification({category,emailEnabled:preference?.emailEnabled!==false,policy:preference?.deliveryPolicy,now:new Date()});
       if (recipient.emailVerified && delivery.channel==="email")
         await email.enqueue(
@@ -357,6 +369,8 @@ export function notificationService(
     });
   }
   return {
+    channelPolicy: notificationChannelPolicy(db),
+    channelDelivery: origins ? notificationChannelDelivery(db, origins) : undefined,
     notifyCompany,
     processWorkUpdate,
     list,

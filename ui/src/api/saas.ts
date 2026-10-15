@@ -1,3 +1,5 @@
+import { notificationChannelPreferenceViewSchema, notificationChannelPreferenceReceiptSchema,
+  notificationChannelUpdateSchema, type NotificationChannelCategory, type NotificationChannelUpdate } from "@paperclipai/shared";
 import { nativeSupportReviewSchema } from "@paperclipai/shared";
 import type {
   RuntimeVersionCandidate,
@@ -297,6 +299,28 @@ export const saasApi = {
       ),
       {},
     ),
+  notificationChannelPreference: async (companyId: string, userId: string, category: NotificationChannelCategory, signal?: AbortSignal) => {
+    const value = notificationChannelPreferenceViewSchema.parse(await api.get<unknown>(
+      scoped(companyPath(companyId) + "/notifications/channel-preferences/" + category, userId), { signal, cache: "no-store" }));
+    if (value.companyId !== companyId || value.userId !== userId || value.category !== category) throw new Error("The current notification policy is unavailable");
+    return value;
+  },
+  updateNotificationChannel: async (companyId: string, userId: string, category: NotificationChannelCategory, input: NotificationChannelUpdate) => {
+    const command = notificationChannelUpdateSchema.parse(input);
+    const value = notificationChannelPreferenceReceiptSchema.parse(await api.post<unknown>(
+      scoped(companyPath(companyId) + "/notifications/channel-preferences/" + category, userId), command));
+    if (value.companyId !== companyId || value.userId !== userId || value.category !== category || value.requestId !== command.requestId ||
+      value.version !== command.expectedVersion + 1 || value.channel !== command.choice.channel)
+      throw new Error("The Original notification preference receipt is unavailable");
+    return value;
+  },
+  notificationChannelReceipt: async (companyId: string, userId: string, category: NotificationChannelCategory, requestId: string, signal?: AbortSignal) => {
+    const value = notificationChannelPreferenceReceiptSchema.nullable().parse(await api.get<unknown>(
+      scoped(companyPath(companyId) + "/notifications/channel-preferences/" + category + "/receipts/" + encodeURIComponent(requestId), userId), { signal, cache: "no-store" }));
+    if (value && (value.companyId !== companyId || value.userId !== userId || value.category !== category || value.requestId !== requestId))
+      throw new Error("The Original notification preference receipt is unavailable");
+    return value;
+  },
   notificationPreferences: (userId: string, signal?: AbortSignal) =>
     api.get<SaasNotificationPreference[]>(
       scoped("/saas/account/notification-preferences", userId),

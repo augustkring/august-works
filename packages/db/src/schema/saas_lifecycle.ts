@@ -134,6 +134,7 @@ export const saasNotifications = pgTable(
       .defaultNow(),
   },
   (t) => [
+    uniqueIndex("saas_notifications_company_id_uq").on(t.companyId, t.id),
     uniqueIndex("saas_notifications_user_dedupe_uq").on(t.userId, t.dedupeKey),
     index("saas_notifications_user_idx").on(t.companyId, t.userId, t.createdAt),
     check(

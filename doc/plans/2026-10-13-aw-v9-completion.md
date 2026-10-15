@@ -2824,3 +2824,48 @@ current UI/CLI continuation. Their full typecheck/build stages did pass.
 See [the evidence and exact scope](2026-10-15-aw-v9-chart-host-and-contrast.md).
 The full current browser repeat and Native aggregates remain pending. Source
 completion, all 70 release evidence rows and R0 remain open. No PR/push.
+
+
+### 83 — Bind optional account notices to verified private chat through the Original queue
+
+Implement V9-016 as an explicit default-off capability, dependent on the existing
+notification policy and transactional-notification gates. Add company-bound own
+Slack/Teams choices, an explicit English/Danish notice language and immutable
+idempotent preference receipts. The account UI preserves an uncertain command,
+rechecks current session/capability/source, rejects foreign API responses and
+keeps unavailable destinations without email fallback. Rename the section to
+Notification preferences because it now contains both email and linked-chat choices.
+
+Migration 0500 adds scoped child preferences, command metadata and delivery/digest
+membership with database identity/version/receipt guards. Source withdrawal uses
+column-specific SET NULL and preserves the company and monotonic version. Extend
+the existing provider-effect owner with a canonical account-notice FK and a
+separately admitted mode. Recheck the same current Native user, endpoint,
+credential/runtime fence, private identity and timing before its existing durable
+transport claim. A preference neither grants access nor starts a Task. Notices
+contain only a fixed sentence and allowlisted application link, and reuse the
+existing unknown-acceptance quarantine. Email is suppressed at creation and send
+preflight for a bound choice; mandatory security retains its original owner.
+Command metadata expiry remains active independently of channel rollout.
+
+The new fairness test reproduced a deferred digest starving a ready notice; the
+received-effect selector now respects retryAt. Protect the new private HTTP family
+including rejected methods and redact notification reconciliation diagnostics to
+fixed codes. Fifteen focused real-PG/Native queue cases pass, including exact
+receipt recovery, both provider proofs, HTTP scope, forged receipts, expiry,
+reconfirmation, withdrawal, digest grouping, fairness and unknown acceptance with
+one transport attempt. Filtered historical C7 tests do not count as passes.
+See [the implementation and qualification plan](2026-10-15-aw-v9-bound-notification-channels.md)
+and [the data-purpose contract](../experience/v9/notification-channels-data-processing.md).
+All 61 renewed contract/UI/log-policy cases, token gates and source coverage pass.
+The release gate deliberately fails; full final checkpoint verification remains pending.
+
+Baseline verification has also completed: checkpoint81 UI 804 suites/7,941 tests,
+CLI 63/502, general0 456 passed+4 skipped suites/6,606 passed+68 skipped cases and
+general1 459+3 suites/9,571+22 cases, plus current chat partitions 1/3 each 261 and
+retained partitions 0/2 on production-equivalent checkpoint72. Checkpoint80's other
+12 workspaces passed 4,001 cases with 12 explicit skips; serialized continuations
+retain their exact earlier checkpoint/failure/correction provenance. All 90 V9
+production-browser cases passed checkpoint82. None of this is represented as a
+full current pass of the later notification changes. No PR/push. Release remains
+R0 with all 70 evidence rows open and sourceComplete=false.

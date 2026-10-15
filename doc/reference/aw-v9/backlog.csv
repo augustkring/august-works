@@ -14,7 +14,7 @@ V9-012,2179,unified ActionCard renderer base,in_progress
 V9-013,2181,attention precision + critical recall/miss/late/duplicate metrics + dismiss reason telemetry,in_progress
 V9-014,2183,notification preference schema extension,in_progress
 V9-015,2185,quiet hours/digest scheduler,in_progress
-V9-016,2187,Slack/Teams/email delivery policy adapters,not_started
+V9-016,2187,Slack/Teams/email delivery policy adapters,in_progress
 V9-017,2189,notification privacy/redaction tests,in_progress
 V9-018,2191,onboarding schema migration,in_progress
 V9-019,2193,activation state machine/service,in_progress

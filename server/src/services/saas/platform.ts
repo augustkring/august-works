@@ -64,7 +64,7 @@ export function saasPlatform(
     origins,
     mailgunProvider(config),
   );
-  const notifications = notificationService(db, email);
+  const notifications = notificationService(db, email, origins);
   const invitations = saasInvitationService(db, config, email);
   const billing = billingService(
     db,
