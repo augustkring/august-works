@@ -1,3 +1,4 @@
+import { preferredScrollBehavior } from "../lib/scroll-behavior";
 import { AgentIdentity } from "./AgentIdentity";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { memo, useEffect, useMemo, useRef, useState, type ChangeEvent } from "react";
@@ -875,7 +876,7 @@ export function CommentThread({
     if (el) {
       hasScrolledRef.current = true;
       setHighlightCommentId(commentId);
-      el.scrollIntoView({ behavior: "smooth", block: "center" });
+      el.scrollIntoView({ behavior: preferredScrollBehavior(), block: "center" });
       // Clear highlight after animation
       const timer = setTimeout(() => setHighlightCommentId(null), 3000);
       return () => clearTimeout(timer);

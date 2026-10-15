@@ -3065,6 +3065,28 @@ span.paperclip-mention-chip[data-mention-kind="external-object"] {
   .announcement-well { animation: none; }
 }
 
+/* Shared primitives (dialogs, sheets, spinners and Tailwind utilities) also
+   honor reduced motion. Keep a finite animation lifecycle so presence owners
+   can finish teardown on animationend; remove loops, delays and smooth CSS
+   scrolling. Existing static alternatives above retain their final states. */
+:root {
+  --motion-reduced-lifecycle: 0.01ms;
+}
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after {
+    animation-duration: var(--motion-reduced-lifecycle) !important;
+    animation-delay: 0ms !important;
+    animation-iteration-count: 1 !important;
+    scroll-behavior: auto !important;
+  }
+  /* Autofill's long background transition prevents a browser color flash;
+     it is not movement and must retain its existing browser workaround. */
+  *:not(:-webkit-autofill), *::before, *::after {
+    transition-duration: var(--motion-reduced-lifecycle) !important;
+    transition-delay: 0ms !important;
+  }
+}
+
 /* Native disclosure marker is replaced by the connection-health chevron. */
 .chat-connection-health-summary::-webkit-details-marker {
   display: none;

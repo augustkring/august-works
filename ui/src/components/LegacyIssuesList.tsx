@@ -1,3 +1,4 @@
+import { preferredScrollBehavior } from "../lib/scroll-behavior";
 import { AgentIdentity } from "@/components/AgentIdentity";
 import { startTransition, useDeferredValue, useEffect, useMemo, useState, useCallback, useRef } from "react";
 import type { ReactNode } from "react";
@@ -2073,7 +2074,7 @@ export function IssuesList({
                         event.stopPropagation();
                         const target = document.getElementById(`issue-workflow-row-${firstVisibleBlockerChip.blockerId}`);
                         if (!target) return;
-                        target.scrollIntoView({ behavior: "smooth", block: "nearest" });
+                        target.scrollIntoView({ behavior: preferredScrollBehavior(), block: "nearest" });
                         target.focus?.();
                       }}
                       className="inline-flex items-center rounded-full border border-amber-400/45 bg-amber-50/60 px-1.5 py-0.5 text-(length:--text-nano) font-medium text-amber-700 hover:bg-amber-100/80 dark:border-amber-300/35 dark:bg-amber-400/10 dark:text-amber-300"

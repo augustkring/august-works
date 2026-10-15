@@ -4,7 +4,7 @@ import { cardToBlockKit } from "@chat-adapter/slack";
 import { cardToAdaptiveCard } from "@chat-adapter/teams";
 import { projectSafeChatPublication } from "../chat-publication-projection.js";
 import { safeCardForPublication } from "../chat-card-rendering.js";
-import type { ExperienceChatCardContext } from "@paperclipai/shared";
+import { EXPERIENCE_CARD_KINDS, type ExperienceChatCardContext } from "@paperclipai/shared";
 
 const id = randomUUID(), companyId = randomUUID();
 const context: ExperienceChatCardContext = { kind: "question", whyYou: "Svar venligst på spørgsmålet", consequence: "Afventer dit svar",
@@ -15,6 +15,25 @@ const payload = (experience = context) => projectSafeChatPublication({ classific
     experience, actions: [{ type: "callback", actionId: "pcq:test", label: "Høj" }] } } });
 
 describe("V9 semantic content through the installed Slack and Teams adapters", () => {
+  describe.each(["slack", "microsoft-teams"] as const)("complete read-only vocabulary on %s", provider => {
+    it.each(EXPERIENCE_CARD_KINDS)("preserves %s meaning and fallback without granting a callback", kind => {
+      const semantic = { ...context, kind, freshness: "partial" as const };
+      const publication = projectSafeChatPublication({ classification: "external", source: "issue_interaction",
+        text: `Original ${kind}`, interaction: { id, card: { kind: "status", title: `Original ${kind}`,
+          body: "Current source needs review", experience: semantic } } });
+      expect(publication.card?.experience).toEqual(semantic);
+      expect(publication.card?.actions ?? []).toEqual([]);
+      const card = safeCardForPublication(publication, provider)!;
+      const rendered = JSON.stringify(provider === "slack" ? cardToBlockKit(card) : cardToAdaptiveCard(card));
+      for (const text of [`Original ${kind}`, "Current source needs review", semantic.whyYou!, semantic.consequence!, "pending"]) {
+        expect(rendered).toContain(text);
+        expect(publication.text).toContain(text);
+      }
+      expect(rendered).not.toContain(companyId);
+      expect(rendered).not.toContain(id);
+      expect(rendered).not.toContain("pcq:");
+    });
+  });
   it.each(["slack", "microsoft-teams"] as const)("preserves semantic order, Source identity and Original actions on %s", provider => {
     const p = payload(), card = safeCardForPublication(p, provider)!;
     const rendered = JSON.stringify(provider === "slack" ? cardToBlockKit(card) : cardToAdaptiveCard(card));
@@ -40,6 +59,17 @@ describe("V9 semantic content through the installed Slack and Teams adapters", (
     const serialized = JSON.stringify(p);
     expect(serialized).not.toContain("PRIVATE_CANARY"); expect(serialized).not.toContain("PRIVATE_REASONING");
     expect(serialized).not.toContain("@channel");
+  });
+  it("includes only sanitized title/body text in fallback and avoids exact duplicate sections", () => {
+    const publication = projectSafeChatPublication({ classification: "external", source: "issue_interaction", text: "Summary",
+      interaction: { id, card: { kind: "status", title: "token: PRIVATE_TITLE_CANARY",
+        body: "<analysis>PRIVATE_BODY_CANARY</analysis>Useful summary", experience: context } } });
+    expect(publication.text).toContain("Useful summary");
+    expect(publication.text).not.toContain("PRIVATE_TITLE_CANARY");
+    expect(publication.text).not.toContain("PRIVATE_BODY_CANARY");
+    const duplicate = projectSafeChatPublication({ classification: "external", source: "issue_interaction", text: "Summary",
+      interaction: { id, card: { kind: "status", title: "Summary", body: "Summary", experience: context } } });
+    expect(duplicate.text.match(/Summary/g)).toHaveLength(1);
   });
   it.each(["stale", "unavailable"] as const)("withholds callback actions for %s cards", freshness => {
     expect(() => payload({ ...context, freshness })).toThrow(/callback/);

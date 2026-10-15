@@ -68,14 +68,14 @@ V9-066,2287,design token audit/consolidation,not_started
 V9-067,2289,Storybook V9 state matrix,in_progress
 V9-068,2291,premium shell typography/layout refinement,not_started
 V9-069,2293,card/surface reduction pass,not_started
-V9-070,2295,motion/reduced-motion pass,not_started
+V9-070,2295,motion/reduced-motion pass,in_progress
 V9-071,2297,dark-mode recomposition audit,not_started
 V9-072,2299,`.production`/legacy parity inventory,in_progress
 V9-073,2301,migrate canonical Agents/Skills/Costs surfaces,not_started
 V9-074,2303,retire redundant onboarding variants,not_started
 V9-075,2305,retire streamlined legacy flag after migration,not_started
 V9-076,2307,route-level lazy loading/performance pass,in_progress
-V9-077,2309,long-session memory/render performance,not_started
+V9-077,2309,long-session memory/render performance,in_progress
 V9-078,2311,mobile critical action surface,in_progress
 V9-079,2313,WCAG automated gates,in_progress
 V9-080,2315,keyboard/screen-reader critical journey tests,in_progress

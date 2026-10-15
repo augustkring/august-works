@@ -60,6 +60,9 @@ const MAX_TTL_MS = 15000;
 const MAX_TOASTS = 5;
 const DEDUPE_WINDOW_MS = 3500;
 const DEDUPE_MAX_AGE_MS = 20000;
+// Bound burst traffic independently of wall-clock expiry. Oldest keys may be
+// forgotten at capacity; this is presentation deduplication, never authority.
+const MAX_DEDUPE_KEYS = 512;
 
 const ToastStateContext = createContext<ToastItem[] | null>(null);
 const ToastActionsContext = createContext<ToastActionsContextValue | null>(null);
@@ -118,10 +121,14 @@ export function ToastProvider({ children }: { children: ReactNode }) {
       }
 
       const lastSeen = dedupeRef.current.get(dedupeKey);
-      if (lastSeen && now - lastSeen < DEDUPE_WINDOW_MS) {
+      if (lastSeen !== undefined && now - lastSeen < DEDUPE_WINDOW_MS) {
         return null;
       }
+      dedupeRef.current.delete(dedupeKey);
       dedupeRef.current.set(dedupeKey, now);
+      while (dedupeRef.current.size > MAX_DEDUPE_KEYS) {
+        dedupeRef.current.delete(dedupeRef.current.keys().next().value!);
+      }
 
       const id = input.id ?? generateToastId();
       clearTimer(id);
@@ -145,6 +152,11 @@ export function ToastProvider({ children }: { children: ReactNode }) {
         dismissToast(id);
       }, ttlMs);
       timersRef.current.set(id, timeout);
+      // The state keeps only the newest five items. Retire timers for the same
+      // evicted items immediately, including multiple pushes in one React batch.
+      while (timersRef.current.size > MAX_TOASTS) {
+        clearTimer(timersRef.current.keys().next().value!);
+      }
       return id;
     },
     [clearTimer, dismissToast],

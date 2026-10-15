@@ -1049,6 +1049,36 @@ describe("IssueChatThread", () => {
     requestAnimationFrameMock.mockRestore();
   });
 
+  it("forgets measured rows removed from a still-mounted long thread", () => {
+    const root = createRoot(container);
+    const frames = vi.spyOn(window, "requestAnimationFrame").mockImplementation(callback => { callback(0); return 0; });
+    const original = issueChatLongThreadComments.slice(0, 200);
+    function render(comments: typeof original) {
+      act(() => root.render(<MemoryRouter><IssueChatThread comments={comments} linkedRuns={[]} timelineEvents={[]}
+        liveRuns={[]} currentUserId="user-board" onAdd={async () => {}} showComposer={false}
+        showJumpToLatest={false} enableLiveTranscriptPolling={false} /></MemoryRouter>));
+    }
+    const rows = () => container.querySelectorAll<HTMLDivElement>('[data-testid="issue-chat-thread-virtual-row"]');
+    const secondOffset = () => Number(rows()[1]!.style.transform.match(/translateY\(([-\d.]+)px\)/)?.[1]);
+    try {
+      render(original);
+      Object.defineProperty(rows()[0], "getBoundingClientRect", { configurable: true,
+        value: () => ({ height: 800 }) });
+      act(() => rows()[0]!.dispatchEvent(new MouseEvent("click", { bubbles: true })));
+      expect(secondOffset()).toBeGreaterThanOrEqual(800);
+      // Replace the canonical snapshot, then reintroduce the original IDs.
+      // A lifetime measurement cache incorrectly restores the removed height.
+      render(original.map(comment => ({ ...comment, id: `replacement-${comment.id}` })));
+      render(original);
+      expect(rows().length).toBeGreaterThan(1);
+      expect(secondOffset()).toBeGreaterThan(0);
+      expect(secondOffset()).toBeLessThan(800);
+    } finally {
+      act(() => root.unmount());
+      frames.mockRestore();
+    }
+  });
+
   it("scrolls loaded hash targets through the virtualized message index when initial hash scrolling is enabled", () => {
     const root = createRoot(container);
     const targetComment = issueChatLongThreadComments.at(-1);

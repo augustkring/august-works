@@ -2,7 +2,7 @@
 
 import { act } from "react";
 import { createRoot } from "react-dom/client";
-import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ToastProvider, useToastActions, useToastState } from "./ToastContext";
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -17,7 +17,40 @@ describe("ToastContext", () => {
   });
 
   afterEach(() => {
+    vi.useRealTimers();
     document.body.innerHTML = "";
+  });
+
+  it("bounds a long-session burst and cleans up every remaining timer", () => {
+    vi.useFakeTimers();
+    vi.setSystemTime(0);
+    const root = createRoot(container);
+    let actions!: ReturnType<typeof useToastActions>;
+    function Probe() {
+      actions = useToastActions();
+      return <div>{useToastState().map(toast => toast.title).join(",")}</div>;
+    }
+    act(() => root.render(<ToastProvider><Probe /></ToastProvider>));
+    act(() => {
+      for (let index = 0; index < 10000; index++) {
+        actions.pushToast({ title: `Result ${index}`, dedupeKey: `event-${index}` });
+      }
+    });
+    expect(vi.getTimerCount()).toBe(5);
+    expect(container.textContent).toBe("Result 9999,Result 9998,Result 9997,Result 9996,Result 9995");
+    act(() => {
+      expect(actions.pushToast({ title: "Duplicate", dedupeKey: "event-9999" })).toBeNull();
+      // Capacity eviction allows old presentation keys again; it cannot block
+      // new results or grow memory in proportion to an unbounded event stream.
+      expect(actions.pushToast({ title: "Old result", dedupeKey: "event-0" })).not.toBeNull();
+    });
+    expect(vi.getTimerCount()).toBe(5);
+    act(() => vi.advanceTimersByTime(60000));
+    expect(container.textContent).toBe("");
+    expect(vi.getTimerCount()).toBe(0);
+    act(() => actions.pushToast({ title: "After idle" }));
+    act(() => root.unmount());
+    expect(vi.getTimerCount()).toBe(0);
   });
 
   it("does not rerender action-only consumers when toast state changes", () => {

@@ -1,3 +1,4 @@
+import { preferredScrollBehavior } from "../lib/scroll-behavior";
 import { useCallback, useEffect, useRef, useState } from "react";
 import type { IssueDocument } from "@paperclipai/shared";
 import { ISSUE_CONTINUATION_SUMMARY_DOCUMENT_KEY } from "@paperclipai/shared";
@@ -37,7 +38,7 @@ export function IssueContinuationHandoff({
     if (!document || focusSignal <= 0) return;
     setExpanded(true);
     setHighlighted(true);
-    rootRef.current?.scrollIntoView({ behavior: "smooth", block: "center" });
+    rootRef.current?.scrollIntoView({ behavior: preferredScrollBehavior(), block: "center" });
     const timer = setTimeout(() => setHighlighted(false), 3000);
     return () => clearTimeout(timer);
   }, [document, focusSignal]);

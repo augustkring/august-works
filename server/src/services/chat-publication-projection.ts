@@ -410,10 +410,16 @@ export function projectSafeChatPublication(
   const attachmentIds = projectAttachmentIds(input.attachmentIds);
   const interaction = input.interaction ? projectCard(input.interaction) : null;
 
+  const originalText = projectSafeChatPublicationText(input.text);
+  const card = interaction?.card;
+  // Native adapter text fallbacks (including notification previews and
+  // nonvisual clients) must retain the sanitized title and body as well as
+  // the consequence. A rich card must not be the only copy of that meaning.
+  const text = card?.experience ? [...new Set([originalText, card.title,
+    card.experience.whyYou, card.body, card.experience.consequence,
+    card.experience.evidence.join("\n")].filter(Boolean))].join("\n\n") : originalText;
   return {
-    text: [projectSafeChatPublicationText(input.text), interaction?.card.experience?.whyYou,
-      interaction?.card.experience?.consequence, interaction?.card.experience?.evidence.join("\n")]
-      .filter(Boolean).join("\n\n"),
+    text,
     ...(attachmentIds ? { attachmentIds } : {}),
     ...(input.progressState ? { progressState: input.progressState } : {}),
     ...(interaction ?? {}),

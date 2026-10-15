@@ -1,3 +1,4 @@
+import { preferredScrollBehavior } from "../lib/scroll-behavior";
 import { AgentAvatar } from "./AgentAvatar";
 import { useCallback, useMemo, useRef, useState, useEffect } from "react";
 import type {
@@ -167,7 +168,7 @@ export function AnnotationPanelBody(props: AnnotationPanelProps) {
       `[data-thread-id="${props.focusedThreadId}"]`,
     );
     if (card && typeof card.scrollIntoView === "function") {
-      card.scrollIntoView({ block: "nearest", behavior: "smooth" });
+      card.scrollIntoView({ block: "nearest", behavior: preferredScrollBehavior() });
     }
   }, [props.focusedThreadId, visibleThreads]);
 

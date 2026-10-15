@@ -1,3 +1,4 @@
+import { preferredScrollBehavior } from "../lib/scroll-behavior";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import {
   useEffect,
@@ -195,8 +196,8 @@ export function BoardChat() {
    *  user's pre-update position and can decide whether to auto-scroll. */
   const wasNearBottomRef = useRef(true);
 
-  const scrollToLatest = useCallback((behavior: ScrollBehavior = "smooth") => {
-    messagesEndRef.current?.scrollIntoView({ behavior, block: "end" });
+  const scrollToLatest = useCallback((behavior: ScrollBehavior = preferredScrollBehavior()) => {
+    messagesEndRef.current?.scrollIntoView({ behavior: preferredScrollBehavior(behavior), block: "end" });
     wasNearBottomRef.current = true;
     setHasNewBelow(false);
   }, []);
