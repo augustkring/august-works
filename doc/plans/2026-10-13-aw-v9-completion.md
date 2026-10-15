@@ -2775,3 +2775,16 @@ the fix. English/Danish copy now states the saved-draft boundary without calling
 an already confirmed publication unpublished. The final three UI/locale suites pass 29 cases; UI types, token gates, inventory
 and the two current Hire contracts pass. Built browser verification follows. See [the bounded plan](2026-10-15-aw-v9-hire-publication-receipt.md).
 All 70 launch evidence rows, source completion and R0 remain open. No PR/push.
+
+
+### 80 — Separate workspace route transformation from request behavior
+
+The last serialized workspace-runtime-routes-authz fixture timed out during its
+first cold graph load. Collection now resolves that same registered mock graph
+before tests. Existing fresh query-keyed per-case route modules/apps, mock resets,
+authorization assertions and the 15-second behavior limit remain intact. All 12
+cases pass: import 29.47 seconds, request behavior 576 ms. No production change.
+
+Retain the original failure. The two remaining serialized suites and other
+non-server workspaces still need their continuation. See [the scoped note](2026-10-15-aw-v9-workspace-runtime-route-collection.md).
+Source completeness, all 70 launch rows and R0 remain open. No PR/push.
