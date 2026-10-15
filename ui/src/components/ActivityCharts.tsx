@@ -76,7 +76,7 @@ export function ChartCard({ title, subtitle, children }: { title: string; subtit
     <div className="border border-border rounded-lg p-4 space-y-3">
       <div>
         <h3 className="text-xs font-medium text-muted-foreground">{title}</h3>
-        {subtitle && <span className="text-(length:--text-nano) text-muted-foreground/60">{subtitle}</span>}
+        {subtitle && <span className="text-(length:--text-nano) text-muted-foreground">{subtitle}</span>}
       </div>
       {children}
     </div>

@@ -2804,3 +2804,23 @@ retained as failed; it does not count as a product regression or green result.
 See [the fixture and verification note](2026-10-15-aw-v9-workflow-legacy-read-fixture.md).
 The two remaining serialized suites and workspace/general continuation are pending.
 All 70 launch evidence rows, source completion and R0 remain open. No PR/push.
+
+
+### 82 — Correct the Native chart test host and subtitle contrast
+
+The new chart case encountered the empty company's inherited onboarding wizard,
+not a table action failure. Seed an actual idle Agent with wake/heartbeat disabled
+in the disposable Native fixture. The unchanged acceptance then caught a real
+contrast failure in all three light-theme ChartCard subtitles. Remove the opacity
+modifier and use the existing muted-foreground token; no raw color or weakened
+WCAG/keyboard/width assertion. The built chart browser case now passes in both
+themes at 320px, and all 15 focused chart/locale cases and token gates pass.
+
+Retain both the initial wizard timeout and independent contrast failure with
+screenshots. The earlier checkpoint79 broad browser run was interrupted after the
+known fixture failure; it is not a green run. Duplicate checkpoint77/79 full UI
+runs were explicitly interrupted with 143 and consolidated into checkpoint81's
+current UI/CLI continuation. Their full typecheck/build stages did pass.
+See [the evidence and exact scope](2026-10-15-aw-v9-chart-host-and-contrast.md).
+The full current browser repeat and Native aggregates remain pending. Source
+completion, all 70 release evidence rows and R0 remain open. No PR/push.

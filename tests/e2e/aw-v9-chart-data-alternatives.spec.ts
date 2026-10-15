@@ -11,6 +11,12 @@ async function json(response: APIResponse) {
 // authorization changes, screen-reader qualification or representative usability.
 test("chart values have keyboard-accessible tables at narrow width in both themes", async ({ page, request }) => {
   const company = await json(await request.post("/api/companies", { data: { name: "Disposable chart table host" } }));
+  // Use the actual Native dashboard after initial setup. A company with no
+  // Agents opens the inherited first-Agent wizard over this page.
+  await json(await request.post(`/api/companies/${company.id}/agents`, { data: {
+    name: "Idle chart host agent", role: "engineer", adapterType: "process", adapterConfig: {},
+    runtimeConfig: { heartbeat: { enabled: false, wakeOnDemand: false } },
+  } }));
   const summary = await json(await request.get(`/api/companies/${company.id}/dashboard`));
   const date = new Date().toISOString().slice(0, 10);
   const previous = new Date(Date.now() - 86400000).toISOString().slice(0, 10);
