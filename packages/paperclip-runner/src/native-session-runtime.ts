@@ -2041,7 +2041,10 @@ export async function executeNativeSession(
     if (sessionQuarantined) return;
     sessionQuarantined = true;
     try {
-      void options.onSessionQuarantined?.(reason);
+      void Promise.resolve(options.onSessionQuarantined?.(reason)).catch(() => {
+        // Asynchronous diagnostics cannot prevent or outlive provider cleanup
+        // as an unhandled rejection. Do not await an observer that can stall.
+      });
     } catch {
       // Diagnostics cannot prevent provider cleanup.
     }

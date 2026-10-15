@@ -2235,7 +2235,7 @@ describe("executeNativeSession recovery", () => {
     await rejected;
   });
 
-  it("closes the provider when owner quarantine notification throws", async () => {
+  it.each(["throws", "rejects", "never settles"] as const)("closes the provider when quarantine diagnostics %s and owner notification throws", async (diagnosticFailure) => {
     const snapshotFailure = new Error("snapshot failed");
     const close = vi.fn(async () => undefined);
     const session: NativeSession = {
@@ -2285,6 +2285,14 @@ describe("executeNativeSession recovery", () => {
       async completeRun() {},
     };
     const retainedSessions: Array<NativeSession | null> = [];
+    let quarantineNotifications = 0;
+    // A mock promise observer would itself attach a rejection handler.
+    const onSessionQuarantined = () => {
+      quarantineNotifications += 1;
+      if (diagnosticFailure === "throws") throw new Error("quarantine diagnostic failed");
+      if (diagnosticFailure === "rejects") return Promise.reject(new Error("quarantine diagnostic failed"));
+      return new Promise<void>(() => {});
+    };
 
     await expect(
       executeNativeSession({
@@ -2294,6 +2302,7 @@ describe("executeNativeSession recovery", () => {
         runnerInstanceId: "runner-recovery",
         controlPlaneInstanceId: "control-recovery",
         keepSessionOpen: true,
+        onSessionQuarantined,
         onSession(current) {
           retainedSessions.push(current);
           if (current === null) throw new Error("owner notification failed");
@@ -2301,7 +2310,10 @@ describe("executeNativeSession recovery", () => {
       }),
     ).rejects.toBe(snapshotFailure);
 
+    // Let a rejected observer surface before the worker finishes this case.
+    await new Promise<void>((resolve) => setImmediate(resolve));
     expect(retainedSessions).toEqual([session, null]);
+    expect(quarantineNotifications).toBe(1);
     expect(close).toHaveBeenCalledOnce();
   });
 

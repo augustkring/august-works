@@ -372,3 +372,14 @@ retry performs no mutation. Native CAS, scopes, receipts and one-request guards
 are unchanged. Four related DOM suites pass all 47 cases; current forced
 Native-HTTP browser qualification remains pending. No extra browser persistence,
 notification, grant, execution or physical-erasure authority is introduced.
+
+### Native quarantine diagnostic failure containment — checkpoint 72
+
+The existing observer permits asynchronous diagnostics. Its rejection is now
+handled with the existing synchronous failure policy, without awaiting a stalled
+observer. Provider cleanup and quarantine still run, original execution errors
+remain exact, and the Native heartbeat payload authorizer remains unchanged.
+No extra log sink or raw error copy is introduced. The plain pre-fix observer
+reproduces an unhandled rejection; all 138 corrected Runtime cases and the actual
+ten-case chat-project-tools fixture pass without unhandled errors. Runner types
+pass. Full corrected-source and hosted/provider qualification remain pending.

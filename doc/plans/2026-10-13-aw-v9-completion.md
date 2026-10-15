@@ -2625,3 +2625,26 @@ Frozen checkpoint-69 general shard 1 now passes all 9,571 selected cases with
 runner groups continue. Native server/packages/build inputs are unchanged by
 the UI corrections. No complete current whole-suite or V9 release pass is
 inferred. Source completeness, all 70 launch rows and R0 remain open; no PR/push.
+
+### Handle asynchronous Native quarantine observers — checkpoint 72
+
+Frozen checkpoint-69 general shard 0 records 6,606 passing cases and 68 skips,
+but exits 1 on two unhandled rejections from chat-project-tools after its fixture
+pool closes. The Native quarantine observer permits Promise<void>, while its
+try/catch handles only synchronous throws. A plain rejecting observer reproduces
+the unhandled error in the actual Runtime cleanup path before this correction.
+
+The Original runtime now attaches a rejection handler without awaiting a possibly
+stalled diagnostic. Its execution failure, provider cleanup, quarantine and
+payload authorization semantics remain unchanged. All 138 runtime cases pass,
+including throw/reject/never-settle diagnostics and the exact original failure.
+The actual Native chat-project-tools suite passes all ten cases with no
+unhandled errors. Runner typecheck and all 76 own-worktree dependency links pass.
+See [the scoped plan](2026-10-15-aw-v9-native-quarantine-diagnostics.md).
+
+The original general aggregate remains failed. Its other 456 passing suites do
+not erase that error. Frozen general shard 1 passes 9,571 cases with 22 skips;
+its disjoint chat partitions 1 and 3 also pass all selected cases. Remaining
+Native groups and checkpoint-71 complete UI qualification continue separately.
+Current corrected-source whole-scope verification remains pending. All 70 launch
+surfaces, source completeness and R0 remain open. No PR/push.
