@@ -5,7 +5,6 @@ import { getTableName, type SQL } from "drizzle-orm";
 import { PgDialect } from "drizzle-orm/pg-core";
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import { HttpError } from "../errors.js";
-import { hoistModuleGraph } from "./helpers/hoist-module-graph.js";
 
 const issueId = "11111111-1111-4111-8111-111111111111";
 const companyId = "22222222-2222-4222-8222-222222222222";
@@ -424,14 +423,15 @@ function boardActor() {
   };
 }
 
+// Load the same mocked graph once during collection. Cold transformation is
+// module initialization, not part of a checkout-ownership behavior or its hook.
+registerRouteMocks();
+const [{ errorHandler }, { issueRoutes, __clearIssueListResponseCacheForTests }] = await Promise.all([
+  vi.importActual<typeof import("../middleware/index.js")>("../middleware/index.js"),
+  vi.importActual<typeof import("../routes/issues.js")>("../routes/issues.js"),
+]);
+
 describe("agent issue mutation checkout ownership", () => {
-  const routeModules = hoistModuleGraph(registerRouteMocks, async () => {
-    const [{ errorHandler }, { issueRoutes, __clearIssueListResponseCacheForTests }] = await Promise.all([
-      vi.importActual<typeof import("../middleware/index.js")>("../middleware/index.js"),
-      vi.importActual<typeof import("../routes/issues.js")>("../routes/issues.js"),
-    ]);
-    return { errorHandler, issueRoutes, __clearIssueListResponseCacheForTests };
-  });
 
   function createApp(
     actor: Record<string, unknown>,
@@ -443,7 +443,6 @@ describe("agent issue mutation checkout ownership", () => {
       typeof actor.agentId === "string" ? actor.agentId : ownerAgentId,
       typeof actor.runId === "string" ? actor.runId : ownerRunId,
     );
-    const { errorHandler, issueRoutes } = routeModules.value;
     const app = express();
     app.use(express.json());
     app.use((req, _res, next) => {
@@ -456,12 +455,11 @@ describe("agent issue mutation checkout ownership", () => {
   }
 
   beforeEach(() => {
-    // This block loads the route module graph one time (see
-    // hoistModuleGraph above). As a result, the issue-list route keeps its
+    // This file loads the route module graph one time above. The route keeps its
     // response cache in memory between tests. Clear the cache before each
     // test. This stops one test from reusing a cached response left behind
     // by an earlier test.
-    routeModules.value.__clearIssueListResponseCacheForTests();
+    __clearIssueListResponseCacheForTests();
     vi.clearAllMocks();
     mockAnalyticalPayloadAccess.mockReset().mockResolvedValue(undefined);
     mockIssueTreeControlService.getActivePauseHoldGate.mockReset().mockResolvedValue(null);

@@ -1,6 +1,8 @@
 import express from "express";
 import request from "supertest";
 import { afterEach, beforeAll, describe, expect, it } from "vitest";
+import { accessRoutes } from "../routes/access.js";
+import { errorHandler } from "../middleware/index.js";
 
 /**
  * Operator-hidden Access surface floor (`instance.access` in
@@ -22,11 +24,7 @@ const stubDb = {
   }),
 } as never;
 
-async function createApp() {
-  const [{ accessRoutes }, { errorHandler }] = await Promise.all([
-    import("../routes/access.js"),
-    import("../middleware/index.js"),
-  ]);
+function createApp() {
   const app = express();
   app.use(express.json());
   app.use((req, _res, next) => {
@@ -53,10 +51,10 @@ async function createApp() {
 describe("operator-hidden access admin floor", () => {
   let app: express.Express;
 
-  // The access router is a large module; import and build the app once so the
-  // cost is not charged to the first test's timeout on slow CI runners.
-  beforeAll(async () => {
-    app = await createApp();
+  // Cold route loading happens during module collection. The unchanged hook
+  // budget covers only construction of the same per-file app fixture.
+  beforeAll(() => {
+    app = createApp();
   }, 30_000);
 
   afterEach(() => {

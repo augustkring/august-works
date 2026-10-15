@@ -2648,3 +2648,30 @@ its disjoint chat partitions 1 and 3 also pass all selected cases. Remaining
 Native groups and checkpoint-71 complete UI qualification continue separately.
 Current corrected-source whole-scope verification remains pending. All 70 launch
 surfaces, source completeness and R0 remain open. No PR/push.
+
+### Separate cold route imports from behavioral hooks — checkpoint 73
+
+Frozen checkpoint-69 serialized shard 1 passes 39 suites, then skips all 122
+checkout-ownership cases after its mocked route graph exceeds the 30-second
+beforeAll bound. Checkpoint-72 serialized shard 0 also skips all six access-floor
+cases when its access-router import exceeds the same explicit setup bound.
+Neither failure is a behavioral pass.
+
+The checkout file now registers the same mocks and loads the same graph once at
+module collection. Its per-test reset/cache/HTTP ownership assertions remain.
+The access-floor file statically imports its actual router and middleware; its
+same per-file app is constructed inside the unchanged 30-second hook. No shared
+helper, timeout, assertion, route or authorization is relaxed.
+
+Both corrected actual HTTP suites pass all 128 cases together without skips or
+unhandled errors (45.66 seconds total; 44.21 seconds import, 957 ms behavior).
+The original serialized partitions and order are reconciled: shard 1 has 39
+prior passes, its corrected suite and 41 remaining; shard 0 has its corrected
+first suite and 78 remaining. Current corrected-source continuation is pending.
+See [the scoped plan](2026-10-15-aw-v9-route-import-initialization.md).
+
+Checkpoint 72 full workspace typecheck and build pass. Its chat partitions 0
+and 2 also pass all 261 selected cases each. Together with the frozen Native
+partitions 1 and 3, the unchanged 1,044-case file has disjoint selected-case
+coverage; no filtered-out test is counted twice. The complete source, workspace
+and browser aggregates remain pending. All 70 launch rows/R0 remain open.
