@@ -2941,3 +2941,36 @@ was established, but a hierarchical OOM count alone does not identify its cause.
 Same-source 83-case bounded-heap rerun passed. Extra signalled typechecking is not
 counted despite a raw wrapper zero. Remaining broad server/CLI results still run.
 No PR/push; source completion, all 70 release rows and R0 remain open.
+
+
+### 88 — Record the local review baseline and unresolved full-V9 work
+
+The complete checkpoint87 CLI repeat passes 63 suites/502 cases; its follow-up
+CLI typecheck passes. The last general1 setup suite passes unchanged with its
+original 20s hook and all three cases after heavy concurrent jobs end. Preserve
+its failed broad setup/teardown result. The other 460 broad passes remain, with
+462/463 test files byte-identical and the changed notification file independently
+verified on PostgreSQL. Both remaining chat partitions pass 262 each, completing
+all 1,048 cases across four exact-collection/filter-verified partitions. The 786
+other cases per partition are exclusions, not passes.
+
+All 160 serialized suites are covered through the documented same-source/byte-
+identical continuations. Broad UI passes 806/7,951; the subsequent rollback delta
+passes its 31 affected UI/API cases. Twelve other workspace projects pass 4,007
+cases with 12 explicit skips. General0 passes 455 suites/6,435 cases with five
+suite/42 case skips. General1's original raw 51 skipped cases include three from
+its failed setup; the unchanged successful three-case replay resolves those.
+
+Final full workspace typecheck and production build pass checkpoint86. The full
+current browser repeat passes all 91 cases on that source. All 514 served UI files
+are byte-identical to the 514 build files; checkpoint87 changes production code
+nowhere. The initial 87-pass/four-crash browser attempt, earlier worker exits,
+fixture failures and explicitly interrupted typecheck zeros remain distinct.
+Exact worker/crash OOM causes were not established from hierarchical counters.
+
+See [the Danish status and evidence limits](2026-10-15-aw-v9-local-review-status.md).
+This is local draft-review readiness, not a claim that every V9 requirement or
+release gate is complete. All 70 evidence rows, sourceComplete=false and R0 stay
+open; current-head remote CI/independent review and the remaining source/field
+qualification still need their recorded evidence. The existing remote draft PR38
+is unchanged. No push, PR create/edit, merge, deployment or real provider send.
