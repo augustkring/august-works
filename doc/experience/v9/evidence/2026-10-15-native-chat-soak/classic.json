@@ -1,0 +1,280 @@
+{
+  "qualification": "bounded-synthetic-software-soak",
+  "interface": "classic",
+  "warmupCycles": 2,
+  "measuredCycles": 24,
+  "browser": "151.0.7922.173",
+  "viewport": {
+    "width": 1440,
+    "height": 1000
+  },
+  "forcedGcPerSample": true,
+  "sourceDataset": "500 synthetic comments through Native APIs on one unassigned backlog task; explicitly selected interface",
+  "samples": [
+    {
+      "cycle": 0,
+      "motion": "normal",
+      "heapUsedBytes": 65207824,
+      "heapTotalBytes": 67571712,
+      "nodes": 4862,
+      "documents": 1,
+      "listeners": 422,
+      "renderedRows": 19,
+      "sourceRows": 500
+    },
+    {
+      "cycle": 1,
+      "motion": "reduce",
+      "heapUsedBytes": 66161808,
+      "heapTotalBytes": 68358144,
+      "nodes": 4976,
+      "documents": 1,
+      "listeners": 425,
+      "renderedRows": 20,
+      "sourceRows": 500
+    },
+    {
+      "cycle": 2,
+      "motion": "normal",
+      "heapUsedBytes": 66216296,
+      "heapTotalBytes": 68096000,
+      "nodes": 4292,
+      "documents": 1,
+      "listeners": 402,
+      "renderedRows": 14,
+      "sourceRows": 500
+    },
+    {
+      "cycle": 3,
+      "motion": "reduce",
+      "heapUsedBytes": 66739512,
+      "heapTotalBytes": 69144576,
+      "nodes": 4862,
+      "documents": 1,
+      "listeners": 422,
+      "renderedRows": 19,
+      "sourceRows": 500
+    },
+    {
+      "cycle": 4,
+      "motion": "normal",
+      "heapUsedBytes": 66818216,
+      "heapTotalBytes": 69144576,
+      "nodes": 4862,
+      "documents": 1,
+      "listeners": 422,
+      "renderedRows": 19,
+      "sourceRows": 500
+    },
+    {
+      "cycle": 5,
+      "motion": "reduce",
+      "heapUsedBytes": 67242600,
+      "heapTotalBytes": 69406720,
+      "nodes": 4862,
+      "documents": 1,
+      "listeners": 422,
+      "renderedRows": 19,
+      "sourceRows": 500
+    },
+    {
+      "cycle": 6,
+      "motion": "normal",
+      "heapUsedBytes": 67314112,
+      "heapTotalBytes": 69144576,
+      "nodes": 4862,
+      "documents": 1,
+      "listeners": 421,
+      "renderedRows": 19,
+      "sourceRows": 500
+    },
+    {
+      "cycle": 7,
+      "motion": "reduce",
+      "heapUsedBytes": 67517788,
+      "heapTotalBytes": 69668864,
+      "nodes": 4862,
+      "documents": 1,
+      "listeners": 422,
+      "renderedRows": 19,
+      "sourceRows": 500
+    },
+    {
+      "cycle": 8,
+      "motion": "normal",
+      "heapUsedBytes": 67743624,
+      "heapTotalBytes": 69668864,
+      "nodes": 4862,
+      "documents": 1,
+      "listeners": 422,
+      "renderedRows": 19,
+      "sourceRows": 500
+    },
+    {
+      "cycle": 9,
+      "motion": "reduce",
+      "heapUsedBytes": 67815652,
+      "heapTotalBytes": 70193152,
+      "nodes": 4862,
+      "documents": 1,
+      "listeners": 422,
+      "renderedRows": 19,
+      "sourceRows": 500
+    },
+    {
+      "cycle": 10,
+      "motion": "normal",
+      "heapUsedBytes": 67871188,
+      "heapTotalBytes": 70193152,
+      "nodes": 4862,
+      "documents": 1,
+      "listeners": 422,
+      "renderedRows": 19,
+      "sourceRows": 500
+    },
+    {
+      "cycle": 11,
+      "motion": "reduce",
+      "heapUsedBytes": 68066072,
+      "heapTotalBytes": 70455296,
+      "nodes": 4862,
+      "documents": 1,
+      "listeners": 422,
+      "renderedRows": 19,
+      "sourceRows": 500
+    },
+    {
+      "cycle": 12,
+      "motion": "normal",
+      "heapUsedBytes": 68181832,
+      "heapTotalBytes": 70193152,
+      "nodes": 4862,
+      "documents": 1,
+      "listeners": 422,
+      "renderedRows": 19,
+      "sourceRows": 500
+    },
+    {
+      "cycle": 13,
+      "motion": "reduce",
+      "heapUsedBytes": 68331112,
+      "heapTotalBytes": 70455296,
+      "nodes": 4862,
+      "documents": 1,
+      "listeners": 422,
+      "renderedRows": 19,
+      "sourceRows": 500
+    },
+    {
+      "cycle": 14,
+      "motion": "normal",
+      "heapUsedBytes": 68423732,
+      "heapTotalBytes": 70717440,
+      "nodes": 4862,
+      "documents": 1,
+      "listeners": 422,
+      "renderedRows": 19,
+      "sourceRows": 500
+    },
+    {
+      "cycle": 15,
+      "motion": "reduce",
+      "heapUsedBytes": 68801244,
+      "heapTotalBytes": 70979584,
+      "nodes": 4862,
+      "documents": 1,
+      "listeners": 421,
+      "renderedRows": 19,
+      "sourceRows": 500
+    },
+    {
+      "cycle": 16,
+      "motion": "normal",
+      "heapUsedBytes": 68700272,
+      "heapTotalBytes": 70717440,
+      "nodes": 4862,
+      "documents": 1,
+      "listeners": 422,
+      "renderedRows": 19,
+      "sourceRows": 500
+    },
+    {
+      "cycle": 17,
+      "motion": "reduce",
+      "heapUsedBytes": 69518500,
+      "heapTotalBytes": 72552448,
+      "nodes": 4862,
+      "documents": 1,
+      "listeners": 443,
+      "renderedRows": 19,
+      "sourceRows": 500
+    },
+    {
+      "cycle": 18,
+      "motion": "normal",
+      "heapUsedBytes": 68980316,
+      "heapTotalBytes": 71241728,
+      "nodes": 4862,
+      "documents": 1,
+      "listeners": 422,
+      "renderedRows": 19,
+      "sourceRows": 500
+    },
+    {
+      "cycle": 19,
+      "motion": "reduce",
+      "heapUsedBytes": 68982708,
+      "heapTotalBytes": 71503872,
+      "nodes": 4862,
+      "documents": 1,
+      "listeners": 422,
+      "renderedRows": 19,
+      "sourceRows": 500
+    },
+    {
+      "cycle": 20,
+      "motion": "normal",
+      "heapUsedBytes": 69273776,
+      "heapTotalBytes": 71503872,
+      "nodes": 4862,
+      "documents": 1,
+      "listeners": 422,
+      "renderedRows": 19,
+      "sourceRows": 500
+    },
+    {
+      "cycle": 21,
+      "motion": "reduce",
+      "heapUsedBytes": 69448136,
+      "heapTotalBytes": 71503872,
+      "nodes": 4862,
+      "documents": 1,
+      "listeners": 422,
+      "renderedRows": 19,
+      "sourceRows": 500
+    },
+    {
+      "cycle": 22,
+      "motion": "normal",
+      "heapUsedBytes": 69475236,
+      "heapTotalBytes": 72028160,
+      "nodes": 4862,
+      "documents": 1,
+      "listeners": 422,
+      "renderedRows": 19,
+      "sourceRows": 500
+    },
+    {
+      "cycle": 23,
+      "motion": "reduce",
+      "heapUsedBytes": 69461528,
+      "heapTotalBytes": 71766016,
+      "nodes": 4862,
+      "documents": 1,
+      "listeners": 422,
+      "renderedRows": 19,
+      "sourceRows": 500
+    }
+  ],
+  "limits": "One Chromium document, synthetic data, forced-GC perturbation, no production resource or latency acceptance threshold; no hourly/mobile/hosted qualification."
+}

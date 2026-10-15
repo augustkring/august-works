@@ -112,3 +112,53 @@ No live installation or Slack/Teams qualification targets are configured in the
 current managed environment. The user has been asked for existing test-target
 URLs/connection names while local implementation continues. No provider send,
 customer contact, purchase or production deployment is implied by local tests.
+
+## Checkpoint 94 — integrated software verification and retained observations
+
+All 92 V9 built-browser cases pass on `b1c4350e4`, including the committed
+classic retention probe and its persisted JSON. The full Storybook build and
+both component-browser cases pass, covering the existing EN/DA recovery states
+and the 12 card stories in both narrow themes. The first browser selection
+matched the worktree directory name and selected 331 cases; it was interrupted
+after 21 passing cases. The corrected run enumerates the V9 spec filenames.
+That interrupted run is not credited as a complete suite.
+
+Five actual migrated-PostgreSQL channel cases pass on that source: the closed
+Slack question/continuation, durable signed Stop, guest/stale Stop denial and
+both V9 Slack/Teams binary confirmation cases. The other 1,043 cases were
+excluded by the name filter, not executed. These tests reuse Native identity,
+membership, Original interaction, publication and provider-effect owners with
+explicit synthetic provider transports; they do not establish live delivery.
+
+The subsequent two-interface soak passes on `270dec8f7`; its only difference
+from `b1c4350e4` is the parameterized test file. Both the current and classic
+interfaces complete 26 same-document navigation cycles, with 24 measured
+samples each, on an actual 500-comment Native task. Retained observation JSON
+and exact hashes are in
+[`evidence/2026-10-15-native-chat-soak`](../experience/v9/evidence/2026-10-15-native-chat-soak/manifest.json).
+Current-mode heap samples range from 48.4 to 52.6 MiB, with 500 rendered rows;
+classic samples range from 62.2 to 66.3 MiB, with a 14–20-row virtual window.
+These are observed ranges under concurrent verification, not performance
+targets, proof of no leak or a valid before/after comparison. The two UI builds
+have different exact artifact hashes because build-commit metadata changes;
+they are not described as byte-identical artifacts.
+
+The pilot/attention validators pass all 49 cases after adding a reviewed
+first-outcome funnel and per-critical-slice timing. This collects no real
+participant data and does not turn the product's unavailable usable baseline
+into a measured one. The one failing full-UI token-catalog assertion is resolved
+by the separately passing 94-case focused follow-up described above. No whole
+current-head workspace test-catalog pass or configured remote CI pass is claimed
+for these follow-up commits yet.
+
+Normal CLI context discovery found one default profile without a configured
+API origin. The user asked the agent to find targets rather than supply
+technical setup details; discovery continued through repo operations docs,
+GitHub metadata and the normal CLI. The access limitations above remain.
+
+Local runtime measurement collection and the complete legacy parity/retirement
+conditions remain open. The next implementation must preserve explicit
+purpose, individual choice, minimal fields, erasure, bounded ingestion and
+retention, and must not send new experience data to Paperclip's existing
+default telemetry endpoint. Optional interoperability/provider adoption and
+qualified hosted/Human acceptance remain distinct from that software work.

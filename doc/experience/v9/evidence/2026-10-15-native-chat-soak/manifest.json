@@ -1,0 +1,51 @@
+{
+  "schemaVersion": 1,
+  "claim": "bounded_synthetic_software_observation",
+  "gaAllowed": false,
+  "sourceCommit": "270dec8f77897b19b04bc96dd282c950bdbfbe07",
+  "uiArtifactSha256": "85a1fedc2d7cb29ec605f5e9ed8a88e282eb850268a60c96ef25f6bf210871a4",
+  "uiArtifactFiles": 514,
+  "uiDigestMethod": "SHA256 over sorted relative file paths, NUL, SHA256(file bytes) as lowercase hex, newline",
+  "environment": {
+    "cpuQuota": 4,
+    "memoryLimitGiB": 16,
+    "nodeVersion": "v24.19.0",
+    "headlessChromium": true,
+    "viewport": {
+      "width": 1440,
+      "height": 1000
+    },
+    "embeddedPostgresMigrations": 499,
+    "backgroundWork": "Concurrent V9 browser and component verification; not controlled production hardware"
+  },
+  "workload": {
+    "comments": 500,
+    "taskAssignment": "none",
+    "agentFixture": "paused process adapter, heartbeat disabled, zero budget",
+    "providerExecution": false,
+    "warmupCycles": 2,
+    "measuredCyclesPerInterface": 24,
+    "forcedGcPerSample": true
+  },
+  "artifacts": [
+    {
+      "interface": "classic",
+      "path": "doc/experience/v9/evidence/2026-10-15-native-chat-soak/classic.json",
+      "sha256": "f6cb923df547bfa8132f7b824ccd1dd8a88e597d8eb57ec44add8f128f2abc88",
+      "observations": 24
+    },
+    {
+      "interface": "current",
+      "path": "doc/experience/v9/evidence/2026-10-15-native-chat-soak/current.json",
+      "sha256": "4891c7d9d453fd36fd0c9f6debe33da1550dd82e1bc54df52ab8c3f4308a8dad",
+      "observations": 24
+    }
+  ],
+  "limits": [
+    "Not a production memory or latency budget",
+    "No before/after improvement estimate",
+    "No hourly or mobile soak",
+    "No physical provider, manual AT or representative Human qualification",
+    "Readiness remains R0; no complete V9 acceptance"
+  ]
+}
