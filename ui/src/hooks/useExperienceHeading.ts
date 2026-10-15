@@ -1,10 +1,12 @@
 import { useLayoutEffect, useRef } from "react";
 
-/** Orient on entry/context change or recovery, without interrupting utilities. */
+/** Orient on entry/context change or recovery, without interrupting utilities.
+ * A page with pending control restoration can defer to its specific focus owner. */
 export function useExperienceHeading(
   scope: string,
   loading: boolean,
   failed: boolean,
+  deferFocus = false,
 ) {
   const heading = useRef<HTMLHeadingElement>(null);
   const focused = useRef<{ scope: string; element: HTMLHeadingElement } | null>(null);
@@ -21,8 +23,8 @@ export function useExperienceHeading(
     // already started on a utility, navigation link or other current control.
     // Layout timing also prevents a delayed passive effect from taking focus
     // after the newly rendered page is visible and interactive.
-    if (!document.activeElement?.closest('[role="dialog"],button,a[href],input,select,textarea,summary,[contenteditable="true"],[role="button"]'))
+    if (!deferFocus && !document.activeElement?.closest('[role="dialog"],button,a[href],input,select,textarea,summary,[contenteditable="true"],[role="button"]'))
       heading.current.focus();
-  }, [scope, loading, failed]);
+  }, [scope, loading, failed, deferFocus]);
   return heading;
 }

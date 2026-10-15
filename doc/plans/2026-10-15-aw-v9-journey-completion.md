@@ -167,3 +167,22 @@ The separate Docker-context failure on that head occurs before the check:
 public ECR returns HTTP 429 while resolving the pinned Node image manifest.
 The image pin and gate remain unchanged. A current successful check is still
 required; the external refusal is not credited as a pass.
+
+
+### Preserve the more specific Native support focus owner
+
+The broad UI shard on `ccb0314ac` finds a regression from the generic heading
+remount correction: its layout focus consumes the body-focus condition used by
+Native support's existing control-restoration owner. The existing operator-field
+restoration test fails locally as well. The shared heading hook now permits a
+page to defer orientation while its own control restoration is pending. Native
+support uses that explicit deferral. Its saved field, error, fallback-heading
+and open-dialog rules remain with the existing owner.
+
+All 177 cases in nineteen current journey/focus files pass after this correction,
+including every available page test for shared-heading callers and the original
+support restoration test. Full affected UI types and token gates pass. A full
+local UI catalog and combined built Home/support/workflow browser verification
+also run; their final results and current-head CI are recorded in the PR. The
+support browser file retains traces on failure. No focus assertion or deadline
+is changed.
