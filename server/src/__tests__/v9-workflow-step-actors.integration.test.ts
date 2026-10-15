@@ -88,7 +88,7 @@ describe.sequential("Current Native workflow step assignments", () => {
     const f = await toolFixture();
     const read = async () => (await readWorkflowStepContext(db, f.detail, f.actor)).toolAccess.get(f.key);
     expect(await read()).toEqual({ state: "permission_required", connectionName: "Contact system", operationName: "Find contacts",
-      previewHref: `/apps/${f.connectionId}/permissions` });
+      previewHref: `/apps/${f.connectionId}/permissions?focus=${f.entryId}` });
     await db.insert(principalPermissionGrants).values({ companyId: f.companyId, principalType: "user", principalId: f.userId, permissionKey: "tools:use" });
     expect(await read()).toMatchObject({ state: "execution_check" });
     await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId, f.companyId), eq(principalPermissionGrants.permissionKey, "tools:use")));

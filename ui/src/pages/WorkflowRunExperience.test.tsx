@@ -6,6 +6,7 @@ import { MemoryRouter } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import type { WorkflowRunExperience as View } from "@paperclipai/shared";
 import { workflowsApi } from "../api/workflows";
+import { approvalsApi } from "../api/approvals";
 import { WorkflowRunExperience } from "./WorkflowRunExperience";
 import * as supportDownloads from "../lib/support-diagnostic-download";
 import { authApi } from "../api/auth";
@@ -333,4 +334,29 @@ it("withdraws the open support preview during native authority recheck and does 
     expect(container.textContent).toContain("Prepare a support report"),
   );
   expect(document.querySelector('[role="dialog"]')).toBeNull();
+});
+
+it("offers the exact pending tool review directly on the customer run surface", async () => {
+  const value = structuredClone(data);
+  if (value.trace.state !== "available") throw new Error("trace unavailable");
+  Object.assign(value.trace.attempts[0], { toolReviewNodeId: "connected-step", waitingFor: ["tool_action"], payloadUnavailable: false });
+  vi.spyOn(workflowsApi, "runExperience").mockResolvedValue(value);
+  const read = vi.spyOn(workflowsApi, "toolReviews").mockResolvedValue({ canReview: true, reviews: [{ id: "action-request", nodeId: "connected-step", toolName: "Exact pending operation",
+    status: "pending", risk: null, preview: "Current Native preview", argumentsSummary: null, approvalId: null, expiresAt: null }] });
+  await mount();
+  await vi.waitFor(() => expect(container.textContent).toContain("Exact pending operation"));
+  expect(read).toHaveBeenCalledWith(companyId, runId, "member", expect.any(AbortSignal));
+  expect([...container.querySelectorAll("button")].some(button => button.textContent === "Approve action")).toBe(true);
+});
+
+it("links the original current approval from the plain-language run surface", async () => {
+  const value = structuredClone(data);
+  if (value.trace.state !== "available") throw new Error("trace unavailable");
+  Object.assign(value.trace.attempts[0], { approvalReview: { id: "10000000-0000-4000-8000-000000000099", nodeId: "checkpoint-step" }, payloadUnavailable: false });
+  vi.spyOn(workflowsApi, "runExperience").mockResolvedValue(value);
+  vi.spyOn(approvalsApi, "get").mockResolvedValue({ id: "10000000-0000-4000-8000-000000000099", companyId, type: "workflow_step_approval", status: "pending", reviewHash: "a".repeat(64),
+    requestedByAgentId: null, requestedByUserId: "member", decisionNote: null, decidedByUserId: null, decidedAt: null, createdAt: new Date(), updatedAt: new Date(),
+    payload: { workflowNodeId: "checkpoint-step", workflowId, workflowRunId: runId, workflowRevisionId: value.revisionId, summary: "Exact checkpoint", consequence: "Proceed with the reviewed step" } });
+  await mount();
+  await vi.waitFor(() => expect(container.querySelector('a[href="/AW/approvals/10000000-0000-4000-8000-000000000099"]')).not.toBeNull());
 });

@@ -2,12 +2,14 @@ import { agentAppearanceSchema } from "@paperclipai/shared";
 import { and, asc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { approvalComments, approvals } from "@paperclipai/db";
-import { notFound, unprocessable } from "../errors.js";
+import { conflict, notFound, unprocessable } from "../errors.js";
 import { redactCurrentUserText } from "../log-redaction.js";
 import { agentService } from "./agents.js";
 import { budgetService } from "./budgets.js";
 import { notifyHireApproved } from "./hire-hook.js";
 import { instanceSettingsService } from "./instance-settings.js";
+import { approvalReviewHash } from "./approval-review.js";
+import { nativeSha256 } from "./native-runtime/canonical.js";
 
 export function approvalService(db: Db) {
   const agentsSvc = agentService(db);
@@ -42,11 +44,18 @@ export function approvalService(db: Db) {
     return existing;
   }
 
+  function reviewedMaterial(value: ApprovalRecord) {
+    return and(eq(approvals.companyId, value.companyId), eq(approvals.type, value.type),
+      eq(approvals.status, value.status), eq(approvals.payload, value.payload),
+      sql`date_trunc('milliseconds', ${approvals.updatedAt}) = ${value.updatedAt.toISOString()}::timestamptz`);
+  }
+
   async function resolveApproval(
     id: string,
     targetStatus: "approved" | "rejected",
     decidedByUserId: string,
     decisionNote: string | null | undefined,
+    expectedReviewHash?: string,
   ): Promise<ResolutionResult> {
     const existing = await getExistingApproval(id);
     if (!canResolveStatuses.has(existing.status)) {
@@ -58,6 +67,8 @@ export function approvalService(db: Db) {
       );
     }
 
+    if (expectedReviewHash !== undefined && approvalReviewHash(existing) !== expectedReviewHash)
+      throw conflict("Approval changed; review its current material", { code: "approval_review_changed" });
     const now = new Date();
     const updated = await db
       .update(approvals)
@@ -68,7 +79,8 @@ export function approvalService(db: Db) {
         decidedAt: now,
         updatedAt: now,
       })
-      .where(and(eq(approvals.id, id), inArray(approvals.status, resolvableStatuses)))
+      .where(and(eq(approvals.id, id), inArray(approvals.status, resolvableStatuses),
+        expectedReviewHash === undefined ? undefined : reviewedMaterial(existing)))
       .returning()
       .then((rows) => rows[0] ?? null);
 
@@ -81,6 +93,8 @@ export function approvalService(db: Db) {
       return { approval: latest, applied: false };
     }
 
+    if (expectedReviewHash !== undefined)
+      throw conflict("Approval changed; review its current material", { code: "approval_review_changed" });
     throw unprocessable(
       `Only pending or revision requested approvals can be ${targetStatus === "approved" ? "approved" : "rejected"}`,
     );
@@ -141,12 +155,13 @@ export function approvalService(db: Db) {
       return updated;
     },
 
-    approve: async (id: string, decidedByUserId: string, decisionNote?: string | null) => {
+    approve: async (id: string, decidedByUserId: string, decisionNote?: string | null, expectedReviewHash?: string) => {
       const { approval: updated, applied } = await resolveApproval(
         id,
         "approved",
         decidedByUserId,
         decisionNote,
+        expectedReviewHash,
       );
 
       let hireApprovedAgentId: string | null = null;
@@ -212,12 +227,13 @@ export function approvalService(db: Db) {
       return { approval: updated, applied };
     },
 
-    reject: async (id: string, decidedByUserId: string, decisionNote?: string | null) => {
+    reject: async (id: string, decidedByUserId: string, decisionNote?: string | null, expectedReviewHash?: string) => {
       const { approval: updated, applied } = await resolveApproval(
         id,
         "rejected",
         decidedByUserId,
         decisionNote,
+        expectedReviewHash,
       );
 
       if (applied && updated.type === "hire_agent") {
@@ -247,9 +263,12 @@ export function approvalService(db: Db) {
           decidedAt: now,
           updatedAt: now,
         })
-        .where(eq(approvals.id, id))
+        .where(and(eq(approvals.id, id), reviewedMaterial(existing)))
         .returning()
-        .then((rows) => rows[0]);
+        .then((rows) => {
+          if (!rows[0]) throw conflict("Approval changed; review its current material", { code: "approval_review_changed" });
+          return rows[0];
+        });
     },
 
     resubmit: async (id: string, payload?: Record<string, unknown>) => {
@@ -258,6 +277,8 @@ export function approvalService(db: Db) {
         throw unprocessable("Only revision requested approvals can be resubmitted");
       }
 
+      if (existing.type === "workflow_step_approval" && payload !== undefined && nativeSha256(payload) !== nativeSha256(existing.payload))
+        throw conflict("Change the workflow draft instead of its published checkpoint", { code: "workflow_approval_snapshot_immutable" });
       const now = new Date();
       return db
         .update(approvals)
@@ -269,9 +290,12 @@ export function approvalService(db: Db) {
           decidedAt: null,
           updatedAt: now,
         })
-        .where(eq(approvals.id, id))
+        .where(and(eq(approvals.id, id), reviewedMaterial(existing)))
         .returning()
-        .then((rows) => rows[0]);
+        .then((rows) => {
+          if (!rows[0]) throw conflict("Approval changed; review its current material", { code: "approval_review_changed" });
+          return rows[0];
+        });
     },
 
     listComments: async (approvalId: string) => {

@@ -2977,5 +2977,36 @@
     "withdraw": "Slå fra og slet observationer",
     "check": "Kontrollér aktuelt valg",
     "enable": "Tillad lokale observationer"
+  },
+  "workflowToolReview": {
+    "heading": "Gennemgang af tilsluttet handling",
+    "unavailable": "Den aktuelle handling kan ikke gennemgås. Kontrollér din adgang, og prøv igen.",
+    "unconfirmed": "Din beslutning er ikke bekræftet. Kontrollér den aktuelle status, før du foretager dig mere. Gentag ikke beslutningen.",
+    "check": "Kontrollér aktuel status",
+    "noPending": "Der er ingen handling til gennemgang for dette trin. Se kørslen for resultatet.",
+    "preview": "Gennemgå denne tilsluttede handling, før den må udføres.",
+    "boundary": "Godkendelse tillader de gennemgåede argumenter én gang. Afvisning følger workflowets indstillede genopretnings- eller stopforløb. Øvrige adgangs- og kørselskontroller gælder stadig.",
+    "board": "Åbn hele godkendelsen",
+    "approve": "Godkend handling",
+    "reject": "Afvis handling",
+    "statusLabel": "Aktuel anmodningsstatus",
+    "statuses": {
+      "pending": "Afventer en beslutning.",
+      "approved": "Godkendt; udførelsen er endnu ikke bekræftet.",
+      "executing": "Udførelse i gang.",
+      "rejected": "Afvist.",
+      "expired": "Udløbet.",
+      "cancelled": "Annulleret.",
+      "executed": "Udførelse registreret af værktøjsgatewayen.",
+      "failed": "Fejlet; kontrollér kørslen, før du prøver igen.",
+      "unknown": "Status er ikke tilgængelig; kontrollér kørslen.",
+      "revision_requested": "Ændringer er anmodet. Gennemgå workflowudkastet, før der træffes en ny beslutning."
+    },
+    "checkpointTitle": "Godkendelsestrin i workflow",
+    "checkpointHeading": "Gennemgang af workflowgodkendelse",
+    "checkpointBoundary": "Godkendelse fortsætter denne kørsel fra den gennemgåede revision. Den giver ingen værktøjsadgang og bekræfter ikke senere arbejde. Afvisning følger workflowets indstillede genopretnings- eller stopforløb.",
+    "approveCheckpoint": "Godkend trin",
+    "rejectCheckpoint": "Afvis trin",
+    "changed": "Godkendelsen er ændret. Gennemgå det aktuelle indhold, før du træffer en ny beslutning."
   }
 }

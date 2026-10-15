@@ -2249,8 +2249,9 @@ registerV4Operation("get", `${runBase}/review`, "Get an immutable workflow run r
 registerV4Operation("post", `${runBase}/review`, "Record an identified human review and explicit corrections", runParams, { board: true, body: workflowRunReviewSchema, status: 201 });
 for (const action of ["task-result", "direct-result"]) registerV4Operation("post", `${runBase}/nodes/{nodeId}/${action}`, "Submit a typed result from the active assigned agent execution", runParams.extend({ nodeId: z.string() }), { body: z.object({ result: z.unknown() }).strict(), status: 201,
   description: "Requires a run-bound agent JWT, current delegated authority and the assigned active heartbeat. Results are schema validated and limited to 1 MB." });
-registerV4Operation("get", `${runBase}/tool-reviews`, "List durable workflow tool review requests", runParams);
-for (const decision of ["approve", "reject"]) registerV4Operation("post", `${runBase}/tool-reviews/{requestId}/${decision}`, `${decision === "approve" ? "Approve" : "Reject"} a bound workflow tool request`, runParams.extend({ requestId: z.string().uuid() }), { board: true });
+const workflowToolReviewAccount = z.object({ expectedUserId: z.string().min(1).max(300).optional() });
+registerV4Operation("get", `${runBase}/tool-reviews`, "List durable workflow tool review requests", runParams, { query: workflowToolReviewAccount });
+for (const decision of ["approve", "reject"]) registerV4Operation("post", `${runBase}/tool-reviews/{requestId}/${decision}`, `${decision === "approve" ? "Approve" : "Reject"} a bound workflow tool request`, runParams.extend({ requestId: z.string().uuid() }), { board: true, query: workflowToolReviewAccount });
 
 // ─── Memory ──────────────────────────────────────────────────────────────────
 
@@ -5463,8 +5464,8 @@ registry.registerPath({
   path: "/api/approvals/{id}",
   tags: ["approvals"],
   summary: "Get an approval",
-  request: { params: z.object({ id: z.string() }) },
-  responses: { 200: r.ok(), 401: r.unauthorized, 404: r.notFound },
+  request: { params: z.object({ id: z.string() }), query: z.object({ expectedUserId: z.string().min(1).max(300).optional() }) },
+  responses: { 200: r.ok(), 400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound, 409: r.conflict },
 });
 
 registry.registerPath({
@@ -5483,9 +5484,10 @@ registry.registerPath({
   summary: "Approve an approval",
   request: {
     params: z.object({ id: z.string() }),
+    query: z.object({ expectedUserId: z.string().min(1).max(300).optional() }),
     body: jsonBody(resolveApprovalSchema),
   },
-  responses: { 200: r.ok(), 400: r.badRequest, 401: r.unauthorized },
+  responses: { 200: r.ok(), 400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound, 409: r.conflict },
 });
 
 registry.registerPath({
@@ -5495,9 +5497,10 @@ registry.registerPath({
   summary: "Reject an approval",
   request: {
     params: z.object({ id: z.string() }),
+    query: z.object({ expectedUserId: z.string().min(1).max(300).optional() }),
     body: jsonBody(resolveApprovalSchema),
   },
-  responses: { 200: r.ok(), 400: r.badRequest, 401: r.unauthorized },
+  responses: { 200: r.ok(), 400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound, 409: r.conflict },
 });
 
 registry.registerPath({

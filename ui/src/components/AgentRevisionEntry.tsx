@@ -2,7 +2,8 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useEffect, useRef } from "react";
 import { useTranslation } from "react-i18next";
 import { agentAuthoringApi } from "../api/agent-authoring";
-import { useAccountIdentity } from "../api/companies-query";
+import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
+import { useV9PrivateReadAuthority } from "../hooks/useV9PrivateReadAuthority";
 import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
 import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
 import { useNavigate } from "../lib/router";
@@ -26,10 +27,12 @@ function CurrentRevisionEntry({
   beforeNavigate: () => boolean | Promise<boolean>;
 }) {
   const { t } = useTranslation("experience"),
-    identity = useAccountIdentity(),
+    identity = useV9CurrentAccount(),
     navigate = useNavigate(),
     client = useQueryClient();
   const principal = identity.userId;
+  const authority = useV9PrivateReadAuthority(principal ?? "");
+  const navigationPending = useRef(false);
   const alive = useRef(true),
     scope = useRef("");
   scope.current = `${company}:${principal}:${agentId}`;
@@ -39,12 +42,12 @@ function CurrentRevisionEntry({
       alive.current = false;
     };
   }, []);
-  const key = ["agent-draft-admission", company, principal, agentId];
+  const key = ["agent-draft-admission", company, principal, agentId, authority.epoch];
   const query = useQuery({
     queryKey: key,
     queryFn: ({ signal }) =>
-      agentAuthoringApi.admission(company, principal!, agentId, signal),
-    enabled: identity.settled && !!principal && !identity.localImplicit,
+      authority.read(() => agentAuthoringApi.admission(company, principal!, agentId, signal)),
+    enabled: authority.readReady && !!principal && !identity.localImplicit,
     retry: false,
     gcTime: 0,
     staleTime: 0,
@@ -60,8 +63,13 @@ function CurrentRevisionEntry({
     )
       void client.resetQueries({ queryKey: key });
   });
+  function current() {
+    const state = client.getQueryState(key);
+    return authority.canRead() && state?.status === "success" && state.fetchStatus === "idle" && !state.isInvalidated &&
+      client.getQueryData<{ canCreateDraft: boolean }>(key)?.canCreateDraft === true;
+  }
   if (
-    identity.failed ||
+    !current() || identity.failed ||
     query.isError ||
     query.isPending ||
     query.isFetching ||
@@ -77,11 +85,21 @@ function CurrentRevisionEntry({
         className="min-h-11"
         variant="outline"
         onClick={() => {
+          if (navigationPending.current || !current()) return;
           const requestedScope = scope.current;
-          void Promise.resolve(beforeNavigate()).then((allowed) => {
-            if (allowed && alive.current && scope.current === requestedScope)
-              navigate(`/agents/custom?agentId=${encodeURIComponent(agentId)}`);
-          });
+          navigationPending.current = true;
+          void (async () => {
+            try {
+              if (!await beforeNavigate() || !alive.current || scope.current !== requestedScope || !current()) return;
+              // The Human decision may outlive the server-side admission. Fetch
+              // its current Native owner again before handing off to the draft.
+              await client.fetchQuery({ queryKey: key, retry: false, staleTime: 0,
+                queryFn: ({ signal }) => authority.read(() => agentAuthoringApi.admission(company, principal!, agentId, signal)) });
+              if (alive.current && scope.current === requestedScope && current())
+                navigate(`/agents/custom?agentId=${encodeURIComponent(agentId)}`);
+            } catch { /* Failed admission never permits a handoff; the query hides the entry. */ }
+            finally { navigationPending.current = false; }
+          })();
         }}
       >
         {t("agentRevisionCreate")}

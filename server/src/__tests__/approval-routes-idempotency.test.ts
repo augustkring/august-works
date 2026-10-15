@@ -111,6 +111,19 @@ async function createAgentApp(options: { runId?: string; contextSnapshot?: Recor
 }
 
 describe("approval routes idempotent retries", () => {
+  it("rejects a changed expected account before Original approval reads or decisions", async () => {
+    const app = await createApp();
+    for (const action of ["", "/approve", "/reject"]) {
+      const url = `/api/approvals/approval-1${action}?expectedUserId=other-user`;
+      const response = action ? await request(app).post(url).send({}) : await request(app).get(url);
+      expect(response.status).toBe(409);
+      expect(response.body.details.code).toBe("ACCOUNT_CHANGED");
+      expect(response.headers["cache-control"]).toBe("private, no-store");
+    }
+    expect(mockApprovalService.getById).not.toHaveBeenCalled();
+    expect(mockApprovalService.approve).not.toHaveBeenCalled(); expect(mockApprovalService.reject).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     vi.clearAllMocks();
     mockApprovalService.list.mockReset();
@@ -137,6 +150,22 @@ describe("approval routes idempotent retries", () => {
     mockHeartbeatService.wakeup.mockResolvedValue({ id: "wake-1" });
     mockIssueApprovalService.listIssuesForApproval.mockResolvedValue([{ id: "issue-1" }]);
     mockLogActivity.mockResolvedValue(undefined);
+  });
+
+  it("returns private review material and forwards its binding to the Native decision owner", async () => {
+    const approval = { id: "approval-1", companyId: "company-1", type: "workflow_step_approval", status: "pending",
+      payload: { workflowRunId: "run-1" }, updatedAt: new Date("2026-10-15T12:00:00.000Z") };
+    mockApprovalService.getById.mockResolvedValue(approval);
+    const app = await createApp();
+    const read = await request(app).get("/api/approvals/approval-1?expectedUserId=user-1");
+    expect(read.status).toBe(200);
+    expect(read.body.reviewHash).toMatch(/^[a-f0-9]{64}$/);
+    expect(read.headers["cache-control"]).toBe("private, no-store");
+    mockApprovalService.approve.mockResolvedValue({ approval: { ...approval, status: "approved" }, applied: false });
+    const resolved = await request(app).post("/api/approvals/approval-1/approve?expectedUserId=user-1")
+      .send({ expectedReviewHash: read.body.reviewHash });
+    expect(resolved.status).toBe(200);
+    expect(mockApprovalService.approve).toHaveBeenCalledWith("approval-1", "user-1", undefined, read.body.reviewHash);
   });
 
   it("does not emit duplicate approval side effects when approve is already resolved", async () => {

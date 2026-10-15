@@ -30,7 +30,8 @@
     "displayedState": [
       "Human checkpoint, no checkpoint, execution-owner review or unavailable semantics for each step.",
       "Current checkpoint summary and consequence; no checkpoint never overrides execution admission.",
-      "A draft checkpoint does not create or pre-approve a future material action."
+      "A draft checkpoint does not create or pre-approve a future material action.",
+      "The ordinary run exposes exact active Native tool and Human checkpoint reviews. Human decisions bind the current approval material; a changed binding refuses before effect. Approval does not verify subsequent execution."
     ]
   },
   "inputs": [],
@@ -95,7 +96,8 @@
       "Current principal/company/resource-authorized Native state and bounded review metadata only"
     ],
     "dataCollected": [
-      "Explicit Human fields only under the Original owner processing purpose; leaf editors retain their own field contracts"
+      "Explicit Human fields only under the Original owner processing purpose; leaf editors retain their own field contracts",
+      "Before an explicit decision, sessionStorage retains only the opaque Original request ID, approve/reject choice and one-day local validity. Its key scopes company, current principal, run and opaque attempt ID. No review prose, inputs or outputs are persisted. A lost reply remains locked across refresh, remount and reload; reads never replay the decision."
     ],
     "sensitiveFields": [
       "Private configuration, work, account/source references and provider credentials"
@@ -115,13 +117,13 @@
   "acceptance": {
     "functional": [
       "Verify the specified Native baseline/version, current actor, no implicit effect, exact replay and lost-response recovery on the exact artifact.",
-      "Complete material approval-policy/card-family settlement and independent governance/channel qualification remain open. Existing semantic projections are partial implementation, not full acceptance."
+      "Current run pointers, exact Human material and node/revision binding, current-account refusal, unknown decision recovery and Native compare-and-set are covered by scoped software tests. Independent full card-family, channel and representative Human qualification remain open."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
     ],
     "securityPrivacy": [
-      "Verify current-account/resource revocation, tenant isolation, refusal before effect, exact source/version and no private persistence or log expansion.",
+      "Verify current-account/resource revocation, tenant isolation, refusal before effect, exact source/version and only the declared opaque recovery locator in browser persistence. Exclude private review prose and raw errors from generic logs.",
       "This contract maps existing partial Native implementation and intended V3 behavior. It accepts no release evidence by itself."
     ],
     "usability": [

@@ -24,7 +24,7 @@ import type {
   WorkflowRunDetail,
   WorkflowRevision,
 } from "@paperclipai/shared";
-import { api as defaultApi } from "./client";
+import { api as defaultApi, detachInflightGet } from "./client";
 import {
   workflowExperienceSchema,
   workflowRunExperienceSchema,
@@ -276,8 +276,11 @@ export const createWorkflowsApi = (api: typeof defaultApi = defaultApi) => ({
       `/companies/${companyId}/workflow-runs/${runId}/review`,
       input,
     ),
-  toolReviews: (companyId: string, runId: string) =>
-    api.get<{
+  toolReviews: (companyId: string, runId: string, principal?: string, signal?: AbortSignal) => {
+    const path = `/companies/${companyId}/workflow-runs/${runId}/tool-reviews${principal ? `?${new URLSearchParams({ expectedUserId: principal })}` : ""}`;
+    // A new authority/source read must not join an older session's transport.
+    detachInflightGet(path);
+    return api.get<{
       canReview: boolean;
       reviews: Array<{
         id: string;
@@ -290,17 +293,22 @@ export const createWorkflowsApi = (api: typeof defaultApi = defaultApi) => ({
         approvalId: string | null;
         expiresAt: string | null;
       }>;
-    }>(`/companies/${companyId}/workflow-runs/${runId}/tool-reviews`),
-  resolveToolReview: (
+    }>(path, { signal, cache: "no-store" });
+  },
+  resolveToolReview: async (
     companyId: string,
     runId: string,
     requestId: string,
     decision: "approve" | "reject",
-  ) =>
-    api.post<WorkflowRunDetail>(
-      `/companies/${companyId}/workflow-runs/${runId}/tool-reviews/${requestId}/${decision}`,
+    principal?: string,
+  ) => {
+    const value = await api.post<WorkflowRunDetail>(
+      `/companies/${companyId}/workflow-runs/${runId}/tool-reviews/${requestId}/${decision}${principal ? `?${new URLSearchParams({ expectedUserId: principal })}` : ""}`,
       {},
-    ),
+    );
+    if (value.run.companyId !== companyId || value.run.id !== runId) throw new Error("Workflow decision acknowledgement changed scope");
+    return value;
+  },
   dataSelector: (companyId: string, input: WorkflowDataSelectorRequest) =>
     api.post<WorkflowDataSelectorModel>(
       `/companies/${companyId}/workflows/data-selector`,

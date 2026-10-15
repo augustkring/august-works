@@ -82,6 +82,7 @@ export function NativeSupportControls({
     `${companyId}:${principal}`,
     sessions.isPending || sessions.isFetching,
     sessions.isError,
+    restoreFocus.current !== null,
   );
   useEffect(() => {
     if (

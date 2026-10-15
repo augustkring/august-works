@@ -301,3 +301,33 @@ it("keeps unknown operation and absent execution metadata explicit", () => {
     ],
   });
 });
+
+it("opens an Original tool review only for the exact current, retained waiting attempt", () => {
+  const f = fixture();
+  f.revision.graph.nodes[0].type = "connector.action";
+  f.detail.steps[0].toolInvocationId = id(96);
+  f.detail.waits[0].kind = "tool_action";
+  f.detail.waits[0].referenceType = "tool_invocation";
+  f.detail.waits[0].referenceId = id(96);
+  const trace = project(f).trace;
+  expect(trace.state).toBe("available");
+  if (trace.state !== "available") throw new Error("trace unavailable");
+  expect(trace.attempts[0].toolReviewNodeId).toBe("review");
+  expect(JSON.stringify(trace)).not.toContain(id(96));
+  for (const change of [() => { f.detail.waits[0].referenceId = id(95); },
+    () => { f.detail.waits[0].referenceId = id(96); f.detail.steps[0].payloadDeleted = true; },
+    () => { f.detail.steps[0].payloadDeleted = false; f.detail.run.status = "cancelled"; }]) {
+    change(); const value = project(f).trace;
+    expect(value.state === "available" && value.attempts[0].toolReviewNodeId).toBeUndefined();
+  }
+});
+
+it("links only an exact active Original approval without projecting its decision or payload", () => {
+  const f = fixture();
+  f.detail.waits[0].referenceType = "approval";
+  const get = () => { const trace = project(f).trace; if (trace.state !== "available") throw new Error("trace unavailable"); return trace.attempts[0]; };
+  expect(get().approvalReview).toEqual({ id: id(97), nodeId: "review" });
+  expect(JSON.stringify(get())).not.toContain("SECRET");
+  f.detail.steps[0].payloadDeleted = true; expect(get().approvalReview).toBeUndefined();
+  f.detail.steps[0].payloadDeleted = false; f.detail.waits[0].status = "resolved"; expect(get().approvalReview).toBeUndefined();
+});

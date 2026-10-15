@@ -68,7 +68,9 @@ test("current ordered review shows exact private input and missing connection ac
     await expect(page.getByText('"customer.name"', { exact: true })).toBeVisible();
     await expect(page.getByText("Your current account lacks permission to use connected tools in this company. Review the connection permissions.", { exact: true })).toBeVisible();
     const preview = page.getByRole("link", { name: "Review Contact system permissions", exact: true });
-    await expect(preview).toHaveAttribute("href", new RegExp(`/apps/${connectionId}/permissions$`));
+    const permissionUrl = new URL((await preview.getAttribute("href"))!, page.url());
+    expect(permissionUrl.pathname.endsWith(`/apps/${connectionId}/permissions`)).toBe(true);
+    expect(permissionUrl.search).toBe(`?focus=${entryId}`);
     await expect(page.getByRole("button", { name: "Review internal test", exact: true })).toHaveCount(0);
     await expect(page.getByText("PRIVATE objective", { exact: true })).toBeVisible();
     await expect(page.getByRole("main")).not.toContainText("PRIVATE tool input");

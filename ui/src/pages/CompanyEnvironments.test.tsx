@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
 import { createRoot } from "react-dom/client";
+import { act } from "react";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -235,12 +236,6 @@ class FakeWebSocket {
   emitMessage(data: string) {
     this.onmessage?.(new MessageEvent("message", { data }));
   }
-}
-
-async function act(callback: () => void | Promise<void>) {
-  await callback();
-  await Promise.resolve();
-  await new Promise((resolve) => window.setTimeout(resolve, 0));
 }
 
 async function flushReact() {

@@ -3,11 +3,14 @@ import type { ApprovalStatus, ApprovalType } from "../constants.js";
 export interface Approval {
   id: string;
   companyId: string;
-  type: ApprovalType;
+  // Workflow checkpoints are created only by the Native executor. The public
+  // createApprovalSchema keeps its separate caller-authored type allowlist.
+  type: ApprovalType | "workflow_step_approval";
   requestedByAgentId: string | null;
   requestedByUserId: string | null;
   status: ApprovalStatus;
   payload: Record<string, unknown>;
+  reviewHash?: string;
   decisionNote: string | null;
   decidedByUserId: string | null;
   decidedAt: Date | null;

@@ -1,5 +1,6 @@
 import { createRequire } from "node:module";
 import { expect, test, type APIResponse } from "@playwright/test";
+test.use({ trace: "retain-on-failure" });
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 async function json(response: APIResponse) {
   expect(response.ok(), `${response.status()}: ${await response.text()}`).toBe(

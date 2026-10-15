@@ -2977,5 +2977,36 @@
     "withdraw": "Turn off and delete observations",
     "check": "Check current choice",
     "enable": "Allow local observations"
+  },
+  "workflowToolReview": {
+    "heading": "Connected action review",
+    "unavailable": "Current action review is unavailable. Check your access and try again.",
+    "unconfirmed": "Your decision is unconfirmed. Check the current status before taking another action. Do not repeat the decision.",
+    "check": "Check current status",
+    "noPending": "No action review is currently listed for this step. Check the run for its outcome.",
+    "preview": "Review this connected action before allowing execution.",
+    "boundary": "Approval allows these reviewed arguments once. Rejection follows the workflow’s configured recovery or stop path. Other access and execution checks still apply.",
+    "board": "Open full approval",
+    "approve": "Approve action",
+    "reject": "Reject action",
+    "statusLabel": "Current request status",
+    "statuses": {
+      "pending": "Waiting for a decision.",
+      "approved": "Approved; execution is not yet confirmed.",
+      "executing": "Execution in progress.",
+      "rejected": "Rejected.",
+      "expired": "Expired.",
+      "cancelled": "Cancelled.",
+      "executed": "Execution recorded by the tool gateway.",
+      "failed": "Failed; check the run before trying again.",
+      "unknown": "Status unavailable; check the run.",
+      "revision_requested": "Revision requested. Review the workflow draft before a new decision."
+    },
+    "checkpointTitle": "Workflow checkpoint",
+    "checkpointHeading": "Workflow approval review",
+    "checkpointBoundary": "Approval continues this run from its reviewed revision. It grants no tool access and does not verify later work. Rejection follows the workflow’s configured recovery or stop path.",
+    "approveCheckpoint": "Approve step",
+    "rejectCheckpoint": "Reject step",
+    "changed": "The approval changed. Review the current material before making a new decision."
   }
 }

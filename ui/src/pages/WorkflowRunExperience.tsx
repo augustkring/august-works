@@ -16,6 +16,7 @@ import { WorkflowSupportDiagnostics } from "../components/WorkflowSupportDiagnos
 import { Link, useParams } from "../lib/router";
 import { queryKeys } from "../lib/queryKeys";
 import { WorkflowRun } from "./WorkflowRun";
+import { WorkflowToolReview } from "../components/workflows/WorkflowToolReview";
 
 export function WorkflowRunEntry() {
   const feature = useV9FeatureEnabled("progressive_shell_v9");
@@ -220,6 +221,12 @@ export function WorkflowRunExperience({
                   {attempt.waitingFor.map((kind) => (
                     <p key={kind}>{t(`workflowWaiting.${kind}`)}</p>
                   ))}
+                  {attempt.approvalReview?.id && <>
+                    <WorkflowToolReview companyId={company} runId={id} attemptId={attempt.id} nodeId={`approval:${attempt.approvalReview?.id}`}
+                      checkpoint={{ approvalId: attempt.approvalReview.id, nodeId: attempt.approvalReview.nodeId, workflowId: workflow, revisionId: detail.revisionId }} />
+                    <Link className="inline-flex min-h-11 items-center underline" to={`/approvals/${attempt.approvalReview?.id}`}>{t("workflowToolReview.board")}</Link>
+                  </>}
+                  {attempt.toolReviewNodeId && <WorkflowToolReview companyId={company} runId={id} attemptId={attempt.id} nodeId={attempt.toolReviewNodeId} />}
                   {attempt.payloadUnavailable && (
                     <p>{t("workflowRunPayloadUnavailable")}</p>
                   )}

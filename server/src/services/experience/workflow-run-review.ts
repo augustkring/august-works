@@ -128,6 +128,9 @@ export function workflowRunReview(
         state: "available" as const,
         attempts: steps.map((step) => {
           const node = nodeMap.get(step.nodeId)!;
+          const approvals = waits.filter(wait => wait.nodeId === step.nodeId && wait.status === "active" &&
+            wait.kind === "human_interaction" && wait.referenceType === "approval" && wait.referenceId);
+
           return {
             id: step.id,
             name: node.name.slice(0, 160),
@@ -142,6 +145,12 @@ export function workflowRunReview(
                 ? ("tool" as const)
                 : ("not_recorded" as const),
             approvalCheckpoint: node.type === "human.approval",
+            ...(run.status === "waiting" && step.status === "waiting" && !step.payloadDeleted && step.nodeId.length <= 160 && approvals.length === 1
+              ? { approvalReview: { id: approvals[0].referenceId!, nodeId: step.nodeId } } : {}),
+            ...(run.status === "waiting" && step.status === "waiting" && !step.payloadDeleted && node.type === "connector.action" &&
+              step.nodeId.length <= 160 && waits.filter(wait => wait.nodeId === step.nodeId && wait.status === "active" &&
+                wait.kind === "tool_action" && wait.referenceType === "tool_invocation" && wait.referenceId === step.toolInvocationId).length === 1
+              ? { toolReviewNodeId: step.nodeId } : {}),
             payloadUnavailable: step.payloadDeleted === true,
             branchChoice: branchChoice(step, node, revision.graph),
             waitingFor:

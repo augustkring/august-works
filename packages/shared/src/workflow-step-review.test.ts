@@ -61,3 +61,11 @@ it("accepts only pinned explicit scalar tool edits, keeping connection selection
   for (const extra of [{ connectionId: revision.id }, { inputMapping: { query: "{{trigger.private}}" } }, { grants: ["tools:use"] }, { inputSchemaHash: "old" }])
     expect(workflowDraftStepCommandSchema.safeParse({ ...value, configuration: { ...value.configuration, ...extra } }).success).toBe(false);
 });
+
+it("allows an exact catalog-action focus without admitting arbitrary permission URLs", () => {
+  const href = "/apps/10000000-0000-4000-8000-000000000001/permissions";
+  const view = { state: "execution_check", connectionName: "Contacts", operationName: "Find", previewHref: href };
+  expect(workflowStepToolAccessSchema.safeParse({ ...view, previewHref: href + "?focus=10000000-0000-4000-8000-000000000002" }).success).toBe(true);
+  for (const suffix of ["?focus=bad", "?focus=10000000-0000-4000-8000-000000000002&allow=true", "?redirect=https://outside.invalid", "#approve", "?focus=javascript:alert(1)"])
+    expect(workflowStepToolAccessSchema.safeParse({ ...view, previewHref: href + suffix }).success).toBe(false);
+});

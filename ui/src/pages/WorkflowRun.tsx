@@ -482,7 +482,7 @@ export function WorkflowRun() {
                 <p className="text-xs text-muted-foreground">
                   {waitDescription(activeWait)}
                 </p>
-                {activeWait.kind === "tool_action" && <WorkflowToolReview companyId={selectedCompanyId!} runId={runId!} nodeId={activeWait.nodeId} />}
+                {activeWait.kind === "tool_action" && <WorkflowToolReview companyId={selectedCompanyId!} runId={runId!} attemptId={activeStep.id} nodeId={activeWait.nodeId} />}
                 {activeWait.kind === "human_interaction" &&
                 activeWait.referenceType === "approval" &&
                 activeWait.referenceId ? (

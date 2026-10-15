@@ -45,6 +45,7 @@ async function mount() {
       </QueryClientProvider>,
     ),
   );
+  return client;
 }
 const model = {
   companyId: "10000000-0000-4000-8000-000000000001",
@@ -145,4 +146,23 @@ describe("Home state truth", () => {
       ),
     ).toBe(true);
   });
+});
+
+it.each([false, true])("orients a remounted current heading after a private recheck without interrupting utilities (utility=%s)", async utility => {
+  let finish!: (value: typeof model) => void;
+  vi.spyOn(experienceApi, "home").mockResolvedValueOnce(model)
+    .mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  const client = await mount();
+  await vi.waitFor(() => expect(document.activeElement).toBe(container.querySelector("h1")));
+  const original = container.querySelector("h1");
+  await act(async () => { void client.refetchQueries({ type: "active" }); });
+  await vi.waitFor(() => expect(container.querySelector("h1")).toBeNull());
+  const feedback = document.createElement("button"); feedback.textContent = "Feedback"; document.body.append(feedback);
+  try {
+    if (utility) feedback.focus();
+    await act(async () => finish(model));
+    await vi.waitFor(() => expect(container.querySelector("h1")).not.toBeNull());
+    expect(container.querySelector("h1")).not.toBe(original);
+    expect(document.activeElement).toBe(utility ? feedback : container.querySelector("h1"));
+  } finally { feedback.remove(); }
 });
