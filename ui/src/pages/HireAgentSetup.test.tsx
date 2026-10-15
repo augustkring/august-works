@@ -10,6 +10,8 @@ import {
   agentAuthoringContentSchema,
   type AgentAuthoringDraftView,
   type LiveEvent,
+  agentDraftPublicationReviewSchema,
+  agentDraftPublicationReceiptSchema,
 } from "@paperclipai/shared";
 import { agentAuthoringApi } from "../api/agent-authoring";
 import { ApiError } from "../api/client";
@@ -72,6 +74,7 @@ afterEach(async () => {
   client?.clear();
   container?.remove();
   context.handlers.clear();
+  sessionStorage.clear();
   vi.restoreAllMocks();
   await i18n.changeLanguage("en");
 });
@@ -434,4 +437,38 @@ it("saves the selected actual Agent runtime in the original candidate without le
   await vi.waitFor(() => expect(container.textContent).toContain("This runtime is selected in the saved candidate"));
   expect(container.textContent).not.toContain("Saved Hire setups destination");
   expect(start).not.toHaveBeenCalled(); expect(publish).not.toHaveBeenCalled();
+});
+
+
+it("keeps a recovered Original publication visible across the hire receipt transition", async () => {
+  const agentId = "10000000-0000-4000-8000-000000000004";
+  const requestId = "10000000-0000-4000-8000-000000000005";
+  const prepared = { ...draft, agentId, step: "hire_review" as const };
+  const command = { requestId, expectedVersion: prepared.version, expectedReviewHash: "b".repeat(64),
+    activate: true, confirmPublication: true, confirmActivation: true };
+  sessionStorage.setItem(`aw:v9:agent-publication:${company}:author:${id}`, JSON.stringify(command));
+  vi.spyOn(agentAuthoringApi, "get").mockResolvedValue(prepared);
+  vi.spyOn(agentAuthoringApi, "packageSetupReview").mockRejectedValue(new Error("Not part of this receipt test"));
+  vi.spyOn(agentAuthoringApi, "publicationReview").mockResolvedValue(agentDraftPublicationReviewSchema.parse({
+    companyId: company, draftId: id, version: prepared.version, agentId,
+    previousVersion: 1, nextVersion: 2, before: prepared.content, after: prepared.content,
+    activate: true, canPublish: true, blockers: [], requiredProcedures: [], maximumPerModelCallMinor: 3,
+    currency: "USD", provider: "anthropic", model: "fixture-model", runtimeBindingId: null,
+    reviewHash: command.expectedReviewHash, modelCalled: false, authorityGranted: false, executionStarted: false,
+  }));
+  const original = agentDraftPublicationReceiptSchema.parse({ companyId: company, draftId: id, requestId, agentId,
+    revisionId: requestId, publishedVersion: 2, publishedAt: "2026-10-12T00:00:00Z", activatedAtPublication: true,
+    publishedContent: prepared.content, authorityGranted: false, executionStarted: false });
+  const receipt = vi.spyOn(agentAuthoringApi, "publicationReceipt").mockResolvedValue(original);
+  const publish = vi.spyOn(agentAuthoringApi, "publish");
+  await mount("hire_review");
+  await vi.waitFor(() => expect(container.textContent).toContain("Check original publication"));
+  await click("Check original publication");
+  await vi.waitFor(() => expect(Array.from(container.querySelectorAll("h2")).some(
+    heading => heading.textContent === i18n.t("hireSetup.stepReceipt", { ns: "experience" }),
+  )).toBe(true));
+  await vi.waitFor(() => expect(container.textContent).toContain("Version 2 was published and activated"));
+  expect(container.textContent).not.toContain("Check original publication");
+  expect(receipt.mock.calls.every(call => call[3] === requestId)).toBe(true);
+  expect(publish).not.toHaveBeenCalled();
 });

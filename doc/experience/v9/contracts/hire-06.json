@@ -8,20 +8,20 @@
     "admin",
     "security_admin"
   ],
-  "customerOutcome": "Inspect the saved proposal and current blockers before any production activation.",
+  "customerOutcome": "Review the saved Hire configuration, current qualification blockers and package setup before explicitly confirming Original publication and activation.",
   "entryConditions": [
     "Current verified creator in the selected company with native agents:create authority; no instance-admin bypass.",
     "The canonical setup pins an immutable native customer package version; historical reads and discard survive flag rollback.",
     "Pending/failed current account or settings checks hide private content and controls. Same-account drafts remain mounted and resume only after a fresh original-owner read; a different settled principal cannot inherit the draft."
   ],
   "exitConditions": [
-    "Save & exit and section changes persist only an unpublished canonical proposal with request/version fences.",
-    "No agent, installation, grant, execution result or active receipt is created.",
-    "Native representative test, connection scope assessment, publication and active receipt remain incomplete."
+    "Saving the setup does not itself change the active Agent, grant access or start work.",
+    "Publication/activation requires the admitted exact Native review and two explicit confirmations; package purpose/activation is a separate Original decision.",
+    "A publication receipt is not proof of a model run or independently verified business outcome. Live provider/channel, manual and representative Human qualification remain open."
   ],
   "content": {
     "h1": "Review setup",
-    "supportingCopy": "Inspect the saved proposal and current blockers before any production activation.",
+    "supportingCopy": "Review the saved Hire configuration, current qualification blockers and package setup before explicitly confirming Original publication and activation.",
     "customerTerms": [
       "Agent",
       "Company",
@@ -38,14 +38,13 @@
   "inputs": [],
   "actions": {
     "primary": {
-      "label": "Hire agent",
-      "operation": "Persist the private proposal before continuing; disabled for unqualified representative test or activation. No active receipt is fabricated."
+      "label": "Review publication and activation",
+      "operation": "Review exact before/after, required procedures, provider/model and bounded cost. Confirm publication and activation against the current draft version and review hash; unqualified or changed state blocks the Original command."
     },
     "secondary": [
-      "Save & exit",
-      "Resume saved section",
-      "Retry the exact unacknowledged save",
-      "Explicitly reload after a version conflict"
+      "Check the Original publication after unknown acknowledgement using the immutable request ID",
+      "Read the same Original receipt after reload or rollout withdrawal",
+      "Save & exit for the unpublished draft; exact request/version retry and explicit conflict reload remain separate"
     ],
     "destructiveOrIrreversible": [
       "Discard setup removes authored proposal content; current native authority and exact request/version fences apply."
@@ -55,12 +54,14 @@
     "canonicalReadDomains": [
       "Native creator-private agent_configuration_drafts",
       "Pinned native package version and current customer qualification",
-      "Current authorized company members and approved Foundation sources"
+      "Current authorized company members and approved Foundation sources",
+      "Original agent draft publication review and exact request-bound publication receipt",
+      "Original package purpose/activation review and receipt"
     ],
-    "canonicalWriteOperation": "Native unpublished draft save/discard only; per-kind step validation, immutable source pins and unmodifiable Hire capability declarations.",
-    "authorityEffect": "No grants, activation, agent mutation, external messages or runtime execution.",
+    "canonicalWriteOperation": "Receipt-only mode performs no publication. Review mode uses the existing Original publication/activation command with exact version, review hash, request ID and both confirmations; package setup uses its separate Original owner.",
+    "authorityEffect": "Saving the setup grants no access or activation. Explicit admitted publication promotes and activates the reviewed Native Agent without dispatching a run or granting arbitrary external effects. Reading its receipt has no such effect.",
     "asyncWork": "Principal/company/draft-keyed no-store queries; immediate hide on authority events; frozen request/body/version retry; late acknowledgements cannot restore private content after revocation. V9 account observation rechecks on return inside the ordinary 30-second freshness window, without restarting reads for nested observers. Same-turn QueryClient fetch guards and authority epochs fence Native transport and late acknowledgements.",
-    "receipt": "Saved setup version only. Representative execution, independent verification, publication and active-agent receipts remain unavailable."
+    "receipt": "Current Original company/draft/Agent/request-bound published version and package provenance. Keep the same publication instance across review to receipt and re-read the Original under current authority. A reload preserves command identity, never inferred success or automatic replay."
   },
   "states": {
     "loading": "Announce loading only while the current identity/company request is pending.",
@@ -122,7 +123,8 @@
   "acceptance": {
     "functional": [
       "Exercise save/resume/discard, exact retries, concurrent versions, immutable package pins, withdrawal, authority revocation and rollback reads.",
-      "Complete representative execution, connection assessment, native publication and active receipt are open; source partial states cannot qualify this journey."
+      "Verify the current Native qualification gates, package setup, publication and exact receipt recovery separately. Provider/host and complete journey qualification remain open; source evidence cannot establish representative Human acceptance.",
+      "A successful Original publication check must remain recoverable across navigation to hire_receipt without a second Human check, no repeated POST and no authority bypass."
     ],
     "accessibility": [
       "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."

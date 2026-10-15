@@ -602,22 +602,24 @@ export function HireAgentSetup({
               client.getQueryState(key)?.fetchStatus === "idle"}
             onConfirmed={value => { if (!alive.current || !authority.canRead() || checking.current) return;
               client.setQueryData(key, value); setReceipt(value); setContent(value.content); }} />
-          <AgentDraftPublication key={`publication:${receipt.id}`} company={company} principal={principal} draft={receipt}
-            onPublished={() => { if (alive.current && authority.canRead()) navigate(`/agents/hire/drafts/${id}/hire_receipt`); }}
-              options={options.isSuccess && !options.isFetching ? options.data : null}
-            enabled={viewReady && enabled && !frozen && JSON.stringify(content) === JSON.stringify(receipt.content)}
-            canUseAuthority={() => alive.current && authority.canRead() && !checking.current && !checkingAccess &&
-              client.getQueryState(key)?.fetchStatus === "idle"} />
         </section>
       )}
       {step === "hire_receipt" && (
         <section className="space-y-3" aria-labelledby="hire-receipt">
           <h2 id="hire-receipt" className="text-lg font-semibold">{t("hireSetup.stepReceipt")}</h2>
-          <AgentDraftPublication receiptOnly company={company} principal={principal} draft={receipt}
-            options={options.isSuccess && !options.isFetching ? options.data : null}
-            enabled={viewReady && !frozen}
-            canUseAuthority={() => alive.current && authority.canRead() && !checking.current && !checkingAccess && client.getQueryState(key)?.fetchStatus === "idle"} />
         </section>
+      )}
+      {/* Preserve the admitted Original command/receipt across review → receipt.
+          A remount would reload the stored command as unknown and ask the Human
+          to reconcile the same confirmed publication a second time. */}
+      {["hire_review", "hire_receipt"].includes(step) && (
+        <AgentDraftPublication key={`publication:${receipt.id}`} company={company} principal={principal} draft={receipt}
+          receiptOnly={step === "hire_receipt"}
+          onPublished={step === "hire_review" ? () => { if (alive.current && authority.canRead()) navigate(`/agents/hire/drafts/${id}/hire_receipt`); } : undefined}
+          options={options.isSuccess && !options.isFetching ? options.data : null}
+          enabled={viewReady && !frozen && (step === "hire_receipt" || enabled && JSON.stringify(content) === JSON.stringify(receipt.content))}
+          canUseAuthority={() => alive.current && authority.canRead() && !checking.current && !checkingAccess &&
+            client.getQueryState(key)?.fetchStatus === "idle"} />
       )}
       {["hire_test", "hire_review", "hire_receipt"].includes(step) && (
         <section className="space-y-2" aria-labelledby="hire-blockers">

@@ -2758,3 +2758,20 @@ behavior 453 ms. Production ownership and permissions do not change.
 Retain the original failure and continue the exact remaining shard/workspaces.
 See [the scoped verification note](2026-10-15-aw-v9-plugin-route-collection.md).
 Source completeness, all 70 launch rows and R0 remain open. No PR/push.
+
+
+### 79 — Preserve a recovered Hire publication across its receipt navigation
+
+The checkpoint76 built-host repeat passed six Agent cases and failed Danish Hire
+publication: the Original receipt check succeeded, but navigation remounted the
+publication surface and treated the same stored command as unknown again. A
+routed parent/component regression reproduces the final receipt page with no
+receipt. One shared keyed publication instance now survives review → receipt;
+receipt-only mode still re-reads the exact Original through current authority.
+No permission, version/hash, confirmation or replay guard changes.
+
+The pre-fix test fails; all 22 focused Hire/publication component cases pass after
+the fix. English/Danish copy now states the saved-draft boundary without calling
+an already confirmed publication unpublished. The final three UI/locale suites pass 29 cases; UI types, token gates, inventory
+and the two current Hire contracts pass. Built browser verification follows. See [the bounded plan](2026-10-15-aw-v9-hire-publication-receipt.md).
+All 70 launch evidence rows, source completion and R0 remain open. No PR/push.

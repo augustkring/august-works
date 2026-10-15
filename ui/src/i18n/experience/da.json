@@ -1314,7 +1314,7 @@
     "discarded": "Denne opsætning blev kasseret. Ingen agent blev aktiveret.",
     "hire": "Ansæt agent",
     "version": "Gemt opsætning v{{version}} · {{packageVersion}}",
-    "unpublished": "Dette er en upubliceret opsætning. Den har ikke givet en agent virksomhedsadgang eller startet arbejde.",
+    "unpublished": "Når du gemmer opsætningen, ændrer det ikke den aktive agent, giver adgang eller starter arbejde. Udgivelse og aktivering kræver en separat gennemgang og din bekræftelse.",
     "changesUnavailable": "Nye ændringer i opsætningen er ikke tilgængelige. Du kan stadig læse eller kassere den gemte opsætning.",
     "retrySave": "Prøv den samme gemmeanmodning igen",
     "reload": "Genindlæs gemt opsætning — erstatter ændringer, der ikke er gemt",

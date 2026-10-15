@@ -1314,7 +1314,7 @@
     "discarded": "This setup was discarded. No agent was activated.",
     "hire": "Hire agent",
     "version": "Saved setup v{{version}} · {{packageVersion}}",
-    "unpublished": "This is an unpublished setup. It has not given an agent company access or started work.",
+    "unpublished": "Saving this setup does not change the active agent, grant access or start work. Publication and activation require a separate review and your confirmation.",
     "changesUnavailable": "New setup changes are unavailable. You can still read or discard this saved setup.",
     "retrySave": "Retry the same save",
     "reload": "Reload saved setup — replaces unsaved edits",
