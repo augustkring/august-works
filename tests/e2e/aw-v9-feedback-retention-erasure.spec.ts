@@ -64,8 +64,12 @@ test("erasure uses separate keyboard C3, reads an unknown reply, survives accoun
   });
   async function openQueue() {
     const input = page.getByRole("textbox", { name: "Company ID", exact: true });
-    await input.fill(company.id);
-    await expect(input).toHaveValue(company.id);
+    // A session recheck can withdraw the private form between focus and input.
+    // Retry only this local edit after the current form returns, never erasure.
+    await expect(async () => {
+      await input.fill(company.id);
+      await expect(input).toHaveValue(company.id);
+    }).toPass({ timeout: 10000 });
     const open = page.getByRole("button", { name: "Open queue", exact: true });
     await expect(open).toBeEnabled();
     await open.focus(); await open.press("Enter");

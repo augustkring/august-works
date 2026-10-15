@@ -102,7 +102,7 @@ test("unknown account deletion retains one original request across the actual or
     await expect(main.getByLabel("Type DELETE MY ACCOUNT", { exact: true })).toHaveValue("DELETE MY ACCOUNT");
     await main.getByRole("checkbox", { name: "I have saved any exports I need.", exact: true }).check();
     await main.getByRole("button", { name: "Delete account", exact: true }).click();
-    await expect(main.getByRole("alert")).toContainText("Your deletion request is not confirmed");
+    await expect(main.getByRole("region", { name: "Delete your account", exact: true }).getByRole("alert")).toContainText("Your deletion request is not confirmed");
     expect(state.writes).toHaveLength(1); const original = structuredClone(state.writes[0]);
     // Settings has its own sidebar. Return through the real app navigation to
     // reach the original organization switcher, unmounting the private form.

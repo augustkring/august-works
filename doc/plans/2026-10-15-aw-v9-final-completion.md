@@ -207,3 +207,31 @@ the subsequently passing Native classic/current browser checks, and the final
 follow-up still required. V9-066/068/069/071/073 move only to in_progress.
 Classic retirement, host/provider access and representative Human qualification
 remain separate, open requirements.
+
+
+### Corrected-source broad browser verification and review
+
+Source `898eebe833985483a5892f9422880a6f4c25d965` passes the updated server/UI
+typechecks and complete workspace build. Its complete local default catalog
+is running in the unchanged primary worktree. The independent built V9 browser
+run completes all 97 cases in 13.7 minutes: 95 pass and two fail. Both long-thread
+modes pass (classic 52.4 seconds; current 2.2 minutes). No current heap-range or
+no-leak claim is inferred from those pass results.
+
+The account-deletion test selected every alert in the main region, including
+the new independent observation-choice failure. Its assertion is now scoped to
+the named account-deletion region; the deletion outcome and immutable request
+body assertions remain. The notification test establishes that the browser tab
+is visible before driving its foreground session check. CI separately found a
+Company ID edit racing the operator form's deliberate withdrawal during session
+revalidation. Only that local edit is retried against the current form; erasure
+and other Native writes are never replayed by the test helper. All four affected
+browser cases pass in the focused follow-up with failure traces enabled.
+
+CodeRabbit completed its review of 80 selected files on `898eebe83` with no
+actionable comments and no code-change request. Its optional docstring coverage
+check is inconclusive (22.81% of supported touched functions; some files skipped
+by that check). This is not described as Greptile 5/5 or Human acceptance. PR 39
+is ready for review; current-head CI and the catalog check must finish before a
+merge-ready claim. The follow-up changes only these test fixtures and this
+record, preserving the production source verified on `898eebe83`.
