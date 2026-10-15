@@ -132,7 +132,7 @@ describe("AppErrorBoundary", () => {
       expect(container.textContent).not.toContain("private-canary");
       expect(container.textContent).not.toContain("private-customer-canary");
       expect(captureBrowserExceptionMock).toHaveBeenCalledWith(privateError, expect.objectContaining({ boundary: "app" }));
-      expect(consoleErrorSpy.mock.calls.filter(args => args[0] === "App shell crashed")).toEqual([["App shell crashed"]]);
+      expect(consoleErrorSpy.mock.calls.filter((args: unknown[]) => args[0] === "App shell crashed")).toEqual([["App shell crashed"]]);
       expect(container.querySelector("a")?.getAttribute("href")).toBe("mailto:support@blentera.com");
     } finally { act(() => root.unmount()); }
   });
