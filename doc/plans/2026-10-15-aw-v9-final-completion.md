@@ -51,6 +51,52 @@ V9 component job with its installed Chromium. Token gates pass.
 
 Final broad verification results must be recorded before PR-ready hand-off.
 
+### Broad source check and Native browser follow-up
+
+Full workspace types and build pass on `d12d71b35f420c44a1e701f15237311bd8f9cd5a`.
+The full UI run has 807 passing files / 7,959 passing cases and one failing
+motion-catalog case. The new fixed accessibility lifecycle token had used the
+`--motion-*` namespace, whose existing contract requires membership in the
+customer animation-tuning catalog. It now uses the explicit
+`--a11y-reduced-motion-lifecycle` namespace; the policy value is unchanged and
+the catalog assertion is preserved. All four affected UI files / 94 cases pass
+after that correction. This is scoped follow-up evidence, not a claim that the
+first full run passed.
+
+The new Native browser soak creates 500 synthetic comments through the actual
+API on an unassigned backlog task. A zero-budget process fixture is paused
+through the Original API with heartbeat disabled, so this existing-company
+workload does not accidentally enter the correct agentless onboarding flow.
+It explicitly selects the retained classic interface and restores the flag.
+The final prototype passes in 50.8 seconds: two warmup cycles and 24 measured
+cycles navigate to Overview and Back inside one browser document, load the
+actual paginated history, preserve more than 450 source rows with a bounded
+rendered window, and measure heap/DOM/listeners after explicit Chromium GC.
+This is a short synthetic retention probe, not hourly, mobile, current/default
+Task Chat, hosted or customer performance qualification. No memory/latency
+acceptance target is invented. The committed test persists its observations
+as a private JSON file rather than relying on an in-memory reporter attachment.
+
+Earlier harness failures are retained outside the repository: the dev-only
+fixture route is absent from production, history loading needed source-count
+postconditions, a response waiter omitted the Original identifier alias, a
+cleanup error masked an initial timeout, the agentless onboarding overlay
+correctly blocked navigation, and the pause command required its normal empty
+JSON body. No production guard was disabled to pass the soak.
+
+### Existing live-target discovery
+
+Read-only discovery found no GitHub environments or deployments. Repository
+variables cannot be read with the current integration (403); Pages reports
+404. `doc/operations/aw-v6-runtime.md:105` names
+`https://ai.augustworks.dk` as the initial origin, but its health request is
+refused by the CONNECT proxy (403, no target HTTP response) and the current
+resolver returns no address. The documented future `.ai` origin is explicitly
+deferred. These observations do not prove that no external installation exists.
+The managed environment exposes no configured provider identities, runtime
+variables or secret bindings. No secret-file discovery, account creation,
+provider send, deployment or purchase was performed.
+
 ## Remaining closure boundaries
 
 The 120-row backlog and 70-surface manifest remain authoritative working

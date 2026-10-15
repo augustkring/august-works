@@ -3070,11 +3070,11 @@ span.paperclip-mention-chip[data-mention-kind="external-object"] {
    can finish teardown on animationend; remove loops, delays and smooth CSS
    scrolling. Existing static alternatives above retain their final states. */
 :root {
-  --motion-reduced-lifecycle: 0.01ms;
+  --a11y-reduced-motion-lifecycle: 0.01ms;
 }
 @media (prefers-reduced-motion: reduce) {
   *, *::before, *::after {
-    animation-duration: var(--motion-reduced-lifecycle) !important;
+    animation-duration: var(--a11y-reduced-motion-lifecycle) !important;
     animation-delay: 0ms !important;
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
@@ -3082,7 +3082,7 @@ span.paperclip-mention-chip[data-mention-kind="external-object"] {
   /* Autofill's long background transition prevents a browser color flash;
      it is not movement and must retain its existing browser workaround. */
   *:not(:-webkit-autofill), *::before, *::after {
-    transition-duration: var(--motion-reduced-lifecycle) !important;
+    transition-duration: var(--a11y-reduced-motion-lifecycle) !important;
     transition-delay: 0ms !important;
   }
 }
