@@ -4,14 +4,23 @@ import { createRequire } from "node:module";
 import { analyticalPurpose } from "../../server/src/__tests__/helpers/business-metric-fixture.ts";
 import { json } from "./agent-chat.shared";
 test.setTimeout(120000);
+test.use({ trace: "retain-on-failure" });
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 // Actual local-trusted API and shipped operator UI. Explicit deterministic native
 // fixtures qualify owner integration; no provider/Human/pilot trial is claimed.
 for (const mode of ["joint", "initiative"] as const) test(`a native operator separately reviews real ${mode} planning before canonical changes`, async ({ page, request }, info) => {
   const original = await json(await request.get("/api/instance/settings/experimental"));
+  let primaryFailed = false;
   try {
     await json(await request.patch("/api/instance/settings/experimental", { data: { analytical_lineage_v8: true, business_metrics_v8: true, strategy_execution_v8: true, adaptive_planning_v8: true, planning_optimizer_v8: true, enableFoundationV1: true, project_roadmap_v5: true, ai_use_cases_v7: true, governance_evidence_v7: true } }));
     const company = await json(await request.post("/api/companies", { data: { name: "Native joint planning browser fixture" } }));
+    // Planning is an existing-company journey. Keep agentless onboarding out of
+    // this fixture without admitting any autonomous execution.
+    const agent = await json(await request.post(`/api/companies/${company.id}/agents`, { data: {
+      name: "Paused planning fixture", adapterType: "process", adapterConfig: { command: "/usr/bin/true" },
+      runtimeConfig: { heartbeat: { enabled: false } }, budgetMonthlyCents: 0,
+    } }));
+    expect((await json(await request.post(`/api/agents/${agent.id}/pause`, { data: {} }))).status).toBe("paused");
     const goal = await json(await request.post(`/api/companies/${company.id}/goals`, { data: { title: "Current native portfolio software Goal", level: "company", status: "active" } }));
     const projectRows = [];
     for (const name of ["First native project", "Second native project"]) projectRows.push(await json(await request.post(`/api/companies/${company.id}/projects`, { data: { name, goalIds: [goal.id] } })));
@@ -21,6 +30,8 @@ for (const mode of ["joint", "initiative"] as const) test(`a native operator sep
     const policy = analyticalPurpose(); policy.analyticalPurpose!.capabilities = ["planning"];
     const obligation = await json(await request.post(`/api/companies/${company.id}/governance-obligations`, { data: policy }));
     await page.setViewportSize({ width: 390, height: 844 }); await page.goto(`/${company.issuePrefix}/adaptive-planning`);
+    await expect(page.getByRole("main").getByRole("heading", { name: "Cross-project planning", exact: true })).toBeVisible();
+    await expect(page.getByRole("heading", { name: "Create your first agent", exact: true })).not.toBeVisible();
     const choices = page.getByRole("region", { name: "Native joint planning project choices", exact: true });
     for (const project of projectRows) await choices.getByRole("checkbox", { name: project.name, exact: true }).check();
     await page.getByRole("button", { name: "Declare shared project constraints", exact: true }).click();
@@ -78,6 +89,7 @@ for (const mode of ["joint", "initiative"] as const) test(`a native operator sep
     for (const project of projectRows) expect((await json(await request.get(`/api/projects/${project.id}`))).status).toBe("backlog");
     for (const task of [first, second]) expect((await json(await request.get(`/api/issues/${task.id}`))).plannedStartAt).toBeNull();
     if (mode === "initiative") {
+      await expect(priorities.getByRole("textbox", { name: "Initiative proposal reason", exact: true })).toBeVisible();
       await priorities.getByRole("textbox", { name: "Initiative proposal reason", exact: true }).fill("Human proposes these exact initiative priorities and constraints for separate review");
       const proposed = page.waitForResponse(r => r.url().includes(`${endpoint}/initiatives/proposals`) && r.request().method() === "POST");
       await priorities.getByRole("button", { name: "Create initiative proposal", exact: true }).click();
@@ -142,5 +154,11 @@ for (const mode of ["joint", "initiative"] as const) test(`a native operator sep
     const firstTask = await json(await request.get(`/api/issues/${first.id}`)), secondTask = await json(await request.get(`/api/issues/${second.id}`));
     expect(Date.parse(firstTask.plannedEndAt)).toBeLessThanOrEqual(Date.parse(secondTask.plannedStartAt));
     expect(firstTask.status).toBe("todo"); expect(secondTask.status).toBe("todo");
-  } finally { await json(await request.patch("/api/instance/settings/experimental", { data: original })); }
+  } catch (error) {
+    primaryFailed = true;
+    throw error;
+  } finally {
+    try { await json(await request.patch("/api/instance/settings/experimental", { data: original })); }
+    catch (error) { if (!primaryFailed) throw error; }
+  }
 });

@@ -330,3 +330,21 @@ copy conflict and exhausted disposable database space; those failures remain
 in their logs and are not credited as passes. Completed owned fixture roots
 were removed after checking process/file references. The final configured CI
 must still verify this test-only source; no production behavior changes here.
+
+### Qualify planning as an existing-company browser journey
+
+The configured browser shard on `618488859` times out while locating the
+initiative proposal reason after its preview and screenshots. Flag restoration
+then masks that primary failure because the request context is already closed.
+The report identifies the pending field, but does not prove a production cause.
+
+This planning fixture now includes a paused process agent with heartbeat off
+and zero budget, matching the existing-company journey. It asserts that the
+planning page is admitted without first-agent onboarding. It checks the reason
+field before filling it, retains failure traces, and preserves the original
+exception if cleanup also fails. Native preview, proposal, separate review,
+canonical-write, theme, viewport and accessibility assertions remain intact.
+The global 120-second deadline and production guards remain unchanged.
+
+Both built-browser cases pass against the real local API in 57 seconds with
+this correction. Full configured CI must still verify the resulting source.
