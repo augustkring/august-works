@@ -125,7 +125,15 @@ test("reviews run evidence and qualifies, shadows and retires a generated optimi
     await expect(page.getByLabel("Candidate contract JSON")).toHaveValue(/preserve-0/);
     await page.getByRole("button", { name: "Compile and run replay", exact: true }).click();
     await expect(page.getByRole("status").filter({ hasText: "Qualification passed." })).toBeVisible();
+    const shadowResponse = page.waitForResponse(response =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname.startsWith(`${base}/workflows/${workflow.id}/optimizer-evaluations/`) &&
+      new URL(response.url()).pathname.endsWith("/shadow"));
     await page.getByRole("button", { name: "Start shadow", exact: true }).click();
+    expect((await shadowResponse).ok()).toBe(true);
+    // A click does not establish that the Native transition committed. The
+    // first observation must start after shadow admission, not race its POST.
+    await expect(page.getByText("The original published transform supplies every result while the candidate is observed.", { exact: true })).toBeVisible();
     for (let value = 4; value <= 6; value++) {
       const run = await json(await request.post(`${base}/workflows/${workflow.id}/run`, { headers: { "Idempotency-Key": randomUUID() }, data: { input: { value } } }));
       expect(run.steps.find((step: { nodeId: string }) => step.nodeId === "copy").outputJson).toEqual({ value });

@@ -3003,3 +3003,37 @@ the final five suites pass all 28 cases. Token and source gates
 pass. See the dated provider-independent recovery plan. R0/launch evidence is
 not changed by a push or a recovery component. Final CI and open review findings
 must be checked on the exact final head before merge.
+
+## Checkpoint 90 — qualify render recovery and repair current CI observations
+
+The full checkpoint89 type command failed at the new UI test's untyped mock-call
+filter parameter. The explicit unknown[] parameter fixes that assertion; the
+whole affected UI typecheck then passes. The initial failure remains recorded,
+not counted as a full successful type command. A new complete workspace
+check/build runs on the committed test correction, with production source
+unchanged from checkpoint89.
+
+The current GitHub V4 product browser failed on checkpoint88 and checkpoint89:
+its artifact records six runs but two shadow observations. The test started runs
+through a second API client immediately after clicking Start shadow. It now
+waits for the exact successful POST and the UI's committed shadow state before
+creating observations. All three built V4 journeys pass locally (exit 0, 1.1min),
+including the unchanged three-pass/zero-failure, promotion denial and retirement
+checks. No production transition or test deadline was loosened.
+
+The chart browser failed current CI's dark-theme contrast check. It changed the
+root theme and immediately ran axe while ordinary color transitions could still
+be active. The check now waits on actual finite CSS animations before running
+the unchanged full WCAG rule set. The affected built chart journey passes both
+themes at 320px (exit 0, 44s). The original failure is retained; a passing final
+color check alone does not prove every cause of the earlier sample.
+
+Added four EN/DA app/page render-recovery Storybook states and browser checks for
+both themes at 320px with reduced motion. Heading focus, keyboard continuation,
+44px controls, plain support mailto, reflow and all axe rules pass. Storybook
+build and both component-browser tests pass (exit 0, 35.4s); the existing twelve
+card stories remain covered. This is software/component evidence, not manual AT,
+representative users, provider qualification or completed V9 launch acceptance.
+Current-head remote CI and the repository's required independent review remain
+necessary before merge. The fork currently exposes CodeRabbit and no Greptile
+review; CONTRIBUTING's explicit Greptile 5/5 condition is not fabricated.

@@ -48,6 +48,13 @@ test("chart values have keyboard-accessible tables at narrow width in both theme
     await page.addScriptTag({ path: axePath });
     for (const theme of ["light", "dark"]) {
       await page.evaluate(theme => document.documentElement.classList.toggle("dark", theme === "dark"), theme);
+      // The theme class starts real color transitions on the dashboard. Check
+      // the settled theme rather than sampling mixed light/dark colors.
+      await page.evaluate(async () => {
+        await Promise.all(document.getAnimations()
+          .filter(animation => Number.isFinite(animation.effect?.getComputedTiming().endTime))
+          .map(animation => animation.finished.catch(() => {})));
+      });
       expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth)).toBe(true);
       const violations = await page.evaluate(async () => (await (window as any).axe.run("main", {
         runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"] },

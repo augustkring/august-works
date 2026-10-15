@@ -2,6 +2,52 @@ import { createRequire } from "node:module";
 import { expect, test } from "@playwright/test";
 const axePath = createRequire(import.meta.url).resolve("axe-core/axe.min.js");
 
+test("render-error recovery keeps EN/DA focus, targets and contrast in both narrow themes", async ({ page, request, baseURL }) => {
+  test.setTimeout(120000);
+  const response = await request.get("/index.json");
+  expect(response.ok()).toBe(true);
+  const index = await response.json();
+  const stories = (Object.values(index.entries) as Array<{ type: string; title: string; id: string }>).filter(
+    entry => entry.type === "story" && entry.title === "August Works/V9/Error recovery",
+  );
+  expect(stories).toHaveLength(4);
+  await page.setViewportSize({ width: 320, height: 720 });
+  await page.emulateMedia({ reducedMotion: "reduce" });
+  await page.route(/^https?:\/\//, route => new URL(route.request().url()).origin === baseURL ? route.continue() : route.abort("blockedbyclient"));
+  for (const theme of ["light", "dark"] as const) {
+    for (const story of stories) {
+      await page.goto(`/iframe.html?id=${encodeURIComponent(story.id)}&viewMode=story&globals=theme:${theme}`);
+      const main = page.getByRole("main"), heading = main.getByRole("heading", { level: 1 });
+      await expect(heading).toBeVisible();
+      await expect(heading).toBeFocused();
+      await expect(page.locator("html")).toHaveClass(theme === "dark" ? /\bdark\b/ : /^(?!.*\bdark\b)/);
+      await expect(main.getByRole("link")).toHaveAttribute("href", "mailto:support@blentera.com");
+      await page.keyboard.press("Tab");
+      await expect(main.getByRole("button").first()).toBeFocused();
+      for (const control of await main.locator("button,a").all()) {
+        const box = await control.boundingBox();
+        expect(box?.height).toBeGreaterThanOrEqual(44);
+      }
+      // Measure final theme colors after their real finite CSS transitions.
+      await page.evaluate(async () => { await Promise.all(document.getAnimations().filter(animation => Number.isFinite(animation.effect?.getComputedTiming().endTime)).map(animation => animation.finished.catch(() => {}))); });
+      await page.addScriptTag({ path: axePath });
+      const violations = await page.evaluate(async () => {
+        const axe = (window as unknown as { axe: { run(scope: string): Promise<{ violations: unknown[] }> } }).axe;
+        const deadline = performance.now() + 15000;
+        while (true) {
+          try { return (await axe.run("main")).violations; }
+          catch (error) {
+            if (!(error instanceof Error) || !error.message.startsWith("Axe is already running.") || performance.now() >= deadline) throw error;
+            await new Promise<void>(resolve => requestAnimationFrame(() => resolve()));
+          }
+        }
+      });
+      expect(violations, `${story.id} ${theme}`).toEqual([]);
+      expect(await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth)).toBe(true);
+    }
+  }
+});
+
 // Actual built components with explicit software fixtures. No visual baseline,
 // Native execution, manual AT, human or complete launch acceptance is inferred.
 test("V9 card stories render in light and dark mobile layouts with read-only actions and no axe violations", async ({
