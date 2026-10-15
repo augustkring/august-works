@@ -2869,3 +2869,21 @@ retain their exact earlier checkpoint/failure/correction provenance. All 90 V9
 production-browser cases passed checkpoint82. None of this is represented as a
 full current pass of the later notification changes. No PR/push. Release remains
 R0 with all 70 evidence rows open and sourceComplete=false.
+
+
+### 84 — Pin the connected-policy fixture's fixed-window clock
+
+The current general1 run exposed a real-clock acceptance assumption: two
+sequential remote MCP calls can fall in different fixed minute buckets. Preserve
+the production rate policy and the original second-call 429 assertion. Control
+only Date for that subsection, with real network/timeout timers, and add an
+explicit next-millisecond/new-bucket admission assertion. All 73 Tool Gateway
+cases pass. Retain the original failed broad run and repeat its full partition.
+See [the clock and verification note](2026-10-15-aw-v9-connected-policy-clock.md).
+
+Correct the notification plan's migration count: 499 SQL files/journal entries,
+through migration 0500. The production tree is identical to checkpoint83. Its
+first serialized0 worker was OOM-killed after 66/83 live-run-route assertions;
+all 83 pass on unchanged code with a bounded 4GiB Node heap. Original failure and
+complete-lane retry logs are separate. Other complete current checks still run.
+No PR/push or release claim. All 70 evidence rows, source completion and R0 stay open.

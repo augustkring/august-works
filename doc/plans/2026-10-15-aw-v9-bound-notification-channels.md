@@ -56,7 +56,7 @@ now pass after the final corrections. Token and source-coverage checks pass; the
 release gate deliberately still fails. Complete final checkpoint type/build and
 regression remain pending.
 
-Drizzle reports no schema drift; all 500 migrations run in disposable PostgreSQL.
+Drizzle reports no schema drift; all 499 SQL migrations run in disposable PostgreSQL.
 The full workspace typecheck passed before the final server privacy/fairness delta.
 Initial fixture dependency/timestamp failures, red privacy/fairness cases and the
 browser measurement failure remain inspectable. No production database, external
