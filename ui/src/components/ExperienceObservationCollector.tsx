@@ -13,6 +13,12 @@ import { queryKeys } from "../lib/queryKeys";
 
 /** Route strings never enter an observation or persistent client storage. */
 export function ExperienceObservationCollector() {
+  const feature = useV9FeatureEnabled("experience_analytics_v9");
+  if (!feature.enabled || !feature.query.isSuccess || feature.query.isFetching) return null;
+  return <AdmittedObservationCollector />;
+}
+
+function AdmittedObservationCollector() {
   const identity = useV9CurrentAccount(), company = useCompany(), location = useLocation();
   const surface = experienceObservationSurface(location.pathname, company.selectedCompany?.issuePrefix);
   if (!identity.settled || !identity.userId || identity.localImplicit || !company.selectedCompanyId || !surface) return null;

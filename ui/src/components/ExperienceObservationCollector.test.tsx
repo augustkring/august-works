@@ -3,7 +3,7 @@ import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
-import { ObservationScope } from "./ExperienceObservationCollector";
+import { ExperienceObservationCollector, ObservationScope } from "./ExperienceObservationCollector";
 import { experienceObservationsApi } from "../api/experience-observations";
 import { instanceSettingsApi } from "../api/instanceSettings";
 import { authApi } from "../api/auth";
@@ -66,4 +66,14 @@ it("does not retry a failed sample or expose its error in customer UI", async ()
   await act(async () => { await client.invalidateQueries({ queryKey: ["experience-observation-preference", company, "owner"] }); });
   await vi.waitFor(() => expect(record).toHaveBeenCalledTimes(1));
   expect(host.textContent).toBe("");
+});
+
+it("does not read personal identity or preferences while rollout is off", async () => {
+  client = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity } } });
+  vi.spyOn(instanceSettingsApi, "getExperimental").mockResolvedValue({ experience_analytics_v9: false } as never);
+  const session = vi.spyOn(authApi, "getSession"), preference = vi.spyOn(experienceObservationsApi, "get"), record = vi.spyOn(experienceObservationsApi, "record");
+  host = document.createElement("div"); document.body.append(host); root = createRoot(host);
+  await act(async () => root.render(<QueryClientProvider client={client}><ExperienceObservationCollector /></QueryClientProvider>));
+  await vi.waitFor(() => expect(instanceSettingsApi.getExperimental).toHaveBeenCalled());
+  expect(session).not.toHaveBeenCalled(); expect(preference).not.toHaveBeenCalled(); expect(record).not.toHaveBeenCalled();
 });

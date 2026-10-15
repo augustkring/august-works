@@ -1,3 +1,4 @@
+import { ExperienceObservationCollector } from "./ExperienceObservationCollector";
 import { useUserPreferences } from "../hooks/useUserPreferences";
 import { SetupWizardSidebarOutlet } from "./SetupWizard";
 import { ChatSetupSidebarProvider } from "@/context/ChatSetupSidebarContext";
@@ -617,6 +618,7 @@ export function Layout({ sidebarSections }: { sidebarSections?: ReactNode }) {
   return (
     <ChatSetupSidebarProvider>
     <GeneralSettingsProvider value={{ keyboardShortcutsEnabled }}>
+      <ExperienceObservationCollector />
       <div
       className={cn(
         "bg-background text-foreground pt-(--sz-safe-top)",

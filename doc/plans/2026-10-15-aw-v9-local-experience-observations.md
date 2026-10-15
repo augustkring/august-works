@@ -92,3 +92,13 @@ These observations cover the beginning of V9-008/085–088; they do not measure
 actual Human interruptions, canonical successful outcomes, monthly support
 labour or a representative legacy-usage window. Full current-source workspace
 checks and the final browser follow-up must finish before PR-ready claims.
+
+
+The first broad UI run stopped at the provider-free routing harness after
+63 files / 2,079 cases passed. The global collector had introduced a query
+provider requirement into the route table. It now mounts inside each actual
+authenticated Layout, where the Original company/session providers already
+exist. A closed rollout also prevents personal identity/preference reads.
+Activation retains its explicit scoped observer. The routing/Layout/observation
+follow-up passes 53 cases before the added rollout-off regression. No full
+UI pass is claimed from the stopped run.
