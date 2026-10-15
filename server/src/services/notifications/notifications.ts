@@ -1,3 +1,7 @@
+import { notificationChannelPolicy } from "./channel-policy.js";
+import { notificationChannelDelivery } from "./channel-delivery.js";
+import { nativeSha256 } from "../native-runtime/canonical.js";
+import { conflict } from "../../errors.js";
 import { and, desc, eq, gte, inArray, isNull, sql } from "drizzle-orm";
 import {
   activityLog,
@@ -6,11 +10,15 @@ import {
   companyMemberships,
   saasNotifications,
   saasNotificationPreferences,
+  notificationChannelPreferences,
   type Db,
 } from "@paperclipai/db";
 import { z } from "zod";
 import { badRequest, forbidden, notFound } from "../../errors.js";
 import type { transactionalEmail, EmailDb } from "./transactional-email.js";
+import { notificationPreferenceUpdateSchema, notificationPolicySchema, v9FeatureEnabled, type PublicOriginConfig } from "@paperclipai/shared";
+import { routeNotification } from "./interruption-policy.js";
+import { instanceSettingsService } from "../instance-settings.js";
 export const NOTIFICATION_CATEGORIES = [
   "security",
   "billing",
@@ -26,9 +34,18 @@ export type NotifyCompany = (
   dedupeKey: string,
   writer: EmailDb,
 ) => Promise<void>;
+export async function lockNotificationPreference(db:Db,userId:string,category:string){
+  await db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`notification-preference:${userId}:${category}`},0))`);
+}
+export async function notificationPreferenceBaseline(db:Db,userId:string,category:string){
+  const [row]=await db.select().from(saasNotificationPreferences).where(and(eq(saasNotificationPreferences.userId,userId),eq(saasNotificationPreferences.category,category)));
+  return nativeSha256({userId,category,emailEnabled:category==="security"||row?.emailEnabled!==false,policy:row?.deliveryPolicy??null});
+}
+
 export function notificationService(
   db: Db,
   email: ReturnType<typeof transactionalEmail>,
+  origins?: PublicOriginConfig,
 ) {
   async function membership(
     companyId: string,
@@ -120,22 +137,29 @@ export function notificationService(
           ),
         )
         .limit(1);
-      if (
-        recipient.emailVerified &&
-        (category === "security" || preference?.emailEnabled !== false)
-      )
+      // A bound channel is an explicit company-specific choice. Unavailable or
+      // withdrawn transport stays in-app; it must not fall back to email.
+      if (category !== "security") {
+        const [bound] = await writer.select({ channel: notificationChannelPreferences.channel }).from(notificationChannelPreferences)
+          .where(and(eq(notificationChannelPreferences.companyId, companyId), eq(notificationChannelPreferences.userId, recipient.userId),
+            eq(notificationChannelPreferences.category, category))).limit(1);
+        if (bound && bound.channel !== "default") continue;
+      }
+      const delivery=routeNotification({category,emailEnabled:preference?.emailEnabled!==false,policy:preference?.deliveryPolicy,now:new Date()});
+      if (recipient.emailVerified && delivery.channel==="email")
         await email.enqueue(
           {
             companyId,
             userId: recipient.userId,
             purpose: category,
             recipient: recipient.email,
-            subject: title,
+            subject: delivery.groupKey ? "Your August Works updates" : title,
             message:
               "There is an account update in August Works. Sign in to review it.",
             actionPath: relativePath,
-            dedupeKey: "notification:" + created.id,
-            expiresAt: new Date(Date.now() + 86400000),
+            dedupeKey: delivery.groupKey ? `notification:${companyId}:${recipient.userId}:${category}:${delivery.groupKey}` : "notification:" + created.id,
+            notBefore:delivery.notBefore,
+            expiresAt: new Date(delivery.notBefore.getTime() + 86400000),
           },
           writer,
         );
@@ -303,33 +327,34 @@ export function notificationService(
       emailEnabled:
         category === "security" ||
         rows.find((row) => row.category === category)?.emailEnabled !== false,
+      ...(rows.find(row=>row.category===category)?.deliveryPolicy ? {policy:notificationPolicySchema.parse(rows.find(row=>row.category===category)!.deliveryPolicy)} : {}),
     }));
   }
   async function updatePreference(
     companyId: string,
     userId: string,
     raw: unknown,
+    options:{expectedBaselineHash?:string}={},
   ) {
-    const input = z
-      .object({
-        category: z.enum(NOTIFICATION_CATEGORIES),
-        emailEnabled: z.boolean(),
-      })
-      .strict()
-      .parse(raw);
+    const input = notificationPreferenceUpdateSchema.parse(raw);
     if (input.category === "security" && !input.emailEnabled)
       throw forbidden("Security notifications are required");
+    if(input.category==="security"&&input.policy&&(input.policy.cadence!=="immediate"||input.policy.quietHours))throw forbidden("Account safety delivery cannot be delayed or disabled");
     return db.transaction(async (tx) => {
+      await lockNotificationPreference(tx as unknown as Db,userId,input.category);
       await membership(companyId, userId, tx);
+      if(options.expectedBaselineHash&&(await notificationPreferenceBaseline(tx as unknown as Db,userId,input.category))!==options.expectedBaselineHash)
+        throw conflict("Notification preferences changed; review the current proposal again");
+      if(input.policy&&!v9FeatureEnabled(await instanceSettingsService(tx as unknown as Db).getExperimental(),"notification_policy_v9"))throw notFound("Notification policy changes are not enabled");
       await tx
         .insert(saasNotificationPreferences)
-        .values({ userId, ...input })
+        .values({ userId, category:input.category,emailEnabled:input.emailEnabled,...(input.policy ? {deliveryPolicy:input.policy} : {}) })
         .onConflictDoUpdate({
           target: [
             saasNotificationPreferences.userId,
             saasNotificationPreferences.category,
           ],
-          set: { emailEnabled: input.emailEnabled },
+          set: { emailEnabled: input.emailEnabled,...(input.policy ? {deliveryPolicy:input.policy} : {}) },
         });
       await tx.insert(activityLog).values({
         companyId,
@@ -344,6 +369,8 @@ export function notificationService(
     });
   }
   return {
+    channelPolicy: notificationChannelPolicy(db),
+    channelDelivery: origins ? notificationChannelDelivery(db, origins) : undefined,
     notifyCompany,
     processWorkUpdate,
     list,

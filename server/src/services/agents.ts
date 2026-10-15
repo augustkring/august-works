@@ -2,7 +2,7 @@ import { isSaasDeployment } from "../deployment-profile.js";
 import { assertSaasRemoteAdapterConfig } from "./saas/execution-admission.js";
 import { agentAppearanceSchema, randomAgentAppearance, resolveAgentAppearance, agentAvatarUrl } from "@paperclipai/shared";
 import { createHash, randomBytes } from "node:crypto";
-import { and, desc, eq, gte, inArray, lt, ne, or, sql } from "drizzle-orm";
+import { and, desc, eq, gte, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
@@ -21,6 +21,8 @@ import {
   issueComments,
 } from "@paperclipai/db";
 import {
+  AUTHORED_AGENT_DEFINITION_KEY,
+  type AuthoredAgentDefinition,
   AGENT_DEFAULT_MAX_CONCURRENT_RUNS,
   agentRuntimeConfigSchema,
   getAgentWorkEligibility,
@@ -56,6 +58,8 @@ import {
   builtInAgentMarkersEqual,
   readBuiltInAgentMarker,
 } from "./built-in-agent-metadata.js";
+import { hasAuthoredAgentDefinition, compileAuthoredAgentDefinition } from "./agents/authored-definition.js";
+import { nativeSha256 } from "./native-runtime/canonical.js";
 import { issueThreadInteractionService } from "./issue-thread-interactions.js";
 
 function hashToken(token: string) {
@@ -86,6 +90,7 @@ type ConfigRevisionField = (typeof CONFIG_REVISION_FIELDS)[number];
 type AgentConfigSnapshot = Pick<typeof agents.$inferSelect, ConfigRevisionField>;
 
 interface RevisionMetadata {
+  id?: string;
   createdByAgentId?: string | null;
   createdByUserId?: string | null;
   source?: string;
@@ -121,6 +126,7 @@ interface ClaudeLoginContext {
 }
 
 interface UpdateAgentOptions {
+  authoredPublication?: AuthoredAgentDefinition;
   recordRevision?: RevisionMetadata;
   allowBuiltInAgentMetadata?: boolean;
   allowPendingApprovalConfigUpdate?: boolean;
@@ -705,6 +711,17 @@ export function agentService(db: Db) {
   ) {
     const existing = await getById(id);
     if (!existing) return null;
+    const installsAuthoredDefinition = isPlainRecord(data.runtimeConfig) &&
+      Object.prototype.hasOwnProperty.call(data.runtimeConfig, AUTHORED_AGENT_DEFINITION_KEY);
+    if (installsAuthoredDefinition || (hasAuthoredAgentDefinition(existing) && (hasConfigPatchFields(data) || data.permissions !== undefined))) {
+      const definition = options?.authoredPublication;
+      if (!definition || options?.recordRevision?.source !== "agent_authoring_publish" ||
+          options.recordRevision.id !== definition.revisionId || !installsAuthoredDefinition ||
+          nativeSha256(data.runtimeConfig?.[AUTHORED_AGENT_DEFINITION_KEY]) !== nativeSha256(definition) ||
+          nativeSha256(compileAuthoredAgentDefinition(definition.content, definition.revisionId, definition.candidateHash, definition.procedureSnapshotHash,
+            definition.publication ? { version: definition.version!, provenance: definition.publication } : undefined)) !== nativeSha256(definition))
+        throw conflict("Edit and publish a draft to change this identified Agent version", { code: "authored_agent_version_readonly" });
+    }
     if(data.adapterType!==undefined||data.adapterConfig!==undefined)assertSaasRemoteAdapterConfig(data.adapterType??existing.adapterType,data.adapterConfig??existing.adapterConfig);
     if (isSaasDeployment() && (data.adapterType !== undefined || data.adapterConfig !== undefined)
       && !["openclaw_gateway","hermes_gateway","http","cursor_cloud"].includes(data.adapterType ?? existing.adapterType)) {
@@ -843,6 +860,7 @@ export function agentService(db: Db) {
         const changedKeys = diffConfigSnapshot(beforeConfig, afterConfig);
         if (changedKeys.length > 0) {
           await txDb.insert(agentConfigRevisions).values({
+            ...(options?.recordRevision?.id ? { id: options.recordRevision.id } : {}),
             companyId: normalizedUpdated.companyId,
             agentId: normalizedUpdated.id,
             createdByAgentId: options?.recordRevision?.createdByAgentId ?? null,
@@ -899,6 +917,8 @@ export function agentService(db: Db) {
       const role = data.role ?? "general";
       const normalizedPermissions = normalizeAgentPermissions(data.permissions, { context: "create" });
       const runtimeConfig = normalizeRuntimeConfigForNewAgent(data.runtimeConfig);
+      if (Object.prototype.hasOwnProperty.call(runtimeConfig, AUTHORED_AGENT_DEFINITION_KEY))
+        throw conflict("An authored Agent version requires its reviewed publication", { code: "authored_agent_version_readonly" });
       const adapterType = data.adapterType ?? "process";
       const rawAdapterConfig = isPlainRecord(data.adapterConfig)
         ? await secretsSvc.normalizeAdapterConfigForPersistence(companyId, data.adapterConfig, { adapterType })
@@ -961,6 +981,7 @@ export function agentService(db: Db) {
       const existing = await getById(id);
       if (!existing) return null;
       if (existing.status === "terminated") throw conflict("Cannot pause terminated agent");
+      if (existing.status === "pending_approval") throw conflict("Pending approval agents cannot be paused");
 
       const updated = await db
         .update(agents)
@@ -971,9 +992,10 @@ export function agentService(db: Db) {
           errorReason: null,
           updatedAt: new Date(),
         })
-        .where(eq(agents.id, id))
+        .where(and(eq(agents.id, id), ne(agents.status, "pending_approval"), ne(agents.status, "terminated")))
         .returning()
         .then((rows) => rows[0] ?? null);
+      if (!updated) throw conflict("Agent state changed before pause; reload the agent");
       return updated ? getById(updated.id) : null;
     },
 
@@ -994,9 +1016,10 @@ export function agentService(db: Db) {
           errorReason: null,
           updatedAt: new Date(),
         })
-        .where(eq(agents.id, id))
+        .where(and(eq(agents.id, id), ne(agents.status, "pending_approval"), ne(agents.status, "terminated")))
         .returning()
         .then((rows) => rows[0] ?? null);
+      if (!updated) throw conflict("Agent state changed before resume; reload the agent");
       return updated ? getById(updated.id) : null;
     },
 
@@ -1031,26 +1054,28 @@ export function agentService(db: Db) {
     },
 
     terminate: async (id: string) => {
-      const existing = await getById(id);
-      if (!existing) return null;
+      return db.transaction(async (transaction) => {
+        const tx = transaction as unknown as Db;
+        const [existing] = await tx.select({ id: agents.id }).from(agents).where(eq(agents.id, id)).for("update");
+        if (!existing) return null;
+        await tx
+          .update(agents)
+          .set({
+            status: "terminated",
+            pauseReason: null,
+            pausedAt: null,
+            errorReason: null,
+            updatedAt: new Date(),
+          })
+          .where(eq(agents.id, id));
 
-      await db
-        .update(agents)
-        .set({
-          status: "terminated",
-          pauseReason: null,
-          pausedAt: null,
-          errorReason: null,
-          updatedAt: new Date(),
-        })
-        .where(eq(agents.id, id));
+        await tx
+          .update(agentApiKeys)
+          .set({ revokedAt: new Date() })
+          .where(and(eq(agentApiKeys.agentId, id), isNull(agentApiKeys.revokedAt)));
 
-      await db
-        .update(agentApiKeys)
-        .set({ revokedAt: new Date() })
-        .where(eq(agentApiKeys.agentId, id));
-
-      return getById(id);
+        return agentService(tx).getById(id);
+      });
     },
 
     remove: async (id: string) => {
@@ -1177,6 +1202,8 @@ export function agentService(db: Db) {
     updatePermissions: async (id: string, permissions: Record<string, unknown> & { canCreateAgents: boolean }) => {
       const existing = await getById(id);
       if (!existing) return null;
+      if (hasAuthoredAgentDefinition(existing))
+        throw conflict("Edit and publish a draft to change this identified Agent version", { code: "authored_agent_version_readonly" });
       if (existing.status === "pending_approval") {
         throw conflict("Pending approval agent permissions cannot be changed before board approval", {
           code: "pending_approval_agent_config_frozen",

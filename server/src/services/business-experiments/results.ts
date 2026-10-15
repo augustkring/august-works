@@ -59,6 +59,11 @@ export async function inspectBusinessExperimentResults(tx:Db,companyId:string,ac
   for(const pin of metrics)definitions.set(pin.key,await businessMetricService(tx).inspectPublishedDefinition(companyId,actor,pin.metricId,pin.metricVersionId));
   const calculations=new Map(metrics.map(pin=>[pin.key,prepareNativeMetric(definitions.get(pin.key)!.version.definition,{metricId:pin.metricId,versionId:pin.metricVersionId,from:version.definition.sampleOrDurationPlan.from,until:version.definition.sampleOrDurationPlan.until,dimensions:[],maxRows:1})]));
   const lineage=await loadExperimentLineage(tx,companyId,outcomes.map(outcome=>outcome.lineageManifestId),deadline),assignments=new Map(receipts.assignments.map(assignment=>[assignment.id,assignment])),authorityEdges=new Map<string,ExperimentEdge>();
+  // Reuse only immutable lineage calculations within this inspection. Each
+  // outcome still verifies its own actual retained edges, signed material and
+  // current Source authority. Include the exact outcome project in the key so
+  // a changed or forged project cannot inherit another outcome's comparison.
+  const inheritedHashes=new Map<string,string>(), expectedHashes=new Map<string,Map<string|null,string>>();
   for(const outcome of outcomes){
     experimentBudget(deadline);const assignment=assignments.get(outcome.assignmentId),metric=definitions.get(outcome.key),pin=metrics.find(p=>p.key===outcome.key);
     if(!assignment||!metric||!pin||outcome.metricId!==pin.metricId||outcome.metricVersionId!==pin.metricVersionId||outcome.capturedAt.getTime()!==analysis.analyzedAt.getTime()||outcome.sourceSnapshot.id!==assignment.unitId||outcome.sourceSnapshot.createdAt!==assignment.sourceSnapshot.createdAt)throw notFound("Experiment outcome exact identity or capture time is unavailable");
@@ -67,11 +72,19 @@ export async function inspectBusinessExperimentResults(tx:Db,companyId:string,ac
     if(calculation.status!=="observed"||calculation.value!==outcome.value||calculation.inputHash!==outcome.inputHash||outcome.sourceHash!==nativeSha256({snapshot:outcome.sourceSnapshot,metricHash:pin.contentHash,inputHash:outcome.inputHash,value:outcome.value}))throw notFound("Experiment native outcome material is unavailable");
     const manifest=lineage.manifests.get(outcome.lineageManifestId),edges=lineage.edges.get(outcome.lineageManifestId)??[],inherited=receipts.assignmentLineage.get(assignment.lineageManifestId);
     if(!inherited)throw notFound("Experiment exact assignment lineage is unavailable");
-    const expectedEdges=experimentEdges([...inherited,...(outcome.sourceSnapshot.projectId?[{inputType:"project" as const,inputRef:outcome.sourceSnapshot.projectId,inputHash:nativeSha256({type:"project",id:outcome.sourceSnapshot.projectId}),relationship:"source" as const}]:[])]);
+    let inheritedHash=inheritedHashes.get(assignment.lineageManifestId);
+    if(inheritedHash===undefined){inheritedHash=nativeSha256(experimentEdges(inherited));inheritedHashes.set(assignment.lineageManifestId,inheritedHash);}
+    let assignmentExpected=expectedHashes.get(assignment.lineageManifestId);
+    if(!assignmentExpected){assignmentExpected=new Map();expectedHashes.set(assignment.lineageManifestId,assignmentExpected);}
+    const projectId=outcome.sourceSnapshot.projectId??null;
+    let expectedHash=assignmentExpected.get(projectId);
+    if(expectedHash===undefined){expectedHash=nativeSha256(experimentEdges([...inherited,...(projectId?[{inputType:"project" as const,inputRef:projectId,inputHash:nativeSha256({type:"project",id:projectId}),relationship:"source" as const}]:[])]));assignmentExpected.set(projectId,expectedHash);}
     const inheritedManifestId=manifest?.parameters.assignmentManifestId;
-    const completeEdges=inheritedManifestId===undefined?experimentEdges(edges):experimentEdges([...inherited,...edges]);
-    if(inheritedManifestId!==undefined&&(inheritedManifestId!==assignment.lineageManifestId||manifest?.parameters.assignmentLineageHash!==nativeSha256(experimentEdges(inherited))||manifest?.parameters.completeLineageHash!==nativeSha256(completeEdges)))throw notFound("Experiment inherited assignment Source lineage is unavailable");
-    if(!manifest||manifest.expiresAt<=new Date()||manifest.engineVersion!==EXPERIMENT_OWNER_ENGINE||manifest.analysisType!=="experiment_outcome"||manifest.analysisRef!==outcome.id||manifest.definitionHash!==version.contentHash||manifest.inputHash!==outcome.sourceHash||manifest.parameters.receiptHash!==outcome.receiptHash||manifest.createdAt.getTime()!==outcome.capturedAt.getTime()||manifest.expiresAt.getTime()!==version.expiresAt.getTime()||manifest.sourceCount!==edges.length||manifest.parameters.lineageHash!==nativeSha256(experimentEdges(edges))||nativeSha256(expectedEdges)!==nativeSha256(completeEdges))throw notFound("Experiment outcome lineage is erased or unavailable");
+    const normalizedEdges=experimentEdges(edges), edgesHash=nativeSha256(normalizedEdges);
+    const completeEdges=inheritedManifestId===undefined?normalizedEdges:experimentEdges([...inherited,...normalizedEdges]);
+    const completeHash=inheritedManifestId===undefined?edgesHash:nativeSha256(completeEdges);
+    if(inheritedManifestId!==undefined&&(inheritedManifestId!==assignment.lineageManifestId||manifest?.parameters.assignmentLineageHash!==inheritedHash||manifest?.parameters.completeLineageHash!==completeHash))throw notFound("Experiment inherited assignment Source lineage is unavailable");
+    if(!manifest||manifest.expiresAt<=new Date()||manifest.engineVersion!==EXPERIMENT_OWNER_ENGINE||manifest.analysisType!=="experiment_outcome"||manifest.analysisRef!==outcome.id||manifest.definitionHash!==version.contentHash||manifest.inputHash!==outcome.sourceHash||manifest.parameters.receiptHash!==outcome.receiptHash||manifest.createdAt.getTime()!==outcome.capturedAt.getTime()||manifest.expiresAt.getTime()!==version.expiresAt.getTime()||manifest.sourceCount!==edges.length||manifest.parameters.lineageHash!==edgesHash||expectedHash!==completeHash)throw notFound("Experiment outcome lineage is erased or unavailable");
     for(const edge of completeEdges){const key=`${edge.inputType}:${edge.inputRef}`,prior=authorityEdges.get(key);if(prior&&prior.inputHash!==edge.inputHash)throw conflict("Experiment outcome Source pins disagree");authorityEdges.set(key,edge);}
   }
   // Reuse only the actual Source admission performed by the enclosing receipt

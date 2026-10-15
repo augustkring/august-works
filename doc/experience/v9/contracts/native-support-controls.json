@@ -1,0 +1,185 @@
+{
+  "screenId": "NATIVE-SUPPORT-CONTROLS",
+  "journeyId": "support",
+  "routeOrSurface": "/company/settings/support",
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
+  "customerOutcome": "Explicitly review and approve temporary support access through the original V6 owner, and resolve the original pending request without duplicate grants.",
+  "entryConditions": [
+    "Current authenticated Native company owner and matching expected account/company.",
+    "Original effective admin_support_v6 gate for review, approval and receipt reads. Cancellation of an ungranted original request remains available to its current Native owner after gate rollback."
+  ],
+  "exitConditions": [
+    "Navigate away; a prepared original request is retained by the Native owner and recovered on a current account/company read.",
+    "Current source loss hides form, review, pending reference and history."
+  ],
+  "content": {
+    "h1": "Support access",
+    "supportingCopy": "Review the configured operator, reason, exact scopes and maximum duration before explicitly approving temporary access. Historical receipt metadata is separate from current operator authority.",
+    "customerTerms": [
+      "Temporary support access",
+      "Review",
+      "Original request",
+      "Recorded approval",
+      "Revoke"
+    ],
+    "displayedState": [
+      "Current original Native support records and at most one unresolved original review for the current owner.",
+      "An unresolved original review prevents preparing a replacement. No private form, review or record is shown while the current source is checking or refused.",
+      "Recorded approval is not current authority, successful support work or a reversed previous action."
+    ]
+  },
+  "inputs": [
+    {
+      "id": "operator",
+      "label": "Configured operator",
+      "dataType": "text",
+      "required": true,
+      "default": "Empty",
+      "help": "One currently configured independent operator; 1\u2013200 characters.",
+      "validation": "One currently configured independent operator; 1\u2013200 characters.",
+      "autofillOrPrefill": "No restored private browser values; current component input only."
+    },
+    {
+      "id": "reason",
+      "label": "Reason",
+      "dataType": "textarea",
+      "required": true,
+      "default": "Empty",
+      "help": "10\u2013500 characters; immutable in the original reviewed request.",
+      "validation": "10\u2013500 characters; immutable in the original reviewed request.",
+      "autofillOrPrefill": "No restored private browser values; current component input only."
+    },
+    {
+      "id": "scopes",
+      "label": "Permissions",
+      "dataType": "checkbox",
+      "required": true,
+      "default": "Status read",
+      "help": "Status read plus explicitly selected runtime management or backup restoration; never a new permission catalog.",
+      "validation": "Status read plus explicitly selected runtime management or backup restoration; never a new permission catalog.",
+      "autofillOrPrefill": "No restored private browser values; current component input only."
+    },
+    {
+      "id": "duration",
+      "label": "Maximum duration",
+      "dataType": "select",
+      "required": true,
+      "default": "30 minutes",
+      "help": "15, 30 or 60 minutes; Native maximum remains 60.",
+      "validation": "15, 30 or 60 minutes; Native maximum remains 60.",
+      "autofillOrPrefill": "No restored private browser values; current component input only."
+    },
+    {
+      "id": "acknowledgement",
+      "label": "Approval acknowledgement",
+      "dataType": "checkbox",
+      "required": true,
+      "default": "Unchecked",
+      "help": "Initially unchecked and required after the frozen review, before the original grant effect.",
+      "validation": "Initially unchecked and required after the frozen review, before the original grant effect.",
+      "autofillOrPrefill": "No restored private browser values; current component input only."
+    }
+  ],
+  "actions": {
+    "primary": {
+      "label": "Review temporary access",
+      "operation": "Freeze one original UUID and input; reserve only its content hash with the original Native owner, then show that exact review. This step grants no support access."
+    },
+    "secondary": [
+      "Approve temporary access only after review and explicit acknowledgement",
+      "Cancel the original ungranted request; a committed grant is reported rather than silently revoked",
+      "Read the exact original approval after an unclear response",
+      "Revoke an exact original Native session and recover its original timestamp",
+      "Retry the same original review reservation or cancellation after an unclear response"
+    ],
+    "destructiveOrIrreversible": [
+      "Explicit approval grants the reviewed original V6 scopes for the bounded duration; Native use independently rechecks owner, configured operator, scope, expiry and revocation.",
+      "Original request cancellation fences later approval of that same reference; already-recorded access requires its separate explicit Revoke action."
+    ]
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Original Native V6 support_sessions, active owner membership, instance rollout and existing activity_log review/approval/cancellation receipts"
+    ],
+    "canonicalWriteOperation": "Original Native V6 support owner prepareApproval/approve/cancelApproval/revoke; no new grant owner, scheduler, browser persistence or permission engine.",
+    "authorityEffect": "The original owner/configured independent-operator predicate is unchanged. Review reservation has no access effect; cancellation affects only the original ungranted command; grant use remains separately admitted.",
+    "asyncWork": "Five-second SQL statement bound and Native privacy/owner/rollout/original-reference locks. Foreground fifteen-second current source refresh, Native events and focus hide old private data during checking.",
+    "receipt": "Existing Native review hash and original support-session UUID. Exactly linked approval audit is required for receipt reconciliation; expiry/revocation is never renewed by replay."
+  },
+  "states": {
+    "loading": "Current checking hides all private inputs, review, pending reference and history.",
+    "empty": "Current Native source reports no unresolved review and no support records; this does not infer the outcome of an unrelated or unrecorded command.",
+    "partial": "Source is implemented for Native DB-local review/approval/cancellation/revocation; exact Native, built browser, human, hosted and general support recovery acceptance remain pending.",
+    "stale": "Withdraw private state and reread current Native authority; do not display a stale pending reference as a grant.",
+    "validation_error": "Current Native input/ref/hash mismatch refuses an effect. Preserve an unconfirmed original request rather than substituting a new reference.",
+    "system_error": "Fixed localized errors; raw Native errors are omitted. The original request remains blocked until exact reconciliation/cancellation.",
+    "permission_denied": "Hide private state and refuse Native commands; receipt metadata cannot substitute for current owner or operator authority.",
+    "recovering": "On navigation/reload, read the current owner's original unresolved Native review. Check its exact receipt or explicitly cancel that same command before preparing new access. A missing receipt is not no effect.",
+    "success": "Original approval recorded or original ungranted command cancelled. These facts do not prove current scoped authority, support work or reversal."
+  },
+  "navigation": {
+    "back": "Original Company/settings navigation.",
+    "cancelOrSaveExit": "An unconfirmed command retains the original Native reference/hash. Ordinary leave does not grant access or automatically cancel. Explicit cancellation is Native, idempotent and targets only the original command.",
+    "deepLink": "/company/settings/support",
+    "resume": "Current owner/account/company reads recover an unresolved original review without local storage, restored private fields or automatic effect replay."
+  },
+  "accessibility": {
+    "initialFocus": "Current H1 on entry; user-requested review moves focus to its H2 while preserving an already open Native dialog.",
+    "focusAfterError": "Fixed source-error alert receives focus; current-source refresh restores its previous control or heading and preserves an open Native dialog. Actual DOM tests pass; built browser/manual AT acceptance remains pending.",
+    "focusAfterSuccess": "Current source is reread and prior control/heading focus is restored. Actual DOM restoration tests pass; built browser and human acceptance remain pending.",
+    "keyboardModel": "Semantic labelled form and review, unchecked acknowledgement, Native buttons with min-h-11 touch targets.",
+    "statusAnnouncement": "Polite loading status, safe alert for unavailable current state.",
+    "targetSize": "Token min-h-11 links/buttons.",
+    "zoomReflow": "Stacked current state and receipt rows at narrow width; no horizontal table.",
+    "reducedMotion": "No animation.",
+    "screenReaderNotes": "Native Layout owns the sole main landmark; this page uses a section, semantic headings, lists, named scope labels and time elements. Source errors receive focus."
+  },
+  "responsive": {
+    "wide": "Stacked wrapping metadata, token touch targets and no horizontal table.",
+    "narrow": "Stacked wrapping metadata, token touch targets and no horizontal table.",
+    "mobile": "Stacked wrapping metadata, token touch targets and no horizontal table."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Current original owner-only operator, reason, scopes and times; pending reference and reviewed time only."
+    ],
+    "dataCollected": [
+      "Existing original support approval fields; Native review/cancellation audit stores only a content hash and existing scoped identities."
+    ],
+    "sensitiveFields": [
+      "Private reason/operator/review fields are not copied to a second journal, browser storage, mailto, analytics, diagnostics or HTTP logs."
+    ],
+    "loggingConstraints": "Whole original support namespace including malformed and rejected operations has fixed content-free logging. Successful original support responses are private/no-store."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "Native support references",
+      "Private reason/operator/owner",
+      "Input/content hash",
+      "Pending command state",
+      "Raw errors"
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Native lost post-commit ACK, exact immutable request replay, concurrent approval/cancellation, stale request fencing, expiry/revocation retention and no duplicate audits.",
+      "Native reserve/reload/replacement refusal, exact Native owner/company/flag/independent-operator checks and missing/ambiguous original receipts."
+    ],
+    "accessibility": [
+      "Actual DOM review/acknowledgement/focus and same-tick guards; exact built mobile axe, complete keyboard/error/focus recovery and manual AT remain pending. Forty selected actual Native support/SaaS/operator cases pass, including durable review/replay/cancellation and scoped owner refusal."
+    ],
+    "securityPrivacy": [
+      "Strict content-free pending DTO, private current source withdrawal, no browser persistence or automatic effect retry.",
+      "Original Native operator use authority remains unchanged and independent of UI receipts."
+    ],
+    "usability": [
+      "Representative formal support approval/cancellation/revocation and unknown-outcome journeys on the accepted artifact remain pending."
+    ]
+  }
+}

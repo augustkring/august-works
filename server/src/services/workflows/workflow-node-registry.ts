@@ -25,6 +25,7 @@ import { parseWorkflowConditionExpression } from "./workflow-condition-expressio
 import { parseWorkflowTransformExpression } from "./workflow-transform-expression.js";
 import { workflowNativeQueryNodes } from "./workflow-native-nodes.js";
 import { workflowHttpNode } from "./workflow-http-request.js";
+import { nativeSha256 } from "../native-runtime/canonical.js";
 import { assertWorkflowOutputSchema, validateWorkflowOutput } from "./workflow-output-schema.js";
 import {
   descriptorRetryIsStructurallySafe,
@@ -135,6 +136,7 @@ const connectorActionConfig = z.object({
   inputMapping: z.record(z.string(), z.string().max(10_000)).optional(),
   catalogVersionHash: z.string().min(1).optional(),
   catalogSchemaHash: z.string().min(1).optional(),
+  projectedInputSchemaHash: z.string().regex(/^[a-f0-9]{64}$/).optional(),
 }).strict().superRefine((value, ctx) => {
   for (const [field, expression] of Object.entries(value.inputMapping ?? {})) {
     try { parseWorkflowTransformExpression(expression); }
@@ -557,6 +559,7 @@ const REGISTRY: RegisteredWorkflowNode[] = [
           inputMapping: { type: "object", additionalProperties: { type: "string" } },
           catalogVersionHash: { type: "string" },
           catalogSchemaHash: { type: "string" },
+          projectedInputSchemaHash: { type: "string", pattern: "^[a-f0-9]{64}$" },
         },
         additionalProperties: false,
       },
@@ -594,13 +597,15 @@ const REGISTRY: RegisteredWorkflowNode[] = [
           status: toolCatalogEntries.status,
           versionHash: toolCatalogEntries.versionHash,
           schemaHash: toolCatalogEntries.schemaHash,
+          inputSchema: toolCatalogEntries.inputSchema,
+          toolName: toolCatalogEntries.toolName,
         }).from(toolCatalogEntries)
           .where(and(
             eq(toolCatalogEntries.companyId, companyId),
             eq(toolCatalogEntries.id, parsed.toolCatalogEntryId),
           ))
           .then((rows) => rows[0] ?? null),
-        db.select({ id: toolConnections.id }).from(toolConnections)
+        db.select().from(toolConnections)
           .where(and(
             eq(toolConnections.companyId, companyId),
             eq(toolConnections.id, parsed.connectionId),
@@ -619,6 +624,14 @@ const REGISTRY: RegisteredWorkflowNode[] = [
         parsed.catalogVersionHash !== entry.versionHash || parsed.catalogSchemaHash !== entry.schemaHash)) {
         invalidNode("Connector publication requires the current catalogue version and schema", {
           reason: "workflow_connector_binding_invalid", nodeId });
+      }
+      if (mode === "publish" && parsed.projectedInputSchemaHash) {
+        // Resolve the Original projection only at validation time: tool-access also
+        // reaches the executor, whose static registry must initialize first.
+        const { projectedConnectionToolInputSchema } = await import("../tool-access.js");
+        if (parsed.projectedInputSchemaHash !== nativeSha256(projectedConnectionToolInputSchema(connection, entry.inputSchema ?? {}, entry.toolName))) {
+          invalidNode("Connector input projection changed; review the current definition", { reason: "workflow_connector_binding_invalid", nodeId });
+        }
       }
     },
   },

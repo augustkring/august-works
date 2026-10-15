@@ -1,6 +1,8 @@
 import { publicChatTaskUrl } from "../chat-task-url.js";
 import {MANAGEMENT_ANALYTICAL_TOOL_DEFINITIONS,isManagementAnalyticalTool,executeManagementAnalyticalTool} from "./management-analytical-tools.js";
 import {assertAnalyticalContextPayloadAccess} from "../analytical-context-authority.js";
+import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { withOrchestrationNativeTool, lockNativeToolPlan, assertNativeToolPlanCurrent } from "../orchestration/native-tool-boundary.js";
 import type { createAssignedMcpTools } from "./assigned-mcp-tools.js";
 import { assertAssignableAgent } from "../agent-assignability.js";
@@ -201,7 +203,18 @@ export class PaperclipRunnerToolAuthority {
             ? "Prepare one verified workspace file for Paperclip's final task or external-chat response. This records the attachment, work product, and explicit same-run selection; it does not confirm provider delivery."
             : descriptor.description,
         inputSchema:
-          descriptor.operationId === "register_deliverable"
+          descriptor.operationId === "request_human_input"
+            ? {
+                ...descriptor.inputSchema,
+                properties: {
+                  ...descriptor.inputSchema.properties,
+                  resolverPolicy: {
+                    type: "string", enum: ["human_only"],
+                    description: "Optional tightening: only a current authorized human may resolve this interaction. Omission preserves its Native policy.",
+                  },
+                },
+              }
+            : descriptor.operationId === "register_deliverable"
             ? {
                 ...descriptor.inputSchema,
                 properties: {
@@ -689,6 +702,7 @@ export class PaperclipRunnerToolAuthority {
       }
     }
     this.binding.authoritySignal?.throwIfAborted();
+    this.#assertConversationGeneration(row);
     await assertAnalyticalContextPayloadAccess(this.db,this.binding.companyId,{type:"agent",source:"agent_jwt",companyId:this.binding.companyId,agentId:this.binding.agentId,runId:this.binding.runId,onBehalfOfUserId:row.run.responsibleUserId},{issueId:this.binding.issueId});
     return row;
   }
@@ -1486,6 +1500,7 @@ export class PaperclipRunnerToolAuthority {
             throw new Error("paperclip_runner_tool_idempotency_conflict");
           }
           await options.beforeReceiptReplay?.(tx as unknown as Db, context);
+          await this.#assertMutationSourceCurrent(tx as unknown as Db, context);
           return describeResult(prior.result);
         }
         const result = JSON.parse(
@@ -1494,6 +1509,12 @@ export class PaperclipRunnerToolAuthority {
           ),
         ) as unknown;
         this.binding.authoritySignal?.throwIfAborted();
+        const [currentIssue] = await tx.select().from(issues).where(and(
+          eq(issues.companyId, this.binding.companyId), eq(issues.id, this.binding.issueId),
+        ));
+        if (!currentIssue) throw new Error("paperclip_runner_tool_binding_not_authorized");
+        this.#assertConversationGeneration({ issue: currentIssue, run: context.run });
+        await this.#assertMutationSourceCurrent(tx as unknown as Db, context);
         receipts[idempotencyKey] = {
           operationId,
           input,
@@ -1514,12 +1535,32 @@ export class PaperclipRunnerToolAuthority {
     });
   }
 
+  #assertConversationGeneration(context: { issue: typeof issues.$inferSelect; run: typeof heartbeatRuns.$inferSelect }) {
+    if (!context.issue.conversationAgentId && !context.issue.conversationRetiredAt) return;
+    const generation = context.run.contextSnapshot?.conversationSessionGeneration ?? 0;
+    if (context.issue.conversationRetiredAt || !Number.isSafeInteger(generation) ||
+      generation !== context.issue.conversationSessionGeneration) {
+      throw new Error("paperclip_runner_conversation_generation_changed");
+    }
+  }
+
+  async #assertMutationSourceCurrent(tx: Db, context: { run: typeof heartbeatRuns.$inferSelect }) {
+    const actor = { type: "agent" as const, source: "agent_jwt" as const, companyId: this.binding.companyId,
+      agentId: this.binding.agentId, runId: this.binding.runId, onBehalfOfUserId: context.run.responsibleUserId };
+    await assertAnalyticalContextPayloadAccess(tx, this.binding.companyId, actor, { runId: this.binding.runId });
+    await assertAnalyticalContextPayloadAccess(tx, this.binding.companyId, actor, { issueId: this.binding.issueId });
+  }
+
   async #lockAuthorizedMutationContext(tx: Db): Promise<{
     run: typeof heartbeatRuns.$inferSelect;
     issue: typeof issues.$inferSelect;
     actor: typeof agents.$inferSelect;
   }> {
     this.binding.authoritySignal?.throwIfAborted();
+    // Current analytical source review must acquire its company boundary
+    // before Memory; then preserve the Native plan -> Task -> run order.
+    await lockAnalyticalCompany(tx, this.binding.companyId);
+    await lockMemoryPrivacy(tx, this.binding.companyId);
     // Bounded plans use the same order as reservation, supervision and Stop.
     // Ordinary native runs retain their existing Task/run mutation behavior.
     const bounded = await lockNativeToolPlan(tx, this.binding);
@@ -1566,10 +1607,14 @@ export class PaperclipRunnerToolAuthority {
     }
     if (bounded) await assertNativeToolPlanCurrent(tx, this.binding, true);
     this.binding.authoritySignal?.throwIfAborted();
+    this.#assertConversationGeneration(context);
+    await this.#assertMutationSourceCurrent(tx, context);
     return context;
   }
 
   async #requestHumanInput(input: Record<string, unknown>, identityContextId: string | null): Promise<unknown> {
+    if (input.resolverPolicy !== undefined && input.resolverPolicy !== "human_only")
+      throw new Error("paperclip_runner_interaction_resolver_policy_invalid");
     const interactionKind = requiredString(input.interactionKind);
     const interactionKinds = {
       confirmation: "request_confirmation",
@@ -1623,6 +1668,7 @@ export class PaperclipRunnerToolAuthority {
           kind,
           idempotencyKey,
           sourceRunId: this.binding.runId,
+          ...(input.resolverPolicy === "human_only" ? { resolverPolicy: "human_only" } : {}),
           title: requiredString(input.title),
           summary: prompt,
           continuationPolicy: requiredString(input.continuationPolicy),

@@ -1,0 +1,129 @@
+{
+  "screenId": "NATIVE-PACKAGE-INSTALLATION-REQUEST",
+  "journeyId": "package-recovery",
+  "routeOrSurface": "/agents/packages/requests/:requestId; inline /agents/packages recovery",
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
+  "customerOutcome": "Reconcile one original installation request without creating a second setup or inferring activation from an acknowledgement.",
+  "entryConditions": [
+    "Current company and original current Human session, including explicit Native local operator policy.",
+    "Current verified member/Original installing principal and Agent read authority on the server; instance-admin claims are not a substitute.",
+    "A matching retained per-tab locator or exact request UUID. Restoring a locator never reconstructs configuration or dispatches a POST."
+  ],
+  "exitConditions": [
+    "Clear only the matching local pending locator after the Original reader confirms its record; return to existing package controls.",
+    "Leave for Home while retaining unresolved identity. Pending, failed or missing observations remain unconfirmed."
+  ],
+  "content": {
+    "h1": "Original installation request",
+    "supportingCopy": "Recorded current installation state is separate from proof of a running Agent or verified business result.",
+    "customerTerms": [
+      "Original request",
+      "Recorded installation",
+      "Current status",
+      "Check again"
+    ],
+    "displayedState": [
+      "Only current installation status/version and Original observation time; no names, component pins, reasons or result bodies.",
+      "Waiting for the original transport, current read checking, unconfirmed, denied/unavailable and recorded current state are distinct.",
+      "A missing record is not proof that the first request failed."
+    ]
+  },
+  "inputs": [],
+  "actions": {
+    "primary": {
+      "label": "Return to packages",
+      "operation": "Clear the matching per-tab locator only after a current Original read confirms the record, then navigate. No server mutation."
+    },
+    "secondary": [
+      "Check the Original request using a bounded private GET.",
+      "Leave for Home retaining the pending locator.",
+      "Only the still-open form can explicitly resend its exact captured input/request key through the existing Native installation owner; restored locators offer no resend."
+    ],
+    "destructiveOrIrreversible": []
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Original package installation request binding and current metadata under company/creator/Agent read authority.",
+      "Original successful current session, privacy serialization and current membership; no copied response authorizes another reader."
+    ],
+    "canonicalWriteOperation": "Optional explicit resend through Original installation POST, using the same retained request UUID and unchanged in-memory setup. Current Native access/admission/version/pin guards remain; no activation or permission grant. Reading creates no write.",
+    "authorityEffect": "Current requester and Agent read are required for metadata. New work retains the Native installation owner and rollout. Current-session epoch/mounted-reader fences reject late private responses.",
+    "asyncWork": "1500 ms total Source/SQL budget and 250 ms lock budget on metadata; exact existing company/requester/request index, one share-locked row. No automatic resend, assessment or background repair.",
+    "receipt": "The immutable Original request binding identifies the current installation record. Its status is current configuration metadata, not immutable historical status or physical/verified outcome proof."
+  },
+  "states": {
+    "loading": "Hide private fields and prior observations during session/Source checks. Awaiting the original response does not imply completion.",
+    "empty": "There is no complete-empty success state: an absent Original record remains unconfirmed.",
+    "partial": "Unknown acknowledgement or inaccessible Original state retains its request locator. Other maintenance/qualification is outside this view.",
+    "stale": "Withdraw prior state/actions on account/Source epoch changes; a new Original read is required.",
+    "validation_error": "Malformed or over-budget/corrupt locator storage refuses new work; no raw configuration is restored or shown.",
+    "system_error": "Keep the original locator and fixed unconfirmed copy; never display provider/error prose or create a new request key automatically.",
+    "permission_denied": "Current account/membership/Agent read refusal withholds all private record metadata and cannot clear it as a successful outcome.",
+    "recovering": "Explicitly read the Original request. An optional unchanged resend requires the original open form and Native owner; it is never rebuilt from stored locators.",
+    "success": "Only the Original reader confirms a recorded binding; show current status separately from activation/running/verified business state."
+  },
+  "navigation": {
+    "back": "Home; keep pending identity when the original outcome is unresolved.",
+    "cancelOrSaveExit": "No raw form/input/result persistence; per-tab metadata only.",
+    "deepLink": "/agents/packages/requests/:requestId",
+    "resume": "Read exact company/principal/request locator through the Original owner, including after agent_packages_v7 closes. No new-work fallback or inferred failure."
+  },
+  "accessibility": {
+    "initialFocus": "Receipt H1 on entry unless a Native dialog owns focus.",
+    "focusAfterError": "Named unconfirmed/error status and explicit current-read action; preserve native dialog focus.",
+    "focusAfterSuccess": "Keep H1 and user focus while current state appears; do not announce activation.",
+    "keyboardModel": "Standard links/buttons; no custom keyboard trap.",
+    "statusAnnouncement": "Polite loading/waiting; alert for unconfirmed/unavailable; recorded state has a named section.",
+    "targetSize": "New controls use token min-h-11 targets.",
+    "zoomReflow": "Stacked metadata and wrapping secondary actions; cancel/return in one footer row. Browser 390px/automated checks do not qualify manual 200/400% or assistive technology.",
+    "reducedMotion": "No animation.",
+    "screenReaderNotes": "One main landmark belongs to Native Layout; this supporting view renders a section with H1 and current-state H2."
+  },
+  "responsive": {
+    "wide": "Stacked minimal record and recovery controls.",
+    "narrow": "Wrapping secondary actions; no data table.",
+    "mobile": "Token touch targets and no horizontal overflow; actual EN/DA browser evidence remains separate."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Current own installation status/version and observation time only."
+    ],
+    "dataCollected": [
+      "Per-tab company UUID, original principal identifier and request UUID only; 32-entry/8 KiB bounds and strict closed parsing. Clear matching locator only after a confirmed read."
+    ],
+    "sensitiveFields": [
+      "No setup, component, Agent/source name, credential, reason, private result or error body is stored in the recovery locator or returned by its reader."
+    ],
+    "loggingConstraints": "Private/no-store HTTP responses and existing normalized private package namespace, including refused methods. No generic raw body/query/error/identifier logs."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "No request/configuration contents, actor identifiers, request IDs, sources, errors or metadata in analytics."
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Actual Native install/request binding survives release withdrawal, uninstall and rollout closure with no additional Activity or installation.",
+      "Exact query key and current company/creator/verified account/Agent read are enforced; absent stays unconfirmed.",
+      "Lost response retains one locator; reload performs GET only; an explicit in-memory resend reuses identical input/key.",
+      "A transport acknowledgement alone never clears pending identity: the Original reader must confirm its record."
+    ],
+    "accessibility": [
+      "One main, initial H1, token targets, clear unknown/recorded semantics and mobile reflow; manual assistive technology remains pending."
+    ],
+    "securityPrivacy": [
+      "Strict metadata DTO, foreign/expanded response rejection, private headers/logging, unknown/corrupt-storage refusal and current-session/late-reader withdrawal.",
+      "Restored locators cannot supply a body or new authority; Source/permission loss never becomes an accepted outcome."
+    ],
+    "usability": [
+      "Recorded configuration is separate from activation/running/business proof; reference EN/DA fixed copy.",
+      "Real Human/host/provider qualification remains pending; controlled transport fixtures are software evidence only."
+    ]
+  }
+}

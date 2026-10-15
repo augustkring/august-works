@@ -1,7 +1,9 @@
-import { spawn } from "node:child_process";
+import { spawn, execFileSync } from "node:child_process";
 import { randomUUID } from "node:crypto";
 import { once } from "node:events";
-import { fileURLToPath } from "node:url";
+import { mkdir, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq, inArray } from "drizzle-orm";
 import {
@@ -633,7 +635,9 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
     const newerWakeKey = `newer-comment:${newerCommentId}`;
     const turnId = "provider-active-turn";
     const providerSessionId = "provider-existing-session";
-    const repoRoot = fileURLToPath(new URL("../../../", import.meta.url));
+    // Native attachment staging belongs to this disposable recovery fixture.
+    // Never write wake inputs into the contributor's source checkout.
+    const repoRoot = join(tmpdir(), `paperclip-native-resumption-workspace-${randomUUID()}`);
     const contract = {
       revision: "phase6-recovery-v1",
       objective: "Recover the persisted provider turn",
@@ -781,6 +785,11 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
     };
 
     beforeAll(async () => {
+      await mkdir(repoRoot, { mode: 0o700 });
+      // The unchanged legacy adapter preflight requires a real Git workspace.
+      // Initialize only this owned disposable fixture, without host Git config.
+      execFileSync("git", ["init", "--quiet", repoRoot], { timeout: 5000,
+        env: { ...process.env, GIT_CONFIG_NOSYSTEM: "1", GIT_CONFIG_GLOBAL: "/dev/null" } });
       temporary = await startEmbeddedPostgresTestDatabase(
         "paperclip-native-reaper-e2e-",
       );
@@ -972,6 +981,7 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
         );
         await temporary.cleanup();
       }
+      await rm(repoRoot, { recursive: true, force: true });
     });
 
     it("preserves the old provider contract and admits newer direction only in a separate turn", async () => {
@@ -1415,7 +1425,11 @@ describe.each(["unchanged", "newer_active", "stale_idle"] as const)(
       });
       expect(fresh).not.toBeNull();
       await drainHeartbeatRunsToQuiescence(db, heartbeat);
-      expect(legacyAdapterExecute).toHaveBeenCalledOnce();
+      const [freshDiagnosis] = await db.select({ status: heartbeatRuns.status, error: heartbeatRuns.error,
+        errorCode: heartbeatRuns.errorCode }).from(heartbeatRuns).where(eq(heartbeatRuns.id, fresh!.id));
+      // This original test uses owned fake provider/workspace data only. Keep
+      // the original success assertion and expose its bounded native refusal.
+      expect(legacyAdapterExecute, JSON.stringify(freshDiagnosis)).toHaveBeenCalledOnce();
       await expect(
         db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, fresh!.id)),
       ).resolves.toEqual([

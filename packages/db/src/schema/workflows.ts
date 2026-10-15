@@ -41,6 +41,9 @@ export const workflows = pgTable(
     draftRevisionId: uuid("draft_revision_id"),
     createdByUserId: text("created_by_user_id"),
     createdByAgentId: uuid("created_by_agent_id").references(() => agents.id, { onDelete: "set null" }),
+    // Native authoring provenance survives later Human revisions and source-run
+    // removal. These IDs confer no read, execution or permission authority.
+    authoringSourceRunIds: jsonb("authoring_source_run_ids").$type<string[]>().notNull().default([]),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
     archivedAt: timestamp("archived_at", { withTimezone: true }),
@@ -58,6 +61,8 @@ export const workflows = pgTable(
       "workflows_status_check",
       sql`${table.status} in ('active', 'paused', 'archived')`,
     ),
+    authoringSourcesCheck: check("workflows_authoring_sources_check",
+      sql`jsonb_typeof(${table.authoringSourceRunIds}) = 'array'`),
     archiveCheck: check(
       "workflows_archive_check",
       sql`(${table.status} = 'archived') = (${table.archivedAt} is not null)`,
@@ -88,6 +93,9 @@ export const workflowRuns = pgTable(
     triggerPayload: jsonb("trigger_payload").$type<Record<string, unknown>>().notNull().default({}),
     responsibleUserId: text("responsible_user_id"),
     executionPrincipal: jsonb("execution_principal").$type<ExecutionPrincipal>(),
+    // Actual private workflow copy owners retained across child-run removal.
+    // Native capture propagates these IDs to the existing parent run chain.
+    authoringSourceWorkflowIds: jsonb("authoring_source_workflow_ids").$type<string[]>().notNull().default([]),
     memoryRecordIds: jsonb("memory_record_ids").$type<string[]>().notNull().default([]),
     parentWorkflowRunId: uuid("parent_workflow_run_id").references((): AnyPgColumn => workflowRuns.id, { onDelete: "set null" }),
     parentNodeId: text("parent_node_id"),
@@ -114,6 +122,9 @@ export const workflowRuns = pgTable(
   },
   (table) => ({
     companyIdUq: unique("workflow_runs_company_id_uq").on(table.companyId, table.id),
+    authoringSourcesIdx: index("workflow_runs_authoring_sources_idx").using("gin", table.authoringSourceWorkflowIds),
+    authoringSourcesCheck: check("workflow_runs_authoring_sources_check",
+      sql`jsonb_typeof(${table.authoringSourceWorkflowIds}) = 'array'`),
     companyWorkflowCreatedIdx: index("workflow_runs_company_workflow_created_idx").on(
       table.companyId,
       table.workflowId,
@@ -143,7 +154,7 @@ export const workflowRuns = pgTable(
     ),
     sourceCheck: check(
       "workflow_runs_source_check",
-      sql`${table.source} in ('manual', 'schedule', 'webhook', 'api', 'connector_event', 'routine', 'pipeline', 'task')`,
+      sql`${table.source} in ('manual', 'schedule', 'webhook', 'api', 'connector_event', 'routine', 'pipeline', 'task', 'test')`,
     ),
     leasePairCheck: check(
       "workflow_runs_lease_pair_check",
@@ -324,6 +335,11 @@ export const workflowRevisions = pgTable(
       table.companyId,
       table.workflowId,
       table.state,
+    ),
+    companyAuthoringRunIdx: index("workflow_revisions_company_authoring_run_idx").on(
+      table.companyId,
+      table.createdByRunId,
+      table.createdAt,
     ),
     oneDraftUq: uniqueIndex("workflow_revisions_one_draft_uq")
       .on(table.workflowId)

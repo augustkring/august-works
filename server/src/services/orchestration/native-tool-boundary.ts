@@ -30,6 +30,7 @@ import {
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { retainedOrchestrationContract } from "./orchestration-contracts.js";
 import { agentProviderBindingService } from "../agent-provider-bindings.js";
+import { assertAuthoredAgentManifestCurrent } from "../agents/authored-definition.js";
 import { enqueueSupervisionStop } from "../supervision/supervision-outbox.js";
 import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
 
@@ -211,6 +212,7 @@ export async function assertNativeToolPlanCurrent(
     !(await heartbeatMemoryPayloadRetained(db, b.companyId, b.runId))
   )
     throw forbidden("Native tool Task/run/source ownership changed");
+  await assertAuthoredAgentManifestCurrent(db, presence.agent, manifest.manifest.agentDefinitionVersion);
   const resource = {
     type: "issue" as const,
     companyId: b.companyId,

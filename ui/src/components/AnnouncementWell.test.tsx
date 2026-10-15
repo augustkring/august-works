@@ -52,4 +52,13 @@ describe("announcement placement gates", () => {
     await act(async () => { dialog.remove(); }); expect(visible()).toBe(true);
     expect(state.dismiss).not.toHaveBeenCalled();
   });
+  it("waits for an explicit disclosure action and preserves the existing dismissal owner", async () => {
+    await render();
+    const details = container.querySelector("details")!;
+    expect(details.open).toBe(false);
+    await act(async () => container.querySelector("summary")!.click());
+    expect(details.open).toBe(true); expect(state.dismiss).not.toHaveBeenCalled();
+    await act(async () => container.querySelector("button")!.click());
+    expect(state.dismiss).toHaveBeenCalledWith(announcementPreview.id);
+  });
 });

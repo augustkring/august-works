@@ -1,0 +1,142 @@
+{
+  "screenId": "WORKFLOW-PUBLISH",
+  "journeyId": "workflow",
+  "routeOrSurface": "/workflows/:workflowId",
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
+  "customerOutcome": "Explicitly publish the exact reviewed native internal control draft after a successful bound internal test and recover its immutable original receipt.",
+  "entryConditions": [
+    "Current account/company/workflow and Read/Edit/Run/Publish authority with current non-viewer role.",
+    "Native workflow and progressive shell rollout enabled; immutable current C0 internal draft and same-human successful native test."
+  ],
+  "exitConditions": [
+    "Native publication receipt proves only the original revision publication; current active status is read separately.",
+    "Native next draft and historical published/test revision remain under the existing workflow owner."
+  ],
+  "content": {
+    "h1": "Workflow review with Publish internal version confirmation",
+    "supportingCopy": "A successful internal test does not qualify material actions or independently verify business outcomes. Publication creates the next native draft and retains history.",
+    "customerTerms": [
+      "Reviewed internal version",
+      "Published revision",
+      "Original publication receipt",
+      "Current draft",
+      "Internal test"
+    ],
+    "displayedState": [
+      "Source-bound current draft/revision/test and previous published pointer, no private raw config/input/output.",
+      "internal_ready, test_required, review_required, no_draft or not_active from current native authority.",
+      "Original same-human publication receipt is separate from current published pointer and native execution status."
+    ]
+  },
+  "inputs": [
+    {
+      "id": "acknowledgeInternalPublication",
+      "label": "I reviewed the exact internal draft and its completed internal test.",
+      "dataType": "Explicit boolean acknowledgement",
+      "required": true,
+      "default": "Unchecked",
+      "help": "Only the closed C0 internal flow with empty synthetic input enters this publication mode.",
+      "validation": "Literal true; native current draft/test/time/published-pointer tuple must match.",
+      "autofillOrPrefill": "Never automatically acknowledged."
+    }
+  ],
+  "actions": {
+    "primary": {
+      "label": "Publish reviewed version",
+      "operation": "Freeze and explicitly acknowledge the exact native draft/time/test/previous-publication tuple; publish via the existing native owner and atomic original receipt."
+    },
+    "secondary": [
+      "Cancel without replacing an unknown original command.",
+      "Retry the exact unknown original request.",
+      "Reload to recover the same-human native publication receipt.",
+      "Open current native version/run history."
+    ],
+    "destructiveOrIrreversible": [
+      "Replaces the prior published revision while retaining it as historical; new native runs can select this published internal version when the workflow is active."
+    ]
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Current native workflow/revisions/Test run and original activity receipt.",
+      "Native Read/Edit/Run/Publish, current role/rollout and learned/analytical source admission."
+    ],
+    "canonicalWriteOperation": "Native workflowService.publish in the enclosing privacy/authority/workflow transaction, plus atomic workflow.customer_publication_recorded receipt.",
+    "authorityEffect": "No new grant; current authority and source binding repeat for new admission, original replay and private receipt recovery.",
+    "asyncWork": "Existing native publication; no model/provider call, hidden live test or alternate scheduler.",
+    "receipt": "Strict company/workflow/request/revision/test bindings; disposition published confirms original publication only."
+  },
+  "states": {
+    "loading": "Hide prior private state while current sources/authority are checked; unavailable, stale, partial, rejected and unknown responses never imply successful material work.",
+    "empty": "Hide prior private state while current sources/authority are checked; unavailable, stale, partial, rejected and unknown responses never imply successful material work.",
+    "partial": "Hide prior private state while current sources/authority are checked; unavailable, stale, partial, rejected and unknown responses never imply successful material work.",
+    "stale": "Hide prior private state while current sources/authority are checked; unavailable, stale, partial, rejected and unknown responses never imply successful material work.",
+    "validation_error": "Hide prior private state while current sources/authority are checked; unavailable, stale, partial, rejected and unknown responses never imply successful material work.",
+    "system_error": "Hide prior private state while current sources/authority are checked; unavailable, stale, partial, rejected and unknown responses never imply successful material work.",
+    "permission_denied": "Hide prior private state while current sources/authority are checked; unavailable, stale, partial, rejected and unknown responses never imply successful material work.",
+    "recovering": "Hide prior private state while current sources/authority are checked; unavailable, stale, partial, rejected and unknown responses never imply successful material work.",
+    "success": "Bound native original publication fact; independently read current version and run status."
+  },
+  "navigation": {
+    "back": "Native workflow review",
+    "cancelOrSaveExit": "Cancel closes confirmation and retains an unknown original request within the current mounted private scope.",
+    "deepLink": "Company/account/workflow-bound native review.",
+    "resume": "Reload current native review and original same-human receipt; no browser persistence."
+  },
+  "accessibility": {
+    "initialFocus": "Native dialog title for explicit confirmation; private read checks never steal another actual native dialog focus.",
+    "focusAfterError": "Error summary or first invalid control, with a programmatically associated explanation.",
+    "focusAfterSuccess": "Native dialog restores the initiating trigger; fresh current version read follows.",
+    "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
+    "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
+    "targetSize": "Custom frequent and primary controls target at least 44 \u00d7 44 CSS px.",
+    "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
+    "reducedMotion": "No essential animated transition or moving progress indicator.",
+    "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
+  },
+  "responsive": {
+    "wide": "Readable constrained content width with natural wrapping.",
+    "narrow": "Reflow cards and form actions without concealing utilities or consequences.",
+    "mobile": "Touch targets remain reachable; dialogs scroll within the viewport and do not obscure focus."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Authorized draft version, internal test state and original publication fact; no raw graphs/prompts/inputs/outputs/secrets."
+    ],
+    "dataCollected": [
+      "Strict reviewed native publication tuple and explicit acknowledgement in the original native activity receipt."
+    ],
+    "sensitiveFields": [
+      "Company/account/workflow/revision/run/request IDs remain private."
+    ],
+    "loggingConstraints": "Normalized generic private route; no raw IDs/account query, request/reply/config or raw error prose."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "No private draft/test/receipt IDs, customer content, prompts, credentials, inputs, outputs or account identifiers."
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Actual native publication preserves exact tested immutable draft and creates next draft under the existing owner.",
+      "Concurrent/replayed original requests yield one native publication receipt; stale/changed/missing/unqualified tuples refuse before effect."
+    ],
+    "accessibility": [
+      "Native confirmation requires an unchecked explicit acknowledgement and token touch targets.",
+      "Lost-response recovery and mobile/keyboard/software axe checks required; real assistive-technology and human acceptance pending."
+    ],
+    "securityPrivacy": [
+      "Current source/privacy/authority/role/rollout applies to publication and original receipt replay/read.",
+      "No grant, alternate run engine, material test bypass or business verification claim."
+    ],
+    "usability": [
+      "Native publication fact and current execution/business verification are distinct.",
+      "Representative material targets, simulation/customer input, hosted/runtime and human qualification remain pending."
+    ]
+  }
+}

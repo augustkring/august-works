@@ -1,4 +1,4 @@
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { agentPackageVersions, companyAgentPackageInstallations, agents, issues, workflows, readinessAssessments, readinessRequirements, knowledgeQualityFindings } from "@paperclipai/db";
 import type { Request } from "express";
@@ -42,6 +42,18 @@ export function readinessService(db: Db) {
       .innerJoin(readinessAssessments, and(eq(knowledgeQualityFindings.companyId, readinessAssessments.companyId), eq(knowledgeQualityFindings.assessmentId, readinessAssessments.id)))
       .where(and(eq(knowledgeQualityFindings.companyId, companyId), eq(readinessAssessments.principalId, principalId)))
       .orderBy(desc(knowledgeQualityFindings.createdAt)).limit(100).then((rows) => rows.map((row) => row.finding)),
+    /** Internal body-free open findings using the same Original principal owner.
+     * Bound the extra row for a projection; hold current status through assembly. */
+    maintenanceFindings: (companyId: string, principalId: string) => db.select({
+      id: knowledgeQualityFindings.id, assessmentId: knowledgeQualityFindings.assessmentId,
+      status: knowledgeQualityFindings.status, severity: knowledgeQualityFindings.severity,
+      findingHash: knowledgeQualityFindings.findingHash, createdAt: knowledgeQualityFindings.createdAt,
+      expiresAt: readinessAssessments.expiresAt,
+    }).from(knowledgeQualityFindings).innerJoin(readinessAssessments, and(
+      eq(knowledgeQualityFindings.companyId, readinessAssessments.companyId), eq(knowledgeQualityFindings.assessmentId, readinessAssessments.id)))
+      .where(and(eq(knowledgeQualityFindings.companyId, companyId), eq(readinessAssessments.principalId, principalId),
+        inArray(knowledgeQualityFindings.status, ["open", "acknowledged"])))
+      .orderBy(desc(knowledgeQualityFindings.createdAt), desc(knowledgeQualityFindings.id)).limit(6).for("share"),
     resolveFinding: async (companyId: string, id: string, input: z.infer<typeof resolveReadinessFindingSchema>, owner: ReadinessActor) => {
       const publications: ActivityPublication[] = [];
       const resolved = await db.transaction(async (tx) => {

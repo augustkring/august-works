@@ -15,6 +15,7 @@ function fixture() {
     companyId: randomUUID(),
     endpointId: randomUUID(),
     conversationId: randomUUID(),
+    notificationId: null,
     deliveryId: randomUUID(),
     principalId: randomUUID(),
     kind: "inbound_wakeup",

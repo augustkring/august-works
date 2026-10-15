@@ -14,9 +14,10 @@ import {
   it,
   vi,
 } from "vitest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   agents,
+  authUsers,
   agentIdentities,
   companies,
   companyMemberships,
@@ -36,9 +37,12 @@ import {
   toolInvocations,
   issueDocuments,
   documents,
+  issueThreadInteractions,
+  memoryDeletionMarkers,
 } from "@paperclipai/db";
 import {
   PROVIDER_CAPABILITY_FEATURES,
+  agentAuthoringContentSchema, AUTHORED_AGENT_DEFINITION_KEY,
   type WorkerModelBinding,
 } from "@paperclipai/shared";
 import { instanceSettingsService } from "../services/instance-settings.js";
@@ -57,7 +61,8 @@ import type { guardedRemoteHttpFetch } from "../services/remote-http-fetch.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
 import { runtimeConnectionIntentRoutes } from "../routes/connection-intents.js";
 import { errorHandler } from "../middleware/index.js";
-import { purgeMemoryRecords } from "../services/memory/memory-privacy.js";
+import { purgeMemoryRecords, purgeDerivedWorkflowMemory, lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
+import { assertAnalyticalContextPayloadAccess } from "../services/analytical-context-authority.js";
 import { PaperclipRunnerToolAuthority } from "../services/native-runtime/paperclip-runner-tool-authority.js";
 import { PaperclipRunnerSemanticAuthority } from "../services/native-runtime/runner-semantic-authority.js";
 import { createAssignedMcpTools } from "../services/native-runtime/assigned-mcp-tools.js";
@@ -72,6 +77,11 @@ import {
   validatePrpStructuredRunResult,
 } from "../vendor/paperclip-runner/index.js";
 import { documentService } from "../services/documents.js";
+import { agentService } from "../services/agents.js";
+import { compileAuthoredAgentDefinition, readAuthoredAgentDefinition } from "../services/agents/authored-definition.js";
+import { issueThreadInteractionService } from "../services/issue-thread-interactions.js";
+import { makeProviderCapabilitySnapshot, providerConformanceRequirements } from "../services/provider-capabilities.js";
+import { hashContextPolicySnapshot } from "../services/context/context-manifest.js";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -104,6 +114,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       observedKey: string,
       observedBody: string,
       inputTokens: number,
+      modelOutput: string,
       duringCall: (() => Promise<void>) | undefined;
     beforeAll(async () => {
       home = await mkdtemp(join(tmpdir(), "aw-v7-worker-model-fixture-"));
@@ -126,7 +137,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         await rm(home, { recursive: true, force: true });
       }
     }, 30000);
-    beforeEach(async () => {
+    beforeEach(async (context) => {
       await instanceSettingsService(db).updateExperimental({
         enableWorkflowsV1: true,
         role_packs_v5: false,
@@ -135,10 +146,25 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         orchestration_v7: true,
       });
       f = await seedV5Presences(db);
+      const workerProfileId = randomUUID();
       await db
         .update(agents)
         .set({ adapterType: "claude_local" })
         .where(eq(agents.id, f.presence.id));
+      // This mode publishes through the Original owner before manifest creation;
+      // it does not patch an already retained execution pin to fit the test.
+      if (context.task.name.startsWith("reviewed proposal:")) {
+        const definition = compileAuthoredAgentDefinition(agentAuthoringContentSchema.parse({
+          name: "Internal task proposer", description: "Drafts one bounded follow-up for Human review",
+          outcome: "Draft a bounded internal follow-up", ownerUserId: f.userId,
+          capabilities: [{ operation: "create_internal_draft", autonomy: "automatic" }, { operation: "create_task", autonomy: "ask_first" }],
+          instructions: { purpose: "Draft internal work", responsibilities: "Propose one follow-up", prohibited: "No external actions",
+            missingInformation: "Ask the owner", escalation: "Ask the owner", communication: "Plain language" },
+        }), randomUUID(), "a".repeat(64));
+        await agentService(db).update(f.presence.id, { adapterType: "paperclip_runner", adapterConfig: { provider: "aw_text_only", model: "fixture-worker-model-20261005", workerModelProfileId: workerProfileId, lifecycleMode: "per_turn" },
+          runtimeConfig: { [AUTHORED_AGENT_DEFINITION_KEY]: definition } },
+        { authoredPublication: definition, recordRevision: { id: definition.revisionId, source: "agent_authoring_publish", createdByUserId: f.userId } });
+      }
       const providers = agentProviderBindingService(db),
         pb = await providers.create(f.actor, f.home, f.presence.id, {
           providerType: "paperclip_native",
@@ -146,11 +172,19 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
           isolationMode: "isolated_per_presence",
           providerEndpointRef: null,
         });
-      await providers.attach(f.actor, f.home, f.presence.id, {
+      const attached = await providers.attach(f.actor, f.home, f.presence.id, {
         providerBindingId: pb.id,
         providerProfileRef: f.presence.id,
       });
-      await providers.recordDiscovery(
+      if (context.task.name.startsWith("reviewed proposal:")) {
+        const agent = (await agentService(db).getById(f.presence.id))!;
+        const snapshot = makeProviderCapabilitySnapshot(await discoverNativeCapabilities({ companyId: f.home, adapterType: agent.adapterType, config: agent.adapterConfig }));
+        // Software fixture metadata through the Original owner, not live conformance.
+        await providers.recordDiscovery(f.home, agent.id, snapshot,
+          Object.fromEntries(providerConformanceRequirements(snapshot, pb.isolationMode).map(check => [check, true])),
+          { configurationHash: hashContextPolicySnapshot({ adapterType: agent.adapterType, adapterConfig: agent.adapterConfig }),
+            runtimeId: attached.id, profileRef: attached.providerProfileRef, bindingId: pb.id, accountingComplete: true });
+      } else await providers.recordDiscovery(
         f.home,
         f.presence.id,
         {
@@ -213,7 +247,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
           requiredOutputs: [{ key: "result" }],
           businessInvariants: ["Use authorized sources only"],
         },
-        budgets: { maxModelCostMinor: 6, maxToolActions: 2 },
+        budgets: { maxModelCostMinor: 6, maxToolActions: context.task.name.startsWith("reviewed proposal:") && !context.task.name.includes("insufficient retained") ? 3 : 2 },
         workers: [{ key: "writer", issueId: task.id }],
       });
       // Private Native fixture setup only. Production launch remains closed for
@@ -269,7 +303,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         credential,
       );
       profile = {
-        id: randomUUID(),
+        id: workerProfileId,
         companyId: f.home,
         workerAgentId: f.presence.id,
         providerBindingId: provider.provider.id,
@@ -310,6 +344,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       observedKey = "";
       observedBody = "";
       inputTokens = 10;
+      modelOutput = "Retained bounded draft";
       duringCall = undefined;
     });
     afterEach(() => registerNativeDraftGateway(db, undefined));
@@ -667,7 +702,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
           role: "assistant",
           model: profile.tariff.model,
           stop_reason: "end_turn",
-          content: [{ type: "text", text: "Retained bounded draft" }],
+          content: [{ type: "text", text: modelOutput }],
           usage: { input_tokens: inputTokens, output_tokens: 20 },
         }),
         { status: 200, headers: { "content-type": "application/json" } },
@@ -702,6 +737,131 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
     const sessionIdentity = () => ({
       ...nativeBinding(),
       sessionId: randomUUID(),
+    });
+    it("reviewed proposal: saves bounded data and requests Human approval before any backlog task exists", async () => {
+      modelOutput = JSON.stringify({ draft: "Review the internal evidence", proposedTask: { title: "Follow up on the approved scope", description: "Compare only the internal source" } });
+      const session = await draftBackend().openSession({ identity: sessionIdentity() });
+      await session.startTurn({ message: { role: "user", text: "Propose one internal follow-up for Human review" } });
+      expect(await session.result()).toMatchObject({ result: { reportedWorkDisposition: "needs_review", completionClaim: { objectiveSatisfied: false } } });
+      expect(calls).toBe(1);
+      expect(JSON.parse(observedBody).system).toContain("proposedTask");
+      expect(JSON.parse(observedBody).tools).toBeUndefined();
+      const [proposal] = await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, task.id));
+      expect(proposal).toMatchObject({ kind: "suggest_tasks", status: "pending", requestedResolverPolicy: "human_only", continuationPolicy: "none", sourceRunId: run.id,
+        payload: { version: 1, tasks: [{ clientKey: "proposed-task", title: "Follow up on the approved scope", description: "Compare only the internal source", status: "backlog", placement: "company_backlog" }] } });
+      expect(await db.select().from(issues).where(eq(issues.originRunId, run.id))).toEqual([]);
+      expect((await documentService(db).getIssueDocumentByKey(task.id, "result"))?.body).toContain("Proposed task — not created");
+      const service = issueThreadInteractionService(db);
+      await expect(service.acceptInteraction(task, proposal!.id, {}, { agentId: f.presence.id, runId: run.id, suggestedTaskEffectsAuthorized: true })).rejects.toThrow();
+      const resolutions = await Promise.allSettled([
+        service.acceptInteraction(task, proposal!.id, {}, { userId: f.userId }),
+        service.acceptInteraction(task, proposal!.id, {}, { userId: f.userId }),
+      ]);
+      const failures = resolutions.filter(result => result.status === "rejected").map(result => ({
+        code: result.reason?.details?.code ?? result.reason?.code,
+        reason: result.reason?.cause?.message ?? result.reason?.message,
+      }));
+      expect(resolutions.filter(result => result.status === "fulfilled"), JSON.stringify(failures)).toHaveLength(1);
+      expect(resolutions.filter(result => result.status === "rejected")).toHaveLength(1);
+      const accepted = resolutions.find(result => result.status === "fulfilled")!.value;
+      expect(accepted.createdIssues).toEqual([expect.objectContaining({ status: "backlog", assigneeAgentId: null })]);
+      const [child] = await db.select().from(issues).where(eq(issues.id, accepted.createdIssues[0]!.id));
+      expect(child).toMatchObject({ companyId: f.home, parentId: null, originRunId: run.id, originId: `paperclip-suggested-task:${proposal!.id}`,
+        createdByUserId: f.userId, assigneeAgentId: null, assigneeUserId: null, status: "backlog" });
+      await expect(service.acceptInteraction(task, proposal!.id, {}, { userId: f.userId })).rejects.toThrow();
+      expect(await db.select().from(issues).where(eq(issues.originRunId, run.id))).toHaveLength(1);
+      const lineage = await db.execute<{ source_run_id: string; source_task_id: string; invalid: boolean }>(sql`
+        select * from aw_runner_task_source_chain(${f.home}::uuid,null,${child!.id}::uuid)`);
+      expect(lineage).toEqual([expect.objectContaining({ source_run_id: run.id, source_task_id: task.id, invalid: false })]);
+      const [forged] = await db.insert(issues).values({ companyId: f.home, title: "FORGED receipt identity", status: "backlog",
+        createdByUserId: f.userId, originKind: "manual", originRunId: run.id, originId: child!.originId }).returning();
+      await expect(assertAnalyticalContextPayloadAccess(db, f.home, f.actor, { issueId: forged!.id }))
+        .rejects.toMatchObject({ status: 403, details: { code: "analytical_source_access_lost" } });
+      await db.transaction(async rawTx => {
+        const tx = rawTx as unknown as typeof db;
+        await lockMemoryPrivacy(tx, f.home);
+        await tx.insert(memoryDeletionMarkers).values({ companyId: f.home, kind: "source", key: `memory-run-source-erasure:v1:${run.id}` });
+        await purgeDerivedWorkflowMemory(tx, f.home, [], new Date(), { workflowRevisionIds: [], artifactVersionIds: [], runIds: [run.id] });
+      });
+      expect((await db.select().from(issues).where(eq(issues.id, child!.id)))[0])
+        .toMatchObject({ title: "Erased workflow task", description: null });
+      await expect(assertAnalyticalContextPayloadAccess(db, f.home, f.actor, { issueId: child!.id }))
+        .rejects.toMatchObject({ status: 403, details: { code: "analytical_source_access_lost" } });
+    });
+    it("reviewed proposal: explicit absence saves a draft without requesting task approval", async () => {
+      modelOutput = JSON.stringify({ draft: "No additional task is needed", proposedTask: null });
+      const session = await draftBackend().openSession({ identity: sessionIdentity() });
+      await session.startTurn({ message: { role: "user", text: "Draft only the requested answer" } });
+      expect(await session.result()).toMatchObject({ result: { reportedWorkDisposition: "needs_review" } });
+      expect(await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, task.id))).toEqual([]);
+      expect((await documentService(db).getIssueDocumentByKey(task.id, "result"))?.body).toBe("No additional task is needed");
+    });
+    it("reviewed proposal: erased run Source prevents Human task creation and rolls back the verdict", async () => {
+      modelOutput = JSON.stringify({ draft: "A Source-bound draft", proposedTask: { title: "A Source-bound task", description: "Only retained source data" } });
+      const session = await draftBackend().openSession({ identity: sessionIdentity() });
+      await session.startTurn({ message: { role: "user", text: "Propose one internal task" } });
+      expect(await session.result()).toMatchObject({ result: { reportedWorkDisposition: "needs_review" } });
+      const [proposal] = await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, task.id));
+      await db.insert(memoryDeletionMarkers).values({ companyId: f.home, kind: "source", key: `memory-run-source-erasure:v1:${run.id}` });
+      const service = issueThreadInteractionService(db);
+      await expect(service.acceptInteraction(task, proposal!.id, {}, { userId: f.userId })).rejects.toMatchObject({ status: 403 });
+      expect((await service.getById(proposal!.id))?.status).toBe("pending");
+      expect(await db.select().from(issues).where(eq(issues.originRunId, run.id))).toEqual([]);
+    });
+    it("reviewed proposal: current Human membership withdrawal prevents separate task creation", async () => {
+      modelOutput = JSON.stringify({ draft: "A bounded draft", proposedTask: { title: "A bounded task", description: "Original internal scope" } });
+      const session = await draftBackend().openSession({ identity: sessionIdentity() });
+      await session.startTurn({ message: { role: "user", text: "Propose one internal task" } });
+      expect(await session.result()).toMatchObject({ result: { reportedWorkDisposition: "needs_review" } });
+      const [proposal] = await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, task.id));
+      await db.delete(companyMemberships).where(and(eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, f.userId)));
+      const service = issueThreadInteractionService(db);
+      await expect(service.acceptInteraction(task, proposal!.id, {}, { userId: f.userId })).rejects.toMatchObject({ status: 403 });
+      expect((await service.getById(proposal!.id))?.status).toBe("pending");
+      expect(await db.select().from(issues).where(eq(issues.originRunId, run.id))).toEqual([]);
+    });
+    it("reviewed proposal: an unverified Human cannot approve a separate task", async () => {
+      modelOutput = JSON.stringify({ draft: "A bounded draft", proposedTask: { title: "A bounded task", description: "Original internal scope" } });
+      const session = await draftBackend().openSession({ identity: sessionIdentity() });
+      await session.startTurn({ message: { role: "user", text: "Propose one internal task" } });
+      expect(await session.result()).toMatchObject({ result: { reportedWorkDisposition: "needs_review" } });
+      const [proposal] = await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, task.id));
+      await db.update(authUsers).set({ emailVerified: false }).where(eq(authUsers.id, f.userId));
+      const service = issueThreadInteractionService(db);
+      await expect(service.acceptInteraction(task, proposal!.id, {}, { userId: f.userId })).rejects.toMatchObject({ status: 403 });
+      expect((await service.getById(proposal!.id))?.status).toBe("pending");
+      expect(await db.select().from(issues).where(eq(issues.originRunId, run.id))).toEqual([]);
+    });
+    it("reviewed proposal: refuses an insufficient retained tool budget before any model dispatch", async () => {
+      await expect(draftBackend().openSession({ identity: sessionIdentity() })).rejects.toThrow("three remaining Native tool actions");
+      expect(calls).toBe(0);
+      expect(await ledger()).toEqual([]);
+    });
+    it("reviewed proposal: refuses model-selected assignees before saving output or an interaction", async () => {
+      modelOutput = JSON.stringify({ draft: "An invalid proposal", proposedTask: { title: "Widen the scope", description: "Unsafe extra fields", assigneeAgentId: f.guestPresence.id } });
+      const session = await draftBackend().openSession({ identity: sessionIdentity() });
+      await session.startTurn({ message: { role: "user", text: "Propose one bounded task" } });
+      expect(await session.result()).toBeNull();
+      expect((await ledger())[0]).toMatchObject({ status: "completed", maximumMinor: 3 });
+      expect(await documentService(db).getIssueDocumentByKey(task.id, "result")).toBeNull();
+      expect(await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, task.id))).toEqual([]);
+      expect(await db.select().from(issues).where(eq(issues.parentId, task.id))).toEqual([]);
+    });
+    it("reviewed proposal: withdraws publication when the Original Agent version changes during inference", async () => {
+      modelOutput = JSON.stringify({ draft: "A stale candidate", proposedTask: { title: "A stale task", description: "Do not publish this scope" } });
+      duringCall = async () => {
+        const agent = (await agentService(db).getById(f.presence.id))!;
+        const current = (await readAuthoredAgentDefinition(db, agent))!;
+        const next = compileAuthoredAgentDefinition({ ...current.content, outcome: "A different approved responsibility" }, randomUUID(), "b".repeat(64));
+        await agentService(db).update(agent.id, { runtimeConfig: { [AUTHORED_AGENT_DEFINITION_KEY]: next } },
+          { authoredPublication: next, recordRevision: { id: next.revisionId, source: "agent_authoring_publish", createdByUserId: f.userId } });
+      };
+      const session = await draftBackend().openSession({ identity: sessionIdentity() });
+      await session.startTurn({ message: { role: "user", text: "Propose the original reviewed scope" } });
+      expect(await session.result()).toBeNull();
+      expect(calls).toBe(1);
+      expect(await documentService(db).getIssueDocumentByKey(task.id, "result")).toBeNull();
+      expect(await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, task.id))).toEqual([]);
     });
     it("runs the real one-call Native draft backend, saves its declared Task output and proposes only review", async () => {
       const backend = draftBackend(),

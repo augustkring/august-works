@@ -1,6 +1,7 @@
 // @vitest-environment jsdom
 
-import { act, StrictMode, useState, type ReactElement } from "react";
+import { act, createRef, StrictMode, useState, type ReactElement } from "react";
+import type { IssueChatComposerHandle } from "../IssueChatThread";
 import { flushSync } from "react-dom";
 import { createRoot, type Root } from "react-dom/client";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
@@ -290,6 +291,20 @@ function autocompleteOption(matchText: string) {
 }
 
 describe("TaskChatComposer", () => {
+  it("appends a reviewed workflow request without replacing an unsent draft or dispatching it", async () => {
+    const handle = createRef<IssueChatComposerHandle>(), onAdd = vi.fn();
+    render(<TaskChatComposer onAdd={onAdd} workMode="standard" composerRef={handle} />);
+    typeText("My existing unsent notes");
+    let inserted = false;
+    act(() => { inserted = handle.current!.appendRequest!("Prepare the linked workflow draft"); });
+    expect(inserted).toBe(true); expect(editable().textContent).toContain("My existing unsent notes");
+    expect(editable().textContent).toContain("Prepare the linked workflow draft"); expect(onAdd).not.toHaveBeenCalled();
+    act(() => { handle.current!.appendRequest!("Prepare the linked workflow draft"); });
+    expect(editable().textContent!.match(/Prepare the linked workflow draft/g)).toHaveLength(1);
+    render(<TaskChatComposer onAdd={onAdd} workMode="standard" composerRef={handle} disabled />);
+    act(() => { inserted = handle.current!.appendRequest!("Must not enter a disabled composer"); });
+    expect(inserted).toBe(false); expect(editable().textContent).not.toContain("Must not enter");
+  });
   it("settles an acknowledged submission after navigating away", async () => {
     const key = "navigate-before-save";
     let resolveSend!: () => void;

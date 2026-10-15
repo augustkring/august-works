@@ -1,0 +1,166 @@
+{
+  "screenId": "WORKFLOW-REVIEW",
+  "journeyId": "workflow",
+  "routeOrSurface": "/workflows/:workflowId; saved workflow proposal in /chats/:agentId",
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
+  "customerOutcome": "Review the native active workflow revision and its separate draft without mistaking declarations for effective authorization or passed tests.",
+  "entryConditions": [
+    "Current authenticated principal and company selection; no retained foreign-principal payload",
+    "Effective feature admission is required for new work; native membership and resource authority remain necessary"
+  ],
+  "exitConditions": [
+    "Only a canonical server-confirmed result permits a success claim",
+    "Pending, stale, unavailable or unqualified work never becomes successful or activated"
+  ],
+  "content": {
+    "h1": "Workflow name",
+    "supportingCopy": "Review the native active workflow revision and its separate draft without mistaking declarations for effective authorization or passed tests.",
+    "customerTerms": [
+      "Workflow",
+      "Draft",
+      "Active version",
+      "Approval",
+      "Run history"
+    ],
+    "displayedState": [
+      "Native published revision and draft are separate and explicitly versioned",
+      "Declared operation, possible effects, approval checkpoint, retry and test-mode metadata",
+      "Native connections and branch labels remain explicit; step numbering is not an execution trace",
+      "Oversized, duplicate, cyclic or dangling topology is unavailable, never silently truncated",
+      "Bound native-ID draft changes against the active revision; private values omitted; incomplete comparison is unavailable, never unchanged or approved.",
+      "The conversation can expand the exact saved authored revision through the same Original bounded flow projection, including declared operations, possible effects, approval checkpoints and connections. A discarded historical revision is never relabeled current or published.",
+      "A structural comparison of a later current draft is keyed by actual Native node IDs and omits private expressions and configurations. Unavailable or older responses remain unavailable, never an unchanged comparison.",
+      "The same current conversation surface previews up to ten distinct tasks from actual Native create_task mutation receipts. Current task state and execution-start evidence are separate from workflow drafts; current task and originating-run source access are rechecked. Earlier sessions, arbitrary links, hidden tasks and unavailable source data are suppressed.",
+      "Conversation routine proposals use the actual Original first revision and current version. An unconfigured routine draft is paused with no execution target; there is no invented draft status. Current target/trigger declarations and a separate Human revision are shown without claiming execution, qualification or a grant. The Original routine editor owns configuration and explicit enable.",
+      "Saved Foundation proposals show exact Original proposal, target document, base/current revision, pending/accepted/rejected/superseded state and review link. Accepted means a Foundation draft; canonical approval remains a separate Human decision. Proposal bodies, reasons and frozen responsible-user provenance are excluded from the conversation projection.",
+      "Saved notification proposals use current owned conversation provenance and show pending/applied/discarded state. The user explicitly opens the actual account proposal, reviews category/email/delivery/timezone/quiet hours/digest and the consequence across companies, then confirms its current version and account baseline. Unknown confirmation responses permit only current reads and cannot automatically resubmit writes.",
+      "Conversation setup proposals show the actual Native draft kind, current version/state and exact editor link. Historical creation created no Agent, installation, runtime or authority; the current setup owner records any later explicit Human preparation or activation. Older server coverage remains unavailable.",
+      "Closed per-step executor/input-source/approval/access/idempotency declarations from the Original registry; exact valid Native delay and declared maximum attempt count. These declarations do not establish a current execution grant.",
+      "Selected Agent names are read separately through current Native agent:read and verified company membership, bound to the exact current revision and private Source. Missing or unreadable assignments remain unavailable. Agent/tool/connection events withdraw cached private review data.",
+      "Current review exposes exact closed Native condition fields, typed literals and operator, valid literal wait, and exact approval summary/consequence. Non-representable inputs stay Advanced; historical/conversation flow previews never receive these private bodies.",
+      "At the selected connector step: visible Native connection/tool names, missing current-account tools permission, disabled connection, catalog drift, unavailable/hidden state and the exact Original /apps/:connectionId/permissions link. A current company tools grant is not a connection/resource/approval execution grant.",
+      "Current connector inputs appear as named scalar values only after the Native connection visibility, catalog/version/schema and effective input hash checks. False, empty text and omitted optional fields remain distinct. Hidden, disabled, drifted, unmapped legacy or complex configurations stay Advanced without private input bodies. The complete added input review has a 64 KiB bound and overload refuses the whole read. Conversation/historical projections remain body-free."
+    ]
+  },
+  "inputs": [],
+  "actions": {
+    "primary": {
+      "label": "Review flow",
+      "operation": "Read the selected current native revision; no mutation or test result is created."
+    },
+    "secondary": [
+      "Switch active/draft revision",
+      "Open authorized Advanced draft editor",
+      "Open native run history",
+      "Retry current private read",
+      "Authorized native Pause/Resume/Retire controls, each with separate consequence confirmation"
+    ],
+    "destructiveOrIrreversible": []
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Native workflows/revisions and current learned-asset privacy/lineage checks",
+      "Native workflows:read/edit grants and immutable node registry descriptors",
+      "Original Native task creation receipts, current issues and their originating heartbeat runs; current issue authorization and source/erasure checks.",
+      "Original routine revisions and creator run/current conversation generation; current reader and originating source checks.",
+      "Original own-account notification preferences and saved proposal provenance, current verified account/company/source admission, immutable proposal version, baseline hash and exact Human confirmation receipt.",
+      "Actual Agent configuration draft creation Activity/run provenance, current conversation generation and creator authority. The bounded proposal projection excludes all current Human-edited names, instructions and private configuration.",
+      "Native workflow private authoring run provenance survives discarded revisions, Human edits and publication. Current verified source-owning Human and Original workflow/issue/Agent reads remain required; membership or a request-snapshot administrator flag supplies no private source-sharing grant.",
+      "Current Native agents, verified auth users, company membership and grants; bounded read-only assignment enrichment, with no provider/transport/catalog refresh or execution session.",
+      "Current bounded Native workflow author policy and account/Source/revision ownership; a choice is not an execution grant or runtime qualification."
+    ],
+    "canonicalWriteOperation": "Review remains read-only; separate explicit lifecycle controls invoke the original native workflow owner (ADR-V9-023).",
+    "authorityEffect": "Presentation and drafts cannot grant permissions. Material effects always require current native permissions, approvals and version preconditions.",
+    "asyncWork": "One current native workflow detail read; projected response is limited to 100 nodes and 200 connections per revision. Account identity and native read admission are checked; existing native owner governs read latency.",
+    "receipt": "Native revision IDs and version numbers only. No representative test, approval decision, effective access or publish/run receipt is fabricated."
+  },
+  "states": {
+    "loading": "Announce loading only while the current identity/company request is pending.",
+    "empty": "An empty revision means no steps in that revision, not a tested process.",
+    "partial": "Oversized, duplicate, cyclic or dangling-connection flows show flow unavailable with no truncated topology.",
+    "stale": "Hide retained private data during background rechecks and live authority/privacy/version invalidations; a new query epoch rejects late prior responses.",
+    "validation_error": "This read-only surface accepts no workflow inputs.",
+    "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
+    "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
+    "recovering": "Re-resolve canonical state/version and the original request identity before permitting another effect.",
+    "success": "Show only the native revision read. No execution, approval, publication or safety success is claimed."
+  },
+  "navigation": {
+    "back": "Return to existing native workflow list.",
+    "cancelOrSaveExit": "No writes or browser-persisted draft data. Native Advanced editor retains canonical draft saves.",
+    "deepLink": "/workflows/:workflowId",
+    "resume": "Re-read current company/principal/native revision and grants. Flag rollback restores the existing graph editor; /advanced preserves a direct graph route."
+  },
+  "accessibility": {
+    "initialFocus": "Main heading or the dialog category control; keyboard focus is visible and unobscured.",
+    "focusAfterError": "Error summary or first invalid control, with a programmatically associated explanation.",
+    "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
+    "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
+    "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
+    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
+    "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
+    "reducedMotion": "No essential animated transition or moving progress indicator.",
+    "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
+  },
+  "responsive": {
+    "wide": "Readable constrained content width with natural wrapping.",
+    "narrow": "Reflow cards and form actions without concealing utilities or consequences.",
+    "mobile": "Touch targets remain reachable; dialogs scroll within the viewport and do not obscure focus."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Current human/company-authorized workflow name and description",
+      "Allowlisted native revision/step/connection declarations only",
+      "Selected Agent and connection names require current Native reads. Current purpose-specific review may show closed Source-bound task briefs, conditions, approval material and supported scalar tool values; arbitrary configuration, connection credentials and hidden schema material remain excluded.",
+      "Purpose-specific current closed condition/approval material and selected visible connection/tool metadata; current verified readers only, with the retained Native local-operator compatibility boundary stated separately."
+    ],
+    "dataCollected": [],
+    "sensitiveFields": [
+      "Native graph configuration, prompts, credentials, arbitrary inputs, raw schemas, variables, raw assignment IDs and results are excluded from this projection",
+      "Private authoring source run IDs are internal Native provenance and are excluded from public workflow details. Lists omit unavailable private owners; Source account/run/permission checks repeat before return."
+    ],
+    "loggingConstraints": "Purpose-separated workflow-experience namespace for success and rejected requests; generic logs omit account query strings, workflow/customer prose and raw errors."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "Raw intent",
+      "Company facts",
+      "Feedback body/goal",
+      "Documents/prompts/results",
+      "Credentials/raw URLs/query strings/DOM/screenshots"
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Verify immutable active/draft separation, publication-free reads, native graph links, unknown operations, branch visibility and explicit bounds.",
+      "Complete per-step actor/input/effect/access policy, chat authoring, representative test/inspect/check/publish/safe run and full recovery remain open. Separate native lifecycle controls are specified in WORKFLOW-OPERATE/RETIRE.",
+      "Verify added/changed/removed native steps, dependency numbering, connection/data/settings indicators, private-value exclusion and unchanged immutable active source.",
+      "Run the Original workflow review suite, conversation Native authoring/authority suite, private client/widget suites and built conversation preview; verify exact authored revision binding, private-expression changes, unavailable topology and no model or publication effect.",
+      "Verify real Native backlog creation without wakeups, receipt replays without duplicate tasks, current owner status changes, pre-reset task exclusion, source-erasure denial, old-server coverage unavailability and EN/DA mobile task links. Native mutation checks reject old conversation generations before effects and roll back a late reset before saving its receipt.",
+      "Verify actual SDK routine draft discovery/invocation, exact replay without duplicate revisions, no target/schedule/run, later Human version distinction, source erasure and restored-payload guards, current private conversation previews and EN/DA Original links. No software fixture supplies runtime or Human usability qualification.",
+      "Verify actual SDK Foundation proposal creation and exact replay, approved-base conflict, current Human/Agent read/propose authority, source and generation withdrawal, no canonical mutation, separate Human accept/approve, promoted and later edited revision provenance, late rollback, physical erasure/restore guards, English/Danish current review metadata and exact domain links.",
+      "Verify one Native draft under concurrency, exact customer catalog pin/revocation, actual Agent journal writer, no Agent/installation/grant effect, refusal of copied private fields, Native low-trust and revoked-grant denial, Human-edit/replay privacy, source/generation withdrawal, late transaction rollback, SDK feature/policy gates and English/Danish current links.",
+      "Verify current Agent renaming/removal, real revision change, account un-verification and membership withdrawal, local fixture metadata refusal, Source-event suppression, exact retry/idempotency declarations and the bounded timestamp-sensitive material binding. Complete connector permission-preview details and exact configured input/actor policy qualification remain open.",
+      "Verify actual Native tools grant insertion/removal, connection disable, catalog hash drift, another user’s draft invisibility despite claimed administrator, own draft and actual manager visibility, removed connection, no invocation/run effect, Original permission href, exact condition field boundaries and typed values, complete Source withdrawal, and unchanged Native draft on read.",
+      "Verify closed input forms share the same exact review guard as guided editing; padding, hidden fields or config-supplied kind never silently normalize material. Complex task/tool/artifact input and the full inline per-resource permission preview/effective execution policy remain open.",
+      "Choose a current named Native author, navigate with only workflow/revision locators and explicitly prepare a localized request in the actual conversation composer. Preserve unsent notes; refuse changed revision, missing current author, disabled/uncertain composer and late private reads. Preparation performs no Send, run, grant or workflow mutation."
+    ],
+    "accessibility": [
+      "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact.",
+      "Verify EN/DA labels, keyboard insertion and focus in the real composer, same-row Back/Open-draft and primary action at 390px, automated scoped axe and no horizontal overflow. This is software evidence; manual AT, zoom and representative Human qualification remain open."
+    ],
+    "securityPrivacy": [
+      "Verify current native grants, membership revocation, account mismatch, foreign-company denial, agent denial, raw-config omission and late-response suppression.",
+      "Verify actual Native authoring and Human publication retain private Source dependencies; current account/grant loss, copied-task erasure, immutable empty erasure shape, late/restore writers, permanent deletion markers and content-free original workflow/editor/run HTTP and crash logs. Parent workflow output, broader package/artifact copies and explicit cross-user sharing still need complete qualification."
+    ],
+    "usability": [
+      "Use representative exploratory and pre-registered confirmatory journey evidence with explicit PASS/FAIL/INCONCLUSIVE; source checks are insufficient."
+    ]
+  }
+}

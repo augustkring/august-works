@@ -1,3 +1,5 @@
+import { ActivityDataTable } from "./ActivityDataTable";
+import { useTranslation } from "@/i18n";
 import type { DashboardRunActivityDay, HeartbeatRun } from "@paperclipai/shared";
 
 /* ---- Utilities ---- */
@@ -74,7 +76,7 @@ export function ChartCard({ title, subtitle, children }: { title: string; subtit
     <div className="border border-border rounded-lg p-4 space-y-3">
       <div>
         <h3 className="text-xs font-medium text-muted-foreground">{title}</h3>
-        {subtitle && <span className="text-(length:--text-nano) text-muted-foreground/60">{subtitle}</span>}
+        {subtitle && <span className="text-(length:--text-nano) text-muted-foreground">{subtitle}</span>}
       </div>
       {children}
     </div>
@@ -161,6 +163,12 @@ export function RunActivityChart(props: RunChartProps) {
       </div>
       <DateLabels days={days} />
       <ChartLegend items={legendItems} />
+      <ActivityDataTable title="runActivity"
+        columns={["total", "succeeded", "recovered", "failed", "other", "failureReasons"].map(key => ({ key }))}
+        rows={days.map(date => { const day = grouped.get(date) ?? emptyRunDay(date); return { date,
+          values: [day.total, day.succeeded, day.recovered, day.failed, day.other,
+            Object.entries(day.failedByErrorCode ?? {}).sort((a, b) => b[1] - a[1]).map(([code, count]) => `${code}: ${count}`).join("; ") || "—"],
+        }; })} />
     </div>
   );
 }
@@ -214,6 +222,8 @@ export function PriorityChart({ issues }: { issues: { priority: string; createdA
       </div>
       <DateLabels days={days} />
       <ChartLegend items={priorityOrder.map(p => ({ color: priorityColors[p], label: p.charAt(0).toUpperCase() + p.slice(1) }))} />
+      <ActivityDataTable title="priority" columns={priorityOrder.map(key => ({ key }))}
+        rows={days.map(date => ({ date, values: priorityOrder.map(priority => grouped.get(date)![priority] ?? 0) }))} />
     </div>
   );
 }
@@ -259,7 +269,7 @@ export function IssueStatusChart({ issues }: { issues: { status: string; created
     allStatuses.add(issue.status);
   }
 
-  const statusOrder = ["todo", "in_progress", "in_review", "done", "blocked", "cancelled", "backlog"].filter(s => allStatuses.has(s));
+  const statusOrder = Array.from(new Set(["todo", "in_progress", "in_review", "done", "blocked", "cancelled", "backlog", ...allStatuses])).filter(s => allStatuses.has(s));
   const maxValue = Math.max(...Array.from(grouped.values()).map(v => Object.values(v).reduce((a, b) => a + b, 0)), 1);
   const hasData = allStatuses.size > 0;
 
@@ -289,11 +299,15 @@ export function IssueStatusChart({ issues }: { issues: { status: string; created
       </div>
       <DateLabels days={days} />
       <ChartLegend items={statusOrder.map(s => ({ color: statusColors[s] ?? "var(--hex-6b7280)", label: statusLabels[s] ?? s }))} />
+      <ActivityDataTable title="taskStatus" columns={statusOrder.map(key => ({ key, label: statusLabels[key] ?? key }))}
+        rows={days.map(date => ({ date, values: statusOrder.map(status => grouped.get(date)![status] ?? 0) }))} />
     </div>
   );
 }
 
 export function SuccessRateChart(props: RunChartProps) {
+  const { i18n } = useTranslation("experience");
+  const percent = new Intl.NumberFormat(i18n.language, { style: "percent", maximumFractionDigits: 0 });
   const activity = resolveRunActivity(props);
   const days = activity.length > 0 ? activity.map((day) => day.date) : getLast14Days();
   const grouped = new Map(activity.map((day) => [day.date, day]));
@@ -323,6 +337,10 @@ export function SuccessRateChart(props: RunChartProps) {
         })}
       </div>
       <DateLabels days={days} />
+      <ActivityDataTable title="successRate" columns={["total", "succeededIncludingRecovery", "successRate"].map(key => ({ key }))}
+        rows={days.map(date => { const day = grouped.get(date) ?? emptyRunDay(date), succeeded = day.succeeded + day.recovered;
+          return { date, values: [day.total, succeeded, day.total > 0 ? percent.format(succeeded / day.total) : null] };
+        })} />
     </div>
   );
 }

@@ -1,0 +1,145 @@
+{
+  "screenId": "WORKFLOW-RECOVER",
+  "journeyId": "workflow",
+  "routeOrSurface": "/workflows/:workflowId/requests/:kind/:requestId; /workflows/:workflowId/runs/:runId/control",
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
+  "customerOutcome": "Confirm the exact previously submitted Native workflow request after a lost acknowledgement or page return, without creating another operation.",
+  "entryConditions": [
+    "The customer UI requires the current authenticated account and selected company; Native current role, permissions and Original retained revision/run Sources mediate each read.",
+    "The Original request journal must belong to this exact company, workflow, operation, initiating principal and request UUID. A later request cannot replace it.",
+    "Read-only recovery remains mounted when workflow/builder/progressive rollout closes. Current Native permission and Source checks are still required."
+  ],
+  "exitConditions": [
+    "An exact Native own-request receipt establishes only the historical recorded admission/publication/status change. It does not establish present workflow state, completed execution, physical Stop or independent verification.",
+    "Missing or refused receipts stay unconfirmed. No mutation, model, new request identity or execution is replayed by entry, reload or read retry.",
+    "Only a confirmed current-account/Source read clears the matching browser locator; a late, foreign or unavailable result retains it."
+  ],
+  "content": {
+    "h1": "Check a saved workflow request",
+    "supportingCopy": "Checking a saved request does not send it again. A missing response does not prove that no request was saved.",
+    "customerTerms": [
+      "Saved request",
+      "Test",
+      "Publication",
+      "Run",
+      "Status change"
+    ],
+    "displayedState": [
+      "Exact recorded operation and request reference; the recorded run link for Test/Run.",
+      "Historical publication revision or status change, explicitly separate from current workflow state.",
+      "Unconfirmed current read with explicit GET retry; raw errors and customer instructions are omitted."
+    ]
+  },
+  "inputs": [
+    {
+      "id": "acknowledgeCompletedEffects",
+      "label": "I understand completed actions remain",
+      "dataType": "Boolean acknowledgement",
+      "required": true,
+      "default": "Unchecked",
+      "help": "On exact retained-run control only; Original revision/update/run identities are frozen by the client, not edited",
+      "validation": "Must be explicitly checked; preserve one Original request identity before POST",
+      "autofillOrPrefill": "None; held only in memory for the current account and Source"
+    }
+  ],
+  "actions": {
+    "primary": {
+      "label": "Check the saved request",
+      "operation": "GET the exact Original own-request journal through its Native permission and Source owner."
+    },
+    "secondary": [
+      "Retry the current private read",
+      "Review the recorded run",
+      "Return to the current workflow"
+    ],
+    "destructiveOrIrreversible": [
+      "The separate exact retained-run control requires current Native read/run permissions/write role and responsible-Human or Native company-administrator scope, exact workflow/revision/run/update review and completed-effects acknowledgement before one Original Stop POST. Admission does not prove physical termination."
+    ]
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Original workflow Activity request receipts and their exact retained workflow revision/run Source owners.",
+      "Current Native Human role, permissions and initiating account."
+    ],
+    "canonicalWriteOperation": "None. Confirmed browser reads may remove only their matched content-free per-tab locator.",
+    "authorityEffect": "A stored locator and navigation grant no authority. The Native owner repeats its actual current permission/role/Source checks. Request-snapshot instance-admin flags cannot substitute for the actual current Native role.",
+    "asyncWork": "The mounted read uses existing four-request/1500ms admission; unfinished underlying work retains its slot. Historical receipt transactions use PostgreSQL statement/lock limits and bounded two-row exact journal checks.",
+    "receipt": "Strict Test/Publication/Run/Status-change union containing only the Original immutable scoped receipt, without prompts, results, credentials or a claimed live qualification."
+  },
+  "states": {
+    "loading": "Announce the current private read and withhold prior receipt while account, company or Source is unresolved.",
+    "empty": "There is no successful empty/no-write state: a missing original receipt remains unconfirmed.",
+    "partial": "Malformed, ambiguous, foreign or incomplete retained Source is unavailable; no partial receipt is rendered as confirmed.",
+    "stale": "Withhold previous receipt during account/Source invalidation and reject a late prior response.",
+    "validation_error": "Invalid company/workflow/kind/request locators are refused before fetching; invalid API query fields are rejected.",
+    "system_error": "Show the safe unconfirmed message with explicit GET retry, without raw errors.",
+    "permission_denied": "Keep receipt unavailable and its locator retained; do not grant authority from a request link.",
+    "recovering": "Read only the exact Original own-request receipt. Automatic write retry or a fresh nonce cannot replace it. Existing explicit in-memory same-command retries retain their Original idempotency owner.",
+    "success": "Show the historical immutable receipt under current Native read admission, then clear only the matching locator. Never claim current execution or independent verification."
+  },
+  "navigation": {
+    "back": "Return to the exact Original workflow.",
+    "cancelOrSaveExit": "No form or write exists on this page; leaving/reloading retains an unconfirmed content-free locator.",
+    "deepLink": "Exact company/workflow/request kind/request UUID; this route is independent of new-work rollout gates. Retained run control is always mounted; navigation/language remain available after rollback.",
+    "resume": "Before commands, retain per-tab company/account/workflow/kind/request UUID. Pending links on workflow entry survive rollout withdrawal rather than the old gate redirecting away."
+  },
+  "accessibility": {
+    "initialFocus": "After confirmed current read, orient to the page heading through the utility-aware focus owner.",
+    "focusAfterError": "Use an announced safe alert and labelled read-retry control.",
+    "focusAfterSuccess": "Focus the confirmed-request heading only if no existing utility/input/navigation gesture is active.",
+    "keyboardModel": "Ordinary labelled links and buttons; no canvas, drag gesture or node-type knowledge.",
+    "statusAnnouncement": "Loading/status and safe failure/alert are separate from historical success.",
+    "targetSize": "Custom common controls target at least 44 × 44 CSS px.",
+    "zoomReflow": "Require exact-artifact 200/400% zoom/manual checks; bounded mobile/browser checks alone do not establish full conformance.",
+    "reducedMotion": "No essential animation. Fallback mobile navigation respects reduced motion.",
+    "screenReaderNotes": "Historical facts, request reference and recorded run link are ordinary text/link content; publication is not execution success."
+  },
+  "responsive": {
+    "wide": "Constrained readable column with naturally wrapped content.",
+    "narrow": "Wrap references and controls without horizontal scrolling.",
+    "mobile": "Readable 390px layout with retained touch controls, language and fallback navigation after rollout withdrawal."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "The current authorized Original own-request receipt IDs and recorded disposition only.",
+      "Retained control selects only Native run/workflow/revision IDs, current status/purpose/update stamp. It does not query or restore private payload fields."
+    ],
+    "dataCollected": [
+      "Per-tab bounded request locators written before Test/Publish/Run/Status POST. No command body, customer prose, input, result or credential is stored there."
+    ],
+    "sensitiveFields": [
+      "No graph configuration, instructions, prompts, results, customer names, permissions or credential data is exposed."
+    ],
+    "loggingConstraints": "Entire workflow experience namespace, including empty/malformed scopes and refused methods, omits identity, object/request IDs, payloads and raw errors from generic logs."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "Request identity, actor identity, prompts, customer prose, results, raw errors, URLs, DOM and screenshots"
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Actual Native PostgreSQL reads for all four kinds after rollout withdrawal without new runs, revisions or audit events; exact own-source/current-permission/foreign-actor refusal.",
+      "API strict scope and aborted/foreign reply refusal; page current-account/Source withdrawal; locator-only reload and corrupt-storage refusal; preserved actual Native C0 browser test/recovery.",
+      "Native queued/waiting timer cancellation and copied-payload erasure, stale/viewer/non-manager refusal and late-role rollback are covered by software fixtures. Original cancellation-only recovery retains physical propagation after rollout closure; live child/provider termination and complete external outcome reconciliation/compensation remain open.",
+      "Private workflow Source erasure admits live-run cancellation through the Original owner. Exact-wait content-free cleanup metadata survives erasure and late results; Original cancellation-only recovery works with rollout closed, and actual Native queued child cancellation does not promote a replacement heartbeat. This is software evidence, not host/provider termination or external-effect compensation."
+    ],
+    "accessibility": [
+      "Verify keyboard/focus, EN/DA and narrow layout against the actual build. Manual assistive technology and full zoom evidence remain pending."
+    ],
+    "securityPrivacy": [
+      "Original current account/permissions and retained Sources are required. Missing receipts cannot prove no prior admission.",
+      "No recovery GET executes work or creates a new request identity. Explicit known Native pre-effect refusals release only their exact tuple; conflict with an already recorded request is not absence proof.",
+      "Verify private subworkflow results retain current source authority through actual public ancestors and child removal; copied run/step/wait/review/activity payloads are erased and late/restore writes stay unavailable. Retained IDs supply no source-sharing or runtime grant."
+    ],
+    "usability": [
+      "Representative exploratory/pre-registered confirmatory Human evidence remains required; software fixtures cannot supply it."
+    ]
+  }
+}

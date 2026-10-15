@@ -4,12 +4,23 @@ import type {AuthorizationActor} from "../authorization.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { isDeepStrictEqual } from "node:util";
-import { and, desc, eq, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
+  activityLog,
   companyMemberships,
+  instanceSettings,
+  principalPermissionGrants,
+  pipelineStages,
+  pipelines,
   projects,
+  routines,
+  heartbeatRuns,
+  toolInvocations,
+  workflowStepRuns,
+  workflowWaits,
+  workflowRuns,
   workflowRevisions,
   workflows,
 } from "@paperclipai/db";
@@ -17,6 +28,10 @@ import {
   createWorkflowSchema,
   publishWorkflowSchema,
   updateWorkflowDraftSchema,
+  workflowLifecycleCommandSchema,
+  workflowLifecycleReceiptSchema,
+  v9FeatureEnabled,
+  type WorkflowLifecycleCommand,
   type CreateWorkflow,
   type ExecutionPrincipal,
   type PublishWorkflow,
@@ -26,14 +41,30 @@ import {
   type WorkflowGraphV1,
   type WorkflowRevision,
 } from "@paperclipai/shared";
-import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
+import { HttpError, conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import { workflowNodeRegistryService } from "./workflow-node-registry.js";
+import { assertV5Authorization, v5HumanActorId } from "../v5-authorization.js";
+import { instanceSettingsService } from "../instance-settings.js";
+import { persistActivity, publishActivity } from "../activity-log.js";
+import { assertLearnedWorkflowPayloadAccess } from "../analytical-context-authority.js";
+import { workflowOperationsSchema } from "@paperclipai/shared";
+import { workflowLaunchCommandSchema, workflowLaunchReceiptSchema, type WorkflowLaunchCommand } from "@paperclipai/shared";
+import { customerWorkflowLaunchReady } from "./workflow-customer-launch.js";
+import { enqueueWorkflowRunInTransaction, resolveWorkflowExecutionRevision } from "./workflow-executor.js";
+import { nativeSha256 } from "../native-runtime/canonical.js";
+import { workflowRequestKindSchema, workflowRequestReceiptSchema, type WorkflowRequestKind } from "@paperclipai/shared";
+import { lockCustomerWorkflowReceiptAuthority } from "./workflow-customer-authority.js";
+import { assertWorkflowAuthoringSources } from "./workflow-authoring-sources.js";
+
+import { assertWorkflowAuthoringAuthority } from "./workflow-authoring-authority.js";
 
 type WorkflowDb = Db;
 
 export interface WorkflowMutationActor {
   principal: ExecutionPrincipal;
   runId?: string | null;
+  /** Internal Original AI draft path; never accepted from request bodies. */
+  workflowAuthoring?: boolean;
 }
 
 function actorFields(actor: WorkflowMutationActor) {
@@ -77,7 +108,8 @@ async function assertProjectReference(db: WorkflowDb, companyId: string, project
 }
 
 function mapWorkflow(row: typeof workflows.$inferSelect): Workflow {
-  return { ...row, status: row.status as Workflow["status"] };
+  const { authoringSourceRunIds: _privateSources, ...publicRow } = row;
+  return { ...publicRow, status: row.status as Workflow["status"] };
 }
 
 function mapRevision(row: typeof workflowRevisions.$inferSelect): WorkflowRevision {
@@ -110,6 +142,7 @@ async function getRevisionById(
 async function getDetail(db: WorkflowDb, companyId: string, workflowId: string, actor?:AuthorizationActor): Promise<WorkflowDetail | null> {
   const workflow = await getWorkflowRow(db, companyId, workflowId);
   if (!workflow) return null;
+  await assertWorkflowAuthoringSources(db, companyId, workflowId, actor);
   const [draft, published] = await Promise.all([
     getRevisionById(db, companyId, workflowId, workflow.draftRevisionId,actor),
     getRevisionById(db, companyId, workflowId, workflow.publishedRevisionId,actor),
@@ -167,18 +200,331 @@ function assertPublishedPointer(workflow: typeof workflows.$inferSelect, expecte
 
 export function workflowService(db: Db) {
   return {
-    list: async (companyId: string) =>
+    /** Read the exact Original request journal without replaying its command.
+     * Current Native permissions, original revisions and run payload Sources
+     * remain required even after the workflow/experience rollout is withdrawn. */
+    requestReceipt: async (companyId: string, workflowId: string, rawKind: WorkflowRequestKind, requestId: string, authority: AuthorizationActor) => {
+      // Like the existing publication owner, consult the actual current Native
+      // instance role rather than treating a request-snapshot flag as authority.
+      authority = { ...authority, isInstanceAdmin: false };
+      const kind = workflowRequestKindSchema.parse(rawKind), principal = v5HumanActorId(authority);
+      workflowLaunchReceiptSchema.shape.requestId.parse(requestId);
+      if (kind === "publication") {
+        const { readCustomerWorkflowPublicationReceipt } = await import("./workflow-customer-publication.js");
+        return workflowRequestReceiptSchema.parse({ kind, receipt: await readCustomerWorkflowPublicationReceipt(db, companyId, workflowId, authority, requestId) });
+      }
+      if (kind === "test") {
+        const { readCustomerWorkflowTestReceipt } = await import("./workflow-customer-test.js");
+        const receipt = await readCustomerWorkflowTestReceipt(db, companyId, workflowId, authority, requestId);
+        if (!receipt) throw notFound("The Original test request is unconfirmed");
+        return workflowRequestReceiptSchema.parse({ kind, receipt });
+      }
+      if (kind === "draft_edit") {
+        const { workflowCustomerDraftEdit } = await import("./workflow-customer-draft-edit.js");
+        return workflowRequestReceiptSchema.parse({ kind, receipt: await workflowCustomerDraftEdit(db).receipt(companyId, workflowId, requestId, authority) });
+      }
+      if (kind === "draft_build") {
+        const { workflowCustomerDraftFlow } = await import("./workflow-customer-draft-flow.js");
+        return workflowRequestReceiptSchema.parse({ kind, receipt: await workflowCustomerDraftFlow(db).receipt(companyId, workflowId, requestId, authority) });
+      }
+      return db.transaction(async raw => {
+        const tx = raw as unknown as Db;
+        await lockCustomerWorkflowReceiptAuthority(tx, companyId, authority,
+          kind === "launch" ? ["workflows:read", "workflows:run"] : ["workflows:read", "workflows:publish"]);
+        const [workflow] = await tx.select({ id: workflows.id }).from(workflows).where(and(
+          eq(workflows.companyId, companyId), eq(workflows.id, workflowId))).for("share");
+        if (!workflow) throw notFound("The Original workflow is unavailable");
+        const events = await tx.select().from(activityLog).where(and(eq(activityLog.companyId, companyId),
+          eq(activityLog.entityType, "workflow"), eq(activityLog.entityId, workflowId),
+          eq(activityLog.action, kind === "launch" ? "workflow.customer_run_admitted" : "workflow.lifecycle_changed"),
+          eq(activityLog.actorType, kind === "lifecycle" && authority.source === "local_implicit" ? "system" : "user"),
+          eq(activityLog.actorId, principal), sql`${activityLog.details}->>'requestId'=${requestId}`)).limit(2);
+        if (events.length !== 1) throw notFound("The Original workflow request is unconfirmed");
+        const event = events[0]!;
+        const value = workflowRequestReceiptSchema.parse({ kind, receipt: event.details?.receipt });
+        if (value.receipt.companyId !== companyId || value.receipt.workflowId !== workflowId || value.receipt.requestId !== requestId)
+          throw notFound("The Original workflow request identity changed");
+        if (value.kind === "launch") {
+          const command = workflowLaunchCommandSchema.parse(event.details?.command), receipt = value.receipt;
+          if (command.requestId !== requestId || command.expectedPublishedRevisionId !== receipt.revisionId)
+            throw notFound("The Original run request changed");
+          const { workflowExecutorService } = await import("./workflow-executor.js");
+          const run = await workflowExecutorService(tx).getRun(companyId, receipt.runId, authority);
+          if (!run || run.run.workflowId !== workflowId || run.run.workflowRevisionId !== receipt.revisionId || run.run.source !== "manual")
+            throw notFound("The Original run source is unavailable");
+          if (!await getRevisionById(tx, companyId, workflowId, receipt.revisionId, authority)) throw notFound("The Original revision is unavailable");
+        } else if (value.kind === "lifecycle") {
+          const command = workflowLifecycleCommandSchema.parse(event.details?.command), receipt = value.receipt;
+          if (command.requestId !== requestId || command.action !== receipt.action || command.workPolicy !== receipt.workPolicy ||
+            command.expectedPublishedRevisionId !== receipt.publishedRevisionId ||
+            (command.action !== "retire" && command.expectedDraftRevisionId !== receipt.draftRevisionId))
+            throw notFound("The Original workflow status request changed");
+          for (const revisionId of [command.expectedPublishedRevisionId, command.expectedDraftRevisionId])
+            if (revisionId && !await getRevisionById(tx, companyId, workflowId, revisionId, authority))
+              throw notFound("The Original workflow status source is unavailable");
+        }
+        return value;
+      });
+    },
+    launch: async (companyId: string, workflowId: string, rawInput: WorkflowLaunchCommand, authority: AuthorizationActor) => {
+      const input = workflowLaunchCommandSchema.parse(rawInput), principal = v5HumanActorId(authority);
+      const result = await db.transaction(async tx => {
+        const nativeDb = tx as unknown as Db;
+        await lockAnalyticalCompany(nativeDb, companyId);
+        await lockMemoryPrivacy(nativeDb, companyId);
+        await instanceSettingsService(nativeDb).getExperimental();
+        await nativeDb.select({ id: instanceSettings.id }).from(instanceSettings).for("share");
+        const flags = await instanceSettingsService(nativeDb).getExperimental();
+        if (!flags.enableWorkflowsV1 || !v9FeatureEnabled(flags, "progressive_shell_v9")) throw notFound("Workflow controls are not enabled");
+        if (authority.source !== "local_implicit") {
+          await nativeDb.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+            eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+            eq(companyMemberships.principalId, principal), eq(companyMemberships.status, "active"))).for("share");
+          await nativeDb.select({ id: principalPermissionGrants.id }).from(principalPermissionGrants).where(and(
+            eq(principalPermissionGrants.companyId, companyId), eq(principalPermissionGrants.principalType, "user"),
+            eq(principalPermissionGrants.principalId, principal))).for("share");
+        }
+        await assertV5Authorization(nativeDb, authority, companyId, "workflows:read");
+        await assertV5Authorization(nativeDb, authority, companyId, "workflows:run");
+        const workflow = await lockWorkflow(tx, companyId, workflowId);
+        if (!workflow) throw notFound("Workflow not found");
+        await getRevisionById(nativeDb, companyId, workflowId, workflow.publishedRevisionId, authority);
+        await getRevisionById(nativeDb, companyId, workflowId, workflow.draftRevisionId, authority);
+        const [prior] = await nativeDb.select().from(activityLog).where(and(eq(activityLog.companyId, companyId),
+          eq(activityLog.entityType, "workflow"), eq(activityLog.entityId, workflowId), eq(activityLog.action, "workflow.customer_run_admitted"),
+          sql`${activityLog.details}->>'requestId' = ${input.requestId}`)).limit(1);
+        if (prior) {
+          if (prior.actorId !== principal || !isDeepStrictEqual(prior.details?.command, input))
+            throw conflict("Original run request changed", { code: "workflow_launch_request_conflict" });
+          const receipt = workflowLaunchReceiptSchema.parse(prior.details?.receipt);
+          if (receipt.companyId !== companyId || receipt.workflowId !== workflowId || receipt.requestId !== input.requestId || receipt.revisionId !== input.expectedPublishedRevisionId)
+            throw notFound("Original workflow receipt is unavailable");
+          const [run] = await nativeDb.select({ id: workflowRuns.id }).from(workflowRuns).where(and(
+            eq(workflowRuns.companyId, companyId), eq(workflowRuns.workflowId, workflowId), eq(workflowRuns.id, receipt.runId),
+            eq(workflowRuns.workflowRevisionId, receipt.revisionId))).limit(1);
+          if (!run || !await getRevisionById(nativeDb, companyId, workflowId, receipt.revisionId, authority)) throw notFound("Original workflow run is unavailable");
+          await assertLearnedWorkflowPayloadAccess(nativeDb, companyId, authority, { workflowRunId: run.id });
+          return { receipt, publications: [] };
+        }
+        if (workflow.status !== "active" || workflow.updatedAt.toISOString() !== input.expectedUpdatedAt ||
+          workflow.publishedRevisionId !== input.expectedPublishedRevisionId || workflow.draftRevisionId !== input.expectedDraftRevisionId)
+          throw conflict("Workflow changed; review the current version", { code: "workflow_launch_conflict" });
+        const resolved = await resolveWorkflowExecutionRevision(nativeDb, companyId, workflowId, input.expectedPublishedRevisionId);
+        if (!customerWorkflowLaunchReady(mapRevision(resolved.revision)))
+          throw conflict("This workflow requires its native review and run controls", { code: "workflow_launch_review_required" });
+        await workflowNodeRegistryService(nativeDb).validatePublishGraph(companyId, resolved.revision.graph, workflowId);
+        await assertSaasDomainAdmission(nativeDb, companyId, "workflows.use");
+        const queued = await enqueueWorkflowRunInTransaction(nativeDb, {
+          companyId, workflowId, revisionId: resolved.revision.id, nodeId: resolved.triggerNodeId, source: "manual", triggerPayload: {},
+          responsibleUserId: authority.userId ?? null, idempotencyKey: `v9-workflow:${nativeSha256({ principal, workflowId, requestId: input.requestId })}`,
+          correlationId: input.requestId, actor: { principal: authority.source === "local_implicit"
+            ? { type: "system", service: "local-board" } : { type: "user", userId: principal } },
+        });
+        const receipt = workflowLaunchReceiptSchema.parse({ companyId, workflowId, requestId: input.requestId,
+          runId: queued.run.id, revisionId: resolved.revision.id, disposition: "admitted" });
+        const activity = await persistActivity(nativeDb, { companyId, actorType: "user", actorId: principal,
+          action: "workflow.customer_run_admitted", entityType: "workflow", entityId: workflowId,
+          details: { requestId: input.requestId, command: input, receipt } });
+        return { receipt, publications: [...queued.publications, activity.publication] };
+      });
+      for (const publication of result.publications) publishActivity(publication);
+      return result.receipt;
+    },
+    operations: async (companyId: string, workflowId: string, authority: AuthorizationActor) => {
+      v5HumanActorId(authority);
+      return db.transaction(async tx => {
+        const nativeDb = tx as unknown as Db;
+        await lockAnalyticalCompany(nativeDb, companyId);
+        await lockMemoryPrivacy(nativeDb, companyId);
+        await assertV5Authorization(nativeDb, authority, companyId, "workflows:read");
+        const flags = await instanceSettingsService(nativeDb).getExperimental();
+        if (!flags.enableWorkflowsV1 || !v9FeatureEnabled(flags, "progressive_shell_v9"))
+          throw notFound("Workflow overview is not enabled");
+        // The shared lock fences a pointer/status change while this view is assembled.
+        await nativeDb.select({ id: workflows.id }).from(workflows)
+          .where(and(eq(workflows.companyId, companyId), eq(workflows.id, workflowId))).for("share");
+        const detail = await getDetail(nativeDb, companyId, workflowId, authority);
+        if (!detail) throw notFound("Workflow not found");
+        if (Boolean(detail.publishedRevisionId) !== Boolean(detail.publishedRevision) ||
+          Boolean(detail.draftRevisionId) !== Boolean(detail.draftRevision))
+          throw notFound("Workflow revision not found");
+        const scope = and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.workflowId, workflowId));
+        const select = { id: workflowRuns.id, workflowRevisionId: workflowRuns.workflowRevisionId,
+          status: workflowRuns.status, source: workflowRuns.source, createdAt: workflowRuns.createdAt, finishedAt: workflowRuns.finishedAt };
+        const recent = await nativeDb.select(select).from(workflowRuns).where(scope)
+          .orderBy(desc(workflowRuns.createdAt), desc(workflowRuns.id)).limit(11).for("share");
+        const blockers = await nativeDb.select(select).from(workflowRuns)
+          .where(and(scope, inArray(workflowRuns.status, ["waiting", "recovering"])))
+          .orderBy(desc(workflowRuns.createdAt), desc(workflowRuns.id)).limit(6).for("share");
+        // Even content-free run metadata uses the current native revision and
+        // copied-payload source owners. The extra rows determine pagination only.
+        const inspected = new Map([...recent, ...blockers].map(run => [run.id, run]));
+        const deadline = performance.now() + 30_000;
+        for (const run of inspected.values()) {
+          if (performance.now() > deadline) throw forbidden("Workflow overview source review exceeded its budget");
+          const revision = await getRevisionById(nativeDb, companyId, workflowId, run.workflowRevisionId, authority);
+          if (!revision) throw notFound("Workflow run revision not found");
+          await assertLearnedWorkflowPayloadAccess(nativeDb, companyId, authority, { workflowRunId: run.id });
+        }
+        if (performance.now() > deadline) throw forbidden("Workflow overview source review exceeded its budget");
+        const status = detail.status === "active" && !detail.publishedRevisionId ? "draft" : detail.status;
+        const { routineService } = await import("../routines.js");
+        const scheduled = status === "active" ? await routineService(nativeDb, { sourceActor: authority }).nextWorkflowSchedule(companyId, workflowId) : null;
+        // Recheck current native authorization/rollout after asynchronous source reads.
+        await assertV5Authorization(nativeDb, authority, companyId, "workflows:read");
+        const currentFlags = await instanceSettingsService(nativeDb).getExperimental();
+        if (!currentFlags.enableWorkflowsV1 || !v9FeatureEnabled(currentFlags, "progressive_shell_v9"))
+          throw notFound("Workflow overview is not enabled");
+        const project = (run: typeof recent[number]) => ({ id: run.id, revisionId: run.workflowRevisionId,
+          status: run.status, purpose: run.source === "test" ? "test" : "live", createdAt: run.createdAt.toISOString(), finishedAt: run.finishedAt?.toISOString() ?? null });
+        return workflowOperationsSchema.parse({ companyId, workflowId, updatedAt: detail.updatedAt.toISOString(),
+          publishedRevisionId: detail.publishedRevisionId, status,
+          nextTrigger: status === "draft" ? { state: "not_published" }
+            : status !== "active" ? { state: "stopped" }
+            : scheduled ? { state: "scheduled", at: scheduled.toISOString() } : { state: "request_or_event" },
+          recent: { runs: recent.slice(0, 10).map(project), hasMore: recent.length > 10 },
+          blockers: { runs: blockers.slice(0, 5).map(project), hasMore: blockers.length > 5 },
+        });
+      });
+    },
+    lifecycle: async (companyId: string, workflowId: string, rawInput: WorkflowLifecycleCommand, authority: AuthorizationActor) => {
+      const input = workflowLifecycleCommandSchema.parse(rawInput);
+      const principal = v5HumanActorId(authority);
+      const result = await db.transaction(async tx => {
+        const txDb = tx as unknown as Db;
+        await lockAnalyticalCompany(txDb, companyId);
+        await lockMemoryPrivacy(txDb, companyId);
+        // Hold rollout configuration through commit; a late toggle cannot admit
+        // an effect from an earlier enabled snapshot.
+        await instanceSettingsService(txDb).getExperimental();
+        await txDb.select({ id: instanceSettings.id }).from(instanceSettings).for("share");
+        const flags = await instanceSettingsService(txDb).getExperimental();
+        if (!flags.enableWorkflowsV1 || !v9FeatureEnabled(flags, "progressive_shell_v9"))
+          throw notFound("Workflow controls are not enabled");
+        if (authority.source !== "local_implicit") {
+          await txDb.select().from(companyMemberships).where(and(
+            eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+            eq(companyMemberships.principalId, principal), eq(companyMemberships.status, "active"),
+          )).for("share");
+          await txDb.select().from(principalPermissionGrants).where(and(
+            eq(principalPermissionGrants.companyId, companyId), eq(principalPermissionGrants.principalType, "user"),
+            eq(principalPermissionGrants.principalId, principal),
+          )).for("share");
+        }
+        await assertV5Authorization(txDb, authority, companyId, "workflows:read");
+        await assertV5Authorization(txDb, authority, companyId, "workflows:publish");
+        const workflow = await lockWorkflow(tx, companyId, workflowId);
+        if (!workflow) throw notFound("Workflow not found");
+        // Resolve current source admission even when replaying a prior receipt.
+        await getRevisionById(txDb, companyId, workflowId, workflow.publishedRevisionId, authority);
+        await getRevisionById(txDb, companyId, workflowId, workflow.draftRevisionId, authority);
+        const [prior] = await txDb.select().from(activityLog).where(and(
+          eq(activityLog.companyId, companyId), eq(activityLog.entityType, "workflow"),
+          eq(activityLog.entityId, workflowId), eq(activityLog.action, "workflow.lifecycle_changed"),
+          sql`${activityLog.details}->>'requestId' = ${input.requestId}`,
+        )).limit(1);
+        if (prior) {
+          if (prior.actorId !== principal || !isDeepStrictEqual(prior.details?.command, input))
+            throw conflict("Original workflow request changed", { code: "workflow_request_conflict" });
+          return { receipt: workflowLifecycleReceiptSchema.parse(prior.details?.receipt), publication: null };
+        }
+        assertMutableWorkflow(workflow);
+        if (workflow.status !== input.expectedStatus || workflow.updatedAt.toISOString() !== input.expectedUpdatedAt ||
+          workflow.publishedRevisionId !== input.expectedPublishedRevisionId || workflow.draftRevisionId !== input.expectedDraftRevisionId)
+          throw conflict("Workflow changed; review the current version", { code: "workflow_lifecycle_conflict" });
+        if ((input.action === "pause" && workflow.status !== "active") ||
+          (input.action === "resume" && (workflow.status !== "paused" || !workflow.publishedRevisionId)) ||
+          (input.action === "retire" && workflow.status !== "paused"))
+          throw conflict("Workflow action is unavailable in this state", { code: "workflow_invalid_transition" });
+        if (input.action === "resume") await assertSaasDomainAdmission(txDb, companyId, "workflows.use");
+        if (input.action === "retire") {
+          const [pending] = await txDb.select({ id: workflowRuns.id }).from(workflowRuns).where(and(
+            eq(workflowRuns.companyId, companyId), eq(workflowRuns.workflowId, workflowId),
+            inArray(workflowRuns.status, ["queued", "running", "waiting", "recovering", "cancelling"]),
+          )).limit(1);
+          if (pending) throw conflict("Existing work must finish before retirement", { code: "workflow_work_pending" });
+          const [step] = await txDb.select({ id: workflowStepRuns.id }).from(workflowStepRuns).innerJoin(workflowRuns, and(
+            eq(workflowRuns.companyId, companyId), eq(workflowRuns.workflowId, workflowId), eq(workflowRuns.id, workflowStepRuns.workflowRunId),
+          )).where(and(eq(workflowStepRuns.companyId, companyId), inArray(workflowStepRuns.status, ["pending", "running", "waiting", "retry_scheduled", "cancelling"]))).limit(1);
+          const [wait] = await txDb.select({ id: workflowWaits.id }).from(workflowWaits).innerJoin(workflowRuns, and(
+            eq(workflowRuns.companyId, companyId), eq(workflowRuns.workflowId, workflowId), eq(workflowRuns.id, workflowWaits.workflowRunId),
+          )).where(and(eq(workflowWaits.companyId, companyId), eq(workflowWaits.status, "active"))).limit(1);
+          const [provider] = await txDb.select({ id: heartbeatRuns.id }).from(heartbeatRuns).innerJoin(workflowStepRuns, and(
+            eq(workflowStepRuns.companyId, companyId), eq(workflowStepRuns.heartbeatRunId, heartbeatRuns.id),
+          )).innerJoin(workflowRuns, and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.workflowId, workflowId), eq(workflowRuns.id, workflowStepRuns.workflowRunId)))
+            .where(and(eq(heartbeatRuns.companyId, companyId), inArray(heartbeatRuns.status, ["queued", "scheduled_retry", "running"]))).limit(1);
+          const [tool] = await txDb.select({ id: toolInvocations.id }).from(toolInvocations).innerJoin(workflowRuns, and(
+            eq(workflowRuns.companyId, companyId), eq(workflowRuns.workflowId, workflowId), eq(workflowRuns.id, toolInvocations.workflowRunId),
+          )).where(and(eq(toolInvocations.companyId, companyId), inArray(toolInvocations.status, ["pending", "authorized", "awaiting_approval", "executing", "failed", "timed_out"]))).limit(1);
+          if (step || wait || provider || tool) throw conflict("Existing work must finish or be reconciled before retirement", { code: "workflow_work_pending" });
+          const [routine] = await txDb.select({ id: routines.id }).from(routines).where(and(
+            eq(routines.companyId, companyId), eq(routines.executionTargetKind, "workflow"), eq(routines.executionTargetRef, workflowId),
+          )).limit(1);
+          const [stage] = await txDb.select({ id: pipelineStages.id }).from(pipelineStages)
+            .innerJoin(pipelines, and(eq(pipelines.id, pipelineStages.pipelineId), eq(pipelines.companyId, companyId)))
+            .where(sql`(
+              ${pipelineStages.config}#>>'{onEnter,target,workflowId}' = ${workflowId} or
+              ${pipelineStages.config}#>>'{automation,targetRef}' = ${workflowId} or
+              ${pipelineStages.config}#>>'{automation,workflowId}' = ${workflowId}
+            )`).limit(1);
+          const [parent] = await txDb.select({ id: workflowRevisions.id }).from(workflowRevisions).innerJoin(workflows, and(
+            eq(workflows.companyId, companyId), eq(workflows.id, workflowRevisions.workflowId),
+            sql`(${workflows.publishedRevisionId} = ${workflowRevisions.id} or ${workflows.draftRevisionId} = ${workflowRevisions.id})`,
+          )).where(and(eq(workflowRevisions.companyId, companyId), sql`${workflows.status} <> 'archived'`,
+            sql`${workflowRevisions.graph}->'nodes' @> jsonb_build_array(jsonb_build_object('config', jsonb_build_object('workflowId', ${workflowId}::text)))`,
+          )).limit(1);
+          if (routine || stage || parent) throw conflict("Remove connected automations before retirement", { code: "workflow_bindings_present" });
+          if (workflow.draftRevisionId) await txDb.update(workflowRevisions).set({ state: "discarded" }).where(and(
+            eq(workflowRevisions.companyId, companyId), eq(workflowRevisions.workflowId, workflowId),
+            eq(workflowRevisions.id, workflow.draftRevisionId), eq(workflowRevisions.state, "draft"),
+          ));
+        }
+        const now = new Date(Math.max(Date.now(), workflow.updatedAt.getTime() + 1));
+        const [updated] = await txDb.update(workflows).set({
+          status: input.action === "pause" ? "paused" : input.action === "resume" ? "active" : "archived",
+          updatedAt: now, ...(input.action === "retire" ? { archivedAt: now, draftRevisionId: null } : {}),
+        }).where(and(eq(workflows.companyId, companyId), eq(workflows.id, workflowId))).returning();
+        const receipt = workflowLifecycleReceiptSchema.parse({
+          requestId: input.requestId, companyId, workflowId, action: input.action, status: updated!.status,
+          updatedAt: now.toISOString(), publishedRevisionId: updated!.publishedRevisionId,
+          draftRevisionId: updated!.draftRevisionId, workPolicy: input.workPolicy,
+        });
+        const { publication } = await persistActivity(txDb, {
+          companyId, actorType: authority.source === "local_implicit" ? "system" : "user", actorId: principal,
+          action: "workflow.lifecycle_changed", entityType: "workflow", entityId: workflowId,
+          responsibleUserIdOverride: authority.source === "local_implicit" ? null : principal,
+          details: { requestId: input.requestId, command: input, receipt },
+        });
+        return { receipt, publication };
+      });
+      if (result.publication) publishActivity(result.publication);
+      return result.receipt;
+    },
+    list: async (companyId: string, actor?: AuthorizationActor) =>
       db.select().from(workflows)
         .where(eq(workflows.companyId, companyId))
         .orderBy(desc(workflows.updatedAt))
-        .then((rows) => rows.map(mapWorkflow)),
+        .then(async (rows) => {
+          const visible: Workflow[] = [];
+          for (const row of rows) {
+            try { await assertWorkflowAuthoringSources(db, companyId, row.id, actor); visible.push(mapWorkflow(row)); }
+            catch (error) { if (!(error instanceof HttpError) || ![403, 404].includes(error.status)) throw error; }
+          }
+          return visible;
+        }),
 
-    get: async (companyId: string, workflowId: string) => {
+    get: async (companyId: string, workflowId: string, actor?: AuthorizationActor) => {
       const row = await getWorkflowRow(db, companyId, workflowId);
+      if (row) await assertWorkflowAuthoringSources(db, companyId, workflowId, actor);
       return row ? mapWorkflow(row) : null;
     },
 
     getDetail: async (companyId: string, workflowId: string, actor?:AuthorizationActor) => getDetail(db, companyId, workflowId,actor),
+
+    getRevision: async (companyId: string, workflowId: string, revisionId: string, actor?:AuthorizationActor) => {
+      const row = await getRevisionById(db, companyId, workflowId, revisionId, actor);
+      return row ? mapRevision(row) : null;
+    },
 
     listRevisions: async (companyId: string, workflowId: string, actor?:AuthorizationActor) => {
       if (!(await getWorkflowRow(db, companyId, workflowId))) return null;
@@ -201,6 +547,10 @@ export function workflowService(db: Db) {
         const txDb = tx as unknown as Db;
         await lockAnalyticalCompany(txDb,companyId);await lockMemoryPrivacy(txDb, companyId);
         await assertActorCompanyScope(txDb, companyId, actor);
+        if (actor.workflowAuthoring) {
+          if (actor.principal.type !== "agent" || !actor.runId) throw forbidden("Current authoring run is required");
+          await assertWorkflowAuthoringAuthority(txDb, { companyId, agentId: actor.principal.agentId, runId: actor.runId }, "workflows:edit");
+        }
         await assertSaasDomainAdmission(txDb, companyId, "workflows.use");
         await assertProjectReference(txDb, companyId, input.projectId);
         const now = new Date();
@@ -237,6 +587,8 @@ export function workflowService(db: Db) {
           .where(and(eq(workflows.companyId, companyId), eq(workflows.id, workflow!.id)));
         const detail = await getDetail(txDb, companyId, workflow!.id,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
         if (!detail) throw new Error("Workflow disappeared after creation");
+        if (actor.workflowAuthoring && actor.principal.type === "agent" && actor.runId)
+          await assertWorkflowAuthoringAuthority(txDb, { companyId, agentId: actor.principal.agentId, runId: actor.runId }, "workflows:edit");
         return detail;
       });
     },
@@ -254,6 +606,10 @@ export function workflowService(db: Db) {
         const txDb = tx as unknown as Db;
         await lockAnalyticalCompany(txDb,companyId);await lockMemoryPrivacy(txDb, companyId);
         await assertActorCompanyScope(txDb, companyId, actor);
+        if (actor.workflowAuthoring) {
+          if (actor.principal.type !== "agent" || !actor.runId) throw forbidden("Current authoring run is required");
+          await assertWorkflowAuthoringAuthority(txDb, { companyId, agentId: actor.principal.agentId, runId: actor.runId }, "workflows:edit");
+        }
         await assertSaasDomainAdmission(txDb, companyId, "workflows.use");
         const workflow = await lockWorkflow(tx, companyId, workflowId);
         if (!workflow) throw notFound("Workflow not found");
@@ -276,6 +632,8 @@ export function workflowService(db: Db) {
         ) {
           const detail = await getDetail(txDb, companyId, workflowId,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
           if (!detail) throw new Error("Workflow disappeared after no-op update");
+          if (actor.workflowAuthoring && actor.principal.type === "agent" && actor.runId)
+            await assertWorkflowAuthoringAuthority(txDb, { companyId, agentId: actor.principal.agentId, runId: actor.runId }, "workflows:edit");
           return detail;
         }
         const now = new Date();
@@ -305,6 +663,8 @@ export function workflowService(db: Db) {
           .where(and(eq(workflows.companyId, companyId), eq(workflows.id, workflowId)));
         const detail = await getDetail(txDb, companyId, workflowId,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
         if (!detail) throw new Error("Workflow disappeared after draft update");
+        if (actor.workflowAuthoring && actor.principal.type === "agent" && actor.runId)
+          await assertWorkflowAuthoringAuthority(txDb, { companyId, agentId: actor.principal.agentId, runId: actor.runId }, "workflows:edit");
         return detail;
       });
     },

@@ -1,7 +1,8 @@
+import { useTranslation } from "react-i18next";
 import { useWorkspaceIsolationControls } from "@/hooks/useWorkspaceIsolationControls";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { normalizeLegacyRunnerProvider } from "@paperclipai/adapter-utils";
-import { memo, useState, useEffect, useRef, useCallback, useMemo, type ChangeEvent, type CSSProperties, type DragEvent, type RefObject } from "react";
+import { lazy, Suspense, memo, useState, useEffect, useRef, useCallback, useMemo, type ChangeEvent, type CSSProperties, type DragEvent, type RefObject } from "react";
 import { useQuery, useMutation, useQueryClient } from "@tanstack/react-query";
 import type { AgentEnvConfig, EnvBinding, IssueWorkMode } from "@paperclipai/shared";
 import { useDialog } from "../context/DialogContext";
@@ -479,7 +480,23 @@ const IssueDescriptionEditor = memo(function IssueDescriptionEditor({
   );
 });
 
+const ExperienceTaskDraft = lazy(() => import("./ExperienceTaskDraft"));
+
 export function NewIssueDialog() {
+  const { t } = useTranslation("experience");
+  const { newIssueOpen, newIssueDefaults, closeNewIssue } = useDialog();
+  const scope = newIssueDefaults.experienceScope;
+  if (scope) return newIssueOpen ? (
+    <Suspense fallback={<p role="status">{t("loading")}</p>}>
+      <ExperienceTaskDraft key={`${scope.companyId}:${scope.principal}`}
+        companyId={scope.companyId} principal={scope.principal}
+        initialTitle={newIssueDefaults.title ?? ""} onClose={closeNewIssue} />
+    </Suspense>
+  ) : null;
+  return <LegacyNewIssueDialog />;
+}
+
+function LegacyNewIssueDialog() {
   const { visible: workspaceIsolationControlsVisible } = useWorkspaceIsolationControls();
   const { newIssueOpen, newIssueDefaults, closeNewIssue } = useDialog();
   const visualViewportLayout = useVisualViewportLayout(newIssueOpen);

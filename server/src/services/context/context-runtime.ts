@@ -8,6 +8,7 @@ import { contextEngineService } from "./context-engine.js";
 export interface FreshNativeGovernedContextInput {
   enabled: boolean;
   foundationEnabled: boolean;
+  sourceScope?: "task_only";
   companyId: string;
   agentId: string;
   responsibleUserId?: string | null;
@@ -62,6 +63,7 @@ export async function assembleFreshNativeGovernedContext(
     query,
     intent: "native_task_execution",
     includeFoundation: input.foundationEnabled,
+    ...(input.sourceScope === "task_only" ? { sourceScope: input.sourceScope } : {}),
     sensitivityCeiling: "internal",
   });
 

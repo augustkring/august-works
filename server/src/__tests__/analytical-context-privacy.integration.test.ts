@@ -1,3 +1,7 @@
+import { foundationService } from "../services/foundation/foundation-service.js";
+import { foundationChangeProposals, principalPermissionGrants } from "@paperclipai/db";
+import { routines } from "@paperclipai/db";
+import { routineService } from "../services/routines.js";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { analyticalLineageEdges, memoryDeletionMarkers, agentIdentities, agentExecutionManifests, agentExecutionManifestItems, contextManifests, memoryBindings } from "@paperclipai/db";
 import { agentExecutionManifestSchema, createGovernedSkillSchema } from "@paperclipai/shared";
@@ -73,6 +77,37 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
  async function copied(){await db.update(heartbeatRuns).set({contextSnapshot:{sensitive:"Synthetic analytical context"},resultJson:{body:"Synthetic analytical result"},stdoutExcerpt:"Synthetic analytical output"}).where(eq(heartbeatRuns.id,runId));await db.insert(issueComments).values({companyId,issueId,body:"Synthetic analytical answer"});}
  async function root(){return (await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId)))[0]!;}
  async function erased(){expect(await heartbeatMemoryPayloadRetained(db,companyId,runId)).toBe(false);const [run]=await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,runId));expect(run!.resultJson).toBeNull();expect(run!.contextSnapshot).toEqual({});expect((await db.select().from(issueComments).where(eq(issueComments.issueId,issueId))).every(c=>c.body==="Source payload erased")).toBe(true);}
+
+ it("withdraws routine execution payloads when an actual analytical authoring input becomes hidden",async()=>{
+  const f=await fixture();await f.capture();
+  const [routine]=await db.insert(routines).values({companyId,title:"PRIVATE analytical routine",description:"PRIVATE copied answer",
+   status:"paused",originKind:"conversation_draft",originId:runId,createdByAgentId:agentId,responsibleUserId:userId}).returning();
+  const [task]=await db.insert(issues).values({companyId,title:"PRIVATE routine execution",originKind:"routine_execution",originId:routine!.id}).returning();
+  const [execution]=await db.insert(heartbeatRuns).values({companyId,agentId,responsibleUserId:userId,runtimeMode:"native",
+   nativeIssueId:task!.id,status:"queued",resultJson:{body:"PRIVATE execution result"}}).returning();
+  await expect(assertAnalyticalContextPayloadAccess(db,companyId,board,{issueId:task!.id})).resolves.toBeUndefined();
+  await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,f.sourceId));
+  await expect(routineService(db,{sourceActor:board}).get(routine!.id)).rejects.toMatchObject({status:403});
+  await expect(assertAnalyticalContextPayloadAccess(db,companyId,board,{issueId:task!.id})).rejects.toMatchObject({status:403});
+  await expect(assertAnalyticalContextPayloadAccess(db,companyId,board,{runId:execution!.id})).rejects.toMatchObject({status:403});
+  expect(await db.select().from(memoryDeletionMarkers).where(eq(memoryDeletionMarkers.companyId,companyId))).toEqual([]);
+ });
+
+ it("withdraws an accepted Foundation revision when its actual analytical authoring input becomes hidden",async()=>{
+  const f=await fixture();await f.capture();await db.update(authUsers).set({emailVerified:true}).where(eq(authUsers.id,userId));
+  await db.insert(principalPermissionGrants).values({companyId,principalType:"user",principalId:userId,permissionKey:"foundation:read"});
+  const actor={type:"board" as const,source:"session" as const,userId},mutation={principal:{type:"user" as const,userId}},owner=foundationService(db);
+  const draft=await owner.createDraft(companyId,{foundationKey:"analytical-proposal",title:"Native Foundation",body:"Prior body",
+    category:"governance",documentType:"policy",ownerUserId:userId},mutation);
+  const [proposal]=await db.insert(foundationChangeProposals).values({companyId,foundationDocumentId:draft.id,sourceType:"conversation_authoring",
+    sourceId:runId,conversationSourceRunId:runId,conversationResponsibleUserId:userId,proposedByAgentId:agentId,
+    baseRevisionId:draft.latestRevisionId,proposedBody:"PRIVATE analytical proposal",reason:"PRIVATE analytical reason",status:"pending"}).returning();
+  const accepted=await owner.acceptProposal(companyId,draft.id,proposal!.id,mutation);
+  await expect(owner.get(companyId,draft.id,actor)).resolves.toMatchObject({latestRevisionId:accepted.foundation.latestRevisionId});
+  await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,f.sourceId));
+  await expect(owner.get(companyId,draft.id,actor)).rejects.toMatchObject({status:403});
+  expect(await db.select().from(memoryDeletionMarkers).where(eq(memoryDeletionMarkers.companyId,companyId))).toEqual([]);
+ });
 
  it("rejects a mixed restore population atomically when one manifest or native input was erased",async()=>{
   const f=await fixture(),captured=await f.capture(),[original]=await db.select().from(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,captured.lineageManifestId));
@@ -394,6 +429,13 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
 
  it("reauthorizes copied native prose for the current human after the original run ends",async()=>{const f=await fixture();await f.capture();await copied();const reader={type:"board" as const,source:"session" as const,userId,companyIds:[companyId]};await db.update(heartbeatRuns).set({status:"succeeded"}).where(eq(heartbeatRuns.id,runId));await expect(assertAnalyticalContextPayloadAccess(db,companyId,reader,{issueId})).resolves.toBeUndefined();await expect(assertAnalyticalContextPayloadAccess(db,companyId,reader,{runId})).resolves.toBeUndefined();await db.delete(companyMemberships).where(and(eq(companyMemberships.companyId,companyId),eq(companyMemberships.principalId,userId)));await expect(assertAnalyticalContextPayloadAccess(db,companyId,reader,{issueId})).rejects.toMatchObject({status:403});});
  it("withholds copied prose when an original contributing task becomes hidden",async()=>{const f=await fixture();await f.capture();await copied();await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,f.sourceId));await expect(assertAnalyticalContextPayloadAccess(db,companyId,board,{issueId})).rejects.toMatchObject({status:403});expect((await db.select().from(issueComments).where(eq(issueComments.issueId,issueId)))[0]!.body).toBe("Synthetic analytical answer");});
+ it("reauthorizes the actual ancestor's analytical sources for a saved Native task",async()=>{
+  const f=await fixture();await f.capture();
+  const saved=await new PaperclipRunnerToolAuthority(db,{companyId,agentId,issueId,runId}).execute({tool:"create_task",callId:"retained-source-draft",arguments:{idempotencyKey:"retained-source-draft",title:"Synthetic retained analytical work",status:"backlog"}}) as {task:{id:string}};
+  await expect(assertAnalyticalContextPayloadAccess(db,companyId,board,{issueId:saved.task.id})).resolves.toBeUndefined();
+  await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,f.sourceId));
+  await expect(assertAnalyticalContextPayloadAccess(db,companyId,board,{issueId:saved.task.id})).rejects.toMatchObject({status:403,details:{code:"analytical_source_access_lost"}});
+ });
  it("reauthorizes actual WebSocket output at delivery and exposes only native identities on source loss",async()=>{
   const f=await fixture();await f.capture();
   const http=createServer(),wss=setupLiveEventsWebSocketServer(http,db,{deploymentMode:"local_trusted"});

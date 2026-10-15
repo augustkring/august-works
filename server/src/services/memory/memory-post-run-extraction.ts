@@ -3,12 +3,14 @@ import { and, eq } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   heartbeatRuns,
+  agents,
   issues,
   memoryBindings,
   memoryBindingTargets,
   memoryRecords,
 } from "@paperclipai/db";
 import {
+  AUTHORED_AGENT_DEFINITION_KEY,
   memoryPostRunCandidateProposalListSchema,
   type MemoryCandidateInputParsed,
   type MemoryPostRunCandidateProposalParsed,
@@ -26,6 +28,7 @@ type HeartbeatRun = typeof heartbeatRuns.$inferSelect;
 
 export type MemoryPostRunExtractionSkipReason =
   | "feature_disabled"
+  | "authored_memory_write_denied"
   | "run_not_succeeded"
   | "semantic_result_unavailable"
   | "semantic_result_yielded"
@@ -559,6 +562,16 @@ export function memoryPostRunExtractionService(db: Db) {
 
       if (run.status !== "succeeded") {
         addSkip(result, "run_not_succeeded");
+        return result;
+      }
+
+      const [current] = await db.select({ runtimeConfig: agents.runtimeConfig }).from(agents).where(and(
+        eq(agents.companyId, run.companyId), eq(agents.id, run.agentId)));
+      // The current authored text-only mappings grant no automatic Memory
+      // writes. Retained run identity also protects an older readonly version.
+      if (Object.hasOwn(current?.runtimeConfig ?? {}, AUTHORED_AGENT_DEFINITION_KEY) ||
+        Object.hasOwn(run.contextSnapshot ?? {}, "agentDefinitionVersion")) {
+        addSkip(result, "authored_memory_write_denied");
         return result;
       }
 

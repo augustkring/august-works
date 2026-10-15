@@ -1,3 +1,7 @@
+import { assertOptimizerRunSources } from "./optimizer-source-authority.js";
+import type { AuthorizationActor } from "../authorization.js";
+import { learningActorFromPrincipal } from "../learning/learning-analytical-sources.js";
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { isDeepStrictEqual } from "node:util";
 import { and, eq } from "drizzle-orm";
 import { companyMemberships, workflowRevisions, workflowRunReviews, workflowRuns, workflowStepRuns, type Db } from "@paperclipai/db";
@@ -11,12 +15,20 @@ import { validateWorkflowOutput } from "../workflows/workflow-output-schema.js";
 import { workflowRunReviewSchema } from "../v4-api-contracts.js";
 export { workflowRunReviewSchema } from "../v4-api-contracts.js";
 
-export async function getWorkflowRunReview(db: Db, companyId: string, runId: string) {
-  const [review] = await db.select().from(workflowRunReviews).where(and(eq(workflowRunReviews.companyId, companyId), eq(workflowRunReviews.workflowRunId, runId)));
-  if (!review) return null;
-  try { await assertMemoryRecordsRetained(db, companyId, review.memoryRecordIds); }
-  catch { return { ...review, correctedOutputs: {}, reason: "Source payload erased" }; }
-  return review;
+export async function getWorkflowRunReview(db: Db, companyId: string, runId: string, actor?: AuthorizationActor) {
+  return db.transaction(async raw => {
+    const tx = raw as unknown as Db;
+    await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
+    await assertOptimizerRunSources(tx, companyId, runId, actor);
+    const [review] = await tx.select().from(workflowRunReviews).where(and(eq(workflowRunReviews.companyId, companyId), eq(workflowRunReviews.workflowRunId, runId))).for("share");
+    let result = review ?? null;
+    if (review) {
+      try { await assertMemoryRecordsRetained(tx, companyId, review.memoryRecordIds); }
+      catch { result = { ...review, correctedOutputs: {}, reason: "Source payload erased" }; }
+    }
+    await assertOptimizerRunSources(tx, companyId, runId, actor);
+    return result;
+  });
 }
 
 export async function reviewWorkflowRun(db: Db, companyId: string, runId: string,
@@ -24,11 +36,12 @@ export async function reviewWorkflowRun(db: Db, companyId: string, runId: string
   const parsed = workflowRunReviewSchema.safeParse(rawInput);
   if (!parsed.success) throw unprocessable("Invalid workflow review", parsed.error.issues);
   const input = parsed.data;
-  const reviewer = actor.principal;
+  const reviewer = actor.principal, sourceActor = learningActorFromPrincipal(companyId, actor.principal, actor.runId);
   if (reviewer.type === "agent" || (reviewer.type === "system" && reviewer.service !== "local-board")) {
     throw forbidden("Only a board reviewer may confirm correction evidence");
   }
   const accepted = await db.transaction(async (tx) => {
+    await lockAnalyticalCompany(tx as unknown as Db, companyId);
     await lockMemoryPrivacy(tx as unknown as Db, companyId);
     if (reviewer.type === "user") {
       const [membership] = await tx.select().from(companyMemberships).where(and(eq(companyMemberships.companyId, companyId),
@@ -37,6 +50,10 @@ export async function reviewWorkflowRun(db: Db, companyId: string, runId: string
     }
     const [run] = await tx.select().from(workflowRuns).where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.id, runId))).for("update");
     if (!run) throw notFound("Workflow run not found");
+    await assertOptimizerRunSources(tx as unknown as Db, companyId, runId, sourceActor);
+    if (run.source === "test") throw conflict("Internal workflow tests cannot become production correction evidence", {
+      code: "workflow_test_not_production_evidence",
+    });
     if (!["succeeded", "failed", "cancelled"].includes(run.status)) throw conflict("Review requires a terminal workflow run");
     const [existing] = await tx.select().from(workflowRunReviews).where(and(eq(workflowRunReviews.companyId, companyId), eq(workflowRunReviews.workflowRunId, runId)));
     if (existing) {
@@ -45,6 +62,7 @@ export async function reviewWorkflowRun(db: Db, companyId: string, runId: string
         !isDeepStrictEqual(existing.correctedOutputs, input.correctedOutputs) || existing.reason !== input.reason) {
         throw conflict("Accepted run review is immutable", { code: "workflow_run_review_already_accepted" });
       }
+      await assertOptimizerRunSources(tx as unknown as Db, companyId, runId, sourceActor);
       return { review: existing, publication: null };
     }
     const steps = await tx.select().from(workflowStepRuns).where(and(eq(workflowStepRuns.companyId, companyId), eq(workflowStepRuns.workflowRunId, runId)));
@@ -63,6 +81,7 @@ export async function reviewWorkflowRun(db: Db, companyId: string, runId: string
       actorId: principal.type === "user" ? principal.userId : principal.service,
       action: "workflow.run_reviewed", entityType: "workflow_run", entityId: runId,
       details: { reviewId: review!.id, humanCorrection: input.humanCorrection, correctedNodeIds: Object.keys(input.correctedOutputs) } });
+    await assertOptimizerRunSources(tx as unknown as Db, companyId, runId, sourceActor);
     return { review: review!, publication: audit.publication };
   });
   if (accepted.publication) publishActivity(accepted.publication);

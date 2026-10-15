@@ -1,3 +1,4 @@
+import { experienceChatCardContextSchema } from "@paperclipai/shared";
 import type {
   SafeChatPublicationPayload,
   SafeExternalChatCard,
@@ -105,6 +106,7 @@ export interface ChatPublicationProjectionInput {
       kind: SafeExternalChatCardKind;
       title: string;
       body?: string | null;
+      experience?: SafeExternalChatCard["experience"];
       actions?: readonly SafeExternalChatCardAction[] | null;
     };
   } | null;
@@ -316,6 +318,18 @@ function projectCard(
   const body = input.card.body
     ? projectSafeChatPublicationText(input.card.body)
     : undefined;
+  const context = input.card.experience ? experienceChatCardContextSchema.parse(input.card.experience) : undefined;
+  if (context && context.source.resourceId !== input.id)
+    throw new UnsafeChatPublicationError("The semantic card must identify its Original interaction");
+  if (context && projectSafeChatPublicationText(context.source.version) !== context.source.version)
+    throw new UnsafeChatPublicationError("The semantic Source version contains private or unsafe text");
+  if (context && context.freshness !== "fresh" && input.card.actions?.some(action => action.type === "callback"))
+    throw new UnsafeChatPublicationError("Stale semantic cards cannot carry callback actions");
+  const experience = context ? experienceChatCardContextSchema.parse({ ...context,
+    whyYou: context.whyYou ? projectSafeChatPublicationText(context.whyYou) || null : null,
+    consequence: context.consequence ? projectSafeChatPublicationText(context.consequence) || null : null,
+    evidence: context.evidence.map(item => projectSafeChatPublicationText(item)).filter(Boolean),
+  }) : undefined;
   const rawActions = input.card.actions ?? [];
   if (rawActions.length > MAX_CARD_ACTIONS) {
     throw new UnsafeChatPublicationError(
@@ -367,6 +381,7 @@ function projectCard(
       kind: input.card.kind,
       title,
       ...(body ? { body } : {}),
+      ...(experience ? { experience } : {}),
       ...(actions.length ? { actions } : {}),
     },
   };
@@ -396,7 +411,9 @@ export function projectSafeChatPublication(
   const interaction = input.interaction ? projectCard(input.interaction) : null;
 
   return {
-    text: projectSafeChatPublicationText(input.text),
+    text: [projectSafeChatPublicationText(input.text), interaction?.card.experience?.whyYou,
+      interaction?.card.experience?.consequence, interaction?.card.experience?.evidence.join("\n")]
+      .filter(Boolean).join("\n\n"),
     ...(attachmentIds ? { attachmentIds } : {}),
     ...(input.progressState ? { progressState: input.progressState } : {}),
     ...(interaction ?? {}),

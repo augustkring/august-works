@@ -1,4 +1,5 @@
 export { companies } from "./companies.js";
+export { agentConfigurationRuntimeCandidates, agentRuntimeCandidateConformanceRequests } from "./agent_configuration_runtime_candidates.js";
 export { decisionContexts, decisionContextVersions, decisionContextPreparations, decisionContextBindings,
   decisionEvidenceLinks, decisionCalculationPins, decisionExperimentPins, decisionCausalPins, decisionAssumptions, decisionCriteria, decisionExpectedOutcomes } from "./decision_intelligence.js";
 export { companyLogos } from "./company_logos.js";
@@ -294,3 +295,18 @@ export {causalClaims,causalClaimVersions,causalClaimReviews,causalAnalysisRuns} 
 export { managementReviewSnapshots, managementReviewSourceLinks, managementReviewManifestDependencies, managementReviewGovernanceDependencies, managementReviewEvents } from "./management_reviews.js";
 
 export { adaptivePlanningProposals } from "./adaptive_planning.js";
+
+export * from "./customer_feedback.js";
+export * from "./customer_feedback_deletion_markers.js";
+export * from "./customer_feedback_images.js";
+export * from "./customer_feedback_retention.js";
+export * from "./agent_configuration_drafts.js";
+export * from "./agent_retirements.js";
+
+export * from "./feedback_retention_erasures.js";
+export * from "./activation_connection_consents.js";
+export * from "./activation_connection_validations.js";
+
+export { agentConfigurationTests } from "./agent_configuration_tests.js";
+
+export * from "./saas_notification_channels.js";

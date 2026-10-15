@@ -1,3 +1,4 @@
+import { learningActorFromPrincipal } from "../learning/learning-analytical-sources.js";
 import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { and, eq } from "drizzle-orm";
@@ -27,7 +28,7 @@ import {
   unprocessable,
 } from "../../errors.js";
 import { isUniqueViolation } from "../../db-errors.js";
-import { authorizationService } from "../authorization.js";
+import { assertWorkflowAuthoringAuthority } from "./workflow-authoring-authority.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { workflowNodeRegistryService } from "./workflow-node-registry.js";
 import { workflowService } from "./workflow-service.js";
@@ -87,6 +88,7 @@ function authoringActor(context: WorkflowAuthoringContext) {
   return {
     principal: { type: "agent" as const, agentId: context.agentId },
     runId: context.runId,
+    workflowAuthoring: true,
   };
 }
 
@@ -196,7 +198,6 @@ function applyNodeUpdates(
 export function workflowAuthoringToolsService(db: Db) {
   const workflows = workflowService(db);
   const registry = workflowNodeRegistryService(db);
-  const authorization = authorizationService(db);
   const settings = instanceSettingsService(db);
 
   async function assertEnabled(): Promise<void> {
@@ -265,23 +266,7 @@ export function workflowAuthoringToolsService(db: Db) {
     context: WorkflowAuthoringContext,
     action: "workflows:edit" | "workflows:publish",
   ) {
-    const decision = await authorization.decide({
-      actor: {
-        type: "agent",
-        agentId: context.agentId,
-        companyId: context.companyId,
-        runId: context.runId,
-      },
-      action,
-      resource: { type: "company", companyId: context.companyId },
-    });
-    if (!decision.allowed) {
-      throw forbidden(decision.explanation, {
-        code: "permission_denied",
-        permission: action,
-        reason: decision.reason,
-      });
-    }
+    await assertWorkflowAuthoringAuthority(db, context, action);
   }
 
   async function loadEditable(
@@ -290,7 +275,7 @@ export function workflowAuthoringToolsService(db: Db) {
   ) {
     const scope = await resolveContext(context);
     await assertPermission(context, "workflows:edit");
-    const detail = await workflows.getDetail(context.companyId, workflowId);
+    const detail = await workflows.getDetail(context.companyId, workflowId, learningActorFromPrincipal(context.companyId, authoringActor(context).principal, context.runId));
     if (!detail) throw notFound("Workflow not found");
     if (
       scope.projectId &&
@@ -354,7 +339,7 @@ export function workflowAuthoringToolsService(db: Db) {
       scope.issueId ?? context.runId,
       parsed.data.idempotencyKey,
     );
-    const existing = await workflows.getDetail(context.companyId, workflowId);
+    const existing = await workflows.getDetail(context.companyId, workflowId, learningActorFromPrincipal(context.companyId, authoringActor(context).principal, context.runId));
     if (existing) {
       const sameRequest =
         existing.projectId === (requestedProjectId ?? null) &&
@@ -386,7 +371,7 @@ export function workflowAuthoringToolsService(db: Db) {
       // the final concurrency guard; only replay if the winning row is the same
       // logical request.
       if (!isUniqueViolation(error)) throw error;
-      const winner = await workflows.getDetail(context.companyId, workflowId);
+      const winner = await workflows.getDetail(context.companyId, workflowId, learningActorFromPrincipal(context.companyId, authoringActor(context).principal, context.runId));
       if (
         winner &&
         winner.projectId === (requestedProjectId ?? null) &&
@@ -679,7 +664,7 @@ export function workflowAuthoringToolsService(db: Db) {
     }
     const scope = await resolveContext(context);
     await assertPermission(context, "workflows:publish");
-    const detail = await workflows.getDetail(context.companyId, parsed.data.workflowId);
+    const detail = await workflows.getDetail(context.companyId, parsed.data.workflowId, learningActorFromPrincipal(context.companyId, authoringActor(context).principal, context.runId));
     if (!detail) throw notFound("Workflow not found");
     if (scope.projectId && detail.projectId !== scope.projectId) {
       throw forbidden("Workflow is outside the active project context", {

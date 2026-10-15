@@ -34,6 +34,16 @@ import { logger } from "../middleware/logger.js";
 import { normalizeAgentPermissions } from "./agent-permissions.js";
 import { grantsForHumanRole, normalizeHumanRole } from "./company-member-roles.js";
 
+/** Current native role evidence. The optional lock is owned by an enclosing
+ * mutation transaction; a role copied into an actor is never this evidence. */
+export async function hasCurrentInstanceAdminRole(db: Db | DbTransaction, userId: string | null | undefined, shareLock = false): Promise<boolean> {
+  if (!userId) return false;
+  const query = db.select({ id: instanceUserRoles.id }).from(instanceUserRoles)
+    .where(and(eq(instanceUserRoles.userId, userId), eq(instanceUserRoles.role, "instance_admin")));
+  const rows = await (shareLock ? query.for("share") : query);
+  return rows.length > 0;
+}
+
 export type AuthorizationActor =
   {
     type: "board" | "agent" | "none";
@@ -591,25 +601,41 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     try { return await read({ decide: owner.decide }); }
     finally { context.active = false; }
   }
-  async function isInstanceAdmin(userId: string | null | undefined): Promise<boolean> {
-    if (!userId) return false;
-    if (
-      await db
-        .select({ id: instanceUserRoles.id })
-        .from(instanceUserRoles)
-        .where(and(eq(instanceUserRoles.userId, userId), eq(instanceUserRoles.role, "instance_admin")))
-        .then((rows) => rows[0] ?? null)
-    ) {
-      return true;
-    }
-    return false;
+  function prepareSourceInstanceAdminRead() {
+    return db.select({ id: instanceUserRoles.id }).from(instanceUserRoles).where(and(
+      eq(instanceUserRoles.userId, sql.placeholder("userId")),
+      eq(instanceUserRoles.role, "instance_admin"),
+    )).prepare("aw_native_source_instance_role_read");
   }
+  let sourceInstanceAdminRead: ReturnType<typeof prepareSourceInstanceAdminRead> | undefined;
+  async function isInstanceAdmin(userId: string | null | undefined): Promise<boolean> {
+    if (readSources && userId) {
+      sourceInstanceAdminRead ??= prepareSourceInstanceAdminRead();
+      return (await sourceInstanceAdminRead.execute({ userId })).length > 0;
+    }
+    return hasCurrentInstanceAdminRole(db, userId);
+  }
+
+  function prepareSourceMembershipRead() {
+    return db.select().from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, sql.placeholder("companyId")),
+      eq(companyMemberships.principalType, sql.placeholder("principalType")),
+      eq(companyMemberships.principalId, sql.placeholder("principalId")),
+      eq(companyMemberships.status, "active"),
+    )).prepare("aw_native_source_membership_read");
+  }
+  let sourceMembershipRead: ReturnType<typeof prepareSourceMembershipRead> | undefined;
 
   async function getActiveMembership(
     companyId: string,
     principalType: PrincipalType,
     principalId: string,
   ) {
+    if (readSources) {
+      sourceMembershipRead ??= prepareSourceMembershipRead();
+      const rows = await sourceMembershipRead.execute({ companyId, principalType, principalId });
+      return rows[0] ?? null;
+    }
     return db
       .select()
       .from(companyMemberships)
@@ -796,6 +822,34 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       .then((rows) => rows[0] ?? null);
   }
 
+  // Reuse compiled SQL only. Every Source executes fresh current reads; no
+  // actor, run, membership or permission result is cached or share-locked.
+  function prepareReadActorEvidence() {
+    return db.select({
+      agent: {
+        id: agents.id, companyId: agents.companyId, role: agents.role,
+        status: agents.status, reportsTo: agents.reportsTo, permissions: agents.permissions,
+      },
+      run: { companyId: heartbeatRuns.companyId, contextSnapshot: heartbeatRuns.contextSnapshot },
+    }).from(agents).leftJoin(heartbeatRuns, and(
+      eq(heartbeatRuns.id, sql.placeholder("runId")),
+      eq(heartbeatRuns.companyId, sql.placeholder("companyId")),
+      eq(heartbeatRuns.agentId, agents.id),
+    )).where(eq(agents.id, sql.placeholder("agentId"))).prepare("aw_native_source_actor_read");
+  }
+  let readActorQuery: ReturnType<typeof prepareReadActorEvidence> | undefined;
+  async function loadReadActorEvidence(actor: AuthorizationActor, companyId: string) {
+    readActorQuery ??= prepareReadActorEvidence();
+    const [row] = await readActorQuery.execute({ runId: actor.runId!, companyId, agentId: actor.agentId! });
+    const context = isPlainRecord(row?.run?.contextSnapshot) ? row.run.contextSnapshot : null;
+    return {
+      agent: row?.agent ?? null,
+      run: isPlainRecord(context?.executionPolicy)
+        ? { companyId: row!.run!.companyId, executionPolicy: context.executionPolicy }
+        : null,
+    };
+  }
+
   async function loadProject(projectId: string): Promise<ProjectAuthorizationRow | null> {
     if (readSources?.projects.has(projectId)) return readSources.projects.get(projectId) ?? null;
     return db
@@ -926,9 +980,12 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     actor: AuthorizationActor;
     companyId: string;
     resource: AuthorizationResource;
+    readActorEvidence?: Awaited<ReturnType<typeof loadReadActorEvidence>>;
   }): Promise<TrustPresetResolution> {
     const { issue, project } = await loadResourceContext(input.resource);
-    const run = await loadRunPolicy(input.actor.runId, input.companyId, input.actorAgent.id);
+    const run = input.readActorEvidence
+      ? input.readActorEvidence.run
+      : await loadRunPolicy(input.actor.runId, input.companyId, input.actorAgent.id);
     return resolveCoreTrustPreset({
       companyId: input.companyId,
       agent: input.actorAgent,
@@ -1926,7 +1983,10 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       });
     }
 
-    const actorAgent = await loadAgent(actorAgentId);
+    const readActorEvidence = readSources && input.actor.runId
+      ? await loadReadActorEvidence(input.actor, companyId)
+      : undefined;
+    const actorAgent = readActorEvidence ? readActorEvidence.agent : await loadAgent(actorAgentId);
     if (!actorAgent || actorAgent.companyId !== companyId) {
       return deny({
         action: input.action,
@@ -1968,6 +2028,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       actor: input.actor,
       companyId,
       resource: input.resource,
+      readActorEvidence,
     });
     const directParentReportTarget =
       input.action === "issue:comment" &&

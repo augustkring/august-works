@@ -30,12 +30,14 @@ export function authenticateDeletionLedger(
     !Array.isArray(ledger.memory) ||
     !Array.isArray(ledger.businessEvents) ||
     !Array.isArray(ledger.analyticalSources) ||
+    !Array.isArray(ledger.feedback) ||
     !Array.isArray(ledger.identityHomes ?? []) ||
     !Array.isArray(ledger.users ?? []) ||
     ledger.companies.length +
       ledger.memory.length +
       ledger.businessEvents.length +
       ledger.analyticalSources.length +
+      ledger.feedback.length +
       (ledger.identityHomes?.length ?? 0) +
       (ledger.users?.length ?? 0) >
       100000
@@ -83,5 +85,12 @@ export function authenticateDeletionLedger(
       Date.parse(row.created_at) > exportedAt
     )
       throw Error("Invalid account deletion ledger");
+  for (const row of ledger.feedback) {
+    if (!uuid.test(row?.subject_id ?? "") || !uuid.test(row?.company_id ?? "") ||
+      !uuid.test(row?.feedback_id ?? "") || !["case", "image"].includes(row?.target_kind) ||
+      (row.target_kind === "case" && row.subject_id !== row.feedback_id) ||
+      !Number.isFinite(Date.parse(row.erased_at)) || Date.parse(row.erased_at) > exportedAt)
+      throw Error("Invalid feedback deletion marker");
+  }
   return ledger;
 }

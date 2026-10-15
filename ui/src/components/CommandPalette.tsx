@@ -1,4 +1,6 @@
 import { AgentIdentity } from "@/components/AgentIdentity";
+import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
+import { ExperienceCommandPalette } from "./ExperienceCommandPalette";
 import { useState, useEffect, useMemo } from "react";
 import { useLocation, useNavigate } from "@/lib/router";
 import { useQuery } from "@tanstack/react-query";
@@ -89,6 +91,11 @@ function scoreProjectMatch(name: string, description: string, q: string): number
 }
 
 export function CommandPalette() {
+  const { enabled } = useV9FeatureEnabled("ambient_commands_v9");
+  return enabled ? <ExperienceCommandPalette /> : <LegacyCommandPalette />;
+}
+
+function LegacyCommandPalette() {
   const [open, setOpen] = useState(false);
   const [query, setQuery] = useState("");
   const navigate = useNavigate();
@@ -104,6 +111,12 @@ export function CommandPalette() {
     retry: false,
   });
   const fileViewerEnabled = experimentalSettings?.enableExperimentalFileViewer === true;
+
+  useEffect(() => {
+    const show = () => { setOpen(true); if(isMobile) setSidebarOpen(false); };
+    document.addEventListener("paperclip:open-command",show);
+    return () => document.removeEventListener("paperclip:open-command",show);
+  }, [isMobile,setSidebarOpen]);
 
   useEffect(() => {
     function handleKeyDown(e: KeyboardEvent) {

@@ -4,10 +4,13 @@ import {
   orchestrationWorkers,
   issueDocuments,
   documents,
+  agents,
+  orchestrationPlans,
   type Db,
 } from "@paperclipai/db";
 import { and, eq } from "drizzle-orm";
-import { workerModelResultSchema } from "@paperclipai/shared";
+import { workerModelResultSchema, agentDraftRequestsTaskReview, parseAgentDraftOutput,
+  agentDraftReviewDocument, AGENT_REVIEWED_TASK_OUTPUT_INSTRUCTIONS } from "@paperclipai/shared";
 import type {
   NativeRunIdentity,
   NativeSessionCapabilities,
@@ -25,6 +28,8 @@ import { forbidden, conflict } from "../../errors.js";
 import type { workerModelGateway } from "../orchestration/worker-model-gateway.js";
 import { retainedOrchestrationContract } from "../orchestration/orchestration-contracts.js";
 import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
+import { readAuthoredAgentDefinition, assertAuthoredAgentSnapshotCurrent,
+  type AuthoredRuntimeAgent } from "../agents/authored-definition.js";
 
 type Gateway = ReturnType<typeof workerModelGateway>;
 type Input = Parameters<Gateway["issue"]>[0] & {
@@ -160,6 +165,19 @@ export function createAwTextDraftBackend(
         );
       if (worker?.issueId !== identity.issueId)
         throw forbidden("Text draft canonical Task binding changed");
+      const [authoredAgent] = await db.select().from(agents).where(and(
+        eq(agents.companyId, identity.companyId), eq(agents.id, identity.agentId)));
+      if (!authoredAgent) throw forbidden("Text draft Agent is unavailable");
+      const definition = await readAuthoredAgentDefinition(db, authoredAgent);
+      const taskReview = definition ? agentDraftRequestsTaskReview(definition.content) : false;
+      if (taskReview) {
+        const [plan] = await db.select().from(orchestrationPlans).where(and(
+          eq(orchestrationPlans.companyId, input.companyId), eq(orchestrationPlans.id, input.binding.planId)));
+        // Context read, declared output and Human review each consume an
+        // Original Native tool action. Never increase a reviewed plan budget.
+        if (!plan || plan.budgets.maxToolActions - plan.toolActionsUsed < 3)
+          throw forbidden("A reviewed task proposal requires three remaining Native tool actions");
+      }
       const contract = await retainedOrchestrationContract(
         db,
         input.companyId,
@@ -234,6 +252,8 @@ export function createAwTextDraftBackend(
         activeTask,
         gateway,
         claims,
+        authoredAgent,
+        taskReview,
         open.signal,
       );
     },
@@ -252,6 +272,8 @@ function draftSession(
   task: { id: string; title: string; description: string | null },
   gateway: Gateway,
   claims: NonNullable<ReturnType<typeof verifyRuntimeToolsToken>>,
+  authoredAgent: AuthoredRuntimeAgent,
+  taskReview: boolean,
   parentSignal?: AbortSignal,
 ): NativeSession {
   const controller = new AbortController(),
@@ -392,7 +414,7 @@ function draftSession(
               claims,
               {
                 callId: `aw-draft:${identity.runId}`,
-                system,
+                system: taskReview ? `${system.replace("Return only the draft text.", "")} ${AGENT_REVIEWED_TASK_OUTPUT_INSTRUCTIONS}` : system,
                 prompt: JSON.stringify({
                   assignedRuntimeContext: input.runtimeContextText ?? null,
                   task,
@@ -407,6 +429,8 @@ function draftSession(
             ),
           );
           controller.signal.throwIfAborted();
+          const output = parseAgentDraftOutput(response.text, taskReview);
+          await assertAuthoredAgentSnapshotCurrent(db, authoredAgent);
           const current = await retainedOrchestrationContract(
             tools.db,
             identity.companyId,
@@ -426,7 +450,7 @@ function draftSession(
               arguments: {
                 key: input.outputKey,
                 title: "Draft for review",
-                body: response.text,
+                body: agentDraftReviewDocument(output),
                 idempotencyKey: `aw-draft:${identity.runId}:output`,
                 baseRevisionId,
               },
@@ -435,6 +459,22 @@ function draftSession(
           controller.signal.throwIfAborted();
           if (revoked || write.document.key !== input.outputKey)
             throw forbidden("Text draft output authority revoked");
+          if (output.proposedTask) {
+            controller.signal.throwIfAborted();
+            await tools.execute({
+              tool: "request_human_input",
+              callId: `aw-draft:${identity.runId}:task-review`,
+              arguments: {
+                idempotencyKey: `aw-draft:${identity.runId}:task-review`,
+                interactionKind: "suggest_tasks", resolverPolicy: "human_only",
+                title: "Review one internal backlog task",
+                prompt: "Create this separate unassigned backlog task linked from the original Task? No task has been created or started.",
+                continuationPolicy: "none",
+                payload: { version: 1, tasks: [{ clientKey: "proposed-task", ...output.proposedTask, status: "backlog", placement: "company_backlog" }] },
+              },
+            });
+            controller.signal.throwIfAborted();
+          }
           const ref = `/api/issues/${identity.issueId}/documents/${input.outputKey}`;
           const result: PrpStructuredRunResult = {
             schema: "paperclip.run_result.v1",
@@ -469,7 +509,7 @@ function draftSession(
               {
                 kind: "review",
                 ownerClass: "human",
-                summary: "Review the saved internal draft.",
+                summary: output.proposedTask ? "Review the saved internal draft and the separate Human-only backlog task proposal." : "Review the saved internal draft.",
               },
             ],
             artifacts: [

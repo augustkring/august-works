@@ -1,11 +1,11 @@
 import {lockAnalyticalCompany} from "../analytical-privacy.js";
-import {assertAnalyticalContextPayloadAccess} from "../analytical-context-authority.js";
+import { assertOptimizerRunSources } from "./optimizer-source-authority.js";
 import {learningActorFromPrincipal} from "../learning/learning-analytical-sources.js";
 import type {AuthorizationActor} from "../authorization.js";
 import { assertLearningAssetCurrent } from "../learning/learning-assets.js";
 import { performance } from "node:perf_hooks";
 import { isDeepStrictEqual } from "node:util";
-import { and, desc, eq, inArray } from "drizzle-orm";
+import { and, desc, eq, ne, inArray } from "drizzle-orm";
 import { automationArtifacts, automationArtifactVersions, workflowOptimizerEvaluations, workflowOptimizerObservations,
   approvals, workflowOptimizerSuggestions, workflowRevisions, workflowRunReviews, workflowRuns, workflowStepRuns, workflows, type Db } from "@paperclipai/db";
 import type { OptimizerCompiledCandidate, OptimizerReplayCase, OptimizerShadowEvaluation,
@@ -60,9 +60,14 @@ export async function executeCompiledOptimizerCandidate(candidate: OptimizerComp
 
 export async function assertOptimizerEvaluationBinding(db: Db, companyId: string, evaluationId: string, requireGates = true, sourceActor?:AuthorizationActor) {
   const [metadata] = await db.select({ revisionId: workflowOptimizerEvaluations.workflowRevisionId, versionId: workflowOptimizerEvaluations.artifactVersionId,
-    memoryRecordIds: workflowOptimizerEvaluations.memoryRecordIds }).from(workflowOptimizerEvaluations)
+    memoryRecordIds: workflowOptimizerEvaluations.memoryRecordIds, sourceRunIds: workflowOptimizerEvaluations.sourceRunIds }).from(workflowOptimizerEvaluations)
     .where(and(eq(workflowOptimizerEvaluations.companyId, companyId), eq(workflowOptimizerEvaluations.id, evaluationId)));
   if (!metadata) throw notFound("Optimizer evaluation not found");
+  const sourceRuns = z.array(z.uuid()).max(50).safeParse(metadata.sourceRunIds);
+  if (!sourceRuns.success || new Set(sourceRuns.data).size !== sourceRuns.data.length)
+    throw forbidden("Complete Optimizer run provenance is unavailable");
+  for (const runId of sourceRuns.data) await assertOptimizerRunSources(db, companyId, runId, sourceActor);
+
   await assertLearningAssetCurrent(db, companyId, "workflow_revision", metadata.revisionId, sourceActor);
   await assertLearningAssetCurrent(db, companyId, "automation_artifact_version", metadata.versionId, sourceActor);
   await assertMemoryRecordsRetained(db, companyId, metadata.memoryRecordIds);
@@ -112,7 +117,7 @@ export function optimizerEvaluationService(db: Db) {
       .innerJoin(workflowRuns, and(eq(workflowRuns.companyId, workflowOptimizerObservations.companyId), eq(workflowRuns.id, workflowOptimizerObservations.workflowRunId)))
       .innerJoin(workflowStepRuns, and(eq(workflowStepRuns.companyId, workflowRuns.companyId), eq(workflowStepRuns.workflowRunId, workflowRuns.id), eq(workflowStepRuns.nodeId, workflowOptimizerObservations.nodeId)))
       .where(and(eq(workflowOptimizerObservations.companyId, companyId), eq(workflowOptimizerObservations.evaluationId, evaluationId),
-        eq(workflowRuns.status, "succeeded"), eq(workflowStepRuns.status, "succeeded")))
+        ne(workflowRuns.source, "test"), eq(workflowRuns.status, "succeeded"), eq(workflowStepRuns.status, "succeeded")))
       .orderBy(desc(workflowOptimizerObservations.observedAt)).limit(100);
     return rows.map((item) => item.observation);
   }
@@ -169,7 +174,7 @@ export function optimizerEvaluationService(db: Db) {
       if (!revision) throw notFound("Workflow revision not found");
       const sourceActor=learningActorFromPrincipal(companyId,actor.principal,actor.runId);
       await assertLearningAssetCurrent(db,companyId,"workflow_revision",revision.id,sourceActor);
-      const runs = await db.select().from(workflowRuns).where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.workflowRevisionId, revision.id), eq(workflowRuns.status, "succeeded")))
+      const runs = await db.select().from(workflowRuns).where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.workflowRevisionId, revision.id), ne(workflowRuns.source, "test"), eq(workflowRuns.status, "succeeded")))
         .orderBy(desc(workflowRuns.finishedAt)).limit(50);
       const cases: OptimizerReplayCase[] = [];
       const samples: Parameters<typeof compileOptimizerCandidate>[0]["traceSamples"] = [];
@@ -177,7 +182,7 @@ export function optimizerEvaluationService(db: Db) {
       const sourceRunIds: string[] = [];
       let nodeId: string | null = null;
       for (const run of runs) {
-        await assertAnalyticalContextPayloadAccess(db,companyId,sourceActor,{runId:run.id});
+        await assertOptimizerRunSources(db, companyId, run.id, sourceActor);
         const [review] = await db.select().from(workflowRunReviews).where(and(eq(workflowRunReviews.companyId, companyId), eq(workflowRunReviews.workflowRunId, run.id)));
         if (!review) continue;
         const steps = await db.select().from(workflowStepRuns).where(and(eq(workflowStepRuns.companyId, companyId), eq(workflowStepRuns.workflowRunId, run.id)));
@@ -191,7 +196,7 @@ export function optimizerEvaluationService(db: Db) {
         const corrected = Object.prototype.hasOwnProperty.call(review.correctedOutputs, nodeId);
         const expected = corrected ? review.correctedOutputs[nodeId] : step.outputJson;
         cases.push({ id: `run:${run.id}`, category: corrected ? "corrected" : "representative", sourceRunId: run.id, input: nodeInput, expectedOutput: expected });
-        const trace = await optimizerTraceService(db).normalizeWorkflowRun(companyId, run.id);
+        const trace = await optimizerTraceService(db).normalizeWorkflowRun(companyId, run.id, sourceActor);
         const observed = trace.steps[suggestion.stepOrdinals[0]! - 1]!;
         samples.push({ runId: run.id, inputShapeHash: optimizerShapeHash(nodeInput), outputShapeHash: optimizerShapeHash(expected), outcome: corrected ? "corrected" : observed.outcome });
         sourceRunIds.push(run.id);
@@ -220,11 +225,11 @@ export function optimizerEvaluationService(db: Db) {
         await lockAnalyticalCompany(tx,companyId);
         await lockMemoryPrivacy(tx as unknown as Db, companyId);
         await assertLearningAssetCurrent(tx as unknown as Db,companyId,"workflow_revision",revision.id,sourceActor);
-        for(const runId of sourceRunIds)await assertAnalyticalContextPayloadAccess(tx as unknown as Db,companyId,sourceActor,{runId});
+        for(const runId of sourceRunIds)await assertOptimizerRunSources(tx as unknown as Db, companyId, runId, sourceActor);
         await assertMemoryRecordsRetained(tx as unknown as Db, companyId, [...references]);
       const detail = await automationArtifactService(tx as unknown as Db).create(companyId, { ...candidate.artifact, originNodeId: nodeId,
         dependencyManifest: candidate.artifact.dependencyManifest as unknown as Record<string, unknown>,
-        testSpec: { ...candidate.artifact.testSpec, cases: cases.map((item) => ({ name: item.id, input: item.input, expectedOutput: item.expectedOutput, category: item.category, sourceRunId: item.sourceRunId })) } }, SYSTEM);
+        testSpec: { ...candidate.artifact.testSpec, cases: cases.map((item) => ({ name: item.id, input: item.input, expectedOutput: item.expectedOutput, category: item.category, sourceRunId: item.sourceRunId })) } }, { ...SYSTEM, sourceActor });
       const version = detail.latestVersion!;
         const [evaluation] = await tx.insert(workflowOptimizerEvaluations).values({ companyId, suggestionId, workflowId,
           workflowRevisionId: revision.id, nodeId, artifactId: detail.artifact.id, artifactVersionId: version.id, contentHash: version.contentHash,

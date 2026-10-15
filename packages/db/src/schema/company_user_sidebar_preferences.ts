@@ -8,6 +8,7 @@ export const companyUserSidebarPreferences = pgTable(
     companyId: uuid("company_id").notNull().references(() => companies.id, { onDelete: "cascade" }),
     userId: text("user_id").notNull(),
     projectOrder: jsonb("project_order").$type<string[]>().notNull().default([]),
+    experienceProfile: text("experience_profile"),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },

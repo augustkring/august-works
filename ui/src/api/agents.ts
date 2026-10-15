@@ -1,5 +1,6 @@
 import type {
   Agent,
+  PauseAgent,
   AgentDesiredSkillEntry,
   AgentSkillAssignmentMode,
   AgentPermissions,
@@ -174,7 +175,8 @@ export const createAgentsApi = (api: typeof defaultApi = defaultApi) => ({
     api.delete<AgentInstructionsBundle>(
       agentPath(id, companyId, `/instructions-bundle/file?path=${encodeURIComponent(relativePath)}`),
     ),
-  pause: (id: string, companyId?: string) => api.post<Agent>(agentPath(id, companyId, "/pause"), {}),
+  pause: (id: string, companyId?: string, pendingWork: PauseAgent["pendingWork"] = "cancel") =>
+    api.post<Agent>(agentPath(id, companyId, "/pause"), { pendingWork }),
   resume: (id: string, companyId?: string) => api.post<Agent>(agentPath(id, companyId, "/resume"), {}),
   clearError: (id: string, companyId?: string) =>
     api.post<ClearAgentErrorResponse>(agentPath(id, companyId, "/clear-error"), {}),

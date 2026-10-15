@@ -15,6 +15,7 @@ import {and,eq,sql} from "drizzle-orm";
 import {companies,projects,issues,agents,authUsers,heartbeatRuns,decisions,decisionContexts,decisionContextVersions,decisionContextBindings,decisionCalculationPins,managementReviewSnapshots,decisionEvidenceLinks,decisionAssumptions,decisionCriteria,decisionExpectedOutcomes,businessScenarioRuns,businessMetrics,businessMetricVersions,businessMetricPublications,businessMetricObservations,analyticalLineageManifests,analyticalLineageEdges,forecastSpecs,forecastSpecVersions,forecastBacktests,forecastRuns,forecastPublications,createDb} from "@paperclipai/db";
 import {businessForecastDefinitionSchema,businessMetricDefinitionSchema,decisionContextDefinitionSchema,type DecisionEvidenceReference,type BusinessMetricResult} from "@paperclipai/shared";
 import {businessForecastService} from "../services/business-forecasting/service.js";
+import { currentInsightToolCard } from "../services/experience/insight-tool-card.js";
 import {businessScenarioService} from "../services/business-scenarios/service.js";
 import {decisionIntelligenceService,decisionContextSpecHash} from "../services/decision-intelligence.js";
 import {decisionService} from "../services/decisions.js";
@@ -91,6 +92,16 @@ suite("Governed native business forecasts on migrated PostgreSQL",()=>{
  async function draft(source?:Awaited<ReturnType<typeof history>>) {const h=source??await history();const created=await service().create(companyId,actor,{key:`forecast_${randomUUID().replaceAll("-","")}`,definition:definition(h)});return {h,...created};}
  const backtest=(d:Awaited<ReturnType<typeof draft>>)=>service().backtest(companyId,actor,d.spec.id,{expectedRevision:1,versionId:d.version.id,observationIds:d.h.observations.map(item=>item.id),cutoff:d.h.cutoff.toISOString()});
  async function published() {const d=await draft(),test=await backtest(d),spec=await service().publish(companyId,actor,d.spec.id,{expectedRevision:1,versionId:d.version.id,backtestId:test.id,rationale:"Human approval of this exact retained time-safe backtest"});return {...d,test,spec};}
+  it("resolves a retained forecast run into a typed current chat reference without another calculation", async () => {
+    await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental({ action_cards_v9: true, experience_projection_v9: true, progressive_shell_v9: true });
+    const d = await published(), run = await service().run(companyId, actor, d.spec.id, { expectedRevision: d.spec.revision, versionId: d.version.id, observationIds: d.h.observations.map(value => value.id), cutoff: d.h.cutoff.toISOString() });
+    const resourceId = `forecast:${d.spec.id}:${run.id}`, wire = { schemaVersion: 1, component: "ResultCard", companyId, cardId: `insight:${resourceId}`, source: { companyId, domain: "insight", resourceId, version: run.contentHash } };
+    const before = await db.select().from(forecastRuns).where(eq(forecastRuns.companyId, companyId));
+    expect(await currentInsightToolCard(db, actor, companyId, wire)).toMatchObject({ kind: "result", title: "Recorded forecast estimate", evidence: expect.arrayContaining(["backtest_not_future_accuracy"]), actions: [{ operation: "open", href: "/business-forecasts" }] });
+    expect(await db.select().from(forecastRuns).where(eq(forecastRuns.companyId, companyId))).toEqual(before);
+    await db.update(issues).set({ hiddenAt: new Date() }).where(eq(issues.id, d.h.sourceIds[0]));
+    await expect(currentInsightToolCard(db, actor, companyId, wire)).rejects.toMatchObject({ status: 403 });
+  });
  async function statisticalDraft(values=Array.from({length:30},(_,index)=>10+index)) {
   await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({...flags,forecast_provider_statsforecast_v8:true});
   const provider=await service().statisticalProfile(companyId,actor),h=await history(values);

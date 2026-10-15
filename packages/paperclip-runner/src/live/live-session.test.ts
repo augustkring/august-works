@@ -21,6 +21,7 @@ import {
   type CapabilityLiveTransportFactory,
   type CapabilityLiveTurnEvent,
 } from "./live-session.js";
+import * as workspaceCapture from "./workspace-diff.js";
 import { DurableCapabilityLiveSessionStore } from "./durable-live-session-store.js";
 import { defaultCapabilityRunnerdBinary } from "./runnerd-codex-transport.js";
 import { captureTurnRejection } from "../../test/capture-turn-rejection.js";
@@ -741,6 +742,32 @@ describe("Capability live runnerd and Codex session", () => {
     await service.shutdown(session.id);
   });
 
+  it("admits the provider without fabricating a diff when the default baseline deadline expires", async () => {
+    const capture = vi.spyOn(workspaceCapture, "capturePaperclipWorkspace").mockImplementation((_root, options) =>
+      new Promise((_resolve, reject) => {
+        options?.signal?.addEventListener("abort", () => reject(options.signal!.reason), { once: true });
+      }),
+    );
+    const state = providerState();
+    const service = new CapabilityLiveSessionService({ transportFactory: fakeTransportFactory(state) });
+    const session = await service.create();
+    try {
+      const result = await session.sendMessage("respond despite unavailable workspace baseline");
+      expect(result.status).toBe("completed");
+      expect(result.snapshot.workspaceDiffs).toEqual([]);
+      expect(result.snapshot.evidence).toContainEqual(expect.objectContaining({ kind: "diagnostic", data: { diagnostic: "withheld" } }));
+      expect(capture.mock.calls[0]?.[1]?.signal?.aborted).toBe(true);
+      expect(state.transports[0]!.requests.some(request => request.method === "turn/start")).toBe(true);
+    } finally {
+      capture.mockRestore();
+      await service.shutdown(session.id);
+    }
+  });
+
+  it.each([0, -1, 1001, 1.5, Number.NaN, Number.POSITIVE_INFINITY])("rejects an unbounded baseline host budget %s", budget => {
+    expect(() => new CapabilityLiveSessionService({ workspaceBaselineDeadlineMs: budget })).toThrow("from 1 to 1000");
+  });
+
   it("records runner-verified file changes for a dynamic chat turn", async () => {
     const root = await mkdtemp(join(tmpdir(), "paperclip-live-workspace-"));
     await writeFile(join(root, "existing.txt"), "before\n");
@@ -750,7 +777,11 @@ describe("Capability live runnerd and Codex session", () => {
       await writeFile(join(root, "existing.txt"), "after\n");
       await writeFile(join(root, "created.ts"), "export const created = true;\n");
     };
-    const service = new CapabilityLiveSessionService({ transportFactory: fakeTransportFactory(state) });
+    // This proves exact filesystem diff capture, separately from the host's
+    // 100-ms admission SLA. Shared CI can exceed that optional production SLA.
+    const service = new CapabilityLiveSessionService({
+      transportFactory: fakeTransportFactory(state), workspaceBaselineDeadlineMs: 1_000,
+    });
     const session = await service.create({ workingDirectory: root });
 
     const result = await session.sendMessage("edit the workspace");

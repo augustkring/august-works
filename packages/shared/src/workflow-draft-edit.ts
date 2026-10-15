@@ -1,0 +1,79 @@
+import { z } from "zod";
+import { workflowToolArgumentsSchema, workflowToolFieldSchema, workflowToolArgumentErrors, workflowStepToolAccessSchema } from "./workflow-draft-tools.js";
+
+const text = (max: number) => z.string().trim().min(1).max(max).refine(value => !/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/u.test(value) &&
+  !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u.test(value), "Use valid readable text");
+export const workflowEditableNodeIdSchema = text(160);
+export const workflowStepNameSchema = text(200);
+export const workflowWaitSecondsSchema = z.number().int().min(1).max(604800);
+export const workflowApprovalSummarySchema = text(1000);
+export const workflowApprovalConsequenceSchema = text(2000);
+export const workflowAgentObjectiveSchema = text(10000);
+/** Guided comparison data is rendered into the Original condition language on
+ * the server. It is not a second evaluator or a customer-supplied expression. */
+export const workflowGuidedConditionSchema = z.strictObject({
+  kind: z.literal("condition"), source: z.enum(["trigger", "variables", "steps"]),
+  path: z.array(text(160).refine(value => !/[\r\n]/u.test(value), "Use one field name per level")).min(1).max(8),
+  operator: z.enum(["===", "!==", ">", ">=", "<", "<="]),
+  value: z.union([z.string().max(1000).refine(value => !/[\u0000-\u0008\u000B\u000C\u000E-\u001F]/u.test(value) &&
+    !/[\uD800-\uDBFF](?![\uDC00-\uDFFF])|(?<![\uD800-\uDBFF])[\uDC00-\uDFFF]/u.test(value), "Use valid readable text"), z.number().finite(), z.boolean(), z.null()]),
+}).superRefine((value, ctx) => {
+  if (!["===", "!=="].includes(value.operator) && typeof value.value !== "number")
+    ctx.addIssue({ code: "custom", path: ["value"], message: "Ordering needs a numeric comparison value" });
+});
+export const workflowStepConfigurationChangeSchema = z.discriminatedUnion("kind", [
+  z.strictObject({ kind: z.literal("keep") }),
+  z.strictObject({ kind: z.literal("connected_tool"), inputSchemaHash: z.string().regex(/^[a-f0-9]{64}$/), input: workflowToolArgumentsSchema }),
+  z.strictObject({ kind: z.literal("wait"), durationSeconds: workflowWaitSecondsSchema }),
+  z.strictObject({ kind: z.literal("approval"), summary: workflowApprovalSummarySchema, consequence: workflowApprovalConsequenceSchema }),
+  z.strictObject({ kind: z.literal("agent_task"), objective: workflowAgentObjectiveSchema, agentId: z.uuid().optional() }),
+  workflowGuidedConditionSchema,
+]);
+export const workflowConnectedInputReviewSchema = z.strictObject({ kind: z.literal("connected_tool"), inputSchemaHash: z.string().regex(/^[a-f0-9]{64}$/),
+  fields: z.array(workflowToolFieldSchema).max(20), values: workflowToolArgumentsSchema,
+}).superRefine((value, ctx) => {
+  if (new Set(value.fields.map(field => field.name)).size !== value.fields.length || workflowToolArgumentErrors(value.fields, value.values).length)
+    ctx.addIssue({ code: "custom", message: "Saved inputs do not match the current operation fields" });
+});
+export const workflowStepInputReviewSchema = z.discriminatedUnion("kind", [
+  workflowConnectedInputReviewSchema,
+  z.strictObject({ kind: z.literal("advanced") }),
+  z.strictObject({ kind: z.literal("wait"), durationSeconds: workflowWaitSecondsSchema }),
+  z.strictObject({ kind: z.literal("approval"), summary: workflowApprovalSummarySchema, consequence: workflowApprovalConsequenceSchema }),
+  z.strictObject({ kind: z.literal("agent_task"), objective: workflowAgentObjectiveSchema, waitForCompletion: z.boolean() }),
+  workflowGuidedConditionSchema,
+]);
+export type WorkflowStepInputReview = z.infer<typeof workflowStepInputReviewSchema>;
+export const workflowDraftAgentSelectionSchema = z.strictObject({ coverage: z.literal("bounded"), selectedName: text(200).nullable(),
+  choices: z.array(z.strictObject({ agentId: z.uuid(), name: text(200) })).max(32),
+}).superRefine((value, ctx) => {
+  if (new Set(value.choices.map(choice => choice.agentId)).size !== value.choices.length)
+    ctx.addIssue({ code: "custom", path: ["choices"], message: "Agent choice identity is duplicated" });
+});
+export const workflowDraftStepReviewSchema = z.strictObject({
+  companyId: z.uuid(), workflowId: z.uuid(), draftRevisionId: z.uuid(), publishedRevisionId: z.uuid().nullable(),
+  updatedAt: z.iso.datetime(), version: z.number().int().positive(), nodeId: workflowEditableNodeIdSchema,
+  nodeType: text(160), name: workflowStepNameSchema, configuration: workflowStepInputReviewSchema,
+  agentSelection: workflowDraftAgentSelectionSchema.optional(), toolAccess: workflowStepToolAccessSchema.optional(),
+}).superRefine((value, ctx) => {
+  if (value.toolAccess && value.nodeType !== "connector.action")
+    ctx.addIssue({ code: "custom", path: ["toolAccess"], message: "Connection choice binding changed" });
+  if (value.configuration.kind === "connected_tool" && (value.nodeType !== "connector.action" ||
+    !value.toolAccess || !["permission_required", "execution_check"].includes(value.toolAccess.state)))
+    ctx.addIssue({ code: "custom", path: ["configuration"], message: "Connected input binding changed" });
+  if (value.agentSelection && (value.nodeType !== "agent.task" || value.configuration.kind !== "agent_task"))
+    ctx.addIssue({ code: "custom", path: ["agentSelection"], message: "Agent choice binding changed" });
+});
+export const workflowDraftStepCommandSchema = z.strictObject({
+  requestId: z.uuid(), expectedWorkflowId: z.uuid(), expectedDraftRevisionId: z.uuid(), expectedPublishedRevisionId: z.uuid().nullable(),
+  expectedUpdatedAt: z.iso.datetime(), expectedNodeId: workflowEditableNodeIdSchema, expectedNodeType: text(160),
+  name: workflowStepNameSchema, configuration: workflowStepConfigurationChangeSchema,
+});
+export const workflowDraftStepReceiptSchema = z.strictObject({
+  companyId: z.uuid(), workflowId: z.uuid(), requestId: z.uuid(), previousRevisionId: z.uuid(), draftRevisionId: z.uuid(),
+  version: z.number().int().positive(), changed: z.boolean(), recordedAt: z.iso.datetime(),
+  published: z.literal(false), executionStarted: z.literal(false),
+});
+export type WorkflowDraftStepReview = z.infer<typeof workflowDraftStepReviewSchema>;
+export type WorkflowDraftStepCommand = z.infer<typeof workflowDraftStepCommandSchema>;
+export type WorkflowDraftStepReceipt = z.infer<typeof workflowDraftStepReceiptSchema>;

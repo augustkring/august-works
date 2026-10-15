@@ -37,41 +37,30 @@ export function hostVersionMeetsMinimum(
   }
   return true;
 }
+export function assertRuntimeQualificationEvidenceCurrent(
+  config: SaasPlatformConfig,
+  value: { reportUri: string; qualifiedAt: string; qualificationSourceSha: string },
+  now: Date,
+) {
+  const url = new URL(value.reportUri), endpoint = new URL(config.objects.endpoint);
+  const qualifiedAt = new Date(value.qualifiedAt).getTime();
+  if (
+    url.protocol !== "https:" || url.username || url.password || url.search || url.hash ||
+    url.origin !== endpoint.origin || !url.pathname.includes("/qualification/") ||
+    value.qualificationSourceSha !== config.deployment.sourceSha || !Number.isFinite(qualifiedAt) ||
+    qualifiedAt > now.getTime() || now.getTime() - qualifiedAt > 30 * 86400000
+  ) throw unprocessable("Current protected qualification evidence for this build is required");
+}
+
 export function runtimeCatalogService(db: Db, config: SaasPlatformConfig) {
   function operator(id: string) {
     if (!config.operatorUserIds.includes(id))
       throw forbidden("Internal operator access required");
   }
-  function evidence(
-    value: {
-      reportUri: string;
-      qualifiedAt: string;
-      qualificationSourceSha: string;
-    },
-    now: Date,
-  ) {
-    const url = new URL(value.reportUri),
-      endpoint = new URL(config.objects.endpoint);
-    if (
-      url.protocol !== "https:" ||
-      url.username ||
-      url.password ||
-      url.search ||
-      url.hash ||
-      url.origin !== endpoint.origin ||
-      !url.pathname.includes("/qualification/") ||
-      value.qualificationSourceSha !== config.deployment.sourceSha ||
-      new Date(value.qualifiedAt) > now ||
-      now.getTime() - new Date(value.qualifiedAt).getTime() > 30 * 86400000
-    )
-      throw unprocessable(
-        "Current protected qualification evidence for this build is required",
-      );
-  }
   async function candidate(userId: string, raw: unknown, now = new Date()) {
     operator(userId);
     const input = runtimeVersionCandidateSchema.parse(raw);
-    evidence(input.conformance, now);
+    assertRuntimeQualificationEvidenceCurrent(config, input.conformance, now);
     return db.transaction(async (tx) => {
       await tx.execute(
         sql`select pg_advisory_xact_lock(hashtextextended(${input.imageDigest},0))`,
@@ -145,7 +134,7 @@ export function runtimeCatalogService(db: Db, config: SaasPlatformConfig) {
   ) {
     operator(userId);
     const input = runtimeCapacityQualificationSchema.parse(raw);
-    evidence(input.benchmarkEvidence, now);
+    assertRuntimeQualificationEvidenceCurrent(config, input.benchmarkEvidence, now);
     const benchmark = input.benchmarkEvidence;
     if (
       benchmark.hostPlan !== config.runtime.hostPlan ||
@@ -234,7 +223,7 @@ export function runtimeCatalogService(db: Db, config: SaasPlatformConfig) {
           version.conformance;
         const conformance =
           runtimeVersionCandidateSchema.shape.conformance.parse(payload);
-        evidence(conformance, now);
+        assertRuntimeQualificationEvidenceCurrent(config, conformance, now);
       }
       if (input.status === "approved") {
         if (

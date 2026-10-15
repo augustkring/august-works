@@ -1,4 +1,5 @@
-import { useRef, useState } from "react";
+import { lazy, Suspense, useRef, useState } from "react";
+import { useTranslation } from "react-i18next";
 import { useMutation, useQueryClient } from "@tanstack/react-query";
 import type { ProjectRepository } from "@paperclipai/shared";
 import { Folder, X } from "lucide-react";
@@ -11,9 +12,18 @@ import { Button } from "./ui/button";
 import { ProjectRepositoryInput, repositoryOptionsKey } from "./ProjectRepositoryInput";
 import { ConnectionSetupFlow } from "@/features/connections/ConnectionSetupFlow";
 
+const ScopedProjectDraft = lazy(() => import("./ExperienceProjectDraft"));
+
 export function NewProjectDialog() {
-  const { newProjectOpen, closeNewProject } = useDialog();
+  const { t } = useTranslation("experience");
+  const { newProjectOpen, closeNewProject, newProjectDefaults } = useDialog();
   const { selectedCompanyId } = useCompany();
+  if (selectedCompanyId && newProjectOpen && newProjectDefaults?.principal && newProjectDefaults.companyId)
+    return <Suspense fallback={<p role="status">{t("projectDraft.loading")}</p>}>
+      <ScopedProjectDraft key={`${newProjectDefaults.companyId}:${newProjectDefaults.principal}`}
+        companyId={newProjectDefaults.companyId} principal={newProjectDefaults.principal}
+        initialName={newProjectDefaults.name ?? ""} onClose={closeNewProject} />
+    </Suspense>;
   return selectedCompanyId && newProjectOpen
     ? <NewProjectForm key={selectedCompanyId} companyId={selectedCompanyId} onClose={closeNewProject} /> : null;
 }

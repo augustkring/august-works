@@ -177,6 +177,32 @@ describe("AgentActionButtons", () => {
     expect(container.textContent).not.toContain("Clear error");
   });
 
+  it.each(["drain", "cancel"] as const)("requires an explicit pending-work decision before %s pause", async policy => {
+    render(makeAgent());
+    await flushReact();
+    await act(() => Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Pause")!.click());
+    await flushReact();
+    expect(mockAgentsApi.pause).not.toHaveBeenCalled();
+    expect(document.body.textContent).toContain("Work in progress");
+    await act(() => document.body.querySelector<HTMLInputElement>(`input[value="${policy}"]`)!.click());
+    await flushReact();
+    await act(() => Array.from(document.body.querySelectorAll("button")).find(button => button.textContent === "Pause agent")!.click());
+    await flushReact();
+    expect(mockAgentsApi.pause).toHaveBeenCalledWith("agent-1", "company-1", policy);
+    expect(invalidateQueries).toHaveBeenCalledWith({ queryKey: ["agents", "detail", "agent-1"] });
+  });
+
+  it("closes a pending pause decision after the selected agent changes", async () => {
+    render(makeAgent());
+    await flushReact();
+    await act(() => Array.from(container.querySelectorAll("button")).find(button => button.textContent === "Pause")!.click());
+    await flushReact();
+    render(makeAgent({ id: "agent-2", name: "Beta Agent" }));
+    await flushReact();
+    expect(document.body.querySelector('[role="alertdialog"]')).toBeNull();
+    expect(mockAgentsApi.pause).not.toHaveBeenCalled();
+  });
+
   it("starts an administrator-selected run with raw provider tracing", async () => {
     render(makeAgent(), { canRunWithProviderTrace: true });
     await flushReact();

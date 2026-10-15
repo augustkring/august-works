@@ -1,4 +1,7 @@
 import { Router, type Request, type Response } from "express";
+import { filterVisibleToolConnections } from "../services/tool-connection-visibility.js";
+import { z } from "zod";
+import { activationConnectionConsentService } from "../services/saas/activation-connection-consent.js";
 import type { Db } from "@paperclipai/db";
 import { agents, companies, connectionGrants, issueThreadInteractions, toolConnectionInstalls } from "@paperclipai/db";
 import { and, eq, or } from "drizzle-orm";
@@ -54,7 +57,7 @@ import {
 } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
 import { getActorInfo, assertBoard, assertCompanyAccess, assertInstanceAdmin, getAccessibleResource, hasCompanyAccess } from "./authz.js";
-import { badRequest, forbidden, HttpError, notFound, unprocessable } from "../errors.js";
+import { badRequest, conflict, forbidden, HttpError, notFound, unprocessable } from "../errors.js";
 import { accessService, logActivity, toolAccessPolicyService, toolAccessService, vercelConnectIntegrationStatus } from "../services/index.js";
 import { ToolGatewayHttpError, type ToolGatewayService } from "../services/tool-gateway.js";
 import { RailwayError } from "../services/railway.js";
@@ -145,18 +148,7 @@ function classifyConnectionUpdate(
   return events;
 }
 
-export function filterVisibleToolConnections<T extends {
-  status?: string;
-  createdByUserId?: string | null;
-}>(
-  connections: T[],
-  actor: { userId?: string | null; canManageConnections: boolean },
-): T[] {
-  return connections.filter((connection) =>
-    connection.status !== "draft"
-    || actor.canManageConnections
-    || Boolean(actor.userId && connection.createdByUserId === actor.userId));
-}
+export { filterVisibleToolConnections } from "../services/tool-connection-visibility.js";
 
 export function connectionIntentOAuthOutcomeHtml(input: {
   interactionId: string;
@@ -859,6 +851,25 @@ function connectorEnrollmentPrincipal(req: Request): string {
     const redirectUri = oauthRedirectUri(_req);
     const clientId = new URL(OAUTH_CLIENT_ID_METADATA_DOCUMENT_PATH, new URL(redirectUri).origin).toString();
     res.type("application/json").json(oauthClientIdMetadataDocument({ clientId, redirectUri }));
+  });
+
+  router.post("/companies/:companyId/activation/connection-consents/:requestKey/connect", async (req, res) => {
+    const companyId = z.uuid().parse(req.params.companyId), requestKey = z.uuid().parse(req.params.requestKey);
+    z.strictObject({ confirmProviderSetup: z.literal(true) }).parse(req.body);
+    if (typeof req.query.expectedUserId === "string" && req.query.expectedUserId !== req.actor.userId)
+      throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
+    assertToolAppMutationAccess(req, companyId);
+    const owner = activationConnectionConsentService(db, svc);
+    const input = await owner.getApprovedSetup(req.actor, companyId, requestKey);
+    const result = await svc.connectGalleryApp(companyId, input, getActorInfo(req), owner.allocationOwner(req.actor, companyId, requestKey));
+    // Provider sign-in starts through the original setup flow only after the
+    // original allocation reply is confirmed. A lost reply is recovered by
+    // reading its receipt, never by allocating or starting OAuth again here.
+    await logActivity(db, { companyId, actorType: "user", actorId: req.actor.userId!, action: "tool_app.connected",
+      entityType: "tool_connection", entityId: result.connectionId,
+      details: { galleryKey: input.galleryKey, applicationId: input.applicationId, deferredAgentAccess: true } });
+    res.set("Cache-Control", "private, no-store");
+    res.status(201).json(result);
   });
 
   router.post("/companies/:companyId/tools/apps/connect", validate(connectToolAppSchema), async (req, res) => {

@@ -1,0 +1,167 @@
+{
+  "screenId": "ORCHESTRATION",
+  "journeyId": "orchestration",
+  "routeOrSurface": "/orchestration",
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
+  "customerOutcome": "Review recorded task ownership and current work status, with bounded Native worker inspection for current administrators.",
+  "entryConditions": [
+    "Current verified Human account and active company membership; instance administration cannot substitute for membership.",
+    "Current Original task/read authority is required for each projected plan. Native administrator admission separately controls inspection and Pause/Stop.",
+    "Progressive shell and Native orchestration rollout admit the index. The exact safety control and own request-receipt routes survive rollout withdrawal."
+  ],
+  "exitConditions": [
+    "Current recorded plan state is separate from independently verified output.",
+    "Explicit Pause/Stop is committed by the Original plan decision owner with its existing durable supervision stop queue. A receipt proves admission, not physical propagation or reversal of completed effects.",
+    "The bounded index does not claim a complete inventory or prove absence of older or hidden plans."
+  ],
+  "content": {
+    "h1": "Work coordination",
+    "supportingCopy": "A plan status alone does not verify its output.",
+    "customerTerms": [
+      "Work",
+      "Owned by",
+      "Recorded assistance",
+      "Task",
+      "Limits"
+    ],
+    "displayedState": [
+      "Current Native task title, owner and recorded assisting Agent assignments; unknown assignments remain unknown.",
+      "Current Original plan status and version, distinct from output verification.",
+      "Only current Native administrators receive worker assignments, declared joins and plan limits; members receive no topology or budget object.",
+      "Inspect is an explicit disclosure. Pause, Stop and any manual continuation retain their Original control/task owners.",
+      "At most 21 recent candidate plans are checked, with at most 20 authorized results. More-items information counts only confirmed authorized records. An empty bounded view does not prove a complete empty inventory."
+    ]
+  },
+  "inputs": [
+    {
+      "id": "action",
+      "label": "Pause or stop",
+      "dataType": "Closed choice: pause | stop",
+      "required": true,
+      "default": "No submitted action",
+      "help": "On the exact-plan safety page; completed effects remain",
+      "validation": "Select one Native control action and bind the exact plan version",
+      "autofillOrPrefill": "None; held only in memory for the current account and Source"
+    },
+    {
+      "id": "reason",
+      "label": "Why are you stopping this work?",
+      "dataType": "Text",
+      "required": true,
+      "default": "Empty",
+      "help": "Record a concrete reason for the Native control receipt",
+      "validation": "20–2000 readable characters",
+      "autofillOrPrefill": "None; held only in memory for the current account and Source"
+    },
+    {
+      "id": "acknowledgeCompletedEffects",
+      "label": "I understand completed actions remain",
+      "dataType": "Boolean acknowledgement",
+      "required": true,
+      "default": "Unchecked",
+      "help": "Stopping prevents further admitted work; it does not undo completed effects",
+      "validation": "Must be explicitly checked before a new command",
+      "autofillOrPrefill": "None; held only in memory for the current account and Source"
+    }
+  ],
+  "actions": {
+    "primary": {
+      "label": "Review the current task",
+      "operation": "Open the exact Original authorized task; no execution or mutation occurs."
+    },
+    "secondary": [
+      "Inspect current coordination after Native administrator admission",
+      "Open current Pause/Stop controls for the exact Original plan",
+      "Open Original control surface after current administrator admission",
+      "Refresh the current read"
+    ],
+    "destructiveOrIrreversible": [
+      "Explicit Pause/Stop requires current Native administrator/root-task authority, reviewed plan version, 20–2000 character reason and acknowledgement that completed effects remain."
+    ]
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Original orchestration plans, workers, attempts and complete current Task/run Source checks.",
+      "Current verified user, active company/membership, Native task/Agent readers and Original administrator admission."
+    ],
+    "canonicalWriteOperation": "The separate safety page calls the Original plan CAS decision inside its existing transaction; the original supervision outbox and body-free idempotent Activity receipt commit atomically. No second planner, dispatch or queue is created.",
+    "authorityEffect": "Read projection cannot grant permissions or imply a passing result.",
+    "asyncWork": "Existing request admission bounds four in-flight requests and a 1500ms deadline; underlying unfinished work keeps its admission slot until settled. Privacy locks and PostgreSQL statement/lock timeouts bound composition.",
+    "receipt": "Current observed timestamp and Native IDs/version/status only; no Human/provider or execution qualification is manufactured."
+  },
+  "states": {
+    "loading": "Announce a current read while identity or Source is being checked; private prior rows are withheld.",
+    "empty": "No authorized result in this bounded scan; never a complete empty inventory.",
+    "partial": "Missing actor assignments remain unavailable; oversized, malformed or unstable Native metadata makes the read unavailable rather than a truncated complete tree.",
+    "stale": "Withhold private rows during current-account, company or Source rechecks. Display the timestamp of the last confirmed read and provide explicit refresh.",
+    "validation_error": "Index has no editable plan inputs. Safety control validates the exact current version/action, valid reason and effect acknowledgement before retaining a locator or making a POST; invalid/foreign scopes are refused.",
+    "system_error": "Announce current work status unavailable, omit raw errors and offer a current private read retry.",
+    "permission_denied": "Withhold private rows and inspection; no grant is inferred from navigation or a profile label.",
+    "recovering": "Index refreshes current read. Safety control retains a content-free original request locator before one POST; lost acknowledgement/reload permit Original receipt GET only. Missing receipt stays unconfirmed; no mutation or execution is replayed.",
+    "success": "Display confirmed Native ownership, recorded plan state and current administrator metadata. This is neither an execution-start nor an independently verified-output receipt."
+  },
+  "navigation": {
+    "back": "Use the canonical shell navigation or exact Original task link.",
+    "cancelOrSaveExit": "This read-only page saves no input or plan.",
+    "deepLink": "/orchestration; Advanced entry requires current server-confirmed administrator admission. /orchestration/:planId/control remains mounted after rollout withdrawal.",
+    "resume": "Fetch current Source after a return, account change or invalidation. No private status is placed in browser persistence. Safety recovery retains only a content-free per-tab request locator and repeats current Native control admission before showing a receipt."
+  },
+  "accessibility": {
+    "initialFocus": "Focus the current page heading after first confirmed read only when no utility/navigation/input gesture is already active.",
+    "focusAfterError": "The read failure uses an announced alert and labelled retry. Background updates do not steal utility focus.",
+    "focusAfterSuccess": "The first confirmed read may focus the heading through the existing utility-aware focus owner; inspection leaves focus on its disclosure button. There is no mutation-success receipt.",
+    "keyboardModel": "Ordinary labelled links, refresh and disclosure buttons. Enter/Space opens inspection; no topology canvas is required.",
+    "statusAnnouncement": "Current loading/read failure uses status or alert. Recorded plan completion is explicitly separate from verified output.",
+    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
+    "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
+    "reducedMotion": "No essential animated transition or moving progress indicator.",
+    "screenReaderNotes": "Task ownership/status and administrator worker assignments, states, declared dependencies and limits are ordinary text/list content. Disclosure controls reference a stable hidden/visible section."
+  },
+  "responsive": {
+    "wide": "Readable constrained content width with natural wrapping.",
+    "narrow": "Reflow task/Agent names, inspection and limits with readable text and no hidden critical controls.",
+    "mobile": "Links and buttons retain minimum touch targets; text/list inspection wraps within the viewport."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Current authorized task title, Agent display names and recorded plan state.",
+      "Administrator-only allow-listed worker and budget metadata."
+    ],
+    "dataCollected": [
+      "A control rationale is submitted only to the Original decision owner; browser persistence retains a per-tab account/company/plan/request locator without rationale or action."
+    ],
+    "sensitiveFields": [
+      "Completion criteria, invariants, instructions, prompts, results, worker keys, manifests, credentials, raw errors and arbitrary properties are excluded."
+    ],
+    "loggingConstraints": "The entire experience/orchestration namespace, including malformed scopes and refused methods, omits query identity, object/customer prose and raw errors from generic HTTP logs."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "Intent, prompts, customer prose, raw errors, credentials, URLs, DOM and screenshots"
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Verify actual Native creation/read without new runs, audits or model calls; current member/admin separation; actual recorded assignments and missing owners; flag/current-account/membership withdrawal; Source-erased bound attempt suppression without inventing physical plan deletion.",
+      "Verify strict no-store client scope, foreign/late-response rejection, English/Danish disclosure, current-source DOM withdrawal and explicit bounded empty state.",
+      "Actual PostgreSQL CAS, replay, changed-command refusal, current-role rollback and flag-withdrawn control reads are covered by focused software tests. Full effective delegation/action/tool/memory inspection, proportional takeover, native dynamic handoff selection and physical kill/revocation propagation acceptance remain pending."
+    ],
+    "accessibility": [
+      "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
+    ],
+    "securityPrivacy": [
+      "Current verified account/company, active membership and exact Native plan/root-task administrator control authority are required. Foreign account/plan/request responses are refused.",
+      "Control replay reads its immutable body-free receipt and cannot repeat Stop. Lost acknowledgement and reload allow Original GET recovery only; absence cannot prove no write.",
+      "A late authority withdrawal rolls back the plan, Original stop outbox and Activity journals. No model dispatch, schedule or permission grant is created by the experience."
+    ],
+    "usability": [
+      "Use representative exploratory and pre-registered confirmatory journey evidence with explicit PASS/FAIL/INCONCLUSIVE; source checks are insufficient."
+    ]
+  }
+}

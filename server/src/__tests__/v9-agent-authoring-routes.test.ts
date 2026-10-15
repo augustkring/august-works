@@ -1,0 +1,240 @@
+import express from "express";
+import request from "supertest";
+import { beforeEach, describe, expect, it, vi } from "vitest";
+import type { Db } from "@paperclipai/db";
+import { agentAuthoringContentSchema } from "@paperclipai/shared";
+import { agentAuthoringRoutes } from "../routes/agent-authoring.js";
+import { errorHandler } from "../middleware/error-handler.js";
+
+const service = vi.hoisted(() => ({
+  admission: vi.fn(),
+  hireCapability: vi.fn(),
+  hireCatalog: vi.fn(),
+  list: vi.fn(),
+  get: vi.fn(),
+  options: vi.fn(),
+  create: vi.fn(),
+  save: vi.fn(),
+  discard: vi.fn(),
+  review: vi.fn(),
+  preparationReview: vi.fn(),
+  prepare: vi.fn(),
+  runtime: vi.fn(),
+}));
+vi.mock("../services/agents/authoring-drafts.js", () => ({
+  agentAuthoringService: () => service,
+}));
+const tests = vi.hoisted(() => ({ review: vi.fn(), start: vi.fn(), get: vi.fn(), list: vi.fn(), packet: vi.fn(), verify: vi.fn() }));
+vi.mock("../services/agents/authoring-tests.js", () => ({ agentAuthoringTestService: () => tests }));
+const publications = vi.hoisted(() => ({ review: vi.fn(), publish: vi.fn(), receipt: vi.fn() }));
+vi.mock("../services/agents/authoring-publication.js", () => ({ agentAuthoringPublicationService: () => publications }));
+const companyId = "10000000-0000-4000-8000-000000000001",
+  id = "10000000-0000-4000-8000-000000000002",
+  requestId = "10000000-0000-4000-8000-000000000003";
+function app() {
+  const app = express();
+  app.use(express.json());
+  app.use((req, _res, next) => {
+    req.actor = {
+      type: "board",
+      source: "session",
+      userId: "author",
+      companyIds: [companyId],
+      isInstanceAdmin: false,
+    };
+    next();
+  });
+  app.use("/api", agentAuthoringRoutes({} as Db));
+  app.use(errorHandler);
+  return app;
+}
+beforeEach(() => {
+  vi.clearAllMocks();
+});
+describe("native authoring HTTP boundary", () => {
+  it("requires exact principal and explicit bounded-test consent without accepting model or credential overrides", async () => {
+    const path = `/api/companies/${companyId}/agent-configuration-drafts/${id}/tests`;
+    const command = { requestId, expectedVersion: 2, scenarioIndex: 0, expectedReviewHash: "a".repeat(64), confirmRepresentativeTest: true, confirmCompanyVisibleResult: true };
+    await request(app()).post(`${path}?expectedUserId=other`).send(command).expect(409);
+    await request(app()).post(`${path}?expectedUserId=author`).send({ ...command, confirmCompanyVisibleResult: false }).expect(400);
+    await request(app()).post(`${path}?expectedUserId=author`).send({ ...command, model: "injected-model" }).expect(400);
+    expect(tests.start).not.toHaveBeenCalled();
+    tests.start.mockResolvedValue({ execution: "succeeded", testQualified: false });
+    await request(app()).post(`${path}?expectedUserId=author`).send(command).expect(200).expect("Cache-Control", "private, no-store");
+    expect(tests.start).toHaveBeenCalledWith(expect.objectContaining({ userId: "author" }), companyId, id, command);
+  });
+  it("reads the original receipt after a missing response without dispatching a new test", async () => {
+    tests.get.mockResolvedValue(null);
+    await request(app()).get(`/api/companies/${companyId}/agent-configuration-drafts/${id}/tests/${requestId}?expectedUserId=author`)
+      .expect(200).expect("Cache-Control", "private, no-store");
+    expect(tests.get).toHaveBeenCalledWith(expect.objectContaining({ userId: "author" }), companyId, id, requestId);
+    expect(tests.start).not.toHaveBeenCalled();
+  });
+  it("binds current runtime metadata to the private principal and never requests execution", async () => {
+    const path = `/api/companies/${companyId}/agent-configuration-drafts/${id}/runtime`;
+    service.runtime.mockResolvedValue({ draftId: id, status: "needs_setup", runtimeQualified: false, safeTestQualified: false });
+    await request(app()).get(`${path}?expectedUserId=other`).expect(409);
+    expect(service.runtime).not.toHaveBeenCalled();
+    await request(app()).get(`${path}?expectedUserId=author`).expect(200).expect("Cache-Control", "private, no-store");
+    expect(service.runtime).toHaveBeenCalledWith(expect.objectContaining({ userId: "author" }), companyId, id);
+    expect(service.prepare).not.toHaveBeenCalled(); expect(service.save).not.toHaveBeenCalled();
+  });
+  it("requires explicit inactive preparation and current principal without accepting runtime or publication authority", async () => {
+    const path = `/api/companies/${companyId}/agent-configuration-drafts/${id}`;
+    const command = { requestId, expectedVersion: 2, expectedReviewHash: "a".repeat(64), confirmInactiveAgentPreparation: true };
+    service.preparationReview.mockResolvedValue({ draftId: id });
+    await request(app()).get(`${path}/preparation-review?expectedUserId=other`).expect(409);
+    expect(service.preparationReview).not.toHaveBeenCalled();
+    await request(app()).get(`${path}/preparation-review?expectedUserId=author`).expect(200).expect("Cache-Control", "private, no-store");
+    for (const body of [{ ...command, confirmInactiveAgentPreparation: false }, { ...command, runtimeQualified: true }, { ...command, publish: true }]) {
+      await request(app()).post(`${path}/prepare?expectedUserId=author`).send(body).expect(400);
+    }
+    await request(app()).post(`${path}/prepare?expectedUserId=other`).send(command).expect(409);
+    expect(service.prepare).not.toHaveBeenCalled();
+    service.prepare.mockResolvedValue({ id });
+    await request(app()).post(`${path}/prepare?expectedUserId=author`).send(command).expect(200).expect("Cache-Control", "private, no-store");
+    expect(service.prepare).toHaveBeenCalledWith(expect.objectContaining({ userId: "author" }), companyId, id, command);
+    expect(service.create).not.toHaveBeenCalled();
+    expect(service.save).not.toHaveBeenCalled();
+  });
+  it("checks current draft admission without creating a proposal or reading authoring options", async () => {
+    service.admission.mockResolvedValue({
+      companyId,
+      agentId: id,
+      canCreateDraft: true,
+    });
+    const url = `/api/companies/${companyId}/agent-configuration-drafts/admission?agentId=${id}`;
+    await request(app()).get(`${url}&expectedUserId=other`).expect(409);
+    expect(service.admission).not.toHaveBeenCalled();
+    await request(app())
+      .get(`${url}&expectedUserId=author`)
+      .expect(200)
+      .expect("Cache-Control", "private, no-store");
+    expect(service.admission).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "author" }),
+      companyId,
+      id,
+    );
+    expect(service.create).not.toHaveBeenCalled();
+    expect(service.options).not.toHaveBeenCalled();
+  });
+  it("binds saved Hire capability reads to the current private principal and admits only an explicit version reference on create", async () => {
+    const path = `/api/companies/${companyId}/agent-configuration-drafts`;
+    service.hireCapability.mockResolvedValue({ available: false });
+    await request(app())
+      .get(`${path}/${id}/hire-capability?expectedUserId=other`)
+      .expect(409);
+    expect(service.hireCapability).not.toHaveBeenCalled();
+    const response = await request(app())
+      .get(`${path}/${id}/hire-capability?expectedUserId=author`)
+      .expect(200);
+    expect(response.headers["cache-control"]).toBe("private, no-store");
+    expect(service.hireCapability).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "author" }),
+      companyId,
+      id,
+    );
+    service.create.mockResolvedValue({ id });
+    await request(app())
+      .post(`${path}?expectedUserId=author`)
+      .send({ requestId, agentId: null, packageVersionId: id })
+      .expect(201);
+    expect(service.create).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "author" }),
+      companyId,
+      { requestId, agentId: null, packageVersionId: id },
+    );
+    service.create.mockClear();
+    await request(app())
+      .post(`${path}?expectedUserId=author`)
+      .send({
+        requestId,
+        packageVersionId: id,
+        packageContentHash: "a".repeat(64),
+        approved: true,
+      })
+      .expect(400);
+    expect(service.create).not.toHaveBeenCalled();
+  });
+  it("binds the customer capability catalog to the current company and account with private no-store responses", async () => {
+    service.hireCatalog.mockResolvedValue([]);
+    const path = `/api/companies/${companyId}/agent-configuration-drafts/hire-catalog`;
+    await request(app()).get(`${path}?expectedUserId=other`).expect(409);
+    expect(service.hireCatalog).not.toHaveBeenCalled();
+    const response = await request(app())
+      .get(`${path}?expectedUserId=author`)
+      .expect(200);
+    expect(response.headers["cache-control"]).toBe("private, no-store");
+    expect(service.hireCatalog).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "author" }),
+      companyId,
+    );
+  });
+  it("prevents a stale principal or foreign company from reaching the draft owner", async () => {
+    await request(app())
+      .get(
+        `/api/companies/${companyId}/agent-configuration-drafts/${id}?expectedUserId=other`,
+      )
+      .expect(409);
+    await request(app())
+      .get(
+        `/api/companies/${id}/agent-configuration-drafts/${id}?expectedUserId=author`,
+      )
+      .expect(403);
+    expect(service.get).not.toHaveBeenCalled();
+  });
+  it("uses private no-store receipts and forwards current native identity and cursor", async () => {
+    service.list.mockResolvedValue({ items: [], nextCursor: null });
+    const response = await request(app())
+      .get(
+        `/api/companies/${companyId}/agent-configuration-drafts?expectedUserId=author&before=${id}`,
+      )
+      .expect(200);
+    expect(response.headers["cache-control"]).toBe("private, no-store");
+    expect(service.list).toHaveBeenCalledWith(
+      expect.objectContaining({ userId: "author" }),
+      companyId,
+      id,
+    );
+  });
+  it("rejects untyped creation or save authority and publication fields before persistence", async () => {
+    await request(app())
+      .post(`/api/companies/${companyId}/agent-configuration-drafts`)
+      .send({ requestId, agentId: null, permissions: { admin: true } })
+      .expect(400);
+    await request(app())
+      .post(`/api/companies/${companyId}/agent-configuration-drafts/${id}/save`)
+      .send({
+        requestId,
+        expectedVersion: 1,
+        step: "publish",
+        content: agentAuthoringContentSchema.parse({}),
+        publish: true,
+      })
+      .expect(400);
+    expect(service.create).not.toHaveBeenCalled();
+    expect(service.save).not.toHaveBeenCalled();
+  });
+  it("rejects legacy approve-only publication and omitted consent before calling the version owner", async () => {
+    const path = `/api/companies/${companyId}/agent-configuration-drafts/${id}/publish`;
+    const command = { requestId, expectedVersion: 2, expectedReviewHash: "a".repeat(64),
+      activate: true, confirmPublication: true, confirmActivation: true };
+    await request(app()).post(`${path}?expectedUserId=author`).send({ approve: true }).expect(400);
+    for (const key of ["confirmPublication", "confirmActivation"])
+      await request(app()).post(`${path}?expectedUserId=author`).send({ ...command, [key]: false }).expect(400);
+    await request(app()).post(`${path}?expectedUserId=author`).send({ ...command, model: "injected-model" }).expect(400);
+    await request(app()).post(`${path}?expectedUserId=other`).send(command).expect(409);
+    expect(publications.publish).not.toHaveBeenCalled();
+    expect(service.create).not.toHaveBeenCalled();
+    expect(service.save).not.toHaveBeenCalled();
+  });
+  it("sends a scoped explicit publication to the native version owner without using draft save as activation", async () => {
+    const command = { requestId, expectedVersion: 2, expectedReviewHash: "a".repeat(64),
+      activate: true, confirmPublication: true, confirmActivation: true };
+    publications.publish.mockResolvedValue({ requestId, revisionId: requestId });
+    await request(app()).post(`/api/companies/${companyId}/agent-configuration-drafts/${id}/publish?expectedUserId=author`)
+      .send(command).expect(200).expect("Cache-Control", "private, no-store");
+    expect(publications.publish).toHaveBeenCalledWith(expect.objectContaining({ userId: "author" }), companyId, id, command);
+    expect(service.create).not.toHaveBeenCalled(); expect(service.save).not.toHaveBeenCalled(); expect(tests.start).not.toHaveBeenCalled();
+  });
+});

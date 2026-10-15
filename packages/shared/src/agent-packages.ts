@@ -143,6 +143,7 @@ export type PackageRelease = z.infer<typeof packageReleaseSchema>;
 export type PackageComponent = z.infer<typeof packageComponentSchema>;
 export const packageInstallSchema = z
   .object({
+    installationRequestId: z.uuid().optional(),
     versionId: z.string().uuid(),
     agentId: z.string().uuid(),
     components: z
@@ -177,7 +178,8 @@ export const packageUpdateSchema = packageInstallSchema
     approveMaterialChange: z.boolean(),
     reason: z.string().trim().min(1).max(2000),
   })
-  .strict();
+  .strict()
+  .refine((value) => value.installationRequestId === undefined, "Installation request IDs are for initial installation only");
 export interface PackageCatalogView {
   id: string;
   key: string;
@@ -192,6 +194,25 @@ export interface PackageCatalogView {
   components: PackageComponent[];
   releaseEvidence: PackageRelease["releaseEvidence"];
 }
+export const packageInstallationStatusSchema = z.enum([
+  "configuring", "readiness_blocked", "ready", "active", "needs_update", "degraded", "suspended", "uninstalled",
+]);
+/** A recorded request identifies its current Native installation. This is not
+ * an immutable historical status, activation or qualification receipt. */
+export const packageInstallationRequestReceiptSchema = z.strictObject({
+  companyId: z.uuid(), requestId: z.uuid(), installationId: z.uuid(),
+  installationVersion: z.number().int().positive(), installationStatus: packageInstallationStatusSchema,
+  observedAt: z.iso.datetime(),
+});
+export const packageInstallationRequestLocatorSchema = z.strictObject({ companyId: z.uuid(), requestId: z.uuid() });
+export const packageInstallationRequestQuerySchema = z.strictObject({ expectedUserId: z.string().min(1).max(300) });
+export type PackageInstallationRequestReceipt = z.infer<typeof packageInstallationRequestReceiptSchema>;
+export const pendingPackageInstallationRequestSchema = z.strictObject({
+  companyId: z.uuid(), principal: z.string().min(1).max(300), requestId: z.uuid(),
+});
+export const pendingPackageInstallationRequestInventorySchema = z.array(pendingPackageInstallationRequestSchema).max(32)
+  .refine(values => new Set(values.map(value => JSON.stringify([value.companyId, value.principal]))).size === values.length,
+    "Only one unresolved installation per current company/requester");
 export interface PackageInstallationView {
   id: string;
   companyId: string;
@@ -200,17 +221,10 @@ export interface PackageInstallationView {
   agentId: string;
   aiUseCaseId: string | null;
   version: number;
-  status:
-    | "configuring"
-    | "readiness_blocked"
-    | "ready"
-    | "active"
-    | "needs_update"
-    | "degraded"
-    | "suspended"
-    | "uninstalled";
+  status: z.infer<typeof packageInstallationStatusSchema>;
   updatePolicy: "manual" | "auto_low_risk";
   installedByUserId: string;
+  installationRequestId?: string | null;
   components: Array<{
     key: string;
     type: string;

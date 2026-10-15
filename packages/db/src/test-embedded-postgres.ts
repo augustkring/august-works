@@ -273,6 +273,7 @@ export async function getEmbeddedPostgresTestSupport(): Promise<EmbeddedPostgres
 
 export async function startEmbeddedPostgresTestDatabase(
   tempDirPrefix: string,
+  options: { beforeMigrations?: (connectionString: string) => Promise<void> } = {},
 ): Promise<EmbeddedPostgresTestDatabase> {
   // The bounded retry hardens the cluster start against the port race. It throws
   // with the real Postgres output if every attempt fails.
@@ -282,6 +283,9 @@ export async function startEmbeddedPostgresTestDatabase(
     const adminConnectionString = `postgres://paperclip:paperclip@127.0.0.1:${port}/postgres`;
     await ensurePostgresDatabase(adminConnectionString, "paperclip");
     const connectionString = `postgres://paperclip:paperclip@127.0.0.1:${port}/paperclip`;
+    // Historical upgrade fixtures may install and seed an earlier schema.
+    // Every returned database still completes the current migration owner.
+    await options.beforeMigrations?.(connectionString);
     await applyPendingMigrations(connectionString);
 
     return {
@@ -304,6 +308,7 @@ export async function startEmbeddedPostgresTestDatabase(
           fallbackMessage: "embedded Postgres startup failed",
         }).message
       }`,
+      { cause: error },
     );
   }
 }

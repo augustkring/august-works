@@ -1,5 +1,5 @@
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
-import { isNull, and, desc, eq, inArray } from "drizzle-orm";
+import { isNull, and, desc, eq, ne, inArray } from "drizzle-orm";
 import { automationArtifacts, workflowOptimizerEvaluations, workflowOptimizerObservations, workflowOptimizerSuggestions,
   workflowRunReviews, workflowRuns, workflowStepRuns, workflows, type Db } from "@paperclipai/db";
 import type { OptimizerDriftPolicy } from "@paperclipai/shared";
@@ -30,7 +30,7 @@ export async function evaluateLiveOptimizerDrift(db: Db, companyId: string, eval
         eq(workflowStepRuns.nodeId, workflowOptimizerObservations.nodeId), eq(workflowStepRuns.status, "succeeded")))
       .leftJoin(workflowRunReviews, and(eq(workflowRunReviews.companyId, companyId), eq(workflowRunReviews.workflowRunId, workflowRuns.id)))
       .where(and(eq(workflowOptimizerObservations.companyId, companyId), eq(workflowOptimizerObservations.evaluationId, evaluationId),
-        inArray(workflowOptimizerObservations.mode, ["canary", "active"]), eq(workflowRuns.status, "succeeded")))
+        inArray(workflowOptimizerObservations.mode, ["canary", "active"]), ne(workflowRuns.source, "test"), eq(workflowRuns.status, "succeeded")))
       .orderBy(desc(workflowOptimizerObservations.observedAt)).limit(100);
     const [workflow] = await tx.select({ revisionId: workflows.publishedRevisionId }).from(workflows)
       .where(and(eq(workflows.companyId, companyId), eq(workflows.id, binding.workflowId)));

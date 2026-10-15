@@ -1,3 +1,4 @@
+import { settleTheme } from "./theme.shared";
 import { expect, test } from "@playwright/test";
 import { createRequire } from "node:module";
 import { ISSUE_STATUSES } from "../../packages/shared/src/index.ts";
@@ -46,7 +47,7 @@ test("a native operator pins DoWhy to a human model without reviewing or running
     await page.addScriptTag({ path: axePath });
     for (const theme of ["light", "dark"] as const) for (const width of [390, 1200]) {
       await page.setViewportSize({ width, height: 844 }); await page.emulateMedia({ colorScheme: theme }); await expect.poll(() => page.evaluate(() => document.documentElement.style.colorScheme)).toBe(theme);
-      await page.evaluate(async () => { await new Promise<void>(resolve => requestAnimationFrame(() => requestAnimationFrame(() => resolve()))); await Promise.all(document.getAnimations().filter(animation => Number.isFinite(Number(animation.effect?.getComputedTiming().endTime))).map(animation => animation.finished.catch(() => undefined))); });
+      await settleTheme(page);
       const violations = await page.evaluate(async () => { const w = window as unknown as { axe: { run: (context: string, options: unknown) => Promise<{ violations: unknown[] }> } }; return (await w.axe.run('form[aria-label="Human causal model proposal"]', { runOnly: { type: "tag", values: ["wcag2a", "wcag2aa", "wcag21aa", "wcag22aa"] } })).violations; }); expect(violations).toEqual([]); expect(await page.evaluate(() => document.documentElement.scrollWidth <= window.innerWidth + 1)).toBe(true);
       const cancel = await form.getByRole("button", { name: "Cancel model proposal", exact: true }).boundingBox(), save = await form.getByRole("button", { name: "Save human causal model", exact: true }).boundingBox(); expect(cancel).not.toBeNull(); expect(save).not.toBeNull(); expect(Math.abs(cancel!.y - save!.y)).toBeLessThanOrEqual(1); expect(cancel!.x).toBeLessThan(save!.x); await page.screenshot({ path: info.outputPath(`native-dowhy-proposal-${theme}-${width}.png`), fullPage: true });
     }

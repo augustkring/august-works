@@ -48,6 +48,23 @@ export function registerNativeDraftGateway(
   else installed.delete(db);
 }
 
+/** Internal controller access only; requests cannot install a transport. */
+export function installedNativeDraftGateway(db: Db) {
+  const gateway = installed.get(db);
+  if (!gateway) throw conflict("The installed native draft controller is required");
+  return gateway;
+}
+
+/** Read-only original controller qualification before a canonical Task exists.
+ * The private gateway still owns current provider, credential and tariff checks. */
+export async function qualifyNativeDraftPresence(
+  rootDb: Db, tx: Db, companyId: string, agentId: string, responsibleUserId: string,
+) {
+  const gateway = installed.get(rootDb);
+  if (!gateway) throw conflict("The installed native draft controller is required");
+  return gateway.qualifyDraft(tx, { companyId, agentId, responsibleUserId });
+}
+
 export async function qualifyNativeDraftWorker(
   rootDb: Db,
   tx: Db,
@@ -184,6 +201,7 @@ export async function qualifyNativeDraftPlan(
     throw conflict(
       "The remaining model/tool budget cannot produce each declared draft",
     );
+  return { maximumMinor: maximum };
 }
 
 /** Exact persisted Native heartbeat selection. Unconfigured controllers and

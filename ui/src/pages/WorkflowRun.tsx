@@ -329,7 +329,7 @@ export function WorkflowRun() {
             </div>
           </div>
           <div className="flex items-center gap-2">
-            {run.status === "failed" || run.status === "cancelled" ? (
+            {run.source !== "test" && (run.status === "failed" || run.status === "cancelled") ? (
               <AlertDialog>
                 <AlertDialogTrigger asChild>
                   <Button
@@ -525,7 +525,7 @@ export function WorkflowRun() {
           </div>
         ) : null}
 
-        {TERMINAL_RUN_STATUSES.has(run.status) && <WorkflowRunReview companyId={selectedCompanyId!} runId={runId!} />}
+        {run.source !== "test" && TERMINAL_RUN_STATUSES.has(run.status) && <WorkflowRunReview companyId={selectedCompanyId!} runId={runId!} />}
 
         {run.status === "cancelled" ? (
           <div className="mt-5 border-l-2 border-border pl-4 text-sm text-muted-foreground">

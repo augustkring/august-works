@@ -1,3 +1,7 @@
+import type { NativeNotificationChannelGateway } from "./notifications/channel-delivery.js";
+import { instanceSettings } from "@paperclipai/db";
+import { v9FeatureEnabled } from "@paperclipai/shared";
+import { safeCardForPublication } from "./chat-card-rendering.js";
 import { withSlackBoardLease } from "./slack-board-lease.js";
 import { mirrorSlackBoardComment, slackBoardReplyBindings } from "./slack-board-messages.js";
 import { authorizeSlackBoardPublication } from "./slack-board-authority.js";
@@ -328,6 +332,7 @@ import {
   enqueueTerminalIssueInteractionChatPublications,
   nativeChatQuestion,
   nativeTelegramConfirmation,
+  nativeChannelConfirmation,
   TELEGRAM_CALLBACK_DATA_LIMIT_BYTES,
   telegramChatSdkCallbackData,
 } from "./chat-interaction-publications.js";
@@ -388,7 +393,6 @@ import type {
   SlashCommandEvent,
   Thread,
 } from "chat";
-import { Actions, Button, Card, CardText, LinkButton } from "chat";
 
 // Only these closed fields may reach Activity or a delivery-batch response.
 // The resolution predicate yields one boolean, never the private envelope.
@@ -1107,7 +1111,12 @@ type ProviderEffectPayload = {
   effect: "thread_message" | "ephemeral_message" | "telegram_callback_notice";
   telegramCallback?: TelegramCallbackReceipt;
   telegramAuthorizationSha256?: string;
-  authorizationMode?: "principal" | "safe_notice";
+  authorizationMode?: "principal" | "safe_notice" | "notification";
+  notificationPreferenceVersion?: number;
+  notificationTargetHash?: string;
+  notificationGroupKey?: string | null;
+  notificationNotBefore?: string;
+  notificationExpiresAt?: string;
   threadId: string;
   userId?: string;
   text: string;
@@ -1396,10 +1405,22 @@ function providerEffectPayload(
   if (
     payload.authorizationMode !== undefined &&
     payload.authorizationMode !== "principal" &&
-    payload.authorizationMode !== "safe_notice"
+    payload.authorizationMode !== "safe_notice" &&
+    payload.authorizationMode !== "notification"
   ) {
     return null;
   }
+  if (payload.authorizationMode === "notification" && (
+    payload.effect !== "thread_message" || payload.settleDelivery !== false ||
+    !Number.isSafeInteger(payload.notificationPreferenceVersion) || Number(payload.notificationPreferenceVersion) < 1 ||
+    typeof payload.notificationTargetHash !== "string" || !/^[a-f0-9]{64}$/.test(payload.notificationTargetHash) ||
+    !(payload.notificationGroupKey === null || typeof payload.notificationGroupKey === "string" && payload.notificationGroupKey.length <= 200) ||
+    typeof payload.notificationNotBefore !== "string" || !Number.isFinite(Date.parse(payload.notificationNotBefore)) ||
+    typeof payload.notificationExpiresAt !== "string" || !Number.isFinite(Date.parse(payload.notificationExpiresAt)) ||
+    payload.completeConversationId !== undefined || payload.userId !== undefined || payload.fallbackText !== undefined || payload.resourceId !== undefined
+  )) return null;
+  if (payload.authorizationMode !== "notification" && ["notificationPreferenceVersion", "notificationTargetHash",
+    "notificationGroupKey", "notificationNotBefore", "notificationExpiresAt"].some(key => payload[key] !== undefined)) return null;
   if (payload.effect === "telegram_callback_notice") {
     const receipt = parseTelegramCallbackReceipt(payload.telegramCallback);
     if (
@@ -1424,6 +1445,7 @@ function providerEffectPayload(
 }
 
 export interface ChatChannelServiceOptions {
+  notificationDelivery?: NativeNotificationChannelGateway;
   /**
    * Provider webhooks await only the durable ingress write, then finish task
    * processing outside the provider response budget. Tests may leave this off
@@ -2007,34 +2029,6 @@ async function editOrPostProviderPublication<T>(
   }
 }
 
-function safeCardForPublication(
-  payload: SafeChatPublicationPayload,
-  provider: ChatProvider,
-) {
-  if (!payload.card) return null;
-  const children = [];
-  if (payload.card.body) children.push(CardText(payload.card.body));
-  const actions = (payload.card.actions ?? []).map((action) =>
-    action.type === "callback"
-      ? Button({
-          id: action.actionId,
-          label: action.label,
-          style: action.style ?? "default",
-          // Telegram encodes both id and value into callback_data, whose hard
-          // limit is 64 bytes. Its opaque action id resolves through the
-          // durable token ledger, so repeating the interaction UUID is both
-          // unnecessary and too large. Other adapters retain the value as a
-          // defense-in-depth binding supported by their larger envelopes.
-          value: provider === "telegram" ? undefined : payload.interactionId,
-          actionType: isChatQuestionFormOpenActionId(action.actionId)
-            ? "modal"
-            : undefined,
-        })
-      : LinkButton({ label: action.label, url: action.url }),
-  );
-  if (actions.length) children.push(Actions(actions));
-  return Card({ title: payload.card.title, children });
-}
 
 function absoluteBaseUrl(value: string | null | undefined): string | null {
   if (!value) return null;
@@ -4021,7 +4015,8 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
           eq(chatActions.kind, "receipt_reaction"),
           ...(onlyActionId ? [eq(chatActions.id, onlyActionId)] : []),
           or(
-            eq(chatActions.status, "received"),
+            and(eq(chatActions.status, "received"),
+              sql`(${chatActions.result}->>'retryAt' is null or (${chatActions.result}->>'retryAt')::timestamptz <= ${now.toISOString()}::timestamptz)`),
             and(
               eq(chatActions.status, "processing"),
               lte(chatActions.updatedAt, staleBefore),
@@ -4578,6 +4573,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
     input: {
       endpoint: EndpointRow;
       deliveryId?: string | null;
+      notificationId?: string | null;
       conversationId?: string | null;
       principalId?: string | null;
       providerActionId: string;
@@ -4594,6 +4590,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
         companyId: input.endpoint.companyId,
         endpointId: input.endpoint.id,
         deliveryId: input.deliveryId ?? null,
+        notificationId: input.notificationId ?? null,
         conversationId: input.conversationId ?? null,
         principalId: input.principalId ?? null,
         kind: "provider_effect",
@@ -4698,7 +4695,9 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
     disposition: ReturnType<typeof providerEffectDisposition>;
     attempt: number;
   }): Promise<boolean> {
-    const failure = redactSensitiveText(input.disposition.reason).slice(
+    const failure = input.payload.authorizationMode === "notification"
+      ? "Notification channel delivery could not be confirmed"
+      : redactSensitiveText(input.disposition.reason).slice(
       0,
       MAX_ERROR_TEXT,
     );
@@ -5233,14 +5232,26 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
                 },
                 ["verifying", "active"],
               );
-              const authorized = currentEndpoint
-                ? await lockCurrentProviderEffectAuthorization(
-                    tx,
-                    currentAction,
-                    currentEndpoint,
-                    payload,
-                  )
-                : false;
+              let authorized = false;
+              if (currentEndpoint && payload.authorizationMode === "notification") {
+                const source = options.notificationDelivery;
+                const first = source && currentAction.notificationId && currentAction.principalId
+                  ? await source.admit(tx as unknown as Db, currentAction, new Date()) : { kind: "deny" as const };
+                if (source && first.kind !== "deny" && currentAction.principalId && currentEndpoint.status === "active" && currentEndpoint.allowDirectMessages) {
+                  const principal = await lockCurrentPrincipalAuthorization(tx, currentEndpoint, currentAction.principalId);
+                  if (principal.allowed && principal.userId === first.userId) {
+                    const final = await source.admit(tx as unknown as Db, currentAction, new Date());
+                    if (final.kind === "defer" && final.userId === principal.userId) {
+                      await tx.update(chatActions).set({ result: { code: "notification_policy_deferred", retryAt: final.notBefore.toISOString() }, updatedAt: new Date() })
+                        .where(and(eq(chatActions.id, currentAction.id), eq(chatActions.status, currentAction.status)));
+                      return null;
+                    }
+                    authorized = final.kind === "admit" && final.userId === principal.userId;
+                  }
+                }
+              } else if (currentEndpoint) {
+                authorized = await lockCurrentProviderEffectAuthorization(tx, currentAction, currentEndpoint, payload);
+              }
               const [transportClaim] = await tx
                 .update(chatActions)
                 .set({
@@ -5477,7 +5488,42 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
     });
   }
 
+  async function stagePendingAccountNotifications(limit: number) {
+    const source = options.notificationDelivery;
+    if (!source) return;
+    for (const id of await source.pending(limit)) {
+      try {
+        await db.transaction(async tx => {
+          const now = new Date(), plan = await source.stage(tx as unknown as Db, id, now);
+          if (!plan) return;
+          const record = await endpointRecord(plan.endpointId);
+          if (!record || record.endpoint.companyId !== plan.companyId || record.endpoint.status !== "active" ||
+            !["slack", "microsoft-teams"].includes(record.endpoint.provider)) return;
+          const action = await stageProviderEffect(tx, {
+            endpoint: record.endpoint, notificationId: plan.notificationId, principalId: plan.principalId,
+            providerActionId: plan.providerActionId, runtimeContext: runtimeContextForRecord(record),
+            payload: { version: 1, effect: "thread_message", authorizationMode: "notification",
+              threadId: plan.threadId, text: plan.text, settleDelivery: false,
+              notificationPreferenceVersion: plan.preferenceVersion, notificationTargetHash: plan.targetHash,
+              notificationGroupKey: plan.groupKey, notificationNotBefore: plan.notBefore.toISOString(),
+              notificationExpiresAt: plan.expiresAt.toISOString() },
+          });
+          if (!action) throw new Error("The Original notification effect was not staged");
+          await source.record(tx as unknown as Db, plan, action.id);
+          if (action.status === "received" && plan.notBefore > now && !action.result) {
+            await tx.update(chatActions).set({ result: { code: "notification_policy_deferred", retryAt: plan.notBefore.toISOString() } })
+              .where(and(eq(chatActions.id, action.id), eq(chatActions.status, "received"), isNull(chatActions.result)));
+          }
+        });
+      } catch {
+        // No raw error, recipient, notice, private destination or payload is logged.
+        logger.warn({ code: "notification_channel_stage_unconfirmed" }, "A notification channel stage could not be confirmed");
+      }
+    }
+  }
+
   async function processPendingProviderEffects(limit = 25) {
+    await stagePendingAccountNotifications(limit);
     const now = new Date();
     const staleBefore = new Date(now.getTime() - PROVIDER_EFFECT_STALE_MS);
     const actions = await db
@@ -5487,7 +5533,8 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
         and(
           eq(chatActions.kind, "provider_effect"),
           or(
-            eq(chatActions.status, "received"),
+            and(eq(chatActions.status, "received"),
+              sql`(${chatActions.result}->>'retryAt' is null or (${chatActions.result}->>'retryAt')::timestamptz <= ${now.toISOString()}::timestamptz)`),
             and(
               eq(chatActions.status, "processing"),
               lte(chatActions.updatedAt, staleBefore),
@@ -5510,6 +5557,10 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
       try {
         await processProviderEffect(action.id);
       } catch (error) {
+        if (action.notificationId) {
+          logger.warn({ code: "notification_channel_delivery_unconfirmed" }, "A notification channel delivery could not be confirmed");
+          continue;
+        }
         logger.warn(
           {
             endpointId: action.endpointId,
@@ -10446,8 +10497,15 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
       expectedUserId: string;
       principalId: string;
       runtimeContext: LifecycleRuntimeFence;
+      v9Confirmation?: boolean;
     },
   ): Promise<void> {
+    if (input.v9Confirmation) {
+      const [settings] = await tx.select({ experimental: instanceSettings.experimental })
+        .from(instanceSettings).where(eq(instanceSettings.singletonKey, "default")).for("share");
+      if (!v9FeatureEnabled(settings?.experimental ?? {}, "action_cards_v9"))
+        throw forbidden("This chat action is no longer authorized", { code: "chat_action_authorization_changed" });
+    }
     const endpoint = await runtimeCallbackEndpoint(
       tx,
       input.endpointId,
@@ -19499,7 +19557,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
       !conversation ||
       !publication ||
       !endpoint ||
-      endpoint.provider !== "telegram" ||
+      !["telegram", "slack", "microsoft-teams"].includes(endpoint.provider) ||
       publication.conversationId !== conversation.id ||
       publication.payload.interactionId !== token.interactionId
     ) {
@@ -20599,8 +20657,8 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
     }
     if (interaction.kind === "request_confirmation") {
       if (
-        event.provider !== "telegram" ||
-        !nativeTelegramConfirmation(interaction)
+        !nativeChannelConfirmation(interaction, event.provider,
+          event.provider === "telegram" || v9FeatureEnabled(await instanceSettingsService(db).getExperimental(), "action_cards_v9"))
       ) {
         return deny(safelyKnown);
       }
@@ -20686,6 +20744,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
                   expectedUserId: principal.userId!,
                   principalId: principal.principal.id,
                   runtimeContext,
+                  v9Confirmation: event.provider !== "telegram",
                 });
               },
               afterResolveInTransaction: async (tx, resolved) => {
@@ -20736,6 +20795,7 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
                   expectedUserId: principal.userId!,
                   principalId: principal.principal.id,
                   runtimeContext,
+                  v9Confirmation: event.provider !== "telegram",
                 });
               },
               afterResolveInTransaction: async (tx, resolved) => {

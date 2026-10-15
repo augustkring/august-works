@@ -2,6 +2,7 @@ import { verifyPassword } from "better-auth/crypto";
 import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import {
   accountDeletionOperations,
+  feedbackImageDeletions,
   authAccounts,
   authRateLimits,
   authUsers,
@@ -23,6 +24,7 @@ export function accountDeletionService(
   effects: {
     removeSecret(id: string): Promise<unknown>;
     cancelRun(id: string): Promise<unknown>;
+    removeFeedbackImages?(operationId: string): Promise<unknown>;
   },
 ) {
   async function request(userId: string, raw: unknown, now = new Date()) {
@@ -212,8 +214,25 @@ export function accountDeletionService(
         )
         .limit(1);
       if (remainingSecret) throw Error("account_secret_erasure_pending");
+      // Request-time access revocation is immediate. A current feedback legal
+      // hold or an uncertain protected object must not be reported as erasure.
+      await db.transaction(tx => eraseAccountAccess(tx, operation.userId, undefined, now));
+      const held = await db.execute(sql`select 1 from customer_feedback_access where user_id=${operation.userId} limit 1`);
+      if (held.length) throw Error("account_feedback_hold_pending");
+      await effects.removeFeedbackImages?.(operation.id);
+      const [pendingImage] = await db.select({ id: feedbackImageDeletions.id }).from(feedbackImageDeletions).where(and(
+        eq(feedbackImageDeletions.accountDeletionId, operation.id), sql`${feedbackImageDeletions.deletedAt} is null`,
+      )).limit(1);
+      if (pendingImage) throw Error("account_feedback_image_erasure_pending");
       await db.transaction(async (tx) => {
         await eraseAccountAccess(tx, operation.userId, undefined, now);
+        // Recheck after the final native erase: a hold can expire or be
+        // released between attempts, creating a new protected-object outbox.
+        // Completing the account must never outrun that physical erasure.
+        const remaining = await tx.execute(sql`select 1 where
+          exists(select 1 from customer_feedback_access where user_id=${operation.userId})
+          or exists(select 1 from feedback_image_deletions where account_deletion_id=${operation.id} and deleted_at is null)`);
+        if (remaining.length) throw Error("account_feedback_erasure_pending");
         await tx.delete(authUsers).where(eq(authUsers.id, operation.userId));
         await tx
           .update(accountDeletionOperations)
@@ -250,6 +269,20 @@ export async function eraseAccountAccess(
   email?: string,
   now = new Date(),
 ) {
+  // Erase this actor's feedback content and private ownership links together.
+  // The same path covers no-name submissions without exposing them to triage.
+  await tx.execute(sql`select f.id from customer_feedback f join customer_feedback_access a on a.company_id=f.company_id and a.feedback_id=f.id
+    where a.user_id=${userId} order by f.id for update of f`);
+  // Retain only a current legal/incident hold under its native private owner.
+  // Required private DSR links remain for pending erasure, while membership,
+  // sessions and keys are still revoked below and named product identity clears.
+  await tx.execute(sql`update customer_feedback set submitted_by_user_id=null,version=version+1
+    where submitted_by_user_id=${userId} and id in (select feedback_id from customer_feedback_access where user_id=${userId})
+      and exists(select 1 from account_deletion_operations where user_id=${userId} and status in ('requested','processing'))`);
+  await tx.execute(sql`delete from customer_feedback f where id in (select feedback_id from customer_feedback_access where user_id=${userId})
+    and not exists(select 1 from customer_feedback_retention r where r.company_id=f.company_id and r.feedback_id=f.id
+      and r.legal_hold and (r.hold_release_at is null or r.hold_release_at>clock_timestamp()))`);
+  await tx.execute(sql`delete from ${authRateLimits} where key like ${"customer-feedback:" + sha256(JSON.stringify(userId)) + ":%"}`);
   await tx.execute(sql`delete from "session" where user_id=${userId}`);
   await tx.execute(sql`delete from "account" where user_id=${userId}`);
   await tx.execute(sql`delete from board_api_keys where user_id=${userId}`);
@@ -268,9 +301,11 @@ export async function eraseAccountAccess(
   await tx.execute(
     sql`delete from user_sidebar_preferences where user_id=${userId}`,
   );
+  await tx.execute(sql`delete from company_user_sidebar_preferences where user_id=${userId}`);
   await tx.execute(
     sql`delete from user_inbox_agent_policies where user_id=${userId}`,
   );
+  await tx.execute(sql`delete from notification_preference_proposals where user_id=${userId}`);
   await tx.execute(sql`delete from saas_notifications where user_id=${userId}`);
   await tx.execute(
     sql`delete from saas_notification_preferences where user_id=${userId}`,

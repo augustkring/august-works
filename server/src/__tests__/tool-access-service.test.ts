@@ -859,7 +859,7 @@ describeEmbeddedPostgres("tool access service", () => {
     await tempDb?.cleanup();
   });
 
-  async function waitForBlockedMembershipUpdate() {
+  async function waitForBlockedMembershipUpdate(expectedPid?: number) {
     for (let attempt = 0; attempt < 80; attempt += 1) {
       const [waiting] = await db.execute<{ waiting: boolean }>(sql`
         SELECT EXISTS (
@@ -869,6 +869,7 @@ describeEmbeddedPostgres("tool access service", () => {
             AND wait_event_type = 'Lock'
             AND query ILIKE '%company_memberships%'
             AND query ILIKE '%for update%'
+            AND ${expectedPid === undefined ? sql`true` : sql`pid = ${expectedPid}`}
         ) AS waiting
       `);
       if (waiting?.waiting) return true;
@@ -1925,6 +1926,9 @@ describeEmbeddedPostgres("tool access service", () => {
       const membershipIsLocked = new Promise<void>((resolve) => {
         membershipLocked = resolve;
       });
+      let cleanupPid!: number;
+      let cleanupStarted!: () => void;
+      const cleanupHasStarted = new Promise<void>(resolve => { cleanupStarted = resolve; });
 
       const firstReplacement = firstReplacementDb.transaction(async (tx) => {
         const service = createTestToolAccessService(
@@ -1939,6 +1943,8 @@ describeEmbeddedPostgres("tool access service", () => {
       await firstReplacementIsStaged;
 
       const cleanup = cleanupDb.transaction(async (tx) => {
+        const [backend] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+        cleanupPid = backend!.pid; cleanupStarted();
         await tx
           .select({ id: companyMemberships.id })
           .from(companyMemberships)
@@ -1967,7 +1973,8 @@ describeEmbeddedPostgres("tool access service", () => {
       // The first replacement still owns the departing member lock, so this
       // proves cleanup is queued before the empty replacement takes the grant
       // lock. A fixed delay does not establish lock order under CPU load.
-      expect(await waitForBlockedMembershipUpdate()).toBe(true);
+      await cleanupHasStarted;
+      expect(await waitForBlockedMembershipUpdate(cleanupPid)).toBe(true);
       let replacementSettled = false;
       const replacement = replacementService
         .replaceConnectionGrantMembers(connection.id, grant.id, [])

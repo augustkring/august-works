@@ -1,8 +1,12 @@
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { drizzle } from "drizzle-orm/postgres-js";
+import { migrate } from "drizzle-orm/postgres-js/migrator";
 import fs from "node:fs";
 import { afterEach, describe, expect, it } from "vitest";
 import postgres from "postgres";
-import { applyPendingMigrations } from "./client.js";
+import { inspectMigrations } from "./client.js";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -13,11 +17,6 @@ const UNIQUE_INDEX = "agents_company_built_in_agent_key_unique_idx";
 const cleanups: Array<() => Promise<void>> = [];
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
-
-async function migrationHash() {
-  const content = await fs.promises.readFile(new URL(`./migrations/${MIGRATION_FILE}`, import.meta.url), "utf8");
-  return createHash("sha256").update(content).digest("hex");
-}
 
 function markerObj(key: string) {
   // Return a plain object (not a JSON string) so `sql.json` stores it as a jsonb
@@ -31,15 +30,6 @@ describeEmbeddedPostgres("built-in agent unique marker migration", () => {
   });
 
   it("resolves pre-existing duplicates and enforces uniqueness going forward", async () => {
-    const database = await startEmbeddedPostgresTestDatabase("paperclip-built-in-unique-marker-");
-    cleanups.push(database.cleanup);
-    const sql = postgres(database.connectionString, { max: 1 });
-    cleanups.push(async () => sql.end());
-
-    // Rewind the migration so we can seed the pre-index (duplicate) state.
-    await sql`DELETE FROM "drizzle"."__drizzle_migrations" WHERE "hash" = ${await migrationHash()}`;
-    await sql`DROP INDEX IF EXISTS ${sql(UNIQUE_INDEX)}`;
-
     const affectedCompanyId = randomUUID();
     const cleanCompanyId = randomUUID();
     const olderId = randomUUID();
@@ -49,31 +39,60 @@ describeEmbeddedPostgres("built-in agent unique marker migration", () => {
     const approvalId = randomUUID();
     const apiKeyId = randomUUID();
 
-    await sql`
-      INSERT INTO "companies" ("id", "name", "issue_prefix")
-      VALUES
-        (${affectedCompanyId}, 'Affected', 'AFF'),
-        (${cleanCompanyId}, 'Clean', 'CLN')
-    `;
-    await sql`
-      INSERT INTO "agents" ("id", "company_id", "name", "status", "created_at", "metadata")
-      VALUES
-        (${olderId}, ${affectedCompanyId}, 'Summarizer One', 'idle', '2026-07-18T00:00:00.000Z', ${sql.json(markerObj("summarizer"))}),
-        (${newerId}, ${affectedCompanyId}, 'Summarizer Two', 'pending_approval', '2026-07-18T00:00:00.025Z', ${sql.json(markerObj("summarizer"))}),
-        (${terminatedDupeId}, ${affectedCompanyId}, 'Summarizer Old', 'terminated', '2026-07-17T00:00:00.000Z', ${sql.json(markerObj("summarizer"))}),
-        (${cleanSummarizerId}, ${cleanCompanyId}, 'Summarizer', 'idle', '2026-07-18T00:00:00.000Z', ${sql.json(markerObj("summarizer"))})
-    `;
-    await sql`
-      INSERT INTO "approvals" ("id", "company_id", "type", "status", "payload")
-      VALUES (${approvalId}, ${affectedCompanyId}, 'hire_agent', 'pending', ${sql.json({ agentId: newerId, sourceBuiltInAgentKey: "summarizer" })})
-    `;
-    await sql`
-      INSERT INTO "agent_api_keys" ("id", "agent_id", "company_id", "name", "key_hash")
-      VALUES (${apiKeyId}, ${newerId}, ${affectedCompanyId}, 'dupe-key', 'hash')
-    `;
-
-    // Re-run the migration: it should clean up the duplicates, then recreate the index.
-    await applyPendingMigrations(database.connectionString);
+    // This migration fixes the pre-index state. Rewinding its journal on a
+    // fully migrated V9 schema introduces later deferred Agent triggers that
+    // never existed at this upgrade boundary. Install the exact earlier SQL
+    // and journal, seed duplicates, then use the current migration owner.
+    const folder = await fs.promises.mkdtemp(join(tmpdir(), "paperclip-marker-history-"));
+    cleanups.push(() => fs.promises.rm(folder, { recursive: true, force: true }));
+    const journal = JSON.parse(await fs.promises.readFile(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8"));
+    const target = journal.entries.findIndex((entry: { tag: string }) => `${entry.tag}.sql` === MIGRATION_FILE);
+    expect(target).toBeGreaterThan(0);
+    const entries = journal.entries.slice(0, target) as Array<{ tag: string }>;
+    await fs.promises.mkdir(join(folder, "meta"));
+    await fs.promises.writeFile(join(folder, "meta", "_journal.json"), JSON.stringify({ ...journal, entries }));
+    for (const entry of entries) await fs.promises.copyFile(
+      new URL(`./migrations/${entry.tag}.sql`, import.meta.url), join(folder, `${entry.tag}.sql`));
+    const database = await startEmbeddedPostgresTestDatabase("paperclip-built-in-unique-marker-", {
+      beforeMigrations: async connectionString => {
+        // Drizzle owns its JSON serializers. Keep the raw seed connection
+        // separate so sql.json retains PostgreSQL's plain-object encoding.
+        const historical = postgres(connectionString, { max: 1 });
+        try { await migrate(drizzle(historical), { migrationsFolder: folder }); }
+        finally { await historical.end(); }
+        const sql = postgres(connectionString, { max: 1 });
+        try {
+          const [missing] = await sql<{ name: string | null }[]>`SELECT to_regclass(${UNIQUE_INDEX})::text AS name`;
+          expect(missing!.name).toBeNull();
+          await sql`
+            INSERT INTO "companies" ("id", "name", "issue_prefix")
+            VALUES
+              (${affectedCompanyId}, 'Affected', 'AFF'),
+              (${cleanCompanyId}, 'Clean', 'CLN')
+          `;
+          await sql`
+            INSERT INTO "agents" ("id", "company_id", "name", "status", "created_at", "metadata")
+            VALUES
+              (${olderId}, ${affectedCompanyId}, 'Summarizer One', 'idle', '2026-07-18T00:00:00.000Z', ${sql.json(markerObj("summarizer"))}),
+              (${newerId}, ${affectedCompanyId}, 'Summarizer Two', 'pending_approval', '2026-07-18T00:00:00.025Z', ${sql.json(markerObj("summarizer"))}),
+              (${terminatedDupeId}, ${affectedCompanyId}, 'Summarizer Old', 'terminated', '2026-07-17T00:00:00.000Z', ${sql.json(markerObj("summarizer"))}),
+              (${cleanSummarizerId}, ${cleanCompanyId}, 'Summarizer', 'idle', '2026-07-18T00:00:00.000Z', ${sql.json(markerObj("summarizer"))})
+          `;
+          await sql`
+            INSERT INTO "approvals" ("id", "company_id", "type", "status", "payload")
+            VALUES (${approvalId}, ${affectedCompanyId}, 'hire_agent', 'pending', ${sql.json({ agentId: newerId, sourceBuiltInAgentKey: "summarizer" })})
+          `;
+          await sql`
+            INSERT INTO "agent_api_keys" ("id", "agent_id", "company_id", "name", "key_hash")
+            VALUES (${apiKeyId}, ${newerId}, ${affectedCompanyId}, 'dupe-key', 'hash')
+          `;
+        } finally { await sql.end(); }
+      },
+    });
+    cleanups.push(database.cleanup);
+    const sql = postgres(database.connectionString, { max: 1 });
+    cleanups.push(async () => sql.end());
+    expect((await inspectMigrations(database.connectionString)).status).toBe("upToDate");
 
     const agentRows = await sql<{ id: string; status: string }[]>`
       SELECT "id", "status" FROM "agents"

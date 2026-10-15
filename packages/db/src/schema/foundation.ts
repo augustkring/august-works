@@ -150,6 +150,9 @@ export const foundationChangeProposals = pgTable(
       .references(() => foundationDocuments.id, { onDelete: "cascade" }),
     sourceType: text("source_type").notNull(),
     sourceId: text("source_id"),
+    // Preserve conversation provenance separately from the proposer/reviewer.
+    conversationSourceRunId: uuid("conversation_source_run_id"),
+    conversationResponsibleUserId: text("conversation_responsible_user_id"),
     proposedByAgentId: uuid("proposed_by_agent_id").references(() => agents.id, {
       onDelete: "set null",
     }),
@@ -171,6 +174,9 @@ export const foundationChangeProposals = pgTable(
       table.companyId,
       table.status,
       table.createdAt,
+    ),
+    conversationSourceRunIdx: index("foundation_change_proposals_company_conversation_source_idx").on(
+      table.companyId, table.conversationSourceRunId,
     ),
     documentStatusIdx: index("foundation_change_proposals_document_status_idx").on(
       table.foundationDocumentId,

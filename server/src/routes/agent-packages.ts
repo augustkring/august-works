@@ -6,6 +6,7 @@ import {
   packageUpdateSchema,
   packageReleaseSchema,
   specialistEvaluationSchema,
+  packageInstallationRequestQuerySchema,
 } from "@paperclipai/shared";
 import {
   agentPackageService,
@@ -21,6 +22,12 @@ export function agentPackageRoutes(
 ) {
   const router = Router(),
     service = agentPackageService(db, options);
+  router.use((req, res, next) => {
+    if (/^\/agent-packages(?:\/|$)/i.test(req.path) ||
+      /^\/companies\/[^/]*\/(?:agent-packages|agent-package-options|agent-package-installations|agent-package-evaluations|agent-package-update-proposals)(?:\/|$)/i.test(req.path))
+      res.setHeader("Cache-Control", "private, no-store");
+    next();
+  });
   function account(req: Request) {
     if (
       typeof req.query.expectedUserId === "string" &&
@@ -39,7 +46,6 @@ export function agentPackageRoutes(
   }
   router.get("/agent-packages", async (req, res) => {
     account(req);
-    res.setHeader("Cache-Control", "no-store");
     res.json(await service.catalog(req.actor));
   });
   router.post(
@@ -68,18 +74,13 @@ export function agentPackageRoutes(
       validate(packageInstallSchema),
       async (req, res) => {
         const companyId = company(req);
-        const catalog = await service.catalog(req.actor);
-        if (
-          !catalog.some(
-            (r) =>
-              r.key === req.params.packageKey &&
-              r.versionId === req.body.versionId,
-          )
-        )
-          throw notFound("Package version not found");
+        if (action === "preview") {
+          const catalog = await service.catalog(req.actor);
+          if (!catalog.some(r => r.key === req.params.packageKey && r.versionId === req.body.versionId)) throw notFound("Package version not found");
+        }
         res
           .status(action === "install" ? 201 : 200)
-          .json(await service[action](req.actor, companyId, req.body));
+          .json(action === "install" ? await service.install(req.actor, companyId, req.body, req.params.packageKey as string) : await service.preview(req.actor, companyId, req.body));
       },
     );
   router.get(
@@ -92,7 +93,6 @@ export function agentPackageRoutes(
     validate(specialistEvaluationSchema),
     async (req, res) => {
       const companyId = company(req);
-      res.setHeader("Cache-Control", "no-store");
       res.json(
         await evaluateSpecialistPackage(db, req.actor, companyId, req.body),
       );
@@ -120,6 +120,10 @@ export function agentPackageRoutes(
     "/companies/:companyId/agent-package-installations",
     async (req, res) => res.json(await service.list(req.actor, company(req))),
   );
+  router.get("/companies/:companyId/agent-package-installations/requests/:requestId", async (req, res) => {
+    packageInstallationRequestQuerySchema.parse(req.query);
+    res.json(await service.installationRequest(req.actor, company(req), req.params.requestId as string));
+  });
   router.get(
     "/companies/:companyId/agent-package-installations/:id",
     async (req, res) =>

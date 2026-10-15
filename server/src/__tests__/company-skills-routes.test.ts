@@ -197,14 +197,16 @@ function registerModuleMocks() {
   }));
 }
 
+const routeModules = await hoistModuleGraph(registerModuleMocks, async () => {
+  const [{ companySkillRoutes }, { errorHandler }] = await Promise.all([
+    vi.importActual<typeof import("../routes/company-skills.js")>("../routes/company-skills.js"),
+    vi.importActual<typeof import("../middleware/index.js")>("../middleware/index.js"),
+  ]);
+  return { companySkillRoutes, errorHandler };
+});
+
 describe("company skill mutation permissions", () => {
-  const routeModules = hoistModuleGraph(registerModuleMocks, async () => {
-    const [{ companySkillRoutes }, { errorHandler }] = await Promise.all([
-      vi.importActual<typeof import("../routes/company-skills.js")>("../routes/company-skills.js"),
-      vi.importActual<typeof import("../middleware/index.js")>("../middleware/index.js"),
-    ]);
-    return { companySkillRoutes, errorHandler };
-  });
+
 
   function createApp(actor: Record<string, unknown>) {
     const { companySkillRoutes, errorHandler } = routeModules.value;

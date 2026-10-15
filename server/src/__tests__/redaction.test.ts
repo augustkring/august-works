@@ -11,6 +11,12 @@ import {
 } from "../redaction.js";
 
 describe("redaction", () => {
+  it("preserves the exact authored Agent schema only as a schema discriminator", () => {
+    const schema = "paperclip.agent-authored-definition.v1";
+    expect(sanitizeRecord({ schema, arbitraryProviderValue: schema, token: "private-secret" })).toEqual({
+      schema, arbitraryProviderValue: REDACTED_EVENT_VALUE, token: REDACTED_EVENT_VALUE,
+    });
+  });
   it("keeps the discriminator allowlist in exact PRP v1 schema parity", () => {
     const schema = JSON.parse(
       readFileSync(

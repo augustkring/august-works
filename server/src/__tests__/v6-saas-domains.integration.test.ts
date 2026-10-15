@@ -44,6 +44,7 @@ import { entitlementService } from "../services/billing/entitlements.js";
 import { usageService } from "../services/billing/usage.js";
 import { saasOnboardingService } from "../services/saas/onboarding.js";
 import { transactionalEmail } from "../services/notifications/transactional-email.js";
+import { instanceSettingsService } from "../services/instance-settings.js";
 import {
   ProviderDeliveryError,
   type TransactionalEmailProvider,
@@ -621,6 +622,22 @@ suite("V6 durable SaaS domains against migrated PostgreSQL", () => {
     expect(
       (await notifications.list(companyId, userId))[0]!.readAt,
     ).toBeTruthy();
+  });
+
+  it("groups native daily digests in the existing encrypted outbox and retains policy after flag rollback",async()=>{
+    const run=await saasOnboardingService(db).create(userId,{name:"V9 native digest",idempotencyKey:"v9-native-digest-001"});
+    await instanceSettingsService(db).updateExperimental({notification_policy_v9:true});
+    const send=vi.fn(), email=transactionalEmail(db,{environment:"staging",mail:{domain:"mail.example.test"},outbox:{encryptionKey:KEY,keyId:"initial",previousKeys:{},recipientHashKey:"b".repeat(64)}} as SaasPlatformConfig,{primaryAppOrigin:"https://app.example.test",allowedAppOrigins:["https://app.example.test"],legacyOrigins:[]},{send,find:vi.fn()}),notifications=notificationService(db,email);
+    const policy={version:1 as const,cadence:"digest" as const,timezone:"UTC",quietHours:null,digestMinute:9*60};
+    await notifications.updatePreference(run.companyId,userId,{category:"work_update",emailEnabled:true,policy});
+    for(const id of ["first","second"])await db.transaction(tx=>notifications.notifyCompany(run.companyId,"work_update","A task has an update","issues",`v9-digest:${id}`,tx));
+    expect(await notifications.list(run.companyId,userId)).toHaveLength(2);
+    const deliveries=await db.select().from(emailDeliveries).where(and(eq(emailDeliveries.companyId,run.companyId),eq(emailDeliveries.purpose,"work_update")));
+    expect(deliveries).toHaveLength(1);expect(deliveries[0]!.dedupeKey).toContain("digest:UTC:");expect(deliveries[0]!.payloadCiphertext).not.toContain("Your August Works updates");expect(deliveries[0]!.notBefore.getTime()).toBeGreaterThanOrEqual(Date.now()-60000);expect(send).not.toHaveBeenCalled();
+    await expect(notifications.updatePreference(run.companyId,userId,{category:"security",emailEnabled:true,policy})).rejects.toMatchObject({status:403});
+    await instanceSettingsService(db).updateExperimental({notification_policy_v9:false});
+    await notifications.updatePreference(run.companyId,userId,{category:"work_update",emailEnabled:false});
+    expect((await notifications.preferences(userId)).find(p=>p.category==="work_update")?.policy).toEqual(policy);
   });
 
   it("delivers native work updates once, respects optional email and pages unread rows across equal timestamps", async () => {

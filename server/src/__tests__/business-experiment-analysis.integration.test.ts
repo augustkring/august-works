@@ -19,6 +19,7 @@ import { decisionService } from "../services/decisions.js";
 import { decisionIntelligenceService } from "../services/decision-intelligence.js";
 import { businessExperimentService } from "../services/business-experiments/service.js";
 import { businessExperimentRecordingService } from "../services/business-experiments/recording.js";
+import { currentInsightToolCard } from "../services/experience/insight-tool-card.js";
 import { businessExperimentRoutes } from "../routes/business-experiments.js";
 import { errorHandler } from "../middleware/index.js";
 import { businessMetricService } from "../services/business-metrics/service.js";
@@ -97,6 +98,16 @@ suite("Native experiment final capture and human interpretation on migrated Post
   }
   function causalModel(d:Awaited<ReturnType<typeof running>>,analysisId:string,interpretationId:string){const seed=causalClaimFixture().definition;return {...seed,outcomeMetricId:d.definition.primaryMetric.metricId,outcomeMetricVersionId:d.definition.primaryMetric.metricVersionId,population:{...seed.population,scope:d.definition.scope,unit:d.definition.population.randomizationUnit},horizon:{from:d.definition.sampleOrDurationPlan.from,until:d.definition.sampleOrDurationPlan.until},experimentEvidence:{type:"experiment_analysis" as const,id:analysisId,experimentId:d.experiment.id,versionId:d.version.id,interpretationId},governanceObligationRefs:[policyId]};}
   const analyzed=(d:Awaited<ReturnType<typeof running>>)=>analysis().analyze(companyId,actor,d.experiment.id,{expectedRevision:5,versionId:d.version.id});
+  it("resolves stopped experiment evidence into a typed Native chat card without inventing an effect", async () => {
+    await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental({ action_cards_v9: true, experience_projection_v9: true, progressive_shell_v9: true });
+    const d = await running(), unit = await attested(d); await closure(d, "emergency_safety_stop"); const result = await analyzed(d);
+    const resourceId = `experiment:${d.experiment.id}:${d.version.id}`, wire = { schemaVersion: 1, component: "ExperimentResultCard", companyId, cardId: `insight:${resourceId}`, source: { companyId, domain: "insight", resourceId, version: `${result.analysis.receiptHash}:none` } };
+    const before = await db.select().from(businessExperimentAnalyses).where(eq(businessExperimentAnalyses.companyId, companyId));
+    expect(await currentInsightToolCard(db, actor, companyId, wire)).toMatchObject({ kind: "insight", title: "Recorded experiment analysis", evidence: expect.arrayContaining(["inconclusive", "advisory_not_rollout_authority"]), actions: [{ operation: "open", href: "/business-experiments" }] });
+    expect(await db.select().from(businessExperimentAnalyses).where(eq(businessExperimentAnalyses.companyId, companyId))).toEqual(before);
+    await db.update(issues).set({ hiddenAt: new Date() }).where(eq(issues.id, unit.unit.id));
+    await expect(currentInsightToolCard(db, actor, companyId, wire)).rejects.toMatchObject({ status: 404 });
+  });
   async function nativeDecision() {
     await db.insert(authUsers).values({id:"local-board",name:"Local fixture human",email:"experiment-decision@example.test",createdAt:new Date(),updatedAt:new Date()}).onConflictDoNothing();
     await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:"local-board",membershipRole:"member",status:"active"}).onConflictDoNothing();
@@ -297,7 +308,7 @@ suite("Native experiment final capture and human interpretation on migrated Post
       try {
         await runDatabaseRestore({connectionString:target.toString(),backupFile:backup.backupFile});
         expect(await restored.select().from(businessExperimentOutcomes).where(eq(businessExperimentOutcomes.analysisId,result.analysis.id))).toEqual(outcomes);
-        await prepareRestoredQuarantine(restored,target.toString(),{companies:[],memory:[],businessEvents:[],analyticalSources:[{company_id:companyId,input_type:"project",input_ref:project.id,suppressed_at:suppression.suppressedAt.toISOString()}]});
+        await prepareRestoredQuarantine(restored,target.toString(),{companies:[],memory:[],businessEvents:[],feedback:[],analyticalSources:[{company_id:companyId,input_type:"project",input_ref:project.id,suppressed_at:suppression.suppressedAt.toISOString()}]});
         await expect(assertDatabaseRestoreAdmission(restored)).rejects.toThrow("remains quarantined");
         expect((await instanceSettingsService(restored,{runtimeEnv:{}}).getExperimental()).business_experiments_v8).toBe(false);
         expect(await restored.select().from(businessExperimentAnalyses).where(eq(businessExperimentAnalyses.id,result.analysis.id))).toEqual([]);
@@ -358,6 +369,25 @@ suite("Native experiment final capture and human interpretation on migrated Post
     const another=await running(true);await attested(another);await closure(another);
     await expect(db.transaction(async raw=>{const tx=raw as unknown as typeof db;const at=new Date();await tx.insert(businessExperimentTransitions).values({companyId,experimentId:another.experiment.id,versionId:another.version.id,revision:6,fromState:"completed",toState:"analyzing",rationale,createdBy:"local-board",createdAt:at});await tx.update(businessExperiments).set({state:"analyzing",revision:6,updatedAt:at}).where(eq(businessExperiments.id,another.experiment.id));})).rejects.toMatchObject({code:"23514"});
     expect((await recording().receipts(companyId,actor,d.experiment.id,d.version.id)).analysis?.receiptHash).toBe(saved.receiptHash);
+  });
+  it("projects a current analysis without participant registers or operator identities and rechecks its Source", async () => {
+    const d = await running(), unit = await enrolled(d);
+    await closure(d, "emergency_safety_stop");
+    const result = await analyzed(d);
+    const endpoint = `/api/companies/${companyId}/experiments/${d.experiment.id}/versions/${d.version.id}/analysis-summary`;
+    const response = await request(app()).get(`${endpoint}?expectedUserId=local-board`).expect(200);
+    expect(response.headers["cache-control"]).toBe("no-store");
+    expect(response.body).toMatchObject({ companyId, experimentId: d.experiment.id, versionId: d.version.id,
+      analysis: { id: result.analysis.id, causalAuthority: "withheld", result: { numericallyQualified: false, metrics: [] } } });
+    expect(response.body).not.toHaveProperty("assignments"); expect(response.body).not.toHaveProperty("exposures");
+    expect(response.body.analysis).not.toHaveProperty("analyzedBy");
+    expect(JSON.stringify(response.body)).not.toContain(unit.unit.id);
+    expect(JSON.stringify(response.body)).not.toContain(unit.assignment.id);
+    await request(app()).get(`${endpoint}?expectedUserId=another-account`).expect(409);
+    await expect(recording().analysisSummary(otherId, actor, d.experiment.id, d.version.id)).rejects.toMatchObject({ status: 404 });
+    await db.update(issues).set({ hiddenAt: new Date() }).where(eq(issues.id, unit.unit.id));
+    await request(app()).get(`/api/companies/${companyId}/experiments/${d.experiment.id}/versions/${d.version.id}/receipts`).expect(404);
+    await request(app()).get(endpoint).expect(404);
   });
   it("public analysis routes reject pasted result/integrity fields and preserve current account/no-store",async()=>{
     const d=await running(true);await attested(d);await closure(d);const app=express();app.use(express.json());app.use((req,_res,next)=>{req.actor=actor;next();});app.use(businessExperimentRoutes(db));app.use(errorHandler);const url=`/companies/${companyId}/experiments/${d.experiment.id}/analyze`;

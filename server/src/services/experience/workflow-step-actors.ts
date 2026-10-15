@@ -1,0 +1,154 @@
+import { and, eq, sql } from "drizzle-orm";
+import { agents, authUsers, companyMemberships, principalPermissionGrants, toolConnections, toolCatalogEntries, type Db } from "@paperclipai/db";
+import { workflowConnectedInputReviewSchema, workflowToolFields, type WorkflowDetail, type WorkflowExperienceRevision, type WorkflowStepToolAccess, type WorkflowStepInputReview } from "@paperclipai/shared";
+import { nativeSha256 } from "../native-runtime/canonical.js";
+import { z } from "zod";
+import { authorizationService, type AuthorizationActor } from "../authorization.js";
+import { assertV5Authorization } from "../v5-authorization.js";
+import { workflowService } from "../workflows/workflow-service.js";
+import { workflowReviewBinding } from "./workflow-review-binding.js";
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
+import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
+import { withExperienceAdmission } from "./admission.js";
+import { ExperienceOverloadError } from "./projection.js";
+import { conflict, forbidden } from "../../errors.js";
+import { accessService } from "../access.js";
+import { filterVisibleToolConnections } from "../tool-connection-visibility.js";
+
+type Assignment = NonNullable<WorkflowExperienceRevision["steps"][number]["assignment"]>;
+/** Names are a separate current Native agent read, never authority borrowed
+ * from workflow ownership or a stored execution principal. No model/tool call. */
+export async function readWorkflowStepActors(db: Db, detail: WorkflowDetail, rawActor: AuthorizationActor) {
+  return (await readWorkflowStepContext(db, detail, rawActor)).assignments;
+}
+export interface WorkflowStepReadAdmission { signal: AbortSignal; remainingMs: () => number }
+export function readWorkflowStepContext(db: Db, detail: WorkflowDetail, rawActor: AuthorizationActor, selected?: { revisionId: string; nodeId: string }, admission?: WorkflowStepReadAdmission) {
+  const read = async (signal: AbortSignal, remainingMs: () => number) => db.transaction(async raw => {
+    const tx = raw as unknown as Db, companyId = detail.companyId;
+    await tx.execute(sql`select set_config('statement_timeout',${`${remainingMs()}ms`},true),set_config('lock_timeout','250ms',true)`);
+    await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId);
+    const actor = { ...rawActor, isInstanceAdmin: false, ignoreInstanceAdmin: true };
+    const references: Array<{ key: string; id: string | null }> = [];
+    const toolReferences: Array<{ key: string; connectionId: string | null; entryId: string | null; version: unknown; schema: unknown; config: Record<string, unknown> }> = [];
+    for (const revision of [detail.draftRevision, detail.publishedRevision]) {
+      if (!revision || selected && selected.revisionId !== revision.id) continue;
+      if (revision.graph.nodes.length > 100) continue; // The flow owner marks oversized revisions unavailable.
+      for (const node of revision.graph.nodes) if ((!selected || selected.nodeId === node.id) && ["agent.task", "agent.external"].includes(node.type)) {
+        const config = node.config as Record<string, unknown> | null;
+        const id = config && typeof config === "object" && !Array.isArray(config) ? z.uuid().safeParse(config.agentId) : null;
+        references.push({ key: `${revision.id}:${node.id}`, id: id?.success ? id.data : null });
+      }
+      for (const node of revision.graph.nodes) if ((!selected || selected.nodeId === node.id) && node.type === "connector.action") {
+        const config = node.config && typeof node.config === "object" && !Array.isArray(node.config) ? node.config as Record<string, unknown> : {};
+        const connectionId = z.uuid().safeParse(config.connectionId), entryId = z.uuid().safeParse(config.toolCatalogEntryId);
+        toolReferences.push({ key: `${revision.id}:${node.id}`, connectionId: connectionId.success ? connectionId.data : null,
+          entryId: entryId.success ? entryId.data : null, version: config.catalogVersionHash, schema: config.catalogSchemaHash, config });
+      }
+    }
+    const assignments = new Map<string, Assignment>();
+    const toolAccess = new Map<string, WorkflowStepToolAccess>();
+    const toolInputs = new Map<string, WorkflowStepInputReview>();
+    // Internal Original validation material: callers serialize only explicit DTO maps.
+    const toolInputSchemas = new Map<string, Record<string, unknown>>();
+    const result = { assignments, toolAccess, toolInputs, toolInputSchemas };
+    const unavailable: WorkflowStepToolAccess = { state: "unavailable", connectionName: null, operationName: null, previewHref: null };
+    // Historical/local fixtures may read the original flow, but cannot invent
+    // a verified Human identity for selected-agent metadata.
+    if (actor.source === "local_implicit") {
+      for (const reference of references) assignments.set(reference.key, { state: "unavailable", name: null });
+      for (const reference of toolReferences) toolAccess.set(reference.key, unavailable);
+      return result;
+    }
+    if (actor.type !== "board" || !actor.userId) throw forbidden("A current verified workflow reader is required");
+    const ids = [...new Set(references.flatMap(reference => reference.id ? [reference.id] : []))];
+    const toolIds = [...new Set(toolReferences.map(reference => `${reference.connectionId}:${reference.entryId}`))];
+    if (ids.length + toolIds.length > 32) throw new ExperienceOverloadError("Complete workflow assignments exceed the read budget");
+    async function account() {
+      signal.throwIfAborted();
+      const [user] = await tx.select({ verified: authUsers.emailVerified }).from(authUsers).where(eq(authUsers.id, actor.userId!)).for("share");
+      const [membership] = await tx.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+        eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+        eq(companyMemberships.principalId, actor.userId!), eq(companyMemberships.status, "active"))).for("share");
+      if (!user?.verified || !membership) throw forbidden("A current verified workflow reader is required");
+      await tx.select({ id: principalPermissionGrants.id }).from(principalPermissionGrants).where(and(
+        eq(principalPermissionGrants.companyId, companyId), eq(principalPermissionGrants.principalType, "user"),
+        eq(principalPermissionGrants.principalId, actor.userId!))).for("share");
+      await assertV5Authorization(tx, actor, companyId, "workflows:read");
+      await assertV5Authorization(tx, actor, companyId, "company_scope:read");
+      // Original revision and private Source owners must still bind the same graph.
+      const current = await workflowService(tx).getDetail(companyId, detail.id, actor);
+      if (!current || workflowReviewBinding(current) !== workflowReviewBinding(detail)) throw conflict("Current workflow changed; refresh");
+    }
+    const auth = authorizationService(tx), names = new Map<string, string | null>();
+    async function name(id: string) {
+      signal.throwIfAborted();
+      if (!(await auth.decide({ actor, action: "agent:read", resource: { type: "agent", companyId, agentId: id } })).allowed) return null;
+      const [row] = await tx.select({ name: agents.name }).from(agents).where(and(eq(agents.companyId, companyId), eq(agents.id, id))).for("share");
+      return row?.name.trim().slice(0, 200) || null;
+    }
+    async function tool(reference: typeof toolReferences[number]): Promise<WorkflowStepToolAccess> {
+      signal.throwIfAborted();
+      toolInputs.set(reference.key, { kind: "advanced" });
+      toolInputSchemas.delete(reference.key);
+      if (!reference.connectionId || !reference.entryId) return unavailable;
+      const [connection] = await tx.select().from(toolConnections)
+        .where(and(eq(toolConnections.companyId, companyId), eq(toolConnections.id, reference.connectionId))).for("share");
+      const canManageConnections = await accessService(tx).hasPermission(companyId, "user", actor.userId!, "tools:manage_connections");
+      if (!connection || !filterVisibleToolConnections([connection], { userId: actor.userId, canManageConnections }).length) return unavailable;
+      const [entry] = await tx.select({ name: toolCatalogEntries.name, title: toolCatalogEntries.title, status: toolCatalogEntries.status,
+        version: toolCatalogEntries.versionHash, schema: toolCatalogEntries.schemaHash, inputSchema: toolCatalogEntries.inputSchema, toolName: toolCatalogEntries.toolName }).from(toolCatalogEntries).where(and(
+          eq(toolCatalogEntries.companyId, companyId), eq(toolCatalogEntries.connectionId, connection.id), eq(toolCatalogEntries.id, reference.entryId))).for("share");
+      if (!entry) return unavailable;
+      const connectionName = connection.name.trim().slice(0, 200), operationName = (entry.title?.trim() || entry.name.trim()).slice(0, 200);
+      if (!connectionName || !operationName) return unavailable;
+      const canUse = (await auth.decide({ actor, action: "tools:use", resource: { type: "company", companyId } })).allowed;
+      let projectionChanged = false;
+      if (reference.config.projectedInputSchemaHash !== undefined) {
+        const { projectedConnectionToolInputSchema } = await import("../tool-access.js");
+        const schema = projectedConnectionToolInputSchema(connection, entry.inputSchema ?? {}, entry.toolName);
+        projectionChanged = reference.config.projectedInputSchemaHash !== nativeSha256(schema);
+        if (!projectionChanged && connection.status === "active" && connection.enabled && entry.status === "active" &&
+          entry.version === reference.version && entry.schema === reference.schema &&
+          !Object.keys(reference.config).some(key => !["toolCatalogEntryId", "connectionId", "catalogVersionHash", "catalogSchemaHash", "projectedInputSchemaHash", "input"].includes(key))) {
+          const fields = workflowToolFields(schema), review = fields && workflowConnectedInputReviewSchema.safeParse({ kind: "connected_tool", inputSchemaHash: reference.config.projectedInputSchemaHash, fields, values: reference.config.input });
+          if (review && review.success) { toolInputs.set(reference.key, review.data); toolInputSchemas.set(reference.key, schema); }
+        }
+      }
+
+      return { connectionName, operationName, previewHref: `/apps/${connection.id}/permissions`,
+        state: connection.status !== "active" || !connection.enabled ? "connection_disabled"
+          : entry.status !== "active" || entry.version !== reference.version || !reference.schema || entry.schema !== reference.schema || projectionChanged ? "catalog_changed"
+            : !canUse ? "permission_required" : "execution_check" };
+    }
+    await account();
+    for (const id of ids) names.set(id, await name(id));
+    for (const reference of toolReferences) toolAccess.set(reference.key, await tool(reference));
+    if (Buffer.byteLength(JSON.stringify([...toolInputs]), "utf8") > 65536)
+      throw new ExperienceOverloadError("Complete connected input review exceeds the read budget");
+    await account();
+    for (const id of ids) if (names.get(id) !== await name(id)) throw conflict("Current workflow assignment changed; refresh");
+    for (const reference of toolReferences) {
+      const before = JSON.stringify([toolAccess.get(reference.key), toolInputs.get(reference.key)]);
+      const currentAccess = await tool(reference);
+      if (before !== JSON.stringify([currentAccess, toolInputs.get(reference.key)]))
+        throw conflict("Current workflow connection access changed; refresh");
+    }
+    for (const reference of references) {
+      const value = reference.id ? names.get(reference.id) : null;
+      assignments.set(reference.key, value ? { state: "current", name: value } : { state: "unavailable", name: null });
+    }
+    signal.throwIfAborted();
+    return result;
+  }).catch(error => {
+    let cause: unknown = error;
+    for (let depth = 0; depth < 4 && cause && typeof cause === "object"; depth++) {
+      const failure = cause as { code?: unknown; cause?: unknown };
+      if (failure.code === "55P03" || failure.code === "57014") throw new ExperienceOverloadError("Current workflow assignments exceeded their read budget");
+      cause = failure.cause;
+    }
+    throw error;
+  });
+  // One customer request occupies one global slot, including a selected-step
+  // read nested inside its already admitted Original draft review.
+  return admission ? read(admission.signal, admission.remainingMs) : withExperienceAdmission(read);
+}

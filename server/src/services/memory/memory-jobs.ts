@@ -415,12 +415,20 @@ export function memoryJobService(
       await eraseArtifactWorkspace(db, { companyId: job.companyId, versionId: source.versionId });
       return { summary: "Erased the native Artifact version's sandbox workspace.", result: { processedVersionCount: 1 } };
     }
-    if (source.kind === "runtime_skill_source_erasure") {
+    if (source.kind === "authored_definition_source_erasure") {
+      if (typeof source.runId !== "string" || typeof source.revisionId !== "string" ||
+        job.jobKey !== `authored-definition-source-erasure:v1:${source.runId}:${source.revisionId}`) throw unprocessable("Invalid authored definition erasure binding");
+      const { eraseAuthoredDefinitionRuntimeCopies } = await import("../agents/authored-definition-erasure.js");
+      await eraseAuthoredDefinitionRuntimeCopies(db, job.companyId, source.runId, source.revisionId);
+      return { summary: "Erased the deleted authored definition's actual runtime copies.", result: { processedRunCount: 1 } };
+    }
+    if (source.kind === "runtime_skill_source_erasure" || source.kind === "runtime_playbook_source_erasure" || source.kind === "runtime_knowledge_source_erasure") {
+      const prefix = source.kind === "runtime_skill_source_erasure" ? "runtime-skill-source-erasure" : source.kind === "runtime_knowledge_source_erasure" ? "runtime-knowledge-source-erasure" : "runtime-playbook-source-erasure";
       if (typeof source.runId !== "string" || typeof source.versionId !== "string" ||
-        job.jobKey !== `runtime-skill-source-erasure:v1:${source.runId}:${source.versionId}`) throw unprocessable("Invalid native Skill runtime erasure binding");
+        job.jobKey !== `${prefix}:v1:${source.runId}:${source.versionId}`) throw unprocessable("Invalid native procedure runtime erasure binding");
       const { eraseSkillRuntimeCopies } = await import("../learning/skill-file-erasure.js");
       await eraseSkillRuntimeCopies(db, job.companyId, source.runId, source.versionId);
-      return { summary: "Erased the deleted Skill version's actual runtime copies.", result: { processedRunCount: 1 } };
+      return { summary: "Erased the deleted procedure version's actual runtime copies.", result: { processedRunCount: 1 } };
     }
     if (source.kind === "runtime_asset_erasure") {
       if (typeof source.runId !== "string" || !Array.isArray(source.legacyDigests) || source.legacyDigests.some(value => typeof value !== "string")) throw unprocessable("Invalid native runtime asset erasure binding");
@@ -646,7 +654,7 @@ export function memoryJobService(
     await db.update(memoryJobs).set({status:"queued",finishedAt:null,error:null,errorCode:null,updatedAt:now})
       .where(and(eq(memoryJobs.operationType,"retention"),eq(memoryJobs.status,"failed"),
         lte(memoryJobs.updatedAt,new Date(now.getTime()-60000)),
-        sql`(${memoryJobs.sourceRefJson}->>'kind' in ('provider_trace_erasure','run_log_erasure','learning_analytical_erasure','skill_version_file_erasure','runtime_asset_erasure','runtime_skill_source_erasure','artifact_workspace_erasure','workflow_artifact_source_erasure') or (${memoryJobs.sourceRefJson}->>'kind'='retention_sweep' and ${memoryJobs.jobKey} like 'analytical-context-erasure:v1:%'))`));
+        sql`(${memoryJobs.sourceRefJson}->>'kind' in ('provider_trace_erasure','run_log_erasure','learning_analytical_erasure','skill_version_file_erasure','runtime_asset_erasure','runtime_skill_source_erasure','runtime_playbook_source_erasure','runtime_knowledge_source_erasure','authored_definition_source_erasure','artifact_workspace_erasure','workflow_artifact_source_erasure') or (${memoryJobs.sourceRefJson}->>'kind'='retention_sweep' and ${memoryJobs.jobKey} like 'analytical-context-erasure:v1:%'))`));
     const recovered = await recoverExpiredLeases(now);
     const [backfilled, retentionQueued] = await Promise.all([
       enqueueMissingPostRunCaptures(),

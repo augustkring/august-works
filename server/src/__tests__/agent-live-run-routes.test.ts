@@ -6,9 +6,11 @@ import { beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockAgentService = vi.hoisted(() => ({
   getById: vi.fn(),
+  pause: vi.fn(),
 }));
 
 const mockHeartbeatService = vi.hoisted(() => ({
+  cancelActiveForAgent: vi.fn(),
   buildRunOutputSilence: vi.fn(),
   decorateActiveRunStatus: vi.fn(),
   getRunIssueSummary: vi.fn(),
@@ -279,6 +281,60 @@ async function requestApp(
 }
 
 describe("agent live run routes", () => {
+  it.each(["drain", "cancel"] as const)("pauses before applying the explicit %s policy and retains its decision", async pendingWork => {
+    mockAgentService.getById.mockResolvedValue({ id: routeAgentId, companyId: "company-1", name: "Builder" });
+    mockAgentService.pause.mockResolvedValue({ id: routeAgentId, companyId: "company-1", status: "paused" });
+    mockHeartbeatService.cancelActiveForAgent.mockResolvedValue(1);
+    const response = await request(await createApp()).post(`/api/agents/${routeAgentId}/pause`).send({ pendingWork });
+    expect(response.status, JSON.stringify(response.body)).toBe(200);
+    expect(response.body.status).toBe("paused");
+    expect(mockAgentService.pause).toHaveBeenCalledWith(routeAgentId);
+    expect(mockLogActivity).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({
+      action: "agent.paused", entityId: routeAgentId, companyId: "company-1", details: { pendingWork },
+    }));
+    expect(mockAgentService.pause.mock.invocationCallOrder[0]).toBeLessThan(mockLogActivity.mock.invocationCallOrder[0]!);
+    if (pendingWork === "drain") expect(mockHeartbeatService.cancelActiveForAgent).not.toHaveBeenCalled();
+    else {
+      expect(mockHeartbeatService.cancelActiveForAgent).toHaveBeenCalledWith(routeAgentId);
+      expect(mockLogActivity.mock.invocationCallOrder[0]).toBeLessThan(mockHeartbeatService.cancelActiveForAgent.mock.invocationCallOrder[0]!);
+    }
+  });
+
+  it("retains the pause decision when cancellation fails instead of claiming completion", async () => {
+    mockAgentService.getById.mockResolvedValue({ id: routeAgentId, companyId: "company-1", name: "Builder" });
+    mockAgentService.pause.mockResolvedValue({ id: routeAgentId, companyId: "company-1", status: "paused" });
+    mockHeartbeatService.cancelActiveForAgent.mockRejectedValueOnce(new Error("Stop reply unavailable"));
+    const response = await request(await createApp()).post(`/api/agents/${routeAgentId}/pause`).send({ pendingWork: "cancel" });
+    expect(response.status).toBe(500);
+    expect(mockLogActivity).toHaveBeenCalledWith(expect.anything(), expect.objectContaining({ action: "agent.paused", details: { pendingWork: "cancel" } }));
+  });
+
+  it("retains cancellation for existing empty-body callers", async () => {
+    mockAgentService.getById.mockResolvedValue({ id: routeAgentId, companyId: "company-1", name: "Builder" });
+    mockAgentService.pause.mockResolvedValue({ id: routeAgentId, companyId: "company-1", status: "paused" });
+    mockHeartbeatService.cancelActiveForAgent.mockResolvedValue(0);
+    const response = await request(await createApp()).post(`/api/agents/${routeAgentId}/pause`).send({});
+    expect(response.status).toBe(200);
+    expect(mockHeartbeatService.cancelActiveForAgent).toHaveBeenCalledWith(routeAgentId);
+  });
+
+  it.each([{ pendingWork: "drop" }, { pendingWork: "drain", status: "idle" }])("rejects unsupported pause authority before mutation: %j", async body => {
+    const response = await request(await createApp()).post(`/api/agents/${routeAgentId}/pause`).send(body);
+    expect(response.status).toBe(400);
+    expect(mockAgentService.pause).not.toHaveBeenCalled();
+    expect(mockHeartbeatService.cancelActiveForAgent).not.toHaveBeenCalled();
+  });
+
+  it("does not apply a pause policy outside the current company", async () => {
+    mockAgentService.getById.mockResolvedValue({ id: routeAgentId, companyId: "foreign-company" });
+    const response = await request(await createApp({}, {
+      type: "board", userId: "signed-in-member", companyIds: ["company-1"], source: "session", isInstanceAdmin: true,
+    })).post(`/api/agents/${routeAgentId}/pause`).send({ pendingWork: "cancel" });
+    expect(response.status).toBe(404);
+    expect(mockAgentService.pause).not.toHaveBeenCalled();
+    expect(mockHeartbeatService.cancelActiveForAgent).not.toHaveBeenCalled();
+  });
+
   beforeEach(() => {
     vi.resetModules();
     vi.doUnmock("../services/agents.js");

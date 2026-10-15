@@ -1754,3 +1754,96 @@ Passing comparisons can create existing Foundation proposals, Skill challengers,
 Every domain candidate retains Learning root lineage. Native document acceptance/publication, Skill promotion and planning acceptance reject stale evidence through database guards. Derived document/Skill descendants inherit lineage. Current human authorization and company/project boundaries apply to reads and writes. Memory correction, revocation and deletion invalidate candidates independently of flags; erasure scrubs Learning prose, evaluations, domain proposal bodies and accepted derived document/Skill versions. Late restored writes into Learning payloads, proposals, document caches and Foundation sections are scrubbed. The `/memory/learning` interface supports company cycles and a guided Foundation hypothesis/comparison/proposal path.
 
 V7 Learning can route supported changes into native Workflow drafts, Role Pack versions and already replayed Optimizer candidates. Live owned Task workers may propose hypotheses; human evaluation and native qualification remain required. Cycle closure observes native current promotion receipts and does not trust model-declared success. Learned Foundation and runtime procedure consumption retains original Memory roots for erasure and reauthorization.
+
+## August Works V9 customer experience (experimental, incomplete)
+
+V9 is implemented incrementally behind default-off native experimental flags;
+[the dated implementation ledger](plans/2026-10-09-aw-v9-build.md) and
+[screen coverage](experience/v9/coverage.json) distinguish partial source from
+exact-artifact acceptance. Profiles and navigation never grant authority.
+
+Hire and Advanced Custom authoring share creator-private canonical
+`agent_configuration_drafts`. Hire setup pins an immutable native customer
+package version; create/save/discard use original request IDs, canonical versions
+and current verified company/resource authorization. Saved proposals grant no
+access and create no active agent. New Hire changes reject withdrawn releases;
+private reads and content discard remain available after flag rollback with the
+new server. Representative execution, independent verification and governed
+native publication are incomplete and reject activation. Migration 0462 and the
+new server must precede enabled clients; older binaries cannot recover Hire
+steps, so rollback retains the recovery-capable service until reconciliation.
+
+The gated ordinary `/needs-you` and `/work` routes project current native work.
+Exact attention/decision links retain the existing resolver and `/decisions`
+retains the full queue/history. Needs You consequences state only native pending
+state or known blocked counts. A native page boundary is observed partial
+coverage, never a complete empty queue. Work shows bounded active/recent Tasks
+with native Project/Task/Routine drill-down. Both projections are read-only;
+full source composition/adapters and human journey acceptance remain incomplete.
+
+The gated workflow detail now reads native published and draft revisions as a
+plain-language step review, with explicit branches and declared effects. The
+human-only projection requires a matching principal and current workflow read
+permission; it excludes raw configuration, prompts, inputs and credentials.
+Operation metadata does not establish effective authority or test success. The
+native graph remains available at `/workflows/:workflowId/advanced`; testing,
+publication, execution and recovery remain native owners. Complete workflow
+authoring and representative lifecycle qualification remain open.
+
+Workflow draft review also projects native-ID-bound change indicators against
+the active revision. Only added/changed step numbers, removed counts and changed
+connection/data-definition/settings indicators reach the customer. Private
+values and signatures stay on the server. Comparison work is bounded and may be
+unavailable; no comparison result is permission, approval or evaluation evidence.
+
+Agent detail exposes a new-revision draft link only after private metadata-only
+admission by the native authoring owner. The read checks current verified
+membership, configuration and target read permission, bound company/principal
+and the V9 feature gate. It creates no draft or active configuration. Navigation
+preserves the existing unsaved-change guard and rejects late confirmation after
+a context change. Active-agent testing/publication and fencing all expert active
+configuration writers remain incomplete.
+
+The V9 workflow run entry also projects recorded native attempt metadata from the
+exact historical revision, with current read and native source/payload admission.
+It excludes private payloads, raw errors and actor IDs; recorded completion does
+not establish independent verification. Oversized/unbound history is unavailable.
+The default-off customer shell retains a native /advanced run route and rollback.
+Full branch/selected-actor/verification inspection and lifecycle acceptance remain
+open (ADR-V9-019 / SCR-V9-012).
+
+Home, Needs You and Work now suppress retained cards during current identity/read
+checks and fence late receipts after native access loss. The native experience
+owner repeats bounded Task/Attention visibility, expert-grant/profile and flag
+checks before reply. Changed sources remain partial; no complete empty queue or
+durable authority is inferred. This is read-only source work within the original
+1500 ms admission/deadline (ADR-V9-021 / SCR-V9-014); full composition and hosted
+or human qualification remain incomplete.
+
+Private feedback UI now freezes unacknowledged creation/reply/triage tuples until
+a bound accepted receipt or canonical non-application refusal. Selected customer
+replies survive read rechecks without exposing their private text, and can replay
+the original key after native status moves to REVIEWING. My Feedback suppresses
+retained/late private history on identity/access loss; customer receipts and
+operator details validate existing company/resource bindings. Native transactional
+replay remains authoritative. Durable recovery across page/context/flag teardown
+and full feedback lifecycle qualification remain open (ADR-V9-022 / SCR-V9-015).
+
+Explicit V9 workflow controls now use the existing native owner for pause/resume
+and drained retirement, with current human publication/source authority, expected
+status/timestamp/revision pointers, atomic original-request activity receipts and
+a shared native enqueue row fence. Pause permits admitted work to finish; blocked
+or uncertain child/tool work and linked automations refuse retirement. Published
+versions/run history are retained and the draft deliberately discarded. Receipt
+confirmation remains separate from current status; native state survives shell
+rollback. Complete operation overview, durable recovery, resource cleanup and
+workflow/runtime/human qualification remain open (ADR-V9-023 / SCR-V9-016).
+
+Native workflow operation observations now expose the earliest configured enabled
+routine schedule and bounded recent/waiting/recovering run metadata with current
+revision/copied-source admission. The UI binds its parent status/update/version,
+hides retained observations during rechecks and links native run history. Trigger
+time is configured scheduling, not guaranteed execution; recorded success is not
+independent business verification. Safe Run now, independently verified outcomes,
+complete recovery/cleanup and hosted/human qualification remain open
+(ADR-V9-024 / SCR-V9-017).

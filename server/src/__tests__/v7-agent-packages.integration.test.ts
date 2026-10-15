@@ -1,3 +1,25 @@
+import { grantsForHumanRole } from "../services/company-member-roles.js";
+import { lockAnalyticalCompany } from "../services/analytical-privacy.js";
+import { secretService } from "../services/secrets.js";
+import { readActivationFirstValue } from "../services/saas/activation-first-value.js";
+import { lockActivationSnapshot, readActivationOwner } from "../services/saas/activation-owner.js";
+import { toolAccessRoutes } from "../routes/tool-access.js";
+import { activationConnectionConsentService } from "../services/saas/activation-connection-consent.js";
+import { toolAccessService } from "../services/tool-access.js";
+import type { PaperclipCloudConnector } from "../services/paperclip-cloud-connector.js";
+import { activationConnectionConsents, activationConnectionValidations, companySecrets } from "@paperclipai/db";
+import { readExperienceMeasures } from "../services/experience/measures.js";
+import { experienceMeasuresRoutes } from "../routes/experience-measures.js";
+import { readPackageMaintenanceAttention } from "../services/experience/maintenance-attention.js";
+import { readCoreMaintenance } from "../services/experience/core-maintenance.js";
+import * as coreMaintenance from "../services/experience/core-maintenance.js";
+import { agentPackageRoutes } from "../routes/agent-packages.js";
+import { experienceService } from "../services/experience/service.js";
+import express from "express";
+import request from "supertest";
+import { maintenanceHistoryRoutes } from "../routes/maintenance-history.js";
+import { errorHandler } from "../middleware/error-handler.js";
+import { readMaintenanceHistory } from "../services/experience/maintenance-history.js";
 import {businessMetricService} from "../services/business-metrics/service.js";
 import {aiGovernanceService} from "../services/ai-governance/governance-service.js";
 import {memoryJobService} from "../services/memory/memory-jobs.js";
@@ -10,13 +32,38 @@ import {
 } from "../services/stewards/core-stewards.js";
 import { evaluateSpecialistPackage } from "../services/agent-packages/specialist-evaluation.js";
 import {
+  authUsers,
   readinessAssessments,
   knowledgeQualityFindings,
   companyMemberships,
+  approvals,
+  agentApiKeys,
+  agentPresenceRuntimeBindings,
+  agentProviderBindings,
   activityLog,
 } from "@paperclipai/db";
 import { learningService } from "../services/learning/learning-service.js";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
+import { activationService } from "../services/saas/activation.js";
+import { readActivationRequiredAccess } from "../services/saas/activation-connections.js";
+import { approvalService } from "../services/approvals.js";
+import { orchestrationService } from "../services/orchestration/orchestration-service.js";
+import { verificationService } from "../services/supervision/verification-service.js";
+import { agentRuntimeFabricService } from "../services/agent-runtime-fabric.js";
+import { aiConnectionService } from "../services/ai-connections.js";
+import { discoverNativeCapabilities } from "../services/native-provider-conformance.js";
+import { workerModelGateway } from "../services/orchestration/worker-model-gateway.js";
+import type { WorkerModelProfile } from "../services/orchestration/worker-model-profiles.js";
+import { registerNativeDraftGateway } from "../services/orchestration/native-draft-runtime.js";
+import type { guardedRemoteHttpFetch } from "../services/remote-http-fetch.js";
+import { initialActivationState, createOrchestrationPlanSchema, type CreateOrchestrationPlanInput } from "@paperclipai/shared";
+import { purpose as governancePurpose, oversight as governanceOversight, reviews as governanceReviews } from "./helpers/governance-fixture.js";
+import { seedRequiredAuthoringProcedures, seedApprovedAuthoringPlaybook } from "./helpers/authoring-procedures.js";
+import { seedHireAutomationComponents } from "./helpers/hire-automations.js";
+import { agentSetupAuthoringToolsService } from "../services/agent-setup-authoring-tools.js";
+import { workflows, routines, workflowRuns, routineRuns } from "@paperclipai/db";
+import { billingAccounts, billingAccountCompanies, billingSubscriptions, companyOnboardingRuns,
+  documents, documentRevisions, issueDocuments } from "@paperclipai/db";
 import { readinessService } from "../services/readiness/readiness-service.js";
 import { foundationService } from "../services/foundation/foundation-service.js";
 import { accessService } from "../services/access.js";
@@ -39,17 +86,26 @@ import {
   expect,
   vi,
 } from "vitest";
+import { mkdtemp, rm } from "node:fs/promises";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
+import { rolePacks } from "@paperclipai/db";
 import { randomUUID } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
   createDb,
   principalPermissionGrants,
+  orchestrationPlans,
   connectionGrants,
+  toolApplications,
+  toolConnections,
+  toolConnectionInstalls,
   agentPackageVersions,
   agentPackageComponents,
   companyAgentPackageInstallations,
   heartbeatRuns,
   agents,
+  agentConfigurationDrafts,
   agentPackageStopActions,
   issues,
 } from "@paperclipai/db";
@@ -66,6 +122,7 @@ import { instanceSettingsService } from "../services/instance-settings.js";
 import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
 import { rolePackService } from "../services/role-packs.js";
 import { agentPackageService } from "../services/agent-packages/package-service.js";
+import { agentAuthoringService } from "../services/agents/authoring-drafts.js";
 import {
   assertPackageExecution,
   packageToolRestriction,
@@ -78,6 +135,7 @@ import {
   packageChangeIsMaterial,
   packageReleaseBlockers,
 } from "../services/agent-packages/package-policy.js";
+import { V9_FEATURE_KEYS } from "@paperclipai/shared";
 const support = await getEmbeddedPostgresTestSupport();
 (support.supported ? describe : describe.skip)(
   "V7 native internal package installation and activation",
@@ -89,20 +147,28 @@ const support = await getEmbeddedPostgresTestSupport();
       input: PackageRelease,
       versionId: string,
       roleId: string,
-      roleVersionId: string;
+      roleVersionId: string,
+      fixtureHome: string;
     beforeAll(async () => {
+      fixtureHome = await mkdtemp(join(tmpdir(), "aw-v9-first-preparation-"));
+      vi.stubEnv("PAPERCLIP_HOME", fixtureHome);
       database = await startEmbeddedPostgresTestDatabase("aw-v7-packages-");
       db = createDb(database.connectionString);
       await instanceSettingsService(db).getExperimental();
       await enableV5ForTest(db);
     }, 60000);
-    afterAll(async () => database?.cleanup(), 30000);
+    afterAll(async () => {
+      await database?.cleanup();
+      if (fixtureHome) await rm(fixtureHome, { recursive: true, force: true });
+      vi.unstubAllEnvs();
+    }, 30000);
     beforeEach(async () => {
       await instanceSettingsService(db).updateExperimental({
         saas_deployment_profile_v6: true,
         billing_v6: true,
         agent_packages_v7: true,
         core_stewards_v7: false,
+        maintenance_autopilot_v9: false,
       });
       f = await seedV5Presences(db);
       service = agentPackageService(db, {
@@ -246,6 +312,368 @@ const support = await getEmbeddedPostgresTestSupport();
         reason: "Explicit internal evaluation",
       });
     }
+    async function hireFixture(requiredConnections: string[] = [], packageKey = `hire-native-fixture-${randomUUID()}`) {
+      await instanceSettingsService(db).updateExperimental({hire_agent_v9: true});
+      const evidence = input.releaseEvidence.provenance;
+      const release: PackageRelease = {
+        ...input, packageKey,
+        manifest: {...input.manifest, audience: "customer", requiredConnections, commercialProductKey: "agent_package_research"},
+        releaseEvidence: {...input.releaseEvidence, sbom: evidence, scan: evidence, evaluations: evidence, protectedHoldout: evidence, customerDemand: evidence},
+      };
+      return {release, published: await service.publish(f.actor, release), hire: agentAuthoringService(db)};
+    }
+    it("conversation package setup pins the Native catalog release without installing or broadening access", async () => {
+      const { release, published } = await hireFixture();
+      await db.update(agents).set({ permissions: { trustPreset: "standard", canCreateAgents: false } }).where(eq(agents.id, f.presence.id));
+      await db.insert(companyMemberships).values({ companyId: f.home, principalType: "agent", principalId: f.presence.id,
+        status: "active", membershipRole: "member" }).onConflictDoNothing();
+      await instanceSettingsService(db).updateExperimental({ experience_projection_v9: true, ambient_commands_v9: true });
+      await db.insert(principalPermissionGrants).values({ companyId: f.home, principalType: "agent", principalId: f.presence.id,
+        permissionKey: "agents:create" }).onConflictDoNothing();
+      const [conversation] = await db.insert(issues).values({ companyId: f.home, title: "Package setup software fixture",
+        assigneeAgentId: f.presence.id, conversationAgentId: f.presence.id, conversationUserId: f.userId,
+        conversationState: "active", status: "in_progress" }).returning();
+      const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
+        nativeIssueId: conversation!.id, runtimeMode: "native", status: "running", contextSnapshot: { conversationSessionGeneration: 0 } }).returning();
+      await db.update(issues).set({ executionRunId: run!.id }).where(eq(issues.id, conversation!.id));
+      const author = agentSetupAuthoringToolsService(db), context = { companyId: f.home, agentId: f.presence.id, runId: run!.id };
+      expect(await author.catalog(context, { query: release.packageKey })).toMatchObject({ coverage: "bounded", modelCalled: false,
+        capabilities: [expect.objectContaining({ key: release.packageKey, versionId: published.id })] });
+      const before = await db.select().from(agents).where(eq(agents.companyId, f.home));
+      const command = { idempotencyKey: "exact-package", packageVersionId: published.id };
+      const receipt = await author.create(context, command);
+      expect(receipt).toMatchObject({ kind: "hire", packageVersionId: published.id, creationInstalledPackage: false,
+        creationCreatedAgent: false, creationGrantedAuthority: false, href: `/agents/hire/drafts/${receipt.draftId}` });
+      expect(await author.create(context, command)).toEqual(receipt);
+      const draft = await agentAuthoringService(db).get(f.actor, f.home, receipt.draftId);
+      expect(draft.package).toMatchObject({ key: release.packageKey, versionId: published.id, contentHash: published.contentHash });
+      expect(draft.content?.outcome).toBe(release.manifest.purpose);
+      expect(await db.select().from(agents).where(eq(agents.companyId, f.home))).toEqual(before);
+      expect(await db.select().from(companyAgentPackageInstallations).where(eq(companyAgentPackageInstallations.companyId, f.home))).toEqual([]);
+      await expect(author.create(context, { ...command, packageVersionId: versionId })).rejects.toMatchObject({ status: 409 });
+      await service.revoke(f.actor, published.id);
+      await expect(author.create(context, { ...command, idempotencyKey: "later-package" })).rejects.toMatchObject({ status: 422 });
+    });
+    it("saves a pinned unpublished Hire setup once without installing, granting or creating an agent", async () => {
+      const {release, published, hire} = await hireFixture();
+      const beforeAgents = (await db.select().from(agents)).length;
+      const beforeInstallations = (await db.select().from(companyAgentPackageInstallations)).length;
+      const input = {requestId: randomUUID(), packageVersionId: published.id};
+      const [first, repeated] = await Promise.all([hire.create(f.actor, f.home, input), hire.create(f.actor, f.home, input)]);
+      expect(first.id).toBe(repeated.id);
+      expect(first.kind).toBe("hire"); expect(first.step).toBe("hire_access"); expect(first.agentId).toBeNull();
+      expect(first.package).toMatchObject({key: release.packageKey, versionId: published.id, contentHash: published.contentHash});
+      expect(first.content!.ownerUserId).toBe(f.userId);
+      const body = {requestId: randomUUID(), expectedVersion: 1, step: "hire_authority", content: first.content};
+      const saved = await hire.save(f.actor, f.home, first.id, body);
+      expect(saved.version).toBe(2);
+      expect((await hire.save(f.actor, f.home, first.id, body)).version).toBe(2);
+      await expect(hire.save(f.actor, f.home, first.id, {...body, requestId: randomUUID(), expectedVersion: 2, step: "tools"})).rejects.toMatchObject({status: 422});
+      await expect(hire.save(f.actor, f.home, first.id, {...body, requestId: randomUUID(), expectedVersion: 2, content: {...first.content!, capabilities: [{operation: "external_send", autonomy: "ask_first"}]}})).rejects.toMatchObject({status: 422});
+      const review = await hire.review(f.actor, f.home, first.id);
+      expect(review.publishAllowed).toBe(false); expect(review.test.status).toBe("unqualified");
+      expect(await db.select().from(agents)).toHaveLength(beforeAgents);
+      expect(await db.select().from(companyAgentPackageInstallations)).toHaveLength(beforeInstallations);
+      const audit = await db.select().from(activityLog).where(eq(activityLog.entityId, first.id));
+      expect(audit.filter((event) => event.action === "agent_configuration.draft_created")).toHaveLength(1);
+      expect(audit.filter((event) => event.action === "agent_configuration.draft_saved")).toHaveLength(1);
+    });
+    it("prepares a pinned Hire draft and its exact package on the Original inactive Agent without grants or execution", async () => {
+      const originalFlags = await instanceSettingsService(db).getExperimental();
+      try {
+      await instanceSettingsService(db).updateExperimental({ free_core_commercial_v7: true, billing_entitlements_v6: true, billing_usage_v6: true });
+      const { published, hire } = await hireFixture();
+      const [account] = await db.insert(billingAccounts).values({ displayName: "Hire preparation Free Core", payerUserId: f.userId }).returning();
+      await db.insert(billingAccountCompanies).values({ companyId: f.home, billingAccountId: account!.id });
+      const beforeAgents = (await db.select().from(agents)).length, beforeInstalls = await db.select().from(companyAgentPackageInstallations);
+      const draft = await hire.create(f.actor, f.home, { requestId: randomUUID(), packageVersionId: published.id });
+      const reviewed = await hire.preparationReview(f.actor, f.home, draft.id);
+      expect(reviewed.packageInstallation).toMatchObject({ versionId: published.id, contentHash: published.contentHash,
+        components: [{ key: "internal-role", resourceId: roleId, versionId: roleVersionId }] });
+      const command = { requestId: randomUUID(), expectedVersion: draft.version, expectedReviewHash: reviewed.reviewHash, confirmInactiveAgentPreparation: true as const };
+      const prepared = await hire.prepare(f.actor, f.home, draft.id, command);
+      expect(prepared.package?.versionId).toBe(published.id);
+      expect(prepared.preparation).toMatchObject({ status: "prepared", runtimeQualified: false, authorityGranted: false, executionStarted: false });
+      expect(await db.select().from(agents)).toHaveLength(beforeAgents + 1);
+      const installations = await db.select().from(companyAgentPackageInstallations).where(eq(companyAgentPackageInstallations.agentId, prepared.preparation!.agentId));
+      expect(installations).toHaveLength(1);
+      expect(installations[0]).toMatchObject({ companyId: f.home, installedVersionId: published.id, status: "configuring",
+        components: [{ key: "internal-role", resourceId: roleId, versionId: roleVersionId }], installationRequestId: command.requestId });
+      expect(await db.select().from(companyAgentPackageInstallations)).toHaveLength(beforeInstalls.length + 1);
+      expect((await hire.prepare(f.actor, f.home, draft.id, command)).preparation!.agentId).toBe(prepared.preparation!.agentId);
+      expect(await db.select().from(companyAgentPackageInstallations)).toHaveLength(beforeInstalls.length + 1);
+      expect((await hire.review(f.actor, f.home, draft.id)).publishAllowed).toBe(false);
+      const another = await hire.create(f.actor, f.home, { requestId: randomUUID(), packageVersionId: published.id });
+      const nextReview = await hire.preparationReview(f.actor, f.home, another.id);
+      await service.revoke(f.actor, published.id);
+      await expect(hire.prepare(f.actor, f.home, another.id, { ...command, requestId: randomUUID(), expectedVersion: another.version, expectedReviewHash: nextReview.reviewHash })).rejects.toMatchObject({ status: 422 });
+      expect(await db.select().from(agents)).toHaveLength(beforeAgents + 1);
+      } finally {
+        await instanceSettingsService(db).updateExperimental({ free_core_commercial_v7: originalFlags.free_core_commercial_v7,
+          billing_entitlements_v6: originalFlags.billing_entitlements_v6, billing_usage_v6: originalFlags.billing_usage_v6 });
+      }
+    });
+    it("retains readable Hire pins through withdrawal and flag rollback, fences native pin/step substitution and permits discard", async () => {
+      const {published, hire} = await hireFixture();
+      const request = {requestId: randomUUID(), packageVersionId: published.id};
+      const draft = await hire.create(f.actor, f.home, request);
+      await expect(db.update(agentConfigurationDrafts).set({packageContentHash: "f".repeat(64), version: 2}).where(eq(agentConfigurationDrafts.id, draft.id))).rejects.toMatchObject({cause: {code: "23514"}});
+      await expect(db.update(agentConfigurationDrafts).set({step: "outcome", version: 2}).where(eq(agentConfigurationDrafts.id, draft.id))).rejects.toMatchObject({cause: {code: "23514"}});
+      await service.revoke(f.actor, published.id);
+      expect((await hire.create(f.actor, f.home, request)).id).toBe(draft.id);
+      expect((await hire.hireCapability(f.actor, f.home, draft.id)).available).toBe(false);
+      expect((await hire.review(f.actor, f.home, draft.id)).blockers.map((blocker) => blocker.code)).toContain("hire_release_unavailable");
+      await expect(hire.save(f.actor, f.home, draft.id, {requestId: randomUUID(), expectedVersion: 1, step: "hire_review", content: draft.content})).rejects.toMatchObject({status: 422});
+      await instanceSettingsService(db).updateExperimental({hire_agent_v9: false});
+      expect((await hire.get(f.actor, f.home, draft.id)).package?.versionId).toBe(published.id);
+      const removed = await hire.discard(f.actor, f.home, draft.id, {requestId: randomUUID(), expectedVersion: 1});
+      expect(removed.content).toBeNull(); expect(removed.package?.versionId).toBe(published.id);
+      await expect(hire.get({...f.actor, userId: "foreign-author", isInstanceAdmin: true}, f.home, draft.id)).rejects.toMatchObject({status: 403});
+    });
+    it("resolves Hire components only inside the selected company and refuses an archived local implementation", async () => {
+      const { published, hire } = await hireFixture();
+      const planned = await service.resolveHireComponents(f.actor, f.home, published.id);
+      expect(planned.components).toMatchObject([{ resourceId: roleId, versionId: roleVersionId }]);
+      await expect(service.resolveHireComponents(f.actor, f.guest, published.id))
+        .rejects.toMatchObject({ status: 409, details: { code: "hire_package_component_unavailable" } });
+      const draft = await hire.create(f.actor, f.home, { requestId: randomUUID(), packageVersionId: published.id });
+      const beforeAgents = await db.select().from(agents), beforeInstalls = await db.select().from(companyAgentPackageInstallations);
+      await db.update(rolePacks).set({ status: "archived" }).where(eq(rolePacks.id, roleId));
+      await expect(hire.preparationReview(f.actor, f.home, draft.id))
+        .rejects.toMatchObject({ status: 409, details: { code: "hire_package_component_unavailable" } });
+      expect(await db.select().from(agents)).toEqual(beforeAgents);
+      expect(await db.select().from(companyAgentPackageInstallations)).toEqual(beforeInstalls);
+    });
+    it("refuses a required Skill component that the package's exact Role Pack does not consume", async () => {
+      const procedures = await seedRequiredAuthoringProcedures(db, f.actor, f.home, f.presence.id);
+      const required = procedures[0]!, { release } = await hireFixture();
+      const [hash] = await db.execute(sql`select aw_v7_package_component_hash(${f.home}::uuid,'skill',${required.skillId}::uuid,${required.versionId}::uuid) as hash`);
+      const published = await service.publish(f.actor, { ...release, packageKey: `unbound-procedure-${randomUUID()}`,
+        components: [...release.components, { key: "required-procedure", type: "skill", sourceVersion: "1",
+          contentHash: String(hash!.hash), source: release.releaseEvidence.provenance, required: true }] });
+      const before = await db.select().from(companyAgentPackageInstallations);
+      await expect(service.resolveHireComponents(f.actor, f.home, published.id))
+        .rejects.toMatchObject({ status: 409, details: { code: "hire_package_mapping_required" } });
+      expect(await db.select().from(companyAgentPackageInstallations)).toEqual(before);
+    });
+    it("refuses a required Playbook component outside the package's reviewed Role Pack", async () => {
+      const required = await seedApprovedAuthoringPlaybook(db, f.actor, f.home), { release } = await hireFixture();
+      const [hash] = await db.execute(sql`select aw_v7_package_component_hash(${f.home}::uuid,'playbook',
+        ${required.playbookId}::uuid,${required.revisionId}::uuid) as hash`);
+      const published = await service.publish(f.actor, { ...release, packageKey: `unbound-playbook-${randomUUID()}`,
+        components: [...release.components, { key: "required-playbook", type: "playbook", sourceVersion: "1",
+          contentHash: String(hash!.hash), source: release.releaseEvidence.provenance, required: true }] });
+      const before = await db.select().from(companyAgentPackageInstallations);
+      await expect(service.resolveHireComponents(f.actor, f.home, published.id))
+        .rejects.toMatchObject({ status: 409, details: { code: "hire_package_mapping_required" } });
+      expect(await db.select().from(companyAgentPackageInstallations)).toEqual(before);
+    });
+    it("withholds another owner's conversation routine from package options and pin review", async () => {
+      const automation = await seedHireAutomationComponents(db, f), { release } = await hireFixture();
+      const [conversation] = await db.insert(issues).values({ companyId: f.home, title: "PRIVATE routine source",
+        assigneeAgentId: f.presence.id, conversationAgentId: f.presence.id, conversationUserId: f.userId,
+        conversationState: "active", status: "in_progress" }).returning();
+      const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
+        nativeIssueId: conversation!.id, runtimeMode: "native", status: "running", contextSnapshot: { conversationSessionGeneration: 0 } }).returning();
+      await db.update(routines).set({ originKind: "conversation_draft", originId: run!.id,
+        responsibleUserId: f.userId, createdByAgentId: f.presence.id }).where(eq(routines.id, automation.routine.id));
+      const other = `package-other-owner-${randomUUID()}`, now = new Date();
+      await db.insert(authUsers).values({ id: other, name: "Other owner", email: `${other}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now });
+      await db.insert(companyMemberships).values({ companyId: f.home, principalType: "user", principalId: other, status: "active", membershipRole: "owner" });
+      await db.insert(principalPermissionGrants).values(grantsForHumanRole("owner").map(grant => ({
+        companyId: f.home, principalType: "user", principalId: other, ...grant })));
+      const otherActor = { ...f.actor, userId: other, isInstanceAdmin: true };
+      const ownOptions = await service.options(f.actor, f.home);
+      expect(ownOptions.components.some(component => component.resourceId === automation.routine.id)).toBe(true);
+      const hidden = await service.options(otherActor, f.home);
+      expect(hidden.components.some(component => component.resourceId === automation.routine.id)).toBe(false);
+      const published = await service.publish(f.actor, { ...release, packageKey: `private-routine-${randomUUID()}`,
+        components: [...release.components, { key: "manual-routine", type: "routine_template", sourceVersion: "1",
+          contentHash: automation.routineHash, source: release.releaseEvidence.provenance, required: true }] });
+      const beforeAssessments = await db.select().from(readinessAssessments), beforeInstalls = await db.select().from(companyAgentPackageInstallations);
+      await expect(service.preview(otherActor, f.home, { ...installInput(), versionId: published.id,
+        components: [...installInput().components, { key: "manual-routine", resourceId: automation.routine.id, versionId: automation.routine.latestRevisionId }] }))
+        .rejects.toMatchObject({ status: 403 });
+      expect(await db.select().from(readinessAssessments)).toEqual(beforeAssessments);
+      expect(await db.select().from(companyAgentPackageInstallations)).toEqual(beforeInstalls);
+    });
+
+    it("bounds package option reads when the Original company privacy lock is busy", async () => {
+      let release!: () => void, acquired!: () => void;
+      const ready = new Promise<void>(resolve => { acquired = resolve; }), done = new Promise<void>(resolve => { release = resolve; });
+      const owner = db.transaction(async tx => { await lockAnalyticalCompany(tx, f.home); acquired(); await done; });
+      await ready;
+      try { await expect(service.options(f.actor, f.home)).rejects.toMatchObject({ cause: { code: "55P03" } }); }
+      finally { release(); await owner; }
+      expect((await service.options(f.actor, f.home)).agents.some(agent => agent.id === f.presence.id)).toBe(true);
+    });
+
+    it("offers current Native workflow and routine components without starting automation", async () => {
+      const automation = await seedHireAutomationComponents(db, f);
+      const beforeRuns = await db.select().from(workflowRuns), beforeRoutines = await db.select().from(routineRuns);
+      const beforeActivity = await db.select().from(activityLog), beforeAssessments = await db.select().from(readinessAssessments);
+      const options = await service.options(f.actor, f.home);
+      expect(options.components).toEqual(expect.arrayContaining([
+        expect.objectContaining({ type: "workflow_template", resourceId: automation.workflow.id,
+          versionId: automation.workflow.publishedRevisionId, contentHash: automation.workflowHash }),
+        expect.objectContaining({ type: "routine_template", resourceId: automation.routine.id,
+          versionId: automation.routine.latestRevisionId, contentHash: automation.routineHash }),
+      ]));
+      expect(await db.select().from(activityLog)).toEqual(beforeActivity);
+      expect(await db.select().from(readinessAssessments)).toEqual(beforeAssessments);
+      await seedHireAutomationComponents(db, { ...f, home: f.guest });
+      expect((await service.options(f.actor, f.home)).components).toEqual(options.components);
+      await db.update(workflows).set({ status: "paused" }).where(eq(workflows.id, automation.workflow.id));
+      const paused = await service.options(f.actor, f.home);
+      expect(paused.components.some(component => component.resourceId === automation.workflow.id)).toBe(false);
+      expect(await db.select().from(workflowRuns)).toEqual(beforeRuns);
+      expect(await db.select().from(routineRuns)).toEqual(beforeRoutines);
+    });
+
+    it("pins exact current local automation components without starting them and refuses paused or ambiguous sources", async () => {
+      const { release } = await hireFixture(), automation = await seedHireAutomationComponents(db, f);
+      const published = await service.publish(f.actor, { ...release, packageKey: `automation-components-${randomUUID()}`,
+        components: [...release.components,
+          { key: "manual-workflow", type: "workflow_template", sourceVersion: "1", contentHash: automation.workflowHash,
+            source: release.releaseEvidence.provenance, required: true },
+          { key: "manual-routine", type: "routine_template", sourceVersion: "1", contentHash: automation.routineHash,
+            source: release.releaseEvidence.provenance, required: true }] });
+      const beforeWorkflows = await db.select().from(workflowRuns), beforeRoutines = await db.select().from(routineRuns);
+      const planned = await service.resolveHireComponents(f.actor, f.home, published.id);
+      expect(planned.components).toEqual(expect.arrayContaining([
+        expect.objectContaining({ type: "workflow_template", resourceId: automation.workflow.id, versionId: automation.workflow.publishedRevisionId }),
+        expect.objectContaining({ type: "routine_template", resourceId: automation.routine.id, versionId: automation.routine.latestRevisionId }),
+      ]));
+      // An equivalent other-company graph must not become a candidate or make
+      // this company's exact local match ambiguous.
+      await seedHireAutomationComponents(db, { ...f, home: f.guest });
+      expect((await service.resolveHireComponents(f.actor, f.home, published.id)).components).toEqual(planned.components);
+      await db.update(workflows).set({ status: "paused" }).where(eq(workflows.id, automation.workflow.id));
+      await expect(service.resolveHireComponents(f.actor, f.home, published.id))
+        .rejects.toMatchObject({ status: 409, details: { code: "hire_package_component_unavailable" } });
+      await db.update(workflows).set({ status: "active" }).where(eq(workflows.id, automation.workflow.id));
+      await db.update(routines).set({ status: "paused" }).where(eq(routines.id, automation.routine.id));
+      await expect(service.resolveHireComponents(f.actor, f.home, published.id))
+        .rejects.toMatchObject({ status: 409, details: { code: "hire_package_component_unavailable" } });
+      await db.update(routines).set({ status: "active" }).where(eq(routines.id, automation.routine.id));
+      await seedHireAutomationComponents(db, f);
+      await expect(service.resolveHireComponents(f.actor, f.home, published.id))
+        .rejects.toMatchObject({ status: 409, details: { code: "hire_package_component_ambiguous" } });
+      expect(await db.select().from(workflowRuns)).toEqual(beforeWorkflows);
+      expect(await db.select().from(routineRuns)).toEqual(beforeRoutines);
+    });
+    it("projects only available customer releases for Hire Agent and does not expose internal evaluation or release evidence", async () => {
+      await instanceSettingsService(db).updateExperimental({ hire_agent_v9: true });
+      const hire = agentAuthoringService(db);
+      expect((await hire.hireCatalog(f.actor, f.home)).some((row) => row.key === input.packageKey)).toBe(false);
+      const evidence = input.releaseEvidence.provenance;
+      const customer: PackageRelease = {
+        ...input,
+        packageKey: `customer-catalog-fixture-${randomUUID()}`,
+        manifest: { ...input.manifest, audience: "customer", commercialProductKey: "agent_package_research" },
+        releaseEvidence: { ...input.releaseEvidence, sbom: evidence, scan: evidence, evaluations: evidence, protectedHoldout: evidence, customerDemand: evidence },
+      };
+      const published = await service.publish(f.actor, customer);
+      const rows = await hire.hireCatalog(f.actor, f.home);
+      const capability = rows.find((row) => row.key === customer.packageKey)!;
+      expect(capability.versionId).toBe(published.id);
+      expect(capability.outcome).toBe(customer.manifest.purpose);
+      expect(capability.declaredAccess).toMatchObject({
+        maximumRisk: customer.manifest.maximumRisk,
+        optionalConnections: customer.manifest.optionalConnections,
+        memoryPolicy: customer.manifest.memoryPolicy,
+        sandboxAssurance: customer.manifest.sandboxAssurance,
+        runtimeProviders: customer.manifest.runtimeProviders,
+        scopeAssessment: "unavailable",
+        authorityEffect: "none",
+      });
+      expect(capability).not.toHaveProperty("releaseEvidence");
+      expect(capability).not.toHaveProperty("components");
+      const agentCount = (await db.select().from(agents)).length;
+      await service.revoke(f.actor, published.id);
+      expect((await hire.hireCatalog(f.actor, f.home)).some((row) => row.key === customer.packageKey)).toBe(false);
+      expect(await db.select().from(agents)).toHaveLength(agentCount);
+      await expect(hire.hireCatalog({ ...f.actor, userId: "unknown-account", isInstanceAdmin: true }, f.home)).rejects.toMatchObject({ status: 403 });
+      await instanceSettingsService(db).updateExperimental({ hire_agent_v9: false });
+      await expect(hire.hireCatalog(f.actor, f.home)).rejects.toMatchObject({ status: 404 });
+    });
+    it("reconciles concurrent installation acknowledgements without duplicate installation or audit", async () => {
+      const body = { ...installInput(), installationRequestId: randomUUID() };
+      const [first, second] = await Promise.all([
+        service.install(f.actor, f.home, body, input.packageKey),
+        service.install(f.actor, f.home, body, input.packageKey),
+      ]);
+      expect(first.id).toBe(second.id);
+      expect(first.installationRequestId).toBe(body.installationRequestId);
+      expect(first).not.toHaveProperty("installationRequestHash");
+      expect(first.status).toBe("configuring");
+      expect(first.activationHash).toBeNull();
+      expect(await db.select().from(companyAgentPackageInstallations).where(eq(companyAgentPackageInstallations.agentId, f.presence.id))).toHaveLength(1);
+      const audit = await db.select().from(activityLog).where(eq(activityLog.entityId, first.id));
+      expect(audit.filter((event) => event.action === "agent_package.installed")).toHaveLength(1);
+      await expect(service.install(f.actor, f.home, { ...body, updatePolicy: "auto_low_risk" }, input.packageKey)).rejects.toMatchObject({status: 409, details: {code: "PACKAGE_INSTALL_REQUEST_CONFLICT"}});
+      await expect(service.install(f.actor, f.home, body, "other-package")).rejects.toMatchObject({status: 409});
+    });
+    it("retains the installation receipt after release withdrawal and uninstall, but requires current authority", async () => {
+      const body = { ...installInput(), installationRequestId: randomUUID() };
+      const first = await service.install(f.actor, f.home, body, input.packageKey);
+      await service.revoke(f.actor, versionId);
+      const withdrawn = await service.install(f.actor, f.home, body, input.packageKey);
+      expect(withdrawn.id).toBe(first.id);
+      expect(withdrawn.status).not.toBe("active");
+      const removed = await service.decide(f.actor, f.home, first.id, "uninstall", {expectedVersion: withdrawn.version, reason: "Retire withdrawn evaluation"});
+      expect((await service.install(f.actor, f.home, body, input.packageKey)).status).toBe("uninstalled");
+      expect(removed.id).toBe(first.id);
+      await db.update(companyMemberships).set({status: "suspended"}).where(sql`company_id=${f.home}::uuid and principal_id=${f.userId}`);
+      await expect(service.install(f.actor, f.home, body, input.packageKey)).rejects.toMatchObject({status: 403});
+    });
+    it("rejects package-path substitution and immutable installation request rewrites at the native database", async () => {
+      const body = { ...installInput(), installationRequestId: randomUUID() };
+      await expect(service.install(f.actor, f.home, body, "other-package")).rejects.toMatchObject({status: 404});
+      const first = await service.install(f.actor, f.home, body, input.packageKey);
+      await expect(db.update(companyAgentPackageInstallations).set({installationRequestId: randomUUID(), version: first.version + 1}).where(eq(companyAgentPackageInstallations.id, first.id))).rejects.toMatchObject({cause: {code: "23514", message: "package_installation_request_immutable"}});
+      await expect(db.update(companyAgentPackageInstallations).set({installationRequestHash: null, version: first.version + 1}).where(eq(companyAgentPackageInstallations.id, first.id))).rejects.toMatchObject({cause: {code: "23514"}});
+      const other = await seedV5Presences(db);
+      await expect(service.install(other.actor, other.home, body, input.packageKey)).rejects.toMatchObject({status: 404});
+    });
+    it("reads a retained installation request without replay after withdrawal, uninstall and rollout closure", async () => {
+      const body = { ...installInput(), installationRequestId: randomUUID() };
+      const installed = await service.install(f.actor, f.home, body, input.packageKey);
+      const before = await db.select().from(activityLog).where(eq(activityLog.entityId, installed.id));
+      const first = await service.installationRequest(f.actor, f.home, body.installationRequestId);
+      expect(first).toMatchObject({ companyId: f.home, requestId: body.installationRequestId,
+        installationId: installed.id, installationVersion: 1, installationStatus: "configuring" });
+      expect(Object.keys(first).sort()).toEqual(["companyId", "installationId", "installationStatus", "installationVersion", "observedAt", "requestId"]);
+      expect(await db.select().from(activityLog).where(eq(activityLog.entityId, installed.id))).toEqual(before);
+      await service.revoke(f.actor, versionId);
+      const current = await service.get(f.actor, f.home, installed.id);
+      await service.decide(f.actor, f.home, installed.id, "uninstall", { expectedVersion: current.version, reason: "Retire the original recorded installation" });
+      await instanceSettingsService(db).updateExperimental({ ...Object.fromEntries(V9_FEATURE_KEYS.map(key => [key, false])),
+        core_stewards_v7: false, agent_packages_v7: false });
+      expect(await service.installationRequest(f.actor, f.home, body.installationRequestId)).toMatchObject({ installationId: installed.id, installationStatus: "uninstalled" });
+      const app = express(); app.use(express.json());
+      app.use((req, _res, next) => { req.actor = f.actor as typeof req.actor; next(); });
+      app.use("/api", agentPackageRoutes(db)); app.use(errorHandler);
+      const response = await request(app).get(`/api/companies/${f.home}/agent-package-installations/requests/${body.installationRequestId}?expectedUserId=${f.userId}`).expect(200);
+      expect(response.headers["cache-control"]).toBe("private, no-store");
+      expect(response.body.installationStatus).toBe("uninstalled");
+      await request(app).get(`/api/companies/${f.home}/agent-package-installations/requests/${body.installationRequestId}?expectedUserId=foreign`).expect(409);
+      await request(app).get(`/api/companies/${f.home}/agent-package-installations/requests/${body.installationRequestId}`).expect(400);
+      await request(app).get(`/api/companies/${f.home}/agent-package-installations/requests/not-a-uuid?expectedUserId=${f.userId}`).expect(400);
+    });
+    it("keeps absent or foreign installation requests unconfirmed and preserves current requester/Agent authority", async () => {
+      const body = { ...installInput(), installationRequestId: randomUUID() };
+      await service.install(f.actor, f.home, body, input.packageKey);
+      await expect(service.installationRequest(f.actor, f.home, randomUUID())).rejects.toMatchObject({ status: 404, details: { code: "PACKAGE_INSTALL_REQUEST_UNCONFIRMED" } });
+      await expect(service.installationRequest(f.actor, f.guest, body.installationRequestId)).rejects.toMatchObject({ status: 404 });
+      const other = await seedV5Presences(db);
+      await expect(service.installationRequest({ ...other.actor, isInstanceAdmin: true }, f.home, body.installationRequestId)).rejects.toMatchObject({ status: 403 });
+      await db.update(authUsers).set({ emailVerified: false }).where(eq(authUsers.id, f.userId));
+      await expect(service.installationRequest(f.actor, f.home, body.installationRequestId)).rejects.toMatchObject({ status: 403 });
+      await db.update(authUsers).set({ emailVerified: true }).where(eq(authUsers.id, f.userId));
+      await db.update(companyMemberships).set({ status: "suspended" }).where(and(eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
+      await expect(service.installationRequest({ ...f.actor, isInstanceAdmin: true }, f.home, body.installationRequestId)).rejects.toMatchObject({ status: 403 });
+    });
     async function run() {
       return (
         await db
@@ -271,6 +699,351 @@ const support = await getEmbeddedPostgresTestSupport();
         core_stewards_v7: true,
       });
     }
+    async function enableV9Maintenance() {
+      await enableStewards();
+      await instanceSettingsService(db).updateExperimental({ experience_projection_v9: true, maintenance_autopilot_v9: true });
+    }
+    it("retains private no-store headers on Original package reads and refused writes", async () => {
+      const app = express(); app.use(express.json());
+      app.use((req, _res, next) => { req.actor = f.actor as typeof req.actor; next(); });
+      app.use("/api", agentPackageRoutes(db));
+      app.get("/api/non-package-probe", (_req, res) => res.json({ ok: true }));
+      app.use(errorHandler);
+      const responses = [
+        await request(app).get(`/api/agent-packages?expectedUserId=${f.userId}`).expect(200),
+        await request(app).get(`/api/companies/${f.home}/agent-package-installations?expectedUserId=${f.userId}`).expect(200),
+        await request(app).get(`/api/companies/${f.home}/agent-package-installations?expectedUserId=foreign-account`).expect(409),
+        await request(app).post(`/api/companies/${f.home}/agent-packages/${input.packageKey}/install?expectedUserId=${f.userId}`).send({}).expect(400),
+      ];
+      for (const response of responses) expect(response.headers["cache-control"]).toBe("private, no-store");
+      expect((await request(app).get("/api/non-package-probe").expect(200)).headers["cache-control"]).toBeUndefined();
+    });
+    async function reviewedMaintenance(installedId: string, next: { id: string; contentHash: string }) {
+      const [current] = await db.select().from(companyAgentPackageInstallations).where(eq(companyAgentPackageInstallations.id, installedId));
+      return { expectedInstallationVersion: current!.version, expectedInstalledVersionId: current!.installedVersionId,
+        expectedUpdatedAt: current!.updatedAt.toISOString(), expectedReleaseContentHash: next.contentHash };
+    }
+    it("V9 maintenance refuses unreviewed, stale-version, changed-time and changed-release observations before native mutation", async () => {
+      await enableV9Maintenance();
+      const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });
+      await service.decide(f.actor, f.home, installed.id, "activate", { expectedVersion: 1, reason: "Review bounded source admission" });
+      const next = await service.publish(f.actor, { ...input, version: "1.0.1", releaseNotes: "Editorial correction" });
+      const review = await reviewedMaintenance(installed.id, next);
+      expect(await service.stewardUpdate(f.home, installed.id, next.id)).toEqual({ updated: false });
+      for (const change of [{ expectedInstallationVersion: review.expectedInstallationVersion + 1 },
+        { expectedUpdatedAt: "2000-01-01T00:00:00.000Z" }, { expectedReleaseContentHash: "0".repeat(64) }])
+        expect(await service.stewardUpdate(f.home, installed.id, next.id, { ...review, ...change })).toEqual({ updated: false });
+      const current = await service.get(f.actor, f.home, installed.id);
+      expect(current.installedVersionId).toBe(installed.installedVersionId); expect(current.status).toBe("active");
+      expect(await db.select().from(activityLog).where(and(eq(activityLog.entityId, installed.id), eq(activityLog.action, "agent_package.low_risk_update_configured")))).toHaveLength(0);
+    });
+    it("V9 maintenance retains a durable unknown attempt when the native effect transaction rolls back", async () => {
+      await enableV9Maintenance();
+      const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });
+      await service.decide(f.actor, f.home, installed.id, "activate", { expectedVersion: 1, reason: "Review unknown outcome admission" });
+      const next = await service.publish(f.actor, { ...input, version: "1.0.1", releaseNotes: "Editorial correction" });
+      const review = await reviewedMaintenance(installed.id, next);
+      await db.execute(sql`create function aw_v9_attempt_rollback() returns trigger language plpgsql as $$ begin
+        if new.action='agent_package.low_risk_update_configured' and new.entity_id=${sql.raw("'" + installed.id + "'")} then
+          raise exception 'Native configured receipt unavailable' using errcode='23514'; end if; return new; end $$`);
+      await db.execute(sql`create trigger aw_v9_attempt_rollback before insert on activity_log for each row execute function aw_v9_attempt_rollback()`);
+      try {
+        await expect(service.stewardUpdate(f.home, installed.id, next.id, review)).rejects.toMatchObject({ cause: { code: "23514" } });
+      } finally {
+        await db.execute(sql`drop trigger aw_v9_attempt_rollback on activity_log`);
+        await db.execute(sql`drop function aw_v9_attempt_rollback()`);
+      }
+      expect(await service.get(f.actor, f.home, installed.id)).toMatchObject({ status: "active", installedVersionId: review.expectedInstalledVersionId, version: review.expectedInstallationVersion });
+      // Observe the actual unchanged five-second native lease before escalation.
+      await new Promise(resolve => setTimeout(resolve, 6000));
+      expect(await service.stewardUpdate(f.home, installed.id, next.id, review)).toEqual({ updated: false });
+      const events = await db.select().from(activityLog).where(eq(activityLog.entityId, installed.id));
+      expect(events.filter(e => e.action === "agent_package.maintenance_attempt_started")).toHaveLength(1);
+      expect(events.filter(e => e.action === "agent_package.maintenance_attempt_finished")).toHaveLength(0);
+      expect(events.find(e => e.action === "agent_package.maintenance_loop_blocked")?.details).toMatchObject({ reason: "unknown_outcome", humanReviewRequired: true });
+      const unknownHistory = await readMaintenanceHistory(db, f.actor, f.home, installed.id);
+      expect(unknownHistory.entries).toMatchObject([{ outcome: "human_review_required" }]);
+      expect(unknownHistory.attemptHistory).toMatchObject({ hasMore: false, entries: [{ outcome: "unconfirmed", finishedAt: null, sourceMatchesCurrent: true }] });
+      expect(unknownHistory.attemptHistory?.observedAt).toBe(unknownHistory.observedAt);
+      expect((await readPackageMaintenanceAttention(db, f.actor, f.home, new AbortController().signal)).needsYou[0]?.evidence).toEqual(["unknown_outcome"]);
+      // An explicit native owner source transition supersedes, but does not erase, the old attempt.
+      const suspended = await service.decide(f.actor, f.home, installed.id, "suspend", { expectedVersion: review.expectedInstallationVersion, reason: "Owner reviews retained unknown outcome" });
+      expect((await readPackageMaintenanceAttention(db, f.actor, f.home, new AbortController().signal)).needsYou).toEqual([]);
+      await service.decide(f.actor, f.home, installed.id, "activate", { expectedVersion: suspended.version, reason: "Owner explicitly reauthorizes current configuration" });
+      expect(await service.stewardUpdate(f.home, installed.id, next.id, await reviewedMaintenance(installed.id, next))).toEqual({ updated: true });
+      expect((await db.select().from(activityLog).where(and(eq(activityLog.entityId, installed.id), eq(activityLog.action, "agent_package.maintenance_attempt_started"))))).toHaveLength(2);
+    });
+    it.each([1, 2])("V9 maintenance does not repeat an effect after transaction %s acknowledgement is lost", async (lostTransaction) => {
+      await enableV9Maintenance();
+      const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });
+      await service.decide(f.actor, f.home, installed.id, "activate", { expectedVersion: 1, reason: "Review original native acknowledgement" });
+      const next = await service.publish(f.actor, { ...input, version: "1.0.1", releaseNotes: "Editorial correction" });
+      const review = await reviewedMaintenance(installed.id, next);
+      const transact = db.transaction.bind(db);
+      let completed = 0;
+      const dropAck = vi.spyOn(db, "transaction").mockImplementation(async (callback, config) => {
+        const result = await transact(callback, config);
+        if (++completed === lostTransaction) throw new Error("Lost native transaction acknowledgement");
+        return result;
+      });
+      try { await expect(service.stewardUpdate(f.home, installed.id, next.id, review)).rejects.toThrow("Lost native transaction acknowledgement"); }
+      finally { dropAck.mockRestore(); }
+      const current = await service.get(f.actor, f.home, installed.id);
+      expect(current).toMatchObject(lostTransaction === 1
+        ? { status: "active", installedVersionId: review.expectedInstalledVersionId, version: review.expectedInstallationVersion }
+        : { status: "configuring", installedVersionId: next.id, version: review.expectedInstallationVersion + 1, activationHash: null });
+      expect(await service.stewardUpdate(f.home, installed.id, next.id, review)).toEqual({ updated: false });
+      const events = await db.select().from(activityLog).where(eq(activityLog.entityId, installed.id));
+      expect(events.filter(e => e.action === "agent_package.maintenance_attempt_started")).toHaveLength(1);
+      expect(events.filter(e => e.action === "agent_package.low_risk_update_configured")).toHaveLength(lostTransaction === 2 ? 1 : 0);
+      expect(events.filter(e => e.action === "agent_package.maintenance_attempt_finished")).toHaveLength(lostTransaction === 2 ? 1 : 0);
+      const history = await readMaintenanceHistory(db, f.actor, f.home, installed.id);
+      const attempt = history.attemptHistory?.entries[0];
+      expect(attempt).toMatchObject({ sourceMatchesCurrent: lostTransaction === 1 });
+      expect(attempt?.outcome).toBe(lostTransaction === 2 ? "configuration_recorded"
+        : Date.parse(history.observedAt) >= Date.parse(attempt!.leaseExpiresAt) ? "unconfirmed" : "awaiting_receipt");
+      expect(await db.select().from(activityLog).where(eq(activityLog.entityId, installed.id))).toHaveLength(events.length);
+    });
+    it("V9 maintenance rechecks original human authority after durable reservation", async () => {
+      await enableV9Maintenance();
+      const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });
+      await service.decide(f.actor, f.home, installed.id, "activate", { expectedVersion: 1, reason: "Review current human authority" });
+      const next = await service.publish(f.actor, { ...input, version: "1.0.1", releaseNotes: "Editorial correction" });
+      const review = await reviewedMaintenance(installed.id, next);
+      const transact = db.transaction.bind(db);
+      let completed = 0;
+      const withdraw = vi.spyOn(db, "transaction").mockImplementation(async (callback, config) => {
+        const result = await transact(callback, config);
+        if (++completed === 1) await db.update(companyMemberships).set({ status: "suspended" }).where(and(eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
+        return result;
+      });
+      try { await expect(service.stewardUpdate(f.home, installed.id, next.id, review)).rejects.toMatchObject({ status: 403 }); }
+      finally {
+        withdraw.mockRestore();
+        await db.update(companyMemberships).set({ status: "active" }).where(and(eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
+      }
+      expect(await service.get(f.actor, f.home, installed.id)).toMatchObject({ status: "active", installedVersionId: review.expectedInstalledVersionId });
+      expect(await service.stewardUpdate(f.home, installed.id, next.id, review)).toEqual({ updated: false });
+    });
+    it("V9 maintenance fences a late reserved worker and counts its known no-effect attempt", async () => {
+      await enableV9Maintenance();
+      const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });
+      await service.decide(f.actor, f.home, installed.id, "activate", { expectedVersion: 1, reason: "Review native attempt lease" });
+      const next = await service.publish(f.actor, { ...input, version: "1.0.1", releaseNotes: "Editorial correction" });
+      const review = await reviewedMaintenance(installed.id, next);
+      const transact = db.transaction.bind(db);
+      let completed = 0;
+      const delay = vi.spyOn(db, "transaction").mockImplementation(async (callback, config) => {
+        const result = await transact(callback, config);
+        if (++completed === 1) await new Promise(resolve => setTimeout(resolve, 6000));
+        return result;
+      });
+      try { expect(await service.stewardUpdate(f.home, installed.id, next.id, review)).toEqual({ updated: false }); }
+      finally { delay.mockRestore(); }
+      expect(await service.get(f.actor, f.home, installed.id)).toMatchObject({ status: "active", installedVersionId: review.expectedInstalledVersionId });
+      expect(await service.stewardUpdate(f.home, installed.id, next.id, review)).toEqual({ updated: true });
+      const events = await db.select().from(activityLog).where(eq(activityLog.entityId, installed.id));
+      expect(events.filter(e => e.action === "agent_package.maintenance_attempt_started")).toHaveLength(2);
+      expect(events.filter(e => e.action === "agent_package.low_risk_update_configured")).toHaveLength(1);
+      expect(events.filter(e => e.action === "agent_package.maintenance_attempt_finished").map(e => e.details?.outcome).sort()).toEqual(["configured_activation_required", "no_effect"]);
+      expect((await readMaintenanceHistory(db, f.actor, f.home, installed.id)).attemptHistory?.entries.map(entry => entry.outcome).sort()).toEqual(["configuration_recorded", "no_effect"]);
+    });
+    it("V9 maintenance retains an unknown original tuple after its daily budget window has elapsed", async () => {
+      await enableV9Maintenance();
+      const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });
+      await service.decide(f.actor, f.home, installed.id, "activate", { expectedVersion: 1, reason: "Review retained unknown native source" });
+      const next = await service.publish(f.actor, { ...input, version: "1.0.1", releaseNotes: "Editorial correction" });
+      const review = await reviewedMaintenance(installed.id, next);
+      // Retained original audit fixture exercises time-window semantics, not execution evidence.
+      await db.insert(activityLog).values({ companyId: f.home, actorType: "system", actorId: "core-stewards",
+        entityType: "agent_package_installation", entityId: installed.id, action: "agent_package.maintenance_attempt_started",
+        createdAt: new Date(Date.now() - 48 * 60 * 60 * 1000), details: { attemptId: randomUUID(), candidateVersion: next.id,
+          reviewedSource: review, policyVersion: "aw-v9-package-maintenance-1", maintenanceClass: "M2", policyOwnerUserId: f.userId } });
+      expect(await service.stewardUpdate(f.home, installed.id, next.id, review)).toEqual({ updated: false });
+      expect(await service.get(f.actor, f.home, installed.id)).toMatchObject({ status: "active", installedVersionId: review.expectedInstalledVersionId });
+      const blocked = await db.select().from(activityLog).where(and(eq(activityLog.entityId, installed.id), eq(activityLog.action, "agent_package.maintenance_loop_blocked")));
+      expect(blocked).toHaveLength(1); expect(blocked[0]!.details).toMatchObject({ reason: "unknown_outcome" });
+      expect((await readPackageMaintenanceAttention(db, f.actor, f.home, new AbortController().signal)).needsYou).toHaveLength(1);
+      expect((await readMaintenanceHistory(db, f.actor, f.home, installed.id)).attemptHistory).toMatchObject({ entries: [{ outcome: "unconfirmed", finishedAt: null, sourceMatchesCurrent: true }] });
+    });
+    it("V9 maintenance counts known no-effect attempts and never falls back to V7 authority", async () => {
+      await enableV9Maintenance();
+      const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });
+      await service.decide(f.actor, f.home, installed.id, "activate", { expectedVersion: 1, reason: "Review bounded attempt costs" });
+      const next = await service.publish(f.actor, { ...input, version: "1.0.1", releaseNotes: "Editorial correction" });
+      const review = await reviewedMaintenance(installed.id, next);
+      for (let attempt = 0; attempt < 3; attempt++) {
+        const transact = db.transaction.bind(db);
+        let completed = 0;
+        const rollbackFlag = vi.spyOn(db, "transaction").mockImplementation(async (callback, config) => {
+          const result = await transact(callback, config);
+          if (++completed === 1) await instanceSettingsService(db).updateExperimental({ maintenance_autopilot_v9: false });
+          return result;
+        });
+        try { expect(await service.stewardUpdate(f.home, installed.id, next.id, review)).toEqual({ updated: false }); }
+        finally { rollbackFlag.mockRestore(); await instanceSettingsService(db).updateExperimental({ maintenance_autopilot_v9: true }); }
+      }
+      expect(await service.stewardUpdate(f.home, installed.id, next.id, review)).toEqual({ updated: false });
+      expect(await service.get(f.actor, f.home, installed.id)).toMatchObject({ status: "active", installedVersionId: review.expectedInstalledVersionId, version: review.expectedInstallationVersion });
+      const events = await db.select().from(activityLog).where(eq(activityLog.entityId, installed.id));
+      expect(events.filter(e => e.action === "agent_package.maintenance_attempt_started")).toHaveLength(3);
+      expect(events.filter(e => e.action === "agent_package.maintenance_attempt_finished").map(e => e.details?.outcome)).toEqual(["no_effect", "no_effect", "no_effect"]);
+      expect(events.filter(e => e.action === "agent_package.low_risk_update_configured")).toHaveLength(0);
+      expect(events.find(e => e.action === "agent_package.maintenance_loop_blocked")?.details).toMatchObject({ reason: "attempt_budget" });
+      expect((await readMaintenanceHistory(db, f.actor, f.home, installed.id)).attemptHistory?.entries.map(entry => entry.outcome)).toEqual(["no_effect", "no_effect", "no_effect"]);
+      expect((await readPackageMaintenanceAttention(db, f.actor, f.home, new AbortController().signal)).needsYou[0]?.evidence).toEqual(["attempt_budget"]);
+    });
+    it("V9 maintenance concurrent scans configure once with a native verified configuration receipt and retain activation", async () => {
+      await enableV9Maintenance();
+      const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });
+      await service.decide(f.actor, f.home, installed.id, "activate", { expectedVersion: 1, reason: "Opt in to bounded unchanged-content updates" });
+      const next = await service.publish(f.actor, { ...input, version: "1.0.1", releaseNotes: "Editorial correction" });
+      const scans = await Promise.all([maintainPackageUpdates(db), maintainPackageUpdates(db)]);
+      // The native scanner also services retained fixtures in other companies.
+      // Exactly-once is asserted below on this installation's real mutation receipt.
+      expect(scans.some(scan => scan.configured > 0)).toBe(true);
+      const current = await service.get(f.actor, f.home, installed.id);
+      expect(current).toMatchObject({ installedVersionId: next.id, status: "configuring", activationHash: null, version: 3 });
+      const receipts = await db.select().from(activityLog).where(and(eq(activityLog.entityId, installed.id), eq(activityLog.action, "agent_package.low_risk_update_configured")));
+      expect(receipts).toHaveLength(1); expect(receipts[0]!.details).toMatchObject({ maintenanceClass: "M2", policyVersion: "aw-v9-package-maintenance-1", postcondition: "configured_activation_required", activationRequired: true });
+      const history = await readMaintenanceHistory(db, f.actor, f.home, installed.id);
+      expect(history).toMatchObject({ companyId: f.home, installationId: installed.id, installationVersion: 3,
+        installationStatus: "configuring", hasMore: false, entries: [{ receiptId: receipts[0]!.id, maintenanceClass: "M2", outcome: "configured_activation_required" }] });
+      expect(JSON.stringify(history)).not.toContain("policyOwnerUserId");
+      expect(history.attemptHistory).toMatchObject({ hasMore: false, entries: [{ outcome: "configuration_recorded", sourceMatchesCurrent: false }] });
+      // Additional unlinked historical receipt fixtures exercise only bounded projection.
+      // They must not duplicate the original attempt-bound configured receipt.
+      const { attemptId: _attemptId, ...historicalDetails } = receipts[0]!.details!;
+      await db.insert(activityLog).values(Array.from({ length: 11 }, (_, index) => ({
+        companyId: f.home, actorType: "system", actorId: "core-stewards", entityType: "agent_package_installation", entityId: installed.id,
+        action: "agent_package.low_risk_update_configured", details: historicalDetails, createdAt: new Date(Date.now() + index),
+      })));
+      const bounded = await readMaintenanceHistory(db, f.actor, f.home, installed.id);
+      expect(bounded.entries).toHaveLength(10); expect(bounded.hasMore).toBe(true);
+      await expect(run()).rejects.toMatchObject({ cause: { code: "23514", message: "package_run_activation_required" } });
+    });
+    it("V9 maintenance attempt projection bounds retained original starts without writing or inventing outcomes", async () => {
+      await enableV9Maintenance();
+      const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });
+      await service.decide(f.actor, f.home, installed.id, "activate", { expectedVersion: 1, reason: "Read retained native attempt history" });
+      const next = await service.publish(f.actor, { ...input, version: "1.0.1", releaseNotes: "Editorial correction" });
+      const review = await reviewedMaintenance(installed.id, next);
+      // Original audit fixtures qualify read projection, not package execution or recovery.
+      await db.insert(activityLog).values(Array.from({ length: 11 }, (_, index) => ({
+        companyId: f.home, actorType: "system", actorId: "core-stewards", entityType: "agent_package_installation", entityId: installed.id,
+        action: "agent_package.maintenance_attempt_started", createdAt: new Date(Date.now() - 60000 - index * 1000),
+        details: { attemptId: randomUUID(), candidateVersion: next.id, reviewedSource: review,
+          policyVersion: "aw-v9-package-maintenance-1", maintenanceClass: "M2", policyOwnerUserId: f.userId },
+      })));
+      const before = await db.select().from(activityLog).where(eq(activityLog.entityId, installed.id));
+      const history = await readMaintenanceHistory(db, f.actor, f.home, installed.id);
+      expect(history.attemptHistory?.hasMore).toBe(true);
+      expect(history.attemptHistory?.entries).toHaveLength(10);
+      expect(history.attemptHistory?.entries.every(entry => entry.outcome === "unconfirmed" && entry.finishedAt === null && entry.sourceMatchesCurrent)).toBe(true);
+      expect(JSON.stringify(history)).not.toContain(f.userId);
+      expect(await db.select().from(activityLog).where(eq(activityLog.entityId, installed.id))).toHaveLength(before.length);
+      expect(await service.get(f.actor, f.home, installed.id)).toMatchObject({ status: "active", installedVersionId: review.expectedInstalledVersionId });
+    });
+    it("V9 maintenance attempt projection refuses duplicate terminal evidence instead of choosing an outcome", async () => {
+      await enableV9Maintenance();
+      const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });
+      await service.decide(f.actor, f.home, installed.id, "activate", { expectedVersion: 1, reason: "Review original native terminal evidence" });
+      const next = await service.publish(f.actor, { ...input, version: "1.0.1", releaseNotes: "Editorial correction" });
+      expect(await service.stewardUpdate(f.home, installed.id, next.id, await reviewedMaintenance(installed.id, next))).toEqual({ updated: true });
+      const [terminal] = await db.select().from(activityLog).where(and(eq(activityLog.entityId, installed.id), eq(activityLog.action, "agent_package.maintenance_attempt_finished")));
+      // Deliberately inconsistent original-namespace fixture: no synthetic execution claim.
+      const [duplicate] = await db.insert(activityLog).values({ companyId: f.home, actorType: "system", actorId: "core-stewards",
+        entityType: "agent_package_installation", entityId: installed.id, action: terminal!.action, details: terminal!.details }).returning();
+      try { await expect(readMaintenanceHistory(db, f.actor, f.home, installed.id)).rejects.toMatchObject({ status: 404 }); }
+      finally { await db.delete(activityLog).where(eq(activityLog.id, duplicate!.id)); }
+      expect((await readMaintenanceHistory(db, f.actor, f.home, installed.id)).attemptHistory?.entries[0]?.outcome).toBe("configuration_recorded");
+    });
+    it("V9 maintenance breaks repeated configured-change recurrence without activating or granting work", async () => {
+      await enableV9Maintenance();
+      const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });
+      let version = installed.version;
+      const grants = await db.select().from(principalPermissionGrants);
+      for (let patch = 1; patch <= 4; patch++) {
+        await service.decide(f.actor, f.home, installed.id, "activate", { expectedVersion: version, reason: "Explicit fixture human activation after each unchanged-content update" });
+        const next = await service.publish(f.actor, { ...input, version: `1.0.${patch}`, releaseNotes: "Editorial correction" });
+        expect(await service.stewardUpdate(f.home, installed.id, next.id, await reviewedMaintenance(installed.id, next))).toEqual({ updated: patch <= 3 });
+        const current = await service.get(f.actor, f.home, installed.id); version = current.version;
+        if (patch === 4) {
+          expect(current.installedVersionId).not.toBe(next.id); expect(current.status).toBe("active");
+          expect(await service.stewardUpdate(f.home, installed.id, next.id, await reviewedMaintenance(installed.id, next))).toEqual({ updated: false });
+        }
+      }
+      expect(await db.select().from(principalPermissionGrants)).toHaveLength(grants.length);
+      const blocked = await db.select().from(activityLog).where(and(eq(activityLog.entityId, installed.id), eq(activityLog.action, "agent_package.maintenance_loop_blocked")));
+      expect(blocked).toHaveLength(1); expect(blocked[0]!.details).toMatchObject({ reason: "attempt_budget", humanReviewRequired: true });
+      const history = await readMaintenanceHistory(db, f.actor, f.home, installed.id);
+      expect(history.installationStatus).toBe("active");
+      expect(history.entries.filter(entry => entry.outcome === "human_review_required")).toHaveLength(1);
+      expect(history.entries.filter(entry => entry.outcome === "configured_activation_required")).toHaveLength(3);
+      const signal = new AbortController().signal;
+      const attention = await readPackageMaintenanceAttention(db, f.actor, f.home, signal);
+      expect(attention.needsYou).toHaveLength(1);
+      expect(attention.needsYou[0]).toMatchObject({ kind: "maintenance", source: { domain: "agent_package_installation", resourceId: installed.id }, actions: [{ operation: "open", href: `/agents/packages/installations/${installed.id}/maintenance` }] });
+      const projection = await experienceService(db).home(f.actor, f.home);
+      expect(projection.needsYou.some(card => card.source.domain === "agent_package_installation" && card.source.resourceId === installed.id)).toBe(true);
+      const aborted = new AbortController(); aborted.abort();
+      await expect(readPackageMaintenanceAttention(db, f.actor, f.home, aborted.signal)).rejects.toBeDefined();
+      await instanceSettingsService(db).updateExperimental({ maintenance_autopilot_v9: false });
+      await expect(readPackageMaintenanceAttention(db, f.actor, f.home, signal)).rejects.toMatchObject({ status: 404 });
+      await instanceSettingsService(db).updateExperimental({ maintenance_autopilot_v9: true });
+      expect((await readPackageMaintenanceAttention(db, f.actor, f.home, signal)).needsYou).toHaveLength(1);
+      // A withdrawn actual candidate cannot keep an old escalation actionable.
+      const candidateId = blocked[0]!.details!.candidateVersion as string;
+      await service.revoke(f.actor, candidateId);
+      expect((await readPackageMaintenanceAttention(db, f.actor, f.home, signal)).needsYou).toEqual([]);
+      // A real later native source change makes the original blocked review stale.
+      await service.decide(f.actor, f.home, installed.id, "suspend", { expectedVersion: history.installationVersion, reason: "Native owner suspension supersedes the original automatic repair observation" });
+      expect((await readPackageMaintenanceAttention(db, f.actor, f.home, signal)).needsYou).toEqual([]);
+      await db.update(companyMemberships).set({ status: "suspended" }).where(and(eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
+      await expect(readPackageMaintenanceAttention(db, { ...f.actor, isInstanceAdmin: true }, f.home, signal)).rejects.toMatchObject({ status: 403 });
+    });
+    it("V9 maintenance retains the native database refusal of cross-company agent references", async () => {
+      await enableV9Maintenance();
+      const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });
+      await expect(db.insert(companyAgentPackageInstallations).values({
+        companyId: f.home, packageId: installed.packageId, installedVersionId: installed.installedVersionId,
+        agentId: f.guestPresence.id, installedByUserId: f.userId, components: [], status: "configuring", updatePolicy: "auto_low_risk",
+      })).rejects.toMatchObject({ cause: { code: "23503" } });
+      // The migrated native composite foreign key owns this tenant invariant.
+      expect((await readMaintenanceHistory(db, f.actor, f.home, installed.id)).agentId).toBe(f.presence.id);
+    });
+    it("V9 maintenance history requires current native tenant and agent read authority and closes on rollback", async () => {
+      await enableV9Maintenance();
+      const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });
+      expect((await readMaintenanceHistory(db, f.actor, f.home, installed.id)).entries).toEqual([]);
+      const api = express(); api.use(express.json()); api.use((req, _res, next) => { req.actor = f.actor; next(); });
+      api.use("/api", maintenanceHistoryRoutes(db)); api.use(errorHandler);
+      const url = `/api/companies/${f.home}/agent-package-installations/${installed.id}/experience/maintenance`;
+      const response = await request(api).get(url + `?expectedUserId=${f.userId}`).expect(200);
+      expect(response.headers["cache-control"]).toBe("private, no-store"); expect(response.body.entries).toEqual([]);
+      const changed = await request(api).get(url + "?expectedUserId=another-account").expect(409);
+      expect(changed.headers["cache-control"]).toBe("private, no-store");
+      await request(api).get(url + `?expectedUserId=${f.userId}&details=true`).expect(400);
+      await request(api).get(url).expect(400);
+
+      await expect(readMaintenanceHistory(db, f.actor, f.guest, installed.id)).rejects.toMatchObject({ status: 404 });
+      await expect(readMaintenanceHistory(db, f.actor, f.home, randomUUID())).rejects.toMatchObject({ status: 404 });
+      await instanceSettingsService(db).updateExperimental({ maintenance_autopilot_v9: false });
+      await expect(readMaintenanceHistory(db, f.actor, f.home, installed.id)).rejects.toMatchObject({ status: 404 });
+      await instanceSettingsService(db).updateExperimental({ maintenance_autopilot_v9: true });
+      await db.update(companyMemberships).set({ status: "suspended" }).where(and(eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
+      await expect(readMaintenanceHistory(db, { ...f.actor, isInstanceAdmin: true }, f.home, installed.id)).rejects.toMatchObject({ status: 403 });
+    });
+    it("V9 maintenance cannot bypass the native Core Steward kill path with a retained review", async () => {
+      await enableV9Maintenance();
+      const installed = await service.install(f.actor, f.home, { ...installInput(), updatePolicy: "auto_low_risk" });
+      await service.decide(f.actor, f.home, installed.id, "activate", { expectedVersion: 1, reason: "Explicit bounded update admission" });
+      const next = await service.publish(f.actor, { ...input, version: "1.0.1", releaseNotes: "Editorial correction" });
+      const review = await reviewedMaintenance(installed.id, next);
+      await instanceSettingsService(db).updateExperimental({ core_stewards_v7: false, maintenance_autopilot_v9: false });
+      await expect(service.stewardUpdate(f.home, installed.id, next.id, review)).rejects.toMatchObject({ status: 404 });
+      expect((await service.get(f.actor, f.home, installed.id)).installedVersionId).toBe(installed.installedVersionId);
+    });
     it("Core Stewards configure only opted-in unchanged-content releases and retain a human activation boundary", async () => {
       await enableStewards();
       const installed = await service.install(f.actor, f.home, {
@@ -593,6 +1366,55 @@ const support = await getEmbeddedPostgresTestSupport();
       ).rejects.toMatchObject({
         cause: { code: "23514", message: "package_run_pin_immutable" },
       });
+    });
+    it("V9 package revalidation projects the Original degraded installation without repair or activation", async () => {
+      await enableV9Maintenance();
+      const installed = await active();
+      await db.update(agents).set({ runtimeConfig: { changed: true } }).where(eq(agents.id, f.presence.id));
+      await reconcileAgentPackages(db);
+      const before = await service.get(f.actor, f.home, installed.id);
+      expect(before.status).toBe("degraded");
+      const activityBefore = await db.select().from(activityLog).where(eq(activityLog.companyId, f.home));
+      const result = await readCoreMaintenance(db, f.actor, f.home, new AbortController().signal);
+      const card = result.needsYou.find(card => card.evidence.includes("package_revalidation_required"));
+      expect(card).toMatchObject({ kind: "maintenance", source: { domain: "agent_package_installation", resourceId: installed.id },
+        actions: [{ operation: "open", href: "/agents/packages", criticality: "C2" }] });
+      expect(JSON.stringify(result)).not.toContain(f.userId); expect(JSON.stringify(result)).not.toContain(f.presence.id);
+      expect(JSON.stringify(result)).not.toContain(input.manifest.purpose);
+      const home = await experienceService(db).home(f.actor, f.home);
+      expect(home.needsYou.find(current => current.id === card!.id)).toEqual(expect.objectContaining({ source: expect.objectContaining({ version: card!.source.version }) }));
+      expect(await service.get(f.actor, f.home, installed.id)).toEqual(before);
+      expect(await db.select().from(activityLog).where(eq(activityLog.companyId, f.home))).toEqual(activityBefore);
+    });
+    it("V9 package revalidation requires current Agent configuration permission despite installer assignment", async () => {
+      await enableV9Maintenance(); const installed = await active();
+      await db.update(agents).set({ runtimeConfig: { changed: true } }).where(eq(agents.id, f.presence.id));
+      await reconcileAgentPackages(db);
+      await db.update(companyMemberships).set({ membershipRole: "member" }).where(and(eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
+      await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId, f.home),
+        eq(principalPermissionGrants.principalId, f.userId), eq(principalPermissionGrants.permissionKey, "agents:configure")));
+      const result = await readCoreMaintenance(db, { ...f.actor, isInstanceAdmin: true }, f.home, new AbortController().signal);
+      expect(result.needsYou.filter(card => card.source.resourceId === installed.id)).toEqual([]);
+      expect(result.coverage?.reason).toBe("source_stale");
+    });
+    it("V9 package revalidation withdraws a canonically suspended installation after fan-out", async () => {
+      await enableV9Maintenance(); const installed = await active();
+      await db.update(agents).set({ runtimeConfig: { changed: true } }).where(eq(agents.id, f.presence.id));
+      await reconcileAgentPackages(db);
+      const real = coreMaintenance.readCoreMaintenance; let calls = 0;
+      const spy = vi.spyOn(coreMaintenance, "readCoreMaintenance").mockImplementation(async (...args) => {
+        const result = await real(...args);
+        if (++calls === 1) {
+          const current = await service.get(f.actor, f.home, installed.id);
+          await service.decide(f.actor, f.home, installed.id, "suspend", { expectedVersion: current.version, reason: "Human suspended this changed installation" });
+        }
+        return result;
+      });
+      try {
+        const result = await experienceService(db).home(f.actor, f.home);
+        expect(result.needsYou.filter(card => card.source.resourceId === installed.id)).toEqual([]);
+        expect(result.dependencies.find(entry => entry.domain === "core-maintenance")).toMatchObject({ state: "partial", reason: "source_stale" });
+      } finally { spy.mockRestore(); }
     });
     it("material updates require explicit review and fresh activation, while uninstall keeps company resources", async () => {
       const installed = await active(),
@@ -978,6 +1800,1108 @@ const support = await getEmbeddedPostgresTestSupport();
           .where(eq(agentPackageStopActions.id, action!.id)),
       ).rejects.toMatchObject({ cause: { code: "23514" } });
     });
+    async function prepareFirstValueFixture(budgets: CreateOrchestrationPlanInput["budgets"] = {}, configurePresence?: () => Promise<void>) {
+      await instanceSettingsService(db).updateExperimental({
+        activation_v9: true, experience_analytics_v9: true, free_core_commercial_v7: true, billing_entitlements_v6: true,
+        billing_usage_v6: true, enableWorkflowsV1: true,
+        transactional_email_v6: true, email_verification_required_v6: true, server_onboarding_v6: true,
+        readiness_engine_v7: true, orchestration_v7: true, supervision_v7: true, verifier_v7: true,
+        ai_use_cases_v7: true,
+      });
+      const { published } = await hireFixture();
+      versionId = published.id;
+      // Seed the original onboarding owner at review, and a bounded native test
+      // entitlement. All package activation, orchestration, admission and review
+      // below use their original writers; this is not a live customer outcome.
+      const [account] = await db.insert(billingAccounts).values({ displayName: "First value fixture", payerUserId: f.userId }).returning();
+      await db.insert(billingAccountCompanies).values({ companyId: f.home, billingAccountId: account!.id });
+      await db.insert(billingSubscriptions).values({ billingAccountId: account!.id,
+        providerSubscriptionId: `native-test-fixture-${randomUUID()}`, status: "active", productKeys: ["agent_package_research"],
+        currentPeriodEnd: new Date(Date.now() + 3600000), providerUpdatedAt: new Date(), sourceHash: "native-test-fixture" });
+      const intent = "Prepare a source-bound customer research draft";
+      const [onboarding] = await db.insert(companyOnboardingRuns).values({ companyId: f.home, billingAccountId: account!.id,
+        createdByUserId: f.userId, idempotencyKey: randomUUID(), requestHash: "a".repeat(64), currentStage: "v9_review",
+        activationState: { ...initialActivationState(), step: "review", intent, packageVersionId: versionId } }).returning();
+      const foundation = foundationService(db), principal = { principal: { type: "user" as const, userId: f.userId } };
+      const companyProfile = await foundation.createDraft(f.home, { foundationKey: "company_profile", category: "company",
+        documentType: "profile", body: "Native test company prepares source-bound customer research drafts",
+        authorityLevel: "canonical", sensitivity: "internal" }, principal);
+      await foundation.submitForReview(f.home, companyProfile.id, companyProfile.latestRevisionId!, principal);
+      await foundation.approve(f.home, companyProfile.id, companyProfile.latestRevisionId!, principal);
+      await db.insert(companyMemberships).values({ companyId: f.home, principalType: "agent", principalId: f.presence.id, status: "active" }).onConflictDoNothing();
+      await db.insert(principalPermissionGrants).values(["company_scope:read", "foundation:read"].map(permissionKey => ({
+        companyId: f.home, principalType: "agent", principalId: f.presence.id, permissionKey,
+      }))).onConflictDoNothing();
+      await configurePresence?.();
+      const governance = aiGovernanceService(db);
+      const oversight = await governance.oversight(f.actor, f.home, governanceOversight);
+      let useCase = await governance.create(f.actor, f.home, { key: `first-value-${randomUUID()}`, purpose: {
+        ...governancePurpose(), intendedPurpose: published.release.manifest.purpose, riskClass: "C1", oversightProfileId: oversight.id,
+      } });
+      for (const assessment of governanceReviews()) {
+        await governance.assess(f.actor, f.home, useCase.id, { ...assessment, expectedVersion: useCase.version });
+        useCase = { ...useCase, version: useCase.version + 1 };
+      }
+      useCase = await governance.decide(f.actor, f.home, useCase.id, "approve", { expectedVersion: useCase.version,
+        rationale: "Native fixture human reviewed this precise internal draft purpose" });
+      const installed = await service.install(f.actor, f.home, { ...installInput(), aiUseCaseId: useCase.id });
+      const installation = await service.decide(f.actor, f.home, installed.id, "activate", {
+        expectedVersion: installed.version, reason: "Explicit native fixture reviewed-purpose activation",
+      });
+      expect(installation.status, JSON.stringify(installation.readiness)).toBe("active");
+      const [task] = await db.insert(issues).values({ companyId: f.home, title: "Private first-result draft", status: "todo",
+        assigneeAgentId: f.presence.id, createdByUserId: f.userId, responsibleUserId: f.userId }).returning();
+      const orchestration = orchestrationService(db);
+      const created = await orchestration.create(f.actor, f.home, createOrchestrationPlanSchema.parse({
+        issueId: task!.id, expectedIssueUpdatedAt: task!.updatedAt.toISOString(), riskClass: "C1", workload: "semantic",
+        completionContract: { objective: intent, requiredOutputs: [{ key: "result" }],
+          businessInvariants: ["Every claim cites an authorized retained source"] }, budgets, workers: [{ key: "worker", issueId: task!.id }],
+      }));
+      return { onboarding: onboarding!, installation, task: task!, created, intent, orchestration, useCase };
+    }
+    async function noChargePreparationFixture() {
+      const modelProfileId = randomUUID();
+      const transport = vi.fn<typeof guardedRemoteHttpFetch>(async () => { throw new Error("Preparation must never call a model transport"); });
+      let profile!: WorkerModelProfile;
+      const fixture = await prepareFirstValueFixture({}, async () => {
+        const connection = await aiConnectionService(db).save(f.home, f.userId, {
+          provider: "anthropic", method: "api_key", ownership: "shared", name: "No-charge preparation software fixture",
+          apiKey: "fixture", allAgents: false, agentIds: [f.presence.id],
+        }, "fixture-private-preparation-credential-123456");
+        await db.update(agents).set({ adapterType: "paperclip_runner", adapterConfig: {
+          provider: "aw_text_only", workerModelProfileId: modelProfileId, model: "fixture-preparation-model-20261010",
+          maxOutputTokens: 256, lifecycleMode: "per_turn",
+        }, runtimeConfig: { heartbeat: { enabled: false, wakeOnDemand: true } } }).where(eq(agents.id, f.presence.id));
+        const [presence] = await db.select().from(agents).where(eq(agents.id, f.presence.id));
+        const providers = agentProviderBindingService(db);
+        const discovery = await discoverNativeCapabilities({ companyId: f.home, adapterType: "paperclip_runner", config: presence!.adapterConfig });
+        const recorded = await providers.recordDiscovery(f.home, f.presence.id, discovery, {
+          connect: true, identity: true, start: true, stream: true, wait: true, cancel: true, memoryScoping: true,
+        });
+        await providers.revalidate(f.actor, f.home, f.presence.id, recorded.capabilitySnapshotHash!,
+          "Original Native software fixture review of exact text-only configuration; no provider delivery qualification claimed");
+        const bound = await providers.assertRuntime(f.home, f.presence.id);
+        profile = { id: modelProfileId, companyId: f.home, workerAgentId: f.presence.id,
+          providerBindingId: bound.provider.id, providerSnapshotHash: bound.provider.capabilitySnapshotHash!,
+          providerProfileRef: bound.runtime.providerProfileRef, qualifiedConfigurationHash: bound.runtime.qualifiedConfigurationHash!,
+          binding: { provider: "anthropic", method: "api_key", mode: "shared", ...connection },
+          transport: "server-text-only-v1", contract: "anthropic-text-messages-2023-06-01",
+          maximumEnvelopeBytes: 64000, inputTokensUpperBound: 100000, maxOutputTokens: 1024,
+          tariff: { provider: "anthropic", model: "fixture-preparation-model-20261010", currency: "USD",
+            inputMinorPerMillion: 0, outputMinorPerMillion: 0, fixedMinor: 0, qualificationHash: "b".repeat(64), sourceSha: "a".repeat(40),
+            testedAt: new Date().toISOString(), expiresAt: new Date(Date.now() + 120000).toISOString() },
+          qualificationEvidenceRef: "https://qualification.test.invalid/qualification/preparation-software-fixture.json",
+          qualificationArtifactSha256: "c".repeat(64),
+        };
+        registerNativeDraftGateway(db, workerModelGateway(db, { profiles: [profile], sourceSha: "a".repeat(40),
+          protectedEvidenceOrigin: "https://qualification.test.invalid", fetch: transport }));
+      });
+      const activation = activationService(db);
+      const view = await activation.get(f.actor, f.home);
+      const option = view.firstTask!.preparationOptions[0]!;
+      expect(option).toMatchObject({ installationId: fixture.installation.id, maximumModelCostMinor: 0 });
+      const input = { operation: "prepare_first_task" as const, requestId: randomUUID(), expectedVersion: view.version,
+        installationId: option.installationId, expectedInstallationVersion: option.installationVersion,
+        expectedInstallationHash: option.installationHash, expectedUseCaseVersion: option.useCaseVersion,
+        expectedPurposeVersion: option.purposeVersion, confirmCurrentPurpose: true as const };
+      return { ...fixture, activation, input, transport, profile };
+    }
+
+    // Original publisher/account/onboarding rows, no installed package/runtime.
+    // This qualifies paused provisioning, not hosted compute or first value.
+    async function firstAgentPreparationFixture(answers: Record<string, unknown> = {}, step: "review" | "access" = "review", requiredConnections: string[] = []) {
+      await instanceSettingsService(db).updateExperimental({ activation_v9: true, free_core_commercial_v7: true,
+        billing_entitlements_v6: true, billing_usage_v6: true, transactional_email_v6: true,
+        email_verification_required_v6: true, server_onboarding_v6: true });
+      const { published } = await hireFixture(requiredConnections); versionId = published.id;
+      const [account] = await db.insert(billingAccounts).values({ displayName: "Paused preparation fixture", payerUserId: f.userId }).returning();
+      await db.insert(billingAccountCompanies).values({ companyId: f.home, billingAccountId: account!.id });
+      const [onboarding] = await db.insert(companyOnboardingRuns).values({ companyId: f.home, billingAccountId: account!.id,
+        createdByUserId: f.userId, idempotencyKey: randomUUID(), requestHash: "a".repeat(64), currentStage: "v9_review", answers,
+        activationState: { ...initialActivationState(), step, intent: "PRIVATE preparation goal", packageVersionId: versionId } }).returning();
+      const activation = activationService(db), input = { operation: "prepare_first_agent" as const,
+        requestId: randomUUID(), expectedVersion: onboarding!.version, confirmPausedPreparation: true as const };
+      return { published, onboarding: onboarding!, activation, input };
+    }
+    // Original Apps rows are software fixtures for setup projection, never
+    // provider-health, credential-resolution or representative-execution proof.
+    async function connectionSetupFixture(companyId = f.home, key = "linear") {
+      const [app] = await db.insert(toolApplications).values({ companyId, applicationKey: key, name: `App ${randomUUID()}`, type: "mcp_http" }).returning();
+      const observed = new Date();
+      const [connection] = await db.insert(toolConnections).values({ companyId, applicationId: app!.id, name: "Recorded setup", uid: randomUUID(),
+        transport: "rest_api", authKind: "none", status: "active", enabled: true, healthStatus: "ok", healthCheckedAt: observed, updatedAt: observed,
+        config: { private: "PRIVATE endpoint configuration" }, healthMessage: "PRIVATE provider observation" }).returning();
+      await db.insert(toolConnectionInstalls).values({ companyId, connectionId: connection!.id, targetType: "company", targetId: companyId });
+      return { app: app!, connection: connection! };
+    }
+    const readRequiredSetup = (required = ["linear"]) => db.transaction(tx => readActivationRequiredAccess(tx as unknown as Db, f.actor, f.home, required));
+    async function connectionConsentFixture(authorizeOwnedFixture = false) {
+      const key = `required-gmail-${randomUUID()}`;
+      const fixture = await firstAgentPreparationFixture({}, "access", [key]);
+      const [app] = await db.insert(toolApplications).values({ companyId: f.home, applicationKey: key, name: `Personal Gmail ${randomUUID()}`,
+        type: "mcp_http", status: "active", metadata: { sourceTemplateKey: "gmail", galleryKey: "gmail" } }).returning();
+      const connector: PaperclipCloudConnector = {
+        getCapabilities: vi.fn(async () => ["gmail.read", "gmail.draft"]),
+        startAuthorization: vi.fn(async ({ returnState }) => {
+          if (!authorizeOwnedFixture) throw new Error("No real provider authorization in this owner fixture");
+          return { authorizationUrl: `https://accounts.google.com/owned-fixture?state=${encodeURIComponent(returnState)}`, expiresAt: new Date(Date.now() + 600000).toISOString() };
+        }),
+        claim: vi.fn(async () => {
+          if (!authorizeOwnedFixture) throw new Error("No provider credential claim in this owner fixture");
+          return { v: 1 as const, provider: "google" as const, profile: "gmail.read", accessToken: "owned-software-access-token",
+            refreshToken: "owned-software-refresh-token", tokenType: "Bearer", accessTokenExpiresAt: null, refreshTokenExpiresAt: null,
+            scopes: ["https://www.googleapis.com/auth/gmail.readonly"], subject: f.userId, companyId: f.home,
+            instanceId: "owned-fixture", environment: "development" as const };
+        }),
+        refresh: vi.fn(async () => { throw new Error("No provider refresh in this owner fixture"); }),
+        revoke: vi.fn(async () => { throw new Error("No provider revocation in this owner fixture"); }),
+      };
+      const apps = toolAccessService(db, { paperclipCloudConnector: connector,
+        remoteHttpEndpointLookup: async () => [{ address: "8.8.8.8", family: 4 }],
+        remoteHttpRequest: async () => {
+          if (!authorizeOwnedFixture) throw new Error("No provider HTTP execution in this ownership fixture");
+          return Response.json({ jsonrpc: "2.0", id: "paperclip-catalog-refresh", result: { tools: [] } });
+        } });
+      const owner = activationConnectionConsentService(db, apps);
+      const review = await owner.getReview(f.actor, f.home, key);
+      const command = { requestKey: randomUUID(), confirmConnectionAuthorization: true as const, expectedReviewHash: review.reviewHash };
+      return { ...fixture, key, app: app!, connector, apps, owner, review, command };
+    }
+    it("records one distinct current purpose consent without credentials, provider authorization or Agent reach", async () => {
+      const c = await connectionConsentFixture();
+      expect(Object.keys(c.review.preview)).toHaveLength(8);
+      expect(c.review).toMatchObject({ applicationId: c.app.id, applicationKey: c.key, grantKind: "user", deferAgentAccess: true,
+        scopeProfile: "gmail.read", providerScopes: ["https://www.googleapis.com/auth/gmail.readonly"] });
+      const before = { agents: await db.select().from(agents), secrets: await db.select().from(companySecrets), grants: await db.select().from(connectionGrants) };
+      const [first, replay] = await Promise.all([c.owner.approve(f.actor, f.home, c.key, c.command), c.owner.approve(f.actor, f.home, c.key, c.command)]);
+      expect(first).toEqual(replay); expect(first).toMatchObject({ status: "approved", connectionId: null });
+      expect(await c.owner.getReceipt(f.actor, f.home, c.command.requestKey)).toEqual(first);
+      expect(await db.select().from(agents)).toEqual(before.agents);
+      expect(await db.select().from(companySecrets)).toEqual(before.secrets);
+      expect(await db.select().from(connectionGrants)).toEqual(before.grants);
+      expect(c.connector.startAuthorization).not.toHaveBeenCalled(); expect(c.connector.claim).not.toHaveBeenCalled();
+      expect((await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.onboardingRunId, c.onboarding.id)))).toHaveLength(1);
+      await expect(c.owner.approve(f.actor, f.home, c.key, { ...c.command, expectedReviewHash: "b".repeat(64) })).rejects.toMatchObject({ status: 409 });
+    });
+    it("rejects stale reviews after Native package, application or onboarding changes without creating an approval", async () => {
+      const c = await connectionConsentFixture();
+      await db.update(toolApplications).set({ name: "Changed provider explanation", updatedAt: new Date() }).where(eq(toolApplications.id, c.app.id));
+      await expect(c.owner.approve(f.actor, f.home, c.key, c.command)).rejects.toMatchObject({ status: 409 });
+      const refreshed = await c.owner.getReview(f.actor, f.home, c.key);
+      const reselected = await c.activation.command(f.actor, f.home, { operation: "reselect_capability", requestId: randomUUID(), expectedVersion: c.onboarding.version });
+      await c.activation.command(f.actor, f.home, { operation: "select_capability", requestId: randomUUID(), expectedVersion: reselected.version, packageVersionId: c.published.id });
+      await expect(c.owner.approve(f.actor, f.home, c.key, { ...c.command, expectedReviewHash: refreshed.reviewHash })).rejects.toMatchObject({ status: 409 });
+      await service.revoke(f.actor, c.published.id);
+      await expect(c.owner.getReview(f.actor, f.home, c.key)).rejects.toMatchObject({ status: 409 });
+      expect(await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.onboardingRunId, c.onboarding.id))).toEqual([]);
+    });
+    it("keeps the actual original allocation on an unknown reply and refuses a second connection or credential owner", async () => {
+      const c = await connectionConsentFixture();
+      await c.owner.approve(f.actor, f.home, c.key, c.command);
+      const input = await c.owner.getApprovedSetup(f.actor, f.home, c.command.requestKey);
+      const connected = await c.apps.connectGalleryApp(f.home, input, { actorType: "user", actorId: f.userId }, c.owner.allocationOwner(f.actor, f.home, c.command.requestKey));
+      const receipt = await c.owner.getReceipt(f.actor, f.home, c.command.requestKey);
+      expect(receipt).toMatchObject({ status: "allocated", connectionId: connected.connectionId, connectedAt: null });
+      expect(JSON.stringify(receipt)).not.toMatch(/reservedConnectionId|credential|methodHash|subjectUserId/);
+      await expect(c.apps.connectGalleryApp(f.home, input, { actorType: "user", actorId: f.userId }, c.owner.allocationOwner(f.actor, f.home, c.command.requestKey))).rejects.toMatchObject({ status: 409 });
+      await expect(c.apps.connectGalleryApp(f.home, input, { actorType: "user", actorId: f.userId })).rejects.toMatchObject({ status: 409 });
+      expect(await db.select().from(toolConnections).where(eq(toolConnections.applicationId, c.app.id))).toHaveLength(1);
+      expect(await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, connected.connectionId))).toEqual([]);
+      expect(await db.select().from(toolConnectionInstalls).where(eq(toolConnectionInstalls.connectionId, connected.connectionId))).toEqual([]);
+      expect(c.connector.startAuthorization).not.toHaveBeenCalled(); expect(c.connector.claim).not.toHaveBeenCalled();
+    });
+    it("uses the original HTTP allocator once and leaves provider sign-in to the explicit setup flow", async () => {
+      const c = await connectionConsentFixture(); await c.owner.approve(f.actor, f.home, c.key, c.command);
+      const app = express(); app.use(express.json());
+      app.use((req, _res, next) => { req.actor = { ...f.actor, memberships: [{ companyId: f.home, membershipRole: "owner", status: "active" }] }; next(); });
+      app.use("/api", toolAccessRoutes(db, { paperclipCloudConnector: c.connector,
+        remoteHttpEndpointLookup: async () => [{ address: "8.8.8.8", family: 4 }],
+        remoteHttpRequest: async () => { throw new Error("No live provider HTTP in this ownership fixture"); } }));
+      app.use(errorHandler);
+      const path = `/api/companies/${f.home}/activation/connection-consents/${c.command.requestKey}/connect`;
+      expect((await request(app).post(path).send({ confirmProviderSetup: true, grantKind: "organization" })).status).toBe(400);
+      const allocated = await request(app).post(path).send({ confirmProviderSetup: true });
+      expect(allocated.status).toBe(201); expect(allocated.body.connection.credentialPolicy).toBe("per_user");
+      expect(allocated.body.auth.startUrl).toBeNull();
+      expect(c.connector.startAuthorization).not.toHaveBeenCalled(); expect(c.connector.claim).not.toHaveBeenCalled();
+      expect((await c.owner.getReceipt(f.actor, f.home, c.command.requestKey)).connectionId).toBe(allocated.body.connectionId);
+      expect((await request(app).post(path).send({ confirmProviderSetup: true })).status).toBe(409);
+      expect(await db.select().from(toolConnections).where(eq(toolConnections.applicationId, c.app.id))).toHaveLength(1);
+    });
+    it("rechecks membership after the original claim before committing the Native connection binding", async () => {
+      const c = await connectionConsentFixture(); await c.owner.approve(f.actor, f.home, c.key, c.command);
+      const input = await c.owner.getApprovedSetup(f.actor, f.home, c.command.requestKey);
+      const original = c.owner.allocationOwner(f.actor, f.home, c.command.requestKey);
+      const interrupted = { ...original, claim: async (...args: Parameters<typeof original.claim>) => {
+        const id = await original.claim(...args);
+        await db.update(companyMemberships).set({ status: "suspended" }).where(and(eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
+        return id;
+      } };
+      await expect(c.apps.connectGalleryApp(f.home, input, { actorType: "user", actorId: f.userId }, interrupted)).rejects.toMatchObject({ status: 403 });
+      expect(await db.select().from(toolConnections).where(eq(toolConnections.applicationId, c.app.id))).toEqual([]);
+      const [receipt] = await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.requestKey, c.command.requestKey));
+      expect(receipt).toMatchObject({ status: "allocating", connectionId: null });
+      await expect(c.owner.getReceipt({ ...f.actor, isInstanceAdmin: true }, f.home, c.command.requestKey)).rejects.toMatchObject({ status: 403 });
+      expect(c.connector.startAuthorization).not.toHaveBeenCalled();
+    });
+    it("rolls back the original connection insert with a failed receipt bind and never invents positive allocation evidence", async () => {
+      const c = await connectionConsentFixture(); await c.owner.approve(f.actor, f.home, c.key, c.command);
+      const input = await c.owner.getApprovedSetup(f.actor, f.home, c.command.requestKey), original = c.owner.allocationOwner(f.actor, f.home, c.command.requestKey);
+      await expect(c.apps.connectGalleryApp(f.home, input, { actorType: "user", actorId: f.userId }, { ...original, bind: async () => { throw new Error("Owned binding failure"); } })).rejects.toThrow("Owned binding failure");
+      expect(await db.select().from(toolConnections).where(eq(toolConnections.applicationId, c.app.id))).toEqual([]);
+      expect(await c.owner.getReceipt(f.actor, f.home, c.command.requestKey)).toMatchObject({ status: "allocating", connectionId: null });
+      await expect(c.owner.getApprovedSetup(f.actor, f.home, c.command.requestKey)).rejects.toMatchObject({ status: 409 });
+    });
+    it("refuses a different original method before P2 allocation rather than silently broadening approved scopes", async () => {
+      const c = await connectionConsentFixture(); await c.owner.approve(f.actor, f.home, c.key, c.command);
+      const input = await c.owner.getApprovedSetup(f.actor, f.home, c.command.requestKey);
+      await expect(c.apps.connectGalleryApp(f.home, { ...input, connectionMethodKey: "paperclip-draft" }, { actorType: "user", actorId: f.userId },
+        c.owner.allocationOwner(f.actor, f.home, c.command.requestKey))).rejects.toMatchObject({ status: 409 });
+      expect(await c.owner.getReceipt(f.actor, f.home, c.command.requestKey)).toMatchObject({ status: "approved", connectionId: null });
+      expect(await db.select().from(toolConnections).where(eq(toolConnections.applicationId, c.app.id))).toEqual([]);
+    });
+    it("enforces immutable consent and zero company or Agent installation on the Native owner", async () => {
+      const c = await connectionConsentFixture(); const consent = await c.owner.approve(f.actor, f.home, c.key, c.command);
+      await expect(db.update(activationConnectionConsents).set({ reviewHash: "c".repeat(64) }).where(eq(activationConnectionConsents.id, consent.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+      const input = await c.owner.getApprovedSetup(f.actor, f.home, c.command.requestKey);
+      const connected = await c.apps.connectGalleryApp(f.home, input, { actorType: "user", actorId: f.userId }, c.owner.allocationOwner(f.actor, f.home, c.command.requestKey));
+      for (const target of [{ targetType: "company" as const, targetId: f.home }, { targetType: "agent" as const, targetId: f.presence.id }])
+        await expect(db.insert(toolConnectionInstalls).values({ companyId: f.home, connectionId: connected.connectionId, ...target })).rejects.toMatchObject({ cause: { code: "23514" } });
+      await expect(db.insert(connectionGrants).values({ companyId: f.home, connectionId: connected.connectionId, kind: "organization", isDefault: true })).rejects.toMatchObject({ cause: { code: "23514" } });
+      await expect(c.apps.finalizeOAuthAccess(f.home, connected.connectionId, { grantKind: "organization" }, { actorType: "user", actorId: f.userId })).rejects.toMatchObject({ status: 409 });
+      await expect(c.apps.finishGalleryAppConnection(f.home, connected.connectionId, { enabledCatalogEntryIds: [], askFirstCatalogEntryIds: [], access: "all_agents" }, { actorType: "user", actorId: f.userId })).rejects.toMatchObject({ status: 409 });
+      expect(await db.select().from(toolConnectionInstalls).where(eq(toolConnectionInstalls.connectionId, connected.connectionId))).toEqual([]);
+    });
+    async function allocatedPersonalSetup() {
+      const c = await connectionConsentFixture();
+      await c.owner.approve(f.actor, f.home, c.key, c.command);
+      const setup = await c.owner.getApprovedSetup(f.actor, f.home, c.command.requestKey);
+      const allocated = await c.apps.connectGalleryApp(f.home, setup, { actorType: "user", actorId: f.userId }, c.owner.allocationOwner(f.actor, f.home, c.command.requestKey));
+      return { ...c, allocated, finish: () => c.apps.finishGalleryAppConnection(f.home, allocated.connectionId,
+        { enabledCatalogEntryIds: [], askFirstCatalogEntryIds: [], access: { agentIds: [] } }, { actorType: "user", actorId: f.userId }) };
+    }
+    // Owned Native metadata fixtures, never provider credentials or sign-in.
+    async function recordOwnedPersonalSetup(c: Awaited<ReturnType<typeof allocatedPersonalSetup>>) {
+      const [secret] = await db.insert(companySecrets).values({ companyId: f.home, name: `Owned metadata ${randomUUID()}`, key: randomUUID(), createdByUserId: f.userId }).returning();
+      const [grant] = await db.insert(connectionGrants).values({ companyId: f.home, connectionId: c.allocated.connectionId,
+        kind: "user", subjectUserId: f.userId, createdByUserId: f.userId, providerTenant: { oauth: { scopes: c.review.providerScopes } },
+        credentialSecretRefs: [{ configPath: "oauth.access_token", secretId: secret!.id, version: "latest" }] }).returning();
+      const observed = new Date();
+      await db.update(toolConnections).set({ status: "active", enabled: true, healthStatus: "ok", healthCheckedAt: observed, updatedAt: observed })
+        .where(eq(toolConnections.id, c.allocated.connectionId));
+      return grant!;
+    }
+    it("requires actual personal health and profile evidence before Native connected status or activation continuation", async () => {
+      const c = await allocatedPersonalSetup();
+      const originalAgents = await db.select().from(agents).where(eq(agents.companyId, f.home));
+      await expect(c.finish()).rejects.toMatchObject({ status: 409 });
+      const receipt = await c.owner.getReceipt(f.actor, f.home, c.command.requestKey);
+      await expect(db.update(activationConnectionConsents).set({ status: "connected", connectionHash: "a".repeat(64), connectedAt: new Date() })
+        .where(eq(activationConnectionConsents.id, receipt.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+      await recordOwnedPersonalSetup(c);
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("needs_review");
+      await c.finish();
+      const connected = await c.owner.getReceipt(f.actor, f.home, c.command.requestKey);
+      expect(connected).toMatchObject({ status: "connected", connectionId: c.allocated.connectionId });
+      expect(connected.connectedAt).not.toBeNull();
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("recorded");
+      const continued = await c.activation.command(f.actor, f.home, { operation: "continue_access", requestId: randomUUID(), expectedVersion: c.onboarding.version });
+      expect(continued.state.step).toBe("review"); expect(continued.requiredAccess[0]?.status).toBe("recorded");
+      expect(await db.select().from(toolConnectionInstalls).where(eq(toolConnectionInstalls.connectionId, c.allocated.connectionId))).toEqual([]);
+      expect(await db.select().from(agents).where(eq(agents.companyId, f.home))).toEqual(originalAgents);
+      expect(c.connector.startAuthorization).not.toHaveBeenCalled(); expect(c.connector.claim).not.toHaveBeenCalled();
+    });
+    it("withdraws the exact purpose without deleting history or credentials and refuses future setup and provider callbacks", async () => {
+      const c = await allocatedPersonalSetup(), grant = await recordOwnedPersonalSetup(c); await c.finish();
+      const connected = await c.owner.getReceipt(f.actor, f.home, c.command.requestKey);
+      const command = { confirmWithdrawal: true as const, expectedReviewHash: connected.reviewHash };
+      const withdrawn = await c.owner.withdraw(f.actor, f.home, c.command.requestKey, command);
+      expect(withdrawn).toMatchObject({ status: "withdrawn", connectionId: connected.connectionId, connectedAt: connected.connectedAt });
+      expect(await c.owner.withdraw(f.actor, f.home, c.command.requestKey, command)).toEqual(withdrawn);
+      expect(await c.owner.getCurrentReceipt(f.actor, f.home, c.key)).toBeNull();
+      await expect(c.finish()).rejects.toMatchObject({ status: 409 });
+      await expect(c.apps.startOAuth(f.home, c.allocated.connectionId, { redirectUri: "https://owned-fixture.invalid/oauth/callback", subjectUserId: f.userId, actor: { actorType: "user", actorId: f.userId } })).rejects.toMatchObject({ status: 409 });
+      await expect(db.update(connectionGrants).set({ updatedAt: new Date() }).where(eq(connectionGrants.id, grant.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+      await expect(c.activation.command(f.actor, f.home, { operation: "continue_access", requestId: randomUUID(), expectedVersion: c.onboarding.version }))
+        .rejects.toMatchObject({ status: 409, details: { code: "REQUIRED_ACCESS_PENDING" } });
+      expect((await db.select().from(connectionGrants).where(eq(connectionGrants.id, grant.id)))[0]?.credentialSecretRefs).toEqual(grant.credentialSecretRefs);
+      expect(c.connector.startAuthorization).not.toHaveBeenCalled();
+      await db.update(connectionGrants).set({ status: "revoked", revokedAt: new Date() }).where(eq(connectionGrants.id, grant.id));
+    });
+    it("ignores unrelated original application activity clocks but refuses changed material scopes before setup", async () => {
+      const c = await allocatedPersonalSetup();
+      await db.update(toolApplications).set({ updatedAt: new Date() }).where(eq(toolApplications.id, c.app.id));
+      expect((await c.owner.getReview(f.actor, f.home, c.key)).reviewHash).toBe(c.review.reviewHash);
+      await recordOwnedPersonalSetup(c);
+      const [connection] = await db.select().from(toolConnections).where(eq(toolConnections.id, c.allocated.connectionId));
+      await db.update(toolConnections).set({ config: { ...connection!.config, oauth: { ...(connection!.config.oauth as object), scopes: ["broader-unapproved-scope"] } } })
+        .where(eq(toolConnections.id, c.allocated.connectionId));
+      await expect(c.finish()).rejects.toMatchObject({ status: 409 });
+      expect(await c.owner.getReceipt(f.actor, f.home, c.command.requestKey)).toMatchObject({ status: "allocated", connectedAt: null });
+    });
+    it("refuses a vanished initiating membership before original finish and retains only the actual allocation", async () => {
+      const c = await allocatedPersonalSetup(); await recordOwnedPersonalSetup(c);
+      await db.update(companyMemberships).set({ status: "suspended" }).where(and(eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
+      await expect(c.finish()).rejects.toMatchObject({ status: 403 });
+      const [receipt] = await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.requestKey, c.command.requestKey));
+      expect(receipt).toMatchObject({ status: "allocated", connectedAt: null, connectionId: c.allocated.connectionId });
+    });
+    it("completes the original managed OAuth callback with owned software credentials and zero Agent reach", async () => {
+      const c = await connectionConsentFixture(true); await c.owner.approve(f.actor, f.home, c.key, c.command);
+      const allocated = await c.apps.connectGalleryApp(f.home, await c.owner.getApprovedSetup(f.actor, f.home, c.command.requestKey),
+        { actorType: "user", actorId: f.userId }, c.owner.allocationOwner(f.actor, f.home, c.command.requestKey));
+      const actor = { actorType: "user" as const, actorId: f.userId };
+      const start = await c.apps.startOAuth(f.home, allocated.connectionId, { redirectUri: "https://owned-fixture.invalid/callback", subjectUserId: f.userId, actor });
+      const state = new URL(start.authorizationUrl).searchParams.get("state")!;
+      await c.apps.completePaperclipCloudConnectorCallback({ state, claimId: "owned-claim", actor });
+      expect(await c.owner.getReceipt(f.actor, f.home, c.command.requestKey)).toMatchObject({ status: "connected", connectionId: allocated.connectionId });
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("recorded");
+      expect(await db.select().from(toolConnectionInstalls).where(eq(toolConnectionInstalls.connectionId, allocated.connectionId))).toEqual([]);
+      const grants = await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, allocated.connectionId));
+      expect(grants).toHaveLength(1); expect(grants[0]).toMatchObject({ kind: "user", subjectUserId: f.userId, isDefault: false });
+      expect(c.connector.claim).toHaveBeenCalledTimes(1);
+    });
+    async function originalCompletedPersonalConnection() {
+      const c = await connectionConsentFixture(true); await c.owner.approve(f.actor, f.home, c.key, c.command);
+      const allocated = await c.apps.connectGalleryApp(f.home, await c.owner.getApprovedSetup(f.actor, f.home, c.command.requestKey),
+        { actorType: "user", actorId: f.userId }, c.owner.allocationOwner(f.actor, f.home, c.command.requestKey));
+      const actor = { actorType: "user" as const, actorId: f.userId };
+      async function reconnect() {
+        const start = await c.apps.startOAuth(f.home, allocated.connectionId,
+          { redirectUri: "https://owned-fixture.invalid/callback", subjectUserId: f.userId, actor });
+        await c.apps.completePaperclipCloudConnectorCallback({ state: new URL(start.authorizationUrl).searchParams.get("state")!,
+          claimId: "owned-revalidation-claim", actor });
+      }
+      await reconnect(); return { ...c, allocated, actor, reconnect };
+    }
+    it("appends Original reconnect validation after credential rotation without rewriting the first purpose or granting Agent reach", async () => {
+      const c = await originalCompletedPersonalConnection();
+      const [original] = await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.requestKey, c.command.requestKey));
+      const before = await db.select().from(activationConnectionValidations).where(eq(activationConnectionValidations.purposeId, original!.id));
+      expect(before).toHaveLength(1);
+      const [grant] = await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, c.allocated.connectionId));
+      await secretService(db).rotate(grant!.credentialSecretRefs[0]!.secretId,
+        { value: "owned-rotated-software-token", expectedLatestVersion: 1 }, { userId: f.userId });
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("needs_review");
+      expect((await c.owner.getReview(f.actor, f.home, c.key)).reviewHash).toBe(c.review.reviewHash);
+      await c.reconnect();
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("recorded");
+      const [unchanged] = await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.id, original!.id));
+      expect(unchanged).toEqual(original);
+      const validations = await db.select().from(activationConnectionValidations).where(eq(activationConnectionValidations.purposeId, original!.id));
+      expect(validations).toHaveLength(2); expect(validations).toContainEqual(before[0]);
+      expect(new Set(validations.map(item => item.setupHash)).size).toBe(2);
+      expect(await db.select().from(toolConnections).where(eq(toolConnections.applicationId, c.app.id))).toHaveLength(1);
+      expect(await db.select().from(toolConnectionInstalls).where(eq(toolConnectionInstalls.connectionId, c.allocated.connectionId))).toEqual([]);
+      const refreshed = await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, c.allocated.connectionId));
+      expect(refreshed).toHaveLength(1); expect(refreshed[0]).toMatchObject({ kind: "user", subjectUserId: f.userId, isDefault: false });
+      await Promise.all([c.apps.finishGalleryAppConnection(f.home, c.allocated.connectionId,
+        { enabledCatalogEntryIds: [], askFirstCatalogEntryIds: [], access: { agentIds: [] } }, c.actor),
+        c.apps.finishGalleryAppConnection(f.home, c.allocated.connectionId,
+          { enabledCatalogEntryIds: [], askFirstCatalogEntryIds: [], access: { agentIds: [] } }, c.actor)]);
+      expect(await db.select().from(activationConnectionValidations).where(eq(activationConnectionValidations.purposeId, original!.id))).toHaveLength(2);
+    });
+    it("retains immutable validation history but refuses stale health and foreign Native purpose proofs", async () => {
+      const c = await originalCompletedPersonalConnection();
+      const [validation] = await db.select().from(activationConnectionValidations).where(eq(activationConnectionValidations.connectionId, c.allocated.connectionId));
+      await expect(db.update(activationConnectionValidations).set({ setupHash: "f".repeat(64) }).where(eq(activationConnectionValidations.id, validation!.id)))
+        .rejects.toMatchObject({ cause: { code: "23514" } });
+      await expect(db.delete(activationConnectionValidations).where(eq(activationConnectionValidations.id, validation!.id)))
+        .rejects.toMatchObject({ cause: { code: "23514" } });
+      await expect(db.insert(activationConnectionValidations).values({ companyId: f.home, purposeId: randomUUID(),
+        connectionId: c.allocated.connectionId, setupHash: "f".repeat(64), healthCheckedAt: validation!.healthCheckedAt }))
+        .rejects.toMatchObject({ cause: { code: "23514" } });
+      const [grant] = await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, c.allocated.connectionId));
+      await db.update(connectionGrants).set({ providerTenant: { ...grant!.providerTenant,
+        oauth: { ...grant!.providerTenant?.oauth, accessTokenExpiresAt: new Date(Date.now() - 60_000).toISOString() } } })
+        .where(eq(connectionGrants.id, grant!.id));
+      await expect(db.insert(activationConnectionValidations).values({ companyId: f.home, purposeId: validation!.purposeId,
+        connectionId: c.allocated.connectionId, setupHash: "f".repeat(64), healthCheckedAt: validation!.healthCheckedAt }))
+        .rejects.toMatchObject({ cause: { code: "23514" } });
+      await db.update(connectionGrants).set({ providerTenant: grant!.providerTenant }).where(eq(connectionGrants.id, grant!.id));
+      await db.update(toolConnections).set({ healthStatus: "error" }).where(eq(toolConnections.id, c.allocated.connectionId));
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("needs_review");
+      await expect(db.insert(activationConnectionValidations).values({ companyId: f.home, purposeId: validation!.purposeId,
+        connectionId: c.allocated.connectionId, setupHash: "f".repeat(64), healthCheckedAt: validation!.healthCheckedAt }))
+        .rejects.toMatchObject({ cause: { code: "23514" } });
+      expect(await db.select().from(activationConnectionValidations).where(eq(activationConnectionValidations.id, validation!.id))).toEqual([validation]);
+    });
+    it("requires Original reconnect for an expired login even when the initial setup hash and successful health observation are unchanged", async () => {
+      const c = await originalCompletedPersonalConnection();
+      const [grant] = await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, c.allocated.connectionId));
+      const expiry = new Date(Date.now() + 60 * 60_000).toISOString();
+      await db.update(connectionGrants).set({ providerTenant: { ...grant!.providerTenant,
+        oauth: { ...grant!.providerTenant?.oauth, accessTokenExpiresAt: expiry } } }).where(eq(connectionGrants.id, grant!.id));
+      await c.apps.finishGalleryAppConnection(f.home, c.allocated.connectionId,
+        { enabledCatalogEntryIds: [], askFirstCatalogEntryIds: [], access: { agentIds: [] } }, c.actor);
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("recorded");
+      const validations = await db.select().from(activationConnectionValidations).where(eq(activationConnectionValidations.connectionId, c.allocated.connectionId));
+      const observed = await db.select().from(toolConnections).where(eq(toolConnections.id, c.allocated.connectionId));
+      // Advance only the owned software clock. The provider's stored expiry,
+      // actual grant/secret metadata and Native health observation stay intact.
+      const clock = vi.spyOn(Date, "now").mockReturnValue(Date.parse(expiry) + 1);
+      try { expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("needs_review"); }
+      finally { clock.mockRestore(); }
+      expect(await db.select().from(toolConnections).where(eq(toolConnections.id, c.allocated.connectionId))).toEqual(observed);
+      expect(await db.select().from(activationConnectionValidations).where(eq(activationConnectionValidations.connectionId, c.allocated.connectionId))).toEqual(validations);
+      await c.reconnect(); expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("recorded");
+    });
+    it("refuses Native revalidation and Original reconnect after the selected original package is revoked", async () => {
+      const c = await originalCompletedPersonalConnection();
+      const [validation] = await db.select().from(activationConnectionValidations).where(eq(activationConnectionValidations.connectionId, c.allocated.connectionId));
+      await service.revoke(f.actor, c.published.id);
+      await expect(db.insert(activationConnectionValidations).values({ companyId: f.home, purposeId: validation!.purposeId,
+        connectionId: c.allocated.connectionId, setupHash: "f".repeat(64), healthCheckedAt: validation!.healthCheckedAt }))
+        .rejects.toMatchObject({ cause: { code: "23514" } });
+      await expect(c.reconnect()).rejects.toMatchObject({ status: 409 });
+      expect(c.connector.startAuthorization).toHaveBeenCalledTimes(1); expect(c.connector.claim).toHaveBeenCalledTimes(1);
+    });
+    it("does not revive a withdrawn connected purpose through Original reconnect and retains its validation history", async () => {
+      const c = await originalCompletedPersonalConnection();
+      const before = await db.select().from(activationConnectionValidations).where(eq(activationConnectionValidations.connectionId, c.allocated.connectionId));
+      await c.owner.withdraw(f.actor, f.home, c.command.requestKey, { confirmWithdrawal: true, expectedReviewHash: c.review.reviewHash });
+      await expect(c.reconnect()).rejects.toMatchObject({ status: 409 });
+      expect(c.connector.startAuthorization).toHaveBeenCalledTimes(1); expect(c.connector.claim).toHaveBeenCalledTimes(1);
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("needs_review");
+      expect(await db.select().from(activationConnectionValidations).where(eq(activationConnectionValidations.connectionId, c.allocated.connectionId))).toEqual(before);
+    });
+    async function withdrawCompletedPurpose(c: Awaited<ReturnType<typeof originalCompletedPersonalConnection>>, requestKey = c.command.requestKey) {
+      const [original] = await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.requestKey, requestKey));
+      await c.owner.withdraw(f.actor, f.home, requestKey, { confirmWithdrawal: true, expectedReviewHash: original!.reviewHash });
+      return original!;
+    }
+    it("records a new explicit purpose after withdrawal while preserving the original connection, credentials and terminal history", async () => {
+      const c = await originalCompletedPersonalConnection();
+      expect(c.review.supersedesConsentId).toBeNull();
+      const original = await withdrawCompletedPurpose(c);
+      const before = { connections: await db.select().from(toolConnections).where(eq(toolConnections.id, c.allocated.connectionId)),
+        grants: await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, c.allocated.connectionId)),
+        secrets: await db.select().from(companySecrets).where(eq(companySecrets.companyId, f.home)),
+        validations: await db.select().from(activationConnectionValidations).where(eq(activationConnectionValidations.purposeId, original.id)) };
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("needs_review");
+      const reviewed = await c.owner.getReview(f.actor, f.home, c.key);
+      expect(reviewed.supersedesConsentId).toBe(original.id);
+      expect(reviewed.existingConnection?.id).toBe(c.allocated.connectionId);
+      expect(reviewed.reviewHash).not.toBe(c.review.reviewHash);
+      await expect(c.owner.approve(f.actor, f.home, c.key, { ...c.command, requestKey: randomUUID() })).rejects.toMatchObject({ status: 409 });
+      const command = { ...c.command, requestKey: randomUUID(), expectedReviewHash: reviewed.reviewHash };
+      const [first, replay] = await Promise.all([c.owner.approve(f.actor, f.home, c.key, command), c.owner.approve(f.actor, f.home, c.key, command)]);
+      expect(first).toEqual(replay); expect(first.id).not.toBe(original.id);
+      expect(first).toMatchObject({ status: "connected", connectionId: c.allocated.connectionId });
+      expect(await c.owner.approve(f.actor, f.home, c.key, c.command)).toMatchObject({ id: original.id, status: "withdrawn" });
+      expect((await c.owner.getCurrentReceipt(f.actor, f.home, c.key))?.id).toBe(first.id);
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("recorded");
+      const [retained] = await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.id, original.id));
+      expect(retained).toEqual({ ...original, status: "withdrawn" });
+      const [successor] = await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.id, first.id));
+      expect(successor?.supersedesConsentId).toBe(original.id);
+      expect(await db.select().from(activationConnectionValidations).where(eq(activationConnectionValidations.purposeId, original.id))).toEqual(before.validations);
+      expect(await db.select().from(activationConnectionValidations).where(eq(activationConnectionValidations.purposeId, first.id))).toHaveLength(1);
+      expect(await db.select().from(toolConnections).where(eq(toolConnections.id, c.allocated.connectionId))).toEqual(before.connections);
+      expect(await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, c.allocated.connectionId))).toEqual(before.grants);
+      expect(await db.select().from(companySecrets).where(eq(companySecrets.companyId, f.home))).toEqual(before.secrets);
+      expect(c.connector.startAuthorization).toHaveBeenCalledTimes(1); expect(c.connector.claim).toHaveBeenCalledTimes(1);
+      await c.reconnect();
+      expect((await c.owner.getCurrentReceipt(f.actor, f.home, c.key))?.id).toBe(first.id);
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("recorded");
+      expect(await db.select().from(toolConnectionInstalls).where(eq(toolConnectionInstalls.connectionId, c.allocated.connectionId))).toEqual([]);
+      expect((await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.id, original.id)))[0]).toEqual(retained);
+    });
+    it("keeps a single current successor through repeated withdrawals instead of selecting the oldest retained approval", async () => {
+      const c = await originalCompletedPersonalConnection(); let requestKey = c.command.requestKey;
+      const retained: Array<typeof activationConnectionConsents.$inferSelect> = [];
+      for (let generation = 0; generation < 3; generation++) {
+        const original = await withdrawCompletedPurpose(c, requestKey); retained.push({ ...original, status: "withdrawn" });
+        const reviewed = await c.owner.getReview(f.actor, f.home, c.key);
+        expect(reviewed.supersedesConsentId).toBe(original.id);
+        requestKey = randomUUID();
+        const next = await c.owner.approve(f.actor, f.home, c.key, { ...c.command, requestKey, expectedReviewHash: reviewed.reviewHash });
+        expect(next.status).toBe("connected");
+        expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("recorded");
+        for (const earlier of retained) expect((await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.id, earlier.id)))[0]).toEqual(earlier);
+      }
+      expect(await db.select().from(toolConnections).where(eq(toolConnections.applicationId, c.app.id))).toHaveLength(1);
+      expect(await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.connectionId, c.allocated.connectionId))).toHaveLength(4);
+    });
+    it("refuses missing, foreign, live and already superseded Native parents without rewriting any lineage", async () => {
+      const c = await originalCompletedPersonalConnection();
+      const original = await withdrawCompletedPurpose(c), reviewed = await c.owner.getReview(f.actor, f.home, c.key);
+      const value = { ...original, id: randomUUID(), requestKey: randomUUID(), status: "approved", reservedConnectionId: null,
+        connectionId: null, connectionHash: null, connectedAt: null, supersedesConsentId: original.id,
+        existingConnectionId: c.allocated.connectionId, existingSetupHash: reviewed.existingConnection!.setupHash };
+      for (const changes of [{ supersedesConsentId: null }, { supersedesConsentId: randomUUID() }, { methodHash: "f".repeat(64) }])
+        await expect(db.insert(activationConnectionConsents).values({ ...value, ...changes })).rejects.toMatchObject({ cause: { code: "23514" } });
+      const next = await c.owner.approve(f.actor, f.home, c.key, { ...c.command, requestKey: randomUUID(), expectedReviewHash: reviewed.reviewHash });
+      await expect(db.insert(activationConnectionConsents).values({ ...value, supersedesConsentId: next.id })).rejects.toMatchObject({ cause: { code: "23514" } });
+      await withdrawCompletedPurpose(c, next.requestKey);
+      await expect(db.insert(activationConnectionConsents).values(value)).rejects.toMatchObject({ cause: { code: "23514" } });
+      await expect(db.update(activationConnectionConsents).set({ supersedesConsentId: randomUUID() }).where(eq(activationConnectionConsents.id, next.id)))
+        .rejects.toMatchObject({ cause: { code: "23514" } });
+      await expect(db.update(activationConnectionConsents).set({ status: "connected" }).where(eq(activationConnectionConsents.id, original.id)))
+        .rejects.toMatchObject({ cause: { code: "23514" } });
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("needs_review");
+      expect(await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.connectionId, c.allocated.connectionId))).toHaveLength(2);
+    });
+    it("requires a fresh explicit successor decision after Original change-setup advances the onboarding version", async () => {
+      const c = await originalCompletedPersonalConnection(), current = await c.activation.get(f.actor, f.home);
+      const reviewStep = await c.activation.command(f.actor, f.home, { operation: "continue_access", requestId: randomUUID(), expectedVersion: current.version });
+      let revised = await c.activation.command(f.actor, f.home, { operation: "change_setup", requestId: randomUUID(), expectedVersion: reviewStep.version });
+      expect(revised.state.step).toBe("intent");
+      expect(revised.state.packageVersionId).toBeNull();
+      revised = await c.activation.command(f.actor, f.home, { operation: "save_intent", intent: "Prepare a source-bound customer research draft", requestId: randomUUID(), expectedVersion: revised.version });
+      revised = await c.activation.command(f.actor, f.home, { operation: "build_customer_draft", requestId: randomUUID(), expectedVersion: revised.version });
+      revised = await c.activation.command(f.actor, f.home, { operation: "continue_discovery", requestId: randomUUID(), expectedVersion: revised.version });
+      revised = await c.activation.command(f.actor, f.home, { operation: "confirm_material_facts", companyPurpose: "Help customers compare services", requestId: randomUUID(), expectedVersion: revised.version });
+      revised = await c.activation.command(f.actor, f.home, { operation: "select_capability", packageVersionId: c.review.packageVersionId, requestId: randomUUID(), expectedVersion: revised.version });
+      expect(revised.state.step).toBe("access");
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("needs_review");
+      const original = await withdrawCompletedPurpose(c), reviewed = await c.owner.getReview(f.actor, f.home, c.key);
+      expect(reviewed.onboardingVersion).toBeGreaterThan(original.onboardingVersion);
+      expect(reviewed.supersedesConsentId).toBe(original.id);
+      const next = await c.owner.approve(f.actor, f.home, c.key, { ...c.command, requestKey: randomUUID(), expectedReviewHash: reviewed.reviewHash });
+      expect(next).toMatchObject({ status: "connected", onboardingVersion: reviewed.onboardingVersion });
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("recorded");
+      expect((await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.id, original.id)))[0]).toEqual({ ...original, status: "withdrawn" });
+    });
+    it("does not reuse an earlier health observation as validation of a newly rotated credential after withdrawal", async () => {
+      const c = await originalCompletedPersonalConnection(), original = await withdrawCompletedPurpose(c);
+      const [grant] = await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, c.allocated.connectionId));
+      await secretService(db).rotate(grant!.credentialSecretRefs[0]!.secretId, { value: "owned-rotated-after-withdrawal", expectedLatestVersion: 1 }, { userId: f.userId });
+      const pending = await c.owner.getReview(f.actor, f.home, c.key);
+      expect(pending.existingConnection).toMatchObject({ id: c.allocated.connectionId, needsValidation: true });
+      expect(pending.supersedesConsentId).toBe(original.id);
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("needs_review");
+      expect(await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.connectionId, c.allocated.connectionId))).toEqual([{ ...original, status: "withdrawn" }]);
+      expect(c.connector.startAuthorization).toHaveBeenCalledTimes(1); expect(c.connector.claim).toHaveBeenCalledTimes(1);
+    });
+    it("reuses the actual allocated draft after withdrawal before first sign-in without allocating again", async () => {
+      const c = await connectionConsentFixture(true); await c.owner.approve(f.actor, f.home, c.key, c.command);
+      const actor = { actorType: "user" as const, actorId: f.userId };
+      const allocated = await c.apps.connectGalleryApp(f.home, await c.owner.getApprovedSetup(f.actor, f.home, c.command.requestKey),
+        actor, c.owner.allocationOwner(f.actor, f.home, c.command.requestKey));
+      const old = await c.owner.withdraw(f.actor, f.home, c.command.requestKey, { confirmWithdrawal: true, expectedReviewHash: c.review.reviewHash });
+      const reviewed = await c.owner.getReview(f.actor, f.home, c.key);
+      expect(reviewed.existingConnection).toMatchObject({ id: allocated.connectionId, needsValidation: true });
+      expect(reviewed.supersedesConsentId).toBe(old.id);
+      const next = await c.owner.approve(f.actor, f.home, c.key, { ...c.command, requestKey: randomUUID(), expectedReviewHash: reviewed.reviewHash });
+      expect(next).toMatchObject({ status: "allocated", connectionId: allocated.connectionId, connectedAt: null });
+      expect(c.connector.startAuthorization).not.toHaveBeenCalled(); expect(c.connector.claim).not.toHaveBeenCalled();
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("needs_review");
+      const start = await c.apps.startOAuth(f.home, allocated.connectionId,
+        { redirectUri: "https://owned-fixture.invalid/callback", subjectUserId: f.userId, actor });
+      await c.apps.completePaperclipCloudConnectorCallback({ state: new URL(start.authorizationUrl).searchParams.get("state")!, claimId: "owned-retained-draft", actor });
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("recorded");
+      expect(await db.select().from(toolConnections).where(eq(toolConnections.applicationId, c.app.id))).toHaveLength(1);
+      expect(await db.select().from(toolConnectionInstalls).where(eq(toolConnectionInstalls.connectionId, allocated.connectionId))).toEqual([]);
+      expect((await c.owner.getReceipt(f.actor, f.home, c.command.requestKey))?.status).toBe("withdrawn");
+    });
+    it("retains one expired personal connection under fresh C3 until actual Original reconnect establishes current evidence", async () => {
+      const c = await originalCompletedPersonalConnection();
+      const [grant] = await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, c.allocated.connectionId));
+      await db.update(connectionGrants).set({ providerTenant: { ...grant!.providerTenant,
+        oauth: { ...grant!.providerTenant?.oauth, accessTokenExpiresAt: "2000-01-01T00:00:00Z" } } }).where(eq(connectionGrants.id, grant!.id));
+      const original = await withdrawCompletedPurpose(c);
+      const connections = await db.select().from(toolConnections).where(eq(toolConnections.id, c.allocated.connectionId));
+      const grants = await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, c.allocated.connectionId));
+      const secrets = await db.select().from(companySecrets).where(eq(companySecrets.companyId, f.home));
+      const review = await c.owner.getReview(f.actor, f.home, c.key);
+      expect(review.existingConnection).toMatchObject({ id: c.allocated.connectionId, needsValidation: true });
+      const command = { ...c.command, requestKey: randomUUID(), expectedReviewHash: review.reviewHash };
+      const next = await c.owner.approve(f.actor, f.home, c.key, command);
+      expect(next).toMatchObject({ status: "allocated", connectionId: c.allocated.connectionId, connectedAt: null });
+      expect(await c.owner.approve(f.actor, f.home, c.key, command)).toEqual(next);
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("needs_review");
+      expect(await db.select().from(activationConnectionValidations).where(eq(activationConnectionValidations.purposeId, next.id))).toEqual([]);
+      expect(await db.select().from(toolConnections).where(eq(toolConnections.id, c.allocated.connectionId))).toEqual(connections);
+      expect(await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, c.allocated.connectionId))).toEqual(grants);
+      expect(await db.select().from(companySecrets).where(eq(companySecrets.companyId, f.home))).toEqual(secrets);
+      expect(c.connector.startAuthorization).toHaveBeenCalledTimes(1); expect(c.connector.claim).toHaveBeenCalledTimes(1);
+      await expect(db.update(activationConnectionConsents).set({ existingSetupValidated: true }).where(eq(activationConnectionConsents.id, next.id)))
+        .rejects.toMatchObject({ cause: { code: "23514" } });
+      await expect(db.update(activationConnectionConsents).set({ status: "connected", connectionHash: "f".repeat(64), connectedAt: new Date() })
+        .where(eq(activationConnectionConsents.id, next.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+      await c.reconnect();
+      expect((await c.owner.getReceipt(f.actor, f.home, command.requestKey))?.status).toBe("connected");
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("recorded");
+      expect((await c.owner.getReview(f.actor, f.home, c.key)).reviewHash).toBe(review.reviewHash);
+      expect(await db.select().from(activationConnectionValidations).where(eq(activationConnectionValidations.purposeId, next.id))).toHaveLength(1);
+      expect((await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.id, original.id)))[0]).toEqual({ ...original, status: "withdrawn" });
+      expect(await db.select().from(toolConnections).where(eq(toolConnections.applicationId, c.app.id))).toHaveLength(1);
+      expect(await db.select().from(toolConnectionInstalls).where(eq(toolConnectionInstalls.connectionId, c.allocated.connectionId))).toEqual([]);
+    });
+    it("requires another review after retained metadata changes and keeps failed Original validation pending", async () => {
+      const c = await originalCompletedPersonalConnection(); await withdrawCompletedPurpose(c);
+      await db.update(toolConnections).set({ healthStatus: "error" }).where(eq(toolConnections.id, c.allocated.connectionId));
+      const reviewed = await c.owner.getReview(f.actor, f.home, c.key);
+      const [grant] = await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, c.allocated.connectionId));
+      await secretService(db).rotate(grant!.credentialSecretRefs[0]!.secretId,
+        { value: "owned-retained-review-race", expectedLatestVersion: 1 }, { userId: f.userId });
+      await expect(c.owner.approve(f.actor, f.home, c.key, { ...c.command, requestKey: randomUUID(), expectedReviewHash: reviewed.reviewHash }))
+        .rejects.toMatchObject({ status: 409 });
+      const current = await c.owner.getReview(f.actor, f.home, c.key);
+      const pending = await c.owner.approve(f.actor, f.home, c.key, { ...c.command, requestKey: randomUUID(), expectedReviewHash: current.reviewHash });
+      expect(pending.status).toBe("allocated");
+      await expect(c.apps.finishGalleryAppConnection(f.home, c.allocated.connectionId,
+        { enabledCatalogEntryIds: [], askFirstCatalogEntryIds: [], access: { agentIds: [] } }, c.actor)).rejects.toMatchObject({ status: 409 });
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("needs_review");
+      expect(await db.select().from(activationConnectionValidations).where(eq(activationConnectionValidations.purposeId, pending.id))).toEqual([]);
+      expect(c.connector.startAuthorization).toHaveBeenCalledTimes(1); expect(c.connector.claim).toHaveBeenCalledTimes(1);
+    });
+    it("refuses a withdrawn original callback before the owned broker claim", async () => {
+      const c = await connectionConsentFixture(true); await c.owner.approve(f.actor, f.home, c.key, c.command);
+      const allocated = await c.apps.connectGalleryApp(f.home, await c.owner.getApprovedSetup(f.actor, f.home, c.command.requestKey),
+        { actorType: "user", actorId: f.userId }, c.owner.allocationOwner(f.actor, f.home, c.command.requestKey));
+      const actor = { actorType: "user" as const, actorId: f.userId };
+      const start = await c.apps.startOAuth(f.home, allocated.connectionId, { redirectUri: "https://owned-fixture.invalid/callback", subjectUserId: f.userId, actor });
+      const state = new URL(start.authorizationUrl).searchParams.get("state")!;
+      await c.owner.withdraw(f.actor, f.home, c.command.requestKey, { confirmWithdrawal: true, expectedReviewHash: c.review.reviewHash });
+      await expect(c.apps.completePaperclipCloudConnectorCallback({ state, claimId: "owned-claim", actor })).rejects.toMatchObject({ status: 409 });
+      expect(c.connector.claim).not.toHaveBeenCalled();
+      expect(await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, allocated.connectionId))).toEqual([]);
+    });
+    async function existingOriginalPersonalConnection() {
+      const c = await connectionConsentFixture(true), actor = { actorType: "user" as const, actorId: f.userId };
+      const connected = await c.apps.connectGalleryApp(f.home, { galleryKey: "gmail", connectionMethodKey: c.review.connectionMethodKey,
+        applicationId: c.app.id, grantKind: "user" }, actor);
+      const authorizationUrl = connected.auth?.startUrl ?? (await c.apps.startOAuth(f.home, connected.connectionId,
+        { redirectUri: "https://owned-fixture.invalid/callback", subjectUserId: f.userId, actor })).authorizationUrl;
+      const state = new URL(authorizationUrl).searchParams.get("state")!;
+      await c.apps.completePaperclipCloudConnectorCallback({ state, claimId: "owned-legacy-claim", actor });
+      // Construct an unassigned legacy connection through its original owners.
+      // This removes access only in this disposable owned fixture.
+      await c.apps.putConnectionInstalls(connected.connectionId, { installs: [] }, actor);
+      await c.apps.finishGalleryAppConnection(f.home, connected.connectionId,
+        { enabledCatalogEntryIds: [], askFirstCatalogEntryIds: [], access: { agentIds: [] } }, actor);
+      await c.apps.checkHealth(connected.connectionId, actor);
+      return { ...c, actor, connectionId: connected.connectionId };
+    }
+    it("adopts the exact existing validated personal connection through C3 without another allocation, credential or Agent owner", async () => {
+      const c = await existingOriginalPersonalConnection(), reviewed = await c.owner.getReview(f.actor, f.home, c.key);
+      expect(reviewed.existingConnection).toMatchObject({ id: c.connectionId, setupHash: expect.stringMatching(/^[a-f0-9]{64}$/) });
+      const before = { connections: await db.select().from(toolConnections).where(eq(toolConnections.applicationId, c.app.id)),
+        grants: await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, c.connectionId)),
+        secrets: await db.select().from(companySecrets).where(eq(companySecrets.companyId, f.home)),
+        agents: await db.select().from(agents).where(eq(agents.companyId, f.home)) };
+      const starts = vi.mocked(c.connector.startAuthorization).mock.calls.length, claims = vi.mocked(c.connector.claim).mock.calls.length;
+      const command = { ...c.command, expectedReviewHash: reviewed.reviewHash };
+      const [first, replay] = await Promise.all([c.owner.approve(f.actor, f.home, c.key, command), c.owner.approve(f.actor, f.home, c.key, command)]);
+      expect(replay).toEqual(first); expect(first).toMatchObject({ status: "connected", connectionId: c.connectionId });
+      expect(await c.owner.getCurrentReceipt(f.actor, f.home, c.key)).toEqual(first);
+      expect((await c.owner.getReview(f.actor, f.home, c.key)).reviewHash).toBe(reviewed.reviewHash);
+      expect(await db.select().from(toolConnections).where(eq(toolConnections.applicationId, c.app.id))).toEqual(before.connections);
+      expect(await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, c.connectionId))).toEqual(before.grants);
+      expect(await db.select().from(companySecrets).where(eq(companySecrets.companyId, f.home))).toEqual(before.secrets);
+      expect(await db.select().from(agents).where(eq(agents.companyId, f.home))).toEqual(before.agents);
+      expect(c.connector.startAuthorization).toHaveBeenCalledTimes(starts); expect(c.connector.claim).toHaveBeenCalledTimes(claims);
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("recorded");
+      const [native] = await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.id, first.id));
+      expect(native).toMatchObject({ existingConnectionId: c.connectionId, existingSetupHash: reviewed.existingConnection!.setupHash });
+      await expect(db.update(activationConnectionConsents).set({ existingConnectionId: randomUUID() }).where(eq(activationConnectionConsents.id, first.id)))
+        .rejects.toMatchObject({ cause: { code: "23514" } });
+    });
+    it("refuses stale existing personal grant scopes before adoption and retains only the original connection", async () => {
+      const c = await existingOriginalPersonalConnection(), reviewed = await c.owner.getReview(f.actor, f.home, c.key);
+      const [grant] = await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, c.connectionId));
+      await db.update(connectionGrants).set({ providerTenant: { ...grant!.providerTenant, oauth: { ...grant!.providerTenant?.oauth, scopes: ["unapproved-broader-scope"] } } })
+        .where(eq(connectionGrants.id, grant!.id));
+      await expect(c.owner.approve(f.actor, f.home, c.key, { ...c.command, expectedReviewHash: reviewed.reviewHash })).rejects.toMatchObject({ status: 409 });
+      expect(await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.applicationId, c.app.id))).toEqual([]);
+      expect(await db.select().from(toolConnections).where(eq(toolConnections.applicationId, c.app.id))).toHaveLength(1);
+    });
+    it("refuses an existing connection review after the original secret owner rotates its credential version", async () => {
+      const c = await existingOriginalPersonalConnection(), reviewed = await c.owner.getReview(f.actor, f.home, c.key);
+      const [grant] = await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, c.connectionId));
+      await secretService(db).rotate(grant!.credentialSecretRefs[0]!.secretId, { value: "owned-rotated-software-token", expectedLatestVersion: 1 }, { userId: f.userId });
+      await expect(c.owner.approve(f.actor, f.home, c.key, { ...c.command, expectedReviewHash: reviewed.reviewHash })).rejects.toMatchObject({ status: 409 });
+      expect(await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.applicationId, c.app.id))).toEqual([]);
+    });
+    it("revalidates an adopted Original personal connection while retaining its initial adoption pin and C3 purpose", async () => {
+      const c = await existingOriginalPersonalConnection(), reviewed = await c.owner.getReview(f.actor, f.home, c.key);
+      const command = { ...c.command, expectedReviewHash: reviewed.reviewHash };
+      const saved = await c.owner.approve(f.actor, f.home, c.key, command);
+      const [original] = await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.id, saved.id));
+      const [grant] = await db.select().from(connectionGrants).where(eq(connectionGrants.connectionId, c.connectionId));
+      await secretService(db).rotate(grant!.credentialSecretRefs[0]!.secretId,
+        { value: "owned-adopted-rotated-token", expectedLatestVersion: 1 }, { userId: f.userId });
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("needs_review");
+      expect((await c.owner.getReview(f.actor, f.home, c.key)).reviewHash).toBe(reviewed.reviewHash);
+      const start = await c.apps.startOAuth(f.home, c.connectionId,
+        { redirectUri: "https://owned-fixture.invalid/callback", subjectUserId: f.userId, actor: c.actor });
+      await c.apps.completePaperclipCloudConnectorCallback({ state: new URL(start.authorizationUrl).searchParams.get("state")!,
+        claimId: "owned-adopted-revalidation-claim", actor: c.actor });
+      expect((await c.activation.get(f.actor, f.home)).requiredAccess[0]?.status).toBe("recorded");
+      expect(await c.owner.getCurrentReceipt(f.actor, f.home, c.key)).toEqual(saved);
+      expect(await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.id, saved.id))).toEqual([original]);
+      expect(await db.select().from(activationConnectionValidations).where(eq(activationConnectionValidations.purposeId, saved.id))).toHaveLength(2);
+      expect(await db.select().from(toolConnections).where(eq(toolConnections.applicationId, c.app.id))).toHaveLength(1);
+      expect(await db.select().from(toolConnectionInstalls).where(eq(toolConnectionInstalls.connectionId, c.connectionId))).toEqual([]);
+    });
+    it("preserves existing Agent/company reach and refuses to reinterpret it as an unassigned onboarding connection", async () => {
+      const c = await existingOriginalPersonalConnection();
+      await c.apps.putConnectionInstalls(c.connectionId, { installs: [{ targetType: "company", targetId: f.home }] }, c.actor);
+      const before = await db.select().from(toolConnectionInstalls).where(eq(toolConnectionInstalls.connectionId, c.connectionId));
+      await expect(c.owner.getReview(f.actor, f.home, c.key)).rejects.toMatchObject({ status: 409 });
+      expect(await db.select().from(toolConnectionInstalls).where(eq(toolConnectionInstalls.connectionId, c.connectionId))).toEqual(before);
+      expect(await db.select().from(activationConnectionConsents).where(eq(activationConnectionConsents.applicationId, c.app.id))).toEqual([]);
+    });
+    it("retains the exact qualified onboarding choice outside the bounded discovery page and refuses it after original revocation", async () => {
+      const selected = await firstAgentPreparationFixture({}, "access");
+      for (let index = 0; index < 21; index++) await hireFixture([], `aa-before-selection-${randomUUID()}`);
+      const view = await selected.activation.get(f.actor, f.home);
+      expect(view.capabilities).toHaveLength(20);
+      expect(view.capabilities[0]?.versionId).toBe(selected.published.id);
+      expect(view.blockers).not.toContain("no_qualified_capability");
+      const choosing = await selected.activation.command(f.actor, f.home, { operation: "reselect_capability", requestId: randomUUID(), expectedVersion: view.version });
+      expect(choosing.capabilities.some(capability => capability.versionId === selected.published.id)).toBe(false);
+      const reselected = await selected.activation.command(f.actor, f.home, { operation: "select_capability", requestId: randomUUID(),
+        expectedVersion: choosing.version, packageVersionId: selected.published.id });
+      expect(reselected.state).toMatchObject({ step: "access", packageVersionId: selected.published.id });
+      expect(await db.select().from(toolConnectionInstalls).where(eq(toolConnectionInstalls.companyId, f.home))).toEqual([]);
+      expect(await db.select().from(connectionGrants).where(eq(connectionGrants.companyId, f.home))).toEqual([]);
+      await service.revoke(f.actor, selected.published.id);
+      const revoked = await selected.activation.get(f.actor, f.home);
+      expect(revoked.capabilities).toHaveLength(20);
+      expect(revoked.capabilities.some(capability => capability.versionId === selected.published.id)).toBe(false);
+      expect(revoked.blockers).toContain("no_qualified_capability");
+      await expect(selected.activation.command(f.actor, f.home, { operation: "continue_access", requestId: randomUUID(), expectedVersion: reselected.version }))
+        .rejects.toMatchObject({ status: 409, details: { code: "CAPABILITY_UNAVAILABLE" } });
+    });
+    it("preserves the original outcome and company purpose when Not now returns to capability choice without granting access", async () => {
+      const fixture = await firstAgentPreparationFixture({}, "access", ["linear"]);
+      const before = await db.select().from(principalPermissionGrants).where(eq(principalPermissionGrants.companyId, f.home));
+      const original = await fixture.activation.get(f.actor, f.home);
+      const command = { operation: "reselect_capability" as const, expectedVersion: fixture.onboarding.version, requestId: randomUUID() };
+      const [first, replay] = await Promise.all([fixture.activation.command(f.actor, f.home, command), fixture.activation.command(f.actor, f.home, command)]);
+      expect(first.state).toMatchObject({ step: "capability", packageVersionId: null, intent: original.state.intent, companyPurpose: original.state.companyPurpose });
+      expect(replay.version).toBe(first.version);
+      expect(await db.select().from(principalPermissionGrants).where(eq(principalPermissionGrants.companyId, f.home))).toEqual(before);
+      expect(await db.select().from(toolConnectionInstalls).where(eq(toolConnectionInstalls.companyId, f.home))).toEqual([]);
+      expect(await db.select().from(connectionGrants).where(eq(connectionGrants.companyId, f.home))).toEqual([]);
+      await expect(fixture.activation.command(f.actor, f.home, { ...command, requestId: randomUUID(), expectedVersion: first.version }))
+        .rejects.toMatchObject({ status: 409, details: { code: "ACTIVATION_STEP_CONFLICT" } });
+    });
+    it("projects only current company setup and continues to review once without native access changes", async () => {
+      const fixture = await firstAgentPreparationFixture({}, "access", ["linear"]);
+      const setup = await connectionSetupFixture();
+      const beforeAgents = await db.select().from(agents).where(eq(agents.companyId, f.home));
+      const beforeGrants = await db.select().from(principalPermissionGrants).where(eq(principalPermissionGrants.companyId, f.home));
+      const beforeApps = await db.select().from(toolConnections).where(eq(toolConnections.companyId, f.home));
+      const view = await fixture.activation.get(f.actor, f.home);
+      expect(view.requiredAccess).toEqual([{ key: "linear", status: "recorded", checkedAt: setup.connection.healthCheckedAt!.toISOString() }]);
+      expect(view.blockers).not.toContain("required_access_pending");
+      expect(JSON.stringify(view.requiredAccess)).not.toMatch(/PRIVATE|credential|agentAccess|connectionId/);
+      const command = { operation: "continue_access" as const, expectedVersion: fixture.onboarding.version, requestId: randomUUID() };
+      const [first, replay] = await Promise.all([fixture.activation.command(f.actor, f.home, command), fixture.activation.command(f.actor, f.home, command)]);
+      expect(first.state.step).toBe("review"); expect(replay.version).toBe(first.version);
+      expect(first.blockers).toContain("safe_execution_unqualified");
+      expect(await db.select().from(agents).where(eq(agents.companyId, f.home))).toEqual(beforeAgents);
+      expect(await db.select().from(principalPermissionGrants).where(eq(principalPermissionGrants.companyId, f.home))).toEqual(beforeGrants);
+      expect(await db.select().from(toolConnections).where(eq(toolConnections.companyId, f.home))).toEqual(beforeApps);
+      expect(await db.select().from(connectionGrants).where(eq(connectionGrants.companyId, f.home))).toEqual([]);
+      expect(await readRequiredSetup(["linear", "linear"])).toHaveLength(1);
+      await expect(readRequiredSetup(Array.from({ length: 21 }, (_, index) => `app-${index}`))).rejects.toThrow("original package bound");
+    });
+    it("rechecks connection changes after the displayed review and preserves the onboarding step", async () => {
+      const fixture = await firstAgentPreparationFixture({}, "access", ["linear"]);
+      const setup = await connectionSetupFixture();
+      expect((await fixture.activation.get(f.actor, f.home)).requiredAccess?.[0]?.status).toBe("recorded");
+      await db.update(toolConnections).set({ enabled: false, updatedAt: new Date() }).where(eq(toolConnections.id, setup.connection.id));
+      await expect(fixture.activation.command(f.actor, f.home, { operation: "continue_access", expectedVersion: fixture.onboarding.version, requestId: randomUUID() }))
+        .rejects.toMatchObject({ status: 409, details: { code: "REQUIRED_ACCESS_PENDING" } });
+      expect((await fixture.activation.get(f.actor, f.home)).state.step).toBe("access");
+      const [original] = await db.select().from(companyOnboardingRuns).where(eq(companyOnboardingRuns.id, fixture.onboarding.id));
+      expect(original!.version).toBe(fixture.onboarding.version);
+    });
+    it("does not substitute another company's connection or a duplicate account for required setup", async () => {
+      await connectionSetupFixture(f.guest);
+      expect(await readRequiredSetup()).toEqual([{ key: "linear", status: "not_connected", checkedAt: null }]);
+      const setup = await connectionSetupFixture();
+      await db.insert(toolConnections).values({ companyId: f.home, applicationId: setup.app.id, name: "Other account", uid: randomUUID(), transport: "rest_api" });
+      expect(await readRequiredSetup()).toEqual([{ key: "linear", status: "needs_review", checkedAt: null }]);
+    });
+    it("does not reuse stale health or an absent company installation", async () => {
+      const setup = await connectionSetupFixture();
+      await db.update(toolConnections).set({ updatedAt: new Date(setup.connection.healthCheckedAt!.getTime() + 1) }).where(eq(toolConnections.id, setup.connection.id));
+      expect((await readRequiredSetup())[0]?.status).toBe("needs_review");
+      await db.update(toolConnections).set({ updatedAt: setup.connection.updatedAt }).where(eq(toolConnections.id, setup.connection.id));
+      await db.delete(toolConnectionInstalls).where(eq(toolConnectionInstalls.connectionId, setup.connection.id));
+      expect((await readRequiredSetup())[0]?.status).toBe("needs_review");
+    });
+    it("keeps per-user credentials separate from company and other-user grants", async () => {
+      const setup = await connectionSetupFixture();
+      await db.update(toolConnections).set({ authKind: "api_key", credentialPolicy: "per_user" }).where(eq(toolConnections.id, setup.connection.id));
+      const refs = [{ configPath: "headers.Authorization", secretId: randomUUID() }];
+      await db.insert(connectionGrants).values([{ companyId: f.home, connectionId: setup.connection.id, kind: "organization", isDefault: true, credentialSecretRefs: refs },
+        { companyId: f.home, connectionId: setup.connection.id, kind: "user", subjectUserId: "another-user", credentialSecretRefs: refs }]);
+      expect((await readRequiredSetup())[0]?.status).toBe("needs_review");
+      const [personal] = await db.insert(connectionGrants).values({ companyId: f.home, connectionId: setup.connection.id, kind: "user", subjectUserId: f.userId, credentialSecretRefs: refs }).returning();
+      expect((await readRequiredSetup())[0]?.status).toBe("recorded");
+      await db.update(connectionGrants).set({ status: "needs_reauthorization" }).where(eq(connectionGrants.id, personal!.id));
+      expect((await readRequiredSetup())[0]?.status).toBe("needs_review");
+    });
+    it("does not borrow a personal or organization credential for a dedicated future agent", async () => {
+      const setup = await connectionSetupFixture();
+      await db.update(toolConnections).set({ authKind: "api_key", credentialPolicy: "per_agent" }).where(eq(toolConnections.id, setup.connection.id));
+      await db.insert(connectionGrants).values({ companyId: f.home, connectionId: setup.connection.id, kind: "organization", isDefault: true,
+        credentialSecretRefs: [{ configPath: "headers.Authorization", secretId: randomUUID() }] });
+      expect((await readRequiredSetup())[0]?.status).toBe("needs_review");
+    });
+    it("records shared credentials only under their original policy and honors personal fallback explicitly", async () => {
+      const setup = await connectionSetupFixture();
+      await db.update(toolConnections).set({ authKind: "api_key", credentialPolicy: "shared" }).where(eq(toolConnections.id, setup.connection.id));
+      const [personal] = await db.insert(connectionGrants).values({ companyId: f.home, connectionId: setup.connection.id, kind: "user", subjectUserId: f.userId,
+        credentialSecretRefs: [{ configPath: "headers.Authorization", secretId: randomUUID() }] }).returning();
+      expect((await readRequiredSetup())[0]?.status).toBe("needs_review");
+      await db.update(toolConnections).set({ credentialPolicy: "per_user_with_fallback" }).where(eq(toolConnections.id, setup.connection.id));
+      expect((await readRequiredSetup())[0]?.status).toBe("recorded");
+      await db.update(connectionGrants).set({ status: "revoked", revokedAt: new Date() }).where(eq(connectionGrants.id, personal!.id));
+      expect((await readRequiredSetup())[0]?.status).toBe("needs_review");
+      await db.update(toolConnections).set({ credentialPolicy: "shared", credentialSecretRefs: [{ configPath: "headers.Authorization", secretId: randomUUID() }] })
+        .where(eq(toolConnections.id, setup.connection.id));
+      expect((await readRequiredSetup())[0]?.status).toBe("recorded");
+    });
+    it("hides observations after current tools authority is withdrawn despite instance-admin flags", async () => {
+      const setup = await connectionSetupFixture();
+      await db.update(companyMemberships).set({ membershipRole: "operator" }).where(and(eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
+      await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId, f.home), eq(principalPermissionGrants.principalId, f.userId), eq(principalPermissionGrants.permissionKey, "tools:admin")));
+      const result = await db.transaction(tx => readActivationRequiredAccess(tx as unknown as Db, { ...f.actor, isInstanceAdmin: true }, f.home, ["linear"]));
+      expect(result).toEqual([{ key: "linear", status: "unavailable", checkedAt: null }]);
+      expect(await db.select().from(toolConnections).where(eq(toolConnections.id, setup.connection.id))).toHaveLength(1);
+    });
+    it("prepares one original paused agent across concurrent clicks and lost replies without work, credentials, grants or installation", async () => {
+      const fixture = await firstAgentPreparationFixture();
+      const before = await db.execute(sql`select
+        (select count(*) from agents where company_id=${f.home}::uuid) as agents,
+        (select count(*) from heartbeat_runs where company_id=${f.home}::uuid) as runs,
+        (select count(*) from agent_api_keys where company_id=${f.home}::uuid) as keys,
+        (select count(*) from principal_permission_grants where company_id=${f.home}::uuid) as grants,
+        (select count(*) from company_agent_package_installations where company_id=${f.home}::uuid) as installs,
+        (select count(*) from agent_presence_runtime_bindings where company_id=${f.home}::uuid) as bindings`);
+      const [first, replay] = await Promise.all([fixture.activation.command(f.actor, f.home, fixture.input), fixture.activation.command(f.actor, f.home, fixture.input)]);
+      expect(first.version).toBe(fixture.onboarding.version + 1); expect(replay.version).toBe(first.version);
+      expect(first.firstAgent).toMatchObject({ status: "prepared", canPrepare: false });
+      expect(replay.firstAgent?.agentId).toBe(first.firstAgent?.agentId);
+      const targetId = first.firstAgent!.agentId!;
+      const [target] = await db.select().from(agents).where(eq(agents.id, targetId));
+      expect(target).toMatchObject({ companyId: f.home, status: "paused", role: "general", adapterConfig: {}, runtimeConfig: { heartbeat: { enabled: false } } });
+      const after = await db.execute(sql`select
+        (select count(*) from agents where company_id=${f.home}::uuid) as agents,
+        (select count(*) from heartbeat_runs where company_id=${f.home}::uuid) as runs,
+        (select count(*) from agent_api_keys where company_id=${f.home}::uuid) as keys,
+        (select count(*) from principal_permission_grants where company_id=${f.home}::uuid) as grants,
+        (select count(*) from company_agent_package_installations where company_id=${f.home}::uuid) as installs,
+        (select count(*) from agent_presence_runtime_bindings where company_id=${f.home}::uuid) as bindings`);
+      expect(Number(after[0]!.agents)).toBe(Number(before[0]!.agents) + 1);
+      for (const key of ["runs", "keys", "grants", "installs"] as const) expect(after[0]![key]).toBe(before[0]![key]);
+      // The original V5 INSERT trigger creates a local unqualified provider
+      // placeholder for every agent. Preserve that owner and prove it cannot run.
+      expect(Number(after[0]!.bindings)).toBe(Number(before[0]!.bindings) + 1);
+      const [binding] = await db.select().from(agentPresenceRuntimeBindings).where(eq(agentPresenceRuntimeBindings.agentId, targetId));
+      expect(binding).toMatchObject({ companyId: f.home, providerBindingId: targetId,
+        qualifiedConfigurationHash: null, conformanceSnapshotHash: null, conformanceReport: null });
+      const [provider] = await db.select().from(agentProviderBindings).where(eq(agentProviderBindings.id, targetId));
+      expect(provider).toMatchObject({ status: "unqualified", capabilitySnapshot: null, conformance: {} });
+      await expect(agentProviderBindingService(db).assertRuntime(f.home, targetId)).rejects.toMatchObject({ status: 409 });
+      const [stored] = await db.select().from(companyOnboardingRuns).where(eq(companyOnboardingRuns.id, fixture.onboarding.id));
+      expect(stored!.activationState!.firstAgent!.agentId).toBe(targetId);
+      expect(JSON.stringify(first)).not.toContain(stored!.activationState!.firstAgent!.configurationHash);
+      expect(first.state).not.toHaveProperty("firstAgent");
+      const receipts = await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.home), eq(activityLog.action, "agent.hire_created")));
+      expect(receipts).toHaveLength(1); expect(JSON.stringify(receipts)).not.toContain("PRIVATE preparation goal");
+      await expect(fixture.activation.command(f.actor, f.home, { ...fixture.input, requestId: randomUUID(), expectedVersion: first.version })).rejects.toMatchObject({ status: 409 });
+      await expect(fixture.activation.command(f.actor, f.home, { operation: "change_setup", requestId: randomUUID(), expectedVersion: first.version })).rejects.toMatchObject({ status: 409 });
+      expect((await fixture.activation.command(f.actor, f.home, fixture.input)).firstAgent?.agentId).toBe(targetId);
+    }, 60000);
+    it("keeps the original board-approval owner and treats later agent changes or withdrawal as review, not readiness", async () => {
+      const fixture = await firstAgentPreparationFixture();
+      await db.update(companies).set({ requireBoardApprovalForNewAgents: true }).where(eq(companies.id, f.home));
+      const first = await fixture.activation.command(f.actor, f.home, fixture.input), targetId = first.firstAgent!.agentId!;
+      expect(first.firstAgent?.status).toBe("pending_approval");
+      const requests = await db.select().from(approvals).where(eq(approvals.companyId, f.home));
+      expect(requests).toHaveLength(1); expect(requests[0]).toMatchObject({ type: "hire_agent", status: "pending", requestedByUserId: f.userId, payload: { agentId: targetId } });
+      // The original approval owner can change the Native row. Its approval
+      // is not a representative safe-test, runtime or first-value receipt.
+      await approvalService(db).approve(requests[0]!.id, f.userId);
+      expect((await fixture.activation.get(f.actor, f.home)).firstAgent?.status).toBe("needs_review");
+      await db.update(agents).set({ title: "Changed native preparation" }).where(eq(agents.id, targetId));
+      expect((await fixture.activation.get(f.actor, f.home)).firstAgent?.status).toBe("needs_review");
+      await service.revoke(f.actor, fixture.published.id);
+      expect((await fixture.activation.get(f.actor, f.home)).firstAgent?.status).toBe("needs_review");
+      await db.update(agents).set({ status: "terminated" }).where(eq(agents.id, targetId));
+      expect((await fixture.activation.get(f.actor, f.home)).firstAgent).toEqual({ status: "unavailable", agentId: null, name: null, canPrepare: false });
+      expect((await db.select().from(agentApiKeys).where(eq(agentApiKeys.agentId, targetId)))).toEqual([]);
+      const [binding] = await db.select().from(agentPresenceRuntimeBindings).where(eq(agentPresenceRuntimeBindings.agentId, targetId));
+      expect(binding).toMatchObject({ qualifiedConfigurationHash: null, conformanceReport: null });
+      await expect(agentProviderBindingService(db).assertRuntime(f.home, targetId)).rejects.toMatchObject({ status: 409 });
+    }, 60000);
+    it("rejects current permission loss, rollout withdrawal and revoked capability without creating a target", async () => {
+      const fixture = await firstAgentPreparationFixture();
+      const count = () => db.select({ id: agents.id }).from(agents).where(eq(agents.companyId, f.home));
+      const before = await count();
+      await db.update(companyMemberships).set({ membershipRole: "viewer" }).where(and(eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
+      const removedGrants = await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId, f.home),
+        eq(principalPermissionGrants.principalType, "user"), eq(principalPermissionGrants.principalId, f.userId), eq(principalPermissionGrants.permissionKey, "agents:create"))).returning();
+      await expect(fixture.activation.command(f.actor, f.home, fixture.input)).rejects.toMatchObject({ status: 403 });
+      await db.update(companyMemberships).set({ membershipRole: "owner" }).where(and(eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
+      expect(removedGrants).toHaveLength(1);
+      await db.insert(principalPermissionGrants).values(removedGrants);
+      await instanceSettingsService(db).updateExperimental({ activation_v9: false });
+      await expect(fixture.activation.command(f.actor, f.home, fixture.input)).rejects.toMatchObject({ status: 404 });
+      await instanceSettingsService(db).updateExperimental({ activation_v9: true });
+      await service.revoke(f.actor, fixture.published.id);
+      await expect(fixture.activation.command(f.actor, f.home, fixture.input)).rejects.toMatchObject({ status: 409 });
+      expect(await count()).toEqual(before);
+      const [stored] = await db.select().from(companyOnboardingRuns).where(eq(companyOnboardingRuns.id, fixture.onboarding.id));
+      expect(stored!.version).toBe(fixture.onboarding.version); expect(stored!.activationState).not.toHaveProperty("firstAgent");
+    }, 60000);
+    it.each(["legacy", "installed"] as const)("does not replace an existing %s preparation whose safe-task option is unavailable", async kind => {
+      const fixture = await firstAgentPreparationFixture(kind === "legacy" ? { createdFirstAgentId: f.presence.id } : {});
+      if (kind === "installed") await service.install(f.actor, f.home, installInput());
+      const before = await db.select({ id: agents.id }).from(agents).where(eq(agents.companyId, f.home));
+      const current = await fixture.activation.get(f.actor, f.home);
+      expect(current.firstTask?.preparationOptions).toEqual([]);
+      expect(current.firstAgent).toEqual({ status: "not_created", agentId: null, name: null, canPrepare: false });
+      await expect(fixture.activation.command(f.actor, f.home, fixture.input)).rejects.toMatchObject({ status: 409 });
+      expect(await db.select({ id: agents.id }).from(agents).where(eq(agents.companyId, f.home))).toEqual(before);
+    }, 60000);
+    it("rolls back the original agent, approval and audit when preparation fails before commit", async () => {
+      const fixture = await firstAgentPreparationFixture();
+      await db.update(companies).set({ requireBoardApprovalForNewAgents: true }).where(eq(companies.id, f.home));
+      const counts = async () => (await db.execute(sql`select
+        (select count(*) from agents where company_id=${f.home}::uuid) as agents,
+        (select count(*) from approvals where company_id=${f.home}::uuid) as approvals,
+        (select count(*) from activity_log where company_id=${f.home}::uuid) as audits`))[0];
+      const before = await counts(), transact = db.transaction.bind(db);
+      const fault = vi.spyOn(db, "transaction").mockImplementationOnce((callback, config) => transact(async tx => {
+        await callback(tx);
+        throw new Error("Owned preparation fixture failure before Native commit");
+      }, config));
+      try { await expect(fixture.activation.command(f.actor, f.home, fixture.input)).rejects.toThrow("Owned preparation fixture failure before Native commit"); }
+      finally { fault.mockRestore(); }
+      expect(await counts()).toEqual(before);
+      const [stored] = await db.select().from(companyOnboardingRuns).where(eq(companyOnboardingRuns.id, fixture.onboarding.id));
+      expect(stored!.version).toBe(fixture.onboarding.version); expect(stored!.activationState).not.toHaveProperty("firstAgent");
+      const retried = await fixture.activation.command(f.actor, f.home, fixture.input);
+      expect(retried.firstAgent?.status).toBe("pending_approval");
+      expect(Number((await counts())!.agents)).toBe(Number(before!.agents) + 1);
+    }, 60000);
+    async function firstValueFixture() {
+      const { onboarding, installation, task, created, intent, orchestration } = await prepareFirstValueFixture();
+      const plan = await orchestration.decide(f.actor, f.home, created.id, { expectedVersion: created.version, action: "start",
+        rationale: "Start the explicitly bounded native fixture draft" });
+      const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
+        status: "running", contextSnapshot: { issueId: task!.id } }).returning();
+      await agentRuntimeFabricService(db).prepare({ companyId: f.home, agentId: f.presence.id, runId: run!.id,
+        responsibleUserId: f.userId, issueId: task!.id, query: intent });
+      const [document] = await db.insert(documents).values({ companyId: f.home, title: "Research result",
+        latestBody: "Native fixture output for an independent human review", createdByAgentId: f.presence.id }).returning();
+      const [revision] = await db.insert(documentRevisions).values({ companyId: f.home, documentId: document!.id,
+        revisionNumber: 1, body: document!.latestBody }).returning();
+      await db.update(documents).set({ latestRevisionId: revision!.id }).where(eq(documents.id, document!.id));
+      await db.insert(issueDocuments).values({ companyId: f.home, issueId: task!.id, documentId: document!.id, key: "result" });
+      await db.update(heartbeatRuns).set({ status: "succeeded", finishedAt: new Date() }).where(eq(heartbeatRuns.id, run!.id));
+      const worker = (await orchestration.get(f.actor, f.home, plan.id)).workers[0]!;
+      const verifier = verificationService(db), packet = await verifier.packet(f.actor, f.home, plan.id, worker.id);
+      const review = await verifier.review(f.actor, f.home, plan.id, { expectedPlanVersion: packet.planVersion, workerId: worker.id,
+        expectedResultHash: packet.resultHash, result: "pass", objectiveSatisfied: true,
+        rationale: "Independently inspected the saved native draft against the declared invariant",
+        businessInvariants: [{ index: 0, satisfied: true, evidenceRefs: [packet.evidence[0]!.ref] }] });
+      expect(review.result).toBe("pass");
+      return { onboarding: onboarding!, installation, task: task!, run: run!, document: document!, revision: revision!, review: review! };
+    }
+    it("records only a current native first-result task/run/review and replays without executing or granting", async () => {
+      const fixture = await firstValueFixture(), activation = activationService(db);
+      const beforeRuns = (await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home))).length;
+      const candidate = (await activation.get(f.actor, f.home)).firstValue!.candidates[0]!;
+      expect(candidate).toMatchObject({ issueId: fixture.task.id, runId: fixture.run.id, verificationRunId: fixture.review.id,
+        installationId: fixture.installation.id, artifacts: [{ documentId: fixture.document.id, documentKey: "result", revisionId: fixture.revision.id }] });
+      const input = { operation: "record_verified_result" as const, expectedVersion: fixture.onboarding.version, requestId: randomUUID(),
+        installationId: fixture.installation.id, verificationRunId: fixture.review.id };
+      const [first, replay] = await Promise.all([activation.command(f.actor, f.home, input), activation.command(f.actor, f.home, input)]);
+      expect(first.state.step).toBe("result");
+      expect(first.firstValue?.status).toBe("verified");
+      expect(first.state.firstValueAt).toBe(replay.state.firstValueAt);
+      expect(first.version).toBe(replay.version);
+      expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home))).length).toBe(beforeRuns);
+      const audits = await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.home), eq(activityLog.action, "activation.step_completed")));
+      expect(audits).toHaveLength(1);
+      expect(JSON.stringify(audits[0]!.details)).not.toContain("Private first-result");
+      await expect(activation.command(f.actor, f.home, { ...input, verificationRunId: randomUUID() })).rejects.toMatchObject({ status: 409 });
+      await expect(activation.command(f.actor, f.guest, input)).rejects.toMatchObject({ status: 404 });
+      const completion = { operation: "complete_activation" as const, expectedVersion: first.version, requestId: randomUUID() };
+      const completed = await activation.command(f.actor, f.home, completion);
+      expect(completed.state.step).toBe("activated");
+      expect(completed.status).toBe("completed");
+      expect(completed.firstValue?.status).toBe("verified");
+      const completionReplay = await activation.command(f.actor, f.home, completion);
+      expect(completionReplay.version).toBe(completed.version);
+      expect(completionReplay.state.firstValueAt).toBe(first.state.firstValueAt);
+    }, 60000);
+    it("measures original independently reviewed output without exporting content, inventing TTFO or writing analytics", async () => {
+      const fixture = await firstValueFixture(), activation = activationService(db);
+      await activation.command(f.actor, f.home, { operation: "record_verified_result", expectedVersion: fixture.onboarding.version,
+        requestId: randomUUID(), installationId: fixture.installation.id, verificationRunId: fixture.review.id });
+      const before = await db.select().from(activityLog).where(eq(activityLog.companyId, f.home));
+      const view = await readExperienceMeasures(db, f.actor, f.home);
+      expect(view).toMatchObject({ companyId: f.home, status: "verified", setupWindow: "complete", usableBaseline: "unavailable" });
+      expect(view.creationToVerificationBucket).not.toBeNull();
+      expect(await db.select().from(activityLog).where(eq(activityLog.companyId, f.home))).toEqual(before);
+      const payload = JSON.stringify(view);
+      for (const privateValue of [f.userId, fixture.task.id, fixture.run.id, fixture.document.id, fixture.review.id, fixture.document.latestBody!, fixture.task.title])
+        expect(payload).not.toContain(privateValue);
+      const app = express();
+      app.use((req, _res, next) => { req.actor = { ...f.actor, companyIds: [f.home] }; next(); });
+      app.use("/api", experienceMeasuresRoutes(db)); app.use(errorHandler);
+      const response = await request(app).get(`/api/companies/${f.home}/experience/analytics`).query({ expectedUserId: f.userId });
+      expect(response.status).toBe(200); expect(response.headers["cache-control"]).toBe("private, no-store");
+      expect(response.body.status).toBe("verified");
+      expect((await request(app).get(`/api/companies/${f.home}/experience/analytics`).query({ expectedUserId: "another-account" })).status).toBe(409);
+      expect((await request(app).get(`/api/companies/${f.guest}/experience/analytics`).query({ expectedUserId: f.userId })).status).toBe(403);
+      // Original metadata fixtures qualify bounded inspection, not real customer effort.
+      await db.insert(activityLog).values(Array.from({ length: 129 }, (_, index) => ({ companyId: f.home,
+        actorType: "user", actorId: f.userId, action: "activation.step_completed", entityType: "onboarding", entityId: fixture.onboarding.id,
+        createdAt: fixture.onboarding.createdAt, details: { from: "intent", to: "company", version: index + 2 } })));
+      expect(await readExperienceMeasures(db, f.actor, f.home)).toMatchObject({ setupWindow: "bounded", recordedSetupChangesBucket: null });
+    }, 60000);
+    it("withdraws reviewed output links when the original saved document changes", async () => {
+      const fixture = await firstValueFixture(), activation = activationService(db);
+      const recorded = await activation.command(f.actor, f.home, {
+        operation: "record_verified_result", expectedVersion: fixture.onboarding.version,
+        requestId: randomUUID(), installationId: fixture.installation.id, verificationRunId: fixture.review.id,
+      });
+      expect(recorded.firstValue?.result?.artifacts[0]?.documentKey).toBe("result");
+      const [changedRevision] = await db.insert(documentRevisions).values({
+        companyId: f.home, documentId: fixture.document.id, revisionNumber: 2,
+        body: "Changed saved output requires an independent new review",
+      }).returning();
+      await db.update(documents).set({ latestBody: changedRevision!.body,
+        latestRevisionId: changedRevision!.id, latestRevisionNumber: 2, updatedAt: new Date(),
+      }).where(eq(documents.id, fixture.document.id));
+      const current = await activation.get(f.actor, f.home);
+      expect(current.firstValue).toEqual({ status: "withdrawn", result: null, candidates: [], hasMore: false });
+      expect(current.state.firstValueAt).toBe(recorded.state.firstValueAt);
+      expect(await readExperienceMeasures(db, f.actor, f.home)).toMatchObject({ status: "withdrawn", creationToVerificationBucket: null,
+        recordedSetupChangesBucket: null, setupWindow: "not_applicable", usableBaseline: "unavailable" });
+      await expect(activation.command(f.actor, f.home, { operation: "complete_activation",
+        expectedVersion: current.version, requestId: randomUUID(),
+      })).rejects.toMatchObject({ status: 409 });
+    }, 60000);
+    it("withdraws first-result presentation on package revocation and cannot renew its original receipt", async () => {
+      const fixture = await firstValueFixture(), activation = activationService(db);
+      const input = { operation: "record_verified_result" as const, expectedVersion: fixture.onboarding.version, requestId: randomUUID(),
+        installationId: fixture.installation.id, verificationRunId: fixture.review.id };
+      const recorded = await activation.command(f.actor, f.home, input);
+      await service.revoke(f.actor, versionId);
+      const current = await activation.get(f.actor, f.home);
+      expect(current.firstValue).toEqual({ status: "withdrawn", result: null, candidates: [], hasMore: false });
+      expect(current.blockers).toContain("safe_execution_unqualified");
+      await expect(activation.command(f.actor, f.home, { operation: "complete_activation", expectedVersion: current.version,
+        requestId: randomUUID() })).rejects.toMatchObject({ status: 409 });
+      const replay = await activation.command(f.actor, f.home, input);
+      expect(replay.state.firstValueAt).toBe(recorded.state.firstValueAt);
+      expect(replay.firstValue?.status).toBe("withdrawn");
+      expect((await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.home), eq(activityLog.action, "activation.step_completed"))))).toHaveLength(1);
+    }, 60000);
     it("does not elevate fixture evidence to customer or high-assurance qualification", () => {
       expect(
         packageReleaseBlockers({
@@ -998,6 +2922,116 @@ const support = await getEmbeddedPostgresTestSupport();
           releaseNotes: "Editorial note",
         }),
       ).toBe(false);
+    });
+    it("atomically prepares one original canonical Task, purpose deployment and bounded plan, then replays without execution", async () => {
+      try {
+        const fixture = await noChargePreparationFixture();
+        const beforeTasks = await db.select().from(issues).where(eq(issues.companyId, f.home));
+        const beforePlans = await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.companyId, f.home));
+        const grants = await db.select().from(principalPermissionGrants).where(eq(principalPermissionGrants.companyId, f.home));
+        const [prepared, replay] = await Promise.all([fixture.activation.command(f.actor, f.home, fixture.input), fixture.activation.command(f.actor, f.home, fixture.input)]);
+        expect(prepared.version).toBe(fixture.onboarding.version + 1);expect(replay.version).toBe(prepared.version);
+        expect(prepared.state.step).toBe("review");expect(prepared.state.firstTask).toBeUndefined();expect(prepared.state.preparedFirstTask).toBeDefined();
+        const reference = prepared.state.preparedFirstTask!;
+        expect(prepared.firstTask!.preparationOptions).toEqual([]);
+        expect(prepared.firstTask!.candidates).toHaveLength(1);expect(prepared.firstTask!.candidates[0]!.planId).toBe(reference.planId);
+        const task = (await db.select().from(issues).where(eq(issues.id, reference.issueId)))[0]!;
+        expect(task).toMatchObject({ createdByUserId: f.userId, responsibleUserId: f.userId, assigneeAgentId: f.presence.id,
+          originKind: "v9_activation", originId: fixture.onboarding.id, status: "todo", executionRunId: null, checkoutRunId: null });
+        const plan = (await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, reference.planId)))[0]!;
+        expect(plan).toMatchObject({ status: "draft", mode: "single_worker", riskClass: "C1", actionClass: "internal_draft", executionPrincipal: null, startedAt: null });
+        expect(plan.budgets).toEqual({ maxWorkerCount: 1, maxParallelWorkers: 1, maxDelegationDepth: 0, maxRetries: 0,
+          maxWallClockSeconds: 300, maxModelCostMinor: 0, maxToolActions: 2 });
+        const detail = await fixture.orchestration.get(f.actor, f.home, plan.id);
+        expect(detail.completionContract!.objective).toBe(fixture.intent);expect(detail.completionContract!.requiredOutputs).toHaveLength(1);
+        expect(await db.select().from(issues).where(eq(issues.companyId, f.home))).toHaveLength(beforeTasks.length + 1);
+        expect(await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.companyId, f.home))).toHaveLength(beforePlans.length + 1);
+        expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home))).toEqual([]);
+        expect(await db.select().from(principalPermissionGrants).where(eq(principalPermissionGrants.companyId, f.home))).toEqual(grants);
+        expect(fixture.transport).not.toHaveBeenCalled();
+        await fixture.activation.get(f.actor, f.home);expect(fixture.transport).not.toHaveBeenCalled();
+        await expect(fixture.activation.command(f.actor, f.home, { ...fixture.input, requestId: randomUUID(), expectedVersion: prepared.version })).rejects.toMatchObject({ status: 409 });
+        const changed = await fixture.activation.command(f.actor, f.home, { operation: "change_setup", requestId: randomUUID(), expectedVersion: prepared.version });
+        expect(changed.state.step).toBe("intent");expect(changed.state.preparedFirstTask).toBeUndefined();
+        expect((await db.select().from(orchestrationPlans).where(eq(orchestrationPlans.id, plan.id)))[0]!.status).toBe("cancelled");
+        expect(fixture.transport).not.toHaveBeenCalled();
+      } finally { registerNativeDraftGateway(db, undefined); }
+    });
+    it("refuses a stale reviewed purpose before creating a first Task and preserves original authorities", async () => {
+      try {
+        const fixture = await noChargePreparationFixture();
+        const before = await db.select().from(issues).where(eq(issues.companyId, f.home));
+        await expect(fixture.activation.command(f.actor, f.home, { ...fixture.input, expectedPurposeVersion: fixture.input.expectedPurposeVersion + 1 })).rejects.toMatchObject({ status: 409 });
+        expect(await db.select().from(issues).where(eq(issues.companyId, f.home))).toEqual(before);
+        expect((await fixture.activation.get(f.actor, f.home)).version).toBe(fixture.onboarding.version);
+        expect(fixture.transport).not.toHaveBeenCalled();
+        registerNativeDraftGateway(db, undefined);
+        await expect(fixture.activation.command(f.actor, f.home, fixture.input)).rejects.toMatchObject({ status: 409 });
+        expect(await db.select().from(issues).where(eq(issues.companyId, f.home))).toEqual(before);
+      } finally { registerNativeDraftGateway(db, undefined); }
+    });
+    it("does not start an unqualified default first task or change the original owners", async () => {
+      const fixture = await prepareFirstValueFixture({ maxWorkerCount: 1, maxParallelWorkers: 1, maxDelegationDepth: 0,
+        maxRetries: 0, maxToolActions: 2, maxModelCostMinor: 0 });
+      const input = { operation: "start_first_task", requestId: randomUUID(), expectedVersion: fixture.onboarding.version,
+        installationId: fixture.installation.id, planId: fixture.created.id, expectedPlanVersion: fixture.created.version,
+        expectedInstallationHash: fixture.installation.activationHash!, expectedMaximumModelCostMinor: 0 };
+      const before = await db.execute(sql`select (select count(*) from heartbeat_runs where company_id=${f.home}::uuid) as runs,
+        (select count(*) from orchestration_worker_attempts where company_id=${f.home}::uuid) as attempts,
+        (select count(*) from principal_permission_grants where company_id=${f.home}::uuid) as grants`);
+      await expect(activationService(db).command(f.actor, f.home, input)).rejects.toMatchObject({ status: 409 });
+      const [stored] = await db.select().from(companyOnboardingRuns).where(eq(companyOnboardingRuns.id, fixture.onboarding.id));
+      expect(stored!.version).toBe(fixture.onboarding.version);expect(stored!.activationState!.firstTask).toBeUndefined();
+      expect((await orchestrationService(db).get(f.actor, f.home, fixture.created.id)).status).toBe("draft");
+      expect(await db.execute(sql`select (select count(*) from heartbeat_runs where company_id=${f.home}::uuid) as runs,
+        (select count(*) from orchestration_worker_attempts where company_id=${f.home}::uuid) as attempts,
+        (select count(*) from principal_permission_grants where company_id=${f.home}::uuid) as grants`)).toEqual(before);
+    });
+    it("cancels a recorded original first plan after rollout withdrawal and replays its receipt without another decision", async () => {
+      // Historical original-plan reference fixture, not qualification of the
+      // new default's no-charge controller or real provider delivery.
+      const fixture = await prepareFirstValueFixture();
+      const plan = await fixture.orchestration.decide(f.actor, f.home, fixture.created.id, { expectedVersion: fixture.created.version,
+        action: "start", rationale: "Explicit original historical plan fixture before rollout withdrawal" });
+      await db.update(companyOnboardingRuns).set({ activationState: { ...fixture.onboarding.activationState!, step: "running",
+        firstTask: { installationId: fixture.installation.id, installationHash: fixture.installation.activationHash!, planId: plan.id, issueId: fixture.task.id } },
+        currentStage: "v9_running", version: fixture.onboarding.version + 1 }).where(eq(companyOnboardingRuns.id, fixture.onboarding.id));
+      await instanceSettingsService(db).updateExperimental({ activation_v9: false, orchestration_v7: false, supervision_v7: false, verifier_v7: false });
+      const input = { operation: "stop_first_task", requestId: randomUUID(), expectedVersion: fixture.onboarding.version + 1, expectedPlanVersion: plan.version };
+      const activation = activationService(db);
+      const [stopped, replay] = await Promise.all([activation.command(f.actor, f.home, input), activation.command(f.actor, f.home, input)]);
+      expect(stopped.version).toBe(fixture.onboarding.version + 2);expect(replay.version).toBe(stopped.version);
+      expect(stopped.firstTask?.current).toMatchObject({ planId: plan.id, status: "cancelled", planVersion: plan.version + 1 });
+      const audits = await db.select().from(activityLog).where(and(eq(activityLog.companyId, f.home), eq(activityLog.action, "orchestration.cancel_requested")));
+      expect(audits).toHaveLength(1);
+      expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.companyId, f.home))).toHaveLength(0);
+    });
+    it.each(["firstTask", "preparedFirstTask"] as const)("requires the exact %s plan when recording its independently reviewed output", async (referenceKind) => {
+      const fixture = await firstValueFixture();
+      await db.update(companyOnboardingRuns).set({ activationState: { ...fixture.onboarding.activationState!, step: referenceKind === "firstTask" ? "running" : "review",
+        [referenceKind]: { installationId: fixture.installation.id, installationHash: fixture.installation.activationHash!, planId: fixture.review.planId, issueId: fixture.task.id } },
+        currentStage: referenceKind === "firstTask" ? "v9_running" : "v9_review", version: fixture.onboarding.version + 1 }).where(eq(companyOnboardingRuns.id, fixture.onboarding.id));
+      const activation = activationService(db), current = await activation.get(f.actor, f.home);
+      if (!current.firstValue?.candidates.length) {
+        // Inspect the same original refusal only when projection is empty.
+        // Preserve the assertion and every authority/clock budget below.
+        await db.transaction(async transaction => {
+          const tx = transaction as unknown as Db;
+          await lockActivationSnapshot(tx, f.home);
+          const original = await readActivationOwner(tx, f.actor, f.home, true);
+          await readActivationFirstValue(tx, f.actor, f.home, { createdAt: original.run.createdAt,
+            createdByUserId: original.userId, activationState: original.state }, fixture.installation.id, fixture.review.id);
+        });
+      }
+      expect(current.firstValue?.candidates).toHaveLength(1);
+      const recorded = await activation.command(f.actor, f.home, { operation: "record_verified_result", requestId: randomUUID(),
+        expectedVersion: current.version, installationId: fixture.installation.id, verificationRunId: fixture.review.id });
+      expect(recorded.firstValue?.status).toBe("verified");expect(recorded.state.step).toBe("result");
+      await db.update(companyOnboardingRuns).set({ activationState: { ...fixture.onboarding.activationState!, step: referenceKind === "firstTask" ? "running" : "review",
+        [referenceKind]: { installationId: fixture.installation.id, installationHash: fixture.installation.activationHash!, planId: randomUUID(), issueId: fixture.task.id } },
+        version: recorded.version + 1, currentStage: referenceKind === "firstTask" ? "v9_running" : "v9_review" }).where(eq(companyOnboardingRuns.id, fixture.onboarding.id));
+      await expect(activation.command(f.actor, f.home, { operation: "record_verified_result", requestId: randomUUID(), expectedVersion: recorded.version + 1,
+        installationId: fixture.installation.id, verificationRunId: fixture.review.id })).rejects.toMatchObject({ status: 409 });
     });
   },
 );

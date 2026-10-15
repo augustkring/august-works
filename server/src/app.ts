@@ -1,5 +1,13 @@
+import { purgeExpiredNotificationChannelCommands } from "./services/notifications/channel-retention.js";
+import { customerSupportRoutes } from "./routes/customer-support.js";
+import { maintenanceHistoryRoutes } from "./routes/maintenance-history.js";
+import { experienceMeasuresRoutes } from "./routes/experience-measures.js";
+import { agentMonitorRoutes } from "./routes/agent-monitor.js";
+import { agentRetirementRoutes } from "./routes/agent-retirement.js";
 import { enterpriseRoutes } from "./routes/enterprise.js";
 import { agentPackageRoutes } from "./routes/agent-packages.js";
+import { agentAuthoringRoutes } from "./routes/agent-authoring.js";
+import { conversationAuthoringRoutes } from "./routes/conversation-authoring.js";
 import { aiGovernanceRoutes } from "./routes/ai-governance.js";
 import { executionSandboxRoutes } from "./routes/execution-sandbox.js";
 import { openShellBackend } from "./services/execution-sandbox/openshell-backend.js";
@@ -133,6 +141,8 @@ import { processAnalysisRoutes } from "./routes/process-analysis.js";
 import { decisionIntelligenceRoutes } from "./routes/decision-intelligence.js";
 import { businessMetricTargetRoutes } from "./routes/business-metric-targets.js";
 import { dashboardRoutes } from "./routes/dashboard.js";
+import { experienceRoutes } from "./routes/experience.js";
+import { customerFeedbackRoutes } from "./routes/customer-feedback.js";
 import { attentionRoutes } from "./routes/attention.js";
 import { decisionTrainingRoutes } from "./routes/decision-training.js";
 import { decisionRoutes } from "./routes/decisions.js";
@@ -647,6 +657,7 @@ export async function createApp(
     pluginWorkerManager: workerManager,
   });
   const chatChannels = chatChannelService(db, {
+    notificationDelivery: opts.saasPlatform?.notifications?.channelDelivery,
     deferWebhookProcessing: true,
     heartbeat: connectionIntentHeartbeat,
     publicBaseUrl: opts.authPublicBaseUrl,
@@ -903,6 +914,15 @@ export async function createApp(
   api.use(processAnalysisRoutes(db));
   api.use(decisionIntelligenceRoutes(db));
   api.use(dashboardRoutes(db));
+  api.use(experienceRoutes(db));
+  api.use(agentAuthoringRoutes(db, opts.saasPlatform?.config));
+  api.use(conversationAuthoringRoutes(db));
+  api.use(agentMonitorRoutes(db));
+  api.use(agentRetirementRoutes(db));
+  api.use(maintenanceHistoryRoutes(db));
+  api.use(experienceMeasuresRoutes(db));
+  api.use(customerSupportRoutes(db));
+  api.use(customerFeedbackRoutes(db,{operatorUserIds:opts.saasPlatform?.config.operatorUserIds, storage: scopedStorage}));
   api.use(attentionRoutes(db));
   api.use(decisionTrainingRoutes(db));
   api.use(decisionRoutes(db, opts.decisionServiceOptions));
@@ -1281,7 +1301,10 @@ export async function createApp(
   };
   const chatReconciliation = createChatReconciliationCoordinator({
     reconcileProviderRuntimes: () => chatChannels.reconcileProviderRuntimes(),
-    processPendingDeliveries: () => chatChannels.processPendingDeliveries(),
+    processPendingDeliveries: async () => {
+      await purgeExpiredNotificationChannelCommands(db);
+      return chatChannels.processPendingDeliveries();
+    },
     processFailedGitHubWebhookDeliveries: () =>
       chatChannels.processFailedGitHubWebhookDeliveries(),
     projectRunMilestones: () =>

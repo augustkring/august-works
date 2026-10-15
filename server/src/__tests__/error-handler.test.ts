@@ -121,11 +121,16 @@ describe("errorHandler", () => {
     expect(res.__errorContext?.error?.message).toBe("db exploded");
   });
 
-  it("sanitizes chat setup errors before logs and crash reporting", () => {
+  it.each([
+    "/api/chat-endpoints/endpoint-1/setup",
+    "/api/companies/company-1/workflows/workflow-1/draft",
+    "/api/companies//workflows/workflow-1/unknown",
+    "/api/companies/company-1/workflow-runs/run-1",
+  ])("sanitizes private owner errors before logs and crash reporting: %s", (url) => {
     const req = {
       ...makeReq(),
       method: "POST",
-      originalUrl: "/api/chat-endpoints/endpoint-1/setup",
+      originalUrl: url,
       body: { credentials: { botToken: "setup-error-token-canary" } },
     } as unknown as Request;
     const res = makeRes() as any;

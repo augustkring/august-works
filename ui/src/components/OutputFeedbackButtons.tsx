@@ -12,6 +12,11 @@ import {
 } from "@/components/ui/dialog";
 import { ThumbsDown, ThumbsUp } from "lucide-react";
 import { cn } from "../lib/utils";
+import { useQuery } from "@tanstack/react-query";
+import { useTranslation } from "react-i18next";
+import { instanceSettingsApi } from "../api/instanceSettings";
+import { queryKeys } from "../lib/queryKeys";
+import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
 
 export function OutputFeedbackButtons({
   activeVote,
@@ -30,6 +35,11 @@ export function OutputFeedbackButtons({
   rightSlot?: React.ReactNode;
   inline?: boolean;
 }) {
+  const {t}=useTranslation("experience");
+  const general=useQuery({queryKey:queryKeys.instance.generalSettings,queryFn:()=>instanceSettingsApi.getGeneral()});
+  const feedback=useV9FeatureEnabled("customer_feedback_v9");
+  const awLocalOnly=!general.isSuccess||general.data.outputFeedbackPolicyVersion==="aw-v9-local-v1"||feedback.enabled;
+  const [saveFailed,setSaveFailed]=useState(false);
   const [pendingVote, setPendingVote] = useState<{
     vote: FeedbackVoteValue;
     reason?: string;
@@ -54,6 +64,7 @@ export function OutputFeedbackButtons({
     behavior?: { keepReasonPromptOpen?: boolean },
   ) {
     setIsSaving(true);
+    setSaveFailed(false);
     try {
       await onVote(vote, options);
       setPendingVote(null);
@@ -64,7 +75,7 @@ export function OutputFeedbackButtons({
       }
     } catch (error) {
       setOptimisticVote(null);
-      throw error;
+      setSaveFailed(true);
     } finally {
       setIsSaving(false);
     }
@@ -75,6 +86,11 @@ export function OutputFeedbackButtons({
     reason?: string,
     behavior?: { keepReasonPromptOpen?: boolean },
   ) {
+    if(awLocalOnly) {
+      if(vote==="down")setDownvoteAllowSharing(false);
+      void submitVote(vote,{allowSharing:false,...(reason?{reason}:{})},behavior);
+      return;
+    }
     if (sharingPreference === "prompt") {
       setPendingVote({
         vote,
@@ -139,6 +155,8 @@ export function OutputFeedbackButtons({
         </Button>
         {rightSlot ? <div className="ml-auto">{rightSlot}</div> : null}
       </div>
+      {saveFailed&&<p role="alert" className="mt-2 text-sm">{t("feedback.voteFailed")}</p>}
+      {awLocalOnly&&<div className="mt-2 flex flex-wrap items-center gap-2 text-sm text-muted-foreground"><span>{t("feedback.voteLocal")}</span>{feedback.enabled&&<Button variant="ghost" className="min-h-11" onClick={()=>document.dispatchEvent(new Event("paperclip:open-feedback"))}>{t("feedback.shareProduct")}</Button>}</div>}
       {collectingDownvoteReason ? (
         <div className="mt-2 rounded-md border border-border/60 bg-accent/20 p-3">
           <div className="mb-2 text-sm font-medium">What could have been better?</div>
@@ -181,7 +199,7 @@ export function OutputFeedbackButtons({
       ) : null}
 
       <Dialog
-        open={Boolean(pendingVote)}
+        open={!awLocalOnly&&Boolean(pendingVote)}
         onOpenChange={(open) => {
           if (!open && !isSaving) {
             setPendingVote(null);

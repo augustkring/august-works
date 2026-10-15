@@ -8,6 +8,7 @@ import {
 import { Readable } from "node:stream";
 import type { StorageProvider, GetObjectResult, HeadObjectResult } from "./types.js";
 import { notFound, unprocessable } from "../errors.js";
+import { storageScopeIdentity } from "./object-scope.js";
 
 interface S3ProviderConfig {
   bucket: string;
@@ -70,6 +71,18 @@ export function createS3StorageProvider(config: S3ProviderConfig): StorageProvid
   if (!region) throw unprocessable("S3 storage region is required");
 
   const prefix = normalizePrefix(config.prefix);
+  // Secret-bearing/custom endpoint URLs remain usable by existing generic
+  // callers, but cannot supply a protected namespace identity.
+  let endpoint = "aws-s3";
+  let scopeKnown = true;
+  if (config.endpoint) {
+    try {
+      const parsed = new URL(config.endpoint);
+      scopeKnown = ["http:", "https:"].includes(parsed.protocol) && !parsed.username && !parsed.password && !parsed.search && !parsed.hash;
+      endpoint = parsed.origin + parsed.pathname;
+    } catch { scopeKnown = false; }
+  }
+  const scopeId = scopeKnown ? storageScopeIdentity(["s3", bucket, region, endpoint, prefix, String(Boolean(config.forcePathStyle))]) : undefined;
   const client = new S3Client({
     region,
     endpoint: config.endpoint,
@@ -80,6 +93,7 @@ export function createS3StorageProvider(config: S3ProviderConfig): StorageProvid
 
   return {
     id: "s3",
+    scopeId,
 
     async putObject(input) {
       const key = buildKey(prefix, input.objectKey);

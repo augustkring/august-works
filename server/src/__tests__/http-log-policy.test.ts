@@ -1,9 +1,122 @@
 import { describe, expect, it } from "vitest";
 import {
   isPrivateWebhookHttpRequest,
+  isPrivateExperienceHttpRequest,
+  privateExperienceLogUrl,
   isSecretSensitiveHttpRequest,
   shouldSilenceHttpSuccessLog,
 } from "../middleware/http-log-policy.js";
+
+it("protects bound notification destinations, exact receipts and malformed/refused HTTP methods", () => {
+  for (const company of ["", "PRIVATE-company"]) for (const suffix of ["", "/work_update", "/work_update/receipts/PRIVATE-request", "/unknown"])
+    for (const method of ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]) {
+      const url = `/api/companies/${company}/notifications/channel-preferences${suffix}?expectedUserId=PRIVATE-account`;
+      expect(isPrivateExperienceHttpRequest(method, url)).toBe(true);
+      expect(isSecretSensitiveHttpRequest(method, url)).toBe(true);
+      expect(privateExperienceLogUrl(url)).toBe("/api/companies/:companyId/notifications/channel-preferences/:operation");
+    }
+  expect(isPrivateExperienceHttpRequest("GET", "/api/companies/id/notifications/channel-preferences-other")).toBe(false);
+});
+
+it("protects Original package setup and refused methods without classifying adjacent namespaces", () => {
+  for (const company of ["", "PRIVATE-company"])
+    for (const namespace of ["agent-packages", "agent-package-options", "agent-package-installations", "agent-package-evaluations", "agent-package-update-proposals"])
+      for (const suffix of ["", "/PRIVATE-record/review", "/PRIVATE-record/unknown"])
+        for (const method of ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]) {
+          const url = `/api/companies/${company}/${namespace}${suffix}?expectedUserId=PRIVATE-account`;
+          expect(isPrivateExperienceHttpRequest(method, url)).toBe(true);
+          expect(isSecretSensitiveHttpRequest(method, url)).toBe(true);
+          expect(privateExperienceLogUrl(url)).not.toContain("PRIVATE");
+        }
+  expect(isPrivateExperienceHttpRequest("POST", "/api/companies/id/agent-packages-other/id")).toBe(false);
+  expect(isPrivateExperienceHttpRequest("GET", "/api/agent-packages-other/id")).toBe(false);
+});
+
+it("protects Original private graph/run owner writes and malformed rejected routes", () => {
+  for (const company of ["", "PRIVATE-company"]) {
+    for (const namespace of ["workflows", "workflow-runs"]) {
+      for (const suffix of ["", "/", "/PRIVATE-owner/draft", "/PRIVATE-owner/publish", "/PRIVATE-owner/unknown"]) {
+        const url = `/api/companies/${company}/${namespace}${suffix}?expectedUserId=PRIVATE-user`;
+        for (const method of ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"]) {
+          expect(isPrivateExperienceHttpRequest(method, url)).toBe(true);
+          expect(isSecretSensitiveHttpRequest(method, url)).toBe(true);
+          expect(privateExperienceLogUrl(url)).not.toContain("PRIVATE");
+        }
+      }
+    }
+  }
+  expect(isPrivateExperienceHttpRequest("POST", "/api/companies/id/workflows-other/id/draft")).toBe(false);
+});
+
+it("keeps retirement context and rejected mutation payloads private for every HTTP method", () => {
+  const url = "/api/companies/private-company/agents/private-agent/retirement?expectedUserId=private-account";
+  for (const method of ["GET", "HEAD", "POST", "PUT", "PATCH", "DELETE", "OPTIONS"])
+    expect(isPrivateExperienceHttpRequest(method, url)).toBe(true);
+  expect(privateExperienceLogUrl(url)).toBe("/api/companies/:companyId/agents/:agentId/retirement");
+});
+
+it("purpose-separates index-check history, account context and rejected methods", () => {
+  const url = "/api/companies/private-company/memory/experience/maintenance?expectedUserId=private-user";
+  for (const method of ["GET", "POST", "DELETE", "HEAD"]) {
+    expect(isPrivateExperienceHttpRequest(method, url)).toBe(true);
+    expect(isSecretSensitiveHttpRequest(method, url)).toBe(true);
+  }
+  expect(privateExperienceLogUrl(url)).toBe("/api/companies/:companyId/memory/experience");
+  expect(isPrivateExperienceHttpRequest("GET", "/api/companies/id/memory/experience-other")).toBe(false);
+});
+
+it("purpose-separates native run metadata and rejected requests from generic logs", () => {
+  const url = "/api/companies/private-company/workflow-runs/private-run/experience?expectedUserId=private-user";
+  for (const method of ["GET", "POST", "DELETE"])
+    expect(isPrivateExperienceHttpRequest(method, url)).toBe(true);
+  expect(privateExperienceLogUrl(url)).toBe("/api/companies/:companyId/workflow-runs/:runId/experience");
+  expect(isPrivateExperienceHttpRequest("GET", "/api/companies/id/workflow-runs/id/experience-other")).toBe(true);
+});
+it("protects retained run-control and exact Stop receipts, including empty scopes and refused methods", () => {
+  for (const suffix of ["control", "retained-stop", "retained-stop-requests/private-request"])
+    for (const company of ["", "private-company"]) for (const run of ["", "private-run"]) {
+      const url = `/api/companies/${company}/workflow-runs/${run}/experience/${suffix}?expectedUserId=private-user`;
+      for (const method of ["GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"]) {
+        expect(isPrivateExperienceHttpRequest(method, url)).toBe(true); expect(isSecretSensitiveHttpRequest(method, url)).toBe(true);
+        expect(privateExperienceLogUrl(url)).toBe("/api/companies/:companyId/workflow-runs/:runId/experience");
+      }
+    }
+});
+it("omits native test identity and command context from success and rejected generic logs", () => {
+  const url = "/api/companies/private-company/workflows/private-workflow/experience/test?expectedUserId=private-user";
+  for (const method of ["GET", "POST", "DELETE"]) {
+    expect(isPrivateExperienceHttpRequest(method, url)).toBe(true);
+    expect(isSecretSensitiveHttpRequest(method, url)).toBe(true);
+  }
+  expect(privateExperienceLogUrl(url)).toBe("/api/companies/:companyId/workflows/:workflowId/experience");
+});
+it.each(["", "private-company"])("protects exact workflow receipt metadata and malformed empty scopes for company %s", company => {
+  for (const workflow of ["", "private-workflow"]) {
+    const url = `/api/companies/${company}/workflows/${workflow}/experience/requests/test/private-request?expectedUserId=private-user`;
+    for (const method of ["GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"]) {
+      expect(isPrivateExperienceHttpRequest(method, url)).toBe(true);
+      expect(isSecretSensitiveHttpRequest(method, url)).toBe(true);
+      expect(privateExperienceLogUrl(url)).toBe("/api/companies/:companyId/workflows/:workflowId/experience");
+    }
+  }
+});
+
+it("minimizes account and Company control metadata on successful and rejected requests", () => {
+  const url = "/api/companies/private-company/experience/company?expectedUserId=private-user";
+  for (const method of ["GET", "POST", "DELETE"]) expect(isPrivateExperienceHttpRequest(method, url)).toBe(true);
+  expect(privateExperienceLogUrl(url)).toBe("/api/companies/:companyId/experience/company");
+  expect(isPrivateExperienceHttpRequest("GET", "/api/companies/id/experience/company-other")).toBe(false);
+});
+
+it("purpose-separates workflow review text, account identity and rejected requests from generic logs", () => {
+  for (const method of ["GET", "POST", "DELETE"]) {
+    const url = "/api/companies/private-company/workflows/private-workflow/experience?expectedUserId=private-user";
+    expect(isPrivateExperienceHttpRequest(method, url)).toBe(true);
+    expect(isSecretSensitiveHttpRequest(method, url)).toBe(true);
+    expect(privateExperienceLogUrl(url)).toBe("/api/companies/:companyId/workflows/:workflowId/experience");
+  }
+  expect(isPrivateExperienceHttpRequest("GET", "/api/companies/id/workflows/id/experience-other")).toBe(true);
+});
 
 describe("isPrivateWebhookHttpRequest", () => {
   it("protects the native webhook namespace, including rejected methods and query data", () => {
@@ -186,4 +299,24 @@ describe("shouldSilenceHttpSuccessLog", () => {
       ),
     ).toBe(false);
   });
+});
+
+it("purpose-separates activation measures and rejected account-bearing requests from generic logs", () => {
+  for (const method of ["GET", "POST", "DELETE", "HEAD"]) {
+    const url = "/api/companies/private-company/experience/analytics?expectedUserId=private-user";
+    expect(isPrivateExperienceHttpRequest(method, url)).toBe(true);
+    expect(isSecretSensitiveHttpRequest(method, url)).toBe(true);
+    expect(privateExperienceLogUrl(url)).toBe("/api/companies/:companyId/experience/analytics");
+  }
+  expect(isPrivateExperienceHttpRequest("GET", "/api/companies/id/experience/analytics-other")).toBe(false);
+});
+
+it("keeps saved conversation proposal context private, including rejected methods", () => {
+  const url = "/api/companies/private-company/conversations/private-record/authoring?expectedUserId=private-principal";
+  for (const method of ["GET", "HEAD", "POST", "PATCH", "DELETE", "OPTIONS"]) {
+    expect(isPrivateExperienceHttpRequest(method, url)).toBe(true);
+    expect(isSecretSensitiveHttpRequest(method, url)).toBe(true);
+  }
+  expect(privateExperienceLogUrl(url)).toBe("/api/companies/:companyId/conversations/:conversationId/authoring");
+  expect(isPrivateExperienceHttpRequest("GET", "/api/companies/id/conversations/id/authoring-other")).toBe(false);
 });

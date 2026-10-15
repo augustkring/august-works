@@ -2366,6 +2366,10 @@ span.paperclip-mention-chip[data-mention-kind="external-object"] {
   color: color-mix(in srgb, var(--sc) 80%, white);
   border-color: color-mix(in srgb, var(--sc) 48%, transparent);
 }
+.status-chip[data-task-status="backlog"],
+.dark .status-chip[data-task-status="backlog"] {
+  color: var(--foreground);
+}
 .status-fill {
   background-color: var(--sc);
 }
@@ -3041,6 +3045,7 @@ span.paperclip-mention-chip[data-mention-kind="external-object"] {
 }
 :root {
   --announcement-width: 22rem;
+  --announcement-expanded-max-height: min(40dvh, 22rem);
   --announcement-available-width: calc(100vw - var(--spacing) * 6);
   --announcement-image-height: 8.5rem;
   --announcement-image-mobile-height: 6rem;

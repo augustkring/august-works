@@ -88,6 +88,16 @@ describeEmbeddedPostgres("access service", () => {
     await tempDb?.cleanup();
   });
 
+  it.each(["owner", "admin"])("keeps the existing %s role when one read permission changes", async role => {
+    const { company, owner } = await createCompanyWithOwner(db);
+    if (role === "admin") await db.update(companyMemberships).set({ membershipRole: role }).where(eq(companyMemberships.id, owner.id));
+    const service = accessService(db);
+    await service.setPrincipalPermission(company.id, "user", owner.principalId, "foundation:read", true, owner.principalId);
+    expect(await service.getMembership(company.id,"user",owner.principalId)).toMatchObject({ status: "active", membershipRole: role });
+    await service.setPrincipalPermission(company.id, "user", owner.principalId, "foundation:read", false, owner.principalId);
+    expect(await service.getMembership(company.id,"user",owner.principalId)).toMatchObject({ status: "active", membershipRole: role });
+  });
+
   it("rejects combined access updates that would demote the last active owner", async () => {
     const { company, owner } = await createCompanyWithOwner(db);
     const access = accessService(db);

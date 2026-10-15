@@ -1,0 +1,7 @@
+{
+  "schemaVersion": 1,
+  "protocolSha256": null,
+  "referenceAt": null,
+  "coverage": "bounded_sample",
+  "conditions": []
+}

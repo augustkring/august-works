@@ -1,0 +1,130 @@
+{
+  "screenId": "AGENT-CHANGE",
+  "journeyId": "agents",
+  "routeOrSurface": "/agents/custom?agentId=:agentId",
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
+  "customerOutcome": "Edit, test and review a separate draft while the active Agent revision remains unchanged until explicit Native publication.",
+  "entryConditions": [
+    "Resolve the current Original account, company and per-operation Native authority. Profile/navigation is not a grant.",
+    "Effective rollout and current-source requirements remain independent; suppress private state during uncertain account or source checks."
+  ],
+  "exitConditions": [
+    "Only the Original server-confirmed result permits a completion claim.",
+    "Keep stale, unknown, refused and unqualified outcomes distinct; preserve the exact original request for recovery."
+  ],
+  "content": {
+    "h1": "Change agent / Rediger agent",
+    "supportingCopy": "Edit, test and review a separate draft while the active Agent revision remains unchanged until explicit Native publication.",
+    "customerTerms": [
+      "Company",
+      "Work",
+      "Needs You",
+      "Agent",
+      "Feedback"
+    ],
+    "displayedState": [
+      "Current active baseline and separate draft version, saved and unsaved changes, current qualification blockers.",
+      "Exact reviewed publication/activation consequence and original receipt; no inferred execution or verified business result."
+    ]
+  },
+  "inputs": [],
+  "actions": {
+    "primary": {
+      "label": "Review changes",
+      "operation": "Create or open the existing-Agent target draft and use the CUSTOM-01..CUSTOM-13 contracts. Publication requires current exact review/version and explicit publication/activation acknowledgement."
+    },
+    "secondary": [
+      "Open the current Original object or its existing full resolver.",
+      "Refresh current authority/source and recover an unknown Original request."
+    ],
+    "destructiveOrIrreversible": [
+      "Any consequential operation requires its separate current Native review/version/permission boundary; no implicit acknowledgement."
+    ]
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Original Agent configuration baseline and author-owned agent_configuration_drafts",
+      "Original draft review, required procedures, runtime, safe-test and publication receipts"
+    ],
+    "canonicalWriteOperation": "Original Agent draft create/save/discard and explicit authoring publication owner; no blur, draft save or AI suggestion mutates the active revision.",
+    "authorityEffect": "No new authority, execution, provider access, approval or physical-erasure claim. Existing domain owners retain every material effect.",
+    "asyncWork": "Existing domain-specific bounded reads/commands only. Withdraw stale private state and recover the Original request after an unknown answer.",
+    "receipt": "The exact current Native object/version/request receipt when that owner confirms it; observation and provider consent are not effect receipts."
+  },
+  "states": {
+    "loading": "Announce loading only while the current identity/company request is pending.",
+    "empty": "Explain an actual empty authorized result. Missing dependencies or qualified capabilities are separate unavailable states.",
+    "partial": "Retain trustworthy available results and name unavailable dependencies or sources.",
+    "stale": "Remove executable actions and refresh canonical state; preserved input is not evidence of current authority.",
+    "validation_error": "Preserve other entered values, identify the field problem and associate it programmatically with the control.",
+    "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
+    "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
+    "recovering": "Re-resolve canonical state/version and the original request identity before permitting another effect.",
+    "success": "Announce only the server-confirmed canonical result. First value additionally requires independently verified native artifact/run binding."
+  },
+  "navigation": {
+    "back": "Use the existing scoped route and preserve same-principal unsent input in memory through account checks.",
+    "cancelOrSaveExit": "Cancel performs no new effect. Explicit saved drafts remain in the Original draft owner; private input is not added to browser persistence.",
+    "deepLink": "/agents/custom?agentId=:agentId",
+    "resume": "Resolve the current principal/company/source again and use the Original object or request identity; never reconstruct a grant or replay automatically."
+  },
+  "accessibility": {
+    "initialFocus": "Main heading or the dialog category control; keyboard focus is visible and unobscured.",
+    "focusAfterError": "Error summary or first invalid control, with a programmatically associated explanation.",
+    "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
+    "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
+    "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
+    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
+    "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
+    "reducedMotion": "No essential animated transition or moving progress indicator.",
+    "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
+  },
+  "responsive": {
+    "wide": "Readable constrained content width with natural wrapping.",
+    "narrow": "Reflow cards and form actions without concealing utilities or consequences.",
+    "mobile": "Touch targets remain reachable; dialogs scroll within the viewport and do not obscure focus."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Current principal/company/resource-authorized Native state and bounded review metadata only"
+    ],
+    "dataCollected": [
+      "Explicit Human fields only under the Original owner processing purpose; leaf editors retain their own field contracts"
+    ],
+    "sensitiveFields": [
+      "Private configuration, work, account/source references and provider credentials"
+    ],
+    "loggingConstraints": "Exclude private prose, configuration, raw credentials, provider responses and raw errors from generic logs/analytics. Preserve existing purpose-bound Native audit and credential handling."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "Raw intent",
+      "Company facts",
+      "Feedback body/goal",
+      "Documents/prompts/results",
+      "Credentials/raw URLs/query strings/DOM/screenshots"
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Verify the specified Native baseline/version, current actor, no implicit effect, exact replay and lost-response recovery on the exact artifact.",
+      "Full active-Agent edit/legacy caller convergence and material target/provider qualification remain open. A bounded publication fixture does not accept the full change lifecycle."
+    ],
+    "accessibility": [
+      "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
+    ],
+    "securityPrivacy": [
+      "Verify current-account/resource revocation, tenant isolation, refusal before effect, exact source/version and no private persistence or log expansion.",
+      "This contract maps existing partial Native implementation and intended V3 behavior. It accepts no release evidence by itself."
+    ],
+    "usability": [
+      "Use representative exploratory and pre-registered confirmatory journey evidence with explicit PASS/FAIL/INCONCLUSIVE; source checks are insufficient."
+    ]
+  }
+}

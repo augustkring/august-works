@@ -1,0 +1,153 @@
+{
+  "screenId": "TASK-DRAFT",
+  "journeyId": "ambient-authoring",
+  "routeOrSurface": "Command palette → scoped original Create Task dialog",
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
+  "customerOutcome": "Review an editable task title and description, explicitly create through the original Native Issue owner, and reconcile an uncertain response with reads only.",
+  "entryConditions": [
+    "Current resolved principal and selected company match the original command scope.",
+    "A current original command response offers create_task. Text and previews cause no writes.",
+    "Unresolved current-session checks conceal the private draft."
+  ],
+  "exitConditions": [
+    "Cancel leaves no task until explicit submission.",
+    "Only a current authorized original Native create-key/Issue read allows confirmed-task presentation."
+  ],
+  "content": {
+    "h1": "Create a task",
+    "supportingCopy": "Review your task before creating it.",
+    "customerTerms": [
+      "Company",
+      "Work",
+      "Needs You",
+      "Agent",
+      "Feedback"
+    ],
+    "displayedState": [
+      "Editable task title and optional description",
+      "Pending create or unconfirmed receipt; no repeated POST",
+      "Current authorized Native task receipt or unavailable state"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "title",
+      "label": "Task title",
+      "dataType": "Plain text",
+      "required": true,
+      "default": "Verbatim text after explicit English/Danish create-task command",
+      "help": "Review the title before creating the task.",
+      "validation": "Trimmed non-empty value; input limited to 180 characters",
+      "autofillOrPrefill": "Original same-account command text; no inferred agents, dates or access"
+    },
+    {
+      "id": "description",
+      "label": "What should happen?",
+      "dataType": "Plain text",
+      "required": false,
+      "default": "Empty",
+      "help": "Review configured automation before creation. Assignment is a separate decision.",
+      "validation": "Up to 4000 characters",
+      "autofillOrPrefill": "None"
+    }
+  ],
+  "actions": {
+    "primary": {
+      "label": "Create task",
+      "operation": "One explicit original Native Issue POST with backlog/medium/null assignees, explicit allowDuplicate=true, and frozen random UUID; no automatic or user-triggered replay POST"
+    },
+    "secondary": [
+      "Cancel before submission",
+      "Check task receipt performs only original Native GET",
+      "Check Work when the outcome cannot be confirmed",
+      "Open task after current original-authorized receipt"
+    ],
+    "destructiveOrIrreversible": []
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Original current actor session",
+      "Original V9 feature settings",
+      "Original Native create idempotency key and Issue read authorization"
+    ],
+    "canonicalWriteOperation": "Original POST /api/companies/:companyId/issues; no new writer, execution path or schema/store",
+    "authorityEffect": "Commands and keys grant no authority. The original owner authorizes creation. Backlog and null assignees describe requested fields; downstream configured automation remains Native-owned.",
+    "asyncWork": "Persist only a strict per-tab company/principal/UUID locator before one explicit POST. Storage failure blocks the write. Restore can only GET the original Native receipt; missing/erased/unavailable outcomes never cause another create.",
+    "receipt": "Minimal current ID/company/title after original Issue read and exact original board-creator checks. Keys grant no authority. A denied or unavailable receipt remains unconfirmed."
+  },
+  "states": {
+    "loading": "Conceal prior private fields and receipts during current session or original-source checks.",
+    "empty": "Explain an actual empty authorized result. Missing dependencies or qualified capabilities are separate unavailable states.",
+    "partial": "Retain trustworthy available results and name unavailable dependencies or sources.",
+    "stale": "Remove executable actions and refresh canonical state; preserved input is not evidence of current authority.",
+    "validation_error": "Preserve other entered values, identify the field problem and associate it programmatically with the control.",
+    "system_error": "Explain the unconfirmed outcome and offer receipt refresh or Work; do not offer another create for the frozen attempt.",
+    "permission_denied": "Hide the private draft/receipt during an account or flag boundary and after a denied original read.",
+    "recovering": "Refresh the original Native receipt with GET only. Never infer no effect from a failed or missing receipt.",
+    "success": "Show only the current authorized original task; open it to review current status and choose the next step."
+  },
+  "navigation": {
+    "back": "Preserve unsent inputs across a same-account flag/session recheck; a submitted attempt permits receipt reads only.",
+    "cancelOrSaveExit": "Cancel before submission closes an unsent form. After submission, closing the form leaves a minimal per-tab locator for the already-possible Native effect. Only a current authorized receipt clears that locator; no write body or raw task text is persisted.",
+    "deepLink": "Command palette → Create Task",
+    "resume": "Within the same tab, recover the original per-account/company UUID after reload and read its original Native creator-bound receipt only. Closing the tab or clearing session data removes this locator. Cross-device/browser recovery remains unimplemented."
+  },
+  "accessibility": {
+    "initialFocus": "Main heading or the dialog category control; keyboard focus is visible and unobscured.",
+    "focusAfterError": "Error summary or first invalid control, with a programmatically associated explanation.",
+    "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
+    "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
+    "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
+    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
+    "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
+    "reducedMotion": "No essential animated transition or moving progress indicator.",
+    "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
+  },
+  "responsive": {
+    "wide": "Readable constrained content width with natural wrapping.",
+    "narrow": "Reflow cards and form actions without concealing utilities or consequences.",
+    "mobile": "Touch targets remain reachable; dialogs scroll within the viewport and do not obscure focus."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Only the current account/company-scoped draft and current original Native task title/reference"
+    ],
+    "dataCollected": [
+      "Explicit title/description, backlog/medium/null-assignee defaults, allowDuplicate=true and original UUID",
+      "Per-tab opaque company/principal/idempotency UUID recovery locator; maximum 16 entries/8KiB, no task text or write body, erased on settled account switch/logout or tab end."
+    ],
+    "sensitiveFields": [
+      "Raw intent, company facts, feedback and results remain customer data"
+    ],
+    "loggingConstraints": "Purpose-marked Native Task draft HTTP requests and the create-receipt read omit query, body, private errors and resource IDs. Ordinary Issue diagnostics retain their policy. No new telemetry or audit prose is introduced."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "Raw intent",
+      "Company facts",
+      "Feedback body/goal",
+      "Documents/prompts/results",
+      "Credentials/raw URLs/query strings/DOM/screenshots"
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Verify one original Native creation, read-only reconciliation after lost acknowledgement, fresh authorized receipt, and no extra created task/agent/run in the qualification fixture."
+    ],
+    "accessibility": [
+      "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
+    ],
+    "securityPrivacy": [
+      "Verify current membership/resource revocation, tenant isolation, untrusted content and separate private feedback identity purpose."
+    ],
+    "usability": [
+      "Use representative exploratory and pre-registered confirmatory journey evidence with explicit PASS/FAIL/INCONCLUSIVE; source checks are insufficient."
+    ]
+  }
+}

@@ -1,6 +1,10 @@
 import { sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { v7FeatureEnabled, type CoreStewardSummary } from "@paperclipai/shared";
+import {
+  v9FeatureEnabled,
+  v7FeatureEnabled,
+  type CoreStewardSummary,
+} from "@paperclipai/shared";
 import { instanceSettingsService } from "../instance-settings.js";
 import { agentPackageService } from "../agent-packages/package-service.js";
 import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
@@ -10,6 +14,7 @@ import {
   v7HumanActorId,
 } from "../v7-authorization.js";
 import type { AuthorizationActor } from "../authorization.js";
+import { PACKAGE_MAINTENANCE_LIMITS } from "./maintenance-policy.js";
 import { logger } from "../../middleware/logger.js";
 const bounded = (n: number) => Math.max(1, Math.min(100, Math.trunc(n) || 20));
 /** Metadata-only invalidation of the latest native assessments. No source-body
@@ -74,10 +79,20 @@ export async function maintainPackageUpdates(db: Db, limit = 20) {
     !v7FeatureEnabled(flags, "agent_packages_v7")
   )
     return { configured: 0, checked: 0 };
-  // Immutable version ordering and SKIP LOCKED service admission; each company
+  const boundedMaintenance = v9FeatureEnabled(
+    flags,
+    "maintenance_autopilot_v9",
+  );
+  const scanLimit = boundedMaintenance
+    ? Math.min(
+        PACKAGE_MAINTENANCE_LIMITS.maximumResourcesPerScan,
+        bounded(limit),
+      )
+    : bounded(limit);
+  // Immutable version ordering and row-locked service admission; each company
   // policy is independent. No scan of private Memory or source content.
   const rows =
-    await db.execute(sql`select i.id,i.company_id,v.id as next_version_id from company_agent_package_installations i
+    await db.execute(sql`select i.id,i.company_id,i.version,i.installed_version_id,i.updated_at,v.id as next_version_id,v.content_hash as next_content_hash from company_agent_package_installations i
     join agent_package_versions current on current.id=i.installed_version_id
     join lateral(select v.* from agent_package_versions v where v.agent_package_id=i.agent_package_id and v.state='published'
       order by split_part(v.version,'.',1)::numeric desc,split_part(v.version,'.',2)::numeric desc,split_part(v.version,'.',3)::numeric desc limit 1) v on true
@@ -85,9 +100,20 @@ export async function maintainPackageUpdates(db: Db, limit = 20) {
       and aw_v7_package_installation_current(i) and aw_v7_package_release_current(v)
       and v.release->'manifest'=current.release->'manifest' and v.release->'components'=current.release->'components'
       and not exists(select 1 from heartbeat_runs r where r.company_id=i.company_id and r.agent_id=i.agent_id and r.status in ('queued','running','scheduled_retry'))
-    order by i.updated_at,i.id limit ${bounded(limit)}`);
+    order by i.updated_at,i.id limit ${scanLimit}`);
   let configured = 0;
+  let checked = 0;
+  const companiesChecked = new Map<string, number>();
   for (const row of rows) {
+    const companyId = String(row.company_id);
+    const count = companiesChecked.get(companyId) ?? 0;
+    if (
+      boundedMaintenance &&
+      count >= PACKAGE_MAINTENANCE_LIMITS.maximumResourcesPerCompanyPerScan
+    )
+      continue;
+    companiesChecked.set(companyId, count + 1);
+    checked++;
     try {
       if (
         (
@@ -95,18 +121,27 @@ export async function maintainPackageUpdates(db: Db, limit = 20) {
             String(row.company_id),
             String(row.id),
             String(row.next_version_id),
+            {
+              expectedInstallationVersion: Number(row.version),
+              expectedInstalledVersionId: String(row.installed_version_id),
+              expectedUpdatedAt:
+                row.updated_at instanceof Date
+                  ? row.updated_at.toISOString()
+                  : new Date(String(row.updated_at)).toISOString(),
+              expectedReleaseContentHash: String(row.next_content_hash),
+            },
           )
         ).updated
       )
         configured++;
-    } catch (error) {
+    } catch {
       logger.warn(
-        { err: error, installationId: row.id },
-        "Core Steward update remained closed",
+        { installationId: String(row.id), outcome: "unconfirmed" },
+        "Core Steward update outcome requires native receipt review",
       );
     }
   }
-  return { configured, checked: rows.length };
+  return { configured, checked };
 }
 export async function coreStewardSummary(
   db: Db,

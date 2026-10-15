@@ -52,6 +52,7 @@ const JWT_VALUE_RE =
 // arbitrary provider data remains subject to the fail-closed JWT guard.
 const PAPERCLIP_SCHEMA_FIELDS = new Set(["schema", "runtimeSchema"]);
 export const PAPERCLIP_PUBLIC_SCHEMA_IDS = new Set([
+  "paperclip.agent-authored-definition.v1",
   "paperclip.artifact.generated.v1",
   "paperclip.artifact.viewed.v1",
   "paperclip.capability-discovery.v1",

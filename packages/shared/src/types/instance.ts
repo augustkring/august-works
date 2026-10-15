@@ -34,6 +34,7 @@ export interface InstanceGeneralSettings {
   /** @deprecated Legacy instance value. Use /auth/preferences for personal shortcuts. */
   keyboardShortcuts: boolean;
   feedbackDataSharingPreference: FeedbackDataSharingPreference;
+  outputFeedbackPolicyVersion?: "aw-v9-local-v1";
   backupRetention: BackupRetentionPolicy;
   /**
    * Execution policy. Absent/`"any"` = unrestricted; `"kubernetes"` forces the
@@ -42,7 +43,7 @@ export interface InstanceGeneralSettings {
   executionMode?: InstanceExecutionMode;
 }
 
-export interface InstanceExperimentalSettings extends V5FeatureFlags, Partial<import("../v6-feature-flags.js").V6FeatureFlags>, Partial<import("../v7-feature-flags.js").V7FeatureFlags>, Partial<import("../v8-feature-flags.js").V8FeatureFlags> {
+export interface InstanceExperimentalSettings extends V5FeatureFlags, Partial<import("../v6-feature-flags.js").V6FeatureFlags>, Partial<import("../v7-feature-flags.js").V7FeatureFlags>, Partial<import("../v8-feature-flags.js").V8FeatureFlags>, Partial<import("../v9-feature-flags.js").V9FeatureFlags> {
   enableEnvironments: boolean;
   /**
    * Exposes the experimental Paperclip Runner adapter for new selections.

@@ -204,14 +204,16 @@ async function assertNoBackgroundClearWithinRetryWindow() {
   expect(mockExecutionWorkspaceService.clearReopenPendingConsumptionForUnconsumedReopen).not.toHaveBeenCalled();
 }
 
+const routeModules = await hoistModuleGraph(registerServiceMocks, async () => {
+  const [{ issueRoutes }, { errorHandler }] = await Promise.all([
+    vi.importActual<typeof import("../routes/issues.js")>("../routes/issues.js"),
+    vi.importActual<typeof import("../middleware/index.js")>("../middleware/index.js"),
+  ]);
+  return { issueRoutes, errorHandler };
+});
+
 describe.sequential("closed isolated workspace issue routes", () => {
-  const routeModules = hoistModuleGraph(registerServiceMocks, async () => {
-    const [{ issueRoutes }, { errorHandler }] = await Promise.all([
-      vi.importActual<typeof import("../routes/issues.js")>("../routes/issues.js"),
-      vi.importActual<typeof import("../middleware/index.js")>("../middleware/index.js"),
-    ]);
-    return { issueRoutes, errorHandler };
-  });
+
 
   function createApp(actor?: Record<string, unknown>) {
     const { issueRoutes, errorHandler } = routeModules.value;

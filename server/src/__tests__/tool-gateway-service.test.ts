@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { workflowService } from "../services/workflows/workflow-service.js";
 import { workflowExecutorService } from "../services/workflows/workflow-executor.js";
 import { and, eq } from "drizzle-orm";
@@ -243,7 +244,7 @@ describeEmbeddedPostgres("tool gateway service", () => {
         nodes: [{ id: "start", type: "core.manual_trigger", name: "Start", position: { x: 0, y: 0 }, config: {} },
           { id: "connector", type: "connector.action", name: "Read", position: { x: 100, y: 0 }, config: {
             toolCatalogEntryId: catalogEntry.id, connectionId: connection.id,
-            catalogVersionHash: catalogEntry.versionHash, catalogSchemaHash: catalogEntry.schemaHash, input: {},
+            catalogVersionHash: catalogEntry.versionHash, catalogSchemaHash: catalogEntry.schemaHash, projectedInputSchemaHash: nativeSha256(catalogEntry.inputSchema), input: {},
           } }], edges: [{ id: "e1", source: "start", target: "connector" }] },
     }, actor);
     await svc.publish(company.id, workflow.id, { expectedDraftRevisionId: draft.draftRevisionId!,
@@ -256,6 +257,13 @@ describeEmbeddedPostgres("tool gateway service", () => {
     expect(calls).toBe(1);
     const [receipt] = await db.select().from(toolInvocations).where(eq(toolInvocations.id, step.toolInvocationId!));
     expect(receipt.workflowResultJson).toEqual(step.outputJson);
+    // A changed effective input definition must be refused even when a catalog
+    // producer accidentally retains its old version/schema metadata.
+    await db.update(toolCatalogEntries).set({ inputSchema: { type: "object", properties: { changed: { type: "string" } } } }).where(eq(toolCatalogEntries.id, catalogEntry.id));
+    const inputDrift = await executor.startManualRun(company.id, workflow.id, { input: {} }, actor, "workflow-connector-input-drift");
+    expect(inputDrift.run).toMatchObject({ status: "failed", failureCode: "workflow_connector_drift" });
+    expect(calls).toBe(1);
+    await db.update(toolCatalogEntries).set({ inputSchema: catalogEntry.inputSchema }).where(eq(toolCatalogEntries.id, catalogEntry.id));
     await db.update(toolCatalogEntries).set({ versionHash: randomUUID() }).where(eq(toolCatalogEntries.id, catalogEntry.id));
     const denied = await executor.startManualRun(company.id, workflow.id, { input: {} }, actor, "workflow-connector-drift");
     expect(denied.run).toMatchObject({ status: "failed", failureCode: "workflow_connector_drift" });

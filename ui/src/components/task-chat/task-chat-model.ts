@@ -187,6 +187,8 @@ export interface TaskChatToolItem {
   name: string;
   /** Raw ACP tool name pre-collapse ("mcp__server__tool") for taxonomy lookup. */
   rawName?: string;
+  /** Strict typed reference only for the V9 Native card display tool. */
+  experienceCardRequest?: import("@paperclipai/shared").ExperienceToolCardRequest;
   /** ACP ToolKind. */
   toolKind?: string;
   status: TaskChatToolStatus;

@@ -1,5 +1,7 @@
 import fs from "node:fs/promises";
 import path from "node:path";
+import type { Db } from "@paperclipai/db";
+import { assertAuthoredAgentInstructionsWritable, readAuthoredAgentDefinition, authoredAgentInstructionText } from "./agents/authored-definition.js";
 import { notFound, unprocessable } from "../errors.js";
 import { resolveHomeAwarePath, resolvePaperclipInstanceRoot } from "../home-paths.js";
 
@@ -32,6 +34,7 @@ type AgentLike = {
   companyId: string;
   name: string;
   adapterConfig: unknown;
+  runtimeConfig?: unknown;
 };
 
 type AgentInstructionsFileSummary = {
@@ -473,8 +476,23 @@ export function syncInstructionsBundleConfigFromFilePath(
   return applyBundleConfig(next, { mode, rootPath, entryFile });
 }
 
-export function agentInstructionsService() {
+export function agentInstructionsService(db?: Db) {
+  async function authoredFile(agent: AgentLike): Promise<AgentInstructionsFileDetail | null> {
+    const definition = await readAuthoredAgentDefinition(db, agent);
+    if (!definition) return null;
+    const content = authoredAgentInstructionText(definition.content);
+    return { path: ENTRY_FILE_DEFAULT, size: Buffer.byteLength(content, "utf8"), language: "markdown", markdown: true,
+      isEntryFile: true, editable: false, deprecated: false, virtual: true, content };
+  }
   async function getBundle(agent: AgentLike): Promise<AgentInstructionsBundle> {
+    const published = await authoredFile(agent);
+    if (published) {
+      const { content: _content, ...summary } = published;
+      return { agentId: agent.id, companyId: agent.companyId, mode: null, rootPath: null,
+        managedRootPath: resolveManagedInstructionsRoot(agent), entryFile: ENTRY_FILE_DEFAULT,
+        resolvedEntryPath: null, editable: false, warnings: ["Edit and publish a draft to change this agent."],
+        legacyPromptTemplateActive: false, legacyBootstrapPromptTemplateActive: false, files: [summary] };
+    }
     const state = await recoverManagedBundleState(agent, deriveBundleState(agent));
     if (!state.rootPath) return toBundle(agent, state, []);
     const stat = await statIfExists(state.rootPath);
@@ -490,6 +508,11 @@ export function agentInstructionsService() {
   }
 
   async function readFile(agent: AgentLike, relativePath: string): Promise<AgentInstructionsFileDetail> {
+    const published = await authoredFile(agent);
+    if (published) {
+      if (relativePath !== ENTRY_FILE_DEFAULT) throw notFound("Instructions file not found");
+      return published;
+    }
     const state = await recoverManagedBundleState(agent, deriveBundleState(agent));
     if (relativePath === LEGACY_PROMPT_TEMPLATE_PATH) {
       const content = asString(state.config[PROMPT_KEY]);
@@ -531,6 +554,7 @@ export function agentInstructionsService() {
     agent: AgentLike,
     options?: { clearLegacyPromptTemplate?: boolean },
   ): Promise<{ adapterConfig: Record<string, unknown>; state: BundleState }> {
+    assertAuthoredAgentInstructionsWritable(agent);
     const derived = deriveBundleState(agent);
     const current = await recoverManagedBundleState(agent, derived);
     if (current.rootPath && current.mode) {
@@ -576,6 +600,7 @@ export function agentInstructionsService() {
       clearLegacyPromptTemplate?: boolean;
     },
   ): Promise<{ bundle: AgentInstructionsBundle; adapterConfig: Record<string, unknown> }> {
+    assertAuthoredAgentInstructionsWritable(agent);
     const state = await recoverManagedBundleState(agent, deriveBundleState(agent));
     const nextMode = input.mode ?? state.mode ?? "managed";
     const nextEntryFile = input.entryFile ? normalizeRelativeFilePath(input.entryFile) : state.entryFile;
@@ -628,6 +653,7 @@ export function agentInstructionsService() {
     file: AgentInstructionsFileDetail;
     adapterConfig: Record<string, unknown>;
   }> {
+    assertAuthoredAgentInstructionsWritable(agent);
     const current = deriveBundleState(agent);
     if (relativePath === LEGACY_PROMPT_TEMPLATE_PATH) {
       const adapterConfig: Record<string, unknown> = {
@@ -658,6 +684,7 @@ export function agentInstructionsService() {
     bundle: AgentInstructionsBundle;
     adapterConfig: Record<string, unknown>;
   }> {
+    assertAuthoredAgentInstructionsWritable(agent);
     const derived = deriveBundleState(agent);
     const state = await recoverManagedBundleState(agent, derived);
     if (relativePath === LEGACY_PROMPT_TEMPLATE_PATH) {
@@ -680,6 +707,8 @@ export function agentInstructionsService() {
     entryFile: string;
     warnings: string[];
   }> {
+    const published = await authoredFile(agent);
+    if (published) return { files: { [ENTRY_FILE_DEFAULT]: published.content }, entryFile: ENTRY_FILE_DEFAULT, warnings: [] };
     const state = await recoverManagedBundleState(agent, deriveBundleState(agent));
     if (state.rootPath) {
       const stat = await statIfExists(state.rootPath);
@@ -713,6 +742,7 @@ export function agentInstructionsService() {
       entryFile?: string;
     },
   ): Promise<{ bundle: AgentInstructionsBundle; adapterConfig: Record<string, unknown> }> {
+    assertAuthoredAgentInstructionsWritable(agent);
     const rootPath = resolveManagedInstructionsRoot(agent);
     const entryFile = options?.entryFile ? normalizeRelativeFilePath(options.entryFile) : ENTRY_FILE_DEFAULT;
 

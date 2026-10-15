@@ -11,7 +11,7 @@ const state = vi.hoisted(() => ({
 }));
 vi.mock("@/context/CompanyContext", () => ({ useCompany: () => ({ selectedCompanyId: state.companyId }) }));
 vi.mock("@/hooks/useAgentChatEnabled", () => ({ useAgentChatEnabled: () => ({ enabled: true, loaded: true }) }));
-vi.mock("@/lib/router", () => ({ useParams: () => ({ agentRef: state.agentId }) }));
+vi.mock("@/lib/router", () => ({ useParams: () => ({ agentRef: state.agentId }), useLocation: () => ({ search: "" }) }));
 vi.mock("@/lib/recent-agent-chats", () => ({ recordAgentChatVisit: vi.fn() }));
 vi.mock("@/api/agents", () => ({ agentsApi: { list: vi.fn() } }));
 vi.mock("@/api/auth", () => ({ authApi: { getSession: vi.fn() } }));

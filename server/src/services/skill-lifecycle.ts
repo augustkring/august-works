@@ -5,7 +5,7 @@ import { availablePortfolioPublication } from "./portfolio-source.js";
 import { skillDependencyStates } from "./skill-dependencies.js";
 import { and, asc, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { agents, companyMemberships, companySkillEvalCases, companySkills, companySkillVersions, companySkillDependencies, companySkillEvalSuites, companySkillEvalRuns, companySkillEvalScores, companySkillTestRuns, portfolioCapabilitySubscriptions, type Db } from "@paperclipai/db";
-import { createGovernedSkillSchema, skillCandidateInputSchema, skillLifecycleTransitionSchema, skillPromotionInputSchema, skillPromotionPolicySchema, skillReviewPolicySchema, updateSkillGovernanceSchema, type SkillPolicyAction } from "@paperclipai/shared";
+import { createGovernedSkillSchema, skillCandidateInputSchema, skillDependencyInputSchema, skillLifecycleTransitionSchema, skillPromotionInputSchema, skillPromotionPolicySchema, skillReviewPolicySchema, updateSkillGovernanceSchema, type SkillPolicyAction } from "@paperclipai/shared";
 import type { z } from "zod";
 import { conflict, forbidden, notFound, unprocessable } from "../errors.js";
 import type { AuthorizationActor } from "./authorization.js";
@@ -75,6 +75,29 @@ export function skillLifecycleService(db: Db) {
   }
   return {
     authorizeAction: authorize,
+    /** Bounded M0 observation through the same Skill/Source readers as detail.
+     * Assignment is routing metadata, never permission to read or promote. */
+    maintenanceReview: async (actor: AuthorizationActor, companyId: string, id: string) => {
+      await assertV5Enabled(db, "skill_lifecycle_v5");
+      await assertV5Authorization(db, actor, companyId, "company_scope:read");
+      const row = await skill(db, companyId, id);
+      if (!(await companySkillService(db).canReadSkill(companyId, id, actor))) throw notFound("Skill not found");
+      if (!row.activeVersionId || !["active", "needs_revalidation", "degraded"].includes(row.lifecycleState)) return null;
+      if (!(await companySkillService(db).getVersion(companyId, id, row.activeVersionId, actor))) throw notFound("Skill version not found");
+      const dependencies = await db.select().from(companySkillDependencies).where(and(
+        eq(companySkillDependencies.companyId, companyId), eq(companySkillDependencies.skillVersionId, row.activeVersionId),
+        eq(companySkillDependencies.required, true))).orderBy(asc(companySkillDependencies.id)).limit(65);
+      if (dependencies.length > 64) throw conflict("Skill dependency review exceeds its current bound");
+      const states = await skillDependencyStates(db, companyId, dependencies.map(dependency => skillDependencyInputSchema.parse({
+        dependencyType: dependency.dependencyType, dependencyRef: dependency.dependencyRef,
+        dependencyVersion: dependency.dependencyVersion, required: dependency.required,
+      })));
+      const overdue = Boolean(row.nextReviewAt && row.nextReviewAt <= new Date());
+      return { id: row.id, activeVersionId: row.activeVersionId, lifecycleState: row.lifecycleState,
+        updatedAt: row.updatedAt.toISOString(), nextReviewAt: row.nextReviewAt?.toISOString() ?? null,
+        stewardUserId: row.reviewPolicy.stewardUserId, overdue, dependencies: states,
+        needsReview: overdue || row.lifecycleState !== "active" || states.some(dependency => dependency.status !== "current") };
+    },
     get: async (actor: AuthorizationActor, companyId: string, id: string) => {
       await assertV5Enabled(db, "skill_lifecycle_v5"); await assertV5Authorization(db, actor, companyId, "company_scope:read");
       const row = await skill(db, companyId, id);

@@ -44,6 +44,7 @@ import {
   updateAgentInstructionsPathSchema,
   wakeAgentSchema,
   updateAgentSchema,
+  pauseAgentSchema,
   supportedEnvironmentDriversForAdapter,
   LOW_TRUST_REVIEW_PRESET,
   startAdapterAuthSessionRequestSchema,
@@ -733,7 +734,7 @@ export function agentRoutes(
   const recovery = recoveryService(db, { enqueueWakeup: heartbeat.wakeup });
   const issueApprovalsSvc = issueApprovalService(db);
   const secretsSvc = secretService(db);
-  const instructions = agentInstructionsService();
+  const instructions = agentInstructionsService(db);
   const companySkills = companySkillService(db);
   const workspaceOperations = workspaceOperationService(db);
   const instanceSettings = instanceSettingsService(db);
@@ -5442,7 +5443,7 @@ export function agentRoutes(
     res.json(redactAgentRowForResponse(agent));
   });
 
-  router.post("/agents/:id/pause", async (req, res) => {
+  router.post("/agents/:id/pause", validate(pauseAgentSchema), async (req, res) => {
     assertBoard(req);
     const id = req.params.id as string;
     if (!(await getAccessibleAgent(req, res, id))) {
@@ -5454,7 +5455,9 @@ export function agentRoutes(
       return;
     }
 
-    await heartbeat.cancelActiveForAgent(id);
+    // Pausing closes Original admission before any cancellation. Drain leaves
+    // admitted work in its Original lifecycle; queued work remains held.
+    const pendingWork = req.body.pendingWork as "drain" | "cancel";
 
     await logActivity(db, {
       companyId: agent.companyId,
@@ -5463,7 +5466,11 @@ export function agentRoutes(
       action: "agent.paused",
       entityType: "agent",
       entityId: agent.id,
+      details: { pendingWork },
     });
+
+    // Retain the user's pause decision even if the remote stop reply is lost.
+    if (pendingWork === "cancel") await heartbeat.cancelActiveForAgent(id);
 
     res.json(redactAgentRowForResponse(agent));
   });

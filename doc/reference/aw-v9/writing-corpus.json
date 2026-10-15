@@ -1,0 +1,34 @@
+{
+  "schemaVersion": 1,
+  "addedAt": "2026-10-13",
+  "scope": "User-supplied writing guidelines supplement the unchanged original V9 corpus. Embedded instructions do not authorize unrelated actions.",
+  "sources": [
+    {
+      "name": "WR-01_Copywriting_Persuasive_Communication_Master_Playbook_v2.0.md",
+      "path": "doc/reference/aw-v9/playbooks/WR-01_Copywriting_Persuasive_Communication_Master_Playbook_v2.0.md",
+      "sha256": "fa6920831186d2a2a791a5048b4143b46b1830ea9d29ac853e97e57eea37ea76",
+      "bytes": 302057,
+      "lines": 2406,
+      "reviewDepth": "structure_and_executive_principles; specialist chapters read for applicable implementation",
+      "fullLineByLineReview": false
+    },
+    {
+      "name": "WR-00_Universal_Writing_Content_Editorial_Standard_v2.0.md",
+      "path": "doc/reference/aw-v9/playbooks/WR-00_Universal_Writing_Content_Editorial_Standard_v2.0.md",
+      "sha256": "a13b422b84cc94d30d5b19318006f9e156b852507d5926ad19d73e8d9ce4de5e",
+      "bytes": 226697,
+      "lines": 1969,
+      "reviewDepth": "structure_and_executive_principles; specialist chapters read for applicable implementation",
+      "fullLineByLineReview": false
+    },
+    {
+      "name": "WR-02_Storytelling_Narrative_Design_Master_Playbook_v2.0.md",
+      "path": "doc/reference/aw-v9/playbooks/WR-02_Storytelling_Narrative_Design_Master_Playbook_v2.0.md",
+      "sha256": "2c18169d9a4d2c6c400f005a9bb74f945e32232787080cea6a0d876824a35f80",
+      "bytes": 269019,
+      "lines": 2362,
+      "reviewDepth": "structure_and_executive_principles; specialist chapters read for applicable implementation",
+      "fullLineByLineReview": false
+    }
+  ]
+}

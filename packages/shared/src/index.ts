@@ -1,4 +1,12 @@
+export * from "./customer-support.js";
+export * from "./maintenance-history.js";
+export * from "./memory-maintenance-history.js";
+export * from "./agent-runtime-candidates.js";
+export * from "./experience-measures.js";
+export * from "./support-diagnostics.js";
 export { agentAdapterTypeSchema, optionalAgentAdapterTypeSchema } from "./adapter-type.js";
+export * from "./v9-feature-flags.js";
+export * from "./experience.js";
 export { workerModelBindingSchema, workerModelCallSchema, workerModelResultSchema, type WorkerModelBinding, type WorkerModelCall, type WorkerModelResult } from "./worker-model-gateway.js";
 export {
   RUNNER_GOAL_MAX_OBJECTIVE_CHARS,
@@ -62,6 +70,8 @@ export {
 } from "./validators/decision.js";
 
 export { decisionEffectTargetIssueIds } from "./types/decision.js";
+
+export { workflowAuthoringApiCommandSchema, type WorkflowAuthoringApiCommand } from "./workflow-authoring-api.js";
 
 export type {
   ConnectionAvailabilityState,
@@ -1883,6 +1893,8 @@ export {
   builtInAgentResetSchema,
   createAgentHireSchema,
   updateAgentSchema,
+  pauseAgentSchema,
+  type PauseAgent,
   agentInstructionsBundleModeSchema,
   updateAgentInstructionsBundleSchema,
   upsertAgentInstructionsFileSchema,
@@ -3320,3 +3332,70 @@ export * from "./adaptive-planning.js";
 export * from "./management-reviews.js";
 export * from "./analytical-context.js";
 export * from "./management-chat-tools.js";
+
+export * from "./customer-feedback.js";
+export * from "./feedback-data-processing.js";
+export * from "./feedback-retention.js";
+export * from "./feedback-retention-controls.js";
+export * from "./feedback-images.js";
+export * from "./experience-commands.js";
+export * from "./activation.js";
+export * from "./activation-connection-consent.js";
+export * from "./company-experience.js";
+export * from "./notification-policy.js";
+export * from "./agent-authoring.js";
+export * from "./agent-authored-definition.js";
+export * from "./agent-draft-output.js";
+export * from "./workflow-experience.js";
+export * from "./workflow-authoring-experience.js";
+export * from "./agent-setup-authoring.js";
+export * from "./orchestration-experience.js";
+export * from "./orchestration-control.js";
+export * from "./workflow-run-experience.js";
+export * from "./workflow-lifecycle.js";
+export * from "./workflow-operations.js";
+export * from "./workflow-launch.js";
+export * from "./workflow-stop.js";
+export * from "./workflow-test.js";
+
+export * from "./agent-monitor.js";
+
+export * from "./workflow-publication.js";
+export * from "./protocol-interop.js";
+
+export * from "./experience-tool-ui.js";
+
+export * from "./experience-task-draft.js";
+export * from "./agent-retirement.js";
+
+export * from "./feedback-retention-erasure.js";
+
+export { agentDraftTestReviewSchema, agentDraftTestCommandSchema, agentDraftTestViewSchema, agentDraftTestPacketSchema, type AgentDraftTestReview, type AgentDraftTestCommand, type AgentDraftTestView } from "./agent-authoring-tests.js";
+export { agentDraftPublicationCommandSchema, agentDraftPublicationReviewSchema, agentDraftPublicationReceiptSchema,
+  type AgentDraftPublicationCommand, type AgentDraftPublicationReview, type AgentDraftPublicationReceipt } from "./agent-authoring-publication.js";
+export * from "./agent-authoring-package-setup.js";
+
+export * from "./agent-pause.js";
+export * from "./agent-managed-runtime-setup.js";
+export * from "./conversation-authoring.js";
+export * from "./routine-authoring.js";
+
+export * from "./foundation-authoring.js";
+export * from "./workflow-request-receipts.js";
+export * from "./workflow-draft-edit.js";
+export * from "./workflow-draft-tools.js";
+export * from "./workflow-draft-flow.js";
+
+export * from "./experience-metric-observations.js";
+
+export * from "./experience-process-findings.js";
+
+export * from "./experience-scenario-comparisons.js";
+
+export * from "./experience-experiment-results.js";
+
+export * from "./experience-forecast-results.js";
+
+export * from "./experience-management-review-summaries.js";
+
+export * from "./notification-channel-policy.js";

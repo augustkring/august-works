@@ -1,3 +1,5 @@
+import { readCustomerWorkflowPublication, admitCustomerWorkflowPublication } from "../services/workflows/workflow-customer-publication.js";
+import { workflowPublicationCommandSchema } from "@paperclipai/shared";
 import { proposeOptimizerCandidate } from "../services/optimizer/optimizer-candidate-proposal.js";
 import { submitWorkflowDirectResult } from "../services/workflows/workflow-direct-agent.js";
 import { Router, type Request, type Response } from "express";
@@ -13,17 +15,39 @@ import {
   workflowCapabilitySearchQuerySchema,
   workflowRunListQuerySchema,
   workflowDataSelectorRequestSchema,
+  workflowLifecycleCommandSchema,
+  workflowLaunchCommandSchema,
+  workflowStopCommandSchema,
+  workflowTestCommandSchema,
+  workflowRequestKindSchema,
+  workflowRunControlSchema, workflowStopReceiptSchema,
+  workflowExperienceSchema,
+  v9FeatureEnabled,
   type PermissionKey,
   type WorkflowCapabilities,
 } from "@paperclipai/shared";
 import { validate } from "../middleware/validate.js";
-import { forbidden, notFound, unauthorized, unprocessable } from "../errors.js";
+import { conflict, forbidden, notFound, unauthorized, unprocessable, HttpError } from "../errors.js";
+import { withExperienceAdmission } from "../services/experience/admission.js";
+import { ExperienceOverloadError } from "../services/experience/projection.js";
+import { workflowReview } from "../services/experience/workflow-review.js";
+import { readWorkflowStepContext } from "../services/experience/workflow-step-actors.js";
+import { workflowReviewBinding } from "../services/experience/workflow-review-binding.js";
+import { workflowDraftIntentService } from "../services/experience/workflow-draft-intent.js";
+import { applyWorkflowAuthoringApi } from "../services/workflows/workflow-authoring-api.js";
+import { readWorkflowDraftAuthors } from "../services/workflows/workflow-draft-authors.js";
+import { workflowCustomerDraftEdit } from "../services/workflows/workflow-customer-draft-edit.js";
+import { workflowCustomerDraftFlow } from "../services/workflows/workflow-customer-draft-flow.js";
+import { readWorkflowCapabilityCatalog } from "../services/workflows/workflow-capability-visibility.js";
+import { workflowRunReview } from "../services/experience/workflow-run-review.js";
+import { currentWorkflowStopRoleAllows, readCustomerWorkflowStopReceipt } from "../services/workflows/workflow-customer-stop.js";
+import { assertV5Authorization } from "../services/v5-authorization.js";
+import { admitCustomerWorkflowTest, readCustomerWorkflowTestReceipt } from "../services/workflows/workflow-customer-test.js";
 import {
   accessService,
   instanceSettingsService,
   issueService,
   logActivity,
-  workflowCapabilityResolverService,
   workflowDataSelectorService,
   workflowExecutorService,
   workflowNodeRegistryService,
@@ -49,7 +73,6 @@ export function workflowRoutes(db: Db) {
   const router = Router();
   const svc = workflowService(db);
   const nodeRegistry = workflowNodeRegistryService(db);
-  const capabilityResolver = workflowCapabilityResolverService(db);
   const dataSelector = workflowDataSelectorService(db);
   const executor = workflowExecutorService(db);
   const optimizerSuggestions = optimizerSuggestionService(db);
@@ -57,6 +80,39 @@ export function workflowRoutes(db: Db) {
   const access = accessService(db);
   const settings = instanceSettingsService(db);
   const optimizerEvaluations = optimizerEvaluationService(db);
+
+  router.post("/companies/:companyId/workflow-authoring", async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    res.json(await applyWorkflowAuthoringApi(db, req.actor, z.uuid().parse(req.params.companyId), req.body));
+  });
+
+  function currentDraftAccount(req: Request) {
+    const query = z.strictObject({ expectedUserId: z.string().min(1).max(300) }).parse(req.query);
+    if (req.actor.type !== "board" || req.actor.source === "local_implicit" || !req.actor.userId)
+      throw forbidden("A verified current account is required");
+    if (query.expectedUserId !== req.actor.userId)
+      throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
+  }
+  router.get("/companies/:companyId/experience/workflows", async (req, res) => {
+    currentDraftAccount(req);
+    res.set("Cache-Control", "no-store");
+    res.json(await workflowDraftIntentService(db).index(req.actor, z.uuid().parse(req.params.companyId)));
+  });
+  router.post("/companies/:companyId/experience/workflow-drafts", async (req, res) => {
+    currentDraftAccount(req);
+    res.set("Cache-Control", "no-store");
+    res.status(201).json(await workflowDraftIntentService(db).create(req.actor, z.uuid().parse(req.params.companyId), req.body));
+  });
+  router.get("/companies/:companyId/experience/workflow-draft-requests/:requestId", async (req, res) => {
+    currentDraftAccount(req);
+    res.set("Cache-Control", "no-store");
+    res.json(await workflowDraftIntentService(db).receipt(req.actor, z.uuid().parse(req.params.companyId), z.uuid().parse(req.params.requestId)));
+  });
+  router.get("/companies/:companyId/workflows/:workflowId/experience/authors", async (req, res) => {
+    currentDraftAccount(req);
+    res.set("Cache-Control", "no-store");
+    res.json(await readWorkflowDraftAuthors(db, req.actor, z.uuid().parse(req.params.companyId), z.uuid().parse(req.params.workflowId)));
+  });
 
   router.get("/companies/:companyId/workflows/:workflowId/optimizer-evaluations", async (req, res) => {
     const companyId = req.params.companyId as string;
@@ -112,7 +168,7 @@ export function workflowRoutes(db: Db) {
     await assertWorkflowsEnabled();
     await assertPermission(req, companyId, "workflows:read");
     if (!await executor.getRun(companyId, req.params.runId as string,req.actor)) throw notFound("Workflow run not found");
-    res.json(await getWorkflowRunReview(db, companyId, req.params.runId as string));
+    res.json(await getWorkflowRunReview(db, companyId, req.params.runId as string, req.actor));
   });
   router.post("/companies/:companyId/workflow-runs/:runId/review", validate(workflowRunReviewSchema), async (req, res) => {
     const companyId = req.params.companyId as string;
@@ -340,7 +396,8 @@ export function workflowRoutes(db: Db) {
     const companyId = req.params.companyId as string;
     await assertPermission(req, companyId, "workflows:read");
     const query = workflowCapabilitySearchQuerySchema.parse(req.query);
-    res.json(await capabilityResolver.search(companyId, query));
+    res.set("Cache-Control", "private, no-store");
+    res.json(await readWorkflowCapabilityCatalog(db, companyId, req.actor, query));
   });
 
   router.post(
@@ -365,7 +422,7 @@ export function workflowRoutes(db: Db) {
     await assertWorkflowsEnabled();
     const companyId = req.params.companyId as string;
     await assertPermission(req, companyId, "workflows:read");
-    res.json(await svc.list(companyId));
+    res.json(await svc.list(companyId, req.actor));
   });
 
   router.post(
@@ -505,6 +562,90 @@ export function workflowRoutes(db: Db) {
   router.post("/companies/:companyId/workflow-runs/:runId/tool-reviews/:requestId/approve", reviewToolAction("approve"));
   router.post("/companies/:companyId/workflow-runs/:runId/tool-reviews/:requestId/reject", reviewToolAction("reject"));
 
+  const retainedControlScope = (req: Request, res: Response) => {
+    res.set("Cache-Control", "private, no-store"); assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId), runId = z.uuid().parse(req.params.runId);
+    const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+    const account = z.strictObject({ expectedUserId: z.string().min(1).max(300) }).parse(req.query);
+    if (!principal || account.expectedUserId !== principal) throw conflict("Account changed; reload", { code: "ACCOUNT_CHANGED" });
+    return { companyId, runId };
+  };
+  router.get("/companies/:companyId/workflow-runs/:runId/experience/control", async (req, res) => {
+    const scope = retainedControlScope(req, res);
+    res.json(workflowRunControlSchema.parse(await executor.retainedRunControl(scope.companyId, scope.runId, req.actor)));
+  });
+  router.post("/companies/:companyId/workflow-runs/:runId/experience/retained-stop", validate(workflowStopCommandSchema), async (req, res) => {
+    const scope = retainedControlScope(req, res);
+    const receipt = await executor.stopRetainedRun(scope.companyId, scope.runId, req.body, req.actor);
+    // Repeat actual current retained control before disclosing the immutable
+    // admission. A late lost reply is recovered by exact GET, not another Stop.
+    await executor.retainedRunControl(scope.companyId, scope.runId, req.actor);
+    res.json(workflowStopReceiptSchema.parse(receipt));
+  });
+  router.get("/companies/:companyId/workflow-runs/:runId/experience/retained-stop-requests/:requestId", async (req, res) => {
+    const scope = retainedControlScope(req, res), requestId = z.uuid().parse(req.params.requestId);
+    res.json(workflowStopReceiptSchema.parse(await executor.retainedStopReceipt(scope.companyId, scope.runId, requestId, req.actor)));
+  });
+
+  router.get("/companies/:companyId/workflow-runs/:runId/experience", async (req, res) => {
+    assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId);
+    const runId = z.uuid().parse(req.params.runId);
+    const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+    if (!principal) throw unauthorized("Authenticated user identity required");
+    if (req.query.expectedUserId !== principal) throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
+    res.set("Cache-Control", "private, no-store");
+    await assertWorkflowsEnabled();
+    await assertPermission(req, companyId, "workflows:read");
+    await assertV5Authorization(db, req.actor, companyId, "workflows:read");
+    const detail = await executor.getRun(companyId, runId, req.actor);
+    if (!detail) throw notFound("Workflow run not found");
+    const revision = await svc.getRevision(companyId, detail.run.workflowId, detail.run.workflowRevisionId, req.actor);
+    if (!revision) throw notFound("Workflow run revision not found");
+    await assertWorkflowsEnabled();
+    await assertPermission(req, companyId, "workflows:read");
+    await assertV5Authorization(db, req.actor, companyId, "workflows:read");
+    const stopAllowed = await access.decide({ actor: req.actor, action: "workflows:run", resource: { type: "company", companyId } });
+    const stopEnabled = v9FeatureEnabled(await settings.getExperimental(), "progressive_shell_v9");
+    const stopRoleAllowed = await currentWorkflowStopRoleAllows(db, companyId, req.actor);
+    const canRequestStop = stopAllowed.allowed && stopEnabled && stopRoleAllowed;
+    const stopReceipt = canRequestStop ? await readCustomerWorkflowStopReceipt(db, detail.run, req.actor) : null;
+    // A receipt survives navigation, but never bypasses current private-source
+    // admission or reveals another principal's original request.
+    if (stopReceipt) {
+      if (!await executor.getRun(companyId, runId, req.actor)) throw notFound("Workflow run not found");
+      await assertWorkflowsEnabled();
+      await assertV5Authorization(db, req.actor, companyId, "workflows:read");
+      await assertV5Authorization(db, req.actor, companyId, "workflows:run");
+      if (!v9FeatureEnabled(await settings.getExperimental(), "progressive_shell_v9") ||
+          !await currentWorkflowStopRoleAllows(db, companyId, req.actor)) throw notFound("Workflow stop receipt is unavailable");
+    }
+    res.json(workflowRunReview(detail, revision, nodeRegistry.list(), canRequestStop, stopReceipt));
+  });
+
+  router.post("/companies/:companyId/workflow-runs/:runId/experience/stop", validate(workflowStopCommandSchema), async (req, res) => {
+    assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId), runId = z.uuid().parse(req.params.runId);
+    const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+    if (!principal) throw unauthorized("Authenticated user identity required");
+    if (req.query.expectedUserId !== principal) throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
+    res.set("Cache-Control", "private, no-store");
+    await assertWorkflowsEnabled();
+    await assertPermission(req, companyId, "workflows:read");
+    await assertPermission(req, companyId, "workflows:run");
+    const receipt = await executor.stopRun(companyId, runId, req.body, req.actor);
+    // A later authority/retention loss can hide the reply. The native admission
+    // is retained, so the client must reconcile the identical original request.
+    if (!await executor.getRun(companyId, runId, req.actor)) throw notFound("Workflow run not found");
+    await assertWorkflowsEnabled();
+    await assertPermission(req, companyId, "workflows:read");
+    await assertPermission(req, companyId, "workflows:run");
+    await assertV5Authorization(db, req.actor, companyId, "workflows:read");
+    await assertV5Authorization(db, req.actor, companyId, "workflows:run");
+    if (!await currentWorkflowStopRoleAllows(db, companyId, req.actor)) throw forbidden("Viewer access is read-only");
+    res.json(receipt);
+  });
+
   router.get("/companies/:companyId/workflow-runs/:runId", async (req, res) => {
     await assertWorkflowsEnabled();
     const companyId = req.params.companyId as string;
@@ -584,13 +725,205 @@ export function workflowRoutes(db: Db) {
         return;
       }
 
-      const result = await optimizerSuggestions.forWorkflow(companyId, workflowId);
+      const result = await optimizerSuggestions.forWorkflow(companyId, workflowId, req.actor);
       if (!result) {
         throw notFound("Workflow not found");
       }
       res.json(result);
     },
   );
+
+  router.get("/companies/:companyId/workflows/:workflowId/experience/requests/:kind/:requestId", async (req, res) => {
+    res.set("Cache-Control", "private, no-store");
+    assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId), workflowId = z.uuid().parse(req.params.workflowId),
+      requestId = z.uuid().parse(req.params.requestId), kind = workflowRequestKindSchema.parse(req.params.kind);
+    const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+    const account = z.strictObject({ expectedUserId: z.string().min(1).max(300) }).parse(req.query);
+    if (!principal || account.expectedUserId !== principal) throw conflict("Account changed; reload", { code: "ACCOUNT_CHANGED" });
+    try {
+      const receipt = await withExperienceAdmission(async signal => {
+        signal.throwIfAborted();
+        const value = await svc.requestReceipt(companyId, workflowId, kind, requestId, req.actor);
+        signal.throwIfAborted(); return value;
+      });
+      res.json(receipt);
+    } catch (error) {
+      if (error instanceof ExperienceOverloadError) throw new HttpError(503, "The original request is unconfirmed; try the current read again");
+      throw error;
+    }
+  });
+
+  router.get("/companies/:companyId/workflows/:workflowId/experience/publication", async (req, res) => {
+    res.set("Cache-Control", "private, no-store");
+    assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId), workflowId = z.uuid().parse(req.params.workflowId);
+    const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+    const account = z.strictObject({ expectedUserId: z.string().min(1).max(300) }).parse(req.query);
+    if (!principal || account.expectedUserId !== principal) throw conflict("Account changed; reload", { code: "ACCOUNT_CHANGED" });
+    for (const action of ["workflows:read", "workflows:edit", "workflows:run", "workflows:publish"] as const) await assertPermission(req, companyId, action);
+    const review = await readCustomerWorkflowPublication(db, companyId, workflowId, req.actor);
+    for (const action of ["workflows:read", "workflows:edit", "workflows:run", "workflows:publish"] as const) await assertV5Authorization(db, { ...req.actor, isInstanceAdmin: false }, companyId, action);
+    if (!v9FeatureEnabled(await settings.getExperimental(), "progressive_shell_v9") || !await currentWorkflowStopRoleAllows(db, companyId, req.actor)) throw notFound("Current publication authority is unavailable");
+    await assertWorkflowsEnabled();
+    res.json(review);
+  });
+  router.post("/companies/:companyId/workflows/:workflowId/experience/publication", validate(workflowPublicationCommandSchema), async (req, res) => {
+    res.set("Cache-Control", "private, no-store");
+    assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId), workflowId = z.uuid().parse(req.params.workflowId);
+    const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+    const account = z.strictObject({ expectedUserId: z.string().min(1).max(300) }).parse(req.query);
+    if (!principal || account.expectedUserId !== principal) throw conflict("Account changed; reload", { code: "ACCOUNT_CHANGED" });
+    for (const action of ["workflows:read", "workflows:edit", "workflows:run", "workflows:publish"] as const) await assertPermission(req, companyId, action);
+    const receipt = await admitCustomerWorkflowPublication(db, companyId, workflowId, req.actor, req.body);
+    for (const action of ["workflows:read", "workflows:edit", "workflows:run", "workflows:publish"] as const) await assertV5Authorization(db, { ...req.actor, isInstanceAdmin: false }, companyId, action);
+    if (!v9FeatureEnabled(await settings.getExperimental(), "progressive_shell_v9") || !await currentWorkflowStopRoleAllows(db, companyId, req.actor)) throw notFound("Current publication authority is unavailable");
+    await assertWorkflowsEnabled();
+    res.json(receipt);
+  });
+
+  router.post("/companies/:companyId/workflows/:workflowId/experience/test", validate(workflowTestCommandSchema), async (req, res) => {
+    assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId), workflowId = z.uuid().parse(req.params.workflowId);
+    const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+    if (!principal) throw unauthorized("Authenticated user identity required");
+    if (req.query.expectedUserId !== principal) throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
+    res.set("Cache-Control", "private, no-store");
+    await assertWorkflowsEnabled();
+    for (const action of ["workflows:read", "workflows:edit", "workflows:run"] as const) await assertPermission(req, companyId, action);
+    const receipt = await admitCustomerWorkflowTest(db, companyId, workflowId, req.body, req.actor);
+    // The exact native run/source and its original initiating principal remain
+    // authoritative. A queued test is neither publication nor verification.
+    try { await executor.executeQueuedRun(companyId, receipt.runId, runActor(req)); } catch { /* Native recovery retains the admitted test. */ }
+    if (!await executor.getRun(companyId, receipt.runId, req.actor)) throw notFound("Workflow test run not found");
+    await assertWorkflowsEnabled();
+    for (const action of ["workflows:read", "workflows:edit", "workflows:run"] as const) await assertV5Authorization(db, req.actor, companyId, action);
+    if (!v9FeatureEnabled(await settings.getExperimental(), "progressive_shell_v9") || !await currentWorkflowStopRoleAllows(db, companyId, req.actor))
+      throw notFound("Workflow test receipt is unavailable");
+    res.json(receipt);
+  });
+
+  router.post("/companies/:companyId/workflows/:workflowId/experience/launch", validate(workflowLaunchCommandSchema), async (req, res) => {
+    assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId), workflowId = z.uuid().parse(req.params.workflowId);
+    const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+    if (!principal) throw unauthorized("Authenticated user identity required");
+    if (req.query.expectedUserId !== principal) throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
+    res.set("Cache-Control", "private, no-store");
+    const receipt = await svc.launch(companyId, workflowId, req.body, req.actor);
+    // Native durable reconciliation also owns this run. Inline execution is
+    // best effort and cannot upgrade the admission receipt to completion.
+    try { await executor.executeQueuedRun(companyId, receipt.runId, runActor(req)); } catch { /* Original admission remains durable. */ }
+    res.json(receipt);
+  });
+
+  router.get("/companies/:companyId/workflows/:workflowId/experience/operations", async (req, res) => {
+    assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId);
+    const workflowId = z.uuid().parse(req.params.workflowId);
+    const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+    if (!principal) throw unauthorized("Authenticated user identity required");
+    if (req.query.expectedUserId !== principal) throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
+    res.set("Cache-Control", "private, no-store");
+    res.json(await svc.operations(companyId, workflowId, req.actor));
+  });
+
+  router.get("/companies/:companyId/workflows/:workflowId/experience", async (req, res) => {
+    assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId);
+    const workflowId = z.uuid().parse(req.params.workflowId);
+    const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+    if (!principal) throw unauthorized("Authenticated user identity required");
+    if (req.query.expectedUserId !== principal)
+      throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
+    res.set("Cache-Control", "private, no-store");
+    await assertWorkflowsEnabled();
+    await assertPermission(req, companyId, "workflows:read");
+    const detail = await svc.getDetail(companyId, workflowId, req.actor);
+    if (!detail) throw notFound("Workflow not found");
+    const edit = await decidePermission(req, companyId, "workflows:edit");
+    const operate = await decidePermission(req, companyId, "workflows:publish");
+    const run = await decidePermission(req, companyId, "workflows:run");
+    const rollout = v9FeatureEnabled(await settings.getExperimental(), "progressive_shell_v9");
+    const testDecisions = await Promise.all(["workflows:read", "workflows:edit", "workflows:run"].map(action =>
+      access.decide({actor: req.actor, action: action as WorkflowPermission, resource: {type: "company", companyId}})));
+    const canTest = rollout && testDecisions.every(decision => decision.allowed) && await currentWorkflowStopRoleAllows(db, companyId, req.actor);
+    const testReceipt = canTest ? await readCustomerWorkflowTestReceipt(db, companyId, workflowId, req.actor) : null;
+    const result = workflowReview(detail, nodeRegistry.list(), edit.allowed,
+      operate.allowed && rollout, run.allowed && rollout, canTest, testReceipt);
+    try {
+      const { assignments, toolAccess, toolInputs } = await readWorkflowStepContext(db, detail, req.actor);
+      for (const revision of [result.draft, result.active]) if (revision) for (const step of revision.steps) {
+        const assignment = assignments.get(`${revision.id}:${step.nodeId}`);
+        if (assignment) step.assignment = assignment;
+        const connection = toolAccess.get(`${revision.id}:${step.nodeId}`);
+        if (connection) step.toolAccess = connection;
+        const inputs = toolInputs.get(`${revision.id}:${step.nodeId}`);
+        if (inputs) step.inputReview = inputs;
+      }
+    } catch (error) {
+      if (error instanceof ExperienceOverloadError) throw new HttpError(503, "Current workflow assignments are unavailable; try again");
+      throw error;
+    }
+    // Current native admission remains necessary after the asynchronous private read.
+    await assertWorkflowsEnabled();
+    await assertPermission(req, companyId, "workflows:read");
+    await assertV5Authorization(db, req.actor, companyId, "workflows:read");
+    if (canTest) {
+      for (const action of ["workflows:edit", "workflows:run"] as const) await assertV5Authorization(db, req.actor, companyId, action);
+      if (!v9FeatureEnabled(await settings.getExperimental(), "progressive_shell_v9") || !await currentWorkflowStopRoleAllows(db, companyId, req.actor))
+        throw notFound("Workflow test view is unavailable");
+    }
+    const currentDetail = await svc.getDetail(companyId, workflowId, req.actor);
+    if (!currentDetail)
+      throw conflict("Current workflow changed; refresh");
+    try {
+      if (workflowReviewBinding(currentDetail) !== workflowReviewBinding(detail)) throw conflict("Current workflow changed; refresh");
+    } catch (error) {
+      if (error instanceof ExperienceOverloadError) throw new HttpError(503, "Current workflow review exceeds its read budget; try Advanced");
+      throw error;
+    }
+    res.json(workflowExperienceSchema.parse(result));
+  });
+
+  router.get("/companies/:companyId/workflows/:workflowId/experience/draft-flow", async (req, res) => {
+    res.set("Cache-Control", "private, no-store"); currentDraftAccount(req);
+    try {
+      res.json(await withExperienceAdmission(() => workflowCustomerDraftFlow(db).review(z.uuid().parse(req.params.companyId), z.uuid().parse(req.params.workflowId), req.actor)));
+    } catch (error) {
+      if (error instanceof ExperienceOverloadError) throw new HttpError(503, "The current draft flow is unavailable; try again"); throw error;
+    }
+  });
+  router.post("/companies/:companyId/workflows/:workflowId/experience/draft-flow", async (req, res) => {
+    res.set("Cache-Control", "private, no-store"); currentDraftAccount(req);
+    res.json(await workflowCustomerDraftFlow(db).save(z.uuid().parse(req.params.companyId), z.uuid().parse(req.params.workflowId), req.body, req.actor));
+  });
+  router.get("/companies/:companyId/workflows/:workflowId/experience/draft-steps/:nodeId", async (req, res) => {
+    res.set("Cache-Control", "private, no-store"); currentDraftAccount(req);
+    try {
+      res.json(await withExperienceAdmission((signal, remainingMs) => workflowCustomerDraftEdit(db).review(z.uuid().parse(req.params.companyId),
+        z.uuid().parse(req.params.workflowId), req.params.nodeId as string, req.actor, { signal, remainingMs })));
+    } catch (error) {
+      if (error instanceof ExperienceOverloadError) throw new HttpError(503, "The current draft step is unavailable; try again"); throw error;
+    }
+  });
+  router.post("/companies/:companyId/workflows/:workflowId/experience/draft-steps", async (req, res) => {
+    res.set("Cache-Control", "private, no-store"); currentDraftAccount(req);
+    res.json(await workflowCustomerDraftEdit(db).save(z.uuid().parse(req.params.companyId), z.uuid().parse(req.params.workflowId), req.body, req.actor));
+  });
+
+  router.post("/companies/:companyId/workflows/:workflowId/experience/lifecycle",
+    validate(workflowLifecycleCommandSchema), async (req, res) => {
+      assertBoard(req);
+      const companyId = z.uuid().parse(req.params.companyId);
+      const workflowId = z.uuid().parse(req.params.workflowId);
+      const principal = req.actor.source === "local_implicit" ? "local-board" : req.actor.userId;
+      if (!principal) throw unauthorized("Authenticated user identity required");
+      if (req.query.expectedUserId !== principal) throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
+      res.set("Cache-Control", "private, no-store");
+      res.json(await svc.lifecycle(companyId, workflowId, req.body, req.actor));
+    });
 
   router.get("/companies/:companyId/workflows/:workflowId", async (req, res) => {
     await assertWorkflowsEnabled();

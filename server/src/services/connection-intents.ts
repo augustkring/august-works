@@ -37,6 +37,7 @@ import { issueThreadInteractionService } from "./issue-thread-interactions.js";
 import { toolAccessService } from "./tool-access.js";
 import { captureRunIdentity } from "./run-identity.js";
 import { resolveManagedGitHubIdentitySelection } from "./git-credentials.js";
+import { assertConversationConnectionIntentCurrent } from "./conversation-connection-authority.js";
 
 type ConnectionRunClaims = Pick<RuntimeToolsTokenClaims, "sub" | "company_id" | "run_id" | "responsible_user_id">;
 
@@ -147,6 +148,7 @@ export function connectionIntentService(db: Db) {
         responsibleUserId: heartbeatRuns.responsibleUserId,
         activeIdentityContextId: heartbeatRuns.activeIdentityContextId,
         contextSnapshot: heartbeatRuns.contextSnapshot,
+        nativeIssueId: heartbeatRuns.nativeIssueId,
       })
       .from(heartbeatRuns)
       .where(eq(heartbeatRuns.id, claims.run_id))
@@ -164,7 +166,7 @@ export function connectionIntentService(db: Db) {
     }
     if (!run.responsibleUserId) throw forbidden("This task needs a responsible user to connect a service");
     const snapshot = record(run.contextSnapshot);
-    const issueId = text(snapshot?.issueId) ?? text(snapshot?.taskId);
+    const issueId = run.nativeIssueId ?? text(snapshot?.issueId) ?? text(snapshot?.taskId);
     if (!issueId) throw unprocessable("Connection requests require a task-bound heartbeat run");
     const [issue, agent, responsibleMembership] = await Promise.all([
       db.select({
@@ -199,6 +201,8 @@ export function connectionIntentService(db: Db) {
     if (issue.status === "done" || issue.status === "cancelled") {
       throw conflict("Connection requests cannot be created on a closed task");
     }
+    await assertConversationConnectionIntentCurrent(db, { companyId: run.companyId, issueId: issue.id,
+      agentId: agent.id, runId: run.id, userId: run.responsibleUserId });
     return { run, issue, agent };
   }
 
@@ -341,6 +345,12 @@ export function connectionIntentService(db: Db) {
   }
 
   async function search(claims: ConnectionRunClaims, query: string, options: { retryProviderChoice?: boolean } = {}): Promise<ConnectionsSearchResult> {
+    const result = await searchCurrent(claims, query, options);
+    await loadRunContext(claims);
+    return result;
+  }
+
+  async function searchCurrent(claims: ConnectionRunClaims, query: string, options: { retryProviderChoice?: boolean } = {}): Promise<ConnectionsSearchResult> {
     const { run, agent, issue } = await loadRunContext(claims);
     const normalized = query.trim().toLocaleLowerCase();
     const tokens = normalized.split(/[^\p{L}\p{N}]+/u).filter(Boolean);
@@ -572,6 +582,7 @@ export function connectionIntentService(db: Db) {
       purpose: options.purpose,
     });
     if (ready) {
+      await loadRunContext(claims);
       return {
         version: 1,
         service: app.slug,
@@ -613,6 +624,7 @@ export function connectionIntentService(db: Db) {
       },
     );
     if (interaction.status !== "pending") throw conflict("This connection request has already been resolved. Follow its recorded outcome.");
+    await loadRunContext(claims);
     await logActivity(db, {
       companyId: context.run.companyId, actorType: "agent", actorId: context.agent.id,
       agentId: context.agent.id, runId: context.run.id,

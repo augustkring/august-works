@@ -9,12 +9,33 @@ import {
   respondIssueThreadInteractionSchema,
   stalledReviewDecisionSchema,
   suggestedTaskDraftSchema,
+  suggestTasksPayloadSchema,
   updateIssueSchema,
   upsertIssueDocumentSchema,
 } from "./issue.js";
 import { createAgentSchema } from "./agent.js";
 
 describe("issue validators", () => {
+  it("bounds a separate Human-reviewed backlog proposal to one unassigned standard task", () => {
+    const task = { clientKey: "one", title: "Follow up", status: "backlog", placement: "company_backlog" };
+    expect(suggestedTaskDraftSchema.parse(task)).toEqual(task);
+    const id = "00000000-0000-4000-8000-000000000001";
+    for (const patch of [
+      { status: "todo" }, { status: undefined }, { parentId: id }, { parentClientKey: "parent" },
+      { assigneeAgentId: id }, { assigneeUserId: "user" }, { projectId: id }, { goalId: id },
+      { workMode: "planning" }, { priority: "urgent" }, { hiddenInPreview: true }, { labels: ["hidden scope"] },
+    ]) expect(suggestedTaskDraftSchema.safeParse({ ...task, ...patch }).success).toBe(false);
+    expect(suggestTasksPayloadSchema.safeParse({ version: 1, tasks: [task], defaultParentId: id }).success).toBe(false);
+    expect(suggestTasksPayloadSchema.safeParse({ version: 1, tasks: [task, { clientKey: "two", title: "Another" }] }).success).toBe(false);
+  });
+  it("bounds suggested-task initial states while preserving omitted legacy state", () => {
+    const task = { clientKey: "one", title: "A follow-up" };
+    expect(suggestedTaskDraftSchema.parse({ ...task, status: "backlog" }).status).toBe("backlog");
+    expect(suggestedTaskDraftSchema.parse({ ...task, status: "todo" }).status).toBe("todo");
+    expect(suggestedTaskDraftSchema.parse(task).status).toBeUndefined();
+    for (const status of ["in_progress", "done", "cancelled", null])
+      expect(suggestedTaskDraftSchema.safeParse({ ...task, status }).success).toBe(false);
+  });
   it("validates the typed recovery display snapshot while retaining older metadata", () => {
     const metadata = { version: 1, sections: [{ rows: [{ type: "text", text: "Details" }] }] };
     const recovery = { kind: "disposition_repair_escalated", actionId: "9af8228f-0be7-45ae-a104-6fbe0af6f1d3", attemptCount: 2, maxAttempts: 2, reason: "unchanged_source_state_exhausted", assigneeAgentId: null };

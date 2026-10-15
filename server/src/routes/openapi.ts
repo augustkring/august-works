@@ -1,7 +1,10 @@
+import { insightExperimentSummarySchema, insightManagementSummarySchema } from "@paperclipai/shared";
 import { experimentalApiMetadata } from "./experimental-api-metadata.js";
+import { workflowAuthoringApiCommandSchema } from "@paperclipai/shared";
 import { v5ApiPaths } from "./v5-api-paths.js";
 import { v6ApiPaths } from "./v6-api-paths.js";
 import { v7ApiPaths } from "./v7-api-paths.js";
+import { v9ApiPaths } from "./v9-api-paths.js";
 import {
   experimentalApiPaths,
   experimentalApiQueries,
@@ -77,6 +80,7 @@ import {
   createAgentSchema,
   createAgentHireSchema,
   updateAgentSchema,
+  pauseAgentSchema,
   updateAgentPermissionsSchema,
   updateAgentInstructionsPathSchema,
   updateAgentInstructionsBundleSchema,
@@ -1296,15 +1300,18 @@ function registerCurrentRoute(input: {
   summary: string;
   query?: z.ZodTypeAny;
   body?: z.ZodTypeAny;
+  headers?: z.ZodTypeAny;
+  bodyContent?: Record<string, { schema: unknown }>;
   responses?: Record<string, OpenApiResponse>;
 }) {
   const params = paramsSchemaFromPath(input.path);
   const request =
-    params || input.query || input.body
+    params || input.query || input.body || input.headers || input.bodyContent
       ? {
           ...(params ? { params } : {}),
           ...(input.query ? { query: input.query } : {}),
-          ...(input.body ? { body: jsonBody(input.body) } : {}),
+          ...(input.headers ? { headers: input.headers } : {}),
+          ...(input.bodyContent ? { body: { required: true, content: input.bodyContent } } : input.body ? { body: jsonBody(input.body) } : {}),
         }
       : undefined;
   registry.registerPath({
@@ -1737,6 +1744,7 @@ function resolveOperationAuthLevel(
   const key = operationKey(method, path);
   if (PUBLIC_OPERATIONS.has(key)) return "public";
   if (key === "POST /runtime-tools/model/messages") return "worker_model";
+  if (key === "POST /api/companies/{companyId}/workflow-authoring") return "agent_run";
   if (key === "POST /api/mcp/project-tools" || key === "POST /api/companies/{companyId}/slack/tasks/{issueId}/tools" ||
     key === "POST /api/companies/{companyId}/workflow-runs/{runId}/nodes/{nodeId}/task-result" ||
     key === "POST /api/companies/{companyId}/workflow-runs/{runId}/nodes/{nodeId}/direct-result") return "agent_run";
@@ -1883,6 +1891,19 @@ function applyDocumentFixups(document: any): any {
           ...(contract.auth === "operator" ? { configuredOperator: true } : {}),
           ...(contract.auth === "publisher" ? { configuredPublisher: true } : {}),
           ...(contract.auth === "owner" ? { companyOwner: true } : {}) };
+  }
+  for (const contract of v9ApiPaths) {
+    const operation = document.paths[contract.path]?.[contract.method];
+    if (!operation) throw new Error(`Missing V9 API operation: ${contract.path}`);
+    operation.security = contract.auth === "public" ? [] : BOARD_SECURITY;
+    operation["x-paperclip-authorization"] = contract.auth === "public" ? { actor: "public" } : {
+      actor: "board", currentNativeAuthority: true, companyScoped: contract.path.includes("{companyId}"),
+      ...(contract.auth === "operator" ? { configuredOperator: true, noCompanyAdminBypass: true } : {}),
+    };
+    if (contract.auth === "public") {
+      delete operation.responses["401"];
+      delete operation.responses["403"];
+    }
   }
   return document;
 }
@@ -2187,6 +2208,10 @@ function registerV4Operation(method: string, path: string, summary: string, para
   });
 }
 const v4CompanyParams = z.object({ companyId: z.string().uuid() });
+registerV4Operation("post", "/api/companies/{companyId}/workflow-authoring", "Author a workflow draft with the current Native run's typed SDK", v4CompanyParams, {
+  body: workflowAuthoringApiCommandSchema,
+  description: "Use create_workflow, add_trigger, add_step and connect_steps to save an explicit typed draft, then inspect its Original revision. Each mutation requires the exact current draft revision and current workflows:edit authority intersected with the actual responsible user. Requires a running Native Agent JWT and all existing AI authoring feature gates. test_step validates only; prepare_publish returns a Human publication request. This endpoint cannot publish, execute, grant access or replace a whole graph. After saving, return the workflow link for Human review, access, test and publish.",
+});
 const v4ArtifactParams = v4CompanyParams.extend({ artifactId: z.string().uuid() });
 const artifactBase = "/api/companies/{companyId}/automation-artifacts";
 const artifactAccountQuery = z.object({ expectedUserId: z.string().optional() }).strict();
@@ -4011,9 +4036,9 @@ registry.registerPath({
   method: "post",
   path: "/api/agents/{id}/pause",
   tags: ["agents"],
-  summary: "Pause an agent",
-  request: { params: z.object({ id: z.string() }) },
-  responses: { 200: r.ok(), 401: r.unauthorized },
+  summary: "Pause new agent work and explicitly drain or cancel pending work",
+  request: { params: z.object({ id: z.string() }), body: jsonBody(pauseAgentSchema) },
+  responses: { 200: r.ok(), 400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound, 409: r.conflict },
 });
 
 registry.registerPath({
@@ -11826,7 +11851,10 @@ for (const operation of v6ApiPaths) {
       ...(operation.body ? { body: { required: true, content: { "application/json": { schema: operation.body } } } } : {}),
     },
     responses: {
-      [operation.successStatus]: responses.ok(),
+      [operation.successStatus]: {
+        ...responses.ok(operation.result),
+        ...(operation.privateResponse ? { headers: { "Cache-Control": { schema: { type: "string", enum: ["private, no-store"] } } } } : {}),
+      },
       400: responses.badRequest,
       401: { description: "Current authenticated principal or valid machine proof required." },
       403: responses.forbidden,
@@ -12061,6 +12089,9 @@ registerCurrentRoute({method:"get",path:"/api/companies/{companyId}/decision-con
 registerCurrentRoute({method:"get",path:"/api/companies/{companyId}/management-reviews/source-options",tags:["V8"],summary:"Choose bounded currently authorized native review sources with account binding",query:managementSourceOptionsQuerySchema,responses:{200:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,403:r.forbidden,404:r.notFound,409:{description:"Current account or native source changed"}}});
 registerCurrentRoute({method:"get",path:"/api/companies/{companyId}/management-reviews/controls",tags:["V8"],summary:"List independent bounded native review metadata",query:z.object({expectedUserId:z.string().optional(),cursor:z.string().uuid().optional()}).strict(),responses:{200:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Current source, purpose, account or historical packet changed"}}});
 
+registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/experiments/{experimentId}/versions/{versionId}/analysis-summary", tags: ["V8"], summary: "Read current retained analysis without participant, allocation or exposure registers; no experiment execution authority", query: z.object({ expectedUserId: z.string().optional() }).strict(), responses: { 200: { ...r.ok(insightExperimentSummarySchema), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } }, 400: r.badRequest, 401: r.unauthorized, 403: { description: "Current Native source, purpose or principal does not admit this summary" }, 404: r.notFound, 409: { description: "Current account, experiment version or retained evidence changed" } } });
+registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/management-reviews/{reviewId}/summary", tags: ["V8"], summary: "Read a retained historical management summary without source snapshots or operator identity fields; Human agenda is not a decision", query: z.object({ expectedUserId: z.string().optional() }).strict(), responses: { 200: { ...r.ok(insightManagementSummarySchema), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } }, 400: r.badRequest, 401: r.unauthorized, 403: { description: "Current Native source, purpose or principal does not admit this summary" }, 404: r.notFound, 409: { description: "Current account, publication or retained sources changed" } } });
+
 registerCurrentRoute({method:"get",path:"/api/companies/{companyId}/management-reviews/{reviewId}",tags:["V8"],summary:"Inspect an admitted historical cited management packet",query:z.object({expectedUserId:z.string().optional()}).strict(),responses:{200:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Current source, purpose, account or historical packet changed"}}});
 
 registerCurrentRoute({method:"post",path:"/api/companies/{companyId}/management-reviews",tags:["V8"],summary:"Capture a deterministic native management review draft",query:z.object({expectedUserId:z.string().optional()}).strict(),body:managementReviewDefinitionSchema,responses:{201:{...r.ok(),headers:{"Cache-Control":{schema:{type:"string",enum:["no-store"]}}}},400:r.badRequest,401:r.unauthorized,404:r.notFound,409:{description:"Current source, purpose, account or historical packet changed"}}});
@@ -12104,3 +12135,23 @@ registerCurrentRoute({ method: "get", path: "/api/companies/{companyId}/runs/{ru
   responses: { 200: { ...r.ok(z.object({ playbookId: z.string().uuid(), revisionId: z.string().uuid(), markdown: z.string() }).strict()), headers: { "Cache-Control": { schema: { type: "string", enum: ["no-store"] } } } },
     401: r.unauthorized, 403: r.forbidden, 404: r.notFound, 422: { description: "Pinned body exceeds the 32000-byte UTF-8 budget" } },
 });
+
+// V9 follows native owners; blocked capabilities have no invented 2xx result.
+for (const operation of v9ApiPaths) {
+  registerCurrentRoute({
+    method: operation.method, path: operation.path, tags: ["V9"],
+    summary: operation.summary, query: operation.query, body: operation.body, headers: operation.headers, bodyContent: operation.bodyContent,
+    responses: {
+      ...(operation.successStatus ? { [operation.successStatus]: {
+        ...r.ok(operation.result),
+        ...(operation.responseContent ? { content: operation.responseContent } : {}),
+        ...(operation.privateResponse ? { headers: { "Cache-Control": { schema: { type: "string", enum: [operation.cacheControl ?? "private, no-store"] } } } } : {}),
+      } } : {}),
+      400: r.badRequest, 401: r.unauthorized, 403: r.forbidden, 404: r.notFound,
+      409: { description: "Current account, native source, original request or expected version changed" },
+      ...(operation.blocked || operation.unavailable ? { 422: { description: operation.blocked ? "Publication remains unqualified; no production change" : "Current capability, schema or qualification is unavailable" } } : {}),
+      ...(operation.rateLimited ? { 429: { description: "Native submitting-principal feedback budget exceeded" } } : {}),
+      ...(operation.overloaded ? { 503: { description: "Bounded projection admission unavailable; retry after the returned delay" } } : {}),
+    },
+  });
+}

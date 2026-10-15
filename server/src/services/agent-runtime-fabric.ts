@@ -8,6 +8,8 @@ import { and, eq, sql } from "drizzle-orm";
 import { agentIdentities, agents, companies, heartbeatRuns, issues, contextManifestItems, contextManifestMemoryRoots, companySkillTestRuns, companySkillEvalRuns, agentExecutionManifests, agentExecutionManifestItems, agentExecutionAuthorizations, agentExecutionScopeRequests, companySkillUsageEvents, type Db } from "@paperclipai/db";
 import { agentExecutionManifestSchema, createExecutionScopeRequestSchema, v5FeatureEnabled, type AgentExecutionScope } from "@paperclipai/shared";
 import type { z } from "zod";
+import { readAuthoredAgentDefinition } from "./agents/authored-definition.js";
+import { resolveAuthoringProcedures } from "./agents/authoring-procedures.js";
 import { conflict, forbidden, notFound,unprocessable } from "../errors.js";
 import type { AuthorizationActor } from "./authorization.js";
 import { assertV5Authorization, assertV5Enabled, v5HumanActorId } from "./v5-authorization.js";
@@ -38,12 +40,12 @@ export function agentRuntimeFabricService(db: Db) {
     if (!row || row.company.status !== "active" || row.identity.status !== "active" || !["idle", "running", "error"].includes(row.agent.status)) throw forbidden("An active, invokable local presence and logical identity are required");
     return row;
   }
-  async function freshContext(actor: AuthorizationActor, scope: AgentExecutionScope, query: string, runId: string, issueId: string | null) {
+  async function freshContext(actor: AuthorizationActor, scope: AgentExecutionScope, query: string, runId: string, issueId: string | null, taskOnly = false) {
     if (scope.delegatedScopes.length) {
       const packet = await crossCompanyContextService(db).assemble(actor, { executionScope: scope, query, intent: "v5_runtime_execution", maxEstimatedTokens: 8000 });
       return { refs: packet.manifests, markdown: packet.evidence.map((e) => `### ${e.title ?? e.sourceType}\nSource company: ${e.sourceCompanyName} (${e.sourceCompanyId})\nClassification: ${e.shareClassification}; use: ${e.crossCompanyUsePolicy}\n${e.excerpt}\nCitation: ${e.citation.label}`).join("\n\n"), warnings: packet.warnings };
     }
-    const result = await contextEngineService(db).assemble({ companyId: scope.primaryCompanyId, agentId: scope.primaryAgentPresenceId, responsibleUserId: actor.onBehalfOfUserId ?? actor.userId ?? null, enforceResponsibleUserIntersection: true, runId, issueId, query, intent: "v5_runtime_execution", includeFoundation: true, sensitivityCeiling: "internal" });
+    const result = await contextEngineService(db).assemble({ companyId: scope.primaryCompanyId, agentId: scope.primaryAgentPresenceId, responsibleUserId: actor.onBehalfOfUserId ?? actor.userId ?? null, enforceResponsibleUserIntersection: true, runId, issueId, query, intent: "v5_runtime_execution", includeFoundation: !taskOnly, ...(taskOnly ? { sourceScope: "task_only" as const } : {}), sensitivityCeiling: "internal" });
     if (!result.packet.manifest) throw conflict("Runtime context requires persisted provenance");
     return { refs: [{ companyId: scope.primaryCompanyId, contextManifestId: result.packet.manifest.id }], markdown: result.markdown, warnings: [] as string[] };
   }
@@ -128,6 +130,7 @@ export function agentRuntimeFabricService(db: Db) {
       if (!run || run.responsibleUserId !== input.responsibleUserId) throw forbidden("Execution authority does not match the persisted run");
       await currentPayload(actor,input.companyId,input.runId,(stored?.manifest as unknown as Record<string,unknown>|undefined)?.payloadDeleted===true);
       const local = await primary(actor, input.companyId, input.agentId);
+      const authored = await readAuthoredAgentDefinition(db, local.agent);
       let scope: AgentExecutionScope = stored?.manifest.executionScope ?? { primaryCompanyId: input.companyId, primaryAgentPresenceId: input.agentId, delegatedScopes: [] };
       let query = input.query.trim().slice(0, 500) || "Execute the assigned task";
       if (input.scopeRequestId) {
@@ -138,10 +141,20 @@ export function agentRuntimeFabricService(db: Db) {
         scope = request.scope; query = request.query;
       }
       if (scope.delegatedScopes.length && await hasOrchestrationPlan(db, input.companyId, input.issueId)) throw forbidden("Bounded plans require local execution until delegated side-effect and budget receipts are qualified");
+      if (authored && scope.delegatedScopes.length)
+        throw forbidden("This authored version has no delegated execution authority");
       const scoped = scope.delegatedScopes.length ? await crossCompanyContextService(db).resolve(actor, scope) : null;
       const provider = await agentProviderBindingService(db).assertRuntime(input.companyId, input.agentId);
       const providers = [{ companyId: input.companyId, agentId: input.agentId, providerBindingId: provider.provider.id, profileRef: provider.runtime.providerProfileRef, snapshotHash: provider.provider.capabilitySnapshot!.hash, isolationMode: provider.provider.isolationMode as "isolated_per_presence" | "shared_trusted_runtime" }, ...(scoped?.scopes.filter((s) => s.companyId !== input.companyId).map((s) => ({ companyId: s.companyId, agentId: s.presence.id, providerBindingId: s.provider.provider.id, profileRef: s.provider.runtime.providerProfileRef, snapshotHash: s.provider.provider.capabilitySnapshot!.hash, isolationMode: s.provider.provider.isolationMode as "isolated_per_presence" | "shared_trusted_runtime" })) ?? [])];
       const rolePack = v5FeatureEnabled(flags, "role_packs_v5") ? await rolePackService(db).resolve(actor, input.companyId, input.agentId,undefined,"task") : null;
+      if (authored?.procedureSnapshotHash && !input.responsibleUserId)
+        throw forbidden("The identified procedural version requires its accountable execution principal");
+      const procedures = authored?.procedureSnapshotHash ? await resolveAuthoringProcedures(db, {
+        companyId: input.companyId, agentId: input.agentId, responsibleUserId: input.responsibleUserId! }) : null;
+      if (procedures && procedures.hash !== authored!.procedureSnapshotHash)
+        throw conflict("The identified Agent's procedures changed; test and publish a fresh version");
+      if (authored && !procedures && rolePack?.items.some(item => item.type !== "required_policy"))
+        throw conflict("This authored version requires review before using additional Role Pack behavior");
       const [test] = input.issueId ? await db.select().from(companySkillTestRuns).where(and(eq(companySkillTestRuns.companyId, input.companyId), eq(companySkillTestRuns.agentId, input.agentId), eq(companySkillTestRuns.issueId, input.issueId))).limit(1) : [];
       if (test?.deletedAt) throw conflict("This Skill test was deleted");
       if (test?.evaluationContext) {
@@ -152,11 +165,17 @@ export function agentRuntimeFabricService(db: Db) {
       // resolver inputs, so negative controls can observe real non-selection.
       if (test) query = test.inputSnapshot.slice(0, 500);
       if (!v5FeatureEnabled(flags, "skill_resolver_v5") && rolePack?.items.some((item) => item.type === "required_skill")) throw conflict("This Role Pack requires the Skill resolver runtime");
-      const resolvedSkills = !stored && v5FeatureEnabled(flags, "skill_resolver_v5") ? await skillResolverService(db).resolve(actor, input.companyId, query, test?.evaluationContext ? [] : rolePack?.items ?? [], test ? { skillId: test.skillId, versionId: test.skillVersionId } : undefined,"task") : { skills: stored?.manifest.skills ?? [], estimatedTokens: stored?.manifest.inventoryEstimatedTokens ?? 0, warnings: [] };
-      const resolvedPlaybooks = !stored && v5FeatureEnabled(flags, "playbooks_v5") ? await playbookResolverService(db).resolve(actor, input.companyId, query, rolePack?.items ?? [],"task") : { pins: stored?.manifest.playbooks ?? [], warnings: [] as string[] };
+      const resolvedSkills = procedures ? { skills: procedures.skills.map(pin => ({ skillId: pin.skillId, versionId: pin.versionId,
+        key: pin.key, name: pin.name, selection: "required" as const, loadPoint: "always" as const,
+        estimatedDescriptorTokens: Math.ceil(Buffer.byteLength(pin.key + pin.name, "utf8") / 4) })), estimatedTokens: 0, warnings: [] as string[] }
+        : !authored && !stored && v5FeatureEnabled(flags, "skill_resolver_v5") ? await skillResolverService(db).resolve(actor, input.companyId, query, test?.evaluationContext ? [] : rolePack?.items ?? [], test ? { skillId: test.skillId, versionId: test.skillVersionId } : undefined,"task") : { skills: stored?.manifest.skills ?? [], estimatedTokens: stored?.manifest.inventoryEstimatedTokens ?? 0, warnings: [] };
+      const resolvedPlaybooks = procedures ? { pins: procedures.playbooks.map(pin => ({ playbookId: pin.playbookId, revisionId: pin.revisionId, required: true })), warnings: [] as string[] }
+        : !authored && !stored && v5FeatureEnabled(flags, "playbooks_v5") ? await playbookResolverService(db).resolve(actor, input.companyId, query, rolePack?.items ?? [],"task") : { pins: stored?.manifest.playbooks ?? [], warnings: [] as string[] };
       if (!v5FeatureEnabled(flags, "playbooks_v5") && rolePack?.items.some((item) => item.type === "required_playbook")) throw conflict("This Role Pack requires the Playbook runtime");
-      const capabilities = await capabilityResolverService(db).search(actor, input.companyId, "");
-      const context = await freshContext(actor, scope, query, input.runId, input.issueId);
+      if (authored && !procedures && (resolvedSkills.skills.length || resolvedPlaybooks.pins.length))
+        throw conflict("The existing run contains behavior outside this authored version");
+      const capabilities = authored ? [] : await capabilityResolverService(db).search(actor, input.companyId, "");
+      const context = await freshContext(actor, scope, query, input.runId, input.issueId, Boolean(authored));
       if (stored) {
         if (stored.agentId !== input.agentId || stored.agentIdentityId !== local.identity.id || hashContextPolicySnapshot(stored.manifest.providers) !== hashContextPolicySnapshot(providers)) throw conflict("Pinned provider identity/profile changed; start a new execution");
         for (const pin of stored.manifest.skills) await skillResolverService(db).authorizedVersion(actor, input.companyId, pin.skillId, pin.versionId, Boolean(test && pin.skillId === test.skillId && pin.versionId === test.skillVersionId),"task");
@@ -180,9 +199,12 @@ export function agentRuntimeFabricService(db: Db) {
         }
         if (tokens > 2000) throw conflict("Required capabilities exceed the bounded runtime inventory; split this Role Pack");
       }
-      const policyHash = hashContextPolicySnapshot({ scope, policies, providers, capabilities });
-      const manifest = stored?.manifest ?? agentExecutionManifestSchema.parse({ schemaVersion: 5, runId: input.runId, companyId: input.companyId, agentId: input.agentId, agentIdentityId: local.identity.id, homeCompanyId: local.identity.homeCompanyId, responsibleUserId: input.responsibleUserId, executionScope: scope, rolePack: rolePack ? { systemKey: rolePack.systemKey, systemVersion: rolePack.systemVersion, pins: rolePack.pins } : null, contextManifests: context.refs, skills: resolvedSkills.skills, playbooks: resolvedPlaybooks.pins, capabilities, providers, executionPolicy: { deterministicPreference: true, policies, approvalRefs: [], restrictions: ["Every action requires current local authority", "Guest evidence retains source-company classification", "Provider-local tools do not grant platform permissions"], policySnapshotHash: policyHash }, inventoryEstimatedTokens: resolvedSkills.estimatedTokens, warnings: [...resolvedSkills.warnings, ...resolvedPlaybooks.warnings, ...context.warnings].slice(0, 64) });
-      const inventory = ["## Pinned execution inventory", `Run: ${manifest.runId}; company: ${input.companyId}; local presence: ${input.agentId}`, `Policies: ${manifest.executionPolicy.policies.join(", ")}`, ...manifest.executionPolicy.restrictions.map((restriction) => `- ${restriction}`), "Skills (procedures; no permission grants):", ...manifest.skills.map((pin) => `- ${pin.key} (${pin.skillId}@${pin.versionId}); ${pin.selection}; load ${pin.loadPoint}${pin.loadPoint === "on_demand" ? ` via GET /api/companies/${input.companyId}/runs/${input.runId}/skills/${pin.skillId}/body` : ""}`), "Playbook references (canonical organizational procedures):", ...manifest.playbooks.map((pin) => `- ${pin.playbookId}@${pin.revisionId}; ${pin.required ? "required" : "recommended"}; load the exact approved revision via GET /api/companies/${input.companyId}/runs/${input.runId}/playbooks/${pin.playbookId}/body`), `Explicit scoped actions: POST /api/companies/${input.companyId}/runs/${input.runId}/scoped-actions using this primary run authentication. Specify action and companyId. task.read uses taskId; task.forecast uses projectId, taskId and forecast; task.propose_plan uses projectId and proposal; playbook.propose uses playbookId and proposal. tool.list lists authorized local connected tools; tool.invoke uses tool, parameters and an idempotencyKey for mutations. Connection output is confidential and cannot be exported further. Guest mutations require their selected mode and current local authority; commitment review and forecast policy still apply. Never reuse primary-company keys directly against guest-company APIs.`, "Capabilities (current authorization is required at each use; prefer deterministic execution):", ...manifest.capabilities.map((pin) => `- ${pin.type}:${pin.ref}; ${pin.access}; risk ${pin.risk}; version ${pin.versionHash ?? "current"}`)].join("\n");
+      const policyHash = hashContextPolicySnapshot({ scope, policies, providers, capabilities,
+        ...(authored ? { agentDefinitionVersion: { revisionId: authored.revisionId, definitionHash: authored.definitionHash, ...(procedures ? { procedureSnapshotHash: procedures.hash } : {}) } } : {}) });
+      if (authored && stored && stored.manifest.executionPolicy.policySnapshotHash !== policyHash)
+        throw conflict("The identified Agent version changed; start a new execution");
+      const manifest = stored?.manifest ?? agentExecutionManifestSchema.parse({ schemaVersion: 5, runId: input.runId, companyId: input.companyId, agentId: input.agentId, agentIdentityId: local.identity.id, homeCompanyId: local.identity.homeCompanyId, responsibleUserId: input.responsibleUserId, executionScope: scope, ...(authored ? { agentDefinitionVersion: { revisionId: authored.revisionId, definitionHash: authored.definitionHash, ...(authored.procedureSnapshotHash ? { procedureSnapshotHash: authored.procedureSnapshotHash } : {}), ...(authored.version ? { version: authored.version } : {}) } } : {}), rolePack: rolePack ? { systemKey: rolePack.systemKey, systemVersion: rolePack.systemVersion, pins: rolePack.pins } : null, contextManifests: context.refs, skills: resolvedSkills.skills, playbooks: resolvedPlaybooks.pins, capabilities, providers, executionPolicy: { deterministicPreference: true, policies, approvalRefs: [], restrictions: ["Every action requires current local authority", "Guest evidence retains source-company classification", "Provider-local tools do not grant platform permissions"], policySnapshotHash: policyHash }, inventoryEstimatedTokens: resolvedSkills.estimatedTokens, warnings: [...resolvedSkills.warnings, ...resolvedPlaybooks.warnings, ...context.warnings].slice(0, 64) });
+      const inventory = ["## Pinned execution inventory", `Run: ${manifest.runId}; company: ${input.companyId}; local presence: ${input.agentId}`, `Policies: ${manifest.executionPolicy.policies.join(", ")}`, ...manifest.executionPolicy.restrictions.map((restriction) => `- ${restriction}`), "Skills (procedures; no permission grants):", ...manifest.skills.map((pin) => `- ${pin.key} (${pin.skillId}@${pin.versionId}); ${pin.selection}; load ${pin.loadPoint}${pin.loadPoint === "on_demand" ? ` via GET /api/companies/${input.companyId}/runs/${input.runId}/skills/${pin.skillId}/body` : ""}`), "Playbook references (canonical organizational procedures):", ...manifest.playbooks.map((pin) => `- ${pin.playbookId}@${pin.revisionId}; ${pin.required ? "required" : "recommended"}; load the exact approved revision via GET /api/companies/${input.companyId}/runs/${input.runId}/playbooks/${pin.playbookId}/body`), ...(authored ? ["This identified version may only draft from the current Task. No executable tools, connected sources, persistent memory or delegation are mapped."] : [`Explicit scoped actions: POST /api/companies/${input.companyId}/runs/${input.runId}/scoped-actions using this primary run authentication. Specify action and companyId. task.read uses taskId; task.forecast uses projectId, taskId and forecast; task.propose_plan uses projectId and proposal; playbook.propose uses playbookId and proposal. tool.list lists authorized local connected tools; tool.invoke uses tool, parameters and an idempotencyKey for mutations. Connection output is confidential and cannot be exported further. Guest mutations require their selected mode and current local authority; commitment review and forecast policy still apply. Never reuse primary-company keys directly against guest-company APIs.`]), "Capabilities (current authorization is required at each use; prefer deterministic execution):", ...manifest.capabilities.map((pin) => `- ${pin.type}:${pin.ref}; ${pin.access}; risk ${pin.risk}; version ${pin.versionHash ?? "current"}`)].join("\n");
       const inventoryTokens = Math.ceil(Buffer.byteLength(inventory, "utf8") / 4);
       if (inventoryTokens > 4000) throw conflict("Pinned execution inventory exceeds 4000 estimated tokens; split the task requirements");
       if (!stored) manifest.inventoryEstimatedTokens = inventoryTokens;

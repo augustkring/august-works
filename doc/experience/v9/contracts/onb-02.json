@@ -1,0 +1,139 @@
+{
+  "screenId": "ONB-02",
+  "journeyId": "onb",
+  "routeOrSurface": "/saas/activation/2",
+  "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
+  "customerOutcome": "Create one canonical company using verified identity and a durable request key.",
+  "entryConditions": [
+    "Current authenticated principal and company selection; no retained foreign-principal payload",
+    "Effective feature admission is required for new work; native membership and resource authority remain necessary"
+  ],
+  "exitConditions": [
+    "Only a canonical server-confirmed result permits a success claim",
+    "Pending, stale, unavailable or unqualified work never becomes successful or activated"
+  ],
+  "content": {
+    "h1": "Tell us about your company",
+    "supportingCopy": "Create one canonical company using verified identity and a durable request key.",
+    "customerTerms": ["Company", "Work", "Needs You", "Agent", "Feedback"],
+    "displayedState": [
+      "Current canonical state/version",
+      "Missing permission or qualification is explicit; no invented progress or outcomes"
+    ]
+  },
+  "inputs": [
+    {
+      "id": "companyName",
+      "label": "Company name",
+      "dataType": "Text",
+      "required": true,
+      "default": "Empty",
+      "help": "No unrelated company questionnaire.",
+      "validation": "Trimmed 1–120 characters",
+      "autofillOrPrefill": "Native organization autocomplete"
+    },
+    {
+      "id": "website",
+      "label": "Website/domain (optional)",
+      "dataType": "Domain",
+      "required": false,
+      "default": "Empty",
+      "help": "A domain does not grant fetch permission.",
+      "validation": "At most 253 characters; no path, credentials or query",
+      "autofillOrPrefill": "No automatic content collection"
+    }
+  ],
+  "actions": {
+    "primary": {
+      "label": "Continue",
+      "operation": "Advance only through the typed native activation command permitted by the current state"
+    },
+    "secondary": [
+      "Back preserves current valid inputs",
+      "Save & exit after a durable organization exists",
+      "Retry only the same safe request; refresh current state after a version conflict"
+    ],
+    "destructiveOrIrreversible": []
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Existing company_onboarding_runs.activation_state and version",
+      "Current verified creator membership",
+      "Native Foundation and published package qualification"
+    ],
+    "canonicalWriteOperation": "Existing SaaS company/onboarding creation; native billing account and owner/grants are created atomically; activation starts at intent.",
+    "authorityEffect": "Presentation and drafts cannot grant permissions. Material effects always require current native permissions, approvals and version preconditions.",
+    "asyncWork": "Native reads/mutations only; projection work uses bounded admission and a 1500 ms total deadline. Unknown mutation outcomes retain the original request key for reconciliation.",
+    "receipt": "Use the canonical current resource ID/version or immutable accepted feedback receipt; never infer success from a toast or attempted request."
+  },
+  "states": {
+    "loading": "Announce loading only while the current identity/company request is pending.",
+    "empty": "Explain an actual empty authorized result. Missing dependencies or qualified capabilities are separate unavailable states.",
+    "partial": "Retain trustworthy available results and name unavailable dependencies or sources.",
+    "stale": "Remove executable actions and refresh canonical state; preserved input is not evidence of current authority.",
+    "validation_error": "Preserve other entered values, identify the field problem and associate it programmatically with the control.",
+    "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
+    "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
+    "recovering": "Re-resolve canonical state/version and the original request identity before permitting another effect.",
+    "success": "Announce only the server-confirmed canonical result. First value additionally requires independently verified native artifact/run binding."
+  },
+  "navigation": {
+    "back": "Browser and product Back preserve session form state without recreating organizations, agents or runs.",
+    "cancelOrSaveExit": "No input is written to browser persistent storage; committed activation drafts remain in the native onboarding owner.",
+    "deepLink": "/saas/activation/2",
+    "resume": "Refresh current native state and resume the first incomplete material step; stale steps cannot override it."
+  },
+  "accessibility": {
+    "initialFocus": "Main heading or the dialog category control; keyboard focus is visible and unobscured.",
+    "focusAfterError": "Error summary or first invalid control, with a programmatically associated explanation.",
+    "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
+    "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
+    "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
+    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
+    "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
+    "reducedMotion": "No essential animated transition or moving progress indicator.",
+    "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
+  },
+  "responsive": {
+    "wide": "Readable constrained content width with natural wrapping.",
+    "narrow": "Reflow cards and form actions without concealing utilities or consequences.",
+    "mobile": "Touch targets remain reachable; dialogs scroll within the viewport and do not obscure focus."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Only current principal/company-authorized customer data",
+      "Feedback original text and visible messages only in private customer history"
+    ],
+    "dataCollected": [
+      "Only explicit fields and the published safe-context allowlist"
+    ],
+    "sensitiveFields": [
+      "Raw intent, company facts, feedback and results remain customer data"
+    ],
+    "loggingConstraints": "Exclude customer prose, prompts, result bodies, attachments and raw errors from generic analytics/activity details; native domain audit is purpose-separated."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "Raw intent",
+      "Company facts",
+      "Feedback body/goal",
+      "Documents/prompts/results",
+      "Credentials/raw URLs/query strings/DOM/screenshots"
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Verify canonical state, version conflicts, safe replay, unavailable states and principal/company switching on the exact artifact."
+    ],
+    "accessibility": [
+      "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
+    ],
+    "securityPrivacy": [
+      "Verify current membership/resource revocation, tenant isolation, untrusted content and separate private feedback identity purpose."
+    ],
+    "usability": [
+      "Use representative exploratory and pre-registered confirmatory journey evidence with explicit PASS/FAIL/INCONCLUSIVE; source checks are insufficient."
+    ]
+  }
+}

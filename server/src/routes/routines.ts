@@ -24,8 +24,9 @@ export function routineRoutes(
   options: { pluginWorkerManager?: PluginWorkerManager } = {},
 ) {
   const router = Router();
-  const svc = routineService(db, {
+  const scopedSvc = (req: Request) => routineService(db, {
     pluginWorkerManager: options.pluginWorkerManager,
+    sourceActor: req.actor,
   });
   const documentAnnotationsSvc = documentAnnotationService(db);
   const access = accessService(db);
@@ -50,7 +51,7 @@ export function routineRoutes(
   }
 
   async function remapRoutineDescriptionAnnotations(req: Request, routineId: string) {
-    const doc = await svc.getDescriptionDocument(routineId);
+    const doc = await scopedSvc(req).getDescriptionDocument(routineId);
     if (!doc) return;
     const remapped = await documentAnnotationsSvc.remapOpenThreadsForRoutineDocument({
       routineId,
@@ -123,7 +124,7 @@ export function routineRoutes(
   }
 
   async function assertCanManageExistingRoutine(req: Request, routineId: string) {
-    const routine = await svc.get(routineId);
+    const routine = await scopedSvc(req).get(routineId);
     if (!routine || !hasCompanyAccess(req, routine.companyId)) return null;
     assertCompanyAccess(req, routine.companyId);
     if (req.actor.type === "board") return routine;
@@ -167,7 +168,7 @@ export function routineRoutes(
     const companyId = req.params.companyId as string;
     assertCompanyAccess(req, companyId);
     const projectId = typeof req.query.projectId === "string" ? req.query.projectId : undefined;
-    const result = await svc.list(companyId, { projectId });
+    const result = await scopedSvc(req).list(companyId, { projectId });
     res.json(result);
   });
 
@@ -178,7 +179,7 @@ export function routineRoutes(
       assigneeAgentId: req.body.assigneeAgentId,
       executionTarget: req.body.executionTarget,
     });
-    const created = await svc.create(companyId, req.body, {
+    const created = await scopedSvc(req).create(companyId, req.body, {
       agentId: req.actor.type === "agent" ? req.actor.agentId : null,
       userId: req.actor.type === "board" ? req.actor.userId ?? "board" : null,
       runId: req.actor.runId ?? null,
@@ -217,7 +218,7 @@ export function routineRoutes(
   });
 
   router.get("/routines/:id", async (req, res) => {
-    const detail = await getAccessibleResource(req, res, svc.getDetail(req.params.id as string), "Routine not found");
+    const detail = await getAccessibleResource(req, res, scopedSvc(req).getDetail(req.params.id as string), "Routine not found");
     if (!detail) return;
     res.json(detail);
   });
@@ -228,7 +229,7 @@ export function routineRoutes(
       res.status(404).json({ error: "Routine not found" });
       return;
     }
-    const revisions = await svc.listRevisions(routine.id);
+    const revisions = await scopedSvc(req).listRevisions(routine.id);
     res.json(revisions);
   });
 
@@ -423,7 +424,7 @@ export function routineRoutes(
         throw forbidden("Agents can only assign routines to themselves");
       }
     }
-    const updated = await svc.update(routine.id, req.body, {
+    const updated = await scopedSvc(req).update(routine.id, req.body, {
       agentId: req.actor.type === "agent" ? req.actor.agentId : null,
       userId: req.actor.type === "board" ? req.actor.userId ?? "board" : null,
       runId: req.actor.runId ?? null,
@@ -468,7 +469,7 @@ export function routineRoutes(
       return;
     }
     await assertBoardCanAssignTasks(req, routine.companyId);
-    const result = await svc.restoreRevision(routine.id, req.params.revisionId as string, {
+    const result = await scopedSvc(req).restoreRevision(routine.id, req.params.revisionId as string, {
       agentId: req.actor.type === "agent" ? req.actor.agentId : null,
       userId: req.actor.type === "board" ? req.actor.userId ?? "board" : null,
       runId: req.actor.runId ?? null,
@@ -497,10 +498,10 @@ export function routineRoutes(
   });
 
   router.get("/routines/:id/runs", async (req, res) => {
-    const routine = await getAccessibleResource(req, res, svc.get(req.params.id as string), "Routine not found");
+    const routine = await getAccessibleResource(req, res, scopedSvc(req).get(req.params.id as string), "Routine not found");
     if (!routine) return;
     const limit = Number(req.query.limit ?? 50);
-    const result = await svc.listRuns(routine.id, Number.isFinite(limit) ? limit : 50);
+    const result = await scopedSvc(req).listRuns(routine.id, Number.isFinite(limit) ? limit : 50);
     res.json(result);
   });
 
@@ -511,7 +512,7 @@ export function routineRoutes(
       return;
     }
     await assertBoardCanAssignTasks(req, routine.companyId);
-    const created = await svc.createTrigger(routine.id, req.body, {
+    const created = await scopedSvc(req).createTrigger(routine.id, req.body, {
       agentId: req.actor.type === "agent" ? req.actor.agentId : null,
       userId: req.actor.type === "board" ? req.actor.userId ?? "board" : null,
       runId: req.actor.runId ?? null,
@@ -541,7 +542,7 @@ export function routineRoutes(
   });
 
   router.patch("/routine-triggers/:id", validate(updateRoutineTriggerSchema), async (req, res) => {
-    const trigger = await svc.getTrigger(req.params.id as string);
+    const trigger = await scopedSvc(req).getTrigger(req.params.id as string);
     if (!trigger) {
       res.status(404).json({ error: "Routine trigger not found" });
       return;
@@ -552,7 +553,7 @@ export function routineRoutes(
       return;
     }
     await assertBoardCanAssignTasks(req, routine.companyId);
-    const updated = await svc.updateTrigger(trigger.id, req.body, {
+    const updated = await scopedSvc(req).updateTrigger(trigger.id, req.body, {
       agentId: req.actor.type === "agent" ? req.actor.agentId : null,
       userId: req.actor.type === "board" ? req.actor.userId ?? "board" : null,
       runId: req.actor.runId ?? null,
@@ -584,7 +585,7 @@ export function routineRoutes(
   });
 
   router.delete("/routine-triggers/:id", async (req, res) => {
-    const trigger = await svc.getTrigger(req.params.id as string);
+    const trigger = await scopedSvc(req).getTrigger(req.params.id as string);
     if (!trigger) {
       res.status(404).json({ error: "Routine trigger not found" });
       return;
@@ -594,7 +595,7 @@ export function routineRoutes(
       res.status(404).json({ error: "Routine trigger not found" });
       return;
     }
-    const deleted = await svc.deleteTrigger(trigger.id, {
+    const deleted = await scopedSvc(req).deleteTrigger(trigger.id, {
       agentId: req.actor.type === "agent" ? req.actor.agentId : null,
       userId: req.actor.type === "board" ? req.actor.userId ?? "board" : null,
       runId: req.actor.runId ?? null,
@@ -629,7 +630,7 @@ export function routineRoutes(
     "/routine-triggers/:id/rotate-secret",
     validate(rotateRoutineTriggerSecretSchema),
     async (req, res) => {
-      const trigger = await svc.getTrigger(req.params.id as string);
+      const trigger = await scopedSvc(req).getTrigger(req.params.id as string);
       if (!trigger) {
         res.status(404).json({ error: "Routine trigger not found" });
         return;
@@ -639,7 +640,7 @@ export function routineRoutes(
         res.status(404).json({ error: "Routine trigger not found" });
         return;
       }
-      const rotated = await svc.rotateTriggerSecret(trigger.id, {
+      const rotated = await scopedSvc(req).rotateTriggerSecret(trigger.id, {
         agentId: req.actor.type === "agent" ? req.actor.agentId : null,
         userId: req.actor.type === "board" ? req.actor.userId ?? "board" : null,
         runId: req.actor.runId ?? null,
@@ -676,7 +677,7 @@ export function routineRoutes(
       return;
     }
     await assertBoardCanAssignTasks(req, routine.companyId);
-    const run = await svc.runRoutine(routine.id, req.body, {
+    const run = await scopedSvc(req).runRoutine(routine.id, req.body, {
       agentId: req.actor.type === "agent" ? req.actor.agentId : null,
       userId: req.actor.type === "board" ? req.actor.userId ?? null : null,
     });
@@ -703,7 +704,7 @@ export function routineRoutes(
     if (!req.body || typeof req.body !== "object" || Array.isArray(req.body)) {
       throw badRequest("Webhook payload must be a JSON object");
     }
-    const result = await svc.firePublicTrigger(req.params.publicId as string, {
+    const result = await routineService(db, { pluginWorkerManager: options.pluginWorkerManager }).firePublicTrigger(req.params.publicId as string, {
       authorizationHeader: req.header("authorization"),
       signatureHeader: req.header("x-paperclip-signature"),
       hubSignatureHeader: req.header("x-hub-signature-256"),

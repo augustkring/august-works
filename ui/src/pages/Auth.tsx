@@ -1,4 +1,6 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
+import { useTranslation } from "@/i18n";
+import { ExperienceLanguageSelect } from "../components/ExperienceLanguageSelect";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { useNavigate, useSearchParams } from "@/lib/router";
 import { authApi } from "../api/auth";
@@ -15,6 +17,7 @@ import { Link } from "@/lib/router";
 type AuthMode = "sign_in" | "sign_up";
 
 export function AuthPage() {
+  const { t } = useTranslation("experience");
   const saas = useSaasCapabilities();
   const [verificationSent, setVerificationSent] = useState(false);
   const queryClient = useQueryClient();
@@ -26,6 +29,8 @@ export function AuthPage() {
   const [password, setPassword] = useState("");
   const [error, setError] = useState<string | null>(null);
   const errorId = "auth-error";
+  const errorSummary = useRef<HTMLParagraphElement>(null);
+  useEffect(() => { if (error) errorSummary.current?.focus(); }, [error]);
 
   const nextPath = useMemo(
     () => {
@@ -46,7 +51,7 @@ export function AuthPage() {
     }
   }, [session, navigate, nextPath]);
 
-  const ssoMutation = useMutation({mutationFn:()=>authApi.signInSso(email,nextPath,searchParams.get("ssoProvider")??undefined),onSuccess:(url)=>window.location.assign(url),onError:(failure)=>setError(failure instanceof Error ? failure.message : "Company sign-in failed")});
+  const ssoMutation = useMutation({mutationFn:()=>authApi.signInSso(email,nextPath,searchParams.get("ssoProvider")??undefined),onSuccess:(url)=>window.location.assign(url),onError:()=>setError("authFlow.companyFailed")});
   const mutation = useMutation({
     mutationFn: async () => {
       if (mode === "sign_in") {
@@ -72,7 +77,9 @@ export function AuthPage() {
       navigate(nextPath, { replace: true });
     },
     onError: (err) => {
-      setError(err instanceof Error ? err.message : "Authentication failed");
+      const code = err && typeof err === "object" && "code" in err ? err.code : null;
+      setError(code === "INVALID_EMAIL_OR_PASSWORD" || (err instanceof Error && err.message === "Invalid email or password")
+        ? "authFlow.credentialsInvalid" : "authFlow.failed");
     },
   });
 
@@ -90,27 +97,28 @@ export function AuthPage() {
   }
 
   return (
-    <div className="fixed inset-0 flex bg-background">
-      <div className="absolute top-4 right-4 z-10">
+    <main className="fixed inset-0 flex bg-background">
+      <div className="absolute top-4 right-4 z-10 flex flex-wrap items-center justify-end gap-3">
+        {saas.data && <ExperienceLanguageSelect />}
         <ThemeToggle />
       </div>
       {/* Left half — form */}
       <div className="w-full md:w-1/2 flex flex-col overflow-y-auto">
         <div className="w-full max-w-md mx-auto my-auto px-8 py-12">
           <div className="mb-8">
-            <PaperclipLockup className="h-5 w-auto" />
+            {saas.data ? <p className="text-xl font-semibold">August Works</p> : <PaperclipLockup className="h-5 w-auto" />}
           </div>
 
           <h1 className="text-xl font-semibold">
-            {mode === "sign_in" ? (saas.data ? "Sign in to August Works" : "Sign in to Paperclip") : (saas.data ? "Create your August Works account" : "Create your Paperclip account")}
+            {mode === "sign_in" ? (saas.data ? t("authFlow.signInTitle") : t("authFlow.legacySignInTitle")) : (saas.data ? t("authFlow.createTitle") : t("authFlow.legacyCreateTitle"))}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
             {mode === "sign_in"
-              ? "Use your email and password to access this instance."
-              : saas.data?.emailVerification ? "Verify your email to start setting up your organization." : "Create an account for this instance. Email confirmation is not required in v1."}
+              ? t("authFlow.signInHelp")
+              : saas.data?.emailVerification ? t("authFlow.verifyHelp") : t("authFlow.legacyCreateHelp")}
           </p>
-          {verificationSent && <p role="status" className="saas-muted">Check your email for a verification link, then sign in to continue.</p>}
-          {searchParams.get("accountDeletion") === "requested" && <p role="status" className="saas-muted">Your account deletion was requested and access has been revoked. Personal credential cleanup may still be in progress.</p>}
+          {verificationSent && <p role="status" className="saas-muted">{t("authFlow.verificationSent")}</p>}
+          {searchParams.get("accountDeletion") === "requested" && <p role="status" className="saas-muted">{t("authFlow.deletionRequested")}</p>}
 
           <form
             className="mt-6 space-y-4"
@@ -120,7 +128,8 @@ export function AuthPage() {
               event.preventDefault();
               if (mutation.isPending) return;
               if (!canSubmit) {
-                setError("Please fill in all required fields.");
+                setError(mode === "sign_up" && name.trim() && email.trim() && password.trim()
+                  ? "authFlow.passwordTooShort" : "authFlow.requiredFields");
                 return;
               }
               mutation.mutate();
@@ -128,7 +137,7 @@ export function AuthPage() {
           >
             {mode === "sign_up" && (
               <div>
-                <label htmlFor="name" className="text-xs text-muted-foreground mb-1 block">Name</label>
+                <label htmlFor="name" className="text-xs text-muted-foreground mb-1 block">{t("authFlow.name")}</label>
                 <input
                   id="name"
                   name="name"
@@ -145,7 +154,7 @@ export function AuthPage() {
               </div>
             )}
             <div>
-              <label htmlFor="email" className="text-xs text-muted-foreground mb-1 block">Email</label>
+              <label htmlFor="email" className="text-xs text-muted-foreground mb-1 block">{t("authFlow.email")}</label>
               <input
                 id="email"
                 name="email"
@@ -162,7 +171,7 @@ export function AuthPage() {
               />
             </div>
             <div>
-              <label htmlFor="password" className="text-xs text-muted-foreground mb-1 block">Password</label>
+              <label htmlFor="password" className="text-xs text-muted-foreground mb-1 block">{t("authFlow.password")}</label>
               <input
                 id="password"
                 name="password"
@@ -171,15 +180,17 @@ export function AuthPage() {
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 autoComplete={mode === "sign_in" ? "current-password" : "new-password"}
+                minLength={mode === "sign_up" ? (saas.data ? 12 : 8) : undefined}
                 required
                 aria-required="true"
                 aria-invalid={error ? true : undefined}
                 aria-describedby={error ? errorId : undefined}
               />
             </div>
+            {mode === "sign_up" && <p className="text-sm text-muted-foreground">{t("authFlow.passwordMinimum", { count: saas.data ? 12 : 8 })}</p>}
             {error && (
-              <p id={errorId} role="alert" className="text-xs text-destructive">
-                {error}
+              <p ref={errorSummary} tabIndex={-1} id={errorId} role="alert" className="text-xs text-destructive">
+                {t(error, { count: saas.data ? 12 : 8 })}
               </p>
             )}
             <Button
@@ -189,16 +200,16 @@ export function AuthPage() {
               className={`w-full ${!canSubmit && !mutation.isPending ? "opacity-50" : ""}`}
             >
               {mutation.isPending
-                ? "Working…"
+                ? t("authFlow.working")
                 : mode === "sign_in"
-                  ? "Sign In"
-                  : "Create Account"}
+                  ? t("authFlow.signIn")
+                  : saas.data ? t("authFlow.continue") : t("authFlow.createLegacy")}
             </Button>
           </form>
-          {mode === "sign_in" && saas.data?.enterpriseSso ? <Button className="w-full mt-3" variant="outline" disabled={!email.trim() || ssoMutation.isPending || mutation.isPending} onClick={() => ssoMutation.mutate()}>Sign in with company SSO</Button> : null}
+          {mode === "sign_in" && saas.data?.enterpriseSso ? <Button className="w-full mt-3" variant="outline" disabled={!email.trim() || ssoMutation.isPending || mutation.isPending} onClick={() => ssoMutation.mutate()}>{t("authFlow.companySso")}</Button> : null}
 
           {(!saas.data || saas.data.signup || mode === "sign_up") && <div className="mt-5 text-sm text-muted-foreground">
-            {mode === "sign_in" ? "Need an account?" : "Already have an account?"}{" "}
+            {mode === "sign_in" ? t("authFlow.needAccount") : t("authFlow.alreadyAccount")}{" "}
             <button
               type="button"
               className="font-medium text-foreground underline underline-offset-2"
@@ -207,10 +218,10 @@ export function AuthPage() {
                 setMode(mode === "sign_in" ? "sign_up" : "sign_in");
               }}
             >
-              {mode === "sign_in" ? "Create one" : "Sign in"}
+              {mode === "sign_in" ? t("authFlow.createOne") : t("authFlow.signInLink")}
             </button>
           </div>}
-          {saas.data && <p className="saas-muted"><Link className="saas-link" to="/saas/reset-password">Forgot password?</Link></p>}
+          {saas.data && <p className="saas-muted"><Link className="saas-link" to="/saas/reset-password">{t("authFlow.forgotPassword")}</Link></p>}
         </div>
       </div>
 
@@ -218,6 +229,6 @@ export function AuthPage() {
       <div className="hidden md:block w-1/2 overflow-hidden">
         <AsciiArtAnimation />
       </div>
-    </div>
+    </main>
   );
 }

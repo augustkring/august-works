@@ -1,3 +1,4 @@
+import { experienceTaskReceiptSchema, v9FeatureEnabled } from "@paperclipai/shared";
 import { queuedInteractionId, readQueuedInteractionResponse, hasQueuedInteractionResponse } from "../services/queued-interaction-response.js";
 import {assertAnalyticalContextPayloadAccess} from "../services/analytical-context-authority.js";
 import { deliverConversationComments, isConversation } from "../services/agent-conversations.js";
@@ -3223,10 +3224,13 @@ function issueListClientIdentity(req: Request) {
 function safeRefererPath(req: Request): string | null {
   const referer = req.header("referer");
   if (!referer) return null;
+  const privateEditorPath = (pathname: string) => /(?:^|\/)workflows\/[^/]+\/draft(?:\/|$)/i.test(pathname)
+    ? /\/draft\/steps(?:\/|$)/i.test(pathname) ? "/:company/workflows/:workflowId/draft/steps/:nodeId" : "/:company/workflows/:workflowId/draft" : pathname;
   try {
-    return new URL(referer).pathname;
+    return privateEditorPath(new URL(referer).pathname);
   } catch {
-    return referer.split("?")[0]?.slice(0, 160) ?? null;
+    const pathname = referer.split("?")[0];
+    return pathname ? privateEditorPath(pathname).slice(0, 160) : null;
   }
 }
 
@@ -8861,6 +8865,31 @@ export function issueRoutes(
     );
 
     res.json(response);
+  });
+
+  router.get("/companies/:companyId/issues/create-receipts/:idempotencyKey", async (req, res) => {
+    res.set("Cache-Control", "no-store");
+    const companyId = req.params.companyId as string;
+    assertCompanyAccess(req, companyId);
+    if (!v9FeatureEnabled(await instanceSettings.getExperimental(), "ambient_commands_v9"))
+      throw notFound("Task receipt is not available");
+    if (req.actor.type !== "board") throw forbidden("Board authentication required");
+    const parsed = z.uuid().safeParse(req.params.idempotencyKey);
+    if (!parsed.success) throw notFound("Task receipt is not available");
+    const issueId = await svc.getCreateIdempotencyIssueId(companyId, parsed.data);
+    if (!issueId) throw notFound("Task receipt is not available");
+    // Use the original issue read path: key possession grants no access.
+    const issue = await getAccessibleResource(req, res, getIssueById(req, issueId), "Task receipt is not available");
+    if (!issue) return;
+    if (issue.companyId !== companyId) throw notFound("Task receipt is not available");
+    // This locator belongs to the original board creation, not any task that the
+    // viewer can otherwise read in Work. Key possession cannot retarget an actor.
+    const receiptActor = getActorInfo(req);
+    if (receiptActor.actorType !== "user" || issue.createdByUserId !== receiptActor.actorId || issue.createdByAgentId !== null)
+      throw notFound("Task receipt is not available");
+    if (!(await assertIssueReadAllowed(req, res, issue))) return;
+    res.set("Cache-Control", "no-store");
+    res.json(experienceTaskReceiptSchema.parse(issue));
   });
 
   router.get("/issues/:id", async (req, res) => {

@@ -1,309 +1,226 @@
+import { Fragment } from "react";
+import { NotificationChannelSettings } from "../components/NotificationChannelSettings";
 import { useCompany } from "@/context/CompanyContext";
 import { useState, useRef, useEffect } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
-import { saasApi, saasAuthAction } from "@/api/saas";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
+import { saasApi } from "@/api/saas";
 import { Button } from "@/components/ui/button";
-import { Link, useSearchParams } from "@/lib/router";
+import { Link } from "@/lib/router";
 import { useSaasCapabilities } from "@/hooks/useSaasCapabilities";
-import { useAccountIdentity } from "@/api/companies-query";
+import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
+import { useV9AccountScope } from "../hooks/useV9AccountScope";
+import { queryKeys } from "../lib/queryKeys";
+import { ApiError } from "../api/client";
+import { useTranslation } from "react-i18next";
+import type { SaasNotificationPreference } from "@paperclipai/shared";
+import { readPendingAccountDeletion, retainPendingAccountDeletion, clearPendingAccountDeletion } from "../lib/pending-account-deletion";
+import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
+import { NotificationPolicySettings } from "../components/NotificationPolicySettings";
 
 export function SaasAccountPage() {
-  const capabilities = useSaasCapabilities();
-  const identity = useAccountIdentity();
+  const { t } = useTranslation("experience");
+  const identity = useV9CurrentAccount();
+  const client = useQueryClient();
   const { selectedCompanyId } = useCompany();
-  const scope = identity.userId + ":" + selectedCompanyId;
-  const currentScope = useRef(scope);
-  currentScope.current = scope;
-  const preferences = useQuery({
-    queryKey: ["saas-notification-preferences", identity.userId],
-    queryFn: () => saasApi.notificationPreferences(identity.userId!),
-    enabled: Boolean(identity.userId && capabilities.data?.notifications),
-  });
+  if (!identity.userId || identity.localImplicit)
+    return <section className="saas-page" aria-labelledby="account-security-title"><h1 id="account-security-title" className="saas-title">{t("account.heading")}</h1>
+      <p role={identity.failed ? "alert" : "status"}>{t(identity.failed ? "account.checkFailed" : identity.settled ? "account.signInRequired" : "account.checking")}</p>
+      {identity.failed && <Button variant="outline" className="min-h-11" onClick={() => { void client.refetchQueries({ queryKey: queryKeys.auth.session, exact: true }); }}>{t("account.retry")}</Button>}
+      {identity.settled && <Link className="saas-link" to="/auth">{t("account.signIn")}</Link>}
+    </section>;
+  // A company change changes only the audit context for preferences. Account
+  // deletion and its original request key remain bound to this personal account.
+  return <AccountSecurityScope key={identity.userId} principal={identity.userId} companyId={selectedCompanyId} />;
+}
+
+function AccountSecurityScope({ principal, companyId }: { principal: string; companyId: string | null }) {
+  const { t, i18n } = useTranslation("experience"), scope = useV9AccountScope(principal);
+  const capabilities = useSaasCapabilities(), client = useQueryClient();
+  const interruptionPolicy = useV9FeatureEnabled("notification_policy_v9");
+  const company = useRef(companyId); company.current = companyId;
+  const heading = useRef<HTMLHeadingElement>(null);
+  useEffect(() => {
+    if (!scope.ready) return;
+    const active = document.activeElement, section = heading.current?.closest("section");
+    // A current-source acknowledgement may arrive after the form is visible.
+    // Preserve an interaction already started in this account's controls.
+    if (active instanceof HTMLElement && section?.contains(active) &&
+      active.matches("input, select, textarea, button, a[href]")) return;
+    heading.current?.focus();
+  }, [scope.ready, scope.epoch]);
+  const preferenceKey = ["saas-notification-preferences", principal, scope.epoch] as const;
+  const preferences = useQuery({ queryKey: preferenceKey,
+    queryFn: ({ signal }) => scope.read(() => saasApi.notificationPreferences(principal, signal), "notifications"),
+    enabled: scope.ready && capabilities.data?.notifications === true, staleTime: 0, gcTime: 0, retry: false });
+  const receipts = useQuery({ queryKey: ["saas-deletion-receipts", principal, scope.epoch],
+    queryFn: ({ signal }) => scope.read(() => saasApi.deletionReceipts(principal, signal), "deletion"),
+    enabled: scope.ready && capabilities.data?.deletion === true, staleTime: 0, gcTime: 0, retry: false, refetchInterval: 30000 });
+  const sessions = useQuery({ queryKey: ["saas-account-sessions", principal, scope.epoch],
+    queryFn: ({ signal }) => scope.read(() => saasApi.sessions(principal, signal)),
+    enabled: scope.ready, staleTime: 0, gcTime: 0, retry: false });
+  const preferencesCurrent = () => {
+    const state = client.getQueryState(preferenceKey);
+    return scope.canUse("notifications") && state?.status === "success" && state.fetchStatus === "idle" && !state.isInvalidated;
+  };
   const preference = useMutation({
-    mutationFn: (input: {
-      category: "security" | "billing" | "runtime" | "approval" | "work_update";
-      emailEnabled: boolean;
-    }) =>
-      saasApi.updateNotificationPreference(
-        selectedCompanyId!,
-        identity.userId!,
-        input,
-      ),
-    onSuccess: () => currentScope.current === scope && preferences.refetch(),
-  });
-  const receipts = useQuery({
-    queryKey: ["saas-deletion-receipts", identity.userId],
-    queryFn: () => saasApi.deletionReceipts(identity.userId!),
-    enabled: Boolean(identity.userId && capabilities.data?.deletion),
-    refetchInterval: 30000,
-  });
-  const sessions = useQuery({
-    queryKey: ["saas-account-sessions", identity.userId],
-    queryFn: () => saasApi.sessions(identity.userId!),
-    enabled: Boolean(identity.userId && capabilities.data),
+    mutationFn: async (input: { category: SaasNotificationPreference["category"]; emailEnabled: boolean }) => {
+      if (!preferencesCurrent() || !companyId || company.current !== companyId)
+        throw new Error("Current preference access is unresolved");
+      const epoch = scope.epoch;
+      await saasApi.updateNotificationPreference(companyId, principal, input);
+      return { epoch, companyId };
+    }, retry: false,
+    onSuccess: (result) => {
+      if (scope.isCurrent(result.epoch, "notifications") && company.current === result.companyId) void preferences.refetch();
+    },
   });
   const revoke = useMutation({
-    mutationFn: (id: string) => saasApi.revokeSession(id, identity.userId!),
-    onSuccess: () => currentScope.current === scope && sessions.refetch(),
+    mutationFn: async (id: string) => {
+      if (!scope.canUse() || !sessions.isSuccess || sessions.isFetching ||
+        !sessions.data.some(session => session.id === id)) throw new Error("Current sessions must finish loading");
+      const state = client.getQueryState(["saas-account-sessions", principal, scope.epoch]);
+      if (state?.fetchStatus !== "idle" || state.isInvalidated) throw new Error("Current sessions are unresolved");
+      const epoch = scope.epoch;
+      await saasApi.revokeSession(id, principal);
+      return { epoch };
+    }, retry: false,
+    onSuccess: (result) => { if (scope.isCurrent(result.epoch)) void sessions.refetch(); },
   });
   const [deleteConfirmation, setDeleteConfirmation] = useState("");
   const [deletePassword, setDeletePassword] = useState("");
   const [exportAcknowledged, setExportAcknowledged] = useState(false);
-  const deleteKey = useRef(crypto.randomUUID());
+  const [deletionUnconfirmed, setDeletionUnconfirmed] = useState(false);
+  const [initialRecovery] = useState(() => {
+    try {
+      const key = readPendingAccountDeletion(principal);
+      return { key: key ?? crypto.randomUUID(), pending: !!key, unavailable: false };
+    } catch { return { key: null, pending: true, unavailable: true }; }
+  });
+  const deleteKey = useRef<string | null>(initialRecovery.key);
+  const [recoveringDeletion, setRecoveringDeletion] = useState(initialRecovery.pending);
+  const [recoveryUnavailable, setRecoveryUnavailable] = useState(initialRecovery.unavailable);
+  const hadUnknownAcceptance = useRef(initialRecovery.pending);
+  const deletionInFlight = useRef(false);
+  const deletionAttempt = useRef<Parameters<typeof saasApi.deleteAccount>[1] | null>(null);
   const deletion = useMutation({
-    mutationFn: () =>
-      saasApi.deleteAccount(identity.userId!, {
-        confirmation: "DELETE MY ACCOUNT",
-        password: deletePassword,
-        acknowledgeExport: true,
-        idempotencyKey: deleteKey.current,
-      }),
-    onSuccess: () => {
-      if (currentScope.current === scope) {
-        setDeletePassword("");
-        // Drop company and account caches after the server revokes the session.
-        window.location.assign("/auth?accountDeletion=requested");
+    mutationFn: async () => {
+      if (!scope.canUse("deletion")) throw new Error("Current account access is unresolved");
+      if (recoveryUnavailable || !deleteKey.current) throw new Error("Account deletion recovery is unavailable");
+      if (!deletionAttempt.current) {
+        if (deleteConfirmation !== "DELETE MY ACCOUNT" || !deletePassword || !exportAcknowledged)
+          throw new Error("Explicit account deletion confirmation required");
+        // Retain only the original account/key locator before any transport.
+        // A reopened form still requires fresh explicit consent and password.
+        try { retainPendingAccountDeletion(principal, deleteKey.current); }
+        catch (error) { setRecoveryUnavailable(true); throw error; }
+        deletionAttempt.current = { confirmation: "DELETE MY ACCOUNT", password: deletePassword,
+          acknowledgeExport: true, idempotencyKey: deleteKey.current };
       }
+      try { retainPendingAccountDeletion(principal, deletionAttempt.current.idempotencyKey); }
+      catch (error) { setRecoveryUnavailable(true); throw error; }
+      const epoch = scope.epoch;
+      setDeletionUnconfirmed(false);
+      const pending = deletionAttempt.current;
+      await saasApi.deleteAccount(principal, pending);
+      return { epoch, idempotencyKey: pending.idempotencyKey };
+    }, retry: false,
+    onSuccess: (result) => {
+      if (!scope.isMounted()) return;
+      if (!scope.isCurrent(result.epoch, "deletion")) { hadUnknownAcceptance.current = true; setRecoveringDeletion(true); setDeletionUnconfirmed(true); return; }
+      try { clearPendingAccountDeletion(principal, result.idempotencyKey); }
+      catch { /* A current Native acknowledgement still owns the outcome. */ }
+      deletionAttempt.current = null; setDeletePassword("");
+      window.location.assign("/auth?accountDeletion=requested");
     },
+    onError: (error) => {
+      if (!scope.isMounted()) return;
+      // These Native refusals establish that this request was not accepted.
+      // A lost reply/401/5xx keeps the exact in-memory body and original key.
+      if (scope.canUse("deletion") && error instanceof ApiError && [400, 403, 409, 422].includes(error.status)) {
+        try {
+          // Refusing a retry says nothing about an earlier unknown acceptance.
+          // Release its authenticator for correction, retaining the original key.
+          if (!hadUnknownAcceptance.current) clearPendingAccountDeletion(principal, deleteKey.current!);
+          deletionAttempt.current = null; setRecoveringDeletion(hadUnknownAcceptance.current); setDeletionUnconfirmed(hadUnknownAcceptance.current);
+        } catch { setRecoveryUnavailable(true); }
+      } else if (deletionAttempt.current) { hadUnknownAcceptance.current = true; setRecoveringDeletion(true); }
+    },
+    onSettled: () => { deletionInFlight.current = false; },
   });
+  useEffect(() => () => { deletionAttempt.current = null; }, []);
+  // Keep same-person editors mounted without retaining their private DOM during
+  // a recheck. Only a fresh successful Native preference read reveals them.
+  const [policyItems, setPolicyItems] = useState<SaasNotificationPreference[]>([]);
+  const [policySeen, setPolicySeen] = useState(false);
   useEffect(() => {
-    preference.reset();
-    revoke.reset();
-    deletion.reset();
-    setDeleteConfirmation("");
-    setDeletePassword("");
-    setExportAcknowledged(false);
-    deleteKey.current = crypto.randomUUID();
-  }, [scope]);
-  return (
-    <main className="saas-page">
-      <h1 className="saas-title">Account security</h1>
-      {(sessions.error || revoke.error) && (
-        <p role="alert" className="saas-error">
-          {(sessions.error ?? revoke.error)?.message}
-        </p>
-      )}
-      <p className="saas-muted">
-        Revoke a session to sign that device out. Resetting your password
-        revokes all existing sessions.
-      </p>
-      {sessions.data?.map((session) => (
-        <div className="saas-row" key={session.id}>
-          <span>Signed in {new Date(session.createdAt).toLocaleString()}</span>
-          <Button
-            variant="outline"
-            disabled={revoke.isPending}
-            onClick={() => revoke.mutate(session.id)}
-          >
-            Revoke session
-          </Button>
-        </div>
-      ))}
-      {receipts.data && receipts.data.length > 0 && (
-        <section className="saas-section" aria-label="Deletion receipts">
-          <h2 className="saas-subtitle">Organization deletion receipts</h2>
-          {receipts.data.map((receipt) => (
-            <p key={receipt.id}>
-              <span className="saas-machine">{receipt.companyId}</span>:{" "}
-              {receipt.status.replaceAll("_", " ")} ·{" "}
-              {receipt.stage.replaceAll("_", " ")}
-            </p>
-          ))}
-        </section>
-      )}
-      {capabilities.data?.notifications && (
-        <section className="saas-section" aria-label="Email preferences">
-          <h2 className="saas-subtitle">Email preferences</h2>
-          <p className="saas-muted">
-            Security emails remain enabled. In-app updates remain available when
-            optional email is disabled.
-          </p>
-          {(preferences.error || preference.error) && (
-            <p role="alert" className="saas-error">
-              {(preferences.error ?? preference.error)?.message}
-            </p>
-          )}
-          {preferences.data?.map((item) => (
-            <label className="saas-row" key={item.category}>
-              <span>{item.category}</span>
-              <input
-                type="checkbox"
-                checked={item.emailEnabled}
-                disabled={
-                  item.category === "security" ||
-                  preference.isPending ||
-                  !selectedCompanyId
-                }
-                onChange={(event) =>
-                  preference.mutate({
-                    ...item,
-                    emailEnabled: event.target.checked,
-                  })
-                }
-              />
-            </label>
-          ))}
-        </section>
-      )}
-      <Link className="saas-link" to="/saas/reset-password">
-        Reset password
-      </Link>
-      {capabilities.data?.deletion && (
-        <section className="saas-section" aria-label="Delete account">
-          <h2 className="saas-subtitle">Delete your account</h2>
-          <p className="saas-muted">
-            Transfer ownership or finish deleting organizations you solely own,
-            and close or transfer your billing accounts first. Account deletion
-            removes your profile, sessions and personal credentials. Required
-            organization audit and financial records retain an anonymous actor
-            ID.
-          </p>
-          {deletion.error && (
-            <p role="alert" className="saas-error">
-              {deletion.error.message}
-            </p>
-          )}
-          <form
-            className="saas-section"
-            onSubmit={(event) => {
-              event.preventDefault();
-              if (
-                deleteConfirmation === "DELETE MY ACCOUNT" &&
-                exportAcknowledged
-              )
-                deletion.mutate();
-            }}
-          >
-            <label className="saas-label">
-              Type DELETE MY ACCOUNT
-              <input
-                className="saas-input"
-                value={deleteConfirmation}
-                onChange={(event) => setDeleteConfirmation(event.target.value)}
-                required
-                autoComplete="off"
-              />
-            </label>
-            <label className="saas-label">
-              Current password
-              <input
-                className="saas-input"
-                type="password"
-                autoComplete="current-password"
-                maxLength={128}
-                value={deletePassword}
-                onChange={(event) => setDeletePassword(event.target.value)}
-                required
-              />
-            </label>
-            <label className="saas-row">
-              <input
-                type="checkbox"
-                checked={exportAcknowledged}
-                onChange={(event) =>
-                  setExportAcknowledged(event.target.checked)
-                }
-              />
-              I have saved any exports I need.
-            </label>
-            <Button
-              type="submit"
-              variant="destructive"
-              disabled={
-                deletion.isPending ||
-                deleteConfirmation !== "DELETE MY ACCOUNT" ||
-                !deletePassword ||
-                !exportAcknowledged
-              }
-            >
-              Delete account
-            </Button>
-          </form>
-        </section>
-      )}
-    </main>
-  );
-}
-export function SaasResetPasswordPage() {
-  const [params] = useSearchParams();
-  const token = params.get("token");
-  const [email, setEmail] = useState("");
-  const [password, setPassword] = useState("");
-  const mutation = useMutation({
-    mutationFn: () =>
-      token
-        ? saasAuthAction("reset-password", { token, newPassword: password })
-        : saasAuthAction("request-password-reset", {
-            email,
-            redirectTo: window.location.origin + "/saas/reset-password",
-          }),
-  });
-  return (
-    <main className="saas-page">
-      <h1 className="saas-title">
-        {token ? "Set a new password" : "Reset password"}
-      </h1>
-      {mutation.error && (
-        <p role="alert" className="saas-error">
-          {mutation.error.message}
-        </p>
-      )}
-      {mutation.isSuccess ? (
-        <p role="status">
-          {token
-            ? "Your password has been changed. Sign in with your new password."
-            : "If this email has an account, a reset link will arrive shortly."}
-        </p>
-      ) : (
-        <form
-          className="saas-section"
-          onSubmit={(event) => {
-            event.preventDefault();
-            mutation.mutate();
-          }}
-        >
-          {token ? (
-            <label className="saas-label">
-              New password
-              <input
-                className="saas-input"
-                type="password"
-                autoComplete="new-password"
-                minLength={12}
-                maxLength={128}
-                required
-                value={password}
-                onChange={(event) => setPassword(event.target.value)}
-              />
-            </label>
-          ) : (
-            <label className="saas-label">
-              Email
-              <input
-                className="saas-input"
-                type="email"
-                autoComplete="email"
-                required
-                value={email}
-                onChange={(event) => setEmail(event.target.value)}
-              />
-            </label>
-          )}
-          <div className="saas-footer">
-            <Link className="saas-link" to="/auth">
-              Back to sign in
-            </Link>
-            <Button type="submit" disabled={mutation.isPending}>
-              {token ? "Change password" : "Send reset link"}
-            </Button>
-          </div>
+    if (preferences.isSuccess && !preferences.isFetching && preferencesCurrent()) setPolicyItems(preferences.data);
+  }, [preferences.data, preferences.isFetching, scope.epoch]);
+  useEffect(() => { if (interruptionPolicy.enabled) setPolicySeen(true); }, [interruptionPolicy.enabled]);
+  const privateReady = scope.ready && scope.canUse();
+  const preferencesVisible = privateReady && preferences.isSuccess && !preferences.isFetching && preferencesCurrent();
+  const deleteLocked = deletion.isPending || !!deletionAttempt.current || recoveryUnavailable;
+  return <section className="saas-page" aria-labelledby="account-security-title">
+    <h1 id="account-security-title" className="saas-title outline-none" tabIndex={-1} ref={heading}>{t("account.heading")}</h1>
+    {!privateReady && <div>
+      <p role={scope.failed ? "alert" : "status"}>{t(scope.failed ? "account.checkFailed" : capabilities.isSuccess && !capabilities.data ? "account.unavailable" : "account.checking")}</p>
+      {scope.failed && <Button variant="outline" className="min-h-11" onClick={() => {
+        void client.refetchQueries({ queryKey: queryKeys.auth.session, exact: true });
+        void client.refetchQueries({ queryKey: ["saas-capabilities"], exact: true });
+      }}>{t("account.retry")}</Button>}
+    </div>}
+    {privateReady && <>
+      <p className="saas-muted">{t("account.sessionsExplanation")}</p>
+      {sessions.isFetching && <p role="status">{t("account.sessionsLoading")}</p>}
+      {(sessions.isError || revoke.isError) && <p role="alert" className="saas-error">{t("account.sessionsFailed")}
+        <Button variant="outline" className="min-h-11" onClick={() => { if (scope.canUse()) void sessions.refetch(); }}>{t("account.retry")}</Button>
+      </p>}
+      {sessions.isSuccess && !sessions.isFetching && sessions.data.map(session => <div className="saas-row" key={session.id}>
+        <span>{t("account.signedIn", { date: new Date(session.createdAt).toLocaleString(i18n.resolvedLanguage) })}</span>
+        <Button variant="outline" disabled={revoke.isPending} onClick={() => revoke.mutate(session.id)}>{t("account.revoke")}</Button>
+      </div>)}
+      {capabilities.data?.deletion && <section className="saas-section" aria-label={t("account.receiptsHeading")}>
+        <h2 className="saas-subtitle">{t("account.receiptsHeading")}</h2>
+        {receipts.isFetching && <p role="status">{t("account.receiptsLoading")}</p>}
+        {receipts.isError && <p role="alert">{t("account.receiptsFailed")}<Button variant="outline" className="min-h-11" onClick={() => { if (scope.canUse("deletion")) void receipts.refetch(); }}>{t("account.retry")}</Button></p>}
+        {receipts.isSuccess && !receipts.isFetching && receipts.data.map(receipt => <p key={receipt.id}>
+          <span className="saas-machine">{receipt.companyId}</span>: {t(`account.deletionStatus.${receipt.status}`, { defaultValue: t("account.receiptPending") })} · {t(`account.deletionStage.${receipt.stage}`, { defaultValue: t("account.receiptPending") })}
+        </p>)}
+      </section>}
+      <Link className="saas-link" to="/saas/reset-password">{t("account.resetPassword")}</Link>
+      {capabilities.data?.deletion && <section className="saas-section" aria-label={t("account.deleteHeading")}>
+        <h2 className="saas-subtitle">{t("account.deleteHeading")}</h2><p className="saas-muted">{t("account.deleteExplanation")}</p>
+        {recoveringDeletion && !deletionAttempt.current && !recoveryUnavailable && <p role="status">{t("account.deletionRecovery")}</p>}
+        {recoveryUnavailable ? <p role="alert" className="saas-error">{t("account.recoveryUnavailable")} <a className="saas-link" href="mailto:privacy@blentera.com">{t("account.contactPrivacy")}</a></p> :
+          (deletion.isError || deletionUnconfirmed) && <p role="alert" className="saas-error">{t(recoveringDeletion || deletionAttempt.current ? "account.deletionUnconfirmed" : "account.deletionFailed")}</p>}
+        <form className="saas-section" onSubmit={event => {
+          event.preventDefault();
+          if (deletionInFlight.current || !scope.canUse("deletion")) return;
+          deletionInFlight.current = true; deletion.mutate();
+        }}>
+          <label className="saas-label">{t("account.confirmDelete")}<input className="saas-input" value={deleteConfirmation} onChange={event => setDeleteConfirmation(event.target.value)} required autoComplete="off" disabled={deleteLocked} /></label>
+          <label className="saas-label">{t("account.currentPassword")}<input className="saas-input" type="password" autoComplete="current-password" maxLength={128} value={deletePassword} onChange={event => setDeletePassword(event.target.value)} required disabled={deleteLocked} /></label>
+          <label className="saas-row"><input type="checkbox" checked={exportAcknowledged} onChange={event => setExportAcknowledged(event.target.checked)} disabled={deleteLocked} />{t("account.exportAcknowledgement")}</label>
+          <Button type="submit" variant="destructive" disabled={recoveryUnavailable || deletion.isPending || deleteConfirmation !== "DELETE MY ACCOUNT" || !deletePassword || !exportAcknowledged}>{t(recoveringDeletion || deletionAttempt.current ? "account.retryDeletion" : "account.delete")}</Button>
         </form>
-      )}
-      {mutation.isSuccess && (
-        <Link className="saas-link" to="/auth">
-          Sign in
-        </Link>
-      )}
-    </main>
-  );
+      </section>}
+    </>}
+    {privateReady && capabilities.data?.notifications && <section className="saas-section" aria-label={t("account.preferencesHeading")}>
+      <h2 className="saas-subtitle">{t("account.preferencesHeading")}</h2><p className="saas-muted">{t("account.preferencesExplanation")}</p>
+      {preferences.isFetching && <p role="status">{t("account.preferencesLoading")}</p>}
+      {(preferences.isError || preference.isError) && <p role="alert" className="saas-error">{t("account.preferencesFailed")}<Button variant="outline" className="min-h-11" onClick={() => { if (scope.canUse("notifications")) void preferences.refetch(); }}>{t("account.retry")}</Button></p>}
+      {preferencesVisible && preferences.data.map(item => <label className="saas-row" key={item.category}>
+        <span>{t(`notifications.category.${item.category}`)}</span><input type="checkbox" checked={item.emailEnabled} disabled={item.category === "security" || preference.isPending || !companyId}
+          onChange={event => preference.mutate({ category: item.category, emailEnabled: event.target.checked })} />
+      </label>)}
+    </section>}
+    {policySeen && policyItems.map(item => <Fragment key={item.category}>
+      <NotificationPolicySettings item={item} companyId={companyId ?? ""} principal={principal}
+        sourceReady={preferencesVisible && !interruptionPolicy.query.isFetching} sourceQueryKey={preferenceKey}
+        onSaved={() => { if (preferencesCurrent()) void preferences.refetch(); }} />
+      {item.category !== "security" && <NotificationChannelSettings companyId={companyId ?? ""} principal={principal} category={item.category}
+        sourceReady={preferencesVisible && !interruptionPolicy.query.isFetching} sourceQueryKey={preferenceKey} />}
+    </Fragment>)}
+  </section>;
 }
+
+export { SaasResetPasswordPage } from "./SaasPasswordReset";

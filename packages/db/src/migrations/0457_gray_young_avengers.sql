@@ -1,0 +1,1 @@
+ALTER TABLE "company_user_sidebar_preferences" ADD COLUMN "experience_profile" text;

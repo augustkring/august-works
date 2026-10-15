@@ -13,6 +13,9 @@ import { SIDEBAR_SCROLL_RESET_STATE } from "../lib/navigation-scroll";
 import { cn } from "../lib/utils";
 import { useInboxBadge } from "../hooks/useInboxBadge";
 import { Badge } from "@/components/ui/badge";
+import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
+import { ExperienceMobileNavigation } from "./ExperienceMobileNavigation";
+import { useTranslation } from "../i18n";
 
 interface MobileBottomNavProps {
   visible: boolean;
@@ -36,6 +39,12 @@ interface MobileNavActionItem {
 type MobileNavItem = MobileNavLinkItem | MobileNavActionItem;
 
 export function MobileBottomNav({ visible }: MobileBottomNavProps) {
+  const feature = useV9FeatureEnabled("progressive_shell_v9");
+  return feature.enabled ? <ExperienceMobileNavigation visible={visible} /> : <LegacyMobileBottomNav visible={visible} />;
+}
+
+function LegacyMobileBottomNav({ visible }: MobileBottomNavProps) {
+  const { t } = useTranslation("experience");
   const location = useLocation();
   const { selectedCompanyId } = useCompany();
   const { openNewIssue } = useDialogActions();
@@ -43,28 +52,28 @@ export function MobileBottomNav({ visible }: MobileBottomNavProps) {
 
   const items = useMemo<MobileNavItem[]>(
     () => [
-      { type: "link", to: "/dashboard", label: "Overview", icon: House },
-      { type: "link", to: "/issues", label: "Tasks", icon: CircleCheck },
-      { type: "action", label: "New Task", icon: SquarePen, onClick: () => openNewIssue() },
-      { type: "link", to: "/agents/all", label: "Agents", icon: Users },
+      { type: "link", to: "/dashboard", label: t("legacyMobileNavigation.overview"), icon: House },
+      { type: "link", to: "/issues", label: t("legacyMobileNavigation.tasks"), icon: CircleCheck },
+      { type: "action", label: t("legacyMobileNavigation.newTask"), icon: SquarePen, onClick: () => openNewIssue() },
+      { type: "link", to: "/agents/all", label: t("legacyMobileNavigation.agents"), icon: Users },
       {
         type: "link",
         to: "/inbox",
-        label: "Inbox",
+        label: t("legacyMobileNavigation.inbox"),
         icon: Inbox,
         badge: inboxBadge.inbox,
       },
     ],
-    [openNewIssue, inboxBadge.inbox],
+    [openNewIssue, inboxBadge.inbox, t],
   );
 
   return (
     <nav
       className={cn(
-        "fixed bottom-0 left-0 right-0 z-30 bg-border/50 transition-transform duration-200 ease-out dark:bg-muted md:hidden pb-(--sz-safe-bottom)",
+        "fixed bottom-0 left-0 right-0 z-30 bg-border/50 transition-transform duration-200 ease-out motion-reduce:transition-none dark:bg-muted md:hidden pb-(--sz-safe-bottom)",
         visible ? "translate-y-0" : "translate-y-full",
       )}
-      aria-label="Mobile navigation"
+      aria-label={t("mobileNavigation")}
     >
       <div className="grid h-16 grid-cols-5 px-1">
         {items.map((item) => {
@@ -83,7 +92,7 @@ export function MobileBottomNav({ visible }: MobileBottomNavProps) {
                     : "text-muted-foreground hover:text-foreground",
                 )}
               >
-                <Icon className="h-(--sz-18px) w-(--sz-18px)" />
+                <Icon className="h-(--sz-18px) w-(--sz-18px)" aria-hidden="true" />
                 <span className="truncate">{item.label}</span>
               </button>
             );
@@ -107,7 +116,7 @@ export function MobileBottomNav({ visible }: MobileBottomNavProps) {
               {({ isActive }) => (
                 <>
                   <span className="relative">
-                    <Icon className={cn("h-(--sz-18px) w-(--sz-18px)", isActive && "stroke-(length:--sw-2_3)")} />
+                    <Icon className={cn("h-(--sz-18px) w-(--sz-18px)", isActive && "stroke-(length:--sw-2_3)")} aria-hidden="true" />
                     {item.badge != null && item.badge > 0 && (
                       <Badge variant="ghost" className="absolute -right-2 -top-2 bg-primary px-1.5 text-(length:--text-nano) leading-none text-primary-foreground">
                         {item.badge > 99 ? "99+" : item.badge}

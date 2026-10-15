@@ -48,6 +48,7 @@ import {
 } from "./feedback-redaction.js";
 import { getRunLogStore } from "./run-log-store.js";
 import { getOperatorSettingDefaults } from "./setting-defaults.js";
+import { awOutputFeedbackIsLocal } from "./customer-feedback-privacy.js";
 
 const FEEDBACK_SCHEMA_VERSION = "paperclip-feedback-envelope-v2";
 const FEEDBACK_BUNDLE_VERSION = "paperclip-feedback-bundle-v2";
@@ -1789,6 +1790,7 @@ export function feedbackService(db: Db, options: FeedbackServiceOptions = {}) {
       limit?: number;
       now?: Date;
     }) => {
+      if(await awOutputFeedbackIsLocal(db))return {attempted:0,sent:0,failed:0};
       const shareClient = options.shareClient;
       if (!shareClient) {
         const filters = [eq(feedbackExports.status, "pending")];
@@ -1858,11 +1860,13 @@ export function feedbackService(db: Db, options: FeedbackServiceOptions = {}) {
       let failed = 0;
 
       for (const row of rows) {
+        if(await awOutputFeedbackIsLocal(db))break;
         const attemptAt = input?.now ?? new Date();
         attempted += 1;
 
         try {
           const bundle = await buildFeedbackTraceBundleFromRow(db, row);
+          if(await awOutputFeedbackIsLocal(db))break;
           await shareClient.uploadTraceBundle(bundle);
 
           await db
@@ -1937,7 +1941,8 @@ export function feedbackService(db: Db, options: FeedbackServiceOptions = {}) {
 
         const now = new Date();
         const normalizedReason = normalizeReason(input.vote, input.reason);
-        const sharedWithLabs = input.allowSharing === true;
+        const awLocalOnly = await awOutputFeedbackIsLocal(tx as unknown as Db);
+        const sharedWithLabs = !awLocalOnly && input.allowSharing === true;
         let consentEnabledNow = false;
         let consentVersion = existingCompany.feedbackDataSharingTermsVersion ?? null;
         let persistedSharingPreference: "allowed" | "not_allowed" | null = null;
@@ -1996,7 +2001,7 @@ export function feedbackService(db: Db, options: FeedbackServiceOptions = {}) {
           normalizeInstanceGeneralSettings(currentInstanceSettings?.general),
           getOperatorSettingDefaults(),
         );
-        if (currentInstanceSettings && currentGeneral.feedbackDataSharingPreference === "prompt") {
+        if (!awLocalOnly && currentInstanceSettings && currentGeneral.feedbackDataSharingPreference === "prompt") {
           const nextSharingPreference = sharedWithLabs ? "allowed" : "not_allowed";
           const currentGeneralRaw = asRecord(currentInstanceSettings.general) ?? {};
           await tx
@@ -2048,6 +2053,12 @@ export function feedbackService(db: Db, options: FeedbackServiceOptions = {}) {
           })
           .returning();
 
+        if(awLocalOnly) {
+          // Store the tenant-local vote without reading/copying prompts, output
+          // bundles, neighboring messages, instructions or run logs for triage.
+          await tx.update(feedbackExports).set({status:"local_only",destination:null,failureReason:"AW_V9_CONSENT_RECONFIRMATION_REQUIRED",updatedAt:now}).where(eq(feedbackExports.feedbackVoteId,savedVote.id));
+          return {vote:savedVote,traceId:null,consentEnabledNow:false,persistedSharingPreference:null,sharingEnabled:false};
+        }
         const artifacts = await buildPayloadArtifacts(tx, {
           issue,
           target,

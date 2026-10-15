@@ -18,6 +18,7 @@ export class ProviderDeliveryError extends Error {
   constructor(
     public readonly code: string,
     public readonly retryable: boolean,
+    public readonly acceptance: "not_accepted" | "unknown" = "unknown",
   ) {
     super(code);
   }
@@ -57,6 +58,7 @@ export function mailgunProvider(
       throw new ProviderDeliveryError(
         "mailgun_http_" + response.status,
         response.status === 429 || response.status >= 500,
+        response.status < 500 ? "not_accepted" : "unknown",
       );
     const body = await response.json();
     if (!body || typeof body !== "object")
@@ -69,7 +71,7 @@ export function mailgunProvider(
         environment === "staging" &&
         !mail.stagingRecipients.includes(message.to.toLowerCase())
       )
-        throw new ProviderDeliveryError("staging_recipient_blocked", false);
+        throw new ProviderDeliveryError("staging_recipient_blocked", false, "not_accepted");
       const form = new FormData();
       for (const [key, value] of Object.entries({
         from: mail.from,
@@ -118,8 +120,11 @@ export function mailgunProvider(
         .safeParse(result);
       if (!parsed.success)
         throw new ProviderDeliveryError("mailgun_invalid_events", true);
+      const logicalId = (value: string) => value.replace(/^<|>$/g, "");
       const accepted = parsed.data.items.find((item) =>
-        ["accepted", "delivered"].includes(item.event),
+        ["accepted", "delivered"].includes(item.event) &&
+        typeof item.message?.headers["message-id"] === "string" &&
+        logicalId(item.message.headers["message-id"]) === logicalId(messageId),
       );
       return accepted?.message?.headers["message-id"] ?? null;
     },

@@ -1,3 +1,4 @@
+import { isExperienceCardToolName, parseExperienceToolCardRequest } from "@paperclipai/shared";
 /**
  * Live adapter: map a run's streaming TranscriptEntry[] (from
  * useLiveRunTranscripts — the same source the current thread consumes) into the
@@ -716,7 +717,7 @@ export function transcriptToTaskChatItems(
           // generic name must never displace the initial call's real one. ACP
           // also retitles a call to its invocation once known ("Terminal" →
           // "ls -la"); that is detail for the target slot, not a new identity.
-          if (!isGenericToolName(entry.name)) {
+          if (!isGenericToolName(entry.name) && !isExperienceCardToolName(existing.rawName)) {
             if (isGenericToolName(existing.rawName)) {
               existing.name = toolDisplayName(entry.name);
               existing.rawName = entry.name ?? undefined;
@@ -724,6 +725,8 @@ export function transcriptToTaskChatItems(
               existing.target = clip(entry.name!, TARGET_MAX);
             }
           }
+          if (isExperienceCardToolName(existing.rawName) && !existing.experienceCardRequest)
+            existing.experienceCardRequest = boundedExperienceCardRequest(entry.input);
           lastToolIndex = existingIndex!;
         } else {
           items.push({
@@ -731,7 +734,8 @@ export function transcriptToTaskChatItems(
             kind: "tool",
             name: toolDisplayName(entry.name),
             rawName: entry.name ?? undefined,
-            target: summarizeToolInput(entry.input),
+            target: isExperienceCardToolName(entry.name) ? undefined : summarizeToolInput(entry.input),
+            ...(isExperienceCardToolName(entry.name) ? { experienceCardRequest: boundedExperienceCardRequest(entry.input) } : {}),
             status: "in_progress",
           });
           toolIndexById.set(toolCallId, items.length - 1);
@@ -758,7 +762,7 @@ export function transcriptToTaskChatItems(
               existing.name = toolDisplayName(entry.toolName);
               existing.rawName = entry.toolName;
             }
-            const detail = formatToolResultDetail(entry.content);
+            const detail = isExperienceCardToolName(existing.rawName) ? undefined : formatToolResultDetail(entry.content);
             if (detail) {
               existing.detail =
                 entry.delta && existing.detail
@@ -2109,4 +2113,8 @@ export function deriveRunStatusLabel(entries: readonly TranscriptEntry[]): {
       return { label: "Thinking" };
   }
   return { label: "Running" };
+}
+
+function boundedExperienceCardRequest(input: unknown) {
+  try { return parseExperienceToolCardRequest(input); } catch { return undefined; }
 }

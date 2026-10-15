@@ -8,6 +8,7 @@ import {
   companyMemberships,
   createDb,
   instanceUserRoles,
+  heartbeatRuns,
   issueComments,
   issues,
   principalPermissionGrants,
@@ -179,6 +180,7 @@ describeEmbeddedPostgres("authorization service", () => {
     await db.delete(companyMemberships);
     await db.delete(instanceUserRoles);
     await db.delete(issues);
+    await db.delete(heartbeatRuns);
     await db.delete(agents);
     await db.delete(projects);
     await db.delete(companies);
@@ -2765,6 +2767,70 @@ describeEmbeddedPostgres("authorization service", () => {
       expect((await owner.decide(input)).allowed).toBe(true);
       await tx.update(agents).set({permissions:{trustPreset:"unsupported_native_test_preset"}}).where(eq(agents.id,agent.id));
       const ordinary=await authorizationService(tx).decide(input);
+      expect(ordinary.allowed).toBe(false);
+      expect(await owner.decide(input)).toEqual(ordinary);
+    }));
+  });
+
+  it("reads fresh run policy for each Source and ignores a run belonging to another agent", async () => {
+    const company = await createCompany(db, "ReadSourceRunPolicy");
+    const agent = await createAgent(db, company.id), other = await createAgent(db, company.id);
+    const issue = await createIssue(db, company.id), runId = randomUUID();
+    await db.insert(heartbeatRuns).values({ id: runId, companyId: company.id, agentId: agent.id, status: "running" });
+    const input = {
+      actor: { type: "agent" as const, agentId: agent.id, companyId: company.id, source: "agent_jwt" as const, runId },
+      action: "issue:read" as const,
+      resource: { type: "issue" as const, companyId: company.id, issueId: issue.id },
+    };
+    await db.transaction(async tx => authorizationService(tx).withReadSources(company.id, [issue.id], [], async owner => {
+      expect((await owner.decide(input)).allowed).toBe(true);
+      await tx.update(heartbeatRuns).set({ contextSnapshot: { executionPolicy: { trustPreset: "unsupported_native_test_preset" } } }).where(eq(heartbeatRuns.id, runId));
+      const denied = await authorizationService(tx).decide(input);
+      expect(denied.allowed).toBe(false);
+      expect(await owner.decide(input)).toEqual(denied);
+      // A run reference never transfers another agent's policy to this actor.
+      await tx.update(heartbeatRuns).set({ agentId: other.id }).where(eq(heartbeatRuns.id, runId));
+      const ordinary = await authorizationService(tx).decide(input);
+      expect(ordinary.allowed).toBe(true);
+      expect(await owner.decide(input)).toEqual(ordinary);
+      await tx.update(agents).set({ permissions: { trustPreset: "unsupported_native_test_preset" } }).where(eq(agents.id, agent.id));
+      const changedAgent = await authorizationService(tx).decide(input);
+      expect(changedAgent.allowed).toBe(false);
+      expect(await owner.decide(input)).toEqual(changedAgent);
+    }));
+  });
+
+  it("rechecks current responsible-human membership for each Source with compiled SQL", async () => {
+    const company = await createCompany(db, "ReadSourceHumanMembership");
+    const agent = await createAgent(db, company.id), issue = await createIssue(db, company.id);
+    const userId = await createUser(db);
+    await db.insert(companyMemberships).values({ companyId: company.id, principalType: "user", principalId: userId, status: "active", membershipRole: "member" });
+    const input = {
+      actor: { type: "agent" as const, agentId: agent.id, companyId: company.id, source: "agent_jwt" as const, onBehalfOfUserId: userId },
+      action: "issue:read" as const, enforceResponsibleUserIntersection: true,
+      resource: { type: "issue" as const, companyId: company.id, issueId: issue.id },
+    };
+    await db.transaction(async tx => authorizationService(tx).withReadSources(company.id, [issue.id], [], async owner => {
+      expect((await owner.decide(input)).allowed).toBe(true);
+      await tx.update(companyMemberships).set({ status: "inactive" }).where(and(eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, userId)));
+      const ordinary = await authorizationService(tx).decide(input);
+      expect(ordinary).toMatchObject({ allowed: false, code: "RESPONSIBLE_USER_UNAUTHORIZED" });
+      expect(await owner.decide(input)).toEqual(ordinary);
+    }));
+  });
+
+  it("reads a current instance role for every Source rather than caching its result", async () => {
+    const company = await createCompany(db, "ReadSourceInstanceRole"), issue = await createIssue(db, company.id);
+    const userId = await createUser(db);
+    await db.insert(instanceUserRoles).values({ userId, role: "instance_admin" });
+    const input = {
+      actor: { type: "board" as const, source: "session" as const, userId, companyIds: [company.id] },
+      action: "issue:read" as const, resource: { type: "issue" as const, companyId: company.id, issueId: issue.id },
+    };
+    await db.transaction(async tx => authorizationService(tx).withReadSources(company.id, [issue.id], [], async owner => {
+      expect(await owner.decide(input)).toMatchObject({ allowed: true, reason: "allow_instance_admin" });
+      await tx.delete(instanceUserRoles).where(eq(instanceUserRoles.userId, userId));
+      const ordinary = await authorizationService(tx).decide(input);
       expect(ordinary.allowed).toBe(false);
       expect(await owner.decide(input)).toEqual(ordinary);
     }));

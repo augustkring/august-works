@@ -6,6 +6,8 @@ import { businessMetricDefinitionSchema, queryBusinessMetricSchema } from "@pape
 import { currentAnalyticalPurpose } from "../services/analytical-purpose.js";
 import { eraseExpiredAnalyticalLineage } from "../services/analytical-retention.js";
 import { businessMetricService } from "../services/business-metrics/service.js";
+import { companyService } from "../services/companies.js";
+import { currentInsightToolCard } from "../services/experience/insight-tool-card.js";
 import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { assertDatabaseRestoreAdmission, prepareRestoredQuarantine } from "../services/saas/quarantine.js";
@@ -23,6 +25,48 @@ suite("governed native metric owner on migrated PostgreSQL", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
   let db: ReturnType<typeof createDb>;
   let companyId: string; let otherCompanyId: string; let policyId: string; let projectId: string;
+  it("refuses legacy company removal with a private conflict and rolls back all retained dependencies", async () => {
+    const beforeCompany = await db.select().from(companies).where(eq(companies.id, companyId));
+    const beforeProject = await db.select().from(projects).where(eq(projects.id, projectId));
+    const beforeGovernance = await db.select().from(governanceObligations).where(eq(governanceObligations.companyId, companyId));
+    expect(beforeProject).toHaveLength(1); expect(beforeGovernance.length).toBeGreaterThan(0);
+    const refused = companyService(db).remove(companyId);
+    await expect(refused).rejects.toMatchObject({
+      status: 409,
+      message: "This company still has dependent records. Complete governed cleanup before removing it.",
+      details: { code: "company_removal_requires_governed_cleanup" },
+    });
+    await expect(refused).rejects.not.toHaveProperty("cause");
+    await expect(refused).rejects.toHaveProperty("details", { code: "company_removal_requires_governed_cleanup" });
+    expect(await db.select().from(companies).where(eq(companies.id, companyId))).toEqual(beforeCompany);
+    expect(await db.select().from(projects).where(eq(projects.id, projectId))).toEqual(beforeProject);
+    expect(await db.select().from(governanceObligations).where(eq(governanceObligations.companyId, companyId))).toEqual(beforeGovernance);
+  });
+  it("still removes a bare legacy company without dependent governance", async () => {
+    expect((await companyService(db).remove(otherCompanyId))?.id).toBe(otherCompanyId);
+    expect(await db.select().from(companies).where(eq(companies.id, otherCompanyId))).toHaveLength(0);
+    expect(await db.select().from(companies).where(eq(companies.id, companyId))).toHaveLength(1);
+  });
+  it("preserves unrelated legacy company-removal failures", async () => {
+    const service = companyService(db), failure = Object.assign(new Error("Synthetic connection failure"), { code: "08006" });
+    const transaction = vi.spyOn(db, "transaction").mockRejectedValueOnce(failure);
+    try { await expect(service.remove(companyId)).rejects.toBe(failure); }
+    finally { transaction.mockRestore(); }
+  });
+  it("resolves a saved observed zero through the Native chat reader and withdraws a superseded metric version", async () => {
+    await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental({ action_cards_v9: true, experience_projection_v9: true, progressive_shell_v9: true });
+    const owner = businessMetricService(db), created = await owner.create(companyId, actor, { key: "chat_zero", definition: { ...metricDefinition(policyId), valueType: "count", unit: "objects", calculation: { kind: "native_count", population: { entity: "issue", statuses: ["done"], projectId } } } });
+    await owner.publish(companyId, actor, created.metric.id, { expectedRevision: 1, versionId: created.version.id });
+    const observation = await owner.query(companyId, actor, { metricId: created.metric.id, versionId: created.version.id, from: "2026-01-01T00:00:00Z", until: "2026-01-02T00:00:00Z", dimensions: [], maxRows: 5000 });
+    const resourceId = `metric:${observation.id}`, wire = { schemaVersion: 1, component: "MetricInsightCard", companyId, cardId: `insight:${resourceId}`, source: { companyId, domain: "insight", resourceId, version: `${observation.definitionHash}:${observation.inputHash}` } };
+    const card = await currentInsightToolCard(db, actor, companyId, wire);
+    expect(card.evidence).toContain("recorded_value:0|objects");
+    expect(card.evidence).toContain("created_in_window_current_state");
+    expect(card.actions.every(action => action.operation === "open")).toBe(true);
+    const changed = await owner.createVersion(companyId, actor, created.metric.id, { expectedRevision: 2, definition: { ...created.version.definition, name: "Current changed definition" } });
+    await owner.publish(companyId, actor, created.metric.id, { expectedRevision: 3, versionId: changed.id });
+    await expect(currentInsightToolCard(db, actor, companyId, wire)).rejects.toMatchObject({ status: 409 });
+  });
   beforeAll(async () => { database = await startEmbeddedPostgresTestDatabase("aw-v8-metrics-"); db = createDb(database.connectionString); });
   afterAll(async () => { await database?.cleanup(); });
   beforeEach(async () => {
@@ -344,7 +388,7 @@ suite("governed native metric owner on migrated PostgreSQL", () => {
       await restored.insert(analyticalLineageEdges).values(backup.edges);
       await restored.insert(businessMetricObservations).values(backup.observations);
       const marker = { company_id: guard.companyId, input_type: guard.inputType, input_ref: guard.inputRef, suppressed_at: guard.suppressedAt.toISOString() };
-      await prepareRestoredQuarantine(restored, target.toString(), { companies: [], memory: [], businessEvents: [], analyticalSources: [marker, marker,
+      await prepareRestoredQuarantine(restored, target.toString(), { companies: [], memory: [], businessEvents: [], feedback: [], analyticalSources: [marker, marker,
         { ...marker, company_id: otherCompanyId }, { ...marker, company_id: randomUUID() }] });
       await expect(assertDatabaseRestoreAdmission(restored)).rejects.toThrow("remains quarantined");
       expect((await instanceSettingsService(restored).getExperimental()).business_metrics_v8).toBe(false);

@@ -1,8 +1,9 @@
+import { useTranslation } from "react-i18next";
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { CheckCircle2, Inbox } from "lucide-react";
 import type { Agent, AttentionItem, AttentionSubject } from "@paperclipai/shared";
-import { useNavigate, useSearchParams } from "@/lib/router";
+import { useNavigate, useSearchParams, useLocation } from "@/lib/router";
 import { attentionApi } from "../api/attention";
 import { agentsApi } from "../api/agents";
 import { authApi } from "../api/auth";
@@ -86,6 +87,10 @@ function findScrollContainer(element: HTMLElement | null): HTMLElement | null {
 
 export function WhatNeedsMe() {
   const { selectedCompanyId } = useCompany();
+  const {t}=useTranslation("experience");
+  const location=useLocation();
+  const needsYouRoute=location.pathname.split("/").includes("needs-you");
+  const pageTitle=needsYouRoute?t("needsYou"):"Decisions";
   const { setBreadcrumbs } = useBreadcrumbs();
   const [expandedId, setExpandedId] = useState<string | null>(null);
   const [selectedAttentionId, setSelectedAttentionId] = useState<string | null>(null);
@@ -116,6 +121,7 @@ export function WhatNeedsMe() {
   // `?decisionId=` deep link (PAP-16032 §4.7) — focus/expand the referenced card.
   const [searchParams, setSearchParams] = useSearchParams();
   const deepLinkDecisionId = searchParams.get("decisionId");
+  const deepLinkAttentionId = searchParams.get("attentionId");
   const [deepLinkConsumed, setDeepLinkConsumed] = useState(false);
 
   // Optimistic hide/restore. Reset whenever a fresh feed lands (server truth).
@@ -135,8 +141,8 @@ export function WhatNeedsMe() {
   );
 
   useEffect(() => {
-    setBreadcrumbs([{ label: "Decisions" }]);
-  }, [setBreadcrumbs]);
+    setBreadcrumbs([{ label: pageTitle }]);
+  }, [setBreadcrumbs,pageTitle]);
 
   // Re-hydrate per-company preferences when the company changes.
   useEffect(() => {
@@ -357,9 +363,9 @@ export function WhatNeedsMe() {
   // card once the feed lands, then drop the param so a later manual collapse is
   // not re-forced on the next refetch. Wins over the generic auto-expand below.
   useEffect(() => {
-    if (deepLinkConsumed || !deepLinkDecisionId || allItems.length === 0) return;
+    if (deepLinkConsumed || (!deepLinkDecisionId && !deepLinkAttentionId) || allItems.length === 0) return;
     const target = allItems.find(
-      (item) => item.sourceKind === "decision" && item.subject.id === deepLinkDecisionId,
+      (item) => deepLinkAttentionId ? item.id === deepLinkAttentionId : item.sourceKind === "decision" && item.subject.id === deepLinkDecisionId,
     );
     setDeepLinkConsumed(true);
     setAutoExpandDone(true);
@@ -371,12 +377,13 @@ export function WhatNeedsMe() {
         (prev) => {
           const next = new URLSearchParams(prev);
           next.delete("decisionId");
+          next.delete("attentionId");
           return next;
         },
         { replace: true },
       );
     }
-  }, [allItems, deepLinkConsumed, deepLinkDecisionId, setSearchParams]);
+  }, [allItems, deepLinkConsumed, deepLinkDecisionId, deepLinkAttentionId, setSearchParams]);
 
   // Auto-expand the topmost inline-capable decision, once.
   useEffect(() => {
@@ -519,7 +526,7 @@ export function WhatNeedsMe() {
   return (
     <div ref={rootRef} className="max-w-3xl space-y-4">
       <div className="flex items-center justify-between gap-2">
-        <h1 className="text-xl font-bold">Decisions</h1>
+        <h1 className="text-xl font-bold">{pageTitle}</h1>
         <DecisionsToolbar
           visibleCount={visibleCount}
           filterOptions={filterOptions}

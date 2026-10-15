@@ -1,0 +1,46 @@
+{
+  "screenId": "NATIVE-ACTIVATION-MEASURES",
+  "routeOrSurface": "/company/measures",
+  "sourceSections": [
+    "46.1",
+    "46.2"
+  ],
+  "status": "in_progress",
+  "canonicalReadOwners": [
+    "company_onboarding_runs",
+    "Original activation/independent verification owner",
+    "activity_log"
+  ],
+  "canonicalWriteOperation": "None",
+  "contractId": "aw.activation-owner-measures.v1",
+  "entryConditions": [
+    "Current original verified account and active native company membership",
+    "Original initiating onboarding owner",
+    "Current independent result/source authority",
+    "Effective experience_analytics_v9 and activation_v9 flags"
+  ],
+  "content": [
+    "Onboarding-creation-to-current-verification duration bucket, explicitly distinct from TTFO",
+    "Recorded original setup-transition bucket, explicitly distinct from all required customer actions",
+    "Unavailable usable-account baseline",
+    "Bounded/unavailable and withdrawn source states"
+  ],
+  "prohibitedContent": [
+    "User/task/run/result/receipt IDs",
+    "Names",
+    "Prompts and model output",
+    "Document or company content",
+    "Secrets/credentials",
+    "Private errors",
+    "Arbitrary properties"
+  ],
+  "processingContract": "packages/shared/src/experience-measures.ts#ACTIVATION_MEASUREMENT_CONTRACT",
+  "privacy": "Strict allow-list, one-current-company response binding, original privacy serialization and source locks, five-second original bound, private no-store responses, minimized HTTP namespace, no new dataset or provider export. Existing Paperclip first-party Telemetry is a separate unchanged path.",
+  "recovery": "Retry the current authorized read only. Source withdrawal and access/session changes hide prior measurements.",
+  "localization": [
+    "en",
+    "da"
+  ],
+  "accessibility": "Original single main landmark, heading/error focus, restored return-link focus, semantic observation time, token touch targets and mobile reflow.",
+  "acceptance": "32 focused checks, 60 complete original Native PostgreSQL activation/package cases and one built-route software fixture pass. Current combined full types/regression/build, remaining §46 metrics, usable baseline and live/human acceptance remain pending. No full V9 or release acceptance."
+}

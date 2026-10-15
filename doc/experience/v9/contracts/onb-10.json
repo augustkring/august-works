@@ -1,0 +1,135 @@
+{
+  "screenId": "ONB-10",
+  "journeyId": "onb",
+  "routeOrSurface": "/saas/activation/10",
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
+  "customerOutcome": "Observe the original first-task state and retain current authorized Stop without exposing withdrawn private sources.",
+  "entryConditions": [
+    "Current authenticated principal and company selection; no retained foreign-principal payload",
+    "Effective feature admission is required for new work; native membership and resource authority remain necessary"
+  ],
+  "exitConditions": [
+    "Only a canonical server-confirmed result permits a success claim",
+    "Pending, stale, unavailable or unqualified work never becomes successful or activated"
+  ],
+  "content": {
+    "h1": "Working on it",
+    "supportingCopy": "Observe the original first-task state and retain current authorized Stop without exposing withdrawn private sources.",
+    "customerTerms": [
+      "Company",
+      "Work",
+      "Needs You",
+      "Agent",
+      "Feedback"
+    ],
+    "displayedState": [
+      "Original orchestration status and current recorded first-task reference",
+      "No invented milestones, percentage, hidden reasoning or inferred dispatch",
+      "Current authorized Stop remains available when the full package/purpose Source is withdrawn; only a minimal control reference is shown"
+    ]
+  },
+  "inputs": [],
+  "actions": {
+    "primary": {
+      "label": "Continue first task",
+      "operation": "Explicitly dispatch the current recorded original plan only after current Native source and zero-charge admission. No polling, GET, reload or route change dispatches work."
+    },
+    "secondary": [
+      "Leave and come back; refresh the current original onboarding and plan owners",
+      "Open the original task under its current resource authorization"
+    ],
+    "destructiveOrIrreversible": [
+      "Stop first task through the original cancellation owner, expected plan version, onboarding CAS and frozen request UUID. Replayed Stop cannot create a new run."
+    ]
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Existing company_onboarding_runs.activation_state and version",
+      "Current verified creator membership",
+      "Native Foundation and published package qualification",
+      "Original issue, completion-contract, orchestration plan, installation and independent Native draft gateway owners"
+    ],
+    "canonicalWriteOperation": "Explicit continue_first_task and stop_first_task commands use the existing original orchestration owner in the onboarding transaction. Stop checks current initiating-human/task/control authority even when optional package/purpose Source has been withdrawn. No generic background dispatcher or replacement authority exists.",
+    "authorityEffect": "Presentation and drafts cannot grant permissions. Material effects always require current native permissions, approvals and version preconditions.",
+    "asyncWork": "Native reads/mutations only; projection work uses bounded admission and a 1500 ms total deadline. Unknown mutation outcomes retain the original request key for reconciliation.",
+    "receipt": "Use the canonical current resource ID/version or immutable accepted feedback receipt; never infer success from a toast or attempted request."
+  },
+  "states": {
+    "loading": "Announce loading only while the current identity/company request is pending.",
+    "empty": "Explain an actual empty authorized result. Missing dependencies or qualified capabilities are separate unavailable states.",
+    "partial": "Retain trustworthy available results and name unavailable dependencies or sources.",
+    "stale": "Remove executable actions and refresh canonical state; preserved input is not evidence of current authority.",
+    "validation_error": "Preserve other entered values, identify the field problem and associate it programmatically with the control.",
+    "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
+    "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
+    "recovering": "Re-resolve canonical state/version and the original request identity before permitting another effect.",
+    "success": "Announce only the server-confirmed canonical result. First value additionally requires independently verified native artifact/run binding."
+  },
+  "navigation": {
+    "back": "Browser and product Back preserve session form state without recreating organizations, agents or runs.",
+    "cancelOrSaveExit": "No input is written to browser persistent storage; committed activation drafts remain in the native onboarding owner.",
+    "deepLink": "/saas/activation/10",
+    "resume": "Refresh current native state and resume the first incomplete material step; stale steps cannot override it."
+  },
+  "accessibility": {
+    "initialFocus": "Main heading or the dialog category control; keyboard focus is visible and unobscured.",
+    "focusAfterError": "Error summary or first invalid control, with a programmatically associated explanation.",
+    "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
+    "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
+    "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
+    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
+    "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
+    "reducedMotion": "No essential animated transition or moving progress indicator.",
+    "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
+  },
+  "responsive": {
+    "wide": "Readable constrained content width with natural wrapping.",
+    "narrow": "Reflow cards and form actions without concealing utilities or consequences.",
+    "mobile": "Touch targets remain reachable; dialogs scroll within the viewport and do not obscure focus."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Only current principal/company-authorized customer data",
+      "Feedback original text and visible messages only in private customer history"
+    ],
+    "dataCollected": [
+      "Only explicit fields and the published safe-context allowlist"
+    ],
+    "sensitiveFields": [
+      "Raw intent, company facts, feedback and results remain customer data"
+    ],
+    "loggingConstraints": "Exclude customer prose, prompts, result bodies, attachments and raw errors from generic analytics/activity details; native domain audit is purpose-separated."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "Raw intent",
+      "Company facts",
+      "Feedback body/goal",
+      "Documents/prompts/results",
+      "Credentials/raw URLs/query strings/DOM/screenshots"
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Reconcile current plan status/version and actual dispatch references; never infer work from an unacknowledged transport",
+      "Retain current authorized Stop on withdrawn Source; prohibit continue/new work and hide withdrawn titles",
+      "Reject another principal, company or stale same-turn session, and do not replay a different request payload",
+      "The scoped checks do not qualify new-agent provisioning, customer provider delivery or full first-value usability"
+    ],
+    "accessibility": [
+      "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
+    ],
+    "securityPrivacy": [
+      "Verify current membership/resource revocation, tenant isolation, untrusted content and separate private feedback identity purpose."
+    ],
+    "usability": [
+      "Use representative exploratory and pre-registered confirmatory journey evidence with explicit PASS/FAIL/INCONCLUSIVE; source checks are insufficient."
+    ]
+  }
+}

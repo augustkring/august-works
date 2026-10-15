@@ -1,0 +1,1 @@
+CREATE INDEX "automation_artifacts_authoring_sources_idx" ON "automation_artifacts" USING gin ("authoring_source_workflow_ids");

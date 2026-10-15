@@ -37,11 +37,90 @@ function normalizePath(url: string): string {
   return pathname.length > 0 ? pathname : "/";
 }
 
+function isPrivateTaskDraftUrl(url: string): boolean {
+  const pathname = normalizePath(url).replace(/^https?:\/\/[^/]*/i, "");
+  if (/^\/api\/companies\/[^/]*\/issues\/create-receipts(?:\/|$)/i.test(pathname)) return true;
+  const queryAt = url.indexOf("?");
+  if (queryAt < 0) return false;
+  const marker = new URLSearchParams(url.slice(queryAt + 1)).getAll("awExperienceDraft").includes("task");
+  return marker && (/^\/api\/companies\/[^/]*\/issues(?:\/|$)/i.test(pathname)
+    || /^\/api\/issues(?:\/|$)/i.test(pathname));
+}
+
 const SECRET_SENSITIVE_HTTP_PATHS = [
   /^\/api\/chat-endpoints\/[^/]+\/setup(?:-secret)?(?:\/|$)/,
   /^\/api\/saas\/account\/deletion(?:\/|$)/,
 ];
 const SECRET_SENSITIVE_HTTP_METHODS = new Set(["POST", "PUT", "PATCH"]);
+
+/** Feedback and command text has a separate private purpose, including rejected requests. */
+export function isPrivateExperienceHttpRequest(method: string | undefined, url: string | undefined): boolean {
+  if (!method || !url) return false;
+  if (isPrivateTaskDraftUrl(url)) return true;
+  const pathname = normalizePath(url).replace(/^https?:\/\/[^/]*/i, "");
+  return /^\/api\/companies\/[^/]*\/projects(?:\/|$)/i.test(pathname)
+    || /^\/api\/agent-packages(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/[^/]*\/(?:agent-packages|agent-package-options|agent-package-installations|agent-package-evaluations|agent-package-update-proposals)(?:\/|$)/i.test(pathname)
+    || /^\/api\/projects(?:\/|$)/i.test(pathname)
+    || /^\/api\/(?:companies\/(?:[^/]*\/)*customer-feedback|internal\/customer-feedback)(?:\/|$)/i.test(pathname)
+    || /^\/api\/(?:saas\/)?companies\/[^/]*\/(?:activation|onboarding)(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/[^/]*\/notifications\/preference-proposals(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/[^/]*\/notifications\/channel-preferences(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/[^/]*\/conversations\/[^/]*\/authoring(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/[^/]+\/experience\/commands(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/[^/]*\/experience\/insight-card(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/[^/]*\/experiments\/[^/]*\/versions\/[^/]*\/analysis-summary(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/[^/]*\/management-reviews\/[^/]*\/summary(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/[^/]*\/experience\/(?:workflows|workflow-drafts|workflow-draft-requests)(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/[^/]*\/experience\/orchestration(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/[^/]+\/experience\/company(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/[^/]+\/experience\/analytics(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/[^/]+\/experience\/support-access(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/(?:[^/]*\/)*support-sessions(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/[^/]+\/agent-package-installations\/[^/]+\/experience(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/[^/]+\/agents\/[^/]+\/experience(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/[^/]+\/agents\/[^/]+\/retirement(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/[^/]+\/memory\/experience(?:\/|$)/i.test(pathname)
+    // Original graph/draft/run writes can echo copied private configuration in
+    // database errors. Keep the whole Native owner namespace private, including
+    // rejected methods and malformed scopes, rather than just its V9 view.
+    || /^\/api\/companies\/[^/]*\/(?:workflows|workflow-runs)(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/(?:[^/]*\/)*agent-configuration-drafts(?:\/|$)/i.test(pathname);
+}
+export function privateExperienceLogUrl(url: string): string {
+  if (isPrivateTaskDraftUrl(url)) return "/api/companies/:companyId/issues/create-receipts/:operation";
+  if (/\/notifications\/channel-preferences(?:\/|$)/i.test(normalizePath(url))) return "/api/companies/:companyId/notifications/channel-preferences/:operation";
+  if (/\/notifications\/preference-proposals(?:\/|$)/i.test(normalizePath(url))) return "/api/companies/:companyId/notifications/preference-proposals/:operation";
+  const pathname = normalizePath(url).replace(/^https?:\/\/[^/]*/i, "");
+  if (/^\/api\/companies\/[^/]*\/projects(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/projects/:operation";
+  if (/^\/api\/projects(?:\/|$)/i.test(pathname)) return "/api/projects/:projectId/:operation";
+  if (/\/agent-configuration-drafts(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/agent-configuration-drafts/:operation";
+  if (/^\/api\/companies\/[^/]*\/(?:activation|onboarding)(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/activation-or-onboarding/:operation";
+  if (/^\/api\/saas\/companies\//i.test(pathname)) return "/api/saas/companies/:companyId/activation-or-onboarding/:operation";
+  if (/\/conversations\/[^/]*\/authoring(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/conversations/:conversationId/authoring";
+  if (/\/experience\/insight-card(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/insight-card";
+  if (/\/experiments\/[^/]*\/versions\/[^/]*\/analysis-summary(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experiments/:experimentId/versions/:versionId/analysis-summary";
+  if (/\/management-reviews\/[^/]*\/summary(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/management-reviews/:reviewId/summary";
+  if (/\/experience\/commands(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/commands";
+  if (/\/experience\/(?:workflows|workflow-drafts|workflow-draft-requests)(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/workflow-authoring/:operation";
+  if (/\/experience\/orchestration(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/orchestration";
+  if (/\/experience\/company(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/company";
+  if (/\/experience\/analytics(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/analytics";
+  if (/\/experience\/support-access(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/support-access";
+  if (/\/support-sessions(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/support-sessions/:operation";
+  if (/\/agent-package-installations\/[^/]+\/experience(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/agent-package-installations/:installationId/experience";
+  if (/^\/api\/agent-packages(?:\/|$)/i.test(pathname)) return "/api/agent-packages/:operation";
+  if (/^\/api\/companies\/[^/]*\/(?:agent-packages|agent-package-options|agent-package-installations|agent-package-evaluations|agent-package-update-proposals)(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/agent-packages/:operation";
+  if (/\/agents\/[^/]+\/experience(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/agents/:agentId/experience";
+  if (/\/agents\/[^/]+\/retirement(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/agents/:agentId/retirement";
+  if (/\/memory\/experience(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/memory/experience";
+  if (/\/workflows\/[^/]*\/experience(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/workflows/:workflowId/experience";
+  if (/\/workflow-runs\/[^/]*\/experience(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/workflow-runs/:runId/experience";
+  if (/^\/api\/companies\/[^/]*\/workflows(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/workflows/:workflowId/:operation";
+  if (/^\/api\/companies\/[^/]*\/workflow-runs(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/workflow-runs/:runId/:operation";
+  if (/^\/api\/internal\//i.test(pathname)) return "/api/internal/customer-feedback/:companyId/:operation";
+  return "/api/companies/:companyId/customer-feedback/:operation";
+}
 
 /** Provider payloads are private even when a method/signature is rejected. */
 export function isPrivateWebhookHttpRequest(
@@ -79,6 +158,7 @@ export function isSecretSensitiveHttpRequest(
   url: string | undefined,
 ): boolean {
   if (isPrivateWebhookHttpRequest(method, url)) return true;
+  if (isPrivateExperienceHttpRequest(method, url)) return true;
   if (!method || !url) return false;
   if (!SECRET_SENSITIVE_HTTP_METHODS.has(method.toUpperCase())) return false;
   const pathname = normalizePath(url);

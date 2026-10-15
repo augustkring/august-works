@@ -1,3 +1,5 @@
+import { isExperienceCardToolName } from "@paperclipai/shared";
+import { ExperienceToolCard } from "./ExperienceToolCard";
 import { DispositionRecoveryNotice, useDispositionRecoverySnapshot } from "./DispositionRecoveryNotice";
 import { AgentAvatar } from "@/components/AgentAvatar";
 import { TaskChatPausedTakeover, type TaskComposerPause } from "./task-chat/TaskChatPausedTakeover";
@@ -11,6 +13,8 @@ import type {
 } from "@assistant-ui/react";
 import {
   createContext,
+  lazy,
+  Suspense,
   Component,
   forwardRef,
   memo,
@@ -325,6 +329,8 @@ interface IssueChatMessageContext {
   linkCaseReferences?: boolean;
 }
 
+const LazyExperienceToolUI = lazy(() => import("./ExperienceToolUI"));
+
 const IssueChatCtx = createContext<IssueChatMessageContext>({
   feedbackDataSharingPreference: "prompt",
   feedbackTermsUrl: null,
@@ -500,6 +506,7 @@ export function shouldRenderComposerHandoffPreview(
 export interface IssueChatComposerHandle {
   focus: () => void;
   restoreDraft: (submittedBody: string) => void;
+  appendRequest?: (body: string) => boolean;
 }
 
 interface IssueChatComposerProps {
@@ -1609,6 +1616,8 @@ function IssueChatToolPart({
   isError?: boolean;
 }) {
   const [open, setOpen] = useState(false);
+  if (isExperienceCardToolName(toolName))
+    return <ExperienceToolCard wire={args ?? argsText} state={isError ? "error" : result === undefined ? "loading" : "ready"} />;
   if (toolName === "paperclip_provider_activity") {
     return (
       <IssueChatProviderActivity
@@ -4895,8 +4904,16 @@ const IssueChatComposer = forwardRef<
         );
         focusComposer();
       },
+      appendRequest: (request: string) => {
+        if (composerDisabledReason || composerPause || submittingRef.current || uncertainSubmission) return false;
+        const current = bodyRef.current;
+        const next = current.includes(request) ? current : current.trim() ? `${current}\n\n${request}` : request;
+        bodyRef.current = next; setBody(next);
+        focusComposer();
+        return true;
+      },
     }),
-    [],
+    [composerDisabledReason, composerPause, uncertainSubmission],
   );
 
   const showStop =
@@ -6547,6 +6564,9 @@ export function IssueChatThread({
 
   return (
     <AssistantRuntimeProvider runtime={runtime}>
+      {messages.some(message => message.content.some(part => part.type === "tool-call" && isExperienceCardToolName(part.toolName))) && (
+        <Suspense fallback={null}><LazyExperienceToolUI /></Suspense>
+      )}
       <IssueChatCtx.Provider value={chatCtx}>
         <div className={cn(variant === "embedded" ? "space-y-3" : "space-y-4")}>
           {resolvedShowJumpToLatest ? (

@@ -437,6 +437,7 @@ const CAPABILITY_ADMISSION_SHUTDOWN_DEADLINE_MS = 1_000;
 
 async function captureWorkspaceBaselineBeforeAdmission(
   workingDirectory: string,
+  deadlineMs: number,
 ): Promise<PaperclipWorkspaceSnapshot | null> {
   const controller = new AbortController();
   let timeout: ReturnType<typeof setTimeout> | null = null;
@@ -447,7 +448,7 @@ async function captureWorkspaceBaselineBeforeAdmission(
         timeout = setTimeout(() => {
           resolveTimeout(null);
           controller.abort(new Error("workspace baseline admission deadline exceeded"));
-        }, CAPABILITY_WORKSPACE_BASELINE_DEADLINE_MS);
+        }, deadlineMs);
       }),
     ]);
   } finally {
@@ -490,6 +491,8 @@ export type CapabilityLiveTransportFactory = (
 ) => CapabilityRunnerdCodexTransport;
 
 export interface CapabilityLiveSessionServiceOptions {
+  /** Trusted host admission budget, 1–1000 ms; never supplied by a turn or model. */
+  workspaceBaselineDeadlineMs?: number;
   store?: CapabilityLiveSessionStore;
   transportFactory?: CapabilityLiveTransportFactory;
   transportOptions?: CapabilityRunnerdCodexTransportOptions;
@@ -851,6 +854,7 @@ export class CapabilityLiveSessionService {
   readonly #transportFactory: CapabilityLiveTransportFactory;
   readonly #transportOptions: CapabilityRunnerdCodexTransportOptions;
   readonly #now: () => Date;
+  readonly #workspaceBaselineDeadlineMs: number;
   readonly #sessions = new Map<string, CapabilityLiveSession>();
 
   constructor(options: CapabilityLiveSessionServiceOptions = {}) {
@@ -858,6 +862,11 @@ export class CapabilityLiveSessionService {
     this.#transportFactory = options.transportFactory ?? createCapabilityRunnerdCodexTransport;
     this.#transportOptions = options.transportOptions ?? {};
     this.#now = options.now ?? (() => new Date());
+    const budget = options.workspaceBaselineDeadlineMs ?? CAPABILITY_WORKSPACE_BASELINE_DEADLINE_MS;
+    if (!Number.isSafeInteger(budget) || budget < 1 || budget > 1_000) {
+      throw new Error("workspaceBaselineDeadlineMs must be an integer from 1 to 1000");
+    }
+    this.#workspaceBaselineDeadlineMs = budget;
   }
 
   async create(input: CreateCapabilityLiveSessionInput = {}): Promise<CapabilityLiveSession> {
@@ -955,6 +964,7 @@ export class CapabilityLiveSessionService {
       transportFactory: this.#transportFactory,
       transportOptions: this.#transportOptions,
       now: this.#now,
+      workspaceBaselineDeadlineMs: this.#workspaceBaselineDeadlineMs,
       attemptId: input.attemptId ?? runId,
     });
     this.#sessions.set(session.id, session);
@@ -973,6 +983,7 @@ export class CapabilityLiveSessionService {
       transportFactory: this.#transportFactory,
       transportOptions: this.#transportOptions,
       now: this.#now,
+      workspaceBaselineDeadlineMs: this.#workspaceBaselineDeadlineMs,
     });
     this.#sessions.set(session.id, session);
     return session;
@@ -1043,6 +1054,7 @@ export class CapabilityLiveSessionService {
         transportFactory: this.#transportFactory,
         transportOptions: this.#transportOptions,
         now: this.#now,
+      workspaceBaselineDeadlineMs: this.#workspaceBaselineDeadlineMs,
       });
       this.#sessions.set(session.id, session);
       return session;
@@ -1122,6 +1134,7 @@ interface OpenSessionOptions {
   transportFactory: CapabilityLiveTransportFactory;
   transportOptions: CapabilityRunnerdCodexTransportOptions;
   now: () => Date;
+  workspaceBaselineDeadlineMs: number;
   attemptId: string;
 }
 
@@ -1136,6 +1149,7 @@ export class CapabilityLiveSession {
   readonly #transportFactory: CapabilityLiveTransportFactory;
   readonly #transportOptions: CapabilityRunnerdCodexTransportOptions;
   readonly #now: () => Date;
+  readonly #workspaceBaselineDeadlineMs: number;
   readonly #authority: CapabilityLiveAuthoritySnapshot;
   readonly #config: CapabilityLiveSessionConfigSnapshot;
   readonly #createdAt: string;
@@ -1181,6 +1195,7 @@ export class CapabilityLiveSession {
     this.#transportFactory = options.transportFactory;
     this.#transportOptions = options.transportOptions;
     this.#now = options.now;
+    this.#workspaceBaselineDeadlineMs = options.workspaceBaselineDeadlineMs;
     this.#dispatcher = new CapabilitySemanticDispatcher(this.#port, {
       scenario: this.#config.scenario,
       explicitClaims: this.#config.explicitClaims,
@@ -1491,6 +1506,7 @@ export class CapabilityLiveSession {
     const userEntryId = this.#appendTranscript("user", value, null);
     const workspaceBeforePromise = captureWorkspaceBaselineBeforeAdmission(
       this.#config.workingDirectory,
+      this.#workspaceBaselineDeadlineMs,
     );
     let admissionFailure: unknown = null;
     if (this.#terminalTurns.length > 0) {

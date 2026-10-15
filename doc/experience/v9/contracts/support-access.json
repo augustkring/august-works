@@ -1,0 +1,121 @@
+{
+  "screenId": "SUPPORT-ACCESS",
+  "journeyId": "support",
+  "routeOrSurface": "/company/support-access",
+  "targetExperienceProfiles": ["member", "manager", "admin", "security_admin"],
+  "customerOutcome": "Review bounded native V6 support approval history without granting access or inferring that support acted or resolved an issue.",
+  "entryConditions": [
+    "Current authenticated human company owner, matching expected account and company scope.",
+    "Effective progressive_shell_v9 and original admin_support_v6 dependencies enabled.",
+    "A pending current-session recheck suppresses cached private content and actions; restored account authority requires a fresh original-owner read."
+  ],
+  "exitConditions": [
+    "Return to Company or explicitly open original native support controls.",
+    "Account, company, current owner, source or rollout loss hides the whole private read."
+  ],
+  "content": {
+    "h1": "Support access history",
+    "supportingCopy": "Recorded approvals confer no access decision; original V6 operator, approving owner, exact scopes and expiry are independently rechecked at use.",
+    "customerTerms": [
+      "Recorded approval",
+      "Expiry",
+      "Revoked",
+      "Support access"
+    ],
+    "displayedState": [
+      "At most ten original native V6 records with source observation and explicit has-more boundary.",
+      "Only original record/operator references, approval/expiry/revocation times and fixed scope labels.",
+      "Recorded, expired and revoked are historical facts; no support success, current operator authorization or business verification is claimed."
+    ]
+  },
+  "inputs": [],
+  "actions": {
+    "primary": {
+      "label": "Review native support controls",
+      "operation": "Navigate to the original independent V6 owner approval/revocation controls; this read creates no grant or support action."
+    },
+    "secondary": [
+      "Back to Company",
+      "Retry a safe current read",
+      "Open the confirmed support mailto without report content"
+    ],
+    "destructiveOrIrreversible": []
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Original native V6 support_sessions and company owner membership",
+      "Current company scope, effective V6/V9 flags and company privacy serialization"
+    ],
+    "canonicalWriteOperation": "None",
+    "authorityEffect": "The exact existing V6 active user/owner membership predicate is reused; company administrator claims and local board do not substitute for that owner.",
+    "asyncWork": "Five-second SQL/source bound, owner/session/settings share locks and repeated native admission before response. Account/company-bound reads recheck on focus, native events and a fifteen-second foreground interval.",
+    "receipt": "Original native V6 record references only; no secondary history store or inferred authorization."
+  },
+  "states": {
+    "loading": "Checking, failed, denied or unavailable source hides prior private records and never implies an empty history. A cached session is insufficient while its current recheck is unresolved.",
+    "empty": "The current authorized native source has no support records.",
+    "partial": "Owner history and separately owned original support controls are implemented in source. Immutable review reservation, exact approval/revocation receipt replay and pending-request cancellation still need exact migrated, built-browser and human qualification; support assistant and general recovery remain open.",
+    "stale": "Checking, failed, denied or unavailable source hides prior private records and never implies an empty history.",
+    "validation_error": "Checking, failed, denied or unavailable source hides prior private records and never implies an empty history.",
+    "system_error": "Checking, failed, denied or unavailable source hides prior private records and never implies an empty history.",
+    "permission_denied": "Checking, failed, denied or unavailable source hides prior private records and never implies an empty history.",
+    "recovering": "Checking, failed, denied or unavailable source hides prior private records and never implies an empty history.",
+    "success": "Checking, failed, denied or unavailable source hides prior private records and never implies an empty history."
+  },
+  "navigation": {
+    "back": "Back to Company; original native support controls retain their separate authority.",
+    "cancelOrSaveExit": "No draft or mutation on this surface.",
+    "deepLink": "/company/support-access",
+    "resume": "Re-read current account/company/installation and actual native grants; no cached receipt grants authority."
+  },
+  "accessibility": {
+    "initialFocus": "Current page H1 after the first admitted private source.",
+    "focusAfterError": "Current safe error region; an already open native dialog retains focus.",
+    "focusAfterSuccess": "Restore the connected equivalent control after private recheck; never steal focus from another active context.",
+    "keyboardModel": "Semantic headings, time elements and token-sized navigation/contact links; no new privileged action.",
+    "statusAnnouncement": "Polite loading status, safe alert for unavailable current state.",
+    "targetSize": "Token min-h-11 links/buttons.",
+    "zoomReflow": "Stacked current state and receipt rows at narrow width; no horizontal table.",
+    "reducedMotion": "No animation.",
+    "screenReaderNotes": "Native Layout owns the sole main landmark; this page uses a section, semantic headings, lists, named scope labels and time elements. Source errors receive focus."
+  },
+  "responsive": {
+    "wide": "Stacked wrapping metadata, token touch targets and no horizontal table.",
+    "narrow": "Stacked wrapping metadata, token touch targets and no horizontal table.",
+    "mobile": "Stacked wrapping metadata, token touch targets and no horizontal table."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Original scoped record/operator references and fixed scope/state/time metadata"
+    ],
+    "dataCollected": [],
+    "sensitiveFields": [
+      "Reasons, approving-owner IDs, operator configuration, audit payloads, errors and private work are omitted."
+    ],
+    "loggingConstraints": "Private no-store read; normalized content-free HTTP logs including malformed/rejected methods. No metadata in mailto, analytics or browser persistence."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "Session/operator IDs",
+      "Reasons",
+      "Owner IDs",
+      "Private source/error payloads"
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Actual original V6 approval/revoke/expiry, ten-row bound, tenant exclusion, owner loss and rollout tests.",
+      "Native operator/approving-owner/scope/expiry admission remains independently authoritative; a recorded row does not assert it."
+    ],
+    "accessibility": [
+      "Keyboard H1/error focus, one main landmark and localized scope labels; exact built mobile axe and manual screen-reader/zoom acceptance remain pending."
+    ],
+    "securityPrivacy": [
+      "Strict fields and exact account/company binding; private query epochs withdraw old/late data; no write, grant, notification or automatic send."
+    ],
+    "usability": [
+      "Representative exploratory and confirmatory support/recovery evidence remains pending; source tests are not launch evidence."
+    ]
+  }
+}

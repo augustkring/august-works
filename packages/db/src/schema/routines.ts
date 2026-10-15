@@ -121,6 +121,7 @@ export const routineRevisions = pgTable(
       table.routineId,
       table.createdAt,
     ),
+    companyAuthoringRunIdx: index("routine_revisions_company_authoring_run_idx").on(table.companyId, table.createdByRunId),
     companyResponsibleUserIdx: index("routine_revisions_company_responsible_user_idx").on(
       table.companyId,
       table.responsibleUserId,

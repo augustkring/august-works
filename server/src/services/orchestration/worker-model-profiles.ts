@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
 import { readFileSync, realpathSync, statSync } from "node:fs";
 import { z } from "zod";
+import { forbidden } from "../../errors.js";
 import {
   modelQualificationProfileSchema,
   checkModelQualificationProvider,
@@ -22,6 +23,21 @@ export const workerModelProfileSchema = modelQualificationProfileSchema
   .strict()
   .superRefine(checkModelQualificationProvider);
 export type WorkerModelProfile = z.infer<typeof workerModelProfileSchema>;
+
+/** The current canonical configuration selects one installed qualification.
+ * An unselected alternative never becomes a default or supplies another
+ * presence's credential, price or qualification. */
+export function selectWorkerModelProfile(profiles: readonly WorkerModelProfile[], input: {
+  companyId: string; agentId: string; profileId?: string; configurationHash?: string; sourceSha: string; protectedEvidenceOrigin: string;
+}) {
+  if (input.profileId === undefined && input.configurationHash === undefined)
+    throw forbidden("The exact installed worker model qualification is required");
+  const matches = profiles.filter(p => p.companyId === input.companyId && p.workerAgentId === input.agentId &&
+    (input.profileId === undefined || p.id === input.profileId) &&
+    (input.configurationHash === undefined || p.qualifiedConfigurationHash === input.configurationHash));
+  if (matches.length !== 1) throw forbidden("The exact installed worker model qualification is required");
+  return assertWorkerModelProfileCurrent(matches[0]!, input.sourceSha, input.protectedEvidenceOrigin);
+}
 
 export function assertWorkerModelProfileCurrent(
   raw: WorkerModelProfile,
@@ -64,7 +80,7 @@ export function loadWorkerModelProfiles(
   }
   const profiles = z.array(workerModelProfileSchema).max(100).parse(data);
   if (
-    new Set(profiles.map((p) => `${p.companyId}:${p.workerAgentId}`)).size !==
+    new Set(profiles.map((p) => `${p.companyId}:${p.workerAgentId}:${p.qualifiedConfigurationHash}`)).size !==
       profiles.length ||
     new Set(profiles.map((p) => p.id)).size !== profiles.length
   )

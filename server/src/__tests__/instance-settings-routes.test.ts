@@ -65,14 +65,16 @@ const mockDb = {
   select: vi.fn(() => ({ from: () => Promise.resolve(mockCompanyRows) })),
 };
 
+const routeModules = await hoistModuleGraph(registerModuleMocks, async () => {
+  const [{ errorHandler }, { instanceSettingsRoutes }] = await Promise.all([
+    vi.importActual<typeof import("../middleware/index.js")>("../middleware/index.js"),
+    vi.importActual<typeof import("../routes/instance-settings.js")>("../routes/instance-settings.js"),
+  ]);
+  return { errorHandler, instanceSettingsRoutes };
+});
+
 describe("instance settings routes", () => {
-  const routeModules = hoistModuleGraph(registerModuleMocks, async () => {
-    const [{ errorHandler }, { instanceSettingsRoutes }] = await Promise.all([
-      vi.importActual<typeof import("../middleware/index.js")>("../middleware/index.js"),
-      vi.importActual<typeof import("../routes/instance-settings.js")>("../routes/instance-settings.js"),
-    ]);
-    return { errorHandler, instanceSettingsRoutes };
-  });
+
 
   function createApp(actor: any) {
     const { errorHandler, instanceSettingsRoutes } = routeModules.value;

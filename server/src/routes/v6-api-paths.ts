@@ -8,6 +8,8 @@ export const v6ApiPaths: {
   successStatus: number;
   auth: "session" | "host" | "provider";
   body?: z.ZodType;
+  result?: z.ZodType;
+  privateResponse?: boolean;
 }[] = [
   {
     method: "get",
@@ -122,18 +124,52 @@ export const v6ApiPaths: {
     path: "/api/companies/{companyId}/support-sessions",
     successStatus: 200,
     auth: "session",
+    privateResponse: true,
   },
   {
     method: "post",
     path: "/api/companies/{companyId}/support-sessions",
     successStatus: 201,
     auth: "session",
+    privateResponse: true,
   },
   {
     method: "delete",
     path: "/api/companies/{companyId}/support-sessions/{sessionId}",
     successStatus: 200,
     auth: "session",
+    privateResponse: true,
+  },
+  {
+    method: "get",
+    path: "/api/companies/{companyId}/support-sessions/pending-review",
+    successStatus: 200,
+    auth: "session",
+    result: shared.nativeSupportReviewSchema.nullable(),
+    privateResponse: true,
+  },
+  {
+    method: "post",
+    path: "/api/companies/{companyId}/support-sessions/reviews",
+    successStatus: 201,
+    auth: "session",
+    result: shared.nativeSupportReviewSchema,
+    privateResponse: true,
+  },
+  {
+    method: "delete",
+    path: "/api/companies/{companyId}/support-sessions/reviews/{approvalId}",
+    successStatus: 200,
+    auth: "session",
+    result: shared.nativeSupportReviewSchema,
+    privateResponse: true,
+  },
+  {
+    method: "get",
+    path: "/api/companies/{companyId}/support-sessions/{sessionId}",
+    successStatus: 200,
+    auth: "session",
+    privateResponse: true,
   },
   {
     method: "get",
@@ -384,6 +420,10 @@ export const v6ApiPaths: {
 ];
 
 const bodies: Record<string, z.ZodType> = {
+  "POST /api/companies/{companyId}/support-sessions":
+    shared.supportSessionSchema,
+  "POST /api/companies/{companyId}/support-sessions/reviews":
+    shared.prepareSupportApprovalSchema,
   "POST /api/internal/runtime/enroll": shared.runtimeEnrollmentSchema,
   "POST /api/saas/internal/runtime-capacity":
     shared.runtimeCapacityQualificationSchema,

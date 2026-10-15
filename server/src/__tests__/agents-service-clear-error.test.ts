@@ -47,6 +47,27 @@ describeEmbeddedPostgres("agent service clearError", () => {
     await tempDb?.cleanup();
   });
 
+  it("pauses and resumes without manufacturing completion or mutating configuration and pending run history", async () => {
+    const companyId = randomUUID(), agentId = randomUUID(), runId = randomUUID();
+    await db.insert(companies).values({ id: companyId, name: "Pause lifecycle", issuePrefix: `P${companyId.slice(0, 6).toUpperCase()}` });
+    const config = { command: "unused", model: "retained" }, runtimeConfig = { heartbeat: { enabled: false } };
+    await db.insert(agents).values({ id: agentId, companyId, name: "Retained worker", role: "engineer", status: "idle",
+      adapterType: "process", adapterConfig: config, runtimeConfig, permissions: { canCreateAgents: false, canCreateSkills: false } });
+    await db.insert(heartbeatRuns).values({ id: runId, companyId, agentId, status: "running", contextSnapshot: { scenario: "retained" } });
+    const service = agentService(db);
+    const paused = await service.pause(agentId);
+    expect(paused).toMatchObject({ id: agentId, status: "paused", pauseReason: "manual", adapterConfig: config, runtimeConfig });
+    expect(paused?.pausedAt).toBeInstanceOf(Date);
+    expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId))).toEqual([
+      expect.objectContaining({ id: runId, status: "running", finishedAt: null, contextSnapshot: { scenario: "retained" } }),
+    ]);
+    const resumed = await service.resume(agentId);
+    expect(resumed).toMatchObject({ id: agentId, status: "idle", pauseReason: null, pausedAt: null, adapterConfig: config, runtimeConfig });
+    expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId))).toEqual([
+      expect.objectContaining({ id: runId, status: "running", finishedAt: null }),
+    ]);
+  });
+
   it("resets converted agent sessions while preserving identity, configuration and run history", async () => {
     const companyId = randomUUID();
     const agentId = randomUUID();

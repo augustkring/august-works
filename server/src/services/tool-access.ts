@@ -1,6 +1,12 @@
 import { COGNEE_STDIO_TEMPLATE, cogneeCloudUrl } from "./cognee-connection.js";
 import { isMemoryConnectorId, isRemoteMcpConnectorMethod, connectionPurposeTransportSchema } from "@paperclipai/shared";
 import { instanceSettingsService } from "./instance-settings.js";
+import { assertActivationConnectionPurpose, assertActivationConnectionPurposeInTransaction } from "./saas/activation-owner.js";
+import { readDeferredActivationSetup, recordDeferredActivationCompletion } from "./saas/activation-connection-completion.js";
+import { originalOAuthGrantExpiration } from "./tool-oauth-grant-metadata.js";
+import { nativeSha256 } from "./native-runtime/canonical.js";
+import { withV7ActivityTransaction } from "./v7-mutations.js";
+import type { ActivityPublication } from "./activity-log.js";
 import { githubBotRequest } from "./chat-github-client.js";
 import { syncConnectionCredentialBindings } from "./connection-credential-bindings.js";
 import {
@@ -30,6 +36,7 @@ import {
 import type { Db } from "@paperclipai/db";
 import {
   agents,
+  activationConnectionConsents,
   connectionGrantMembers,
   connectionGrantDelegations,
   connectionGrants,
@@ -2511,6 +2518,24 @@ function managedConnectorProfile(value: string | undefined): {
   return null;
 }
 
+/** Internal original allocation seam; API callers cannot supply callbacks. */
+export type GalleryAppAllocationOwner = {
+  claim: (method: ReturnType<typeof activationConnectionMethodSource>) => Promise<string>;
+  guard: (tx: Db) => Promise<void>;
+  bind: (tx: Db, connection: typeof toolConnections.$inferSelect, publications: ActivityPublication[]) => Promise<void>;
+};
+
+export function activationConnectionMethodSource(app: AppDefinition, method: ConnectionMethodDef) {
+  const profile = managedConnectorProfile(method.connectorProfile);
+  if (!profile || profile.provider !== "google" || !isPaperclipCloudConnectorStrategy(method.oauthStrategy) ||
+      method.auth !== "oauth" || !method.grantKinds?.includes("user") || !method.defaults?.serverUrl ||
+      method.tenantFields?.length || method.extensionFields?.length || method.purpose === "channel" || method.transport !== "mcp_remote")
+    throw unprocessable("This method needs a separately verified permission preview");
+  return { galleryKey: app.slug, providerName: app.name, method,
+    providerScopes: [...profile.scopes], scopeProfile: profile.id, resource: method.defaults.serverUrl,
+    providerWriteTools: [...GOOGLE_WORKSPACE_CONNECTOR_PROFILES[profile.id as GoogleWorkspaceConnectorProfileId].writeTools] };
+}
+
 export async function loadGitHubTokenRepositories(
   headers: Record<string, string>,
   request: typeof fetch = fetch,
@@ -3064,6 +3089,25 @@ export function toolAccessService(
       ? (await currentCloudConnector()?.getCapabilities() ?? [])
       : await paperclipCloudConnectorCapabilitiesFromEnv();
     return appWithPaperclipCloudConnectorAvailability(app, profiles);
+  }
+  /** Original setup metadata and actual managed scopes; never a guessed scope
+   * from a gallery hint. Broker availability is read outside onboarding locks. */
+  async function activationConnectionMethod(galleryKey: string, methodKey?: string) {
+    const definition = getConnectableAppDefinition(galleryKey);
+    if (!definition) throw notFound("The original connection provider is unavailable");
+    const app = await appForConnectionSetup(definition);
+    const methods = getAvailableConnectionMethods(app).filter(candidate => {
+      const profile = managedConnectorProfile(candidate.connectorProfile);
+      return candidate.auth === "oauth" && isPaperclipCloudConnectorStrategy(candidate.oauthStrategy) &&
+        profile?.provider === "google" && candidate.grantKinds?.includes("user") &&
+        candidate.purpose !== "channel" && candidate.transport === "mcp_remote" &&
+        candidate.defaults?.serverUrl && !(candidate.tenantFields?.length) && !(candidate.extensionFields?.length);
+    });
+    const method = methodKey ? methods.find(candidate => candidate.key === methodKey) :
+      methods.find(candidate => candidate.connectorProfile && isGoogleWorkspaceConnectorProfileId(candidate.connectorProfile) &&
+        GOOGLE_WORKSPACE_CONNECTOR_PROFILES[candidate.connectorProfile].writeTools.length === 0);
+    if (!method) throw unprocessable("This method needs a separately verified permission preview", { code: "ACTIVATION_CONNECTION_METHOD_UNQUALIFIED" });
+    return activationConnectionMethodSource(app, method);
   }
   let nextGitHubContinuitySweepAt = 0;
   const vercelConnect =
@@ -10719,14 +10763,7 @@ export function toolAccessService(
     grant: typeof connectionGrants.$inferSelect,
     connection: typeof toolConnections.$inferSelect,
   ): number | null {
-    const grantExpiresAt = oauthGrantConfig(grant).accessTokenExpiresAt;
-    const value =
-      typeof grantExpiresAt === "string"
-        ? grantExpiresAt
-        : oauthConfig(connection).expiresAt;
-    if (typeof value !== "string") return null;
-    const ms = Date.parse(value);
-    return Number.isFinite(ms) ? ms : null;
+    return originalOAuthGrantExpiration(grant, connection).expiresAtMs;
   }
 
   async function getOAuthGrantRow(input: {
@@ -11880,6 +11917,7 @@ export function toolAccessService(
     companyId: string,
     input: ConnectToolApp,
     actor?: ActorInfo,
+    allocationOwner?: GalleryAppAllocationOwner,
   ): Promise<ConnectToolAppResult> {
     const definition = input.galleryKey
       ? getConnectableAppDefinition(input.galleryKey)
@@ -11993,6 +12031,13 @@ export function toolAccessService(
       ) {
         existingApplication = recoverableApplication;
       }
+    }
+
+    if (existingApplication && !allocationOwner) {
+      const [purpose] = await db.select({ id: activationConnectionConsents.id }).from(activationConnectionConsents)
+        .where(and(eq(activationConnectionConsents.companyId, companyId), eq(activationConnectionConsents.applicationId, existingApplication.id),
+          ne(activationConnectionConsents.status, "withdrawn"))).limit(1);
+      if (purpose) throw conflict("Continue this connection through its original onboarding permission decision");
     }
 
     const requestedName =
@@ -12521,6 +12566,16 @@ export function toolAccessService(
     } | null = null;
     let personalPublicSetupEstablished = false;
 
+    let ownedConnectionId: string | null = null;
+    if (allocationOwner) {
+      if (!galleryEntry || !method || !existingApplication || retainedConnection || input.resumeConnectionId || input.reconnectConnectionId ||
+          requestedGrantKind !== "user" || input.subjectAgentId || input.link || input.oauthClient || input.saveDraft || input.authMode ||
+          credentialSource !== "paperclip_vault" || input.vercelConnect || Object.keys(input.configValues ?? {}).length ||
+          Object.keys(input.credentialValues ?? {}).length)
+        throw badRequest("Onboarding setup must preserve the reviewed personal method without Agent access");
+      ownedConnectionId = await allocationOwner.claim(activationConnectionMethodSource(galleryEntry, method));
+    }
+
     try {
       const credentialFields =
         credentialSource === "vercel_connect"
@@ -12770,16 +12825,20 @@ export function toolAccessService(
           .where(eq(toolConnections.id, revivedConnectionPrevious.id))
           .returning();
       } else {
-        const connectionId = randomUUID();
-        [connectionRow] = await db
+        const connectionId = ownedConnectionId ?? randomUUID();
+        if (!applicationRow) throw new Error("Original app allocation is unavailable");
+        const allocationApplication = applicationRow;
+        const insertConnection = async (allocationDb: Db, publications: ActivityPublication[] = []) => {
+          if (allocationOwner) await allocationOwner.guard(allocationDb);
+          const [inserted] = await allocationDb
           .insert(toolConnections)
           .values({
             id: connectionId,
             companyId,
-            applicationId: applicationRow.id,
+            applicationId: allocationApplication.id,
             name,
             uid: connectionUid(
-              applicationRow.applicationKey ?? applicationRow.name,
+              allocationApplication.applicationKey ?? allocationApplication.name,
               name,
               connectionId,
             ),
@@ -12802,6 +12861,12 @@ export function toolAccessService(
               actor?.actorType === "user" ? (actor.actorId ?? null) : null,
           })
           .returning();
+          if (allocationOwner) await allocationOwner.bind(allocationDb, inserted!, publications);
+          return inserted!;
+        };
+        connectionRow = allocationOwner
+          ? await withV7ActivityTransaction(db, insertConnection)
+          : await insertConnection(db);
       }
       if (revivedConnectionPrevious) {
         emitConnectionUpdated(
@@ -13150,7 +13215,7 @@ export function toolAccessService(
             },
       };
     } catch (error) {
-      if (personalPublicSetupEstablished) throw error;
+      if (personalPublicSetupEstablished || (allocationOwner && connectionRow)) throw error;
       let identityRollbackError: unknown = null;
       let preserveConcurrentRevival = false;
       if (connectionRow && revivedConnectionPrevious) {
@@ -13473,6 +13538,29 @@ export function toolAccessService(
     return results;
   }
 
+  async function deferredOnboardingPurpose(companyId: string, connectionId: string, actor?: ActorInfo, dbClient: Db = db) {
+    const [purpose] = await dbClient.select().from(activationConnectionConsents).where(and(
+      eq(activationConnectionConsents.companyId, companyId), eq(activationConnectionConsents.connectionId, connectionId)))
+      .orderBy(sql`${activationConnectionConsents.status}='withdrawn'`, desc(activationConnectionConsents.requestedAt), desc(activationConnectionConsents.id)).limit(1);
+    if (!purpose) return null;
+    if (actor?.actorType !== "user" || !actor.actorId || actor.actorSource === "local_implicit")
+      throw forbidden("Current initiating account is required for onboarding connection setup");
+    return (dbClient === db ? assertActivationConnectionPurpose : assertActivationConnectionPurposeInTransaction)(dbClient, { type: "board", source: actor.actorSource ?? "session", userId: actor.actorId }, companyId, connectionId, (connection, current) => {
+    const definition = getConnectableAppDefinition(current.galleryKey);
+    const method = definition?.methods.find(candidate => candidate.key === current.connectionMethodKey);
+    if (!definition || !method) throw conflict("The approved original provider method is unavailable");
+    const source = activationConnectionMethodSource(definition, method), oauth = asRecord(connection.config.oauth);
+    if (nativeSha256(source) !== current.methodHash || connection.credentialPolicy !== "per_user" ||
+        connection.applicationId !== current.applicationId || connection.createdByUserId !== current.subjectUserId ||
+        connection.authKind !== "oauth" || connection.credentialSource !== "paperclip_vault" ||
+        connection.credentialSecretRefs.length || connection.externalCredential ||
+        connection.config.sourceTemplateKey !== current.galleryKey || connection.config.connectionMethodKey !== current.connectionMethodKey ||
+        connection.config.url !== source.resource || oauth.resource !== source.resource || oauth.connectorProfile !== source.scopeProfile ||
+        oauth.strategy !== method.oauthStrategy || !["google", current.galleryKey].includes(String(oauth.provider)) || nativeSha256(oauth.scopes) !== nativeSha256(source.providerScopes))
+      throw conflict("The connection resource or scopes changed; review the original permission again");
+    });
+  }
+
   async function finishGalleryAppConnection(
     companyId: string,
     connectionId: string,
@@ -13480,6 +13568,10 @@ export function toolAccessService(
     actor?: ActorInfo,
   ): Promise<FinishToolAppResult> {
     const connection = await getConnectionRow(connectionId, companyId);
+    const onboardingPurpose = await deferredOnboardingPurpose(companyId, connectionId, actor);
+    if (onboardingPurpose && (onboardingPurpose.status === "withdrawn" || actor?.actorType !== "user" || actor.actorId !== onboardingPurpose.subjectUserId ||
+        input.access === "all_agents" || input.access.agentIds.length || input.preserveExistingAccess))
+      throw conflict("Onboarding connection setup keeps Agent access unassigned");
     if (connection.status === "archived")
       throw conflict("Archived app connections cannot be finished");
     if (connection.config.mcpPreserveAccess === true && isRemoteMcpConnectorMethod(connection.config.sourceTemplateKey, connection.config.connectionMethodKey)) {
@@ -13581,6 +13673,10 @@ export function toolAccessService(
             metadata: { source: "app_gallery_finish" },
           }));
     const transactionResult = await db.transaction(async (tx) => {
+      const currentPurpose = onboardingPurpose ? await deferredOnboardingPurpose(companyId, connectionId, actor, tx as unknown as Db) : null;
+      const currentSetup = currentPurpose ? await readDeferredActivationSetup(tx as unknown as Db, currentPurpose, false) : null;
+      if (currentPurpose && !currentSetup)
+        throw conflict("The original personal connection needs a current successful validation");
       await tx
         .select({ id: toolConnections.id })
         .from(toolConnections)
@@ -13830,7 +13926,7 @@ export function toolAccessService(
       );
       const [updatedConnection] = await tx
         .update(toolConnections)
-        .set({ status: "active", enabled: true, updatedAt: new Date() })
+        .set({ status: "active", enabled: true, updatedAt: currentSetup ? currentSetup.connection.updatedAt : new Date() })
         .where(eq(toolConnections.id, connection.id))
         .returning();
       await tx
@@ -13838,6 +13934,7 @@ export function toolAccessService(
         .set({ status: "active", updatedAt: new Date() })
         .where(eq(toolApplications.id, connection.applicationId));
 
+      if (currentPurpose) await recordDeferredActivationCompletion(tx as unknown as Db, currentPurpose);
       return { profileId, profileBindings, policies, updatedConnection };
     });
     emitConnectionUpdated(
@@ -14132,6 +14229,9 @@ export function toolAccessService(
     },
   ): Promise<ToolOAuthStartResult> {
     let connection = await getConnectionRow(connectionId, companyId);
+    const onboardingPurpose = await deferredOnboardingPurpose(companyId, connectionId, input.actor);
+    if (onboardingPurpose && (input.subjectUserId !== onboardingPurpose.subjectUserId || input.subjectAgentId || input.scopes))
+      throw conflict("Provider sign-in must preserve the approved personal identity and scopes");
     assertSupportedConnection(connection);
     await assertExperimentalConnectorSetupEnabled(connection.config.sourceTemplateKey, connection.status !== "draft");
     if (connection.status === "archived")
@@ -14824,6 +14924,7 @@ export function toolAccessService(
     actor?: ActorInfo;
     interactionId?: string | null;
   }) {
+    const onboardingPurpose = await deferredOnboardingPurpose(input.connection.companyId, input.connection.id, input.actor);
     const linkedInteraction = input.interactionId
       ? await db
           .select({ kind: issueThreadInteractions.kind })
@@ -14869,7 +14970,7 @@ export function toolAccessService(
           ? { agentIds: suggestedAgentIds }
           : "all_agents";
     const remoteMcpAccess = isRemoteMcpConnectorMethod(input.connection.config.sourceTemplateKey, input.connection.config.connectionMethodKey);
-    const access: FinishToolApp["access"] = deferTaskAccess
+    const access: FinishToolApp["access"] = deferTaskAccess || onboardingPurpose
       ? { agentIds: [] }
       : installs.length === 0
         ? remoteMcpAccess ? { agentIds: [] } : normalizedSuggestedAccess
@@ -14958,6 +15059,7 @@ export function toolAccessService(
       stateRow.connectionId,
       stateRow.companyId,
     );
+    const onboardingPurpose = await deferredOnboardingPurpose(connection.companyId, connection.id, input.actor);
     const preCloudCallbackLifecycle = {
       status: connection.status,
       enabled: connection.enabled,
@@ -14968,7 +15070,7 @@ export function toolAccessService(
     // may legitimately survive removal because an MCP gateway retains it, or be
     // intentionally archived on an otherwise active connection; neither case
     // should invert whether recommended defaults are rebuilt.
-    const shouldFinalizeManagedDefaults = connection.status === "draft";
+    const shouldFinalizeManagedDefaults = connection.status === "draft" || !!onboardingPurpose;
     const sourceTemplateKey =
       typeof connection.config.sourceTemplateKey === "string"
         ? connection.config.sourceTemplateKey
@@ -15031,6 +15133,10 @@ export function toolAccessService(
       claimId: input.claimId,
       redemptionId: input.state,
     });
+    if (onboardingPurpose && (credentials.provider !== "google" || credentials.profile !== profile.id ||
+        credentials.companyId !== connection.companyId || credentials.subject !== onboardingPurpose.subjectUserId ||
+        nativeSha256([...credentials.scopes].sort()) !== nativeSha256([...profile.scopes].sort())))
+      throw conflict("Provider credentials do not match the reviewed personal scopes");
     const refreshToken = credentials.refreshToken;
     if (profile.provider === "google" && !refreshToken) {
       throw unprocessable(
@@ -15059,6 +15165,7 @@ export function toolAccessService(
       );
 
     await db.transaction(async (tx) => {
+      if (onboardingPurpose) await deferredOnboardingPurpose(connection.companyId, connection.id, input.actor, tx as unknown as Db);
       // Keep connector credential persistence serialized with membership
       // suspension, downgrade, and removal. A successful claim is only durable
       // while the initiating user still holds connection-management authority.
@@ -15241,7 +15348,7 @@ export function toolAccessService(
         oauth: {
           ...oauthConfig(connection),
           strategy: "paperclip_cloud_connector",
-          provider: galleryEntry?.slug,
+          provider: onboardingPurpose ? profile.provider : galleryEntry?.slug,
           connectorProfile,
           connectorSubjectUserId: subjectUserId,
           connectorSubjectAgentId: subjectAgentId,
@@ -15290,7 +15397,7 @@ export function toolAccessService(
       await tx
         .update(toolApplications)
         .set({
-          status: shouldFinalizeManagedDefaults ? "draft" : "active",
+          status: onboardingPurpose ? "active" : shouldFinalizeManagedDefaults ? "draft" : "active",
           updatedAt: now(),
         })
         .where(eq(toolApplications.id, connection.applicationId));
@@ -16245,6 +16352,10 @@ export function toolAccessService(
     if (requestingAgentId)
       await assertAgentsInCompany(companyId, [requestingAgentId]);
     let connection = await getConnectionRow(connectionId, companyId);
+    const onboardingPurpose = await deferredOnboardingPurpose(companyId, connectionId, actor);
+    if (onboardingPurpose && (onboardingPurpose.status === "withdrawn" || input.grantKind !== "user" || requestingAgentId ||
+        actor?.actorType !== "user" || actor.actorId !== onboardingPurpose.subjectUserId))
+      throw conflict("Onboarding sign-in must keep the original personal identity without Agent access");
     const preFinalizeLifecycle = {
       status: connection.status,
       enabled: connection.enabled,
@@ -16558,6 +16669,12 @@ export function toolAccessService(
       for (const secretId of personalSecretIds) await secrets.remove(secretId);
     }
 
+    if (onboardingPurpose) {
+      // Original validation uses the initiating personal identity. Network I/O
+      // remains outside onboarding/connection locks; finish rechecks its result.
+      await checkConnectionHealth(connection.id, actor);
+    }
+
     // Both identity branches above commit their own lifecycle write (draft ->
     // active) before `finishGalleryAppConnection` re-reads the row, so that
     // step alone would never observe this transition. This is the OAuth
@@ -16602,14 +16719,14 @@ export function toolAccessService(
         askFirstCatalogEntryIds: catalog
           .filter((entry) => askFirstRiskLevels.has(entry.riskLevel))
           .map((entry) => entry.id),
-        access: requestingAgentId
+        access: onboardingPurpose ? { agentIds: [] } : requestingAgentId
           ? { agentIds: [requestingAgentId] }
           : "all_agents",
         preserveExistingAccess: Boolean(requestingAgentId),
       },
       actor,
     );
-    await db
+    if (!onboardingPurpose) await db
       .insert(toolConnectionInstalls)
       .values({
         companyId,
@@ -16828,9 +16945,21 @@ export function toolAccessService(
       return toStdioCommandTemplate(row);
     },
 
+    activationConnectionMethod,
     connectGalleryApp,
 
     finishGalleryAppConnection,
+
+    /** Internal content-free review of the same fixed subject used by
+     * Original OAuth/key reconnect. This never creates a credential/state. */
+    personalReconnectIdentity: async (companyId: string, connectionId: string, userId: string) => {
+      const row = await getConnectionRow(connectionId, companyId);
+      const identity = await fixedPersonalIdentityForReconnect(row, userId, { actorType: "user", actorId: userId });
+      if (!identity) return null;
+      return { userId: identity.subjectUserId, grant: identity.grant ? {
+        id: identity.grant.id, status: identity.grant.status, updatedAt: identity.grant.updatedAt.toISOString(),
+      } : null };
+    },
 
     reconnectGalleryApp,
 

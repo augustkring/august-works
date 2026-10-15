@@ -191,14 +191,16 @@ function makeComment(overrides: Record<string, unknown> = {}) {
   };
 }
 
+const routeModules = await hoistModuleGraph(registerModuleMocks, async () => {
+  const [{ issueRoutes }, { errorHandler }] = await Promise.all([
+    vi.importActual<typeof import("../routes/issues.js")>("../routes/issues.js"),
+    vi.importActual<typeof import("../middleware/index.js")>("../middleware/index.js"),
+  ]);
+  return { issueRoutes, errorHandler };
+});
+
 describe.sequential("issue comment cancel routes", () => {
-  const routeModules = hoistModuleGraph(registerModuleMocks, async () => {
-    const [{ issueRoutes }, { errorHandler }] = await Promise.all([
-      vi.importActual<typeof import("../routes/issues.js")>("../routes/issues.js"),
-      vi.importActual<typeof import("../middleware/index.js")>("../middleware/index.js"),
-    ]);
-    return { issueRoutes, errorHandler };
-  });
+
 
   function installActor(app: express.Express, actor?: Record<string, unknown>) {
     const { issueRoutes, errorHandler } = routeModules.value;

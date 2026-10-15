@@ -52,7 +52,7 @@ import { ApiError } from "@/api/client";
 import { useCompany } from "@/context/CompanyContext";
 import { useBreadcrumbs } from "@/context/BreadcrumbContext";
 import { useToastActions } from "@/context/ToastContext";
-import { useNavigate, useParams } from "@/lib/router";
+import { useNavigate, useParams, useLocation } from "@/lib/router";
 import { queryKeys } from "@/lib/queryKeys";
 import { cn } from "@/lib/utils";
 import { Button } from "@/components/ui/button";
@@ -398,6 +398,7 @@ const NODE_TYPES = { "workflow-node": WorkflowNodeCard };
 export function WorkflowBuilder() {
   const { selectedCompanyId } = useCompany();
   const { workflowId } = useParams();
+  const requestedNodeId = new URLSearchParams(useLocation().search).get("node");
   const { setBreadcrumbs } = useBreadcrumbs();
   const { pushToast } = useToastActions();
   const navigate = useNavigate();
@@ -468,10 +469,10 @@ export function WorkflowBuilder() {
     setLoadedWorkflowId(detail.id);
     setDirty(false);
     setConflicted(false);
-    setSelectedNodeId(null);
+    setSelectedNodeId(detail.draftRevision.graph.nodes.some(node => node.id === requestedNodeId) ? requestedNodeId : null);
     setConnectTargetId("");
     setConnectBranch("true");
-  }, [definitions]);
+  }, [definitions, requestedNodeId]);
 
   useEffect(() => {
     const detail = detailQuery.data;

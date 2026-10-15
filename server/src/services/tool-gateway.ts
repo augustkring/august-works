@@ -184,6 +184,14 @@ import { extendApprovedExecutionWaitDeadline } from "./approved-execution-wait.j
 import { instanceSettingsService } from "./instance-settings.js";
 import { memoryAgentToolsService } from "./memory/memory-agent-tools.js";
 import { workflowAuthoringToolsService } from "./workflows/workflow-authoring-tools.js";
+import { foundationAuthoringToolsService } from "./foundation-authoring-tools.js";
+import { foundationAuthoringProposeInputJsonSchema } from "@paperclipai/shared";
+import { notificationPreferenceProposalService } from "./notification-preference-proposals.js";
+import { notificationPreferenceProposalInputJsonSchema } from "@paperclipai/shared";
+import { routineAuthoringToolsService } from "./routine-authoring-tools.js";
+import { agentSetupAuthoringToolsService } from "./agent-setup-authoring-tools.js";
+import { agentSetupAuthoringInputJsonSchema, agentSetupCatalogInputJsonSchema } from "@paperclipai/shared";
+import { routineAuthoringCreateInputJsonSchema, v9FeatureEnabled } from "@paperclipai/shared";
 
 const DEFAULT_SESSION_TTL_MS = 15 * 60 * 1000;
 const MAX_SESSION_TTL_MS = 60 * 60 * 1000;
@@ -1023,6 +1031,43 @@ const BUILTIN_TOOLS: ToolGatewayDescriptor[] = [
     risk: "write",
   },
   {
+    name: "paperclip-self:propose_foundation_change",
+    displayName: "Propose a Foundation change",
+    description: "Save a proposed change against the exact approved Foundation revision for Human review. This cannot accept or approve the change or alter canonical Foundation content.",
+    parametersSchema: foundationAuthoringProposeInputJsonSchema,
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "write",
+  },
+  {
+    name: "paperclip-self:propose_notification_preferences",
+    displayName: "Propose notification preferences",
+    description: "Save a notification preference proposal for the current conversation user. The user must review and explicitly apply it. This cannot change another account, disable security delivery, or send notifications.",
+    parametersSchema: notificationPreferenceProposalInputJsonSchema,
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "write",
+  },
+  {
+    name: "paperclip-self:list_agent_setup_capabilities",
+    displayName: "Find qualified Agent capabilities",
+    description: "Read the current bounded customer catalog for this admitted conversation. Use its exact version IDs when proposing a package setup. Missing matches are not proof that the full catalog is empty. Catalog declarations are not effective permissions or installed access. No model call or installation occurs.",
+    parametersSchema: agentSetupCatalogInputJsonSchema,
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "read",
+  },
+  {
+    name: "paperclip-self:create_agent_setup_draft",
+    displayName: "Propose Agent setup",
+    description: "Save an unpublished Custom Agent setup or an exact customer catalog package setup for the current conversation user. Custom fields remain empty; package fields come only from the approved catalog version. The Human must configure and review it. This creates no Agent, installation, runtime, permission or execution, and accepts no copied conversation instructions.",
+    parametersSchema: agentSetupAuthoringInputJsonSchema,
+    pluginId: "paperclip-self", providerType: "paperclip_self", risk: "write",
+  },
+  {
+    name: "paperclip-self:create_routine_draft",
+    displayName: "Create routine draft",
+    description: "Save a typed routine intent for human review in the current conversation. The draft is inactive and has no execution target or schedule. Open its Original editor to configure and enable it.",
+    parametersSchema: routineAuthoringCreateInputJsonSchema,
+    pluginId: "paperclip-self",
+    providerType: "paperclip_self",
+    risk: "write",
+  },
+  {
     name: "paperclip-self:add_trigger",
     displayName: "Add workflow trigger",
     description:
@@ -1394,6 +1439,10 @@ export function createToolGatewayService(
     return {
       sharedMemory: experimental.enableCollectiveMemoryV1 === true,
       privateMemory: experimental.enablePrivateAgentMemoryV1 === true,
+      notificationAuthoring: v9FeatureEnabled(experimental,"ambient_commands_v9") && v9FeatureEnabled(experimental,"notification_policy_v9"),
+      routineAuthoring: v9FeatureEnabled(experimental, "ambient_commands_v9"),
+      agentSetupAuthoring: v9FeatureEnabled(experimental, "ambient_commands_v9") && v9FeatureEnabled(experimental, "hire_agent_v9"),
+      foundationAuthoring: experimental.enableFoundationV1 === true && v9FeatureEnabled(experimental, "ambient_commands_v9"),
       workflowAuthoring:
         experimental.enableWorkflowsV1 === true &&
         experimental.enableWorkflowBuilderV1 === true &&
@@ -1410,6 +1459,11 @@ export function createToolGatewayService(
     }
     const flags = await selfToolFeatureFlags();
     return tools.filter((tool) => {
+      if (tool.name === "paperclip-self:propose_notification_preferences") return flags.notificationAuthoring;
+      if (tool.name === "paperclip-self:create_routine_draft") return flags.routineAuthoring;
+      if (tool.name === "paperclip-self:create_agent_setup_draft") return flags.agentSetupAuthoring;
+      if (tool.name === "paperclip-self:list_agent_setup_capabilities") return flags.agentSetupAuthoring;
+      if (tool.name === "paperclip-self:propose_foundation_change") return flags.foundationAuthoring;
       if (isMemorySelfToolName(tool.name)) {
         if (tool.name === "paperclip-self:share_memory") {
           return flags.sharedMemory && flags.privateMemory;
@@ -3341,6 +3395,63 @@ export function createToolGatewayService(
         content: JSON.stringify({ issue, planDocument: planDocument ?? null }),
         data: { issue, planDocument: planDocument ?? null },
       };
+    }
+
+    if (tool.name === "paperclip-self:propose_foundation_change") {
+      if (!session.agentId || !session.runId) throw new ToolGatewayHttpError(403,"Foundation authoring requires a current Agent run","foundation_authoring_run_required");
+      try {
+        const data=await foundationAuthoringToolsService(db).propose({companyId:session.companyId,agentId:session.agentId,runId:session.runId},parameters);
+        return {content:JSON.stringify(data),data};
+      } catch(error) {
+        if(error instanceof HttpError)throw new ToolGatewayHttpError(error.status,error.message,"foundation_authoring_rejected");
+        throw error;
+      }
+    }
+
+    if (tool.name === "paperclip-self:propose_notification_preferences") {
+      if(!session.agentId||!session.runId)throw new ToolGatewayHttpError(403,"Notification proposals require a current Agent run","notification_proposal_run_required");
+      try {
+        const data=await notificationPreferenceProposalService(db).propose({companyId:session.companyId,agentId:session.agentId,runId:session.runId},parameters);
+        return {content:JSON.stringify(data),data};
+      }catch(error){
+        if(error instanceof HttpError)throw new ToolGatewayHttpError(error.status,error.message,"notification_proposal_rejected");
+        throw error;
+      }
+    }
+
+    if (tool.name === "paperclip-self:list_agent_setup_capabilities") {
+      if (!session.agentId || !session.runId) throw new ToolGatewayHttpError(403, "Capability discovery requires a current Agent conversation", "agent_setup_run_required");
+      try {
+        const data = await agentSetupAuthoringToolsService(db).catalog({ companyId: session.companyId,
+          agentId: session.agentId, runId: session.runId }, parameters);
+        return { content: JSON.stringify(data), data };
+      } catch (error) {
+        if (error instanceof HttpError) throw new ToolGatewayHttpError(error.status, error.message, "agent_setup_rejected");
+        throw error;
+      }
+    }
+
+    if (tool.name === "paperclip-self:create_agent_setup_draft") {
+      if (!session.agentId || !session.runId) throw new ToolGatewayHttpError(403, "Agent setup proposals require a current Agent run", "agent_setup_run_required");
+      try {
+        const data = await agentSetupAuthoringToolsService(db).create({ companyId: session.companyId,
+          agentId: session.agentId, runId: session.runId }, parameters);
+        return { content: JSON.stringify(data), data };
+      } catch (error) {
+        if (error instanceof HttpError) throw new ToolGatewayHttpError(error.status, error.message, "agent_setup_rejected");
+        throw error;
+      }
+    }
+
+    if (tool.name === "paperclip-self:create_routine_draft") {
+      if (!session.agentId || !session.runId) throw new ToolGatewayHttpError(403, "Routine authoring requires a current Agent run", "routine_authoring_run_required");
+      try {
+        const data = await routineAuthoringToolsService(db).create({ companyId: session.companyId, agentId: session.agentId, runId: session.runId }, parameters);
+        return { content: JSON.stringify(data), data };
+      } catch (error) {
+        if (error instanceof HttpError) throw new ToolGatewayHttpError(error.status, error.message, "routine_authoring_rejected");
+        throw error;
+      }
     }
 
     if (isWorkflowAuthoringSelfToolName(tool.name)) {

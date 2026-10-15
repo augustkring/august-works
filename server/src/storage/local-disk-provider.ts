@@ -1,7 +1,9 @@
 import { createReadStream, promises as fs } from "node:fs";
+import { randomUUID } from "node:crypto";
 import path from "node:path";
 import type { StorageProvider, GetObjectResult, HeadObjectResult } from "./types.js";
 import { notFound, badRequest } from "../errors.js";
+import { storageScopeIdentity } from "./object-scope.js";
 
 function normalizeObjectKey(objectKey: string): string {
   const normalized = objectKey.replace(/\\/g, "/").trim();
@@ -30,8 +32,9 @@ function resolveWithin(baseDir: string, objectKey: string): string {
 async function statOrNull(filePath: string) {
   try {
     return await fs.stat(filePath);
-  } catch {
-    return null;
+  } catch (error) {
+    if ((error as NodeJS.ErrnoException).code === "ENOENT") return null;
+    throw error;
   }
 }
 
@@ -40,15 +43,26 @@ export function createLocalDiskStorageProvider(baseDir: string): StorageProvider
 
   return {
     id: "local_disk",
+    scopeId: storageScopeIdentity(["local_disk", root]),
 
     async putObject(input) {
       const targetPath = resolveWithin(root, input.objectKey);
       const dir = path.dirname(targetPath);
       await fs.mkdir(dir, { recursive: true });
 
-      const tempPath = `${targetPath}.tmp-${Date.now()}-${Math.random().toString(36).slice(2, 8)}`;
-      await fs.writeFile(tempPath, input.body);
-      await fs.rename(tempPath, targetPath);
+      const tempPath = `${targetPath}.tmp-${randomUUID()}`;
+      // Allocate exclusively before owning cleanup. Never remove another
+      // writer's file if allocation itself fails. Temporary private bytes
+      // have the same deletion obligations as the committed object.
+      const file = await fs.open(tempPath, "wx", 0o600);
+      try {
+        await file.writeFile(input.body);
+        await file.close();
+        await fs.rename(tempPath, targetPath);
+      } finally {
+        await file.close();
+        await fs.rm(tempPath, { force: true });
+      }
     },
 
     async getObject(input): Promise<GetObjectResult> {
@@ -85,10 +99,31 @@ export function createLocalDiskStorageProvider(baseDir: string): StorageProvider
 
     async deleteObject(input): Promise<void> {
       const filePath = resolveWithin(root, input.objectKey);
+      // Include copies left by an interrupted process and the legacy writer.
+      // Match only this exact allocated filename; never recurse or erase a
+      // neighboring object. The protected-feedback owner separately requires
+      // transport quiescence before it can authorize this deletion.
+      const directory = path.dirname(filePath);
+      let names: string[];
+      try {
+        names = await fs.readdir(directory);
+      } catch (error) {
+        if ((error as NodeJS.ErrnoException).code === "ENOENT") return;
+        throw error;
+      }
+      const temporaryPrefix = `${path.basename(filePath)}.tmp-`;
+      for (const name of names) {
+        if (!name.startsWith(temporaryPrefix)) continue;
+        try { await fs.unlink(path.join(directory, name)); }
+        catch (error) {
+          if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
+        }
+      }
       try {
         await fs.unlink(filePath);
-      } catch {
-        // idempotent delete
+      } catch (error) {
+        // Only actual absence is an idempotent deletion acknowledgement.
+        if ((error as NodeJS.ErrnoException).code !== "ENOENT") throw error;
       }
     },
   };

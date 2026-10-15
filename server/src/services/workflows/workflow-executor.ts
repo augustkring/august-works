@@ -9,6 +9,11 @@ import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { WorkflowCheckpointError } from "./workflow-errors.js";
 import { assertWorkflowTaskAssignmentAuthorized } from "./workflow-task-authority.js";
 import { directAgentConfig, dispatchDirectAgent } from "./workflow-direct-agent.js";
+import { lockCustomerWorkflowStop, inspectCustomerWorkflowStop, recordCustomerWorkflowStop, readRetainedWorkflowRunControl, type CustomerWorkflowStop } from "./workflow-customer-stop.js";
+import { v5HumanActorId } from "../v5-authorization.js";
+import { logger } from "../../middleware/logger.js";
+import { customerWorkflowInternalGraphReady, customerWorkflowTestReady } from "./workflow-customer-launch.js";
+import { assertCustomerWorkflowTestRuntimeAuthority, assertCustomerWorkflowTestAuthority, customerWorkflowTestActor, lockCustomerWorkflowControlAuthority } from "./workflow-customer-authority.js";
 import { executeOptimizedWorkflowTransform } from "../optimizer/optimizer-workflow-runtime.js";
 import { subworkflowConfig, requireSubworkflowRevision, assertSubworkflowGraph } from "./workflow-subworkflow.js";
 import { executeWorkflowMap } from "./workflow-map.js";
@@ -37,6 +42,13 @@ import {
   cancelWorkflowRunSchema,
   retryWorkflowRunSchema,
   startWorkflowRunSchema,
+  workflowStopCommandSchema,
+  type WorkflowStopCommand,
+  type WorkflowStopReceipt,
+  workflowTestCommandSchema,
+  workflowSyntheticTriggerPayload,
+  type WorkflowTestCommand,
+  type WorkflowRevision,
   type CancelWorkflowRun,
   type ExecutionPrincipal,
   type RetryWorkflowRun,
@@ -73,7 +85,7 @@ import {
   workflowRetryDelayMs,
   workflowStepIdempotencyKey,
 } from "./workflow-execution-policy.js";
-import { workflowNodeDefinitions } from "./workflow-node-registry.js";
+import { workflowNodeDefinitions, workflowNodeRegistryService } from "./workflow-node-registry.js";
 import { resolveToolActionWait, scheduleToolActionWait } from "./workflow-tool-action-wait.js";
 import { executeNativeWorkflowQuery } from "./workflow-native-nodes.js";
 import { executeWorkflowHttpRequest } from "./workflow-http-request.js";
@@ -117,7 +129,7 @@ type WorkflowHeartbeatRuntime = IssueAssignmentWakeupDeps & {
   cancelRun?: (
     runId: string,
     reason?: string,
-    options?: { errorCode?: string },
+    options?: { errorCode?: string; suppressImmediateRecovery?: boolean },
   ) => Promise<unknown>;
 };
 
@@ -180,8 +192,9 @@ async function persistWorkflowActivity(
 }
 
 function mapRun(row: typeof workflowRuns.$inferSelect): WorkflowRun {
+  const { authoringSourceWorkflowIds: _privateCopyOwners, ...publicRow } = row;
   return {
-    ...row,
+    ...publicRow,
     status: row.status as WorkflowRun["status"],
     source: row.source as WorkflowRun["source"],
     triggerPayload: (row.triggerPayload ?? {}) as Record<string, unknown>,
@@ -363,6 +376,7 @@ export interface EnqueueWorkflowRunInput {
   actor: WorkflowRunActor;
   parentWorkflowRunId?: string;
   parentNodeId?: string;
+  customerTestCommand?: WorkflowTestCommand;
 }
 
 export async function enqueueWorkflowRunInTransaction(
@@ -373,6 +387,14 @@ export async function enqueueWorkflowRunInTransaction(
   created: boolean;
   publications: ActivityPublication[];
 }> {
+  if (input.source === "test") {
+    const command = workflowTestCommandSchema.parse(input.customerTestCommand);
+    if (command.expectedWorkflowId !== input.workflowId || command.expectedDraftRevisionId !== input.revisionId || input.correlationId !== command.requestId)
+      throw conflict("Workflow test request binding changed", { code: "workflow_test_request_conflict" });
+    await lockCustomerWorkflowControlAuthority(executor, input.companyId, customerWorkflowTestActor(input.actor.principal),
+      ["workflows:read", "workflows:edit", "workflows:run"]);
+    await assertCustomerWorkflowTestAuthority(executor, input.companyId, input.actor.principal);
+  }
   await assertLearnedAssetAnalyticalSources(executor,input.companyId,"workflow_revision",input.revisionId,learningActorFromPrincipal(input.companyId,input.actor.principal,input.actor.runId));
   if (input.idempotencyKey) {
     const existing = await getIdempotentRun(
@@ -381,9 +403,49 @@ export async function enqueueWorkflowRunInTransaction(
       input.idempotencyKey,
     );
     if (existing) {
+      if (input.source === "test") throw conflict("Reconcile the original native test receipt", { code: "workflow_test_request_conflict" });
       assertIdempotentRequestMatches(existing, input);
       return { run: existing, created: false, publications: [] };
     }
+  }
+
+  // All native run sources share this admission fence. A status read before
+  // enqueue is insufficient: pause/retirement can commit while callers prepare
+  // input. The lifecycle owner takes the same row lock. Replayed receipts above
+  // admit no new work and remain recoverable after pause.
+  const [workflow] = await executor.select({ status: workflows.status, draftRevisionId: workflows.draftRevisionId, updatedAt: workflows.updatedAt })
+    .from(workflows)
+    .where(and(eq(workflows.companyId, input.companyId), eq(workflows.id, input.workflowId)))
+    .for("update");
+  if (!workflow) throw notFound("Workflow not found");
+  if (input.idempotencyKey) {
+    const committed = await getIdempotentRun(executor, input.companyId, input.idempotencyKey);
+    if (committed) {
+      if (input.source === "test") throw conflict("Reconcile the original native test receipt", { code: "workflow_test_request_conflict" });
+      assertIdempotentRequestMatches(committed, input);
+      return { run: committed, created: false, publications: [] };
+    }
+  }
+  if (workflow.status !== "active") throw conflict("Workflow is not active", {
+    code: "workflow_invalid_transition", status: workflow.status,
+  });
+
+  if (input.source === "test") {
+    const command = workflowTestCommandSchema.parse(input.customerTestCommand);
+    if (command.expectedWorkflowId !== input.workflowId || command.expectedDraftRevisionId !== input.revisionId ||
+        workflow.draftRevisionId !== input.revisionId || workflow.updatedAt.toISOString() !== command.expectedUpdatedAt ||
+        input.triggerId || input.parentWorkflowRunId || input.retryOfRunId || !isDeepStrictEqual(input.triggerPayload, workflowSyntheticTriggerPayload(command.syntheticInput)))
+      throw conflict("Workflow test changed; review the current draft", { code: "workflow_test_conflict" });
+    const [revision] = await executor.select().from(workflowRevisions).where(and(
+      eq(workflowRevisions.companyId, input.companyId), eq(workflowRevisions.workflowId, input.workflowId), eq(workflowRevisions.id, input.revisionId),
+    )).for("share");
+    if (!revision || !customerWorkflowTestReady({ ...revision, state: revision.state as WorkflowRevision["state"] }) ||
+        revision.graph.nodes.filter(node => node.type === "core.manual_trigger").length !== 1 ||
+        revision.graph.nodes.find(node => node.type === "core.manual_trigger")?.id !== input.nodeId)
+      throw conflict("This draft requires a separately qualified test", { code: "workflow_test_review_required" });
+    await workflowNodeRegistryService(executor).validatePublishGraph(input.companyId, revision.graph, input.workflowId);
+  } else if (input.customerTestCommand) {
+    throw conflict("A test command cannot admit live workflow work");
   }
 
   const now = new Date();
@@ -1830,18 +1892,17 @@ async function revisionForRun(
   db: Db,
   run: typeof workflowRuns.$inferSelect,
 ) {
-  return db
-    .select()
-    .from(workflowRevisions)
-    .where(
-      and(
-        eq(workflowRevisions.id, run.workflowRevisionId),
-        eq(workflowRevisions.companyId, run.companyId),
-        eq(workflowRevisions.workflowId, run.workflowId),
-        inArray(workflowRevisions.state, ["published", "superseded"]),
-      ),
-    )
-    .then((rows) => rows[0] ?? null);
+  const [revision] = await db.select().from(workflowRevisions).where(and(
+    eq(workflowRevisions.id, run.workflowRevisionId),
+    eq(workflowRevisions.companyId, run.companyId),
+    eq(workflowRevisions.workflowId, run.workflowId),
+    inArray(workflowRevisions.state, run.source === "test"
+      ? ["draft", "discarded", "published", "superseded"] : ["published", "superseded"]),
+  ));
+  if (!revision || (run.source === "test" && !customerWorkflowInternalGraphReady({
+    ...revision, state: revision.state as WorkflowRevision["state"],
+  }))) return null;
+  return revision;
 }
 
 function waitDurationSeconds(node: WorkflowNode): number {
@@ -5998,10 +6059,12 @@ async function resolveSubworkflowWait(db: Db, run: typeof workflowRuns.$inferSel
     await workflowExecutorService(db, runtimeDeps).cancelRun(run.companyId, child.id, { reason: "Parent subworkflow timeout" },
       { principal: { type: "system", service: "workflow-subworkflow" } });
   }
-  const actor: WorkflowRunActor = { principal: { type: "system", service: "workflow-subworkflow" }, responsibleUserId: run.responsibleUserId };
+  const actor: WorkflowRunActor = { principal: run.executionPrincipal ?? { type: "system", service: "workflow-subworkflow" },
+    runId: run.executionAgentRunId, responsibleUserId: run.responsibleUserId };
   let errorCode = !child ? "workflow_subworkflow_missing" : expired ? "workflow_subworkflow_timeout" : "workflow_subworkflow_failed";
   let succeeded = child?.status === "succeeded" && (!wait.timeoutAt || Boolean(child.finishedAt && child.finishedAt <= wait.timeoutAt));
-  const detail = succeeded ? await getRunDetail(db, run.companyId, child!.id) : null;
+  const detail = succeeded ? await getRunDetail(db, run.companyId, child!.id,
+    learningActorFromPrincipal(run.companyId, actor.principal, actor.runId), "task") : null;
   const childRevision = succeeded ? await revisionForRun(db, child!) : null;
   const terminalNodes = new Set(childRevision?.graph.nodes.filter((item) => !childRevision.graph.edges.some((edge) => edge.source === item.id)).map((item) => item.id) ?? []);
   const resultSteps = detail?.steps.filter((item) => item.status === "succeeded" && terminalNodes.has(item.nodeId)) ?? [];
@@ -6077,6 +6140,10 @@ async function executeWorkflowGraph(
   };
 
   while (current) {
+    if (ownedRun.source === "test") {
+      try { await assertCustomerWorkflowTestRuntimeAuthority(db, ownedRun); }
+      catch { await failRun(db, ownedRun, actor, "workflow_test_authority_revoked", "The initiating human's test authority is no longer current"); return; }
+    }
     try { await assertSaasDomainAdmission(db, ownedRun.companyId, "workflows.use"); }
     catch { await failRun(db, ownedRun, actor, "workflow_commercial_admission_closed", "Workflow work is suspended until account access is restored"); return; }
     ownedRun = await renewRunLease(db, ownedRun);
@@ -7171,9 +7238,13 @@ async function requestWorkflowRunCancellation(
   reason: string,
   actor: WorkflowRunActor,
   terminalFailure?: { code: "workflow_deadline_exceeded" | "workflow_wait_timeout" | "workflow_execution_principal_revoked"; message: string },
+  customerStop?: CustomerWorkflowStop,
+  sourceErasure = false,
 ): Promise<typeof workflowRuns.$inferSelect> {
   const publications: ActivityPublication[] = [];
   const updated = await db.transaction(async (tx) => {
+    const nativeDb = tx as unknown as Db;
+    if (customerStop) await lockCustomerWorkflowStop(nativeDb, companyId, customerStop);
     const run = await tx
       .select()
       .from(workflowRuns)
@@ -7187,6 +7258,12 @@ async function requestWorkflowRunCancellation(
       .then((rows) => rows[0] ?? null);
     if (!run) throw notFound("Workflow run not found");
 
+    if (customerStop && await inspectCustomerWorkflowStop(nativeDb, run, customerStop)) return run;
+    const admitted = async (row: typeof workflowRuns.$inferSelect) => {
+      if (customerStop) publications.push(await recordCustomerWorkflowStop(nativeDb, row, customerStop));
+      return row;
+    };
+
     if (run.status === "cancelled") return run;
     if (workflowRunIsTerminal(run.status)) {
       throw conflict("Workflow run is already terminal", {
@@ -7195,7 +7272,9 @@ async function requestWorkflowRunCancellation(
         status: run.status,
       });
     }
-    if (run.status === "cancelling") return run;
+    // A restore/late writer may already have entered the Source erasure fence.
+    // Its active waits still need Original cancellation admission exactly once.
+    if (run.status === "cancelling" && !sourceErasure) return admitted(run);
 
     const now = new Date();
     const resolutionActor = workflowCancellationResolutionActor(actor);
@@ -7435,7 +7514,7 @@ async function requestWorkflowRunCancellation(
         },
       );
       publications.push(activity.publication);
-      return cancelledRun;
+      return admitted(cancelledRun);
     }
 
     const [cancellingRun] = await tx
@@ -7480,7 +7559,7 @@ async function requestWorkflowRunCancellation(
       },
     );
     publications.push(activity.publication);
-    return cancellingRun;
+    return admitted(cancellingRun);
   });
 
   publishActivities(publications);
@@ -7665,7 +7744,7 @@ async function cancelWorkflowHeartbeatChildren(
         await heartbeatRuntime.cancelRun(
           heartbeat.id,
           reason,
-          { errorCode: "workflow_parent_cancelled" },
+          { errorCode: "workflow_parent_cancelled", suppressImmediateRecovery: true },
         );
       } catch {
         allTerminal = false;
@@ -7821,6 +7900,18 @@ async function finalizeWorkflowRunCancellation(
 
   publishActivities(publications);
   return result;
+}
+
+/** Internal privacy owner admission only. No HTTP/Agent request chooses this
+ * context, and no physical/provider call runs inside the erasure transaction.
+ * The Original cancellation-only reconciler owns post-commit cleanup. */
+export async function requestErasedWorkflowRunCancellation(db: Db, companyId: string, runId: string) {
+  const [run] = await db.select({ workflowId: workflowRuns.workflowId }).from(workflowRuns)
+    .where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.id, runId)));
+  const [source] = run ? await db.execute<{ erased: boolean }>(sql`select aw_workflow_run_authoring_source_erased(${companyId}::uuid,${runId}::uuid) as erased`) : [];
+  if (source?.erased !== true) throw forbidden("Original workflow source erasure is required for cancellation");
+  return requestWorkflowRunCancellation(db, companyId, runId, "Source payload erased",
+    { principal: { type: "system", service: "workflow-source-erasure" } }, undefined, undefined, true);
 }
 
 async function continueWorkflowRunCancellation(
@@ -8176,9 +8267,33 @@ export function workflowExecutorService(
   db: Db,
   runtimeDeps: WorkflowExecutorRuntimeDeps = {},
 ) {
+  async function stopCustomerRun(companyId: string, runId: string, rawInput: WorkflowStopCommand, authority: AuthorizationActor, retainedSafety = false): Promise<WorkflowStopReceipt> {
+    const command = workflowStopCommandSchema.parse(rawInput), principal = v5HumanActorId(authority);
+    const actor: WorkflowRunActor = { principal: authority.source === "local_implicit"
+      ? { type: "system", service: "local-board" } : { type: "user", userId: principal } };
+    const customer: CustomerWorkflowStop = { command, authority: retainedSafety ? { ...authority, isInstanceAdmin: false } : authority,
+      deadline: performance.now() + 30_000, receipt: null, ...(retainedSafety ? { retainedSafety: true as const } : {}) };
+    const reason = "Customer requested workflow stop";
+    const requested = await requestWorkflowRunCancellation(db, companyId, runId, reason, actor, undefined, customer);
+    if (!customer.receipt) throw new Error("Native workflow stop receipt is unavailable");
+    if (requested.status === "cancelling" && !(retainedSafety && customer.replayed)) {
+      try { await continueWorkflowRunCancellation(db, requested, reason, actor, runtimeDeps); }
+      catch {
+        // The Original cancellation-only reconciler also runs with rollout
+        // disabled. Admission and replay never claim physical completion.
+        logger.warn({ companyId, workflowRunId: runId }, "Native workflow stop is admitted; cancellation remains pending");
+      }
+    }
+    return customer.receipt;
+  }
   return {
     getRun: (companyId: string, runId: string, reader?:AuthorizationActor) =>
       getRunDetail(db, companyId, runId,reader),
+
+    stopRun: (companyId: string, runId: string, rawInput: WorkflowStopCommand, authority: AuthorizationActor) => stopCustomerRun(companyId, runId, rawInput, authority),
+    stopRetainedRun: (companyId: string, runId: string, rawInput: WorkflowStopCommand, authority: AuthorizationActor) => stopCustomerRun(companyId, runId, rawInput, authority, true),
+    retainedRunControl: (companyId: string, runId: string, authority: AuthorizationActor) => readRetainedWorkflowRunControl(db, companyId, runId, authority),
+    retainedStopReceipt: (companyId: string, runId: string, requestId: string, authority: AuthorizationActor) => readRetainedWorkflowRunControl(db, companyId, runId, authority, requestId),
 
     cancelRun: async (
       companyId: string,
@@ -8243,6 +8358,9 @@ export function workflowExecutorService(
         )
         .then((rows) => rows[0] ?? null);
       if (!sourceRun) throw notFound("Workflow run not found");
+      if (sourceRun.source === "test") throw conflict("Review and test the current draft instead of retrying it as live work", {
+        code: "workflow_test_retry_requires_review",
+      });
       if (sourceRun.status !== "failed" && sourceRun.status !== "cancelled") {
         throw conflict("Only failed or cancelled workflow runs can be retried", {
           code: "workflow_run_not_retryable",
@@ -8663,6 +8781,7 @@ export function workflowExecutorService(
     recoverExpiredRuns: async (
       limit = 20,
       now = new Date(),
+      options: { cancellationOnly?: boolean } = {},
     ): Promise<{
       checked: number;
       recovered: number;
@@ -8676,7 +8795,7 @@ export function workflowExecutorService(
         .select()
         .from(workflowRuns)
         .where(
-          or(
+          options.cancellationOnly ? eq(workflowRuns.status, "cancelling") : or(
             and(
               eq(workflowRuns.status, "queued"),
               lt(workflowRuns.updatedAt, queuedBefore),

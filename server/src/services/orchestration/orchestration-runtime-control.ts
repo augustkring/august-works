@@ -18,7 +18,9 @@ export function orchestrationRuntimeControl(db: Db) {
       if (!plan || plan.status === "running") throw forbidden("Safety cancellation requires a durably fenced plan");
       const attempts = await db.select().from(orchestrationWorkerAttempts).where(and(eq(orchestrationWorkerAttempts.companyId, companyId), eq(orchestrationWorkerAttempts.planId, id), eq(orchestrationWorkerAttempts.status, "running")));
       for (const attempt of attempts) {
-        if (attempt.runId) await heartbeat.cancelRun(attempt.runId, reason);
+        // A durable plan Stop must not promote the same Task into a fresh run
+        // through the heartbeat owner's ordinary interrupted-work recovery.
+        if (attempt.runId) await heartbeat.cancelRun(attempt.runId, reason, { suppressImmediateRecovery: true });
         else if (attempt.workflowRunId) await workflow.cancelRun(companyId, attempt.workflowRunId, { reason }, { principal: { type: "system", service: "orchestration_supervision" } });
       }
       return attempts.map(attempt => attempt.id);

@@ -1,4 +1,5 @@
 import { V8_FEATURES, type V8FeatureKey } from "./v8-feature-flags.js";
+import { V9_FEATURES, type V9FeatureKey } from "./v9-feature-flags.js";
 import { V6_FEATURES, type V6FeatureKey } from "./v6-feature-flags.js";
 import { V7_FEATURES, type V7FeatureKey } from "./v7-feature-flags.js";
 import { V5_FEATURES, type V5FeatureKey } from "./v5-feature-flags.js";
@@ -50,6 +51,9 @@ const v5Catalog = Object.fromEntries(Object.entries(V5_FEATURES).map(([key, [tit
 const v6Catalog = Object.fromEntries(Object.entries(V6_FEATURES).map(([key, [title, description]]) => [key, { title, description, tier: "managed", cloudDefault: false, selfHostedDefault: false }])) as Record<V6FeatureKey, FeatureCatalogEntry>;
 
 export const INSTANCE_FEATURE_CATALOG: Record<InstanceFeatureKey, FeatureCatalogEntry> = {
+  ...Object.fromEntries(Object.entries(V9_FEATURES).map(([key, [title, description]]) => [key, {
+    title, description, tier: "managed", cloudDefault: false, selfHostedDefault: false,
+  }])) as Record<V9FeatureKey, FeatureCatalogEntry>,
   ...Object.fromEntries(Object.entries(V8_FEATURES).map(([key, [title, description]]) => [key, {
     title, description, tier: "managed", cloudDefault: false, selfHostedDefault: false,
   }])) as Record<V8FeatureKey, FeatureCatalogEntry>,

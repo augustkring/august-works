@@ -1,4 +1,5 @@
 import { assertV8FeatureDependencies, v8FeatureFlagsSchema, V8FeatureDependencyError } from "@paperclipai/shared";
+import { assertV9FeatureDependencies, v9FeatureFlagsSchema, V9FeatureDependencyError } from "@paperclipai/shared";
 import { assertV7FeatureDependencies, v5FeatureFlagsSchema, v6FeatureFlagsSchema, v7FeatureFlagsSchema, V7FeatureDependencyError } from "@paperclipai/shared";
 import { badRequest } from "../errors.js";
 import type { Db } from "@paperclipai/db";
@@ -35,7 +36,7 @@ import {
   applyOperatorGeneralDefaults,
   stripOperatorGeneralEchoes,
 } from "@paperclipai/shared";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { getManagedInstanceConfig, type ManagedInstanceConfig } from "./managed-config.js";
 import { getOperatorSettingDefaults } from "./setting-defaults.js";
 
@@ -202,6 +203,7 @@ export async function resolveWorktreeRunExecutionActivationState(options: {
 }
 
 function normalizeGeneralSettings(raw: unknown): InstanceGeneralSettings {
+  const sticky = raw && typeof raw === "object" && "outputFeedbackPolicyVersion" in raw && raw.outputFeedbackPolicyVersion === "aw-v9-local-v1" ? {outputFeedbackPolicyVersion:"aw-v9-local-v1" as const} : {};
   const parsed = instanceGeneralSettingsStorageSchema.safeParse(raw ?? {});
   if (parsed.success) {
     return {
@@ -210,6 +212,7 @@ function normalizeGeneralSettings(raw: unknown): InstanceGeneralSettings {
       feedbackDataSharingPreference:
         parsed.data.feedbackDataSharingPreference ?? DEFAULT_FEEDBACK_DATA_SHARING_PREFERENCE,
       backupRetention: parsed.data.backupRetention ?? DEFAULT_BACKUP_RETENTION,
+      ...sticky,
       // Absent => unrestricted; only carry through an explicit policy.
       ...(parsed.data.executionMode ? { executionMode: parsed.data.executionMode } : {}),
     };
@@ -219,7 +222,13 @@ function normalizeGeneralSettings(raw: unknown): InstanceGeneralSettings {
     keyboardShortcuts: false,
     feedbackDataSharingPreference: DEFAULT_FEEDBACK_DATA_SHARING_PREFERENCE,
     backupRetention: DEFAULT_BACKUP_RETENTION,
+    ...sticky,
   };
+}
+
+/** Public settings normalization must not erase native operator admission metadata. */
+function internalGeneralState(raw: Record<string, unknown>): Record<string, unknown> {
+  return Object.fromEntries(Object.entries(raw).filter(([key]) => !Object.hasOwn(instanceGeneralSettingsStorageSchema.shape, key)));
 }
 
 export function normalizeExperimentalSettings(raw: unknown): InstanceExperimentalSettings {
@@ -261,6 +270,7 @@ export function normalizeExperimentalSettings(raw: unknown): InstanceExperimenta
       ...v6FeatureFlagsSchema.parse(parsed.data),
       ...v7FeatureFlagsSchema.parse(parsed.data),
       ...v8FeatureFlagsSchema.parse(parsed.data),
+      ...v9FeatureFlagsSchema.parse(parsed.data),
       enableFoundationV1: parsed.data.enableFoundationV1 ?? false,
       enableContextEngineV1: parsed.data.enableContextEngineV1 ?? false,
       enableWorkflowsV1: parsed.data.enableWorkflowsV1 ?? false,
@@ -329,6 +339,7 @@ export function normalizeExperimentalSettings(raw: unknown): InstanceExperimenta
     ...v6FeatureFlagsSchema.parse({}),
     ...v7FeatureFlagsSchema.parse({}),
     ...v8FeatureFlagsSchema.parse({}),
+    ...v9FeatureFlagsSchema.parse({}),
     enableFoundationV1: false,
     enableContextEngineV1: false,
     enableWorkflowsV1: false,
@@ -487,6 +498,7 @@ export function instanceSettingsService(db: Db, options: InstanceSettingsService
     );
     assertV7FeatureDependencies(experimental);
     assertV8FeatureDependencies(experimental);
+    assertV9FeatureDependencies(experimental);
     // Self-hosted responses stay byte-identical: no managedKeys field at all.
     return managedConfig ? { ...experimental, managedKeys } : experimental;
   }
@@ -593,7 +605,7 @@ export function instanceSettingsService(db: Db, options: InstanceSettingsService
       const [updated] = await db
         .update(instanceSettings)
         .set({
-          general: { ...nextGeneral },
+          general: { ...internalGeneralState(current.general), ...nextGeneral },
           updatedAt: now,
         })
         .where(eq(instanceSettings.id, current.id))
@@ -624,6 +636,9 @@ export function instanceSettingsService(db: Db, options: InstanceSettingsService
           // The effective managed overlay must also satisfy the dependency graph.
           toExperimentalView(nextExperimental);
         } catch (error) {
+          if (error instanceof V9FeatureDependencyError) {
+            throw badRequest(error.message, { code: "V9_FEATURE_DEPENDENCY_INVALID", issues: error.issues });
+          }
           if (error instanceof V8FeatureDependencyError) {
             throw badRequest(error.message, { code: "V8_FEATURE_DEPENDENCY_INVALID", issues: error.issues });
           }
@@ -637,6 +652,11 @@ export function instanceSettingsService(db: Db, options: InstanceSettingsService
           .update(instanceSettings)
           .set({
             experimental: { ...nextExperimental },
+            // Experimental admission must preserve native operator state, including
+            // restore quarantine. Merge only the irreversible output-sharing latch.
+            ...(toExperimentalView(nextExperimental).customer_feedback_v9 ? {
+              general: sql`coalesce(${instanceSettings.general}, '{}'::jsonb) || '{"outputFeedbackPolicyVersion":"aw-v9-local-v1"}'::jsonb`,
+            } : {}),
             updatedAt: now,
           })
           .where(eq(instanceSettings.id, current.id))

@@ -644,7 +644,11 @@ describeEmbeddedPostgres("issue list routes assigneeAgentId filter", () => {
     expect(__getIssueListResponseCacheSizeForTests()).toBe(ISSUE_LIST_SERVER_CACHE_MAX_ENTRIES);
   });
 
-  it("logs request_storm_detected for identical in-flight compact issue-list fanout without query values", async () => {
+  it.each([
+    { referer: "http://localhost:3100/issues?q=do-not-log-this", safePath: "/issues" },
+    { referer: "http://localhost:3100/private-company/workflows/private-workflow/draft/steps/do-not-log-this?q=do-not-log-this", safePath: "/:company/workflows/:workflowId/draft/steps/:nodeId" },
+    { referer: "http://localhost:3100/private-company/workflows/private-workflow/draft?q=do-not-log-this", safePath: "/:company/workflows/:workflowId/draft" },
+  ])("logs request_storm_detected without private query or draft-step values: $safePath", async ({ referer, safePath }) => {
     const companyId = randomUUID();
     const issueId = randomUUID();
     const stormEvents: unknown[] = [];
@@ -677,7 +681,7 @@ describeEmbeddedPostgres("issue list routes assigneeAgentId filter", () => {
     const responses = await Promise.all(Array.from({ length: 5 }, () =>
       request(app)
         .get(`/api/companies/${companyId}/issues`)
-        .set("Referer", "http://localhost:3100/issues?q=do-not-log-this")
+        .set("Referer", referer)
         .set("X-Paperclip-Tab-Visible", "visible")
         .query({ view: "compact", limit: "20", q: "do-not-log-this" })
     ));
@@ -689,7 +693,7 @@ describeEmbeddedPostgres("issue list routes assigneeAgentId filter", () => {
       route: "GET /api/companies/:companyId/issues",
       companyId,
       visibilityHint: "visible",
-      referer: "/issues",
+      referer: safePath,
     });
     expect((stormEvents[0] as { queryKeys: string[] }).queryKeys).toEqual(
       expect.arrayContaining(["limit", "q", "view"]),

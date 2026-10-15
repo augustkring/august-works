@@ -7,6 +7,20 @@ import {
 } from "./company-routes";
 
 describe("company routes", () => {
+  it.each(["needs-you", "insights", "advanced", "my-feedback"])(
+    "keeps V9 %s navigation, query strings and recovery links attached to the company",
+    (root) => {
+      const path = `/${root}?feedbackId=current#receipt`;
+      expect(extractCompanyPrefixFromPath(`/${root}`)).toBeNull();
+      expect(applyCompanyPrefix(path, "AW")).toBe(`/AW${path}`);
+      expect(applyCompanyPrefix(`/OTHER${path}`, "AW")).toBe(`/OTHER${path}`);
+    },
+  );
+  it("keeps account and activation routes global when company selection exists", () => {
+    expect(applyCompanyPrefix("/saas/activation/3", "AW")).toBe("/saas/activation/3");
+    expect(extractCompanyPrefixFromPath("/saas/account")).toBeNull();
+    expect(applyCompanyPrefix("/dashboard", "AW")).toBe("/AW/dashboard");
+  });
   it.each(["adaptive-planning", "strategy-execution", "process-intelligence", "business-forecasts", "business-scenarios", "business-experiments", "causal-claims", "management-reviews", "business-metrics"])(
     "keeps V8 %s citations and navigation attached to the current company",
     (root) => {

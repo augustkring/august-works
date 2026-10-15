@@ -1,4 +1,5 @@
 import { v8FeatureFlagShape } from "../v8-feature-flags.js";
+import { v9FeatureFlagShape } from "../v9-feature-flags.js";
 import { v6FeatureFlagShape } from "../v6-feature-flags.js";
 import { v7FeatureFlagShape } from "../v7-feature-flags.js";
 import { v5FeatureFlagShape } from "../v5-feature-flags.js";
@@ -32,6 +33,8 @@ export const instanceGeneralSettingsSchema = z.object({
   feedbackDataSharingPreference: feedbackDataSharingPreferenceSchema.default(
     DEFAULT_FEEDBACK_DATA_SHARING_PREFERENCE,
   ),
+  // Monotonic privacy migration; no API value can restore blanket sharing.
+  outputFeedbackPolicyVersion: z.literal("aw-v9-local-v1").optional(),
   backupRetention: backupRetentionPolicySchema.default(DEFAULT_BACKUP_RETENTION),
   // Execution policy. Absent/"any" = unrestricted; "kubernetes" forces the
   // Kubernetes sandbox provider and denies local/ssh execution (cloud_tenant).
@@ -48,6 +51,7 @@ export const instanceExperimentalSettingsSchema = z.object({
   ...v6FeatureFlagShape,
   ...v7FeatureFlagShape,
   ...v8FeatureFlagShape,
+  ...v9FeatureFlagShape,
   enableEnvironments: z.boolean().default(false),
   enableNativeRunner: z.boolean().default(true),
   enableManagedSandboxOnly: z.boolean().default(false),

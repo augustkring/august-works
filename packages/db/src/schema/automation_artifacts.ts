@@ -59,6 +59,9 @@ export const automationArtifacts = pgTable(
     createdByUserId: text("created_by_user_id"),
     createdByOptimizerSuggestionId: uuid("created_by_optimizer_suggestion_id"),
     originWorkflowId: uuid("origin_workflow_id"),
+    // Actual copied Workflow sources retained after replay/child-run removal.
+    // null marks legacy provenance that could not be reconstructed.
+    authoringSourceWorkflowIds: jsonb("authoring_source_workflow_ids").$type<string[] | null>().default([]),
     originNodeId: text("origin_node_id"),
     latestVersionId: uuid("latest_version_id"),
     successCount: integer("success_count").notNull().default(0),
@@ -73,6 +76,7 @@ export const automationArtifacts = pgTable(
     archivedAt: timestamp("archived_at", { withTimezone: true }),
   },
   (table): PgTableExtraConfigValue[] => [
+    index("automation_artifacts_authoring_sources_idx").using("gin", table.authoringSourceWorkflowIds),
     uniqueIndex("automation_artifacts_company_id_id_uq").on(
       table.companyId,
       table.id,

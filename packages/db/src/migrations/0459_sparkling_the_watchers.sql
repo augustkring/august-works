@@ -1,0 +1,1 @@
+ALTER TABLE "saas_notification_preferences" ADD COLUMN "delivery_policy" jsonb;

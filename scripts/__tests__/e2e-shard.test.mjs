@@ -130,6 +130,19 @@ test("the duration manifest only names specs that still exist", () => {
   }
 });
 
+test("the V9 Storybook suite runs in its dedicated static-component lane", () => {
+  assert.ok(IGNORED_SPECS.includes("aw-v9-storybook.spec.ts"));
+  const config = readFileSync(path.join(repoRoot, "tests/e2e/aw-v9-storybook.config.ts"), "utf8");
+  assert.match(config, /testMatch: "aw-v9-storybook.spec.ts"/);
+  assert.match(config, /--directory ui\/storybook-static/);
+  const workflow = readFileSync(path.join(repoRoot, ".github/workflows/aw-v9-coverage.yml"), "utf8");
+  const lane = readWorkflowJobs(workflow).get("components");
+  assert.ok(lane, "V9 coverage CI must include the dedicated component browser lane");
+  assert.doesNotMatch(lane, /^ {4}if:|continue-on-error:/m, "component checks must not depend on an optional visual label");
+  assert.match(lane, /run: pnpm build-storybook/);
+  assert.match(lane, /pnpm exec playwright test --config tests\/e2e\/aw-v9-storybook.config.ts tests\/e2e\/aw-v9-storybook.spec.ts/);
+});
+
 test("the weighted partition keeps the shards close to balanced", () => {
   const durations = loadShardDurations(durationsManifest);
   const specs = listE2eSpecs();

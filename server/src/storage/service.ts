@@ -88,26 +88,39 @@ function assertPutFileInput(input: PutFileInput): void {
 }
 
 export function createStorageService(provider: StorageProvider, accounting?: StorageAccounting): StorageService {
+  const scopeId = provider.scopeId;
   return {
     provider: provider.id,
+    scopeId,
 
     async putFile(input: PutFileInput): Promise<PutFileResult> {
       assertPutFileInput(input);
       const objectKey = buildObjectKey(input.companyId, input.namespace, input.originalFilename);
       const byteSize = input.body.length;
       const contentType = input.contentType.trim().toLowerCase();
-      await accounting?.reserve(input.companyId, objectKey, byteSize);
+      await input.onAllocated?.(objectKey);
+      try {
+        await accounting?.reserve(input.companyId, objectKey, byteSize);
+      } catch (error) {
+        // No provider method has been invoked. Its durable allocation owner
+        // can reconcile this exact key without inventing a successful PUT or
+        // waiting for a transport which never started.
+        await input.onWritePrevented?.(objectKey);
+        throw error;
+      }
       await provider.putObject({
         objectKey,
         body: input.body,
         contentType,
         contentLength: byteSize,
       });
+      await input.onTransportSettled?.(objectKey);
       // A lost provider or database acknowledgement retains the reservation for reconciliation.
       await accounting?.stored(input.companyId, objectKey);
 
       return {
         provider: provider.id,
+        scopeId,
         objectKey,
         contentType,
         byteSize,

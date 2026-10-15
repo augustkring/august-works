@@ -1,7 +1,12 @@
-import { v7FeatureEnabled } from "@paperclipai/shared";
+import { notificationChannelCategorySchema, notificationChannelUpdateSchema } from "@paperclipai/shared";
+import { v7FeatureEnabled, v9FeatureEnabled, activationCommandSchema } from "@paperclipai/shared";
+import { notificationPreferenceProposalService } from "../services/notification-preference-proposals.js";
+import { notificationService } from "../services/notifications/notifications.js";
+import { activationService } from "../services/saas/activation.js";
+import { activationConnectionConsentService } from "../services/saas/activation-connection-consent.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { z } from "zod";
-import { Router, type Request } from "express";
+import { Router, type Request, type Response } from "express";
 import { and, desc, eq, gt, isNull, sql } from "drizzle-orm";
 import {
   authSecurityEvents,
@@ -32,7 +37,7 @@ import {
   type PermissionKey,
   type V6FeatureKey,
 } from "@paperclipai/shared";
-import { conflict, forbidden, notFound, unauthorized } from "../errors.js";
+import { badRequest, conflict, forbidden, notFound, unauthorized } from "../errors.js";
 import { accessService } from "../services/access.js";
 import { logActivity } from "../services/activity-log.js";
 import type { SaasPlatform } from "../services/saas/platform.js";
@@ -105,6 +110,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
     next();
   });
   router.get("/saas/capabilities", async (_req, res) => {
+    res.set("Cache-Control", "no-store");
     res.json({
       profile: "saas",
       enterpriseSso: v7FeatureEnabled(await instanceSettingsService(db).getExperimental(), "enterprise_identity_v7"),
@@ -113,6 +119,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
         "email_verification_required_v6",
       ),
       onboarding: await platform.enabled("server_onboarding_v6"),
+      activationV9: v9FeatureEnabled(await instanceSettingsService(db).getExperimental(), "activation_v9"),
       billing: await platform.enabled("billing_v6"),
       checkout: await platform.enabled("billing_checkout_v6"),
       runtime: await platform.enabled("hosted_openclaw_v6"),
@@ -135,7 +142,56 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
     const companyId = String(req.params.companyId);
     await company(req, companyId);
     await gate("server_onboarding_v6");
-    res.json(await platform.onboarding.get(companyId));
+    const run=await platform.onboarding.get(companyId);
+    if(run.activationState)throw conflict("Continue in the current activation flow",{code:"ACTIVATION_FLOW_REQUIRED"});
+    res.set("Cache-Control","private, no-store");
+    res.json(run);
+  });
+  router.get("/companies/:companyId/activation", async (req,res) => {
+    const companyId=z.uuid().parse(req.params.companyId);
+    await company(req,companyId);
+    res.set("Cache-Control","private, no-store");
+    res.json(await activationService(db).get(req.actor,companyId));
+  });
+  router.post("/companies/:companyId/activation", async (req,res) => {
+    const companyId=z.uuid().parse(req.params.companyId);
+    await company(req,companyId);
+    res.set("Cache-Control","private, no-store");
+    res.json(await activationService(db).command(req.actor,companyId,activationCommandSchema.parse(req.body)));
+  });
+  router.get("/companies/:companyId/activation/connections/:applicationKey/review", async (req, res) => {
+    const companyId = z.uuid().parse(req.params.companyId);
+    const applicationKey = z.string().min(1).max(120).parse(req.params.applicationKey);
+    const methodKey = z.string().min(1).max(120).optional().parse(req.query.methodKey);
+    await company(req, companyId);
+    res.set("Cache-Control", "private, no-store");
+    res.json(await activationConnectionConsentService(db).getReview(req.actor, companyId, applicationKey, methodKey));
+  });
+  router.post("/companies/:companyId/activation/connections/:applicationKey/consent", async (req, res) => {
+    const companyId = z.uuid().parse(req.params.companyId);
+    const applicationKey = z.string().min(1).max(120).parse(req.params.applicationKey);
+    const methodKey = z.string().min(1).max(120).optional().parse(req.query.methodKey);
+    await company(req, companyId);
+    res.set("Cache-Control", "private, no-store");
+    res.json(await activationConnectionConsentService(db).approve(req.actor, companyId, applicationKey, req.body, methodKey));
+  });
+  router.get("/companies/:companyId/activation/connections/:applicationKey/consent", async (req, res) => {
+    const companyId = z.uuid().parse(req.params.companyId), applicationKey = z.string().min(1).max(120).parse(req.params.applicationKey);
+    await company(req, companyId);
+    res.set("Cache-Control", "private, no-store");
+    res.json(await activationConnectionConsentService(db).getCurrentReceipt(req.actor, companyId, applicationKey));
+  });
+  router.post("/companies/:companyId/activation/connection-consents/:requestKey/withdraw", async (req, res) => {
+    const companyId = z.uuid().parse(req.params.companyId), requestKey = z.uuid().parse(req.params.requestKey);
+    await company(req, companyId);
+    res.set("Cache-Control", "private, no-store");
+    res.json(await activationConnectionConsentService(db).withdraw(req.actor, companyId, requestKey, req.body));
+  });
+  router.get("/companies/:companyId/activation/connection-consents/:requestKey", async (req, res) => {
+    const companyId = z.uuid().parse(req.params.companyId), requestKey = z.uuid().parse(req.params.requestKey);
+    await company(req, companyId);
+    res.set("Cache-Control", "private, no-store");
+    res.json(await activationConnectionConsentService(db).getReceipt(req.actor, companyId, requestKey));
   });
   router.patch("/companies/:companyId/onboarding", async (req, res) => {
     const companyId = String(req.params.companyId);
@@ -241,6 +297,43 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
       );
     },
   );
+  router.get("/companies/:companyId/notifications/preference-proposals/:proposalId",async(req,res)=>{
+    const companyId=z.uuid().parse(req.params.companyId),id=z.uuid().parse(req.params.proposalId);
+    await company(req,companyId);await gate("transactional_email_v6");
+    res.setHeader("Cache-Control","no-store");
+    res.json(await notificationPreferenceProposalService(db).review(req.actor,companyId,id));
+  });
+  router.post("/companies/:companyId/notifications/preference-proposals/:proposalId/apply",async(req,res)=>{
+    const companyId=z.uuid().parse(req.params.companyId),id=z.uuid().parse(req.params.proposalId);
+    await company(req,companyId);await gate("transactional_email_v6");
+    res.setHeader("Cache-Control","no-store");
+    res.json(await notificationPreferenceProposalService(db).apply(req.actor,companyId,id,req.body,
+      tx=>notificationService(tx,platform.email)));
+  });
+  // Native own-account preferences. No endpoint, text, grant or actor can be
+  // supplied by the caller; every target and receipt stays with its owner.
+  async function notificationChannelContext(req: Request, res: Response) {
+    const companyId = z.uuid().parse(req.params.companyId);
+    const category = notificationChannelCategorySchema.parse(req.params.category);
+    if (typeof req.query.expectedUserId !== "string") throw badRequest("Current account identity is required");
+    const actor = await company(req, companyId);
+    await gate("transactional_email_v6");
+    res.setHeader("Cache-Control", "no-store");
+    return { companyId, category, userId: actor.id };
+  }
+  router.get("/companies/:companyId/notifications/channel-preferences/:category", async (req, res) => {
+    const context = await notificationChannelContext(req, res);
+    res.json(await platform.notifications.channelPolicy.view(context.companyId, context.userId, context.category));
+  });
+  router.post("/companies/:companyId/notifications/channel-preferences/:category", async (req, res) => {
+    const context = await notificationChannelContext(req, res);
+    res.json(await platform.notifications.channelPolicy.update(context.companyId, context.userId, context.category,
+      notificationChannelUpdateSchema.parse(req.body)));
+  });
+  router.get("/companies/:companyId/notifications/channel-preferences/:category/receipts/:requestId", async (req, res) => {
+    const context = await notificationChannelContext(req, res);
+    res.json(await platform.notifications.channelPolicy.receipt(context.companyId, context.userId, context.category, z.uuid().parse(req.params.requestId)));
+  });
   router.get("/saas/account/notification-preferences", async (req, res) => {
     const actor = await user(req);
     await gate("transactional_email_v6");
@@ -351,11 +444,34 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
     if (receipt?.requestedByUserId !== actor.id) await company(req, companyId);
     res.json(receipt);
   });
+  router.use("/companies/:companyId/support-sessions", (_req, res, next) => {
+    res.set("Cache-Control", "private, no-store");
+    next();
+  });
   router.get("/companies/:companyId/support-sessions", async (req, res) => {
     const companyId = String(req.params.companyId),
       actor = await company(req, companyId);
     await gate("admin_support_v6");
     res.json(await platform.support.list(companyId, actor.id));
+  });
+  router.get("/companies/:companyId/support-sessions/pending-review", async (req, res) => {
+    const companyId = z.uuid().parse(req.params.companyId), actor = await company(req, companyId);
+    await gate("admin_support_v6");
+    res.json(await platform.support.pendingApproval(companyId, actor.id));
+  });
+  router.post("/companies/:companyId/support-sessions/reviews", async (req, res) => {
+    const companyId = z.uuid().parse(req.params.companyId), actor = await company(req, companyId);
+    await gate("admin_support_v6");
+    res.status(201).json(await platform.support.prepareApproval(companyId, actor.id, req.body));
+  });
+  router.delete("/companies/:companyId/support-sessions/reviews/:approvalId", async (req, res) => {
+    const companyId = z.uuid().parse(req.params.companyId), actor = await company(req, companyId);
+    res.json(await platform.support.cancelApproval(companyId, actor.id, z.uuid().parse(req.params.approvalId)));
+  });
+  router.get("/companies/:companyId/support-sessions/:sessionId", async (req, res) => {
+    const companyId = z.uuid().parse(req.params.companyId), actor = await company(req, companyId);
+    await gate("admin_support_v6");
+    res.json(await platform.support.get(companyId, actor.id, z.uuid().parse(req.params.sessionId)));
   });
   router.post("/companies/:companyId/support-sessions", async (req, res) => {
     const companyId = String(req.params.companyId),

@@ -1,3 +1,6 @@
+import { nativeInteractionExperience } from "./experience/chat-card.js";
+import { v9FeatureEnabled } from "@paperclipai/shared";
+import { instanceSettings } from "@paperclipai/db";
 import { nativePhotonInteraction } from "./photon/interactions.js";
 import { randomBytes } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
@@ -184,6 +187,17 @@ export function nativeTelegramConfirmation(
   return interaction;
 }
 
+/** Existing binary Native confirmation policy, with V9 admission for new hosts.
+ * A provider callback is never authority for tools, grants or document review. */
+export function nativeChannelConfirmation(
+  interaction: IssueThreadInteraction,
+  provider: string,
+  actionCardsEnabled: boolean,
+): RequestConfirmationInteraction | null {
+  return provider === "telegram" || actionCardsEnabled && ["slack", "microsoft-teams"].includes(provider)
+    ? nativeTelegramConfirmation(interaction) : null;
+}
+
 function textForQuestionInteraction(
   interaction: AskUserQuestionsInteraction,
   taskUrl: string | null,
@@ -286,6 +300,10 @@ export async function enqueueIssueInteractionChatPublications(
     interaction.kind === "ask_user_questions"
       ? nativeChatQuestion(interaction)
       : null;
+  const [settings] = await db.select({ experimental: instanceSettings.experimental }).from(instanceSettings)
+    .where(eq(instanceSettings.singletonKey, "default"));
+  const semantic = v9FeatureEnabled(settings?.experimental ?? {}, "action_cards_v9")
+    ? nativeInteractionExperience(interaction) : undefined;
   const inserted: Array<typeof chatPublications.$inferSelect> = [];
   for (const { conversation, endpoint } of bindings) {
     if (endpoint.assignedAgentId !== interaction.createdByAgentId) continue;
@@ -315,8 +333,8 @@ export async function enqueueIssueInteractionChatPublications(
         }))
       : [];
     const confirmation =
-      endpoint.provider === "telegram" && endpoint.capabilities.actions === true
-        ? nativeTelegramConfirmation(interaction)
+      endpoint.capabilities.actions === true
+        ? nativeChannelConfirmation(interaction, endpoint.provider, Boolean(semantic))
         : null;
     const confirmationActionTokens = confirmation
       ? (["accept", "reject"] as const).map((decision) => ({
@@ -405,6 +423,7 @@ export async function enqueueIssueInteractionChatPublications(
                 ? (interaction.payload.detailsMarkdown ?? undefined)
                 : "Open the task in Paperclip to review and respond.",
           actions,
+          ...(semantic ? { experience: semantic } : {}),
         },
       },
     });
@@ -725,6 +744,7 @@ export async function enqueueTerminalIssueInteractionChatPublications(
               kind: original.payload.card.kind,
               title: original.payload.card.title,
               body: copy.body,
+              ...(original.payload.card.experience ? { experience: nativeInteractionExperience(interaction) } : {}),
               actions: [],
             },
           },

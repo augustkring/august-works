@@ -1,3 +1,8 @@
+import {
+  EXPERIENCE_CARD_TOOL,
+  experienceToolCardRequestSchema,
+  parseExperienceToolCardRequest,
+} from "@paperclipai/shared";
 import { z } from "zod";
 import {
   CONNECTION_REQUEST_TOOL_DESCRIPTION,
@@ -267,8 +272,27 @@ async function getIssueWorkspaceRuntime(client: PaperclipApiClient, issueId: str
   };
 }
 
+/** Display reference only. This performs no API read/write, execution, approval
+ * or grant. The receiving current-account Native renderer validates the source. */
+function experienceCardTool(): ToolDefinition {
+  return {
+    name: EXPERIENCE_CARD_TOOL,
+    description: "Request a pre-approved AW Chat card using an existing Native card/source/version reference. The receiving user's current authorized Native read determines what may be shown. This tool cannot create, run, approve or grant anything; do not invent card content, URLs or source versions.",
+    schema: experienceToolCardRequestSchema,
+    execute: async (wire) => {
+      try {
+        const displayReference = parseExperienceToolCardRequest(wire);
+        return formatTextResponse({ schemaVersion: 1, displayReference, authority: "none" });
+      } catch {
+        return formatTextResponse({ error: "Card request unavailable", authority: "none" });
+      }
+    },
+  };
+}
+
 export function createToolDefinitions(client: PaperclipApiClient): ToolDefinition[] {
   return [
+    experienceCardTool(),
     makeTool(
       "connections_search",
       CONNECTIONS_SEARCH_TOOL_DESCRIPTION,

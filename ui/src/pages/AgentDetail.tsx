@@ -1,4 +1,7 @@
+import { PublishedAgentInstructions } from "../components/PublishedAgentInstructions";
+import { AgentMonitorLink } from "../components/AgentMonitorEntry";
 import { AgentCharacter } from "../components/AgentCharacter";
+import { AgentRevisionEntry } from "../components/AgentRevisionEntry";
 import { characterStateForAgent } from "@paperclipai/shared";
 import { mergeRunLogChunks, readChunkSeq } from "../lib/run-log-chunks";
 import { getPageVisibility, usePageVisibility } from "../lib/page-visibility";
@@ -1326,6 +1329,8 @@ export function AgentDetail() {
         </div>
       </header>
 
+      <AgentMonitorLink agentId={agent.id} />
+      {resolvedCompanyId && <AgentRevisionEntry company={resolvedCompanyId} agentId={agent.id} beforeNavigate={prepareAgentNavigation} />}
       {builtInState && (
         <InlineBanner
           tone="info"
@@ -2251,10 +2256,15 @@ export function PromptsTab({
   }, [agent.id]);
 
   const getCapabilities = useAdapterCapabilities();
-  const isLocal = getCapabilities(agent.adapterType).supportsInstructionsBundle;
+  const hasPublishedDefinition = Object.prototype.hasOwnProperty.call(agent.runtimeConfig, "agentDefinitionVersion");
+  const rawDefinition = agent.runtimeConfig.agentDefinitionVersion;
+  const publishedRevision = rawDefinition && typeof rawDefinition === "object" && "revisionId" in rawDefinition
+    && typeof rawDefinition.revisionId === "string" ? rawDefinition.revisionId : "unavailable";
+  const instructionVersionKey = hasPublishedDefinition ? ["published", publishedRevision] : [];
+  const isLocal = hasPublishedDefinition || getCapabilities(agent.adapterType).supportsInstructionsBundle;
 
-  const { data: bundle, isLoading: bundleLoading } = useQuery({
-    queryKey: queryKeys.agents.instructionsBundle(agent.id),
+  const { data: bundle, isLoading: bundleLoading, isFetching: bundleFetching } = useQuery({
+    queryKey: [...queryKeys.agents.instructionsBundle(agent.id), ...instructionVersionKey],
     queryFn: () => agentsApi.instructionsBundle(agent.id, companyId),
     enabled: Boolean(companyId && isLocal),
   });
@@ -2290,8 +2300,8 @@ export function PromptsTab({
   const selectedFileExists = bundleMatchesDraft && fileOptions.includes(selectedOrEntryFile);
   const selectedFileSummary = bundle?.files.find((file) => file.path === selectedOrEntryFile) ?? null;
 
-  const { data: selectedFileDetail, isLoading: fileLoading } = useQuery({
-    queryKey: queryKeys.agents.instructionsFile(agent.id, selectedOrEntryFile),
+  const { data: selectedFileDetail, isLoading: fileLoading, isFetching: fileFetching } = useQuery({
+    queryKey: [...queryKeys.agents.instructionsFile(agent.id, selectedOrEntryFile), ...instructionVersionKey],
     queryFn: () => agentsApi.instructionsFile(agent.id, selectedOrEntryFile, companyId),
     enabled: Boolean(companyId && isLocal && selectedFileExists),
   });
@@ -2458,7 +2468,8 @@ export function PromptsTab({
       ),
   );
   const fileDirty = draft !== null && draft !== currentContent;
-  const isDirty = bundleDirty || fileDirty;
+  const readOnlyInstructions = hasPublishedDefinition || bundle?.editable === false;
+  const isDirty = !readOnlyInstructions && (bundleDirty || fileDirty);
   const isSaving = updateBundle.isPending || saveFile.isPending || deleteFile.isPending || awaitingRefresh;
 
   useEffect(() => { onSavingChange(isSaving); }, [onSavingChange, isSaving]);
@@ -2542,6 +2553,12 @@ export function PromptsTab({
 
   const instructionsSideBySide =
     !isMobile && instructionPaneWidth !== null && instructionPaneWidth >= filePanelWidth + 520;
+
+  if (readOnlyInstructions) {
+    const currentBody = bundle?.editable === false && selectedFileDetail?.editable === false
+      && (!hasPublishedDefinition || selectedFileDetail.virtual) ? selectedFileDetail.content : null;
+    return <PublishedAgentInstructions agentId={agent.id} content={currentBody} checking={bundleLoading || fileLoading || bundleFetching || fileFetching} />;
+  }
 
   if (!isLocal) {
     return (

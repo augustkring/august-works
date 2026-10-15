@@ -1,0 +1,172 @@
+{
+  "screenId": "NATIVE-ACCOUNT-SECURITY",
+  "journeyId": "account",
+  "routeOrSurface": "/company/settings/security",
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
+  "customerOutcome": "Review current personal sessions, organization deletion receipts and notification preferences, and explicitly request deletion through the original Native account owner without renewing an unknown request.",
+  "entryConditions": [
+    "Current successful nonimplicit original session; matching user/session and current original SaaS capabilities.",
+    "Each private list requires a fresh original Native read after an account epoch changes. Notification policy edits also require the existing effective notification_policy_v9 flag and current preference read.",
+    "Optional linked-chat delivery requires the effective notification_channels_v9 flag, current Original notification preferences and the own verified private Slack/Teams identity/conversation proof. Email settings do not grant chat access.",
+    "After channel rollout rollback, the current verified owner can still read and explicitly reset an existing company-bound preference through the Original notification owner. The rollout flag continues to gate all new private destinations and outbound delivery; default choices stay hidden while off."
+  ],
+  "exitConditions": [
+    "Navigate away; personal deletion recovery retains only its principal and original UUID in bounded per-tab Core storage.",
+    "Same-person in-memory drafts remain hidden during checking. Account changes unmount private drafts; successful session decisions prune other accounts or logout references."
+  ],
+  "content": {
+    "h1": "Account security",
+    "supportingCopy": "Session revocation signs a device out. Account deletion requires current password, literal confirmation and export acknowledgement. An unresolved request is not proof that no effect occurred.",
+    "customerTerms": [
+      "Sessions",
+      "Notification preferences",
+      "Delete account",
+      "Retry the same deletion request"
+    ],
+    "displayedState": [
+      "Current Native session metadata, personal preferences and owned organization deletion status.",
+      "No private fields or old rows while current access is checking or refused.",
+      "A recovered locator never displays a receipt, restores a password or triggers a mutation.",
+      "A company-bound channel preference receipt confirms only the saved version, never message delivery. Missing destinations remain unavailable without email fallback; an uncertain save retains its exact Original request for retry or receipt lookup."
+    ]
+  },
+  "inputs": [
+    {
+      "id": "deletion-confirmation",
+      "label": "Type DELETE MY ACCOUNT",
+      "dataType": "text",
+      "required": true,
+      "default": "Empty",
+      "help": "Explicit literal confirmation for this personal account.",
+      "validation": "Exact DELETE MY ACCOUNT; required with password and unchecked-by-default export acknowledgement.",
+      "autofillOrPrefill": "Retained only for a mounted same-person draft; never restored from browser storage."
+    },
+    {
+      "id": "password",
+      "label": "Current password",
+      "dataType": "password",
+      "required": true,
+      "default": "Empty",
+      "help": "The original Native owner verifies the current password.",
+      "validation": "Required; Native 128-character input bound. A rejected retry may release the authenticator for correction without dropping an earlier unknown key.",
+      "autofillOrPrefill": "Native current-password autocomplete; no application browser persistence. Reopening requires a new entry."
+    },
+    {
+      "id": "exports",
+      "label": "I have saved any exports I need.",
+      "dataType": "checkbox",
+      "required": true,
+      "default": "Unchecked",
+      "help": "Required explicit acknowledgement before account deletion.",
+      "validation": "Checked by the current person; all confirmations repeat after reopening.",
+      "autofillOrPrefill": "Same mounted draft only; unchecked after reopening or account change."
+    },
+    {
+      "id": "delivery-policy",
+      "label": "Delivery timing",
+      "dataType": "select",
+      "required": true,
+      "default": "Current original preference on first entry",
+      "help": "Current quiet hours/timezone/digest settings apply to optional email.",
+      "validation": "Original shared notificationPolicySchema; security delivery is mandatory.",
+      "autofillOrPrefill": "Same-person unsaved policy retained in the mounted editor; fresh original preference read required before disclosure."
+    }
+  ],
+  "actions": {
+    "primary": {
+      "label": "Review account security",
+      "operation": "Read current original account sessions, preferences and owned deletion receipts; this creates no work or grant."
+    },
+    "secondary": [
+      "Revoke a listed current Native session",
+      "Save optional email preference or admitted delivery policy",
+      "Retry original current reads after failure",
+      "Explicitly retry the same account deletion UUID after an unknown reply; re-enter password and consent after reopening"
+    ],
+    "destructiveOrIrreversible": [
+      "Account deletion removes access/profile/credentials through the original Native verified-account/password/ownership/billing checks. A locator or cached session does not authorize deletion.",
+      "Session revocation uses the original Native owner and listed current session ID."
+    ]
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Original auth sessions, SaaS capabilities, user preferences and company deletion operations"
+    ],
+    "canonicalWriteOperation": "Original Native notification preference, session revocation and account deletion endpoints; unchanged expected-user bindings and original deletion key.",
+    "authorityEffect": "Current Native verified identity/password, tenant membership/audit context, sole-owner and billing requirements remain authoritative. No new access, receipt or deletion owner.",
+    "asyncWork": "Abortable no-store Native reads with epoch and completed-cache checks before/after reads and at mutation/acknowledgement boundaries. No automatic mutation retry; same-turn deletion submissions coalesce.",
+    "receipt": "Only the current original Native response owns acceptance. A bounded per-tab principal/UUID locator is not a receipt. A refused retry cannot erase evidence of an earlier unknown acceptance."
+  },
+  "states": {
+    "loading": "Hide all private rows, inputs and policy editors; generic current-account checking only.",
+    "empty": "Only fresh Native reads can report empty current lists.",
+    "partial": "Supporting Native account source is qualified by focused software fixtures; current full types/build/browser and launch/human evidence remain required.",
+    "stale": "Withdraw private state; a new epoch requires fresh original reads before list/policy disclosure.",
+    "validation_error": "Required literal/password/export consent; shared policy field errors retain semantic labels and field focus.",
+    "system_error": "Fixed localized errors; original keys survive transport uncertainty. Corrupt/unavailable recovery refuses transport rather than creating a replacement key.",
+    "permission_denied": "Withdraw private fields and refuse callbacks; original Native permission/password checks still mediate every endpoint.",
+    "recovering": "A bounded per-tab locator selects only the original UUID. Reopening restores no credentials or consent and makes no request until explicit current-user confirmation.",
+    "success": "Current original Native acknowledgement may redirect to the original signed-out account-deletion destination. Private policy success and callbacks are scoped to current account/source/company epochs."
+  },
+  "navigation": {
+    "back": "Existing Native navigation; account deletion is personal and does not retarget on a company change.",
+    "cancelOrSaveExit": "Leaving does not send a mutation; mounted in-memory credentials are discarded while unresolved original locator remains per tab.",
+    "deepLink": "Existing company-prefixed /company/settings/security route; reset password uses the original global route.",
+    "resume": "Original account/key locator only; no background replay or synthesized receipt."
+  },
+  "accessibility": {
+    "initialFocus": "Current H1 after current account resolves.",
+    "focusAfterError": "Semantic safe alert and original read retry; required inputs and policy validation retain labels and described errors.",
+    "focusAfterSuccess": "Original destination on current deletion acknowledgement; current heading after reauthorization.",
+    "keyboardModel": "Native labelled inputs, buttons, checkbox and select; explicit form submission and same-turn coalescing.",
+    "statusAnnouncement": "Semantic checking/loading status and fixed safe alert.",
+    "targetSize": "Existing token controls; touch and built-browser qualification pending.",
+    "zoomReflow": "Stacked Native rows and forms; actual 390-pixel axe/overflow check pending.",
+    "reducedMotion": "No added animation.",
+    "screenReaderNotes": "Native Layout owns the sole main landmark; this page is a labelled section with semantic headings. Manual assistive-technology acceptance remains pending."
+  },
+  "responsive": {
+    "wide": "Existing SaaS page and stacked forms.",
+    "narrow": "Existing responsive Native form/row tokens.",
+    "mobile": "Actual built browser 390-pixel keyboard/focus/axe/reflow qualification is pending."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Current own session metadata, preferences and owned organization deletion status."
+    ],
+    "dataCollected": [
+      "Password/consent only in current form memory and the explicit original Native request.",
+      "Per-tab Core locator: schemaVersion, principal and original UUID; at most 16 entries and 8192 bytes."
+    ],
+    "sensitiveFields": [
+      "Password, account identity, private session metadata, preferences and irreversible request state."
+    ],
+    "loggingConstraints": "No new analytics, exporter, automatic diagnostics, raw error rendering or password/body persistence. Original Native private HTTP logging policy remains in force."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "Password, deletion body/UUID, principal, session metadata, preferences, raw errors and input text."
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Current Native reads and no old-account callbacks; same-turn write/rollback guards; unknown request across company change, route unmount and refusal; fresh confirmations after reopening."
+    ],
+    "accessibility": [
+      "Focused semantic form/field/focus tests pass; current actual built browser/mobile and manual AT remain pending."
+    ],
+    "securityPrivacy": [
+      "Original Native owners and endpoint bindings unchanged; no credentials in recovery storage; malformed/unavailable storage refuses irreversible transport.",
+      "63 checks pass across seven focused files on preceding source SHA-256 feb0299b6e6568fe22463d311170e7e165064b267aa1600efa2e7568a7d67a23."
+    ],
+    "usability": [
+      "Representative account/session/privacy and unknown-deletion journeys on accepted artifact remain pending."
+    ]
+  }
+}

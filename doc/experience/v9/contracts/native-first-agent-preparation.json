@@ -1,0 +1,16 @@
+{
+  "screenId": "NATIVE-FIRST-AGENT-PREPARATION",
+  "routeOrSurface": "/saas/activation/9",
+  "sourceSections": ["78.10"],
+  "status": "in_progress",
+  "canonicalReadOwners": ["company_onboarding_runs", "agents", "approvals", "agent_packages", "agent_package_versions", "Original account/company authorization"],
+  "canonicalWriteOperation": "Original transactional onboarding and Agent creation with original hire approval",
+  "entryConditions": ["Current verified initiating account and active company membership", "Effective activation and package flags", "Original agents:create authority", "Current qualified C1 internal-draft customer package", "No existing first-agent/task preparation or recorded result"],
+  "content": ["Explicit paused preparation confirmation", "Original prepared/awaiting-approval state", "Changed or unavailable source state", "Original agent-monitor link"],
+  "prohibitedClaims": ["Ready/active status", "Completed safe test", "Provider or hosting qualification", "New execution/grant/credential authority", "First-value proof"],
+  "privacy": "Configuration hash, publication pin, approval reference and request receipts stay private to the existing onboarding owner. Original account/company/agent-read authority is repeated; original private no-store namespace applies.",
+  "recovery": "Same request reads the same original preparation. New requests cannot replace it. Native transaction failure rolls back agent/approval/reference/audits. Source loss hides identifiers and offers no replacement.",
+  "localization": ["en", "da"],
+  "accessibility": "Existing single main landmark, semantic section and status/alert, token touch targets and keyboard button/link.",
+  "acceptance": "22 focused shared/UI/locale checks plus token and non-release traceability gates pass at the scoped snapshot in the plan. Strict types, original Native/legacy and built-UI checks remain unqualified. Full V9 source, safe-test/promotion, live/human acceptance and PR review remain pending."
+}

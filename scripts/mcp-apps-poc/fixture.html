@@ -1,0 +1,29 @@
+<!doctype html><html lang="en"><head><meta charset="utf-8"><title>Anonymous sandbox fixture</title><style>body{font:16px system-ui;padding:12px}button{min-height:44px;margin:4px}p{overflow-wrap:anywhere}</style></head><body>
+<h1>Read-only synthetic panel</h1><p id="result">Waiting for host initialization</p>
+<button id="cookie">Inspect app cookie boundary</button><p id="cookie-result"></p>
+<button id="dom">Try host DOM access</button><p id="dom-result"></p>
+<button id="network">Try undeclared connection</button><p id="network-result"></p>
+<button id="tool">Request a cross-server tool</button><p id="tool-result"></p>
+<button id="navigation">Try host navigation</button><p id="navigation-result"></p>
+<button id="flood">Exceed bridge message budget</button>
+<script>
+const proxyOrigin = "__SANDBOX_ORIGIN__";
+const send = (method, id, params) => parent.postMessage({jsonrpc:"2.0",method,...(id===undefined?{}:{id}),...(params===undefined?{}:{params})},proxyOrigin);
+// Attempt before initialization: the host must not grant or dispatch it.
+send("tools/call","premature",{name:"cross_server_write",arguments:{secret:"POC_PRIVATE_CANARY"}});
+send("ui/initialize","initialize",{protocolVersion:"2026-01-26",appInfo:{name:"AW anonymous fixture",version:"1.0"},appCapabilities:{}});
+window.addEventListener("message",event=>{
+  if(event.source!==parent || event.origin!==proxyOrigin)return;
+  const rpc=event.data;
+  if(rpc.id==="initialize" && rpc.result){send("ui/notifications/initialized");return;}
+  if(rpc.id==="tool" && rpc.error)document.querySelector("#tool-result").textContent="Tool request refused; no effect";
+  if(rpc.method==="ui/resource-teardown"){parent.postMessage({jsonrpc:"2.0",id:rpc.id,result:{}},proxyOrigin);return;}
+  if(rpc.method==="ui/notifications/tool-result")document.querySelector("#result").textContent=rpc.params.content[0].text;
+});
+document.querySelector("#cookie").onclick=()=>document.querySelector("#cookie-result").textContent=document.cookie===""?"No host cookies":"Cookie boundary failed";
+document.querySelector("#dom").onclick=()=>{try{void top.document.body;document.querySelector("#dom-result").textContent="Boundary failed";}catch{document.querySelector("#dom-result").textContent="Host DOM blocked";}};
+document.querySelector("#network").onclick=async()=>{try{await fetch("__HOST_ORIGIN__/forbidden");document.querySelector("#network-result").textContent="Boundary failed";}catch{document.querySelector("#network-result").textContent="Undeclared connection blocked";}};
+document.querySelector("#tool").onclick=()=>send("tools/call","tool",{name:"another_server_write",arguments:{secret:"POC_PRIVATE_CANARY"}});
+document.querySelector("#navigation").onclick=()=>{try{top.location.href="__HOST_ORIGIN__/forbidden";document.querySelector("#navigation-result").textContent="Navigation attempted";}catch{document.querySelector("#navigation-result").textContent="Host navigation blocked";}};
+document.querySelector("#flood").onclick=()=>{for(let n=0;n<100;n++)send("tools/call",`flood-${n}`,{name:"write",arguments:{}});};
+</script></body></html>

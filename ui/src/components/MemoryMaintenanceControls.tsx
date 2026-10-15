@@ -4,10 +4,15 @@ import { memoryApi } from "@/api/memory";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { useNavigate } from "@/lib/router";
+import { useTranslation } from "react-i18next";
+import { Link } from "@/lib/router";
+import { useV9FeatureEnabled } from "@/hooks/useV9FeatureEnabled";
 
 export function MemoryMaintenanceControls({ companyId }: { companyId: string }) {
   const client = useQueryClient();
   const navigate = useNavigate();
+  const { t } = useTranslation("experience");
+  const history = useV9FeatureEnabled("maintenance_autopilot_v9");
   const [open, setOpen] = useState(false);
   const [selected, setSelected] = useState<string[]>([]);
   const [operation, setOperation] = useState<"dedupe" | "compaction" | "reflection" | "index_refresh">("dedupe");
@@ -24,6 +29,7 @@ export function MemoryMaintenanceControls({ companyId }: { companyId: string }) 
   return <details className="rounded-lg border border-border p-3" open={open} onToggle={(event) => setOpen(event.currentTarget.open)}>
     <summary className="cursor-pointer rounded-sm text-sm font-medium outline-none focus-visible:ring-2 focus-visible:ring-ring">Memory maintenance</summary>
     <div className="mt-3 space-y-3">
+      {history.enabled && <Link className="inline-flex min-h-11 items-center underline" to="/memory/maintenance">{t("memoryMaintenance.open")}</Link>}
       <p className="text-xs text-muted-foreground">Choose accepted shared records. Dedupe preserves one identical claim and its evidence. Compaction creates a pending candidate from reviewed summaries. PostgreSQL maintains search entries on every write; index refresh checks the index and updates statistics.</p>
       <label className="block space-y-1 text-xs">Operation<select value={operation} disabled={enqueue.isPending}
         className="w-full rounded-md border border-input bg-background p-2" onChange={(event) => { setOperation(event.target.value as typeof operation); setRequestKey(crypto.randomUUID()); }}>

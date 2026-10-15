@@ -1011,7 +1011,12 @@ export function accessService(db: Db) {
       return;
     }
 
-    await ensureMembership(companyId, principalType, principalId, "member", "active");
+    // Preserve the role at the row-write boundary, including concurrent role
+    // changes. Existing active memberships require no membership mutation.
+    await db.insert(companyMemberships).values({ companyId, principalType, principalId, status: "active", membershipRole: "member" })
+      .onConflictDoUpdate({ target: [companyMemberships.companyId, companyMemberships.principalType, companyMemberships.principalId],
+        set: { status: "active", membershipRole: "member", updatedAt: new Date() },
+        setWhere: ne(companyMemberships.status, "active") });
 
     const existing = await db
       .select()

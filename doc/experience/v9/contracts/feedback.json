@@ -1,0 +1,205 @@
+{
+  "screenId": "FEEDBACK",
+  "journeyId": "feedback",
+  "routeOrSurface": "Persistent global Feedback dialog",
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
+  "customerOutcome": "Submit a private product report with clear disclosure and a durable server-confirmed receipt.",
+  "entryConditions": [
+    "Current settled board identity and selected company; the feedback form is keyed by company and principal and does not retain foreign drafts.",
+    "Effective customer_feedback_v9 enables new submissions; original domain membership, company availability and request abuse admission remain necessary.",
+    "Current session and rollout reads must settle before writing or showing private draft fields and receipt references; same-turn fetching guards apply before mutation."
+  ],
+  "exitConditions": [
+    "A validated Native acknowledgement from the current account epoch or a fresh current-authorized GET of its original ID confirms acceptance. A late acknowledgement remains concealed until the original read succeeds.",
+    "Cancel or close preserves the current in-memory draft while mounted. Explicit Discard clears an unsent or definitely rejected local draft; an in-flight or unknown accepted request cannot be discarded. A current canonical receipt immediately releases local text/category/choices and image preview URLs while preserving receipt/history access."
+  ],
+  "content": {
+    "h1": "Share feedback (named native dialog; the enclosing page retains its heading)",
+    "supportingCopy": "Tell us what went wrong or what would make August Works better. This is not monitored for urgent support.",
+    "customerTerms": [
+      "Company",
+      "Work",
+      "Needs You",
+      "Agent",
+      "Feedback"
+    ],
+    "displayedState": [
+      "Category-specific question and optional goal, included-context disclosure, explicit diagnostics/name choices, unavailable image status and fixed support/security/privacy links.",
+      "Pending/unconfirmed submission disables input edits; only an accepted canonical receipt displays the feedback reference.",
+      "Generic session-recheck state hides private fields and receipt IDs while preserving the same mounted draft; a different settled account purges it."
+    ]
+  },
+  "inputs": [
+    {
+      "id": "category",
+      "label": "Feedback category",
+      "dataType": "Single select BUG / IMPROVEMENT / IDEA / OTHER",
+      "required": true,
+      "default": "BUG",
+      "help": "Question labels follow the selected category.",
+      "validation": "Exactly one category",
+      "autofillOrPrefill": "No automatic content collection"
+    },
+    {
+      "id": "body",
+      "label": "Category-specific feedback question",
+      "dataType": "Plain text",
+      "required": true,
+      "default": "Empty",
+      "help": "Customer text is untrusted and never executes tools.",
+      "validation": "Trimmed nonempty, at most 10000 characters",
+      "autofillOrPrefill": "No automatic content collection"
+    },
+    {
+      "id": "goal",
+      "label": "Category-specific optional goal",
+      "dataType": "Plain text",
+      "required": false,
+      "default": "Empty",
+      "help": "Describe the desired outcome without mandatory reproduction steps.",
+      "validation": "At most 2000 characters",
+      "autofillOrPrefill": "No automatic content collection"
+    },
+    {
+      "id": "blocksWork",
+      "label": "This stops me from completing my work",
+      "dataType": "Boolean",
+      "required": false,
+      "default": "False",
+      "help": "Visible only for a bug.",
+      "validation": "True is valid only for BUG",
+      "autofillOrPrefill": "No automatic content collection"
+    },
+    {
+      "id": "diagnostics",
+      "label": "Include technical diagnostics",
+      "dataType": "Boolean",
+      "required": false,
+      "default": "False",
+      "help": "Explicit safe-code/correlation allowlist; no raw logs or screenshots. The current dialog discloses that it has collected no diagnostics and opt-in sends an empty bundle before submission.",
+      "validation": "Diagnostics require explicit opt-in; unknown-result retries preserve the originally disclosed immutable bundle.",
+      "autofillOrPrefill": "No automatic content collection"
+    },
+    {
+      "id": "omitName",
+      "label": "Do not include my name/contact details",
+      "dataType": "Boolean",
+      "required": false,
+      "default": "False",
+      "help": "Company/technical context, separate audit and private account ownership remain; this is not anonymity.",
+      "validation": "Canonical author omitted when true",
+      "autofillOrPrefill": "No automatic content collection"
+    }
+  ],
+  "actions": {
+    "primary": {
+      "label": "Send feedback",
+      "operation": "Submit the exact frozen request; retry only with its original key and payload"
+    },
+    "secondary": [
+      "Cancel or close preserves the mounted draft and restores the invoking control.",
+      "Discard clears only the local unsent draft. It makes no Native feedback deletion or image PUT, is withheld when no draft exists, and cannot cancel or forget an unconfirmed submitted request.",
+      "Check receipt reads the Original current-principal/company request slot without resending. A missing observation remains unknown and never changes the frozen retry key/body. A later definite refusal cannot release an earlier unknown request.",
+      "Retry an unconfirmed submission with its exact original key and payload; a canonical validation refusal allows correction with a new key.",
+      "View accepted feedback through My feedback; use separate confirmed support/security/privacy mailto links without prefilled report data.",
+      "Check feedback receipt reads the original committed feedback after an unconfirmed account recheck; Share feedback in the command palette opens this same empty form without submitting or filling body/context."
+    ],
+    "destructiveOrIrreversible": [
+      "Explicit Discard removes locally entered unsent data; the server case/history remains with its Original owner."
+    ]
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Current identity and selected company",
+      "Customer Feedback submission policy",
+      "Startup-owned strict references for all six Privacy policy purposes; declared references remain execution-unqualified and cannot enable GA.",
+      "Original actor-owned feedback access/request slot, read through current Native membership and protected case ownership; lookup performs no submission, upload or activity mutation."
+    ],
+    "canonicalWriteOperation": "POST canonical Customer Feedback with immutable body/goal and explicit disclosure choices, company membership, durable request key and abuse limit.",
+    "authorityEffect": "Only the canonical feedback owner can accept a submission. No tool/provider/agent effect or permission expansion is caused by feedback content.",
+    "asyncWork": "Explicit submission only, with original native idempotency, current membership and transactional rollout admission. Original limit is twenty requests per principal/company in ten minutes. No automatic retry or report send occurs.",
+    "receipt": "Server-accepted AWF reference shown only in the current account epoch. A late acknowledgement uses a fresh original feedback GET with no-store, abort signal and no retained query cache. Read refusal remains unconfirmed and offers read-only Check feedback receipt; it never resubmits the create."
+  },
+  "states": {
+    "loading": "The global trigger waits for settled identity and admission; a pending submission disables form edits and announces sending.",
+    "empty": "A new mounted form has BUG selected and empty body/goal; diagnostics and omit-name are off.",
+    "partial": "Images are explicitly unavailable; optional diagnostics are disclosed as empty. The remaining form can submit through current native admission.",
+    "stale": "Account/company withdrawal removes the keyed form and retained private draft. An unconfirmed submitted snapshot is not recomputed when the dialog reopens.",
+    "validation_error": "Keep entered text; HTML/native bounded category/body/goal validation and canonical rejection allow correction with a new request key.",
+    "system_error": "Fixed translated acknowledgement-unconfirmed copy retains and locks the original payload. Raw exceptions never enter the dialog.",
+    "permission_denied": "Current native membership/company or rollout refusal cannot create a successful receipt or broaden access.",
+    "recovering": "Retry only the retained original submission. Context, disclosure choices and request key stay immutable until a canonical response.",
+    "success": "Show the canonical accepted AWF reference and link to My feedback; do not equate product feedback with urgent support or security incident handling."
+  },
+  "navigation": {
+    "back": "The enclosing page remains the navigation context. Closing/reopening within the mounted account/company preserves entered feedback.",
+    "cancelOrSaveExit": "Cancel/close returns focus to the connected invoking control. Drafts and diagnostics are never written to persistent browser storage.",
+    "deepLink": "Global feedback trigger; accepted history uses the existing private My feedback route.",
+    "resume": "An unconfirmed mounted submission retries its original immutable key/payload. Durable cross-reload draft/reconciliation UX still requires separate implementation and acceptance."
+  },
+  "accessibility": {
+    "initialFocus": "Native named dialog opens on the labeled category control; the dialog container is not an ordinary focus target.",
+    "focusAfterError": "Fixed submission error announcement receives focus; field validation preserves other text.",
+    "focusAfterSuccess": "Accepted receipt receives focus; Close returns to the invoking control.",
+    "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
+    "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
+    "targetSize": "Custom frequent and primary controls target at least 44 \u00d7 44 CSS px.",
+    "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
+    "reducedMotion": "No essential animated transition or moving progress indicator.",
+    "screenReaderNotes": "Named dialog with category-specific labels, associated disclosure/diagnostic help, fixed error/status and native modal focus containment. The parent retains its main landmark."
+  },
+  "responsive": {
+    "wide": "Readable constrained content width with natural wrapping.",
+    "narrow": "Reflow cards and form actions without concealing utilities or consequences.",
+    "mobile": "Touch targets remain reachable; dialogs scroll within the viewport and do not obscure focus."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Only current principal/company-authorized customer data",
+      "Feedback original text and visible messages only in private customer history"
+    ],
+    "dataCollected": [
+      "Customer-entered feedback and optional goal; current company/private account ownership under the canonical feedback domain.",
+      "Safe page category and recognized static screen ID; locale, timezone and viewport category; reported browser/OS family and major version only; client/server build references and server-owned relevant effective feature IDs.",
+      "Optional diagnostics remain an explicit empty safe-code/correlation bundle in this dialog. No raw user-agent string, query/fragment, page text, prompts, outputs, logs, form values, automatic screenshots or fingerprint/client-hint requests."
+    ],
+    "sensitiveFields": [
+      "Feedback body/goal, optional name, protected private account link and reported metadata remain customer data. No-name is not an anonymity claim."
+    ],
+    "loggingConstraints": "Exclude customer prose, prompts, result bodies, attachments and raw errors from generic analytics/activity details; native domain audit is purpose-separated. Startup parser errors omit private configuration; the public no-store policy DTO excludes owner identity and policy refs."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "Raw intent",
+      "Company facts",
+      "Feedback body/goal",
+      "Documents/prompts/results",
+      "Credentials/raw URLs/query strings/DOM/screenshots"
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Verify submit/replay/concurrent requests, lost-ACK immutable context, canonical refusal/correction, scope withdrawal, new-work rollout, retained private history and separate support/security/privacy destinations on the exact artifact.",
+      "Verify temporary close preserves text/category, keyboard Discard clears them without a Native submission, an unknown acceptance refuses Discard/replays only the original request, and current canonical acceptance releases local image preview URLs.",
+      "Lose the acknowledgement after an actual committed submission and recover its canonical receipt by read only; preserve privacy across foreign accounts/companies and late Source withdrawal.",
+      "Protected image/scanner, qualified diagnostics, durable reload draft/reconciliation, retention/DSR/legal hold and complete closure remain pending."
+    ],
+    "accessibility": [
+      "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
+    ],
+    "securityPrivacy": [
+      "Verify current membership/resource revocation, tenant isolation, untrusted content and separate private feedback identity purpose.",
+      "Refuse GA for missing required Privacy policy references and for complete declarations without qualified native policy execution; partial/numeric/unknown declarations cannot silently choose legal periods.",
+      "Reject unknown/raw environment fields, mismatched screen category and forged server feature IDs. Preserve old request hashes and the original accepted metadata across retries and rollout changes."
+    ],
+    "usability": [
+      "Use representative exploratory and pre-registered confirmatory journey evidence with explicit PASS/FAIL/INCONCLUSIVE; source checks are insufficient."
+    ]
+  }
+}

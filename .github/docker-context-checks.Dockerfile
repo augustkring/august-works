@@ -19,7 +19,7 @@
 # node:24-slim — the runner requires Node >= 24.11 and the production
 # image builds on Node 24; the digest pin keeps the security gate's own
 # runtime immutable.
-FROM node:24-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e
+FROM public.ecr.aws/docker/library/node:24-slim@sha256:ba849c60be29959425b8734d57b8b4b7d56f98edd9504c9af091d5281095a71e
 WORKDIR /context
 COPY . .
 # Committed artifacts the image build reads whose drift checks cannot run
@@ -51,7 +51,9 @@ RUN node -e ' \
 # ajv is installed in an isolated directory (the runner's own package.json
 # uses workspace: ranges npm cannot install from) and symlinked in so ESM
 # resolution finds it from the scripts' location.
-RUN AJV_RANGE="$(node -p "require('/context/packages/paperclip-runner/package.json').dependencies.ajv")" \
+RUN --mount=type=secret,id=proxy_ca \
+    if [ -f /run/secrets/proxy_ca ]; then export NODE_EXTRA_CA_CERTS=/run/secrets/proxy_ca; fi \
+ && AJV_RANGE="$(node -p "require('/context/packages/paperclip-runner/package.json').dependencies.ajv")" \
  && mkdir /probe-deps && cd /probe-deps && npm init -y >/dev/null \
  && npm install --ignore-scripts --no-audit --no-fund "ajv@${AJV_RANGE}" \
  && ln -s /probe-deps/node_modules /context/packages/paperclip-runner/node_modules \

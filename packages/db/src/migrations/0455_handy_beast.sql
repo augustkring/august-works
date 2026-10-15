@@ -1,0 +1,1 @@
+ALTER TABLE "customer_feedback" ADD COLUMN "internal_state" text DEFAULT 'RECEIVED' NOT NULL;

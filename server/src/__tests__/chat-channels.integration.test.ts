@@ -1,3 +1,5 @@
+import { notificationChannelDelivery } from "../services/notifications/channel-delivery.js";
+import { notificationChannelPolicy } from "../services/notifications/channel-policy.js";
 import { toolActionRequests, toolInvocations } from "@paperclipai/db";
 import { GitHubPublicationLeaseLost, withGitHubPublicationLease } from "../services/chat-github-publication-lease.js";
 import { githubChatManagementService } from "../services/chat-github-management.js";
@@ -85,6 +87,9 @@ import {
   environmentLeases,
   principalPermissionGrants,
   toolConnections,
+  saasNotifications,
+  saasNotificationPreferences,
+  notificationChannelDeliveries,
 } from "@paperclipai/db";
 import type { ChatProvider } from "@paperclipai/shared";
 import { isPaperclipExternalChatTurn } from "@paperclipai/adapter-utils/server-utils";
@@ -1181,6 +1186,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     overrides: Partial<
       Pick<
         ChatChannelServiceOptions,
+        | "notificationDelivery"
         | "credentialMutationLeaseRenewalIntervalMs"
         | "deferWebhookProcessing"
         | "discordGatewayEventBarrier"
@@ -1564,6 +1570,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     overrides: { allowUnlinkedPeople?: boolean; linkedBoardUser?: boolean } & Partial<
       Pick<
         ChatChannelServiceOptions,
+        | "notificationDelivery"
         | "credentialMutationLeaseRenewalIntervalMs"
         | "conversationLeaseRenewalIntervalMs"
         | "deferWebhookProcessing"
@@ -25056,6 +25063,110 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     expect(wakeup).not.toHaveBeenCalled();
   });
 
+  it.each(["send", "withdraw", "digest", "unknown"] as const)(
+    "keeps an own-account notification on the Original provider-effect path: %s",
+    async mode => {
+      const flags = instanceSettingsService(db), previous = await flags.getExperimental();
+      await flags.updateExperimental({ saas_deployment_profile_v6: true, transactional_email_v6: true,
+        notification_policy_v9: true, notification_channels_v9: true });
+      onTestFinished(async () => { await flags.updateExperimental(previous); });
+      const fixture = await seedCompany();
+      const gateway = notificationChannelDelivery(db, { primaryAppOrigin: "https://app.example.test",
+        allowedAppOrigins: ["https://app.example.test"], legacyOrigins: [] });
+      const { service, endpoint, runtime, wakeup } = await configuredSlackEndpoint(fixture, {
+        linkedBoardUser: true, notificationDelivery: gateway,
+      });
+      await service.update(endpoint.id, { allowDirectMessages: true }, "owner-user");
+      await db.update(chatEndpoints).set({ status: "active" }).where(eq(chatEndpoints.id, endpoint.id));
+      await db.update(toolConnections).set({ healthStatus: "healthy" }).where(eq(toolConnections.id, endpoint.connectionId));
+      const [link] = await db.select().from(chatIdentityLinks).where(eq(chatIdentityLinks.endpointId, endpoint.id));
+      const [issue] = await db.insert(issues).values({ companyId: fixture.companyId,
+        title: "PRIVATE account notice source", assigneeAgentId: fixture.assignedAgentId }).returning();
+      const [conversation] = await db.insert(chatConversations).values({ companyId: fixture.companyId,
+        endpointId: endpoint.id, issueId: issue!.id, externalConversationId: "D-OWN-NOTICE",
+        externalThreadId: "slack:D-OWN-NOTICE:7000.1", externalLabel: "Own DM", isDirectMessage: true }).returning();
+      await db.insert(chatDeliveries).values({ companyId: fixture.companyId, endpointId: endpoint.id,
+        conversationId: conversation!.id, principalId: link!.principalId, providerEventId: randomUUID(),
+        deduplicationKey: randomUUID(), eventKind: "message", state: "processed", normalizedEvent: {} });
+      const policy = notificationChannelPolicy(db), view = await policy.view(fixture.companyId, "owner-user", "work_update");
+      expect(view.targets).toHaveLength(1);
+      const target = view.targets[0]!;
+      await policy.update(fixture.companyId, "owner-user", "work_update", { requestId: randomUUID(), deliveryLocale: "da",
+        expectedVersion: view.version, expectedBaselineHash: view.baselineHash, choice: { channel: target.provider,
+          identityLinkId: target.identityLinkId, conversationId: target.conversationId, expectedTargetHash: target.targetHash } });
+      await db.insert(saasNotificationPreferences).values({ userId: "owner-user", category: "work_update", emailEnabled: false,
+        deliveryPolicy: { version: 1, cadence: mode === "digest" ? "digest" : "immediate", timezone: "UTC",
+          quietHours: null, digestMinute: (new Date().getUTCHours() * 60 + new Date().getUTCMinutes() + 120) % 1440 } })
+        .onConflictDoUpdate({ target: [saasNotificationPreferences.userId, saasNotificationPreferences.category],
+          set: { emailEnabled: false, deliveryPolicy: { version: 1, cadence: mode === "digest" ? "digest" : "immediate",
+            timezone: "UTC", quietHours: null, digestMinute: (new Date().getUTCHours() * 60 + new Date().getUTCMinutes() + 120) % 1440 } } });
+      const [company] = await db.select().from(companies).where(eq(companies.id, fixture.companyId));
+      const [notice] = await db.insert(saasNotifications).values({ companyId: fixture.companyId, userId: "owner-user",
+        category: "work_update", title: "PRIVATE account notice source", relativePath: `/${company!.issuePrefix}/issues`,
+        dedupeKey: randomUUID() }).returning();
+      const transport = runtime.endpoints.get(endpoint.id)!;
+      const transportAttempt = vi.fn(async () => {});
+      if (mode === "unknown") { transport.postHook = transportAttempt; transport.postError = new Error("PRIVATE provider acceptance and account context"); }
+      const warning = vi.spyOn(chatAttachmentLogger, "warn");
+      onTestFinished(() => { warning.mockRestore(); });
+      await service.processPendingProviderEffects();
+      const effects = () => db.select().from(chatActions).where(eq(chatActions.notificationId, notice!.id));
+      const posts = () => runtime.endpoints.get(endpoint.id)!.posts;
+      const [action] = await effects();
+      expect(action).toMatchObject({ kind: "provider_effect", notificationId: notice!.id,
+        status: mode === "digest" ? "received" : mode === "unknown" ? "delivery_unknown" : "processed" });
+      expect(action!.payload).toMatchObject({ authorizationMode: "notification", settleDelivery: false });
+      expect(action!.payload.text).not.toContain("PRIVATE");
+      expect(action!.payload.text).toContain("Der er en kontoopdatering");
+      if (mode === "digest") {
+        expect(posts()).toHaveLength(0);
+        expect(action!.result).toMatchObject({ code: "notification_policy_deferred", retryAt: expect.any(String) });
+      } else if (mode === "unknown") {
+        expect(posts()).toHaveLength(0); expect(transportAttempt).toHaveBeenCalledTimes(1);
+        expect(JSON.stringify(action!.result)).not.toContain("PRIVATE");
+        expect(JSON.stringify(warning.mock.calls)).not.toContain("PRIVATE");
+        expect(JSON.stringify(warning.mock.calls)).not.toContain(endpoint.id);
+        transport.postError = null;
+      } else expect(posts()).toEqual([expect.objectContaining({ text: action!.payload.text })]);
+      if (mode === "digest") {
+        // A future digest must not occupy the first queue slot ahead of an
+        // independently due Original notice. This uses the actual SQL selector.
+        const current = await policy.view(fixture.companyId, "owner-user", "approval");
+        await policy.update(fixture.companyId, "owner-user", "approval", { requestId: randomUUID(), deliveryLocale: "da",
+          expectedVersion: current.version, expectedBaselineHash: current.baselineHash, choice: { channel: target.provider,
+            identityLinkId: target.identityLinkId, conversationId: target.conversationId, expectedTargetHash: target.targetHash } });
+        const [ready] = await db.insert(saasNotifications).values({ companyId: fixture.companyId, userId: "owner-user", category: "approval",
+          title: "PRIVATE ready notice", relativePath: `/${company!.issuePrefix}/approvals`, dedupeKey: randomUUID() }).returning();
+        await service.processPendingProviderEffects(1);
+        expect(await db.select().from(chatActions).where(eq(chatActions.notificationId, ready!.id)))
+          .toEqual([expect.objectContaining({ status: "processed" })]);
+        expect(posts()).toHaveLength(1);
+      }
+      if (mode === "withdraw") {
+        // A second notice is staged then revoked before Native admission.
+        const [second] = await db.insert(saasNotifications).values({ companyId: fixture.companyId, userId: "owner-user",
+          category: "work_update", title: "PRIVATE revoked notice", relativePath: `/${company!.issuePrefix}/issues`, dedupeKey: randomUUID() }).returning();
+        const admission = gateway.admit.bind(gateway);
+        let withdrawn = false;
+        gateway.admit = async (tx, effect, now) => {
+          if (!withdrawn) { withdrawn = true; await tx.update(chatIdentityLinks).set({ status: "revoked", revokedAt: new Date() }).where(eq(chatIdentityLinks.id, link!.id)); }
+          return admission(tx, effect, now);
+        };
+        await service.processPendingProviderEffects();
+        expect(await db.select().from(chatActions).where(eq(chatActions.notificationId, second!.id)))
+          .toEqual([expect.objectContaining({ status: "cancelled" })]);
+        expect(posts()).toHaveLength(1);
+      }
+      await service.processPendingProviderEffects();
+      expect(await effects()).toHaveLength(1);
+      expect(posts()).toHaveLength(mode === "unknown" ? 0 : 1);
+      if (mode === "unknown") expect(transportAttempt).toHaveBeenCalledTimes(1);
+      expect(await db.select().from(notificationChannelDeliveries).where(eq(notificationChannelDeliveries.notificationId, notice!.id))).toHaveLength(1);
+      expect(await db.select().from(issues).where(eq(issues.companyId, fixture.companyId))).toHaveLength(1);
+      expect(wakeup).not.toHaveBeenCalled();
+    },
+  );
+
   it("suppresses a queued provider reply when destination reach is revoked before transport", async () => {
     const fixture = await seedCompany();
     const { callbacks, endpoint, runtime, service } =
@@ -39667,6 +39778,88 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       .where(eq(issueThreadInteractions.id, expired.interaction.id));
     expect(stillPending.status).toBe("pending");
   });
+
+  it.each(["slack", "microsoft-teams"] as const)(
+    "V9 binary confirmations on %s retain Native identity, rollout and one-use resolution",
+    async provider => {
+      await instanceSettingsService(db).updateExperimental({ action_cards_v9: false });
+      onTestFinished(() => instanceSettingsService(db).updateExperimental({ action_cards_v9: false }));
+      const fixture = await seedCompany();
+      const { callbacks, endpoint, service, wakeup } = provider === "slack"
+        ? await configuredSlackEndpoint(fixture) : await configuredTeamsEndpoint(fixture);
+      const externalUserId = `v9-confirm-${randomUUID()}`;
+      const conversationId = `v9-confirm-${randomUUID()}`;
+      const serviceUrl = "https://smba.trafficmanager.net/amer/";
+      const thread = makeThread({ channelId: conversationId, isDM: true,
+        id: provider === "slack" ? `slack:${conversationId}:9000.1` : `teams:${Buffer.from(conversationId).toString("base64url")}:${Buffer.from(serviceUrl).toString("base64url")}` });
+      await deliverMessage({ callbacks, endpointId: endpoint.id, provider, thread: thread.thread,
+        trigger: "direct_message", message: makeMessage({ id: "9000.1", userId: externalUserId,
+          text: "Prepare an internal confirmation", raw: { serviceUrl, from: { aadObjectId: externalUserId } } }) });
+      await qualifySetupRoundTrip(service, endpoint.id, externalUserId);
+      await service.test(endpoint.id, "owner-user");
+      const [conversation] = await service.listConversations(endpoint.id);
+      expect(conversation).toBeDefined();
+      const [principal] = await db.select().from(chatExternalPrincipals).where(and(
+        eq(chatExternalPrincipals.companyId, fixture.companyId), eq(chatExternalPrincipals.provider, provider),
+        eq(chatExternalPrincipals.externalId, externalUserId)));
+      expect(principal).toBeDefined();
+      const intent = await service.createLinkIntent(endpoint.id, principal.id, 1800);
+      await service.confirmIdentityLink(new URL(intent.confirmationUrl).searchParams.get("token")!, "owner-user");
+      const createConfirmation = async (reason = false) => {
+        const interaction = await issueThreadInteractionService(db).create(
+          { id: conversation.issueId, companyId: fixture.companyId },
+          { kind: "request_confirmation", continuationPolicy: "wake_assignee", title: "Internal draft review",
+            payload: { version: 1, prompt: "Continue preparing the internal draft?", acceptLabel: "Continue", rejectLabel: "Stop",
+              ...(reason ? { rejectRequiresReason: true } : {}) } }, { agentId: fixture.assignedAgentId });
+        await service.processPendingPublications();
+        const [publication] = await db.select().from(chatPublications).where(and(eq(chatPublications.endpointId, endpoint.id),
+          eq(chatPublications.idempotencyKey, `interaction:${interaction.id}:${endpoint.id}`)));
+        return { interaction, publication };
+      };
+      const before = await createConfirmation();
+      expect((before.publication.payload.card?.actions ?? []).some(action => action.type === "callback")).toBe(false);
+      await issueThreadInteractionService(db).skipInteraction(
+        { id: conversation.issueId, companyId: fixture.companyId }, before.interaction.id, {}, { userId: "owner-user" });
+      await instanceSettingsService(db).updateExperimental({ experience_projection_v9: true, action_cards_v9: true });
+      const { interaction, publication } = await createConfirmation();
+      expect(publication.state).toBe("published");
+      expect(publication.payload.card?.experience?.source.resourceId).toBe(interaction.id);
+      const actions = await db.select().from(chatActions).where(and(eq(chatActions.endpointId, endpoint.id),
+        eq(chatActions.kind, "confirmation_response"), sql`${chatActions.payload}->>'interactionId' = ${interaction.id}`));
+      expect(actions).toHaveLength(2);
+      const accept = actions.find(action => action.payload.decision === "accept")!;
+      const event = { endpointId: endpoint.id, provider, event: { actionId: accept.providerActionId, adapter: {} as never,
+        messageId: publication.providerMessageId!, openModal: async () => undefined,
+        raw: { serviceUrl, from: { aadObjectId: externalUserId } }, thread: thread.thread, threadId: thread.thread.id,
+        user: { userId: externalUserId, userName: "reviewer", fullName: "Reviewer", isBot: false, isMe: false, isSystem: false },
+        value: interaction.id } };
+      const status = async () => (await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.id, interaction.id)))[0];
+      wakeup.mockClear();
+      await callbacks.onAction!({ ...event, event: { ...event.event, value: randomUUID() } });
+      expect((await status()).status).toBe("pending");
+      await instanceSettingsService(db).updateExperimental({ action_cards_v9: false });
+      await callbacks.onAction!(event);
+      expect((await status()).status).toBe("pending");
+      expect(wakeup).not.toHaveBeenCalled();
+      await instanceSettingsService(db).updateExperimental({ action_cards_v9: true });
+      await db.update(companyMemberships).set({ status: "suspended" }).where(and(
+        eq(companyMemberships.companyId, fixture.companyId), eq(companyMemberships.principalId, "owner-user")));
+      await callbacks.onAction!(event);
+      expect((await status()).status).toBe("pending");
+      await db.update(companyMemberships).set({ status: "active" }).where(and(
+        eq(companyMemberships.companyId, fixture.companyId), eq(companyMemberships.principalId, "owner-user")));
+      await callbacks.onAction!(event);
+      expect(await status()).toMatchObject({ status: "accepted", resolvedByUserId: "owner-user" });
+      await callbacks.onAction!(event);
+      const terminalPublications = await db.select().from(chatPublications)
+        .where(eq(chatPublications.idempotencyKey, `interaction-resolution:${interaction.id}:${endpoint.id}`));
+      expect(terminalPublications).toHaveLength(1);
+      const [settled] = await db.select().from(chatActions).where(eq(chatActions.id, accept.id));
+      expect(settled).toMatchObject({ status: "processed", result: { code: "confirmation_resolution_committed_by_provider" } });
+      const complex = await createConfirmation(true);
+      expect((complex.publication.payload.card?.actions ?? []).some(action => action.type === "callback")).toBe(false);
+    },
+  );
 
   it("renders safe Telegram confirmations as opaque one-use buttons and wakes the resolved task", async () => {
     const fixture = await seedCompany();

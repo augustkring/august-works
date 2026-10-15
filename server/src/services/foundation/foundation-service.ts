@@ -1,3 +1,5 @@
+import { assertConversationRoutineAuthoring } from "../routine-authoring-authority.js";
+import { FOUNDATION_CONVERSATION_SOURCE, assertFoundationConversationSource } from "../foundation-authoring-source.js";
 import {lockAnalyticalCompany} from "../analytical-privacy.js";
 import type {AuthorizationActor} from "../authorization.js";
 import {assertLearnedAssetAnalyticalSources,assertLearningCandidateAnalyticalSources,learningActorFromPrincipal} from "../learning/learning-analytical-sources.js";
@@ -772,13 +774,22 @@ export function foundationService(db: Db) {
       foundationDocumentId: string,
       rawInput: CreateFoundationChangeProposal,
       actor: FoundationMutationActor,
+      options: { idOverride?: string; conversationDraftRunId?: string } = {},
     ) => {
       const parsed = createFoundationChangeProposalSchema.safeParse(rawInput);
       if (!parsed.success) throw unprocessable("Invalid Foundation proposal", parsed.error.issues);
       const input = parsed.data;
-
+      const context = options.conversationDraftRunId && actor.principal.type === "agent" ? {
+        companyId, agentId: actor.principal.agentId, runId: options.conversationDraftRunId,
+      } : null;
+      if (input.sourceType === FOUNDATION_CONVERSATION_SOURCE && (!context || actor.runId !== context.runId || input.sourceId !== context.runId))
+        throw forbidden("Conversation provenance must come from the actual authoring owner");
+      if (context && input.sourceType !== FOUNDATION_CONVERSATION_SOURCE)
+        throw forbidden("The conversation draft must retain its actual source");
       return db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
+        if (context) { await lockAnalyticalCompany(txDb, companyId); await lockMemoryPrivacy(txDb, companyId); }
+        const author = context ? await assertConversationRoutineAuthoring(txDb, context, "foundation:propose") : null;
         await assertActorCompanyScope(txDb, companyId, actor);
         const foundation = await selectFoundation(
           txDb,
@@ -812,6 +823,9 @@ export function foundationService(db: Db) {
           .values({
             companyId,
             foundationDocumentId,
+            ...(options.idOverride ? { id: options.idOverride } : {}),
+            conversationSourceRunId: author?.run.id ?? null,
+            conversationResponsibleUserId: author?.responsibleUserId ?? null,
             sourceType: input.sourceType,
             sourceId: input.sourceId ?? null,
             proposedByAgentId: actorData.agentId,
@@ -825,6 +839,7 @@ export function foundationService(db: Db) {
             updatedAt: now,
           })
           .returning();
+        if (context) await assertConversationRoutineAuthoring(txDb, context, "foundation:propose");
         return proposal!;
       });
     },
@@ -840,7 +855,10 @@ export function foundationService(db: Db) {
           ),
         )
         .orderBy(asc(foundationChangeProposals.createdAt));
-      for(const row of rows)await assertLearningCandidateAnalyticalSources(db,companyId,"foundation",row.id,actor);
+      for(const row of rows){
+        await assertFoundationConversationSource(db,row,actor);
+        await assertLearningCandidateAnalyticalSources(db,companyId,"foundation",row.id,actor);
+      }
       return rows;
     },
 
@@ -868,6 +886,7 @@ export function foundationService(db: Db) {
 
         const proposal = await lockProposal(tx, companyId, foundationDocumentId, proposalId);
         if (!proposal) throw notFound("Foundation proposal not found");
+        await assertFoundationConversationSource(txDb,proposal,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
         await assertLearningCandidateAnalyticalSources(txDb,companyId,"foundation",proposal.id,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
         if (proposal.status !== "pending") {
           throw conflict("Foundation proposal is no longer pending", {
@@ -905,6 +924,7 @@ export function foundationService(db: Db) {
             title: existing.title,
             format: "markdown",
             body: proposal.proposedBody,
+            ...(proposal.conversationSourceRunId ? { conversationFoundationProposalIds: [proposal.id] } : {}),
             changeSummary: proposal.changeSummary ?? "Accepted Foundation proposal",
             createdByUserId: reviewerUserId,
             createdByRunId: actor.runId ?? null,
@@ -993,6 +1013,7 @@ export function foundationService(db: Db) {
         if (!foundation) throw notFound("Foundation document not found");
         const proposal = await lockProposal(tx, companyId, foundationDocumentId, proposalId);
         if (!proposal) throw notFound("Foundation proposal not found");
+        await assertFoundationConversationSource(txDb,proposal,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
         await assertLearningCandidateAnalyticalSources(txDb,companyId,"foundation",proposal.id,learningActorFromPrincipal(companyId,actor.principal,actor.runId));
         if (proposal.status === "rejected") return proposal;
         if (proposal.status !== "pending") {

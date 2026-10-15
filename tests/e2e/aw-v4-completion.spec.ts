@@ -19,8 +19,10 @@ test("reviews an artifact through keyboard controls and exports and erases Memor
   try {
     await page.goto(`/${company.issuePrefix}/automation-artifacts`);
     await expect(page.getByRole("heading", { name: "Automation Artifacts", exact: true })).toBeVisible();
-    const disclosure = page.getByText("Create candidate", { exact: true }).first();
-    await disclosure.focus(); await page.keyboard.press("Enter");
+    const disclosure = page.locator("summary").filter({ hasText: /^Create candidate$/ });
+    await expect(disclosure).toBeVisible();
+    await disclosure.press("Enter");
+    await expect(disclosure).toBeFocused();
     await expect(page.getByLabel("Artifact definition JSON")).toBeVisible();
     await page.getByRole("button", { name: "Create candidate", exact: true }).click();
     await expect(page.getByRole("heading", { name: "Copy value", exact: true })).toBeVisible();
@@ -57,14 +59,14 @@ test("reviews an artifact through keyboard controls and exports and erases Memor
     const exported = JSON.parse(await readFile((await download.path())!, "utf8"));
     expect(exported.companyId).toBe(company.id);
     expect(exported.records).toMatchObject([{ id: recordId, content: "Deterministic browser fixture content" }]);
-    const retention = page.getByText("Retention policy", { exact: true });
-    await retention.focus(); await page.keyboard.press("Enter");
+    const retention = page.locator("summary").filter({ hasText: /^Retention policy$/ });
+    await retention.press("Enter");
     await page.getByLabel("Maximum age in days").fill("90");
     await page.getByRole("button", { name: "Apply retention policy", exact: true }).click();
     await expect(page.getByRole("status").filter({ hasText: "Retention policy saved." })).toBeVisible();
     expect(await json(await request.get(`${base}/memory/retention-policy`))).toMatchObject({ maxAgeDays: 90 });
-    const maintenance = page.getByText("Memory maintenance", { exact: true });
-    await maintenance.focus(); await page.keyboard.press("Enter");
+    const maintenance = page.locator("summary").filter({ hasText: /^Memory maintenance$/ });
+    await maintenance.press("Enter");
     await page.getByRole("combobox", { name: "Operation", exact: true }).selectOption("index_refresh");
     await page.getByLabel("V4 browser privacy record", { exact: true }).check();
     await page.getByRole("button", { name: "Queue maintenance", exact: true }).click();
@@ -123,7 +125,15 @@ test("reviews run evidence and qualifies, shadows and retires a generated optimi
     await expect(page.getByLabel("Candidate contract JSON")).toHaveValue(/preserve-0/);
     await page.getByRole("button", { name: "Compile and run replay", exact: true }).click();
     await expect(page.getByRole("status").filter({ hasText: "Qualification passed." })).toBeVisible();
+    const shadowResponse = page.waitForResponse(response =>
+      response.request().method() === "POST" &&
+      new URL(response.url()).pathname.startsWith(`${base}/workflows/${workflow.id}/optimizer-evaluations/`) &&
+      new URL(response.url()).pathname.endsWith("/shadow"));
     await page.getByRole("button", { name: "Start shadow", exact: true }).click();
+    expect((await shadowResponse).ok()).toBe(true);
+    // A click does not establish that the Native transition committed. The
+    // first observation must start after shadow admission, not race its POST.
+    await expect(page.getByText("The original published transform supplies every result while the candidate is observed.", { exact: true })).toBeVisible();
     for (let value = 4; value <= 6; value++) {
       const run = await json(await request.post(`${base}/workflows/${workflow.id}/run`, { headers: { "Idempotency-Key": randomUUID() }, data: { input: { value } } }));
       expect(run.steps.find((step: { nodeId: string }) => step.nodeId === "copy").outputJson).toEqual({ value });

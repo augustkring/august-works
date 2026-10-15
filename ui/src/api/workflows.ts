@@ -1,3 +1,4 @@
+import { workflowPublicationReviewSchema, workflowPublicationCommandSchema, workflowPublicationReceiptSchema, type WorkflowPublicationCommand } from "@paperclipai/shared";
 import type {
   CancelWorkflowRun,
   CreateWorkflow,
@@ -24,36 +25,291 @@ import type {
   WorkflowRevision,
 } from "@paperclipai/shared";
 import { api as defaultApi } from "./client";
+import {
+  workflowExperienceSchema,
+  workflowRunExperienceSchema,
+  workflowLifecycleCommandSchema,
+  workflowLifecycleReceiptSchema,
+  workflowOperationsSchema,
+  workflowLaunchCommandSchema,
+  workflowLaunchReceiptSchema,
+  workflowStopCommandSchema,
+  workflowStopReceiptSchema,
+  workflowTestCommandSchema,
+  workflowTestReceiptSchema,
+  type WorkflowTestCommand,
+  type WorkflowStopCommand,
+  type WorkflowLaunchCommand,
+  type WorkflowLifecycleCommand,
+  workflowRequestKindSchema, workflowRequestReceiptSchema,
+  type WorkflowRequestKind,
+} from "@paperclipai/shared";
 
 export const createWorkflowsApi = (api: typeof defaultApi = defaultApi) => ({
-  optimizerEvaluations: (companyId: string, workflowId: string) => api.get<WorkflowOptimizerEvaluationSummary[]>(`/companies/${companyId}/workflows/${workflowId}/optimizer-evaluations`),
-  proposeOptimizerCandidate: (companyId: string, workflowId: string, suggestionId: string) =>
-    api.post<WorkflowOptimizerCandidateRequest>(`/companies/${companyId}/workflows/${workflowId}/optimizer-suggestions/${suggestionId}/propose`, {}),
-  compileOptimizerCandidate: (companyId: string, workflowId: string, suggestionId: string, input: WorkflowOptimizerCandidateRequest) =>
-    api.post<{ evaluationId: string; artifactId: string; artifactVersionId: string; replayEvaluation: OptimizerReplayEvaluation; gatesPassed: boolean }>(`/companies/${companyId}/workflows/${workflowId}/optimizer-suggestions/${suggestionId}/compile`, input),
-  optimizerAction: (companyId: string, workflowId: string, evaluationId: string, action: "evaluate" | "shadow" | "request-approval" | "canary" | "activate" | "retire") =>
-    api.post<{ evaluationId: string; decision?: OptimizerPromotionDecision; approvalId?: string; gatesPassed?: boolean }>(`/companies/${companyId}/workflows/${workflowId}/optimizer-evaluations/${evaluationId}/${action}`, {}),
-  runReview: (companyId: string, runId: string) => api.get<WorkflowRunReview | null>(`/companies/${companyId}/workflow-runs/${runId}/review`),
-  reviewRun: (companyId: string, runId: string, input: { humanCorrection: boolean; correctedOutputs: Record<string, unknown>; reason: string }) =>
-    api.post<WorkflowRunReview>(`/companies/${companyId}/workflow-runs/${runId}/review`, input),
-  toolReviews: (companyId: string, runId: string) => api.get<{
-    canReview: boolean;
-    reviews: Array<{ id: string; nodeId: string; toolName: string; status: string; risk: string | null;
-      preview: string | null; argumentsSummary: { summary?: string } | null;
-      approvalId: string | null; expiresAt: string | null }>;
-  }>(`/companies/${companyId}/workflow-runs/${runId}/tool-reviews`),
-  resolveToolReview: (companyId: string, runId: string, requestId: string, decision: "approve" | "reject") =>
-    api.post<WorkflowRunDetail>(`/companies/${companyId}/workflow-runs/${runId}/tool-reviews/${requestId}/${decision}`, {}),
-  dataSelector: (
+  requestReceipt: async (companyId: string, principal: string, workflowId: string, kind: WorkflowRequestKind, requestId: string, signal?: AbortSignal) => {
+    workflowRequestKindSchema.parse(kind); workflowPublicationReceiptSchema.shape.requestId.parse(requestId);
+    workflowPublicationReceiptSchema.shape.companyId.parse(companyId); workflowPublicationReceiptSchema.shape.workflowId.parse(workflowId);
+    const value = workflowRequestReceiptSchema.parse(await api.get(
+      `/companies/${companyId}/workflows/${workflowId}/experience/requests/${kind}/${requestId}?${new URLSearchParams({ expectedUserId: principal })}`,
+      { signal, cache: "no-store" }));
+    signal?.throwIfAborted();
+    if (value.kind !== kind || value.receipt.companyId !== companyId || value.receipt.workflowId !== workflowId || value.receipt.requestId !== requestId)
+      throw new Error("The Original workflow request scope changed");
+    return value;
+  },
+  publicationReview: async (company: string, principal: string, workflow: string, signal?: AbortSignal) => {
+    const view = workflowPublicationReviewSchema.parse(await api.get(`/companies/${company}/workflows/${workflow}/experience/publication?expectedUserId=${encodeURIComponent(principal)}`, { signal, cache: "no-store" }));
+    if (view.companyId !== company || view.workflowId !== workflow) throw new Error("Publication context changed");
+    return view;
+  },
+  publishReviewed: async (company: string, principal: string, workflow: string, raw: WorkflowPublicationCommand) => {
+    const command = workflowPublicationCommandSchema.parse(raw);
+    if (command.expectedWorkflowId !== workflow) throw new Error("Publication request binding changed");
+    const receipt = workflowPublicationReceiptSchema.parse(await api.post(`/companies/${company}/workflows/${workflow}/experience/publication?expectedUserId=${encodeURIComponent(principal)}`, command));
+    if (receipt.companyId !== company || receipt.workflowId !== workflow || receipt.requestId !== command.requestId
+        || receipt.revisionId !== command.expectedDraftRevisionId || receipt.testRunId !== command.expectedTestRunId)
+      throw new Error("Publication receipt binding changed");
+    return receipt;
+  },
+
+  test: async (companyId: string, principal: string, workflowId: string, raw: WorkflowTestCommand) => {
+    const command = workflowTestCommandSchema.parse(raw);
+    if (command.expectedWorkflowId !== workflowId) throw new Error("Workflow test request context changed");
+    const receipt = workflowTestReceiptSchema.parse(await api.post(
+      `/companies/${companyId}/workflows/${workflowId}/experience/test?expectedUserId=${encodeURIComponent(principal)}`, command));
+    if (receipt.companyId !== companyId || receipt.workflowId !== workflowId || receipt.requestId !== command.requestId ||
+        receipt.revisionId !== command.expectedDraftRevisionId) throw new Error("Workflow test receipt context changed");
+    return receipt;
+  },
+  stop: async (
     companyId: string,
-    input: WorkflowDataSelectorRequest,
+    principal: string,
+    workflowId: string,
+    runId: string,
+    raw: WorkflowStopCommand,
+  ) => {
+    const command = workflowStopCommandSchema.parse(raw);
+    if (command.expectedWorkflowId !== workflowId)
+      throw new Error("Workflow stop request context changed");
+    const receipt = workflowStopReceiptSchema.parse(
+      await api.post(
+        `/companies/${companyId}/workflow-runs/${runId}/experience/stop?expectedUserId=${encodeURIComponent(principal)}`,
+        command,
+      ),
+    );
+    if (
+      receipt.companyId !== companyId ||
+      receipt.workflowId !== workflowId ||
+      receipt.runId !== runId ||
+      receipt.revisionId !== command.expectedRevisionId ||
+      receipt.requestId !== command.requestId
+    )
+      throw new Error("Workflow stop receipt context changed");
+    return receipt;
+  },
+  launch: async (
+    companyId: string,
+    principal: string,
+    workflowId: string,
+    raw: WorkflowLaunchCommand,
+  ) => {
+    const command = workflowLaunchCommandSchema.parse(raw);
+    const receipt = workflowLaunchReceiptSchema.parse(
+      await api.post(
+        `/companies/${companyId}/workflows/${workflowId}/experience/launch?expectedUserId=${encodeURIComponent(principal)}`,
+        command,
+      ),
+    );
+    if (
+      receipt.companyId !== companyId ||
+      receipt.workflowId !== workflowId ||
+      receipt.requestId !== command.requestId ||
+      receipt.revisionId !== command.expectedPublishedRevisionId
+    )
+      throw new Error("Workflow run request context changed");
+    return receipt;
+  },
+  operations: async (
+    companyId: string,
+    principal: string,
+    workflowId: string,
+    signal?: AbortSignal,
+  ) => {
+    const result = workflowOperationsSchema.parse(
+      await api.get(
+        `/companies/${companyId}/workflows/${workflowId}/experience/operations?expectedUserId=${encodeURIComponent(principal)}`,
+        { signal, cache: "no-store" },
+      ),
+    );
+    if (result.companyId !== companyId || result.workflowId !== workflowId)
+      throw new Error("Workflow overview context changed");
+    return result;
+  },
+  lifecycle: async (
+    companyId: string,
+    principal: string,
+    workflowId: string,
+    command: WorkflowLifecycleCommand,
+  ) => {
+    const input = workflowLifecycleCommandSchema.parse(command);
+    const receipt = workflowLifecycleReceiptSchema.parse(
+      await api.post(
+        `/companies/${companyId}/workflows/${workflowId}/experience/lifecycle?expectedUserId=${encodeURIComponent(principal)}`,
+        input,
+      ),
+    );
+    if (
+      receipt.companyId !== companyId ||
+      receipt.workflowId !== workflowId ||
+      receipt.requestId !== input.requestId ||
+      receipt.action !== input.action ||
+      receipt.publishedRevisionId !== input.expectedPublishedRevisionId ||
+      (input.action !== "retire" &&
+        receipt.draftRevisionId !== input.expectedDraftRevisionId)
+    )
+      throw new Error("Workflow request context changed");
+    return receipt;
+  },
+  runExperience: async (
+    companyId: string,
+    principal: string,
+    workflowId: string,
+    runId: string,
+    signal?: AbortSignal,
+  ) => {
+    const result = workflowRunExperienceSchema.parse(
+      await api.get(
+        `/companies/${companyId}/workflow-runs/${runId}/experience?expectedUserId=${encodeURIComponent(principal)}`,
+        { signal, cache: "no-store" },
+      ),
+    );
+    signal?.throwIfAborted();
+    if (
+      result.companyId !== companyId ||
+      result.workflowId !== workflowId ||
+      result.id !== runId
+    )
+      throw new Error("Workflow run context changed");
+    return result;
+  },
+  experience: async (
+    companyId: string,
+    principal: string,
+    workflowId: string,
+    signal?: AbortSignal,
+  ) => {
+    const result = workflowExperienceSchema.parse(
+      await api.get(
+        `/companies/${companyId}/workflows/${workflowId}/experience?expectedUserId=${encodeURIComponent(principal)}`,
+        { signal, cache: "no-store" },
+      ),
+    );
+    signal?.throwIfAborted();
+    if (result.companyId !== companyId || result.id !== workflowId)
+      throw new Error("Workflow context changed");
+    return result;
+  },
+  optimizerEvaluations: (companyId: string, workflowId: string) =>
+    api.get<WorkflowOptimizerEvaluationSummary[]>(
+      `/companies/${companyId}/workflows/${workflowId}/optimizer-evaluations`,
+    ),
+  proposeOptimizerCandidate: (
+    companyId: string,
+    workflowId: string,
+    suggestionId: string,
   ) =>
+    api.post<WorkflowOptimizerCandidateRequest>(
+      `/companies/${companyId}/workflows/${workflowId}/optimizer-suggestions/${suggestionId}/propose`,
+      {},
+    ),
+  compileOptimizerCandidate: (
+    companyId: string,
+    workflowId: string,
+    suggestionId: string,
+    input: WorkflowOptimizerCandidateRequest,
+  ) =>
+    api.post<{
+      evaluationId: string;
+      artifactId: string;
+      artifactVersionId: string;
+      replayEvaluation: OptimizerReplayEvaluation;
+      gatesPassed: boolean;
+    }>(
+      `/companies/${companyId}/workflows/${workflowId}/optimizer-suggestions/${suggestionId}/compile`,
+      input,
+    ),
+  optimizerAction: (
+    companyId: string,
+    workflowId: string,
+    evaluationId: string,
+    action:
+      | "evaluate"
+      | "shadow"
+      | "request-approval"
+      | "canary"
+      | "activate"
+      | "retire",
+  ) =>
+    api.post<{
+      evaluationId: string;
+      decision?: OptimizerPromotionDecision;
+      approvalId?: string;
+      gatesPassed?: boolean;
+    }>(
+      `/companies/${companyId}/workflows/${workflowId}/optimizer-evaluations/${evaluationId}/${action}`,
+      {},
+    ),
+  runReview: (companyId: string, runId: string) =>
+    api.get<WorkflowRunReview | null>(
+      `/companies/${companyId}/workflow-runs/${runId}/review`,
+    ),
+  reviewRun: (
+    companyId: string,
+    runId: string,
+    input: {
+      humanCorrection: boolean;
+      correctedOutputs: Record<string, unknown>;
+      reason: string;
+    },
+  ) =>
+    api.post<WorkflowRunReview>(
+      `/companies/${companyId}/workflow-runs/${runId}/review`,
+      input,
+    ),
+  toolReviews: (companyId: string, runId: string) =>
+    api.get<{
+      canReview: boolean;
+      reviews: Array<{
+        id: string;
+        nodeId: string;
+        toolName: string;
+        status: string;
+        risk: string | null;
+        preview: string | null;
+        argumentsSummary: { summary?: string } | null;
+        approvalId: string | null;
+        expiresAt: string | null;
+      }>;
+    }>(`/companies/${companyId}/workflow-runs/${runId}/tool-reviews`),
+  resolveToolReview: (
+    companyId: string,
+    runId: string,
+    requestId: string,
+    decision: "approve" | "reject",
+  ) =>
+    api.post<WorkflowRunDetail>(
+      `/companies/${companyId}/workflow-runs/${runId}/tool-reviews/${requestId}/${decision}`,
+      {},
+    ),
+  dataSelector: (companyId: string, input: WorkflowDataSelectorRequest) =>
     api.post<WorkflowDataSelectorModel>(
       `/companies/${companyId}/workflows/data-selector`,
       input,
     ),
   capabilities: (companyId: string) =>
-    api.get<WorkflowCapabilities>(`/companies/${companyId}/workflows/capabilities`),
+    api.get<WorkflowCapabilities>(
+      `/companies/${companyId}/workflows/capabilities`,
+    ),
 
   list: (companyId: string) =>
     api.get<Workflow[]>(`/companies/${companyId}/workflows`),
@@ -79,11 +335,7 @@ export const createWorkflowsApi = (api: typeof defaultApi = defaultApi) => ({
       input,
     ),
 
-  publish: (
-    companyId: string,
-    workflowId: string,
-    input: PublishWorkflow,
-  ) =>
+  publish: (companyId: string, workflowId: string, input: PublishWorkflow) =>
     api.post<WorkflowDetail>(
       `/companies/${companyId}/workflows/${workflowId}/publish`,
       input,
@@ -125,13 +377,11 @@ export const createWorkflowsApi = (api: typeof defaultApi = defaultApi) => ({
     ),
 
   getRun: (companyId: string, runId: string) =>
-    api.get<WorkflowRunDetail>(`/companies/${companyId}/workflow-runs/${runId}`),
+    api.get<WorkflowRunDetail>(
+      `/companies/${companyId}/workflow-runs/${runId}`,
+    ),
 
-  cancelRun: (
-    companyId: string,
-    runId: string,
-    input: CancelWorkflowRun,
-  ) =>
+  cancelRun: (companyId: string, runId: string, input: CancelWorkflowRun) =>
     api.post<WorkflowRunDetail>(
       `/companies/${companyId}/workflow-runs/${runId}/cancel`,
       input,

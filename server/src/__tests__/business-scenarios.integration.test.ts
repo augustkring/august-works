@@ -6,6 +6,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { companies, projects, issues, analyticalLineageManifests, analyticalLineageEdges, businessScenarioVersions, businessScenarioSourcePins, businessScenarioPublications, businessScenarioRuns, businessScenarios, createDb } from "@paperclipai/db";
 import { businessMetricDefinitionSchema } from "@paperclipai/shared";
 import { businessScenarioService } from "../services/business-scenarios/service.js";
+import { currentInsightToolCard } from "../services/experience/insight-tool-card.js";
 import { businessMetricService } from "../services/business-metrics/service.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
@@ -52,6 +53,16 @@ suite("Governed native conditional scenarios on migrated PostgreSQL", () => {
     const d = await draft(humanOnly), scenario = await service().publish(companyId, actor, d.scenario.id, { expectedRevision: 1, versionId: d.version.id, rationale: "Human publication of this exact conditional model and native source pins" });
     const run = await service().run(companyId, actor, scenario.id, { expectedRevision: 2, versionId: d.version.id, seed: null }); return { ...d, scenario, run };
   }
+  it("resolves a retained conditional scenario into an exact read-only chat card without a new run", async () => {
+    await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental({ action_cards_v9: true, experience_projection_v9: true, progressive_shell_v9: true });
+    const d = await published(), resourceId = `scenario:${d.scenario.id}:${d.run.id}`;
+    const wire = { schemaVersion: 1, component: "ScenarioComparisonCard", companyId, cardId: `insight:${resourceId}`, source: { companyId, domain: "insight", resourceId, version: d.run.contentHash } };
+    const before = await db.select().from(businessScenarioRuns).where(eq(businessScenarioRuns.companyId, companyId));
+    expect(await currentInsightToolCard(db, actor, companyId, wire)).toMatchObject({ kind: "insight", title: "Recorded conditional scenario", source: { version: d.run.contentHash }, actions: [{ operation: "open", href: "/business-scenarios" }] });
+    expect(await db.select().from(businessScenarioRuns).where(eq(businessScenarioRuns.companyId, companyId))).toEqual(before);
+    await db.update(issues).set({ hiddenAt: new Date() }).where(eq(issues.id, d.source!.issue.id));
+    await expect(currentInsightToolCard(db, actor, companyId, wire)).rejects.toMatchObject({ status: 403 });
+  });
   it("captures exact authorized sources and requires human publication before bounded arithmetic", async () => {
     const d = await draft(); expect(d.version.inputs[0]).toMatchObject({ value: 1, unit: { issue: 1 }, sourceId: d.source!.observation.id });
     expect(JSON.stringify(d.version)).not.toContain(d.source!.issue.title);

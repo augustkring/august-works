@@ -4,6 +4,8 @@ import { pinoHttp } from "pino-http";
 import { HTTP_LOG_REDACT_PATHS } from "./http-log-redaction.js";
 import {
   isPrivateWebhookHttpRequest,
+  isPrivateExperienceHttpRequest,
+  privateExperienceLogUrl,
   isSecretSensitiveHttpRequest,
   shouldSilenceHttpSuccessLog,
 } from "./http-log-policy.js";
@@ -75,9 +77,15 @@ function requestLogUrl(req: {
   originalUrl?: unknown;
   url?: unknown;
 }) {
+  if (isPrivateExperienceHttpRequest(req.method, requestClassificationUrl(req)))
+    return privateExperienceLogUrl(requestClassificationUrl(req)!);
   return isPrivateWebhook(req)
     ? privateWebhookLogUrl(requestClassificationUrl(req))
     : stripSecretBearingUrlParts(typeof req.url === "string" ? req.url : "");
+}
+
+function isContentPrivate(req: { method?: string; originalUrl?: unknown; url?: unknown }) {
+  return isPrivateWebhook(req) || isPrivateExperienceHttpRequest(req.method, requestClassificationUrl(req));
 }
 
 export function createHttpLogger(baseLogger: Logger) {
@@ -86,7 +94,7 @@ export function createHttpLogger(baseLogger: Logger) {
     serializers: {
       req(req: Record<string, unknown> & { url?: unknown }) {
         if (
-          isPrivateWebhook({
+          isContentPrivate({
             method: typeof req.method === "string" ? req.method : undefined,
             url: req.url,
           })
@@ -97,7 +105,7 @@ export function createHttpLogger(baseLogger: Logger) {
           return {
             id: req.id,
             method: req.method,
-            url: privateWebhookLogUrl(req.url),
+            url: requestLogUrl({method: typeof req.method === "string" ? req.method : undefined, url: req.url}),
           };
         }
         return {
@@ -121,7 +129,7 @@ export function createHttpLogger(baseLogger: Logger) {
       ) {
         // A provider error may also be reflected in response headers. Keep the
         // same content-free contract on both sides of a webhook request.
-        return res.raw?.req && isPrivateWebhook(res.raw.req)
+        return res.raw?.req && isContentPrivate(res.raw.req)
           ? { statusCode: res.statusCode }
           : res;
       },
@@ -154,12 +162,12 @@ export function createHttpLogger(baseLogger: Logger) {
     customErrorObject(req, _res, _err, value) {
       // pino-http serializes res.err independently of customProps/errorContext.
       // Do not rely on a particular error handler having sanitized an SDK Error.
-      return isPrivateWebhook(req)
+      return isContentPrivate(req)
         ? {
             ...value,
             err: {
               type: "Error",
-              message: /^\/api\/(?:webhooks|internal\/runtime)\//.test(
+              message: isPrivateExperienceHttpRequest(req.method, requestClassificationUrl(req)) ? "Private experience request failed" : /^\/api\/(?:webhooks|internal\/runtime)\//.test(
                 privateWebhookLogUrl(requestClassificationUrl(req)),
               )
                 ? "SaaS ingress request failed"
@@ -171,7 +179,7 @@ export function createHttpLogger(baseLogger: Logger) {
     customProps(req, res) {
       if (res.statusCode >= 400) {
         const ctx = (res as any).__errorContext;
-        if (isPrivateWebhook(req)) {
+        if (isContentPrivate(req)) {
           // Omit, rather than recursively redact, the entire provider payload.
           // This applies equally before/after parsing and with/without context.
           return {

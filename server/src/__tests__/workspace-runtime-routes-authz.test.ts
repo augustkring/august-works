@@ -100,6 +100,16 @@ function registerWorkspaceRouteMocks() {
   }));
 }
 
+// Transform the cold mocked dependency graphs during collection. The factories
+// below still create fresh, query-keyed route modules and apps for every case;
+// per-test mock reset and the 15-second request behavior budget are unchanged.
+registerWorkspaceRouteMocks();
+await Promise.all([
+  import("../routes/projects.js"),
+  import("../routes/execution-workspaces.js"),
+  import("../middleware/index.js"),
+]);
+
 let appImportCounter = 0;
 
 async function createProjectApp(actor: Record<string, unknown>) {

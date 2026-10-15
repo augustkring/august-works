@@ -7,9 +7,48 @@ import { orchestrationService } from "../services/orchestration/orchestration-se
 import { verificationService } from "../services/supervision/verification-service.js";
 import { supervisionService } from "../services/supervision/supervision-service.js";
 import { orchestrationRuntimeControl } from "../services/orchestration/orchestration-runtime-control.js";
+import { readOrchestrationExperience } from "../services/experience/orchestration-experience.js";
+import { orchestrationControlExperienceService } from "../services/experience/orchestration-control.js";
+import { orchestrationControlCommandSchema } from "@paperclipai/shared";
+import { ExperienceOverloadError } from "../services/experience/projection.js";
+import { z } from "zod";
+import { conflict, forbidden } from "../errors.js";
 export function orchestrationRoutes(db: Db) {
   const router = Router(), service = orchestrationService(db);
   router.use((_req, res, next) => { res.setHeader("Cache-Control", "no-store"); next(); });
+  const controls = orchestrationControlExperienceService(db);
+  function controlScope(req: Parameters<typeof assertCompanyAccess>[0]) {
+    const companyId = z.uuid().parse(req.params.companyId), planId = z.uuid().parse(req.params.planId);
+    const query = z.strictObject({ expectedUserId: z.string().min(1).max(300) }).parse(req.query);
+    assertCompanyAccess(req, companyId);
+    if (req.actor.type !== "board" || req.actor.source === "local_implicit" || !req.actor.userId)
+      throw forbidden("A verified account is required for work controls");
+    if (query.expectedUserId !== req.actor.userId) throw conflict("Account changed; refresh");
+    return { companyId, planId };
+  }
+  router.get("/companies/:companyId/experience/orchestration/:planId/control", async (req, res) => {
+    const { companyId, planId } = controlScope(req); res.json(await controls.get(req.actor, companyId, planId));
+  });
+  router.post("/companies/:companyId/experience/orchestration/:planId/control", validate(orchestrationControlCommandSchema), async (req, res) => {
+    const { companyId, planId } = controlScope(req); res.json(await controls.request(req.actor, companyId, planId, req.body));
+  });
+  router.get("/companies/:companyId/experience/orchestration/:planId/control-requests/:requestId", async (req, res) => {
+    const { companyId, planId } = controlScope(req), requestId = z.uuid().parse(req.params.requestId);
+    res.json(await controls.receipt(req.actor, companyId, planId, requestId));
+  });
+  router.get("/companies/:companyId/experience/orchestration", async (req, res) => {
+    const companyId = z.uuid().parse(req.params.companyId);
+    const query = z.strictObject({ expectedUserId: z.string().min(1).max(300) }).parse(req.query);
+    assertCompanyAccess(req, companyId);
+    if (req.actor.type !== "board" || req.actor.source === "local_implicit" || !req.actor.userId)
+      throw forbidden("A verified account is required for current work status");
+    if (query.expectedUserId !== req.actor.userId) throw conflict("Account changed; refresh");
+    const controller = new AbortController(), close = () => controller.abort();
+    req.once("aborted", close); res.once("close", close);
+    try { res.json(await readOrchestrationExperience(db, req.actor, companyId, controller.signal)); }
+    catch (error) { if (error instanceof ExperienceOverloadError) res.status(503).json({ error: "Current work status is unavailable; refresh" }); else throw error; }
+    finally { req.removeListener("aborted", close); res.removeListener("close", close); }
+  });
   router.get("/companies/:companyId/orchestration/plans", async (req, res) => { const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId); res.json(await service.list(req.actor, companyId)); });
   router.get("/companies/:companyId/orchestration/plans/:id", async (req, res) => { const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId); res.json(await service.get(req.actor, companyId, req.params.id as string, true)); });
   router.post("/companies/:companyId/orchestration/plans", validate(createOrchestrationPlanSchema), async (req, res) => { const companyId = req.params.companyId as string; assertCompanyAccess(req, companyId); res.status(201).json(await service.create(req.actor, companyId, req.body)); });

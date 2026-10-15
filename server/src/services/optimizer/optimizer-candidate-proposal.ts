@@ -1,8 +1,8 @@
 import {lockAnalyticalCompany} from "../analytical-privacy.js";
-import {assertAnalyticalContextPayloadAccess} from "../analytical-context-authority.js";
+import { assertOptimizerRunSources } from "./optimizer-source-authority.js";
 import {assertLearningAssetCurrent} from "../learning/learning-assets.js";
 import type {AuthorizationActor} from "../authorization.js";
-import { and, desc, eq } from "drizzle-orm";
+import { and, desc, eq, ne } from "drizzle-orm";
 import { workflowOptimizerSuggestions, workflows, workflowRevisions, workflowRuns, workflowStepRuns, workflowRunReviews, type Db } from "@paperclipai/db";
 import type { WorkflowOptimizerCandidateRequest } from "@paperclipai/shared";
 import { conflict, notFound, unprocessable } from "../../errors.js";
@@ -41,11 +41,11 @@ async function proposeRetainedCandidate(db: Db, companyId: string, workflowId: s
   const [revision] = await db.select().from(workflowRevisions).where(and(eq(workflowRevisions.companyId, companyId), eq(workflowRevisions.id, suggestion.workflowRevisionId)));
   if (!revision) throw notFound("Published revision not found");
   await assertLearningAssetCurrent(db,companyId,"workflow_revision",revision.id,sourceActor);
-  const runs = await db.select().from(workflowRuns).where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.workflowRevisionId, revision.id), eq(workflowRuns.status, "succeeded"))).orderBy(desc(workflowRuns.finishedAt)).limit(50);
+  const runs = await db.select().from(workflowRuns).where(and(eq(workflowRuns.companyId, companyId), eq(workflowRuns.workflowRevisionId, revision.id), ne(workflowRuns.source, "test"), eq(workflowRuns.status, "succeeded"))).orderBy(desc(workflowRuns.finishedAt)).limit(50);
   const samples: { input: Record<string, unknown>; output: Record<string, unknown> }[] = [];
   let nodeId: string | null = null;
   for (const run of runs) {
-    await assertAnalyticalContextPayloadAccess(db,companyId,sourceActor,{runId:run.id});
+    await assertOptimizerRunSources(db, companyId, run.id, sourceActor);
     const [review] = await db.select().from(workflowRunReviews).where(and(eq(workflowRunReviews.companyId, companyId), eq(workflowRunReviews.workflowRunId, run.id)));
     if (!review) continue;
     const steps = await db.select().from(workflowStepRuns).where(and(eq(workflowStepRuns.companyId, companyId), eq(workflowStepRuns.workflowRunId, run.id)));

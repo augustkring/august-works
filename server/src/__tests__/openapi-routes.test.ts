@@ -12,6 +12,14 @@ const __dirname = path.dirname(fileURLToPath(import.meta.url));
 const ROUTES_DIR = path.resolve(__dirname, "../routes");
 
 const apiPrefixes: Record<string, string> = {
+  "conversation-authoring.ts": "/api",
+  "agent-authoring.ts": "/api",
+  "customer-feedback.ts": "/api",
+  "agent-monitor.ts": "/api",
+  "customer-support.ts": "/api",
+  "maintenance-history.ts": "/api",
+  "experience.ts": "/api",
+  "experience-measures.ts": "/api",
   "business-events.ts": "/api",
   "business-metrics.ts": "/api",
   "business-forecasting.ts": "/api",
@@ -284,6 +292,27 @@ function loadSpecRoutes() {
 }
 
 describe("openapi routes", () => {
+  it("documents owned notification proposal review and exact Human baseline confirmation", () => {
+    const spec = buildOpenApiSpec() as any;
+    const base = "/api/companies/{companyId}/notifications/preference-proposals/{proposalId}";
+    for (const operation of [spec.paths[base].get, spec.paths[`${base}/apply`].post]) {
+      expect(operation["x-paperclip-authorization"]).toMatchObject({
+        actor: "board", currentNativeAuthority: true, companyScoped: true,
+      });
+      expect(operation.security).not.toEqual([]);
+      expect(operation.responses["200"].headers["Cache-Control"].schema.enum).toEqual(["no-store"]);
+      const result = operation.responses["200"].content["application/json"].schema;
+      expect(result.additionalProperties).toBe(false);
+      expect(result.properties.status.enum).toEqual(["pending", "applied", "discarded"]);
+      expect(JSON.stringify(result)).not.toMatch(/sourceRunId|createdByAgentId|responsibleUserId/);
+      expect(operation.responses["409"]).toBeDefined();
+    }
+    const confirmation = spec.paths[`${base}/apply`].post.requestBody.content["application/json"].schema;
+    expect(confirmation.additionalProperties).toBe(false);
+    expect(confirmation.required).toEqual(["requestId", "expectedProposalVersion", "expectedBaselineHash"]);
+    expect(confirmation.properties.expectedBaselineHash.pattern).toBe("^[a-f0-9]{64}$");
+    expect(confirmation.properties.preference).toBeUndefined();
+  });
   it("documents exact human experiment protocol commands, account guards and no-store responses", () => {
     const spec = buildOpenApiSpec(), base = "/api/companies/{companyId}/experiments";
     const create = spec.paths[base].post, transition = spec.paths[`${base}/{experimentId}/transition`].post;
@@ -901,6 +930,28 @@ describe("openapi routes", () => {
     expect(body.responses[422]).toBeDefined();
   });
 
+  it("documents current V9 setup, image transport and retention consent without inventing effects", () => {
+    const spec = buildOpenApiSpec() as any, root = "/api/companies/{companyId}";
+    const setup = spec.paths[`${root}/agent-configuration-drafts/{id}/package-setup`].post;
+    expect(setup.requestBody.content["application/json"].schema.properties.confirmIntendedPurpose.enum).toEqual([true]);
+    expect(setup.requestBody.content["application/json"].schema.properties.confirmPackageActivation.enum).toEqual([true]);
+    expect(setup.responses[200].content["application/json"].schema.properties.executionStarted.enum).toEqual([false]);
+    const image = spec.paths[`${root}/customer-feedback/{feedbackId}/images`].post;
+    const feedbackRequest = spec.paths[`${root}/customer-feedback/requests/{requestKey}`].get;
+    expect(feedbackRequest.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    expect(feedbackRequest.responses[200].content["application/json"].schema.required).toEqual(expect.arrayContaining(["requestKey", "receipt"]));
+    expect(feedbackRequest.parameters).toContainEqual(expect.objectContaining({ name: "requestKey", in: "path", required: true }));
+    expect(image.parameters).toContainEqual(expect.objectContaining({ name: "X-AW-Feedback-Request-Key", in: "header", required: true }));
+    expect(image.requestBody.content["multipart/form-data"].schema.properties.file.format).toBe("binary");
+    const readImage = spec.paths[`${root}/customer-feedback/{feedbackId}/images/{imageId}`].get;
+    expect(Object.keys(readImage.responses[200].content)).toEqual(["image/png", "image/jpeg", "image/webp"]);
+    const erase = spec.paths["/api/internal/customer-feedback/{companyId}/{feedbackId}/retention-erasures"].post;
+    expect(erase["x-paperclip-authorization"]).toMatchObject({ configuredOperator: true, noCompanyAdminBypass: true });
+    expect(erase.requestBody.content["application/json"].schema.properties.confirmErasure.enum).toEqual([true]);
+    const connect = spec.paths[`${root}/activation/connection-consents/{requestKey}/connect`].post;
+    expect(connect.requestBody.content["application/json"].schema.properties.confirmProviderSetup.enum).toEqual([true]);
+    expect(connect.responses[201]).toBeDefined(); expect(connect.responses[200]).toBeUndefined();
+  });
   it("covers the mounted server routes exactly", () => {
     const {
       routes: actualRoutes,
@@ -930,6 +981,65 @@ describe("openapi routes", () => {
       extraInSpec: [],
       excludedRoutes: [...explicitOpenApiOperationCoverageExclusions].sort(),
     });
+  });
+
+  it("documents V9 private human/operator admission and blocked publication without an invented success", () => {
+    const { spec } = loadSpecRoutes();
+    const board = [{ BoardSessionAuth: [] }, { BoardApiKeyAuth: [] }];
+    const root = "/api/companies/{companyId}";
+    const stop = spec.paths[`${root}/workflow-runs/{runId}/experience/stop`].post;
+    expect(stop.security).toEqual(board);
+    expect(stop.parameters.find((item: { name: string }) => item.name === "expectedUserId").required).toBe(true);
+    expect(stop.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    expect(stop.requestBody.content["application/json"].schema.properties.acknowledgeCompletedEffectsRemain.enum).toEqual([true]);
+    expect(stop.responses[200].content["application/json"].schema.properties.disposition.enum).toEqual(["cancellation_requested"]);
+    const operations = spec.paths[`${root}/workflows/{workflowId}/experience/operations`].get;
+    expect(operations.security).toEqual(board);
+    expect(operations.parameters.find((item: { name: string }) => item.name === "expectedUserId").required).toBe(true);
+    expect(operations.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    const launch = spec.paths[`${root}/workflows/{workflowId}/experience/launch`].post;
+    expect(launch.security).toEqual(board);
+    expect(launch.parameters.find((item: { name: string }) => item.name === "expectedUserId").required).toBe(true);
+    expect(launch.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    expect(launch.requestBody.content["application/json"].schema.properties.acknowledgeInternalExecution.enum).toEqual([true]);
+    expect(launch.responses[200].content["application/json"].schema.properties.disposition.enum).toEqual(["admitted"]);
+    const lifecycle = spec.paths[`${root}/workflows/{workflowId}/experience/lifecycle`].post;
+    expect(lifecycle.security).toEqual(board);
+    expect(lifecycle.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    expect(lifecycle.requestBody).toBeDefined();
+    const review = spec.paths[`${root}/workflows/{workflowId}/experience`].get;
+    expect(review.security).toEqual(board);
+    expect(review["x-paperclip-authorization"]).toMatchObject({ actor: "board", currentNativeAuthority: true, companyScoped: true });
+    expect(review.parameters.find((item: { name: string }) => item.name === "expectedUserId").required).toBe(true);
+    expect(review.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    const flow = spec.paths[`${root}/workflows/{workflowId}/experience/draft-flow`];
+    expect(flow.get.security).toEqual(board); expect(flow.post.security).toEqual(board);
+    expect(flow.get.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    expect(flow.post.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    expect(flow.post.requestBody.content["application/json"].schema.additionalProperties).toBe(false);
+    expect(flow.post.requestBody.content["application/json"].schema.required).toContain("expectedLastNodeId");
+    expect(flow.get.parameters.find((item: { name: string }) => item.name === "expectedUserId").required).toBe(true);
+    const publish = spec.paths[`${root}/agent-configuration-drafts/{id}/publish`].post;
+    expect(publish.security).toEqual(board);
+    expect(publish.responses[422]).toBeDefined();
+    expect(publish.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    const publicationCommand = publish.requestBody.content["application/json"].schema;
+    expect(publicationCommand.additionalProperties).toBe(false);
+    expect(publicationCommand.properties.confirmPublication.enum).toEqual([true]);
+    expect(publicationCommand.properties.confirmActivation.enum).toEqual([true]);
+    expect(publicationCommand.required).toContain("expectedReviewHash");
+    expect(publish.responses[201]).toBeUndefined();
+    const triage = spec.paths["/api/internal/customer-feedback/{companyId}/{feedbackId}/triage"].post;
+    expect(triage.security).toEqual(board);
+    expect(triage["x-paperclip-authorization"]).toMatchObject({ configuredOperator: true, noCompanyAdminBypass: true });
+    expect(triage.responses[200].content["application/json"].schema.properties.internalState).toBeUndefined();
+    expect(triage.responses[200].content["application/json"].schema.properties.messages).toBeDefined();
+    const policy = spec.paths["/api/customer-feedback/policy"].get;
+    expect(policy.security).toEqual([]);
+    expect(policy.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+    expect(policy.responses[200].content["application/json"].schema.properties.ga.properties.allowed.enum).toEqual([false]);
+    expect(policy["x-paperclip-authorization"]).toEqual({ actor: "public" });
+    expect(spec.paths[`${root}/customer-feedback/{feedbackId}/follow-up`].post.responses[200].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
   });
 
   it("documents board-only repository discovery and selection", () => {
@@ -1158,4 +1268,26 @@ it("documents the account binding required for preference reads", () => {
   expect(operation?.parameters).toEqual(expect.arrayContaining([
     expect.objectContaining({ name: "expectedUserId", in: "query", required: true }),
   ]));
+});
+
+it("documents original Native review, pending recovery and cancellation without a second grant API", () => {
+  const spec = buildOpenApiSpec() as unknown as { paths: Record<string, Record<string, any>> };
+  const base = "/api/companies/{companyId}/support-sessions";
+  for (const [path, method, status] of [[base, "post", 201], [base + "/reviews", "post", 201], [base + "/pending-review", "get", 200], [base + "/reviews/{approvalId}", "delete", 200], [base + "/{sessionId}", "get", 200]] as const)
+    expect(spec.paths[path]![method].responses[status].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+  expect(spec.paths[base + "/reviews"]!.post.requestBody.content["application/json"].schema.required).toContain("approvalId");
+  expect(spec.paths[base]!.post.requestBody.content["application/json"].schema.required).not.toContain("approvalId");
+  const response = spec.paths[base + "/reviews"]!.post.responses[201].content["application/json"].schema;
+  expect(Object.keys(response.properties).sort()).toEqual(["approvalId", "companyId", "reviewedAt", "state"]);
+  expect(response.additionalProperties).toBe(false);
+});
+
+it("documents the current-account read-only insight reference and bounded closed query", () => {
+  const operation = buildOpenApiSpec().paths["/api/companies/{companyId}/experience/insight-card"]?.get;
+  expect(operation).toBeDefined();
+  const parameters = operation.parameters as Array<{ name: string; in: string; required?: boolean; schema: Record<string, unknown> }>;
+  expect(parameters.find(value => value.name === "expectedUserId")).toMatchObject({ in: "query", required: true });
+  expect(parameters.find(value => value.name === "request")).toMatchObject({ in: "query", required: true, schema: { type: "string", maxLength: 8192 } });
+  expect(operation.responses["200"].headers["Cache-Control"].schema.enum).toEqual(["private, no-store"]);
+  for (const code of ["400", "401", "403", "404", "409"]) expect(operation.responses).toHaveProperty(code);
 });

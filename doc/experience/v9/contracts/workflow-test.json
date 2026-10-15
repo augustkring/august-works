@@ -1,0 +1,161 @@
+{
+  "screenId": "WORKFLOW-TEST",
+  "journeyId": "workflow",
+  "routeOrSurface": "/workflows/:workflowId",
+  "targetExperienceProfiles": [
+    "member",
+    "manager",
+    "admin",
+    "security_admin"
+  ],
+  "customerOutcome": "Test the reviewed unpublished native draft without publishing it, reconcile its original admission and inspect actual execution separately from production validity.",
+  "entryConditions": [
+    "Current authenticated principal and company selection; no retained foreign-principal payload",
+    "Effective feature admission is required for new work; native membership and resource authority remain necessary"
+  ],
+  "exitConditions": [
+    "Only a canonical server-confirmed result permits a success claim",
+    "Pending, stale, unavailable or unqualified work never becomes successful or activated"
+  ],
+  "content": {
+    "h1": "Test the draft",
+    "supportingCopy": "Review the immutable draft, explicit invented start values, expected Succeeded result and recorded stop limit before internal test admission.",
+    "customerTerms": [
+      "Draft",
+      "Internal test",
+      "Expected result",
+      "Inspect internal test",
+      "Reconcile original test"
+    ],
+    "displayedState": [
+      "Current native draft ID, version, workflow updatedAt and internal eligibility are distinct from the published version.",
+      "Only the closed manual/condition/switch/merge/parallel/literal-wait C0 subset with no contracts/variables and a 1–60 second deadline is admitted. Summed literal waits must fit strictly within that deadline; input is optional, bounded explicit synthetic data.",
+      "Native publish topology must pass before the view reports internal Test readiness; incomplete condition paths, disconnected nodes and cycles remain review-required. Full native node validation repeats at admission.",
+      "The confirmation freezes the reviewed draft version and expected outcome; changing the native draft does not change an open confirmation.",
+      "The original receipt means admitted, not completed or production verified. Follow its exact run for actual status and recorded steps.",
+      "The latest original admission is recovered for the current human from native activity; an unrelated older admission cannot acknowledge an in-memory unknown attempt.",
+      "Test purpose remains explicit after draft replacement, publication and retirement. Optimizer production traces, correction reviews, samples and live drift exclude tests."
+    ]
+  },
+  "inputs": [
+    {
+      "id": "acknowledgeInternalTest",
+      "label": "I understand this is an internal test",
+      "dataType": "Boolean acknowledgement",
+      "required": true,
+      "default": "Unchecked",
+      "help": "Review the current immutable draft and exact stop limit; any changed material requires a new acknowledgement",
+      "validation": "Must be explicitly checked against the frozen current draft/update identity",
+      "autofillOrPrefill": "None; held only in memory for the current account and Source"
+    },
+    {
+      "id": "syntheticInput",
+      "label": "Invented start values",
+      "dataType": "Bounded rows of exact field paths and typed literals",
+      "required": false,
+      "default": "Empty list; no start data",
+      "help": "Choose text, finite number, boolean or null; fields are exact and case-sensitive",
+      "validation": "At most 20 non-overlapping paths, depth at most 8, total JSON UTF-8 at most 8192 bytes; text at most 1000 characters",
+      "autofillOrPrefill": "None; held only in memory for the current account and Source"
+    }
+  ],
+  "actions": {
+    "primary": {
+      "label": "Start internal test",
+      "operation": "Admit the exact reviewed draft through the native workflow queue with source=test and an atomic original-request activity receipt."
+    },
+    "secondary": [
+      "Close without submitting",
+      "Reconcile the identical unknown request",
+      "Reload and recover the native original receipt",
+      "Inspect the exact bound test run",
+      "Open Advanced to review unsupported/material testing; no implicit publication is performed"
+    ],
+    "destructiveOrIrreversible": []
+  },
+  "systemWork": {
+    "canonicalReadDomains": [
+      "Current native workflow/draft/source authority, exact company/principal and effective read/edit/run grants",
+      "Native workflow.customer_test_admitted activity, actual run/revision bindings and retained-source admission"
+    ],
+    "canonicalWriteOperation": "admitCustomerWorkflowTest uses the existing native authority/privacy/settings and workflow locks, enqueueWorkflowRunInTransaction and native activity receipt. The existing executor/leases/recovery/cancellation execute the unpublished immutable revision; no second scheduler or run store.",
+    "authorityEffect": "Current human read/edit/run and actual non-viewer membership/current admin role are required for new admission and original replay. Recovery rechecks the original initiating human. This grants no access and publishes nothing.",
+    "asyncWork": "Native closed C0 execution with configured deadline up to 60 seconds. Source review has a 30-second admission budget. Admission is durable even if inline execution or its HTTP response fails.",
+    "receipt": "Strict company/workflow/request/revision/run binding plus purpose=test and disposition=admitted. Native queue and activity commit together; original replay creates neither a second run nor another original event."
+  },
+  "states": {
+    "loading": "Announce loading only while the current identity/company request is pending.",
+    "empty": "No current draft or inactive workflow permits new test admission; an existing original receipt remains historical.",
+    "partial": "Oversized, duplicate, cyclic or dangling-connection flows show flow unavailable with no truncated topology.",
+    "stale": "Hide retained private data during background rechecks and live authority/privacy/version invalidations; a new query epoch rejects late prior responses.",
+    "validation_error": "Associate invalid test field paths or values with inline corrections and a linked, focused error summary before persisting any locator or POST.",
+    "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
+    "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
+    "recovering": "Retain the identical unknown command in memory; a reload reads the current human's actual native receipt. Absence of a receipt does not prove that a timed-out request cannot still commit.",
+    "success": "Only native admission is confirmed here. The separately read run status is actual execution status, not production/business validity."
+  },
+  "navigation": {
+    "back": "Return to existing native workflow list.",
+    "cancelOrSaveExit": "Closing an in-memory dialog retains its exact Original command for existing explicit idempotent retry. Route reload retains only a content-free locator; exact GET recovery reads the Original journal. A Native pre-effect refusal can release only its own tuple.",
+    "deepLink": "/workflows/:workflowId",
+    "resume": "Current Native read and a bounded content-free per-tab company/account/workflow/kind/request locator survive page return. Follow the exact Original request GET under current account/permission/Source admission; no new command identity is inferred from absence."
+  },
+  "accessibility": {
+    "initialFocus": "Main heading or the dialog category control; keyboard focus is visible and unobscured.",
+    "focusAfterError": "Error summary or first invalid control, with a programmatically associated explanation.",
+    "focusAfterSuccess": "Canonical receipt or next-step heading; announcements do not trap focus.",
+    "keyboardModel": "Standard buttons, links, labeled text inputs and semantic single-select controls; dialog Escape/close and focus return use the native primitive.",
+    "statusAnnouncement": "Use status for pending/success and alert for material failures, without repeated routine interruption.",
+    "targetSize": "Custom frequent and primary controls target at least 44 × 44 CSS px.",
+    "zoomReflow": "Require browser/manual verification at 200% and 400% zoom and narrow mobile width; this file is not proof of conformance.",
+    "reducedMotion": "No essential animated transition or moving progress indicator.",
+    "screenReaderNotes": "One meaningful H1, persistent visible labels, named sections and logical DOM/focus order."
+  },
+  "responsive": {
+    "wide": "Readable constrained content width with natural wrapping.",
+    "narrow": "Reflow cards and form actions without concealing utilities or consequences.",
+    "mobile": "Touch targets remain reachable; dialogs scroll within the viewport and do not obscure focus."
+  },
+  "privacySecurity": {
+    "dataShown": [
+      "Current human/company-authorized workflow name and description",
+      "Allowlisted native revision/step/connection declarations only",
+      "Bound original native test receipt and explicit test purpose only; no test payload or private errors.",
+      "Only explicitly entered in-memory synthetic test values; no copy in browser storage, Activity journal or safe execution-trace projection."
+    ],
+    "dataCollected": [
+      "Strict immutable command UUID and reviewed native version preconditions; no customer input or browser persistence."
+    ],
+    "sensitiveFields": [
+      "Native graph configuration, prompts, credentials, inputs, schemas, variables, actor assignments and results are excluded from this projection"
+    ],
+    "loggingConstraints": "Purpose-separated workflow-experience namespace for success and rejected requests; generic logs omit account query strings, workflow/customer prose and raw errors."
+  },
+  "analytics": {
+    "allowedEvents": [],
+    "prohibitedPayloads": [
+      "Raw intent",
+      "Company facts",
+      "Feedback body/goal",
+      "Documents/prompts/results",
+      "Credentials/raw URLs/query strings/DOM/screenshots"
+    ]
+  },
+  "acceptance": {
+    "functional": [
+      "Verify actual unpublished execution without publication/cloning/live admission; simultaneous original requests, draft replacement/publication, Pause, rollback and private receipt recovery.",
+      "Verify expected result/deadline and explicit acknowledgement; retained unknown commands and matching native receipts; strict purpose separation and optimizer exclusions.",
+      "Representative/material/customer-approved inputs, simulated writes/test targets, material side-effect disclosure, independent business verification and full workflow Test scope remain open."
+    ],
+    "accessibility": [
+      "Verify keyboard/focus/announcements and 200/400% zoom manually on the exact artifact."
+    ],
+    "securityPrivacy": [
+      "Verify actual read/edit/run grant loss and current role/admin/membership/source revocation on admission, replay, receipt reads and queued recovery; denied/late views never restore private data.",
+      "Verify other humans cannot recover this original receipt; corrupted native bindings and public manual-source injection are rejected."
+    ],
+    "usability": [
+      "Use representative exploratory and pre-registered confirmatory journey evidence with explicit PASS/FAIL/INCONCLUSIVE; source checks are insufficient."
+    ]
+  }
+}

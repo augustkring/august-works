@@ -1,11 +1,10 @@
-import { agentService } from "../agents.js";
+import { createPausedOnboardingAgent } from "./onboarding-agent.js";
 import { issueService } from "../issues.js";
 import { rolePackService } from "../role-packs.js";
 import { assertV5Authorization } from "../v5-authorization.js";
 import { and, eq, sql } from "drizzle-orm";
 import {
   activityLog,
-  approvals,
   agents,
   authUsers,
   billingAccounts,
@@ -24,6 +23,7 @@ import {
   createSaasCompanySchema,
   updateOnboardingSchema,
   PERMISSION_KEYS,
+  initialActivationState, v9FeatureEnabled,
 } from "@paperclipai/shared";
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import {
@@ -35,6 +35,7 @@ import { entitlementService } from "../billing/entitlements.js";
 import { sha256 } from "./crypto.js";
 import { foundationService } from "../foundation/foundation-service.js";
 import type { z } from "zod";
+import { instanceSettingsService } from "../instance-settings.js";
 
 const STAGES = [
   "organization",
@@ -54,6 +55,7 @@ export function saasOnboardingService(db: Db) {
       JSON.stringify({
         name: input.name,
         description: input.description ?? null,
+        ...(input.activation ? {activation:input.activation} : {}),
       }),
     );
     for (let attempt = 0; attempt < 5; attempt++) {
@@ -84,6 +86,8 @@ export function saasOnboardingService(db: Db) {
               throw conflict("Idempotency key has a different request");
             return existing;
           }
+          if (input.activation && !v9FeatureEnabled(await instanceSettingsService(tx as unknown as Db).getExperimental(), "activation_v9"))
+            throw notFound("Intent-first activation is not enabled");
           const owned = await tx
             .select({ id: companyMemberships.id })
             .from(companyMemberships)
@@ -142,6 +146,7 @@ export function saasOnboardingService(db: Db) {
               createdByUserId: userId,
               idempotencyKey: input.idempotencyKey,
               requestHash,
+              ...(input.activation ? {activationState:initialActivationState(input.activation.website),currentStage:"v9_intent"} : {}),
             })
             .returning();
           await tx.insert(activityLog).values({
@@ -183,6 +188,7 @@ export function saasOnboardingService(db: Db) {
     )
       throw unprocessable("First-agent creation evidence is server-owned");
     const current = await get(companyId);
+    if (current.activationState) throw conflict("Continue this setup in the current activation flow", {code:"ACTIVATION_FLOW_REQUIRED"});
     const from = STAGES.indexOf(current.currentStage),
       to = STAGES.indexOf(input.stage);
     if (
@@ -390,6 +396,7 @@ export function saasOnboardingService(db: Db) {
         .where(eq(companyOnboardingRuns.companyId, companyId))
         .for("update");
       if (!run) throw notFound("Onboarding not found");
+      if (run.activationState) throw conflict("Continue this setup in the current activation flow", {code:"ACTIVATION_FLOW_REQUIRED"});
       const name = input.name.trim();
       if (!name || name.length > 100)
         throw unprocessable("Agent name must contain 1–100 characters");
@@ -413,61 +420,7 @@ export function saasOnboardingService(db: Db) {
           "Reach the current agent stage before creating the first agent",
           { code: "ONBOARDING_VERSION_CONFLICT" },
         );
-      await entitlementService(txDb).require(companyId, "platform.access");
-      const [company] = await tx
-        .select()
-        .from(companies)
-        .where(eq(companies.id, companyId))
-        .for("share");
-      if (!company) throw notFound("Company not found");
-      const agent = await agentService(txDb).create(companyId, {
-        name,
-        role: "ceo",
-        adapterType: "openclaw_gateway",
-        adapterConfig: {},
-        runtimeConfig: { heartbeat: { enabled: false } },
-        budgetMonthlyCents: 0,
-        status: company.requireBoardApprovalForNewAgents
-          ? "pending_approval"
-          : "paused",
-      });
-      let approvalId: string | null = null;
-      if (company.requireBoardApprovalForNewAgents) {
-        const [approval] = await tx
-          .insert(approvals)
-          .values({
-            companyId,
-            type: "hire_agent",
-            requestedByUserId: userId,
-            status: "pending",
-            payload: {
-              agentId: agent.id,
-              name: agent.name,
-              role: agent.role,
-              adapterType: agent.adapterType,
-              adapterConfig: agent.adapterConfig,
-              runtimeConfig: agent.runtimeConfig,
-              budgetMonthlyCents: 0,
-              requestedConfigurationSnapshot: {
-                adapterType: agent.adapterType,
-                adapterConfig: agent.adapterConfig,
-                runtimeConfig: agent.runtimeConfig,
-                desiredSkills: [],
-              },
-            },
-          })
-          .returning();
-        approvalId = approval!.id;
-        await tx.insert(activityLog).values({
-          companyId,
-          actorType: "user",
-          actorId: userId,
-          action: "approval.created",
-          entityType: "approval",
-          entityId: approvalId,
-          details: { type: "hire_agent" },
-        });
-      }
+      const { agent, approvalId } = await createPausedOnboardingAgent(txDb, companyId, userId, name);
       await tx
         .update(companyOnboardingRuns)
         .set({

@@ -6,6 +6,7 @@ import { describe, expect, it } from "vitest";
 import {
   assertWorkerModelProfileCurrent,
   loadWorkerModelProfiles,
+  selectWorkerModelProfile,
   workerModelProfileSchema,
   type WorkerModelProfile,
 } from "../services/orchestration/worker-model-profiles.js";
@@ -47,6 +48,36 @@ const fixture = (): WorkerModelProfile => ({
   qualificationArtifactSha256: "e".repeat(64),
 });
 describe("private worker text transport qualifications", () => {
+  it("selects only the explicit owned profile and never falls back to another installed alternative", () => {
+    const p = fixture(), alternative = { ...p, id: randomUUID(), qualifiedConfigurationHash: "f".repeat(64),
+      tariff: { ...p.tariff, model: "alternative-fixture-model" } };
+    const input = { companyId: p.companyId, agentId: p.workerAgentId, profileId: p.id, sourceSha, protectedEvidenceOrigin: origin };
+    expect(selectWorkerModelProfile([p, alternative], input)).toEqual(p);
+    expect(selectWorkerModelProfile([p, alternative], { ...input, profileId: alternative.id })).toEqual(alternative);
+    expect(selectWorkerModelProfile([p, alternative], { ...input, profileId: undefined, configurationHash: p.qualifiedConfigurationHash })).toEqual(p);
+    expect(() => selectWorkerModelProfile([p, alternative], { ...input, profileId: undefined })).toThrow("exact installed");
+    expect(() => selectWorkerModelProfile([p, alternative], { ...input, configurationHash: alternative.qualifiedConfigurationHash })).toThrow("exact installed");
+    for (const changed of [{ profileId: randomUUID() }, { profileId: "" }, { companyId: randomUUID() }, { agentId: randomUUID() }])
+      expect(() => selectWorkerModelProfile([p, alternative], { ...input, ...changed })).toThrow("exact installed");
+    expect(() => selectWorkerModelProfile([p, p], input)).toThrow("exact installed");
+    expect(() => selectWorkerModelProfile([{ ...p, tariff: { ...p.tariff, sourceSha: "f".repeat(40) } }, alternative], input)).toThrow();
+  });
+  it("loads distinct configuration pins for one presence while refusing ambiguous configuration or global profile identity", async () => {
+    const p = fixture(), alternative = { ...p, id: randomUUID(), qualifiedConfigurationHash: "f".repeat(64) };
+    const home = await mkdtemp(join(tmpdir(), "aw-worker-model-alternatives-")), file = join(home, "profiles.json");
+    const write = async (profiles: WorkerModelProfile[]) => {
+      const bytes = JSON.stringify(profiles); await writeFile(file, bytes, { mode: 0o600 });
+      return createHash("sha256").update(bytes).digest("hex");
+    };
+    try {
+      expect(loadWorkerModelProfiles(file, await write([p, alternative]))).toHaveLength(2);
+      expect(() => loadWorkerModelProfiles(file, undefined)).toThrow("pin_required");
+      const duplicate = await write([p, { ...alternative, id: p.id }]);
+      expect(() => loadWorkerModelProfiles(file, duplicate)).toThrow("ambiguous");
+      const ambiguous = await write([p, { ...alternative, qualifiedConfigurationHash: p.qualifiedConfigurationHash }]);
+      expect(() => loadWorkerModelProfiles(file, ambiguous)).toThrow("ambiguous");
+    } finally { await rm(home, { recursive: true, force: true }); }
+  });
   it("requires paired deployment pins, a private owner file and exact bytes; missing configuration stays inactive", async () => {
     expect(loadWorkerModelProfiles(undefined, undefined)).toEqual([]);
     expect(() => loadWorkerModelProfiles("/missing", undefined)).toThrow(

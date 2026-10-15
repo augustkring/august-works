@@ -7,6 +7,8 @@ import { analyticalLineageManifests, businessMetricObservations, companies, goal
 import { managementReviewDefinitionSchema, type ManagementReviewDefinition } from "@paperclipai/shared";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { managementReviewService } from "../services/management-reviews/service.js";
+import { currentInsightToolCard } from "../services/experience/insight-tool-card.js";
+import { experienceRoutes } from "../routes/experience.js";
 import { managementReviewRoutes } from "../routes/management-reviews.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { aiGovernanceService } from "../services/ai-governance/governance-service.js";
@@ -30,6 +32,50 @@ describe.skipIf(!support.supported)("Native historical management review owner o
   afterAll(async () => { await database?.cleanup(); });
   beforeEach(async () => { await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental({ enableFoundationV1: true, project_roadmap_v5: true, analytical_lineage_v8: true, business_metrics_v8: true, management_reviews_v8: true, ai_use_cases_v7: true, governance_evidence_v7: true }); companyId = randomUUID(); otherId = randomUUID(); await db.insert(companies).values([{ id: companyId, name: "Synthetic native management", issuePrefix: randomUUID() }, { id: otherId, name: "Foreign native source", issuePrefix: randomUUID() }]); const policy = analyticalPurpose(); policy.analyticalPurpose!.capabilities = ["metrics", "reviews"]; policyId = (await aiGovernanceService(db).obligation(actor, companyId, policy)).id; });
   async function fixture() { const [goal] = await db.insert(goals).values({ companyId, title: "Native source goal", status: "planned" }).returning(); const now = new Date(), from = new Date(now.getTime() - 86400000).toISOString(), until = now.toISOString(); const definition = managementReviewDefinitionSchema.parse({ name: "Human cited leadership review", reviewType: "weekly_leadership", period: { from, until }, purpose: "management_intelligence", sensitivity: "internal", retentionDays: 1, governanceObligationRefs: [policyId], sources: [{ key: "goal", source: { kind: "canonical", reference: { type: "goal", id: goal!.id } } }], agenda: [{ key: "inspect", category: "INVESTIGATE", ownerUserId: "local-board", dueAt: new Date(now.getTime() + 86400000).toISOString(), sourceKeys: ["goal"], nextAction: rationale, hypothesis: "Human suspects a constraint; this remains an unverified hypothesis" }] }); return { goal: goal!, definition }; }
+  it("projects a signed review without raw source snapshots, actor fields or events and rechecks its current sources", async () => {
+    const f = await fixture(), owner = managementReviewService(db), created = await owner.create(companyId, actor, f.definition);
+    await publish(created.id, created.contentHash);
+    const full = await owner.detail(companyId, actor, created.id), summary = await owner.summary(companyId, actor, created.id);
+    expect(summary).toMatchObject({ id: created.id, companyId, status: "published", contentHash: created.contentHash, currentQualification: "current", sourceKeys: ["goal"] });
+    expect(summary.packet.claims).toEqual(full.packet.claims);
+    expect(summary.packet.agenda[0]).not.toHaveProperty("ownerUserId");
+    for (const field of ["sources", "events", "createdBy", "publishedBy"]) expect(summary).not.toHaveProperty(field);
+    await expect(owner.summary(otherId, actor, created.id)).rejects.toMatchObject({ status: 404 });
+    await db.update(goals).set({ title: "Changed actual Native source title" }).where(eq(goals.id, f.goal.id));
+    const rechecked = await owner.summary(companyId, actor, created.id);
+    expect(rechecked.currentQualification).toBe("needs_revalidation"); expect(rechecked.packet).toEqual(summary.packet);
+    await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental({ management_reviews_v8: false });
+    await expect(owner.summary(companyId, actor, created.id)).rejects.toMatchObject({ status: 404 });
+  });
+  it("resolves a typed chat reference through its actual current Native owner and refuses invented content, versions and closed flags", async () => {
+    await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental({ action_cards_v9: true, experience_projection_v9: true, progressive_shell_v9: true });
+    const f = await fixture(), owner = managementReviewService(db), created = await owner.create(companyId, actor, f.definition); await publish(created.id, created.contentHash);
+    const resourceId = `review:${created.id}`, wire = { schemaVersion: 1, component: "ResultCard", companyId, cardId: `insight:${resourceId}`, source: { domain: "insight", companyId, resourceId, version: created.contentHash } };
+    const before = await db.select().from(managementReviewSnapshots).where(eq(managementReviewSnapshots.id, created.id));
+    const card = await currentInsightToolCard(db, actor, companyId, wire);
+    expect(card).toMatchObject({ id: wire.cardId, title: f.definition.name, kind: "result", freshness: "fresh", source: { version: created.contentHash },
+      actions: [{ operation: "open", href: "/management-reviews" }] });
+    expect(card.actions.every(action => action.operation === "open")).toBe(true);
+    const app = express(); app.use((req, _res, next) => { req.actor = actor; next(); }); app.use(experienceRoutes(db)); app.use(errorHandler);
+    const endpoint = `/companies/${companyId}/experience/insight-card?expectedUserId=local-board&request=${encodeURIComponent(JSON.stringify(wire))}`;
+    const response = await request(app).get(endpoint).expect(200);
+    expect(response.headers["cache-control"]).toBe("private, no-store"); expect(response.body).toEqual({ ...card, displayExpiresAt: expect.any(String), displayValidForMs: expect.any(Number) });
+    expect(Date.parse(response.body.displayExpiresAt)).toBeGreaterThan(Date.now());
+    expect(Date.parse(response.body.displayExpiresAt)).toBeLessThanOrEqual(Date.now() + 30_000);
+    expect(response.body.displayValidForMs).toBeGreaterThan(0);
+    expect(response.body.displayValidForMs).toBeLessThanOrEqual(30_000);
+    await request(app).get(endpoint.replace("expectedUserId=local-board", "expectedUserId=another-account")).expect(409);
+    await request(app).get(`${endpoint}&unexpected=1`).expect(400);
+    expect(await db.select().from(managementReviewSnapshots).where(eq(managementReviewSnapshots.id, created.id))).toEqual(before);
+    await expect(currentInsightToolCard(db, actor, companyId, { ...wire, title: "INVENTED result", html: "<script/>" })).rejects.toMatchObject({ status: 400 });
+    await expect(currentInsightToolCard(db, actor, companyId, { ...wire, source: { ...wire.source, version: "f".repeat(64) } })).rejects.toMatchObject({ status: 409 });
+    await expect(currentInsightToolCard(db, actor, companyId, { ...wire, component: "DecisionCard" })).rejects.toMatchObject({ status: 400 });
+    await expect(currentInsightToolCard(db, actor, otherId, wire)).rejects.toMatchObject({ status: 400 });
+    await db.update(goals).set({ title: "Changed current Source" }).where(eq(goals.id, f.goal.id));
+    await expect(currentInsightToolCard(db, actor, companyId, wire)).rejects.toMatchObject({ status: 409 });
+    await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental({ action_cards_v9: false });
+    await expect(currentInsightToolCard(db, actor, companyId, wire)).rejects.toMatchObject({ status: 404 });
+  });
   it("backfills native governance dependencies without rewriting or re-signing pre-migration review bytes", async () => {
     const f = await fixture(), owner = managementReviewService(db), created = await owner.create(companyId, actor, f.definition); await publish(created.id, created.contentHash); const original = await owner.detail(companyId, actor, created.id);
     const migration = await readFile(new URL("../../../packages/db/src/migrations/0412_woozy_scrambler.sql", import.meta.url), "utf8");

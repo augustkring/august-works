@@ -1,0 +1,8 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 344 430" width="344" height="430" shape-rendering="geometricPrecision">
+
+<g fill="#0E1B29">
+<path d="M0 0H206 C286 0 340 53 340 131 C340 164 328 190 300 215 C279 234 247 246 207 248 C156 249 110 239 74 220 C29 196 4 157 0 111Z"/>
+<path d="M0 430V344 C0 296 23 260 63 241 C98 224 139 219 189 219 C239 219 277 222 307 241 C336 260 344 289 344 322 C344 379 306 416 260 427 C239 431 214 430 0 430Z"/>
+</g>
+</svg>

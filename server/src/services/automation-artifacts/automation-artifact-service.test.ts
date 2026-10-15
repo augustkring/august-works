@@ -9,6 +9,7 @@ import {
   companyMemberships,
   createDb,
   instanceSettings,
+  workflowRuns,
   workflowOptimizerSuggestions,
   workflowRevisions,
   workflows,
@@ -368,6 +369,11 @@ describePg("Automation Artifact service", () => {
           },
         });
       });
+      // Structural Native provenance rows; these queued fixtures are not
+      // executed outcomes or runtime/provider/Human qualification evidence.
+      const observed = await db.insert(workflowRuns).values(Array.from({ length: 3 }, () => ({
+        companyId, workflowId, workflowRevisionId: revisionId, status: "queued", source: "manual",
+      }))).returning({ id: workflowRuns.id });
       const [suggestion] = await db
         .insert(workflowOptimizerSuggestions)
         .values({
@@ -392,7 +398,7 @@ describePg("Automation Artifact service", () => {
           averageCost: null,
           estimatedLatencySavingsMs: 10,
           estimatedCostSavings: null,
-          observedRunIds: [],
+          observedRunIds: observed.map(row => row.id),
         })
         .returning();
       return { workflowId, revisionId, suggestion: suggestion! };

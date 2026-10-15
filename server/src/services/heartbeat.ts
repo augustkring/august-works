@@ -1,4 +1,5 @@
 import { isCompanyCapacityWait } from "./billing/capacity-admission.js";
+import { reconcileAgentDraftTest } from "./agents/authoring-test-recovery.js";
 import { governedNativeTaskRunFields } from "./ai-governance/execution-gate.js";
 import { assertSaasExecutionAdmission } from "./saas/execution-admission.js";
 import { recordEagerSkillLoading, recordSkillExecutionCompletion, reconcileSkillExecutionCompletions } from "./skill-usage.js";
@@ -480,6 +481,7 @@ import {
   instanceSettingsService,
   resolveWorktreeRunExecutionActivation,
 } from "./instance-settings.js";
+import { readAuthoredAgentDefinition } from "./agents/authored-definition.js";
 import { assembleFreshNativeGovernedContext } from "./context/context-runtime.js";
 import {
   evaluateExecutionAllowlist,
@@ -19121,6 +19123,7 @@ export function heartbeatService(
       nativeControllerProcessStartedAt,
       nativeControllerLeaseExpiresAt,
     } of activeRuns) {
+      if (await reconcileAgentDraftTest(db, run)) continue;
       // Authentication timeout requires an explicit ownership resolution, not
       // repeated reattachment or a process-gone guess on subsequent sweeps.
       if (isNativeRunnerOwnershipHeld(run)) continue;
@@ -21295,6 +21298,9 @@ export function heartbeatService(
           selectedEnvironmentForConfig?.driver ?? "local",
         );
       const internalTextDraft = agent.adapterType === "paperclip_runner" && parseObject(agent.adapterConfig).provider === "aw_text_only";
+      const authoredDefinition = await readAuthoredAgentDefinition(db, agent);
+      if (authoredDefinition && !internalTextDraft)
+        throw forbidden("This authored version requires its mapped native draft transport");
       if (internalTextDraft && agent.runtimeConfig?.aiConnection)
         throw forbidden("Internal drafts use the installed private controller grant, not a CLI AI binding");
       const aiBinding = !internalTextDraft && agent.runtimeConfig?.aiConnection ? aiConnectionBindingSchema.parse(agent.runtimeConfig.aiConnection) : undefined;
@@ -23542,6 +23548,7 @@ export function heartbeatService(
                   experimentalInstanceSettings.enableContextEngineV1 === true,
                 foundationEnabled:
                   experimentalInstanceSettings.enableFoundationV1 === true,
+                ...(authoredDefinition ? { sourceScope: "task_only" as const } : {}),
                 companyId: agent.companyId,
                 agentId: agent.id,
                 responsibleUserId: run.responsibleUserId ?? responsibleUserId,
@@ -29189,7 +29196,10 @@ export function heartbeatService(
     agentId: string,
     reason = "Cancelled due to agent pause",
     errorCode = "cancelled",
+    expectedRunIds?: readonly string[],
   ) {
+    // Never expand a confirmed run set to work admitted after resume.
+    if (expectedRunIds?.length === 0) return 0;
     const agent = await getAgent(agentId);
     const runs = await db
       .select()
@@ -29198,6 +29208,7 @@ export function heartbeatService(
         and(
           eq(heartbeatRuns.agentId, agentId),
           inArray(heartbeatRuns.status, [...CANCELLABLE_HEARTBEAT_RUN_STATUSES]),
+          expectedRunIds ? inArray(heartbeatRuns.id, [...expectedRunIds]) : undefined,
         ),
       );
 
@@ -29822,8 +29833,8 @@ export function heartbeatService(
      * agent pause route. For non-pause cancellations use cancelRun, or call the internal
      * cancelActiveForAgentInternal(agentId, reason, errorCode) with an explicit errorCode.
      */
-    cancelActiveForAgent: (agentId: string, reason?: string) =>
-      cancelActiveForAgentInternal(agentId, reason, "agent_paused"),
+    cancelActiveForAgent: (agentId: string, reason?: string, expectedRunIds?: readonly string[]) =>
+      cancelActiveForAgentInternal(agentId, reason, "agent_paused", expectedRunIds),
 
     cancelInvocationsForAgents: (agentIds: string[], reason: string) =>
       cancelInvocationsForAgentsInternal(agentIds, reason),
