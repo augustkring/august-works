@@ -2964,5 +2964,18 @@
     "reload": "Reload page",
     "supportExplanation": "If the problem continues, contact support. Do not include passwords, credentials or private work in your email. No report is sent automatically.",
     "support": "Contact support"
+  },
+  "observations": {
+    "heading": "Optional local experience observations",
+    "disclosure": "If you opt in, this installation stores coarse page categories, interface mode and visible-view duration buckets for your account in this company for up to 35 days. It does not collect page text, prompts, names, email addresses or URLs, and sends nothing to an analytics provider. These are interface observations, not measurements of your work or successful outcomes. Turning this off deletes your observations from the active database. Operational backups follow the installation’s backup retention policy.",
+    "loading": "Checking your current choice…",
+    "failed": "Your current choice could not be checked.",
+    "on": "Local observations are on for this company.",
+    "off": "Local observations are off or collection is unavailable.",
+    "unknown": "The result could not be confirmed. Check your current choice before enabling again. You can always request withdrawal.",
+    "erased": "Your observations were deleted from the active database.",
+    "withdraw": "Turn off and delete observations",
+    "check": "Check current choice",
+    "enable": "Allow local observations"
   }
 }

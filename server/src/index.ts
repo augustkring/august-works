@@ -1,3 +1,4 @@
+import { eraseExpiredExperienceObservations } from "./services/experience/observations.js";
 import { securityEventExportService } from "./services/enterprise/security-events.js";
 import { reconcileSandboxSafety } from "./services/execution-sandbox/sandbox-guardian.js";
 import { reconcileAgentPackages, deliverAgentPackageStops } from "./services/agent-packages/package-jobs.js";
@@ -1224,6 +1225,7 @@ async function startServerWithDatabaseTeardown(
   const { workSignalService } = await import("./services/work-signals/work-signal-service.js");
   const executionControlSweeps = [
     ["model_reservations", () => expireModelReservations(db)],
+    ["experience_observation_retention", () => eraseExpiredExperienceObservations(db)],
     ["sandbox_safety", () => reconcileSandboxSafety(db, {
       hostMaxAgeSeconds: platform?.config.runtime.suspectSeconds,
       requestStop: platform ? input => platform.runtime.request(input.companyId, input.cellId, "sandbox-guardian", { action: "stop", idempotencyKey: input.idempotencyKey }, new Date(), "sandbox-guardian", input.generation) : undefined,

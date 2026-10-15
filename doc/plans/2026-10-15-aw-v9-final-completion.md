@@ -162,3 +162,27 @@ purpose, individual choice, minimal fields, erasure, bounded ingestion and
 retention, and must not send new experience data to Paperclip's existing
 default telemetry endpoint. Optional interoperability/provider adoption and
 qualified hosted/Human acceptance remain distinct from that software work.
+
+
+### Optional instance-local runtime observations
+
+The missing collection foundation for V9-008/085–088 now has strict shared
+contracts, recoverable processing-purpose metadata, migration 0501, own-person
+Native services/routes, bounded flag-independent retention, EN/DA account
+controls and a passive collector. Rollout and explicit individual opt-in are
+both required. No outbound Paperclip telemetry client, analytics provider,
+session replay, business writer or model is introduced. Current consent versions
+fence late samples after withdrawal/re-enable. Withdrawal erases own samples in
+its transaction even after company/rollout access loss; Original final account
+and company deletion cascade the new data. Preference writes are audited;
+passive samples are not duplicated into the independently retained Activity Log.
+
+See [the scoped implementation and verification record](2026-10-15-aw-v9-local-experience-observations.md).
+The corrected migrated PostgreSQL/shared/private-HTTP group passes 87 cases;
+the final targeted UI/shared group passes 53 cases. Direct server/UI types and
+token gates pass. The first built EN/DA account control run passes both cases;
+a dashboard-collection follow-up and broader current-source checks remain to
+finish. V9-008/087/088 move only to in_progress. This measures finite interface
+categories and coarse visible intervals, not Human interruptions, successful
+outcomes, support labour or a representative legacy-usage window. Release
+readiness and the outstanding qualification requirements remain unchanged.

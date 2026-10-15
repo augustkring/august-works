@@ -74,7 +74,7 @@ export function isPrivateExperienceHttpRequest(method: string | undefined, url: 
     || /^\/api\/companies\/[^/]*\/experience\/(?:workflows|workflow-drafts|workflow-draft-requests)(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]*\/experience\/orchestration(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/experience\/company(?:\/|$)/i.test(pathname)
-    || /^\/api\/companies\/[^/]+\/experience\/analytics(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/[^/]*\/experience\/(?:analytics|observations)(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/experience\/support-access(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/(?:[^/]*\/)*support-sessions(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/agent-package-installations\/[^/]+\/experience(?:\/|$)/i.test(pathname)
@@ -105,6 +105,7 @@ export function privateExperienceLogUrl(url: string): string {
   if (/\/experience\/(?:workflows|workflow-drafts|workflow-draft-requests)(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/workflow-authoring/:operation";
   if (/\/experience\/orchestration(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/orchestration";
   if (/\/experience\/company(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/company";
+  if (/\/experience\/observations(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/observations/:operation";
   if (/\/experience\/analytics(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/analytics";
   if (/\/experience\/support-access(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/support-access";
   if (/\/support-sessions(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/support-sessions/:operation";

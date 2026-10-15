@@ -6,7 +6,7 @@ V9-004,2163,authorization/staleness + Experience Orchestrator degradation/freshn
 V9-005,2165,experience profile resolver,in_progress
 V9-006,2167,progressive shell + Advanced entry,in_progress
 V9-007,2169,sidebar route compatibility + deep-link tests,in_progress
-V9-008,2171,legacy shell usage telemetry,not_started
+V9-008,2171,legacy shell usage telemetry,in_progress
 V9-009,2173,Home projection service,in_progress
 V9-010,2175,Home UI / accessible empty/loading/failure states,in_progress
 V9-011,2177,Needs You naming/IA migration over attention,in_progress
@@ -85,8 +85,8 @@ V9-083,2321,localization key migration for V9 surfaces,in_progress
 V9-084,2323,Danish/English reference locale QA if launch scope requires,in_progress
 V9-085,2325,UX event Data Processing Contracts + allow-listed schema/redaction/leakage tests,in_progress
 V9-086,2327,Time-to-first-outcome funnel,in_progress
-V9-087,2329,interruption/attention telemetry,not_started
-V9-088,2331,maintenance/support effort telemetry,not_started
+V9-087,2329,interruption/attention telemetry,in_progress
+V9-088,2331,maintenance/support effort telemetry,in_progress
 V9-089,2333,optional PostHog adapter + DPA/privacy feature gate,not_started
 V9-090,2335,onboarding exploratory usability pilot harness + confirmatory-validation preregistration,in_progress
 V9-091,2337,Slack-only employee journey E2E,not_started

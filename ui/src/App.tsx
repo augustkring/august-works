@@ -1,3 +1,4 @@
+import { ExperienceObservationCollector } from "./components/ExperienceObservationCollector";
 import {
   CustomerSupport,
   MaintenanceHistoryEntry,
@@ -936,6 +937,7 @@ export function App() {
 
   return (
     <>
+      <ExperienceObservationCollector />
       <Routes>
         <Route path="oauth-handoff" element={<PaperclipCloudOAuthHandoffPage />} />
         <Route path="auth" element={<AuthPage />} />

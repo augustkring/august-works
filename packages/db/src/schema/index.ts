@@ -310,3 +310,4 @@ export * from "./activation_connection_validations.js";
 export { agentConfigurationTests } from "./agent_configuration_tests.js";
 
 export * from "./saas_notification_channels.js";
+export * from "./experience_observations.js";
