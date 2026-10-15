@@ -6,7 +6,9 @@ test.use({ trace: "retain-on-failure" });
 
 // Bounded synthetic soak of the actual built shell and Native read owners.
 // Heap samples are observations, never a fabricated production memory budget.
-test("repeated long-thread navigation keeps virtual rows bounded in one browser document", async ({ page, request, baseURL }, info) => {
+for (const mode of ["classic", "current"] as const) {
+test(`${mode} long-thread navigation preserves its history in one browser document`, async ({ page, request, baseURL }, info) => {
+  const classic = mode === "classic";
   test.setTimeout(240000);
   page.setDefaultTimeout(10000);
   page.setDefaultNavigationTimeout(10000);
@@ -25,7 +27,7 @@ test("repeated long-thread navigation keeps virtual rows bounded in one browser 
   await client.send("Performance.enable");
   let primaryFailed = false;
   try {
-    await json(await request.patch("/api/instance/settings/experimental", { data: { enableClassicTaskInterface: true } }));
+    await json(await request.patch("/api/instance/settings/experimental", { data: { enableClassicTaskInterface: classic } }));
     const agent = await json(await request.post(`/api/companies/${company.id}/agents`, { data: {
       name: "Paused synthetic soak fixture", adapterType: "process", adapterConfig: { command: "/usr/bin/true" },
       runtimeConfig: { heartbeat: { enabled: false } }, budgetMonthlyCents: 0,
@@ -43,12 +45,13 @@ test("repeated long-thread navigation keeps virtual rows bounded in one browser 
     }
     await page.goto(`/${company.issuePrefix}/issues/${issue.identifier}`);
     const timeOrigin = await page.evaluate(() => performance.timeOrigin);
-    const fixture = page.getByTestId("issue-chat-thread-virtualizer");
+    const rows = classic ? page.getByTestId("issue-chat-thread-virtual-row") : page.locator('[data-thread-anchor][id^="comment-"]');
+    const fixture = classic ? page.getByTestId("issue-chat-thread-virtualizer") : rows.first();
     async function loadHistory() {
       const older = page.getByRole("button", { name: "Load earlier comments", exact: true });
-      const loadedCount = async () => await fixture.count()
-        ? Number(await fixture.getAttribute("data-virtual-count"))
-        : await page.getByTestId("issue-chat-message-row").count();
+      const loadedCount = async () => classic
+        ? await fixture.count() ? Number(await fixture.getAttribute("data-virtual-count")) : await page.getByTestId("issue-chat-message-row").count()
+        : await rows.count();
       await expect.poll(loadedCount).toBeGreaterThan(0);
       for (let batch = 0; batch < 20 && await loadedCount() < 500; batch++) {
         await expect(older).toBeEnabled();
@@ -66,13 +69,13 @@ test("repeated long-thread navigation keeps virtual rows bounded in one browser 
       console.info(`V9 soak cycle ${cycle}: current history`);
       await page.emulateMedia({ reducedMotion: cycle % 2 ? "reduce" : "no-preference" });
       await expect(fixture).toBeVisible();
-      const target = Number(await fixture.getAttribute("data-virtual-count"));
+      const target = classic ? Number(await fixture.getAttribute("data-virtual-count")) : 500;
       expect(target).toBeGreaterThanOrEqual(450);
-      const rows = page.getByTestId("issue-chat-thread-virtual-row");
       await expect(rows.first()).toBeVisible();
       const rendered = await rows.count();
       expect(rendered).toBeGreaterThan(0);
-      expect(rendered).toBeLessThan(target);
+      if (classic) expect(rendered).toBeLessThan(target);
+      else expect(rendered).toBe(target);
       await page.getByRole("main").evaluate(element => element.scrollTo({ top: element.scrollHeight, behavior: "instant" }));
       await expect(rows.first()).toBeAttached();
       // Real client navigation and browser Back retain the same shell/document.
@@ -105,9 +108,9 @@ test("repeated long-thread navigation keeps virtual rows bounded in one browser 
     expect(errors).toEqual([]);
     const artifact = info.outputPath("long-session-resource-observations.json");
     await writeFile(artifact, JSON.stringify({
-      qualification: "bounded-synthetic-software-soak", warmupCycles: 2, measuredCycles: 24,
+      qualification: "bounded-synthetic-software-soak", interface: mode, warmupCycles: 2, measuredCycles: 24,
       browser: page.context().browser()?.version(), viewport: page.viewportSize(), forcedGcPerSample: true,
-      sourceDataset: "500 synthetic comments through Native APIs on one unassigned backlog task; classic interface explicitly selected", samples,
+      sourceDataset: "500 synthetic comments through Native APIs on one unassigned backlog task; explicitly selected interface", samples,
       limits: "One Chromium document, synthetic data, forced-GC perturbation, no production resource or latency acceptance threshold; no hourly/mobile/hosted qualification.",
     }, null, 2) + "\n", { mode: 0o600 });
     await info.attach("long-session-resource-observations.json", { contentType: "application/json", path: artifact });
@@ -121,3 +124,5 @@ test("repeated long-thread navigation keeps virtual rows bounded in one browser 
     if (cleanupFailure) console.info("V9 soak cleanup failed after the primary failure");
   }
 });
+
+}
