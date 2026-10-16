@@ -18,7 +18,12 @@ Run `pnpm check:aw-v9-coverage` to check source inventory and traceability.
 `pnpm check:aw-v9-coverage -- --release` additionally requires resolved contracts,
 component paths and passed functional/accessibility/security/privacy/usability
 evidence for each surface tied to an exact artifact. A pending surface never
-passes release just because the brief describes it. Evidence entries have
+passes release just because the brief describes it. Release coverage also reads
+the canonical V7 and V8 registers. It refuses incomplete V7 implementation,
+incomplete V8 source, missing or open H6/H7 gates, and a missing V9 acceptance
+owner. Source checks remain available while these prerequisites are open.
+This checks retained declarations; it does not authenticate their evidence or
+certify production acceptance. Evidence entries have
 `kind`, `status`, `artifactSha` and repository `path` fields.
 
 See [architecture decisions](../../adr/V9-ARCHITECTURE-DECISIONS.md),
@@ -97,3 +102,8 @@ These mappings do not establish full provider/channel coverage, live-edit/legacy
 convergence, automatic reassignment/external cleanup, material permission/policy
 editing or complete approval-card settlement. Existing Native owners remain
 authoritative. All 70 launch rows and R0 remain open.
+
+The [2026-10-16 local runtime qualification checkpoint](evidence/2026-10-16-runtime-qualification/manifest.json)
+records actual fault/recovery, dump/restore, channel-fixture and built-browser
+results on merged master. It is separate from release-bound evidence. See the
+[remaining implementation boundaries](../../plans/2026-10-16-aw-v9-runtime-qualification.md).

@@ -1,6 +1,7 @@
 import { readFileSync, existsSync, realpathSync } from "node:fs";
 import { createHash } from "node:crypto";
 import { resolve, relative, isAbsolute } from "node:path";
+import { v9ReleasePrerequisiteFailures } from "./aw-v9-release-prerequisites.mjs";
 const root = resolve(import.meta.dirname, "..");
 const manifest = JSON.parse(
   readFileSync(resolve(root, "doc/experience/v9/coverage.json"), "utf8"),
@@ -20,14 +21,33 @@ const readiness = JSON.parse(
   readFileSync(resolve(root, "evals/aw-v9/readiness.json"), "utf8"),
 );
 const identity = readiness.releaseIdentity;
+if (release) {
+  try {
+    failures.push(
+      ...v9ReleasePrerequisiteFailures({
+        v9: readiness,
+        v8: JSON.parse(
+          readFileSync(resolve(root, "evals/aw-v8/readiness.json"), "utf8"),
+        ),
+        v7: JSON.parse(
+          readFileSync(resolve(root, "evals/aw-v7/pilot-readiness.json"), "utf8"),
+        ),
+      }),
+    );
+  } catch {
+    failures.push("Inherited release prerequisite registers are unavailable or invalid");
+  }
+}
 if (
   release &&
-  (!readiness.sourceComplete ||
+  (readiness.version !== 1 ||
+    readiness.sourceComplete !== true ||
     !identity ||
     !/^([a-f0-9]{40}|[a-f0-9]{64})$/.test(identity.artifactSha ?? "") ||
     !/^[a-f0-9]{40}$/.test(identity.sourceSha ?? "") ||
     !/^[a-f0-9]{64}$/.test(identity.configSha256 ?? "") ||
-    !identity.schemaVersion)
+    typeof identity.schemaVersion !== "string" ||
+    !identity.schemaVersion.trim())
 )
   failures.push(
     "Release requires complete source and an exact source/artifact/config/schema identity",

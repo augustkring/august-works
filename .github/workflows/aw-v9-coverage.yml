@@ -9,6 +9,10 @@ on:
       - 'ui/src/**'
       - 'doc/reference/aw-v9/brief/**'
       - 'scripts/check-aw-v9-coverage.mjs'
+      - 'scripts/aw-v9-release-prerequisites.mjs'
+      - 'scripts/__tests__/aw-v9-release-prerequisites.test.mjs'
+      - 'evals/aw-v7/pilot-readiness.json'
+      - 'evals/aw-v8/readiness.json'
       - 'scripts/aw-v9-reduced-motion.test.mjs'
       - 'scripts/aw-v9-status-contrast.test.mjs'
       - 'scripts/validate-aw-v9-pilot.mjs'
@@ -36,6 +40,8 @@ jobs:
         with:
           node-version: '24'
       - run: node scripts/check-aw-v9-coverage.mjs
+      - name: Verify inherited release blockers cannot be bypassed
+        run: node --test scripts/__tests__/aw-v9-release-prerequisites.test.mjs
       - name: Check frozen pilot and attention samples with private artifact validation
         run: >-
           node --test scripts/__tests__/aw-v9-pilot.test.mjs scripts/__tests__/aw-v9-pilot-files.test.mjs
