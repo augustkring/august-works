@@ -1,0 +1,159 @@
+{
+  "version": 1,
+  "evidenceKind": "local_software_qualification",
+  "applicationSourceSha": "9f1003e75a250f4bb43a9ef4d4d62b45cccc9448",
+  "applicationTreeSha": "7ddf24a7bcb2515ded6dd73b9866aa7546def174",
+  "checkedAtUtc": "2026-10-16T04:42:30Z",
+  "checks": [
+    {
+      "id": "runtime_fault_recovery",
+      "status": "passed_local",
+      "passedCases": 128,
+      "skippedOrExcludedCases": 1,
+      "logFileName": "aw-v9-runtime-qualification-20261016.log",
+      "logSha256": "8658c406beb329b635bd74cbaf84d33c5d0069396b51712776faa768ed2cc217"
+    },
+    {
+      "id": "real_pg_dump_restore",
+      "status": "passed_local",
+      "passedCases": 1,
+      "skippedOrExcludedCases": 0,
+      "logFileName": "aw-v9-real-restore-20261016.log",
+      "logSha256": "56a25ef1c8a20c956c98e4ef0a672e7e1b0d770b7289adf6fc55619a0b357a13"
+    },
+    {
+      "id": "slack_teams_native_transport_fixtures",
+      "status": "passed_local",
+      "passedCases": 5,
+      "skippedOrExcludedCases": 1043,
+      "logFileName": "aw-v9-channel-qualification-20261016.log",
+      "logSha256": "4d86f77f6e90b335e894e2fa6feacf22dd455422912ff735e82c669bbbc58ac2"
+    },
+    {
+      "id": "host_accessibility_evaluation_controls",
+      "status": "passed_local",
+      "passedCases": 53,
+      "skippedOrExcludedCases": 0,
+      "logFileName": "aw-v9-qualification-controls-20261016.log",
+      "logSha256": "d7d8c720cb750c35ac7f5711c393cda810e3f106c7fa59746b9c3d6c5ec4185f"
+    },
+    {
+      "id": "built_recovery_stop_browser",
+      "status": "passed_local",
+      "passedCases": 6,
+      "skippedOrExcludedCases": 0,
+      "logFileName": "aw-v9-browser-qualification-retry-20261016.log",
+      "logSha256": "429acb1a016ceb68d8b5441fbca0c2360aed037ebed61e8b49bc4cf48df1eceb"
+    },
+    {
+      "id": "final_script_portfolio",
+      "status": "passed_local",
+      "passedCases": 61,
+      "skippedOrExcludedCases": 0,
+      "logFileName": "aw-v9-qualification-final-scripts-20261016.log",
+      "logSha256": "1bb2bc8be24818fbec11ea9789c58a3c19940df86b1346aaa62985f2a39cd127"
+    },
+    {
+      "id": "workspace_types",
+      "status": "passed_local",
+      "logFileName": "aw-v9-qualification-types-20261016.log",
+      "logSha256": "69f78f634dc10596aca4cb2aacc9c544df4bb13f8438717e099a3f37180e8c4c"
+    },
+    {
+      "id": "workspace_build",
+      "status": "passed_local",
+      "logFileName": "aw-v9-qualification-build-20261016.log",
+      "logSha256": "c1da4202e0e5779d737f6e7c6eef1de67cd7913aef6932af88016f8e32cbb8be"
+    }
+  ],
+  "suiteSources": [
+    {
+      "path": "server/src/__tests__/v7-sandbox-qualification-faults.test.ts",
+      "sha256": "3ade25de930e530d370f29ba5f645bb0fccb383c3f633c5de848d5f124f46fc5"
+    },
+    {
+      "path": "server/src/__tests__/v7-sandbox-host-bridge.integration.test.ts",
+      "sha256": "15ff84c38f2c8446890d9632b58ca35f71e81b4198f2eafa148826da85f6c504"
+    },
+    {
+      "path": "server/src/__tests__/v7-sandbox.integration.test.ts",
+      "sha256": "5819b93aaf6d404dd8d7f4f29de1c6e34c1faf939eda3a410478ca786035cae6"
+    },
+    {
+      "path": "server/src/__tests__/v7-model-reservations.integration.test.ts",
+      "sha256": "be13e6f713a74e1cca01cda6c6fcb8d063774f1d910bbf54c0e37e687a0a7a2b"
+    },
+    {
+      "path": "server/src/__tests__/v7-worker-model-gateway.integration.test.ts",
+      "sha256": "0b269adbae7f611db238677bcd199793054eb4f03833cf3f518af9eb338fb705"
+    },
+    {
+      "path": "server/src/__tests__/v6-runtime-command-recovery.integration.test.ts",
+      "sha256": "6b4a9bd0e17bde6ae5e4e0bb0d4385a3bd2e060215521924bbf76eff437aa7f2"
+    },
+    {
+      "path": "server/src/__tests__/v6-database-quarantine.integration.test.ts",
+      "sha256": "40085f65af7dd4c8d095c41de37927fcbfb1be078ea36231f8f2ec1cf0b9804f"
+    },
+    {
+      "path": "server/src/__tests__/v9-runtime-recovery.integration.test.ts",
+      "sha256": "211df95343aba0073a07eaeecc6291195ad1abefa3d409c867be16a1ce0e2583"
+    },
+    {
+      "path": "server/src/__tests__/v9-workflow-recovery.integration.test.ts",
+      "sha256": "37e5306627eda6decf7b209d5bbcd24a0f501625ef5568f5a4c49da249206ed3"
+    },
+    {
+      "path": "server/src/__tests__/v9-connector-recovery.integration.test.ts",
+      "sha256": "c3c6907747326824d66af1fead02f847f6b356a9de9a71ba08cf58725d006659"
+    },
+    {
+      "path": "server/src/__tests__/chat-channels.integration.test.ts",
+      "sha256": "3a5f87add0b9c8a5d3fe7f0b4bc5e830f425a02784545b8acae55b69e89da880"
+    },
+    {
+      "path": "tests/e2e/aw-v9-runtime-recovery.spec.ts",
+      "sha256": "245e49e63c6a17b87bcdc5781e176348ec458d537f99089e5c5a1958ac5514c1"
+    },
+    {
+      "path": "tests/e2e/aw-v9-workflow-recovery.spec.ts",
+      "sha256": "ac3cc83ff84d3ca8295f7d31d31aaee4629cb0e6161f6756a3781f574d6b0519"
+    },
+    {
+      "path": "tests/e2e/aw-v9-connector-recovery.spec.ts",
+      "sha256": "cd33636f05fcc78f4a9f109e4d814fa816d428b5e509ac2632a5776d2218cac6"
+    },
+    {
+      "path": "tests/e2e/aw-v9-workflow-request-recovery.spec.ts",
+      "sha256": "a00a5cbc9d9d4c3ba4e1b04cccff39c216623bbf3a4a09dc553c800f00046c47"
+    },
+    {
+      "path": "tests/e2e/aw-v9-workflow-retained-stop.spec.ts",
+      "sha256": "cd5609117c93ddc4ab5dbeaa9c983089970f59475d8b8a79130c246585d6d047"
+    }
+  ],
+  "postgresClientImage": "postgres@sha256:5a5a84b19854a9ffaa54082c166ff4ec27473a361e496e5ea167f298f2da9722",
+  "limitations": [
+    "The initial database quarantine case was skipped without the client image; its separate pinned-image rerun passed and is recorded above.",
+    "The first browser invocation failed before tests because temporary disk space was exhausted; only the corrected invocation is credited.",
+    "Channel tests use explicit synthetic transports; the 1043 other channel cases were excluded by the name filter.",
+    "Browser projection fixtures and automated accessibility checks do not establish live runtime behavior, manual screen-reader acceptance or representative usability.",
+    "Local log hashes identify retained workspace files; they do not authenticate externally retained artifacts or constitute release-bound AssuranceEvidence.",
+    "The three inherited V7 implementation blockers, V8 source acceptance and H6/H7 operating gates remain open.",
+    "The script selections overlap; case counts must not be added together."
+  ],
+  "releaseControlSources": [
+    {
+      "path": "scripts/aw-v9-release-prerequisites.mjs",
+      "sha256": "07f50046f72576574b5dd98d28af6e21aa75d2f4ee2f30d9230ecb7d89978cd4"
+    },
+    {
+      "path": "scripts/check-aw-v9-coverage.mjs",
+      "sha256": "11c0357020a7a400bb176305bdd684149218fe34132689376f2a1c55f4477178"
+    },
+    {
+      "path": "scripts/__tests__/aw-v9-release-prerequisites.test.mjs",
+      "sha256": "cb3bb7b1766445cc11ff74bb75dc2e82f3ad42b4bb6aff0ee70c473f02480321"
+    }
+  ]
+}

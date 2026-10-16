@@ -16,5 +16,8 @@
     "pre-registered confirmatory usability",
     "hosted runtime/provider/channel qualification",
     "performance and recovery fault evidence"
+  ],
+  "localQualificationCheckpoints": [
+    "doc/experience/v9/evidence/2026-10-16-runtime-qualification/manifest.json"
   ]
 }
