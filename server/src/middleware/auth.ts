@@ -25,6 +25,7 @@ import { agentRunWritesRevoked } from "../agent-run-cancellation.js";
 import { isUuidLike, normalizeAgentApiKeyScope, type DeploymentMode } from "@paperclipai/shared";
 import type { BetterAuthSessionResult } from "../auth/better-auth.js";
 import { logger } from "./logger.js";
+import { stripSecretBearingUrlParts } from "./redact-sensitive.js";
 import { captureRunIdentity } from "../services/run-identity.js";
 import { boardAuthService } from "../services/board-auth.js";
 
@@ -158,26 +159,40 @@ async function auditAgentJwtRunHeaderMismatch(
   db: Db,
   input: { companyId: string; agentId: string; claimRunId: string; headerRunId: string; method: string; url: string },
 ) {
+  // Retain opaque identifiers, never arbitrary header/claim prose or URL secrets.
+  const claimRunId = isUuidLike(input.claimRunId) ? input.claimRunId.trim() : null;
+  const headerRunId = isUuidLike(input.headerRunId) ? input.headerRunId.trim() : null;
   try {
-    await db.insert(activityLog).values({
-      companyId: input.companyId,
-      actorType: "agent",
-      actorId: input.agentId,
-      action: "auth.agent_jwt_run_header_mismatch",
-      entityType: "heartbeat_run",
-      entityId: input.claimRunId,
-      ...(isUuidLike(input.agentId) ? { agentId: input.agentId } : {}),
-      ...(isUuidLike(input.claimRunId) ? { runId: input.claimRunId } : {}),
-      details: {
-        claimRunId: input.claimRunId,
-        headerRunId: input.headerRunId,
-        method: input.method,
-        url: input.url,
-      },
+    await db.transaction(async (tx) => {
+      // Lock the scoped run through the insert: a prior deletion omits the FK,
+      // while a concurrent deletion cannot invalidate an already selected run.
+      const [claimedRun] = claimRunId
+        ? await tx.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+            eq(heartbeatRuns.id, claimRunId),
+            eq(heartbeatRuns.companyId, input.companyId),
+            eq(heartbeatRuns.agentId, input.agentId),
+          )).for("key share")
+        : [];
+      await tx.insert(activityLog).values({
+        companyId: input.companyId,
+        actorType: "agent",
+        actorId: input.agentId,
+        action: "auth.agent_jwt_run_header_mismatch",
+        entityType: "heartbeat_run",
+        entityId: claimRunId ?? "invalid-run-id",
+        ...(isUuidLike(input.agentId) ? { agentId: input.agentId } : {}),
+        ...(claimedRun ? { runId: claimedRun.id } : {}),
+        details: {
+          claimRunId,
+          headerRunId,
+          method: input.method.slice(0, 16),
+          url: stripSecretBearingUrlParts(input.url).slice(0, 2048),
+        },
+      });
     });
   } catch (err) {
     logger.warn(
-      { err, companyId: input.companyId, agentId: input.agentId, claimRunId: input.claimRunId },
+      { err, companyId: input.companyId, agentId: input.agentId, claimRunId },
       "Failed to audit rejected agent JWT run header mismatch",
     );
   }

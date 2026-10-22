@@ -1,5 +1,7 @@
 import { createHash, createHmac, randomUUID } from "node:crypto";
 import express from "express";
+import { PgDialect } from "drizzle-orm/pg-core";
+import type { SQL } from "drizzle-orm";
 import request from "supertest";
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -18,12 +20,13 @@ function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
 }
 
-function createSelectChain(rowsForTable: (table: unknown) => unknown[]) {
+function createSelectChain(rowsForTable: (table: unknown, condition: SQL) => unknown[]) {
   return {
     from(table: unknown) {
       return {
-        where() {
-          return Promise.resolve(rowsForTable(table));
+        where(condition: SQL) {
+          const result = Promise.resolve(rowsForTable(table, condition));
+          return Object.assign(result, { for: (_strength: string) => result });
         },
       };
     },
@@ -67,11 +70,14 @@ function createDbState(input: {
 
   const db = {
     select: () =>
-      createSelectChain((table) => {
+      createSelectChain((table, condition) => {
         if (table === boardApiKeys) return [];
         if (table === agentApiKeys) return keyRow ? [keyRow] : [];
         if (table === agents) return [agentRow];
-        if (table === heartbeatRuns) return runRow ? [runRow] : [];
+        if (table === heartbeatRuns) {
+          const parameters = new PgDialect().sqlToQuery(condition).params;
+          return runRow && parameters.every(value => [runRow.id, runRow.companyId, runRow.agentId].includes(value as string)) ? [runRow] : [];
+        }
         return [];
       }),
     update: () => ({
@@ -83,9 +89,16 @@ function createDbState(input: {
         };
       },
     }),
+    transaction: async (operation: (tx: unknown) => Promise<unknown>) => operation(db),
     insert: (table: unknown) => ({
       values(values: Record<string, unknown>) {
-        if (table === activityLog) activity.push(values);
+        if (table === activityLog) {
+          // Model the real FK: the original bug swallowed this failed insert.
+          if (values.runId && values.runId !== runRow?.id) {
+            return Promise.reject(Object.assign(new Error("activity_log run_id foreign key violation"), { code: "23503" }));
+          }
+          activity.push(values);
+        }
         return Promise.resolve([]);
       },
     }),
@@ -424,6 +437,53 @@ describe("agent auth middleware", () => {
       runId,
       details: { claimRunId: runId, headerRunId: spoofedRunId },
     });
+  });
+
+  it.each(["missing", "other company", "other agent"])("retains rejected JWT mismatch evidence for a %s claimed run", async (kind) => {
+    const companyId = randomUUID();
+    const agentId = randomUUID();
+    const claimRunId = randomUUID();
+    const headerRunId = randomUUID();
+    const { db, activity } = createDbState({
+      agent: { id: agentId, companyId },
+      ...(kind === "missing" ? {} : { run: { id: claimRunId,
+        companyId: kind === "other company" ? randomUUID() : companyId,
+        agentId: kind === "other agent" ? randomUUID() : agentId } }),
+    });
+    const token = createLocalAgentJwt(agentId, companyId, "codex_local", claimRunId, "user-claim");
+    const response = await request(createApp(db, "local_trusted"))
+      .get(`/companies/${companyId}/protected`)
+      .set("Authorization", `Bearer ${token}`)
+      .set("X-Paperclip-Run-Id", headerRunId);
+    expect(response.status).toBe(422);
+    expect(response.body.code).toBe("agent_jwt_run_id_mismatch");
+    expect(activity).toHaveLength(1);
+    expect(activity[0]).toMatchObject({ companyId, actorType: "agent", actorId: agentId,
+      action: "auth.agent_jwt_run_header_mismatch", entityType: "heartbeat_run", entityId: claimRunId,
+      details: { claimRunId, headerRunId } });
+    expect(activity[0].runId).toBeUndefined();
+  });
+
+  it.each(["query", "long path", "invalid claim"])("bounds mismatch audit metadata without retaining secrets: %s", async (kind) => {
+    const companyId = randomUUID();
+    const agentId = randomUUID();
+    const runId = randomUUID();
+    const claimRunId = kind === "invalid claim" ? `private-claim-canary${"x".repeat(4000)}` : runId;
+    const headerRunId = `private-header-canary${"x".repeat(4000)}`;
+    const { db, activity } = createDbState({ agent: { id: agentId, companyId },
+      run: { id: runId, companyId, agentId } });
+    const token = createLocalAgentJwt(agentId, companyId, "codex_local", claimRunId, "user-claim");
+    const path = kind === "long path" ? `/actor/${"p".repeat(4000)}` : "/actor";
+    const response = await request(createApp(db))
+      .get(`${path}?ticket=private-query-canary`)
+      .set("Authorization", `Bearer ${token}`)
+      .set("X-Paperclip-Run-Id", headerRunId);
+    expect(response.status).toBe(422);
+    expect(activity).toHaveLength(1);
+    expect(JSON.stringify(activity)).not.toContain("private-");
+    expect(activity[0].details).toMatchObject({ claimRunId: kind === "invalid claim" ? null : runId,
+      headerRunId: null, method: "GET", url: path.slice(0, 2048) });
+    expect(activity[0].entityId).toBe(kind === "invalid claim" ? "invalid-run-id" : runId);
   });
 
   it("falls back to the run row responsible user for legacy claim-less agent JWTs", async () => {
