@@ -283,7 +283,7 @@ export function buildWorktreeConfig(input: {
       disableSignUp: source?.auth.disableSignUp ?? false,
     },
     telemetry: {
-      enabled: source?.telemetry?.enabled ?? true,
+      enabled: source?.telemetry?.enabled === true,
     },
     storage: {
       provider: source?.storage.provider ?? "local_disk",

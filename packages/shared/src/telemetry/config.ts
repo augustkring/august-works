@@ -63,6 +63,19 @@ function isCI(): boolean {
   return CI_ENV_VARS.some((key) => process.env[key] === "true" || process.env[key] === "1");
 }
 
+/** Invalid destinations never admit collection or expose their raw value. */
+export function resolveTelemetryEndpoint(value: string | undefined): string | undefined {
+  if (!value?.trim()) return undefined;
+  try {
+    const endpoint = new URL(value.trim());
+    if (!["http:", "https:"].includes(endpoint.protocol) || endpoint.username ||
+      endpoint.password || endpoint.search || endpoint.hash) return undefined;
+    return endpoint.toString();
+  } catch {
+    return undefined;
+  }
+}
+
 export function resolveTelemetryConfig(
   fileConfig?: { enabled?: boolean } & TelemetryConfigOverrides,
 ): TelemetryConfig {
@@ -77,10 +90,10 @@ export function resolveTelemetryConfig(
   if (isCI()) {
     return { enabled: false, ...caps };
   }
-  if (fileConfig?.enabled === false) {
+  if (fileConfig?.enabled !== true) {
     return { enabled: false, ...caps };
   }
 
-  const endpoint = process.env.PAPERCLIP_TELEMETRY_ENDPOINT || undefined;
-  return { enabled: true, endpoint, ...caps };
+  const endpoint = resolveTelemetryEndpoint(process.env.PAPERCLIP_TELEMETRY_ENDPOINT);
+  return { enabled: !!endpoint, endpoint, ...caps };
 }

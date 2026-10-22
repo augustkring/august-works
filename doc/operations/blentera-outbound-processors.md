@@ -39,10 +39,33 @@ asset reads; content-addressed assets; and sandboxed animation documents with a
 network-denying CSP. This permits a qualified operator-owned notice feed. It does
 not prove that an arbitrary selected publisher's copy or links are approved.
 
+## First-party Telemetry
+
+First-party Telemetry defaults off. Both `telemetry.enabled: true` in instance
+configuration and an explicitly selected `PAPERCLIP_TELEMETRY_ENDPOINT` are
+required. The destination must be HTTP(S), with no URL credentials, query or
+fragment. Existing CI, `DO_NOT_TRACK=1` and `PAPERCLIP_TELEMETRY_DISABLED=1`
+suppression remains authoritative. New CLI configuration defaults off; copying
+a worktree preserves an existing explicit enabled choice.
+
+There is no built-in processor or fallback destination, and redirects are
+refused. Missing or invalid configuration does not create installation state,
+hash private references, start flush timers or send events. Enabled clients
+retain the existing event envelope, bounded queues and retries, using only the
+selected destination. The event contract and dimension restrictions remain in
+`packages/shared/src/telemetry/README.md`; selecting a destination does not
+qualify its processor, retention or permitted purposes.
+
+Server and CLI configuration is resolved at process initialization. Restart to
+apply changed settings. This is not a live consent withdrawal mechanism and
+does not promise to clear a previously initialized client's queue. Optional
+product analytics policy and live withdrawal remain separate qualification.
+
 ## Remaining qualification
 
-The separate first-party Telemetry owner and OpenTelemetry operator endpoint
-must be reconciled along with model, connector, support, update, package,
-browser and runtime egress. Feedback and announcement tests are scoped software
-evidence. Full V10-148 inventory, deployment notices, privacy review and actual
-deployment qualification remain open until their own evidence is recorded.
+The OpenTelemetry operator endpoint must be reconciled along with model,
+connector, support, update, package, browser and runtime egress. Feedback,
+announcement and first-party Telemetry tests are scoped software evidence.
+Full V10-148 inventory, deployment notices, processor legal/region/retention
+qualification and actual deployment qualification remain open until their own
+evidence is recorded.

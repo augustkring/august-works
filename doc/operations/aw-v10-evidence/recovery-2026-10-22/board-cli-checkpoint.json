@@ -49,7 +49,8 @@
       "log": "up02-ui-final-green.log.txt",
       "result": "PASS",
       "testsPassed": 30,
-      "note": "Use raw log for projects. Final UI/copy bytes stable. Includes auth lifecycle and actual Danish consent copy."
+      "note": "Use raw log for projects. Final UI/copy bytes stable. Includes auth lifecycle and actual Danish consent copy.",
+      "command": "node node_modules/vitest/vitest.mjs run ui/src/pages/Auth.test.tsx ui/src/i18n/locale-validation.test.ts --maxWorkers=1"
     },
     {
       "command": "node node_modules/vitest/vitest.mjs run cli/src/__tests__/board-auth.test.ts --maxWorkers=1",
@@ -66,16 +67,23 @@
       "result": "PASS",
       "testsPassed": 1,
       "deselectedByNameFilter": 17,
-      "note": "Focused final-source real-PG correction; precise name filter must be verified from original agent capture before repeating.",
+      "note": "Focused final-source real PostgreSQL correction; other 17 tests intentionally deselected.",
       "observations": [
         "Physical board_api_keys DELETE triggers actual FK SET NULL",
         "Retained approvedAt stays terminal; same/other approvers cannot resurrect key"
-      ]
+      ],
+      "command": "node node_modules/vitest/vitest.mjs run server/src/services/board-auth.test.ts --maxWorkers=1 -t 'keeps consent terminal after physical key deletion'"
     },
     {
       "command": "pnpm check:token-gates",
       "log": "up02-token-gates.log.txt",
       "result": "PASS"
+    },
+    {
+      "command": "pnpm --filter @paperclipai/ui typecheck",
+      "result": "PASS",
+      "log": "up02-ui-typecheck-current.log.txt",
+      "note": "Normal current UI typecheck after final CliAuth/ENDA edits, before next global auth audit schema work."
     }
   ],
   "logs": [
@@ -113,6 +121,11 @@
       "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up02-token-gates.log.txt",
       "sha256": "c1c757b9e9f2ecda1deecd4a037fcc7c49285b496f25744d4c17d3778b33b3af",
       "sizeBytes": 314
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up02-ui-typecheck-current.log.txt",
+      "sha256": "95d09526415f43fb0567543e66baf52e473a4f2dedb40ab03dc04279fd41a946",
+      "sizeBytes": 72
     }
   ],
   "review": {

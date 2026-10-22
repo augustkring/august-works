@@ -120,7 +120,7 @@ When your task produces a user-inspectable deliverable file, follow the Papercli
 7. Name the three data paths correctly.
 This repo has three separate data paths. Do not confuse them. Match a change to a path by its file path, not by the word "observability" or "telemetry" alone.
 
-- **Telemetry** is the Paperclip first-party event system. It is opt-out and it sends data to a Paperclip endpoint by default. Its paths are:
+- **Telemetry** is the first-party event system. It is off by default and requires explicit operator enablement and an explicit destination. Its paths are:
   - `packages/shared/src/telemetry/`
   - the generated contract `packages/shared/src/telemetry/generated/paperclip-telemetry.ts`
   - each caller of `packages/shared/src/telemetry/events.ts` or `packages/shared/src/telemetry/client.ts`
@@ -137,7 +137,7 @@ This repo has three separate data paths. Do not confuse them. Match a change to 
 
 Apply a review level that matches the path:
 
-- **Telemetry change (strict review).** The author updates the generated contract first. The author updates `packages/shared/src/telemetry/README.md` in the same pull request. The author requests a privacy review. Reason: a Telemetry event goes to a Paperclip endpoint by default, so a mistake sends data immediately.
+- **Telemetry change (strict review).** The author updates the generated contract first. The author updates `packages/shared/src/telemetry/README.md` in the same pull request. The author requests a privacy review. Reason: enabled Telemetry sends data outside the instance, so its admission, destination and payload need privacy review.
 - **Observability change (lighter review).** The operator endpoint gate stays in place. The no-operation behaviour stays when no endpoint is set. A privacy review is not necessary while the change stays inside the closed span-attribute allowlist.
 - **Run-log change (no extra review).** A run-log change needs neither review level above, because the data stays in the instance database.
 

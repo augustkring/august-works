@@ -1,0 +1,110 @@
+2026-10-22T19:41:58Z
+c83b40dc1eb18d2dc1c80e493ea110ef98bf4213
+e598e3b5c6e16a9c0bc43e295f5d079b2df572c294c0e1215ecb9003572cdf56  packages/shared/src/config-schema.ts
+9011e87ec6649d7a4d351228398e5bfc4acdda82acc2d97f0869a3feabca832d  packages/shared/src/telemetry/config.ts
+e56c8c28be0c5f7675aff6f1049c065412897e6cf2717c057c3f790761080235  packages/shared/src/telemetry/client.ts
+e790eb0719b9f5692c765fa2c490d861715c0db6df38b13e5faebfde6d17ade3  packages/shared/src/telemetry/admission.test.ts
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/shared| src/telemetry/admission.test.ts (13 tests | 9 failed) 387ms
+     × defaults parsed and resolved configuration off, including endpoint-only configuration 18ms
+     × never initializes state, private hashes, timers or fetch for an inadmissible endpoint: undefined 4ms
+     × never initializes state, private hashes, timers or fetch for an inadmissible endpoint:  2ms
+     × never initializes state, private hashes, timers or fetch for an inadmissible endpoint: ftp://telemetry.example.test/ingest 2ms
+     × never initializes state, private hashes, timers or fetch for an inadmissible endpoint: https://user:private-credential@telemetry.example.test 2ms
+     × never initializes state, private hashes, timers or fetch for an inadmissible endpoint: https://telemetry.example.test?token=private-credential 1ms
+     × never initializes state, private hashes, timers or fetch for an inadmissible endpoint: https://telemetry.example.test#private-fragment 2ms
+     × keeps an explicitly disabled client closed even with a valid destination 3ms
+     × sends an opted-in event only to the selected receiver and refuses its redirect 336ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 9 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/shared| src/telemetry/admission.test.ts > explicit telemetry admission > defaults parsed and resolved configuration off, including endpoint-only configuration
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/telemetry/admission.test.ts:18:60
+     16|
+     17|   it("defaults parsed and resolved configuration off, including endpoi…
+     18|     expect(telemetryConfigSchema.parse(undefined).enabled).toBe(false);
+       |                                                            ^
+     19|     expect(resolveTelemetryConfig().enabled).toBe(false);
+     20|     expect(resolveTelemetryConfig({ enabled: true }).enabled).toBe(fal…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/9]⎯
+
+ FAIL  |@paperclipai/shared| src/telemetry/admission.test.ts > explicit telemetry admission > never initializes state, private hashes, timers or fetch for an inadmissible endpoint: undefined
+ FAIL  |@paperclipai/shared| src/telemetry/admission.test.ts > explicit telemetry admission > never initializes state, private hashes, timers or fetch for an inadmissible endpoint: 
+ FAIL  |@paperclipai/shared| src/telemetry/admission.test.ts > explicit telemetry admission > never initializes state, private hashes, timers or fetch for an inadmissible endpoint: ftp://telemetry.example.test/ingest
+ FAIL  |@paperclipai/shared| src/telemetry/admission.test.ts > explicit telemetry admission > never initializes state, private hashes, timers or fetch for an inadmissible endpoint: https://user:private-credential@telemetry.example.test
+ FAIL  |@paperclipai/shared| src/telemetry/admission.test.ts > explicit telemetry admission > never initializes state, private hashes, timers or fetch for an inadmissible endpoint: https://telemetry.example.test?token=private-credential
+ FAIL  |@paperclipai/shared| src/telemetry/admission.test.ts > explicit telemetry admission > never initializes state, private hashes, timers or fetch for an inadmissible endpoint: https://telemetry.example.test#private-fragment
+AssertionError: expected true to be false // Object.is equality
+
+- Expected
++ Received
+
+- false
++ true
+
+ ❯ src/telemetry/admission.test.ts:40:65
+     38|       vi.useFakeTimers();
+     39|       vi.stubEnv("PAPERCLIP_TELEMETRY_ENDPOINT", endpoint);
+     40|       expect(resolveTelemetryConfig({ enabled: true }).enabled).toBe(f…
+       |                                                                 ^
+     41|       const stateFactory = vi.fn(() => ({ installId: "fixture-install"…
+     42|         createdAt: "2026-10-22T00:00:00Z", firstSeenVersion: "fixture"…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/9]⎯
+
+ FAIL  |@paperclipai/shared| src/telemetry/admission.test.ts > explicit telemetry admission > keeps an explicitly disabled client closed even with a valid destination
+Error: Disabled telemetry opened installation state
+ ❯ TelemetryClient.<anonymous> src/telemetry/admission.test.ts:59:46
+     57|
+     58|   it("keeps an explicitly disabled client closed even with a valid des…
+     59|     const stateFactory = vi.fn(() => { throw new Error("Disabled telem…
+       |                                              ^
+     60|     const client = new TelemetryClient({ enabled: false, endpoint: "ht…
+     61|     trackCompanyImported(client, { sourceType: "local_path", sourceRef…
+ ❯ TelemetryClient.getState src/telemetry/client.ts:486:25
+ ❯ TelemetryClient.hashPrivateRef src/telemetry/client.ts:477:24
+ ❯ trackCompanyImported src/telemetry/events.ts:31:39
+ ❯ src/telemetry/admission.test.ts:61:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/9]⎯
+
+ FAIL  |@paperclipai/shared| src/telemetry/admission.test.ts > explicit telemetry admission > sends an opted-in event only to the selected receiver and refuses its redirect
+AssertionError: expected 1 to be +0 // Object.is equality
+
+- Expected
++ Received
+
+- 0
++ 1
+
+ ❯ src/telemetry/admission.test.ts:103:26
+    101|       expect(received).toHaveLength(2);
+    102|       expect(JSON.parse(received[0]!).events).toEqual([expect.objectCo…
+    103|       expect(redirected).toBe(0);
+       |                          ^
+    104|     } finally {
+    105|       await Promise.all([processor, receiver].map(server => new Promis…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/9]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  9 failed | 4 passed (13)
+   Start at  19:41:59
+   Duration  1.24s (transform 266ms, setup 0ms, import 440ms, tests 387ms, environment 0ms)
+
+VITEST_EXIT=1
