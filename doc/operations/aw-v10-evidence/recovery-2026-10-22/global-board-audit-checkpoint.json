@@ -77,6 +77,12 @@
       "result": "PASS",
       "log": "up02-server-typecheck-final.log.txt",
       "scope": "Normal Runner protocol/eval/release/replay and SDK prerequisites followed by actual full server tsc; after final global/replay/import corrections."
+    },
+    {
+      "command": "GOMEMLIMIT=6GiB GOMAXPROCS=2 NODE_OPTIONS=--max-old-space-size=6144 pnpm --filter paperclipai typecheck",
+      "result": "PASS",
+      "log": "up02-cli-typecheck-current.log.txt",
+      "scope": "Normal full CLI typecheck after final global/replay/fixture and ProductIdentity TypeScript changes, before UP03 source edits."
     }
   ],
   "logs": [
@@ -124,6 +130,11 @@
       "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up02-server-typecheck-final.log.txt",
       "sha256": "ad88e7ca73b69cd6ece32f89fbb5b91916fac0e0089d3f7172020ca4a3c84254",
       "sizeBytes": 7859
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up02-cli-typecheck-current.log.txt",
+      "sha256": "efef6acb9c48203c26db1ec6787acecc976e0f6c11711e986101a50a81b5b3d1",
+      "sizeBytes": 92
     }
   ],
   "review": {
@@ -135,8 +146,8 @@
   "limitations": [
     "Retained opaque user/key attribution is pseudonymous personal security evidence, not anonymous or immediate erasure",
     "Expiry batch is capped at1000 per existing native sweep; offline servers do not run retention",
-    "Ordinary CLI typecheck currently running separately; no result inferred",
-    "Whole-repository required checks, assembled browser/provider journeys and full V10 source/operating qualification remain open"
+    "Whole-repository required checks, assembled browser/provider journeys and full V10 source/operating qualification remain open",
+    "These scoped typecheck results precede subsequent UP03 work; they are not automatically current after new source changes."
   ],
   "sourceComplete": false,
   "prReady": false
