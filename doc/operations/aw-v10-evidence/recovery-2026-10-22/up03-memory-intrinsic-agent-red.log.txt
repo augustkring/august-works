@@ -1,0 +1,114 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v10-private-payload.integration.test.ts (32 tests | 1 failed | 31 skipped) 12279ms
+     × does not transfer an intrinsic private Agent root through an actually shared and reviewed Memory copy 719ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-payload.integration.test.ts > Private ordinary payloads retain current source authority without analytical roots > does not transfer an intrinsic private Agent root through an actually shared and reviewed Memory copy
+AssertionError: expected { record: { …(44) }, …(1) } to be null
+
+- Expected:
+null
+
++ Received:
+{
+  "evidence": [
+    {
+      "citationJson": {
+        "label": "Agent-private memory",
+      },
+      "companyId": "1529ad04-6d12-4b74-a8a1-97372808f550",
+      "createdAt": 2026-10-22T21:41:22.694Z,
+      "excerptHash": "aecc24132d837e1f307a313ba975bc6c05767893c2fc4756500884015bf5f3e1",
+      "id": "7706c408-af72-4993-bfde-2a0461544abf",
+      "memoryRecordId": "5e8c7896-a68c-4584-9520-f5ce469cfc3f",
+      "observedAt": 2026-10-22T21:41:22.753Z,
+      "sourceClass": "private_memory",
+      "sourceProvider": "august_works_memory",
+      "sourceRef": "memory://private/10da9418-84f3-4675-b186-93878b1c8608",
+      "sourceType": "memory_record",
+      "sourceUpdatedAt": 2026-10-22T21:41:22.565Z,
+      "sourceVersion": "2026-10-22T21:41:22.565Z",
+      "supportsOrContradicts": "supports",
+      "trustLevel": "low",
+    },
+  ],
+  "record": {
+    "bindingId": "108b609e-6f8c-460f-8b35-2a468121c9c4",
+    "companyId": "1529ad04-6d12-4b74-a8a1-97372808f550",
+    "confidenceScore": 0.5,
+    "content": "PRIVATE retained source",
+    "createdAt": 2026-10-22T21:41:22.764Z,
+    "createdByActorId": "272a44c2-d9d1-4ed0-89a4-b350c467ef25",
+    "createdByActorType": "agent",
+    "createdByOperationId": "57e5bba5-ef75-45b2-8954-bbb773d86cfa",
+    "deletedAt": null,
+    "expiresAt": null,
+    "id": "5e8c7896-a68c-4584-9520-f5ce469cfc3f",
+    "importance": 50,
+    "memoryType": "lesson",
+    "metadata": {
+      "promotedFromOwnerAgentId": "272a44c2-d9d1-4ed0-89a4-b350c467ef25",
+      "promotedFromPrivateRecordId": "10da9418-84f3-4675-b186-93878b1c8608",
+      "promotionReason": "Propose a source-bound lesson",
+      "shareOperationContextFingerprint": null,
+      "shareOperationFingerprint": "712582fc6ceee4a4b9b03575942c121545740ddacd6ee5ab99347973c41a52f8",
+    },
+    "observedAt": 2026-10-22T21:41:22.528Z,
+    "ownerAgentId": null,
+    "privateOwnerUserId": null,
+    "providerKey": "local",
+    "retentionPolicy": "standard",
+    "retentionState": "active",
+    "reviewState": "accepted",
+    "revocationReason": null,
+    "revokedAt": null,
+    "revokedByActorId": null,
+    "revokedByActorType": null,
+    "scopeId": null,
+    "scopeType": "company",
+    "sensitivityLabel": "internal",
+    "sourceFoundationRevisionIds": [],
+    "sourceIssueIds": [],
+    "sourceMemoryIds": [
+      "10da9418-84f3-4675-b186-93878b1c8608",
+    ],
+    "sourceProjectIds": [],
+    "sourceProvenanceQualified": true,
+    "sourceRunIds": [
+      "b326a2d4-3157-4734-94bf-e94e3b823d1c",
+    ],
+    "subjectId": null,
+    "subjectType": null,
+    "summary": null,
+    "supersededByRecordId": null,
+    "supersedesRecordId": null,
+    "title": "Private source lesson",
+    "updatedAt": 2026-10-22T21:41:22.896Z,
+    "validFrom": null,
+    "validUntil": null,
+    "verificationState": "human_verified",
+  },
+}
+
+ ❯ src/__tests__/v10-private-payload.integration.test.ts:518:8
+    516|     await expect(memoryService(db).get(companyId,shared.record.id,{
+    517|       principal:{type:"agent",agentId:readerAgentId,responsibleUserId:…
+    518|     })).resolves.toBeNull();
+       |        ^
+    519|     await expect(memoryService(db).get(companyId,shared.record.id,memo…
+    520|     await expect(memoryService(db).getShared(companyId,shared.record.i…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 31 skipped (32)
+   Start at  21:40:36
+   Duration  46.35s (transform 23.17s, setup 162ms, import 33.51s, tests 12.28s, environment 0ms)
+

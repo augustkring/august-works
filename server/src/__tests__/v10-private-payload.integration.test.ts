@@ -499,4 +499,25 @@ describe("Private ordinary payloads retain current source authority without anal
     expect(await db.select().from(contextManifests).where(eq(contextManifests.runId,producerRunId))).toHaveLength(0);
   });
 
+  it("does not transfer an intrinsic private Agent root through an actually shared and reviewed Memory copy",async()=>{
+    const producerRunId=randomUUID();
+    await db.insert(heartbeatRuns).values({id:producerRunId,companyId,agentId,responsibleUserId:ownerId,runtimeMode:"native",status:"running"});
+    const created=await privateMemory(producerRunId),binding=await privateMemoryBinding();
+    await db.insert(memoryBindingTargets).values({companyId,bindingId:binding.id,targetType:"company",targetId:companyId});
+    const shared=await memoryService(db).sharePrivateMemory(companyId,created.record.id,{
+      targetBindingId:binding.id,targetScope:{type:"company",id:null},reason:"Propose a source-bound lesson",createdByOperationId:randomUUID(),
+    },memoryActor(ownerId,producerRunId));
+    expect(shared.record.sourceMemoryIds).toContain(created.record.id);
+    const humanActor={principal:{type:"user" as const,userId:ownerId}};
+    await memoryService(db).reviewCandidate(companyId,shared.record.id,{decision:"accept",reason:"Review copied content without releasing private sources"},humanActor);
+    const readerAgentId=randomUUID(),readerRunId=randomUUID();
+    await db.insert(agents).values({id:readerAgentId,companyId,name:"Other reader agent",role:"engineer",status:"idle",adapterType:"paperclip_runner"});
+    await db.insert(heartbeatRuns).values({id:readerRunId,companyId,agentId:readerAgentId,responsibleUserId:ownerId,runtimeMode:"native",status:"running"});
+    await expect(memoryService(db).get(companyId,shared.record.id,{
+      principal:{type:"agent",agentId:readerAgentId,responsibleUserId:ownerId},runId:readerRunId,
+    })).resolves.toBeNull();
+    await expect(memoryService(db).get(companyId,shared.record.id,memoryActor(ownerId,producerRunId))).resolves.toMatchObject({record:{content:"PRIVATE retained source"}});
+    await expect(memoryService(db).getShared(companyId,shared.record.id,humanActor)).resolves.toMatchObject({record:{content:"PRIVATE retained source"}});
+  });
+
 });

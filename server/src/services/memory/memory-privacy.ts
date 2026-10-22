@@ -72,6 +72,8 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
     // current identity cannot transfer an earlier private Memory to that Human.
     if((row.scopeType==="agent" && !row.privateOwnerUserId)
       || (row.privateOwnerUserId && row.privateOwnerUserId!==readerUserId))return false;
+    if(row.scopeType==="agent" && actor.type==="agent"
+      && (row.ownerAgentId!==actor.agentId || row.scopeId!==actor.agentId))return false;
     if(ancestor && (row.revokedAt || row.retentionState==="expired" || row.validUntil && row.validUntil.getTime()<=Date.now()))return false;
     const ids = [...row.sourceRunIds,...row.sourceIssueIds,...row.sourceProjectIds,...row.sourceMemoryIds,...row.sourceFoundationRevisionIds];
     if (ids.length>256 || ids.some(value=>typeof value!=="string" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value))) return false;

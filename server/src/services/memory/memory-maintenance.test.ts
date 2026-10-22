@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { activityLog, authUsers, companies, companyMemberships, createDb, memoryBindings, memoryBindingTargets, memoryEvidence, memoryJobs, memoryRecords } from "@paperclipai/db";
+import { activityLog, authUsers, companies, companyMemberships, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, memoryBindings, memoryBindingTargets, memoryEvidence, memoryJobs, memoryRecords } from "@paperclipai/db";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { memoryService } from "./memory-service.js";
@@ -15,7 +15,7 @@ suite("Governed native Memory maintenance", () => {
   let temp: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
   const fixtureCompanies = new Set<string>();
   beforeAll(async () => { temp = await startEmbeddedPostgresTestDatabase("paperclip-memory-maintenance-"); db = createDb(temp.connectionString);
-    await enableHistory(); }, 30_000);
+    await enableHistory(); }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
   afterAll(async () => temp?.cleanup());
   afterEach(async () => {
     // Preserve assertions and receipts, but do not let a failed disposable

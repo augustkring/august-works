@@ -1156,4 +1156,6 @@ export async function resetPostgresDatabase(
   }
 }
 
-export type Db = ReturnType<typeof createDb>;
+// Services use the native query/transaction surface. Pool ownership belongs to
+// createDb's result; native transactions intentionally do not own a $client.
+export type Db = Omit<ReturnType<typeof createDb>, "$client">;
