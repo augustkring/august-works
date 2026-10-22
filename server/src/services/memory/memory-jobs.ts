@@ -547,19 +547,21 @@ export function memoryJobService(
       if(job.operationType!=="retention")await assertSaasDomainAdmission(db,job.companyId,"memory.use");
       if (["dedupe", "compaction", "reflection", "index_refresh", "model_rebuild"].includes(job.operationType)) {
         if (!(await settings.getExperimental()).enableCollectiveMemoryV1) throw conflict("Memory maintenance is disabled");
-        const publication = await db.transaction(async (tx) => {
+        const publications = await db.transaction(async (tx) => {
+          const deferred: ActivityPublication[] = [];
           await lockAnalyticalCompany(tx as unknown as Db,job.companyId);
           await lockMemoryPrivacy(tx as unknown as Db, job.companyId);
           const [owned] = await tx.select().from(memoryJobs).where(and(eq(memoryJobs.id, job.id), eq(memoryJobs.companyId, job.companyId),
             eq(memoryJobs.status, "running"), eq(memoryJobs.executionOwnerId, ownerId))).for("update");
           if (!owned?.leaseExpiresAt || owned.leaseExpiresAt <= new Date()) throw conflict("Memory job lease was lost");
           await tx.execute(sql`set local statement_timeout = '5000'`);
-          const output = owned.operationType === "model_rebuild" ? await executeModelRebuild(tx as unknown as Db, owned) : await executeMemoryMaintenance(tx as unknown as Db, owned);
+          const output = owned.operationType === "model_rebuild" ? await executeModelRebuild(tx as unknown as Db, owned) : await executeMemoryMaintenance(tx as unknown as Db, owned, deferred);
           if (owned.leaseExpiresAt <= new Date()) throw conflict("Memory job lease expired during maintenance");
           await settle(owned, { status: "succeeded", resultSummary: "Native Memory maintenance completed.", resultJson: output.result }, tx as unknown as Db);
-          return output.publication;
+          deferred.push(output.publication);
+          return deferred;
         });
-        publishActivity(publication);
+        publications.forEach(publishActivity);
         return;
       }
       if (job.operationType === "capture") {

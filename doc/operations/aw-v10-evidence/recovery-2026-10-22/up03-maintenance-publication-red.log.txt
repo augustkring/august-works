@@ -1,0 +1,86 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[23:19:16] [33mWARN[39m: [36mMemory job failed[39m [90m{"jobId":"3f39725c-30a0-4bfe-862b-0dc49224c1ef","operationType":"compaction"}[39m
+    err: {
+      "type": "HttpError",
+      "message": "Memory job lease expired during maintenance",
+      "stack":
+          Error: Memory job lease expired during maintenance
+              at conflict (/workspace/blentera-v10/server/src/errors.ts:29:10)
+              at /workspace/blentera-v10/server/src/services/memory/memory-jobs.ts:558:57
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at scope (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+              at sql.begin (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+              at Object.executeClaimed (/workspace/blentera-v10/server/src/services/memory/memory-jobs.ts:550:29)
+              at /workspace/blentera-v10/server/src/__tests__/memory-maintenance-publication.integration.test.ts:40:7
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+      "status": 409
+    }
+ ❯ |@paperclipai/server| src/__tests__/memory-maintenance-publication.integration.test.ts (1 test | 1 failed) 12166ms
+     × does not publish a candidate rolled back after the maintenance lease expires during INSERT 2688ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-maintenance-publication.integration.test.ts > Native maintenance publishes only committed Memory effects > does not publish a candidate rolled back after the maintenance lease expires during INSERT
+AssertionError: expected [ { id: 1, …(4) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "companyId": "4d86ffa8-e7e4-4849-a149-ea8c12108cb3",
++     "createdAt": "2026-10-22T23:19:16.659Z",
++     "id": 1,
++     "payload": {
++       "action": "memory.candidate_created",
++       "actorId": "cf0d4029-c99b-4c47-921f-e72f5b2d15d3",
++       "actorType": "user",
++       "agentId": null,
++       "details": {
++         "memoryType": "observation",
++         "resolution": {
++           "kind": "new",
++           "novelEvidenceCount": 0,
++           "reasonCode": "no_deterministic_claim_identity",
++           "relatedRecordIds": [
++             "19754de4-e7b9-4403-adc4-509e10c4b07a",
++             "a3ed04a6-25b4-455b-b169-e203f7a98b42",
++           ],
++           "resolvedAt": "2026-10-22T23:19:14.292Z",
++           "targetRecordId": null,
++           "version": "v1",
++         },
++         "scopeId": null,
++         "scopeType": "company",
++       },
++       "entityId": "e14ae1ef-3d21-499e-88cc-9d91bcd6259a",
++       "entityType": "memory_record",
++       "responsibleUserId": "cf0d4029-c99b-4c47-921f-e72f5b2d15d3",
++       "runId": null,
++     },
++     "type": "activity.logged",
++   },
++ ]
+
+ ❯ src/__tests__/memory-maintenance-publication.integration.test.ts:49:22
+     47|       expect(await db.select().from(memoryEvidence).where(eq(memoryEvi…
+     48|       expect(await db.select().from(activityLog).where(eq(activityLog.…
+     49|       expect(events).toEqual([]);
+       |                      ^
+     50|     } finally {
+     51|       unsubscribe();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed (1)
+   Start at  23:16:06
+   Duration  190.01s (transform 80.15s, setup 390ms, import 176.98s, tests 12.17s, environment 0ms)
+

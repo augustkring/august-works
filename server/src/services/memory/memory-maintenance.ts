@@ -7,7 +7,7 @@ import { z } from "zod";
 import { conflict, forbidden, unprocessable } from "../../errors.js";
 import { memoryService, type MemoryMutationActor } from "./memory-service.js";
 import { assertMemoryRecordsRetained, lockMemoryPrivacy, memoryPayloadVisible, reapplyMemoryDeletionMarkers } from "./memory-privacy.js";
-import { persistActivity } from "../activity-log.js";
+import { persistActivity, type ActivityPublication } from "../activity-log.js";
 import { executionPrincipalSchema } from "@paperclipai/shared";
 
 import { memoryMaintenanceInputSchema } from "../v4-api-contracts.js";
@@ -51,7 +51,7 @@ async function assertNativeMemoryIndex(db: Db) {
 }
 
 /** Pure native maintenance. All effects and the job receipt commit together. */
-export async function executeMemoryMaintenance(db: Db, job: typeof memoryJobs.$inferSelect) {
+export async function executeMemoryMaintenance(db: Db, job: typeof memoryJobs.$inferSelect, postCommitPublications: ActivityPublication[]) {
   const source = sourceSchema.parse(job.sourceRefJson);
   await lockAnalyticalCompany(db,job.companyId);
   await lockMemoryPrivacy(db, job.companyId);
@@ -111,7 +111,7 @@ export async function executeMemoryMaintenance(db: Db, job: typeof memoryJobs.$i
     const sensitivity = records.reduce((highest, row) => sensitivityRank.indexOf(row.sensitivityLabel) > sensitivityRank.indexOf(highest) ? row.sensitivityLabel : highest, first.sensitivityLabel);
     const dates = (field: "validFrom" | "validUntil" | "expiresAt") => records.flatMap((row) => row[field] ? [row[field]!.getTime()] : []);
     const from = dates("validFrom"), until = dates("validUntil"), expiry = dates("expiresAt");
-    const candidate = await memoryService(db).createCandidate(job.companyId, { bindingId: first.bindingId, memoryType: reflection ? "lesson" : "observation",
+    const candidate = await memoryService(db,{postCommitPublications}).createCandidate(job.companyId, { bindingId: first.bindingId, memoryType: reflection ? "lesson" : "observation",
       scope: { type: first.scopeType, id: first.scopeId }, subject: first.subjectType && first.subjectId ? { type: first.subjectType, id: first.subjectId } : null,
       ownerAgentId: null, title: reflection ? source.proposedLesson!.title : "Collected reviewed summaries", content, summary: null, sensitivity,
       importance: Math.max(...records.map((row) => row.importance)), confidenceScore: Math.min(...records.map((row) => row.confidenceScore)),
