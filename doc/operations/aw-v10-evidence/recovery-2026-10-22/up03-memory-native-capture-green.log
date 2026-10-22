@@ -1,0 +1,41 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/memory-native-capture-purpose.integration.test.ts (6 tests | 1 failed) 52833ms
+     × keeps a completed-producer Foundation/Learning diamond readable and a real source cycle denied 1196ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-native-capture-purpose.integration.test.ts > Native capture source purpose stays inside its actual PostgreSQL transaction > keeps a completed-producer Foundation/Learning diamond readable and a real source cycle denied
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/__tests__/memory-native-capture-purpose.integration.test.ts:156:75
+    154|       await tx.insert(memoryRecords).values({...source.record,id:topId…
+    155|         sourceMemoryIds:[source.record.id],sourceFoundationRevisionIds…
+    156|       expect(await canActorReadMemorySources(tx,companyId,actor(),topI…
+       |                                                                           ^
+    157|       // Actual persisted retained-edge cycle; no caller metadata supp…
+    158|       await tx.update(memoryRecords).set({sourceFoundationRevisionIds:…
+ ❯ src/services/memory/memory-privacy.ts:84:22
+ ❯ withNativeMemoryCaptureSources src/services/memory/memory-privacy.ts:80:12
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ src/__tests__/memory-native-capture-purpose.integration.test.ts:151:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 12 passed (13)
+   Start at  22:42:18
+   Duration  183.94s (transform 34.69s, setup 618ms, import 78.93s, tests 101.76s, environment 1ms)
+

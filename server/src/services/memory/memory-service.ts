@@ -41,7 +41,7 @@ import {
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import { isUniqueViolation } from "../../db-errors.js";
 import { lockMemoryPrivacy, assertMemoryOperationRetained, assertMemorySourcesRetained,
-  purgeMemoryRecords, memoryDeletionKey, memoryPayloadVisible, reapplyMemoryDeletionMarkers, canActorReadMemorySources, captureMemorySources } from "./memory-privacy.js";
+  purgeMemoryRecords, memoryDeletionKey, memoryPayloadVisible, reapplyMemoryDeletionMarkers, canActorReadMemorySources, captureMemorySources, withNativeMemoryCaptureSources, type NativeMemoryCaptureReceipt } from "./memory-privacy.js";
 import { learningActorFromPrincipal } from "../learning/learning-analytical-sources.js";
 import { persistActivity, publishActivity, type ActivityPublication } from "../activity-log.js";
 import {
@@ -632,7 +632,231 @@ async function insertCandidate(
   return record;
 }
 
-export function memoryService(db: Db) {
+export interface MemoryServiceOptions {
+  postCommitPublications?: ActivityPublication[];
+  nativeCaptureReceipt?: NativeMemoryCaptureReceipt;
+}
+
+export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
+  const publishOrDefer = (publications: ActivityPublication[]) => {
+    if (options.postCommitPublications) options.postCommitPublications.push(...publications);
+    else publications.forEach(publishActivity);
+  };
+  async function runCandidate(
+      companyId: string,
+      rawInput: unknown,
+      actor: MemoryMutationActor,
+      sourceMemoryIds: string[],
+      nativeCapture: boolean,
+    ) {
+      const parsed = memoryCandidateInputSchema.safeParse(rawInput);
+      if (!parsed.success) {
+        throw unprocessable("Invalid memory candidate", parsed.error.issues);
+      }
+
+      const fingerprint=parsed.data.metadata.postRunExtractionFingerprint;
+      if(nativeCapture && (!options.nativeCaptureReceipt || !options.postCommitPublications || !parsed.data.createdByOperationId
+        || typeof fingerprint!=="string" || !/^[0-9a-f]{64}$/.test(fingerprint)))
+        throw forbidden("Native Memory capture requires its server receipt and input fingerprint");
+      const publications: ActivityPublication[] = [];
+      const outcome = await db.transaction(async (tx) => {
+        const txDb = tx as unknown as Db;
+        await lockAnalyticalCompany(txDb,companyId);
+        await lockMemoryPrivacy(txDb,companyId);
+        const inspect=async()=>{
+
+        // Authorize before classification so the resolver can never become a
+        // cross-tenant or cross-scope record oracle.
+        await assertActorCompanyScope(txDb, companyId, actor);
+        await assertScopeReferences(txDb, companyId, parsed.data);
+        await assertAgentPrivateOwnership(parsed.data, actor);
+        await assertBindingAllowsCandidate(txDb, companyId, parsed.data);
+        await lockAnalyticalCompany(txDb,companyId);
+        await assertMemorySourcesRetained(txDb, companyId, parsed.data.evidence);
+
+        // Preserve the existing operation-id contract before semantic
+        // resolution. Reusing one operation id with any prior persisted record
+        // remains a conflict even when the new payload happens to be similar.
+        if (parsed.data.createdByOperationId) {
+          await lockMemoryOperation(
+            txDb,
+            companyId,
+            parsed.data.createdByOperationId,
+          );
+          const existingOperation = await memoryRecordForOperation(
+            txDb,
+            companyId,
+            parsed.data.createdByOperationId,
+            actor,
+          );
+          if (existingOperation) {
+            if(nativeCapture){
+              if(existingOperation.metadata.postRunExtractionFingerprint!==fingerprint)
+                throw conflict("Memory operation id is already associated with a record",{code:"memory_operation_conflict"});
+              return {recordId:existingOperation.id,resolution:null,replayed:true as const};
+            }
+            throw conflict(
+              "Memory operation id is already associated with a record",
+              {
+                code: "memory_operation_conflict",
+                operationId: parsed.data.createdByOperationId,
+                existingRecordId: existingOperation.id,
+              },
+            );
+          }
+        }
+
+        await lockMemoryResolution(txDb, companyId, parsed.data);
+        const resolution = await resolveMemoryCandidate(
+          txDb,
+          companyId,
+          parsed.data,
+          {actor:learningActorFromPrincipal(companyId,actor.principal,actor.runId)},
+        );
+
+        const attachesToExistingPendingContradiction =
+          resolution.metadata.kind === "contradiction" &&
+          resolution.metadata.reasonCode ===
+            "contradicting_evidence_against_pending_equivalent_claim";
+
+        if (
+          resolution.metadata.kind === "duplicate" ||
+          resolution.metadata.kind === "corroboration" ||
+          attachesToExistingPendingContradiction
+        ) {
+          const resolvedTarget = resolution.target;
+          if (!resolvedTarget) {
+            throw new Error(
+              `Memory ${resolution.metadata.kind} resolution is missing its target record`,
+            );
+          }
+          const [target] = await txDb.select().from(memoryRecords).where(and(
+            eq(memoryRecords.companyId,companyId),eq(memoryRecords.id,resolvedTarget.id),memoryPayloadVisible(),
+          )).for("update");
+          if(!target || target.updatedAt.getTime()!==resolvedTarget.updatedAt.getTime())
+            throw conflict("Memory resolution target changed before attachment",{code:"memory_resolution_conflict"});
+          await assertMemorySourceAccess(txDb,companyId,target.id,actor);
+
+          const provenance=await captureMemorySources(txDb,companyId,learningActorFromPrincipal(companyId,actor.principal,actor.runId),parsed.data.scope,sourceMemoryIds);
+          if(provenance.sourceMemoryIds.includes(target.id)){
+            // Only the exact current native selection can be a no-op input to
+            // its own unchanged claim. Caller IDs and old receipts cannot erase
+            // a dependency; all other captured roots remain in the union.
+            if(actor.principal.type!=="agent" || !actor.runId)
+              throw conflict("Memory self-source requires its current native selection",{code:"memory_resolution_source_conflict"});
+            const version=target.updatedAt.toISOString();
+            const receipts=await txDb.select({version:contextManifestMemoryRoots.sourceVersion,pinned:sql<boolean>`exists(
+              select 1 from ${contextManifestItems} item where item.company_id=${companyId}::uuid
+                and item.manifest_id=${contextManifestMemoryRoots.manifestId} and item.source_provider='august_works_memory'
+                and item.source_ref=${`memory://record/${target.id}`} and item.source_version=${version})`})
+              .from(contextManifestMemoryRoots).innerJoin(contextManifests,and(
+                eq(contextManifests.companyId,contextManifestMemoryRoots.companyId),eq(contextManifests.id,contextManifestMemoryRoots.manifestId),
+              )).where(and(eq(contextManifests.companyId,companyId),eq(contextManifests.runId,actor.runId),
+                eq(contextManifests.agentId,actor.principal.agentId),eq(contextManifestMemoryRoots.memoryRecordId,target.id))).limit(65);
+            if(!receipts.length || receipts.length>64 || receipts.some(receipt=>receipt.version!==version || !receipt.pinned))
+              throw conflict("Memory self-source selection changed before attachment",{code:"memory_resolution_source_conflict"});
+            provenance.sourceMemoryIds=provenance.sourceMemoryIds.filter(id=>id!==target.id);
+          }
+          const sourceKeys=["sourceRunIds","sourceIssueIds","sourceProjectIds","sourceMemoryIds","sourceFoundationRevisionIds"] as const;
+          const sourceChanges=target.sourceProvenanceQualified!==(target.sourceProvenanceQualified && provenance.sourceProvenanceQualified)
+            || sourceKeys.some(key=>provenance[key].some(id=>!target[key].includes(id)));
+          if(resolution.metadata.kind!=="duplicate" || sourceChanges)await txDb.update(memoryRecords).set({
+            sourceProvenanceQualified:target.sourceProvenanceQualified && provenance.sourceProvenanceQualified,
+            sourceRunIds:[...new Set([...target.sourceRunIds,...provenance.sourceRunIds])],
+            sourceIssueIds:[...new Set([...target.sourceIssueIds,...provenance.sourceIssueIds])],
+            sourceProjectIds:[...new Set([...target.sourceProjectIds,...provenance.sourceProjectIds])],
+            sourceMemoryIds:[...new Set([...target.sourceMemoryIds,...provenance.sourceMemoryIds])],
+            sourceFoundationRevisionIds:[...new Set([...target.sourceFoundationRevisionIds,...provenance.sourceFoundationRevisionIds])],
+            updatedAt:new Date(),
+          }).where(and(eq(memoryRecords.companyId,companyId),eq(memoryRecords.id,target.id)));
+
+          if (
+            resolution.metadata.kind === "corroboration" ||
+            attachesToExistingPendingContradiction
+          ) {
+            await insertEvidenceRows(
+              txDb,
+              companyId,
+              target.id,
+              resolution.novelEvidence,
+            );
+
+            publications.push(
+              await persistMemoryActivity(txDb, actor, {
+                companyId,
+                action:
+                  resolution.metadata.kind === "corroboration"
+                    ? "memory.corroborated"
+                    : "memory.contradiction_attached",
+                recordId: target.id,
+                details: { resolution: resolution.metadata },
+              }),
+            );
+          }
+
+          // A distinct descendant or another retained source may lead back to
+          // this target. Use the original current source owner before commit,
+          // so failed attachment rolls back lineage, evidence and audit alike.
+          if(!await canActorReadMemorySources(txDb,companyId,learningActorFromPrincipal(companyId,actor.principal,actor.runId),target.id))
+            throw conflict("Memory attachment sources are unavailable or cyclic",{code:"memory_resolution_source_conflict"});
+          return { recordId: target.id, resolution: resolution.metadata, replayed:false as const };
+        }
+
+        const supersedesRecordId =
+          resolution.metadata.kind === "update" ||
+          resolution.metadata.kind === "contradiction"
+            ? resolution.target?.id ?? null
+            : null;
+        if (
+          (resolution.metadata.kind === "update" ||
+            resolution.metadata.kind === "contradiction") &&
+          !supersedesRecordId
+        ) {
+          throw new Error(
+            `Memory ${resolution.metadata.kind} resolution is missing its target record`,
+          );
+        }
+
+        const candidate: MemoryCandidateInputParsed = {
+          ...parsed.data,
+          metadata: {
+            ...parsed.data.metadata,
+            memoryResolution: resolution.metadata,
+          },
+        };
+        const created = await insertCandidate(
+          txDb,
+          companyId,
+          candidate,
+          actor,
+          supersedesRecordId,
+          {sourceMemoryIds},
+        );
+        publications.push(
+          await persistMemoryActivity(txDb, actor, {
+            companyId,
+            action: "memory.candidate_created",
+            recordId: created.id,
+            details: {
+              memoryType: created.memoryType,
+              scopeType: created.scopeType,
+              scopeId: created.scopeId,
+              resolution: resolution.metadata,
+            },
+          }),
+        );
+        if(!await canActorReadMemorySources(txDb,companyId,learningActorFromPrincipal(companyId,actor.principal,actor.runId),created.id))
+          throw forbidden("Memory candidate source access is unavailable");
+        return { recordId: created.id, resolution: resolution.metadata, replayed:false as const };
+        };
+        return nativeCapture
+          ? withNativeMemoryCaptureSources(txDb,companyId,learningActorFromPrincipal(companyId,actor.principal,actor.runId),options.nativeCaptureReceipt!,inspect)
+          : inspect();
+      });
+      publishOrDefer(publications);
+
+      return outcome;
+  }
   return {
     exportDeletionLedger: async (companyId: string, actor: MemoryMutationActor) => {
       await assertPrivacyManagement(db, companyId, actor);
@@ -662,7 +886,7 @@ export function memoryService(db: Db) {
           details: { markerCount: ledger.markers.length, deletedRecordCount: erased.deletedRecordCount } }));
         return { importedMarkerCount: ledger.markers.length, deletedRecordCount: erased.deletedRecordCount };
       });
-      publications.forEach(publishActivity);
+      publishOrDefer(publications);
       return result;
     },
     forget: async (companyId: string, recordId: string, actor: MemoryMutationActor) => {
@@ -684,7 +908,7 @@ export function memoryService(db: Db) {
         }));
         return deleted;
       });
-      publications.forEach(publishActivity);
+      publishOrDefer(publications);
       return result;
     },
 
@@ -719,7 +943,7 @@ export function memoryService(db: Db) {
           details: { sourceDigest: key, deletedRecordCount: deleted.deletedRecordCount } }));
         return { deletedRecordCount: deleted.deletedRecordCount, sourceDigest: key };
       });
-      publications.forEach(publishActivity);
+      publishOrDefer(publications);
       return result;
     },
 
@@ -750,7 +974,7 @@ export function memoryService(db: Db) {
           details: { maxAgeDays: stored!.maxAgeDays } }));
         return stored!;
       });
-      publications.forEach(publishActivity);
+      publishOrDefer(publications);
       return result;
     },
 
@@ -1058,7 +1282,7 @@ export function memoryService(db: Db) {
         );
         return created;
       });
-      publications.forEach(publishActivity);
+      publishOrDefer(publications);
       return requireCurrentMemoryDetail(db,companyId,record.id,actor);
     },
 
@@ -1227,7 +1451,7 @@ export function memoryService(db: Db) {
         );
         return next;
       });
-      publications.forEach(publishActivity);
+      publishOrDefer(publications);
       return requireCurrentMemoryDetail(db,companyId,corrected.id,actor);
     },
 
@@ -1394,213 +1618,22 @@ export function memoryService(db: Db) {
         );
         return created;
       });
-      publications.forEach(publishActivity);
+      publishOrDefer(publications);
       return requireCurrentMemoryDetail(db,companyId,shared.id,actor);
     },
 
-    createCandidate: async (
-      companyId: string,
-      rawInput: unknown,
-      actor: MemoryMutationActor,
-      sourceMemoryIds: string[] = [],
-    ) => {
-      const parsed = memoryCandidateInputSchema.safeParse(rawInput);
-      if (!parsed.success) {
-        throw unprocessable("Invalid memory candidate", parsed.error.issues);
-      }
+    createCandidate: async (companyId:string, rawInput:unknown, actor:MemoryMutationActor, sourceMemoryIds:string[]=[]) => {
+      const outcome=await runCandidate(companyId,rawInput,actor,sourceMemoryIds,false);
+      if(!outcome.resolution)throw new Error("Ordinary Memory candidate replay is unavailable");
+      const detail=await requireCurrentMemoryDetail(db,companyId,outcome.recordId,actor);
+      return withResolution(detail,outcome.resolution);
+    },
 
-      const publications: ActivityPublication[] = [];
-      const outcome = await db.transaction(async (tx) => {
-        const txDb = tx as unknown as Db;
-
-        // Authorize before classification so the resolver can never become a
-        // cross-tenant or cross-scope record oracle.
-        await assertActorCompanyScope(txDb, companyId, actor);
-        await assertScopeReferences(txDb, companyId, parsed.data);
-        await assertAgentPrivateOwnership(parsed.data, actor);
-        await assertBindingAllowsCandidate(txDb, companyId, parsed.data);
-        await lockAnalyticalCompany(txDb,companyId);
-        await assertMemorySourcesRetained(txDb, companyId, parsed.data.evidence);
-
-        // Preserve the existing operation-id contract before semantic
-        // resolution. Reusing one operation id with any prior persisted record
-        // remains a conflict even when the new payload happens to be similar.
-        if (parsed.data.createdByOperationId) {
-          await lockMemoryOperation(
-            txDb,
-            companyId,
-            parsed.data.createdByOperationId,
-          );
-          const existingOperation = await memoryRecordForOperation(
-            txDb,
-            companyId,
-            parsed.data.createdByOperationId,
-            actor,
-          );
-          if (existingOperation) {
-            throw conflict(
-              "Memory operation id is already associated with a record",
-              {
-                code: "memory_operation_conflict",
-                operationId: parsed.data.createdByOperationId,
-                existingRecordId: existingOperation.id,
-              },
-            );
-          }
-        }
-
-        await lockMemoryResolution(txDb, companyId, parsed.data);
-        const resolution = await resolveMemoryCandidate(
-          txDb,
-          companyId,
-          parsed.data,
-          {actor:learningActorFromPrincipal(companyId,actor.principal,actor.runId)},
-        );
-
-        const attachesToExistingPendingContradiction =
-          resolution.metadata.kind === "contradiction" &&
-          resolution.metadata.reasonCode ===
-            "contradicting_evidence_against_pending_equivalent_claim";
-
-        if (
-          resolution.metadata.kind === "duplicate" ||
-          resolution.metadata.kind === "corroboration" ||
-          attachesToExistingPendingContradiction
-        ) {
-          const resolvedTarget = resolution.target;
-          if (!resolvedTarget) {
-            throw new Error(
-              `Memory ${resolution.metadata.kind} resolution is missing its target record`,
-            );
-          }
-          const [target] = await txDb.select().from(memoryRecords).where(and(
-            eq(memoryRecords.companyId,companyId),eq(memoryRecords.id,resolvedTarget.id),memoryPayloadVisible(),
-          )).for("update");
-          if(!target || target.updatedAt.getTime()!==resolvedTarget.updatedAt.getTime())
-            throw conflict("Memory resolution target changed before attachment",{code:"memory_resolution_conflict"});
-          await assertMemorySourceAccess(txDb,companyId,target.id,actor);
-
-          const provenance=await captureMemorySources(txDb,companyId,learningActorFromPrincipal(companyId,actor.principal,actor.runId),parsed.data.scope,sourceMemoryIds);
-          if(provenance.sourceMemoryIds.includes(target.id)){
-            // Only the exact current native selection can be a no-op input to
-            // its own unchanged claim. Caller IDs and old receipts cannot erase
-            // a dependency; all other captured roots remain in the union.
-            if(actor.principal.type!=="agent" || !actor.runId)
-              throw conflict("Memory self-source requires its current native selection",{code:"memory_resolution_source_conflict"});
-            const version=target.updatedAt.toISOString();
-            const receipts=await txDb.select({version:contextManifestMemoryRoots.sourceVersion,pinned:sql<boolean>`exists(
-              select 1 from ${contextManifestItems} item where item.company_id=${companyId}::uuid
-                and item.manifest_id=${contextManifestMemoryRoots.manifestId} and item.source_provider='august_works_memory'
-                and item.source_ref=${`memory://record/${target.id}`} and item.source_version=${version})`})
-              .from(contextManifestMemoryRoots).innerJoin(contextManifests,and(
-                eq(contextManifests.companyId,contextManifestMemoryRoots.companyId),eq(contextManifests.id,contextManifestMemoryRoots.manifestId),
-              )).where(and(eq(contextManifests.companyId,companyId),eq(contextManifests.runId,actor.runId),
-                eq(contextManifests.agentId,actor.principal.agentId),eq(contextManifestMemoryRoots.memoryRecordId,target.id))).limit(65);
-            if(!receipts.length || receipts.length>64 || receipts.some(receipt=>receipt.version!==version || !receipt.pinned))
-              throw conflict("Memory self-source selection changed before attachment",{code:"memory_resolution_source_conflict"});
-            provenance.sourceMemoryIds=provenance.sourceMemoryIds.filter(id=>id!==target.id);
-          }
-          const sourceKeys=["sourceRunIds","sourceIssueIds","sourceProjectIds","sourceMemoryIds","sourceFoundationRevisionIds"] as const;
-          const sourceChanges=target.sourceProvenanceQualified!==(target.sourceProvenanceQualified && provenance.sourceProvenanceQualified)
-            || sourceKeys.some(key=>provenance[key].some(id=>!target[key].includes(id)));
-          if(resolution.metadata.kind!=="duplicate" || sourceChanges)await txDb.update(memoryRecords).set({
-            sourceProvenanceQualified:target.sourceProvenanceQualified && provenance.sourceProvenanceQualified,
-            sourceRunIds:[...new Set([...target.sourceRunIds,...provenance.sourceRunIds])],
-            sourceIssueIds:[...new Set([...target.sourceIssueIds,...provenance.sourceIssueIds])],
-            sourceProjectIds:[...new Set([...target.sourceProjectIds,...provenance.sourceProjectIds])],
-            sourceMemoryIds:[...new Set([...target.sourceMemoryIds,...provenance.sourceMemoryIds])],
-            sourceFoundationRevisionIds:[...new Set([...target.sourceFoundationRevisionIds,...provenance.sourceFoundationRevisionIds])],
-            updatedAt:new Date(),
-          }).where(and(eq(memoryRecords.companyId,companyId),eq(memoryRecords.id,target.id)));
-
-          if (
-            resolution.metadata.kind === "corroboration" ||
-            attachesToExistingPendingContradiction
-          ) {
-            await insertEvidenceRows(
-              txDb,
-              companyId,
-              target.id,
-              resolution.novelEvidence,
-            );
-
-            publications.push(
-              await persistMemoryActivity(txDb, actor, {
-                companyId,
-                action:
-                  resolution.metadata.kind === "corroboration"
-                    ? "memory.corroborated"
-                    : "memory.contradiction_attached",
-                recordId: target.id,
-                details: { resolution: resolution.metadata },
-              }),
-            );
-          }
-
-          // A distinct descendant or another retained source may lead back to
-          // this target. Use the original current source owner before commit,
-          // so failed attachment rolls back lineage, evidence and audit alike.
-          if(!await canActorReadMemorySources(txDb,companyId,learningActorFromPrincipal(companyId,actor.principal,actor.runId),target.id))
-            throw conflict("Memory attachment sources are unavailable or cyclic",{code:"memory_resolution_source_conflict"});
-          return { recordId: target.id, resolution: resolution.metadata };
-        }
-
-        const supersedesRecordId =
-          resolution.metadata.kind === "update" ||
-          resolution.metadata.kind === "contradiction"
-            ? resolution.target?.id ?? null
-            : null;
-        if (
-          (resolution.metadata.kind === "update" ||
-            resolution.metadata.kind === "contradiction") &&
-          !supersedesRecordId
-        ) {
-          throw new Error(
-            `Memory ${resolution.metadata.kind} resolution is missing its target record`,
-          );
-        }
-
-        const candidate: MemoryCandidateInputParsed = {
-          ...parsed.data,
-          metadata: {
-            ...parsed.data.metadata,
-            memoryResolution: resolution.metadata,
-          },
-        };
-        const created = await insertCandidate(
-          txDb,
-          companyId,
-          candidate,
-          actor,
-          supersedesRecordId,
-          {sourceMemoryIds},
-        );
-        publications.push(
-          await persistMemoryActivity(txDb, actor, {
-            companyId,
-            action: "memory.candidate_created",
-            recordId: created.id,
-            details: {
-              memoryType: created.memoryType,
-              scopeType: created.scopeType,
-              scopeId: created.scopeId,
-              resolution: resolution.metadata,
-            },
-          }),
-        );
-        return { recordId: created.id, resolution: resolution.metadata };
-      });
-      publications.forEach(publishActivity);
-
-      // A new input-only producer result discloses no historical Memory. Any
-      // reused record or related-source metadata requires a current read again.
-      const detail = outcome.resolution.kind==="new" && !outcome.resolution.relatedRecordIds.length
-        ? await getRecordDetail(db,companyId,outcome.recordId)
-        : await requireCurrentMemoryDetail(db,companyId,outcome.recordId,actor);
-      if (!detail) {
-        throw new Error("Resolved Memory candidate record is unavailable");
-      }
-      return withResolution(detail, outcome.resolution);
+    // Native worker result only: source comparison never becomes a generic
+    // completed-run get/export permission or discloses a retained record DTO.
+    captureCandidate: async (companyId:string, rawInput:unknown, actor:MemoryMutationActor) => {
+      const outcome=await runCandidate(companyId,rawInput,actor,[],true);
+      return {resolutionKind:outcome.replayed ? "duplicate" as const : outcome.resolution!.kind,replayed:outcome.replayed};
     },
 
     createCorrectionCandidate: async (
@@ -1689,7 +1722,7 @@ export function memoryService(db: Db) {
         );
         return next;
       });
-      publications.forEach(publishActivity);
+      publishOrDefer(publications);
       return requireCurrentMemoryDetail(db,companyId,created.id,actor);
     },
 
@@ -1822,7 +1855,7 @@ export function memoryService(db: Db) {
         );
         return updated;
       });
-      publications.forEach(publishActivity);
+      publishOrDefer(publications);
       return requireCurrentMemoryDetail(db,companyId,reviewed.id,actor);
     },
 
@@ -1895,7 +1928,7 @@ export function memoryService(db: Db) {
         }
         return result;
       });
-      publications.forEach(publishActivity);
+      publishOrDefer(publications);
       return requireCurrentMemoryDetail(db,companyId,revoked.id,actor);
     },
 

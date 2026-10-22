@@ -6,7 +6,7 @@ import {v8FeatureEnabled} from "@paperclipai/shared";
 import type {AuthorizationActor} from "./authorization.js";
 import {assertV7Authorization,v7HumanActorId} from "./v7-authorization.js";
 import {instanceSettingsService} from "./instance-settings.js";
-import {heartbeatMemoryPayloadRetained} from "./memory/memory-privacy.js";
+import {heartbeatMemoryPayloadRetained,nativeMemoryCaptureSourcePurposeActive,assertNativeMemoryCaptureSourcePrincipal} from "./memory/memory-privacy.js";
 import {forbidden,notFound} from "../errors.js";
 /** Read identity only: an actual running conversation or assigned Task and its current
  * responsible human. Source owners still enforce agent × human authorization;
@@ -15,6 +15,19 @@ export type NativeReadScope = "conversation" | "task";
 async function assertNativeReaderIdentity(db:Db,companyId:string,actor:AuthorizationActor,scope:NativeReadScope="conversation") {
  if(actor.type==="board"){v7HumanActorId(actor);return;}
  if(actor.type!=="agent"||actor.source!=="agent_jwt"||actor.companyId!==companyId||!actor.agentId||!actor.runId||!actor.onBehalfOfUserId||actor.keyId||actor.keyScope||!z.string().uuid().safeParse(actor.agentId).success||!z.string().uuid().safeParse(actor.runId).success)throw forbidden("Current native analytical conversation identity is required");
+ // A completed producer has released execution ownership. Its actual leased
+ // native job can compare sources inside that same transaction, never act as a
+ // running conversation reader. Permissions and all retained payload checks stay.
+ if(nativeMemoryCaptureSourcePurposeActive(companyId,actor)){
+  await assertNativeMemoryCaptureSourcePrincipal(db,companyId,actor);
+  const [producer]=await db.select({issueId:heartbeatRuns.issueId}).from(heartbeatRuns)
+   .where(and(eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,actor.runId)));
+  if(!producer?.issueId || !await heartbeatMemoryPayloadRetained(db,companyId,actor.runId))throw forbidden("Native capture source is unavailable");
+  await assertV7Authorization(db,actor,companyId,"company_scope:read");
+  await assertV7Authorization(db,actor,companyId,"issue:read",{type:"issue",companyId,issueId:producer.issueId});
+  await assertNativeMemoryCaptureSourcePrincipal(db,companyId,actor);
+  return;
+ }
  if(scope==="conversation"&&!v8FeatureEnabled(await instanceSettingsService(db).getExperimental(),"management_chat_tools_v8"))throw notFound("Management chat tools are not enabled");
  const [binding]=await db.select({run:heartbeatRuns,agent:agents,issue:issues}).from(heartbeatRuns)
   .innerJoin(agents,and(eq(agents.companyId,heartbeatRuns.companyId),eq(agents.id,heartbeatRuns.agentId)))

@@ -37,6 +37,7 @@ import {
 import { logger } from "../middleware/logger.js";
 import { normalizeAgentPermissions } from "./agent-permissions.js";
 import { grantsForHumanRole, normalizeHumanRole } from "./company-member-roles.js";
+import { nativeMemoryCapturePrincipalCondition } from "./memory/memory-privacy.js";
 
 /** Current native role evidence. The optional lock is owned by an enclosing
  * mutation transaction; a role copied into an actor is never this evidence. */
@@ -514,8 +515,9 @@ function privatePrincipalCurrent(actor: AuthorizationActor, company: SQL): SQL<b
   if (actor.type === "board") return human;
   if (!actor.agentId || !privacyUuid.test(actor.agentId)) return sql<boolean>`false`;
   const run = actor.runId && privacyUuid.test(actor.runId)
-    ? sql`exists(select 1 from ${heartbeatRuns} r where r.id=${actor.runId} and r.company_id=${company}
-        and r.agent_id=${actor.agentId} and r.responsible_user_id=${userId} and r.status='running')`
+    ? sql`(exists(select 1 from ${heartbeatRuns} r where r.id=${actor.runId} and r.company_id=${company}
+        and r.agent_id=${actor.agentId} and r.responsible_user_id=${userId} and r.status='running') or
+        ${nativeMemoryCapturePrincipalCondition(actor,company)})`
     : sql`false`;
   const key = actor.keyId && privacyUuid.test(actor.keyId)
     ? sql`exists(select 1 from ${agentApiKeys} k where k.id=${actor.keyId} and k.company_id=${company}

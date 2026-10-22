@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
-import { and, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
+import { and, eq, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
 import { agentExecutionManifests,providerTraceRecords, memoryDeletionMarkers, memoryEvidence, memoryJobs, memoryRecords, memoryRetentionPolicies,
   contextManifests, contextManifestItems, contextManifestMemoryRoots, saasRunLogs, saasRunLogChunks, activityLog, issueThreadInteractions, toolAccessAuditEvents, toolActionRequests, toolCallEvents, toolInvocations,
   heartbeatRuns, heartbeatRunEvents, agentWakeupRequests, agents, authUsers, issues, issueComments, issueDocuments, documents, documentRevisions,
@@ -20,6 +20,72 @@ export function memoryDeletionKey(companyId: string, kind: "record" | "operation
 
 export async function lockMemoryPrivacy(db: Db, companyId: string) {
   await db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`memory:privacy:${companyId}`}, 0))`);
+}
+
+/** Internal receipt from the native worker's locked capture transaction. Neither
+ * actor claims nor a completed run alone admit retained source comparison. */
+export type NativeMemoryCaptureReceipt = {
+  jobId: string;
+  executionOwnerId: string;
+  backendPid: number;
+  transactionId: string;
+};
+const nativeCaptureSources = new AsyncLocalStorage<{
+  companyId: string; agentId: string; runId: string; userId: string;
+  receipt: NativeMemoryCaptureReceipt; active: boolean;
+}>();
+export function nativeMemoryCaptureSourcePurposeActive(companyId: string, actor: AuthorizationActor): boolean {
+  const permit = nativeCaptureSources.getStore();
+  return !!permit?.active && actor.type === "agent" && actor.source === "agent_jwt" && !actor.keyId && !actor.keyScope
+    && actor.companyId === companyId && permit.companyId === companyId
+    && permit.agentId === actor.agentId && permit.runId === actor.runId && permit.userId === actor.onBehalfOfUserId;
+}
+/** Savepoints retain the same physical backend and top-level transaction. Each
+ * source owner rechecks the live lease; this is not a cached permission result. */
+export function nativeMemoryCapturePrincipalCondition(actor: AuthorizationActor, company: SQL): SQL<boolean> {
+  const permit = nativeCaptureSources.getStore();
+  if (!permit || !nativeMemoryCaptureSourcePurposeActive(permit.companyId, actor)) return sql<boolean>`false`;
+  const receipt = permit.receipt;
+  return sql<boolean>`(${company}=${permit.companyId}::uuid
+    and pg_backend_pid()=${receipt.backendPid} and pg_current_xact_id()::text=${receipt.transactionId}
+    and exists(select 1 from ${memoryJobs} j
+      join ${heartbeatRuns} r on r.id=j.source_heartbeat_run_id and r.company_id=j.company_id
+      join ${agents} a on a.id=r.agent_id and a.company_id=r.company_id
+      join ${authUsers} u on u.id=r.responsible_user_id
+      join company_memberships m on m.company_id=r.company_id and m.principal_type='user'
+        and m.principal_id=u.id and m.status='active'
+      where j.id=${receipt.jobId}::uuid and j.company_id=${company} and j.operation_type='capture'
+        and j.status='running' and j.execution_owner_id=${receipt.executionOwnerId}
+        and j.lease_expires_at>clock_timestamp() and r.id=${permit.runId}::uuid
+        and r.agent_id=${permit.agentId}::uuid and r.responsible_user_id=${permit.userId}
+        and r.status='succeeded' and r.runtime_mode='native'
+        and a.status not in ('paused','terminated','pending_approval','error')))`;
+}
+export async function assertNativeMemoryCaptureSourcePrincipal(db: Db, companyId: string, actor: AuthorizationActor) {
+  const [current] = await db.execute<{allowed:boolean}>(sql`select ${nativeMemoryCapturePrincipalCondition(actor,sql`${companyId}::uuid`)} as allowed`);
+  if (!current?.allowed) throw forbidden("Native Memory capture source authority changed");
+}
+export async function withNativeMemoryCaptureSources<T>(db: Db, companyId: string, actor: AuthorizationActor | undefined,
+  receipt: NativeMemoryCaptureReceipt, inspect: () => Promise<T>): Promise<T> {
+  if (!actor || actor.type !== "agent" || actor.source !== "agent_jwt" || actor.companyId !== companyId
+    || !actor.agentId || !actor.runId || !actor.onBehalfOfUserId || actor.keyId || actor.keyScope
+    || ![companyId,actor.agentId,actor.runId].every(id=>/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(id))
+    || !receipt || !/^[a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12}$/i.test(receipt.jobId)
+    || !Number.isSafeInteger(receipt.backendPid) || receipt.backendPid <= 0
+    || !/^\d+$/.test(receipt.transactionId) || !receipt.executionOwnerId || receipt.executionOwnerId.length > 256)
+    throw forbidden("A native Memory capture transaction is required");
+  const permit = {companyId,agentId:actor.agentId,runId:actor.runId,userId:actor.onBehalfOfUserId,
+    receipt:{...receipt},active:true};
+  try {
+    return await nativeCaptureSources.run(permit,async()=>{
+      await assertNativeMemoryCaptureSourcePrincipal(db,companyId,actor);
+      await db.execute(sql`select id from ${memoryJobs} where id=${receipt.jobId}::uuid for update`);
+      await assertNativeMemoryCaptureSourcePrincipal(db,companyId,actor);
+      const result = await inspect();
+      await assertNativeMemoryCaptureSourcePrincipal(db,companyId,actor);
+      return result;
+    });
+  } finally { permit.active=false; }
 }
 
 /** Current source authority, independent of a Memory record's display scope.
@@ -49,7 +115,10 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
         eq(heartbeatRuns.responsibleUserId,actor.onBehalfOfUserId),eq(heartbeatRuns.status,"running"),
         sql`${agents.status} not in ('paused','terminated','pending_approval','error')`,
       ));
-      if (!run) return false;
+      if (!run) {
+        const [capture] = await db.execute<{allowed:boolean}>(sql`select ${nativeMemoryCapturePrincipalCondition(actor,sql`${companyId}::uuid`)} as allowed`);
+        if (!capture?.allowed) return false;
+      }
     }else if(actor.type==="board" && actor.source!=="local_implicit"){
       if(!actor.userId)return false;
       const [account]=await db.select({id:authUsers.id}).from(authUsers).where(eq(authUsers.id,actor.userId));
@@ -123,7 +192,9 @@ export async function captureMemorySources(db: Db, companyId: string, actor: Aut
     if (!actor.runId || !actor.agentId || !actor.onBehalfOfUserId) throw forbidden("Memory requires its actual accountable producer run");
     const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,actor.runId),
       eq(heartbeatRuns.agentId,actor.agentId),eq(heartbeatRuns.responsibleUserId,actor.onBehalfOfUserId))).for("share");
-    if (!run || !["running","succeeded"].includes(run.status)) throw forbidden("Memory producer run is unavailable");
+    if (!run || (run.status!=="running" && !nativeMemoryCaptureSourcePurposeActive(companyId,actor)))
+      throw forbidden("Memory producer run is unavailable");
+    if(run.status!=="running")await assertNativeMemoryCaptureSourcePrincipal(db,companyId,actor);
     if(scope.type==="agent")sources.privateOwnerUserId=run.responsibleUserId;
     sources.sourceRunIds.push(run.id);
     if (run.issueId) sources.sourceIssueIds.push(run.issueId);
@@ -155,7 +226,30 @@ export async function captureMemorySources(db: Db, companyId: string, actor: Aut
     sources[key]=[...new Set(sources[key])].sort();
   if (sources.sourceRunIds.length+sources.sourceIssueIds.length+sources.sourceProjectIds.length+sources.sourceMemoryIds.length+sources.sourceFoundationRevisionIds.length>256)
     throw forbidden("Complete Memory provenance exceeds its source budget");
-  if (!(await authorizationService(db).decide({actor,action:"company_scope:read",resource:{type:"company",companyId},enforceResponsibleUserIntersection:true})).allowed)
+  // Actual Context retention supplies dependencies, never authority. In
+  // particular, acknowledged Human steering cannot authorize the prior Human's
+  // private roots merely because they still belong to this same producer run.
+  const {canActorReadIssuePrivacy,canActorReadProjectPrivacy,canActorReadHeartbeatRunPrivacy}=await import("../authorization.js");
+  const deadline=performance.now()+8000;
+  for(const id of sources.sourceRunIds)if(performance.now()>deadline || !await canActorReadHeartbeatRunPrivacy(db,actor,{companyId,id}))
+    throw forbidden("Memory producer source access is unavailable");
+  for(const id of sources.sourceIssueIds)if(performance.now()>deadline || !await canActorReadIssuePrivacy(db,actor,{companyId,id}))
+    throw forbidden("Memory Task source access is unavailable");
+  for(const id of sources.sourceProjectIds)if(performance.now()>deadline || !await canActorReadProjectPrivacy(db,actor,{companyId,id}))
+    throw forbidden("Memory Project source access is unavailable");
+  for(const id of sources.sourceMemoryIds)if(performance.now()>deadline || !await canActorReadMemorySources(db,companyId,actor,id))
+    throw forbidden("Memory retained source access is unavailable");
+  if(sources.sourceFoundationRevisionIds.length){
+    if(!(await authorizationService(db).decide({actor,action:"foundation:read",resource:{type:"company",companyId},enforceResponsibleUserIntersection:true})).allowed)
+      throw forbidden("Memory Foundation source access is unavailable");
+    const {assertLearnedAssetAnalyticalSources}=await import("../learning/learning-analytical-sources.js");
+    for(const id of sources.sourceFoundationRevisionIds){
+      const [revision]=await db.select({id:documentRevisions.id}).from(documentRevisions).where(and(eq(documentRevisions.companyId,companyId),eq(documentRevisions.id,id)));
+      if(!revision || performance.now()>deadline)throw forbidden("Memory Foundation source is unavailable");
+      await assertLearnedAssetAnalyticalSources(db,companyId,"document_revision",id,actor,"task");
+    }
+  }
+  if (performance.now()>deadline || !(await authorizationService(db).decide({actor,action:"company_scope:read",resource:{type:"company",companyId},enforceResponsibleUserIntersection:true})).allowed)
     throw forbidden("Memory producer authority changed");
   sources.sourceProvenanceQualified=true;
   return sources;
