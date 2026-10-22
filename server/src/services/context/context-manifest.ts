@@ -7,6 +7,7 @@ import {
   contextManifests,
   heartbeatRuns,
   issues,
+  issuePrivacySources,
   projects,
   contextManifestMemoryRoots,
   memoryRecords,
@@ -19,8 +20,9 @@ import type {
 } from "@paperclipai/shared";
 import { conflict, forbidden, unprocessable } from "../../errors.js";
 import { learningAssetRoots,retainLearnedAssetsInContext } from "../learning/learning-assets.js";
-import { lockMemoryPrivacy, memoryPayloadVisible, canActorReadMemorySources } from "../memory/memory-privacy.js";
-import {lockAnalyticalCompany} from "../analytical-privacy.js";
+import { memoryPayloadVisible, canActorReadMemorySources } from "../memory/memory-privacy.js";
+import { modelLineage, observationLineage } from "../memory/derived-memory.js";
+import { lockIssuePrivacyTree } from "../issues.js";
 import {authorizationService,canActorReadHeartbeatRunPrivacy,canActorReadIssuePrivacy,canActorReadProjectPrivacy,type AuthorizationActor} from "../authorization.js";
 
 type JsonScalar = string | number | boolean | null;
@@ -108,7 +110,7 @@ async function assertManifestReferences(db: Db, input: CreateContextManifestInpu
       .then((rows) => rows[0] ?? null),
     input.runId
       ? db
-          .select({ id: heartbeatRuns.id, agentId: heartbeatRuns.agentId, responsibleUserId:heartbeatRuns.responsibleUserId })
+          .select({ id: heartbeatRuns.id, agentId: heartbeatRuns.agentId, responsibleUserId:heartbeatRuns.responsibleUserId,issueId:heartbeatRuns.issueId })
           .from(heartbeatRuns)
           .where(
             and(
@@ -182,20 +184,27 @@ export function contextManifestService(db: Db) {
       const policySnapshotHash = hashContextPolicySnapshot(input.policySnapshot);
 
       return db.transaction(async (tx) => {
-        await lockAnalyticalCompany(tx as unknown as Db,input.companyId);
-        await lockMemoryPrivacy(tx as unknown as Db, input.companyId);
+        await lockIssuePrivacyTree(tx,input.companyId);
         const sourceDb = tx as unknown as Db;
         const run = await assertManifestReferences(sourceDb, input);
         if (!run?.responsibleUserId || (input.responsibleUserId && input.responsibleUserId !== run.responsibleUserId))
           throw forbidden("Context requires its actual accountable run");
+        if(input.issueId && input.issueId!==run.issueId)
+          throw forbidden("Context task does not match its actual run");
+        const issueId=run.issueId;
         const sourceActor:AuthorizationActor={type:"agent",source:"agent_jwt",companyId:input.companyId,agentId:input.agentId,runId:run.id,onBehalfOfUserId:run.responsibleUserId};
         // Retrieval may have waited while membership or sharing changed. The
         // original privacy transaction owns admission of the retained copy.
         const assertScopePrivacy = async () => {
+          const [currentRun]=await sourceDb.select({id:heartbeatRuns.id}).from(heartbeatRuns).where(and(
+            eq(heartbeatRuns.companyId,input.companyId),eq(heartbeatRuns.id,run.id),
+            eq(heartbeatRuns.agentId,input.agentId),eq(heartbeatRuns.responsibleUserId,run.responsibleUserId!),
+          ));
+          if(!currentRun)throw forbidden("Context accountable run changed during assembly");
           const admission = await authorizationService(sourceDb).decide({actor:sourceActor,action:"company_scope:read",
             resource:{type:"company",companyId:input.companyId},enforceResponsibleUserIntersection:true});
           if (!admission.allowed) throw forbidden("Context source access is unavailable");
-          if ((input.issueId && !await canActorReadIssuePrivacy(sourceDb,sourceActor,{companyId:input.companyId,id:input.issueId}))
+          if ((issueId && !await canActorReadIssuePrivacy(sourceDb,sourceActor,{companyId:input.companyId,id:issueId}))
             || (input.runId && !await canActorReadHeartbeatRunPrivacy(sourceDb,sourceActor,{companyId:input.companyId,id:input.runId}))
             || (input.projectId && !await canActorReadProjectPrivacy(sourceDb,sourceActor,{companyId:input.companyId,id:input.projectId})))
             throw forbidden("Context source access is unavailable");
@@ -220,13 +229,19 @@ export function contextManifestService(db: Db) {
         for (const id of selectedTaskIds)
           if (!await canActorReadIssuePrivacy(sourceDb,sourceActor,{companyId:input.companyId,id}))
             throw forbidden("Context source access is unavailable");
+        // Retain copied Task roots at the original destination Task owner.
+        // Removing a Context manifest later cannot release these dependencies.
+        const copiedTaskIds=selectedTaskIds.filter(id=>id!==issueId);
+        if(issueId && copiedTaskIds.length)await tx.insert(issuePrivacySources).values(copiedTaskIds.map(sourceId=>({
+          companyId:input.companyId,issueId,sourceKind:"issue" as const,sourceId,
+        }))).onConflictDoNothing();
         const [manifest] = await tx
           .insert(contextManifests)
           .values({
             companyId: input.companyId,
             runId: input.runId ?? null,
             agentId: input.agentId,
-            issueId: input.issueId ?? null,
+            issueId,
             projectId: input.projectId ?? null,
             queryHash,
             policySnapshotHash,
@@ -270,31 +285,52 @@ export function contextManifestService(db: Db) {
             learnedRoots.set(root.id, root.expectedVersion);
           }
         }
-        const rootIds = [...new Set([...input.selected.flatMap(({ decision }) => {
-          const evidence = decision.evidence;
-          if (!["august_works_memory", "august_works_derived_memory"].includes(evidence.sourceProvider)) return [];
-          const ids = evidence.metadata.derived === true ? evidence.metadata.sourceMemoryIds : [evidence.metadata.recordId];
-          if (!Array.isArray(ids) || ids.length > 64 || ids.some((id) => typeof id !== "string" || !/^[a-f0-9-]{36}$/i.test(id))) throw unprocessable("Invalid Memory root provenance");
-          return ids as string[];
-        }), ...learnedRoots.keys()])];
-        if (rootIds.length) {
-          const roots = await tx.select({ id: memoryRecords.id, updatedAt: memoryRecords.updatedAt }).from(memoryRecords).where(and(eq(memoryRecords.companyId, input.companyId), inArray(memoryRecords.id, rootIds), memoryPayloadVisible()));
-          if (roots.length !== rootIds.length) throw forbidden("Context Memory roots cross a company boundary");
-          for(const root of roots)if(!await canActorReadMemorySources(sourceDb,input.companyId,sourceActor,root.id))throw forbidden("Context Memory source access is unavailable");
-          if (roots.some(root => learnedRoots.has(root.id) && learnedRoots.get(root.id) !== root.updatedAt.toISOString())) throw conflict("Learned Context roots changed during assembly");
-          for (const { decision } of input.selected) {
-            const item = decision.evidence;
-            if (item.sourceProvider === "august_works_memory" && roots.find((root) => root.id === item.metadata.recordId)?.updatedAt.toISOString() !== item.sourceVersion) throw conflict("Context Memory changed during assembly");
-            if (item.sourceProvider === "august_works_derived_memory") {
-              const versions = item.metadata.sourceMemoryVersions;
-              if (!versions || typeof versions !== "object" || roots.some((root) => Array.isArray(item.metadata.sourceMemoryIds) && item.metadata.sourceMemoryIds.includes(root.id) && (versions as Record<string, unknown>)[root.id] !== root.updatedAt.toISOString())) throw conflict("Derived Context roots changed during assembly");
-              const ref = /^memory:\/\/(memory_model|memory_observation)\/([a-f0-9-]{36})$/i.exec(item.sourceRef);
-              if (!ref) throw unprocessable("Derived Context requires an AW observation/model reference");
-              const current = ref[1] === "memory_model" ? await tx.select().from(memoryModels).where(and(eq(memoryModels.companyId, input.companyId), eq(memoryModels.id, ref[2]!)))
-                : await tx.select().from(memoryObservations).where(and(eq(memoryObservations.companyId, input.companyId), eq(memoryObservations.id, ref[2]!)));
-              if (!current[0] || current[0].erasedAt || !["active", "accepted"].includes(current[0].status) || String(current[0].version) !== item.sourceVersion) throw conflict("Derived Context review changed during assembly");
+        // Native references and lineage owners define the complete source set.
+        // Provider metadata is descriptive; it cannot shrink retained roots.
+        const expectedRoots=new Map(learnedRoots);
+        for(const {decision} of input.selected){
+          const item=decision.evidence;
+          if(item.sourceProvider==="august_works_memory"){
+            const ref=/^memory:\/\/record\/([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})$/i.exec(item.sourceRef);
+            if(!ref)throw forbidden("Context requires its canonical Memory reference");
+            if(!item.sourceVersion || expectedRoots.has(ref[1]!) && expectedRoots.get(ref[1]!)!==item.sourceVersion)
+              throw conflict("Context Memory source versions conflict");
+            expectedRoots.set(ref[1]!,item.sourceVersion);
+          }else if(item.sourceProvider==="august_works_derived_memory"){
+            const ref=/^memory:\/\/(memory_model|memory_observation)\/([a-f0-9-]{36})$/i.exec(item.sourceRef);
+            if(!ref)throw unprocessable("Derived Context requires its native observation/model reference");
+            const roots=await (async()=>{
+              if(ref[1]==="memory_model"){
+                const [row]=await tx.select().from(memoryModels).where(and(eq(memoryModels.companyId,input.companyId),eq(memoryModels.id,ref[2]!))).for("share");
+                if(!row || row.erasedAt || row.status!=="active" || String(row.version)!==item.sourceVersion)
+                  throw conflict("Derived Context review changed during assembly");
+                return (await modelLineage(sourceDb,sourceActor,row)).roots;
+              }
+              const [row]=await tx.select().from(memoryObservations).where(and(eq(memoryObservations.companyId,input.companyId),eq(memoryObservations.id,ref[2]!))).for("share");
+              if(!row || row.erasedAt || row.status!=="accepted" || String(row.version)!==item.sourceVersion)
+                throw conflict("Derived Context review changed during assembly");
+              return (await observationLineage(sourceDb,sourceActor,row)).roots;
+            })();
+            for(const root of roots){
+              const version=root.updatedAt.toISOString();
+              if(expectedRoots.has(root.id) && expectedRoots.get(root.id)!==version)
+                throw conflict("Context Memory source versions conflict");
+              expectedRoots.set(root.id,version);
             }
           }
+        }
+        const rootIds=[...expectedRoots.keys()];
+        if(rootIds.length>256)throw forbidden("Complete Context Memory roots exceed their source budget");
+        if (rootIds.length) {
+          const roots = await tx.select({ id: memoryRecords.id, updatedAt: memoryRecords.updatedAt,scopeType:memoryRecords.scopeType,ownerAgentId:memoryRecords.ownerAgentId }).from(memoryRecords).where(and(eq(memoryRecords.companyId, input.companyId), inArray(memoryRecords.id, rootIds), memoryPayloadVisible())).for("share");
+          if (roots.length !== rootIds.length) throw forbidden("Context Memory roots cross a company boundary");
+          for(const root of roots){
+            if(root.scopeType==="agent" && root.ownerAgentId!==input.agentId)
+              throw forbidden("Context private Memory belongs to another agent");
+            if(!await canActorReadMemorySources(sourceDb,input.companyId,sourceActor,root.id))throw forbidden("Context Memory source access is unavailable");
+          }
+          if(roots.some(root=>expectedRoots.get(root.id)!==root.updatedAt.toISOString()))
+            throw conflict("Context Memory roots changed during assembly");
           await tx.insert(contextManifestMemoryRoots).values(roots.map((root) => ({ companyId: input.companyId, manifestId: manifest!.id, memoryRecordId: root.id, sourceVersion: root.updatedAt.toISOString() })));
         }
 
@@ -304,6 +340,9 @@ export function contextManifestService(db: Db) {
         for (const id of selectedTaskIds)
           if (!await canActorReadIssuePrivacy(sourceDb,sourceActor,{companyId:input.companyId,id}))
             throw forbidden("Context source access is unavailable");
+        for(const id of rootIds)
+          if(!await canActorReadMemorySources(sourceDb,input.companyId,sourceActor,id))
+            throw forbidden("Context Memory source access changed during assembly");
 
         return { manifest: manifest!, items };
       });

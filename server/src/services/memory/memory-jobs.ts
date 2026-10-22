@@ -1,3 +1,4 @@
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { createHash, randomUUID } from "node:crypto";
 import { providerTraceStore } from "../provider-trace-store.js";
@@ -505,6 +506,7 @@ export function memoryJobService(
       if (["dedupe", "compaction", "reflection", "index_refresh", "model_rebuild"].includes(job.operationType)) {
         if (!(await settings.getExperimental()).enableCollectiveMemoryV1) throw conflict("Memory maintenance is disabled");
         const publication = await db.transaction(async (tx) => {
+          await lockAnalyticalCompany(tx as unknown as Db,job.companyId);
           await lockMemoryPrivacy(tx as unknown as Db, job.companyId);
           const [owned] = await tx.select().from(memoryJobs).where(and(eq(memoryJobs.id, job.id), eq(memoryJobs.companyId, job.companyId),
             eq(memoryJobs.status, "running"), eq(memoryJobs.executionOwnerId, ownerId))).for("update");

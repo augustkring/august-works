@@ -1,3 +1,4 @@
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { and, eq, inArray, isNull, desc } from "drizzle-orm";
 import { memoryRecords, memoryEvidence, memoryObservations, memoryObservationEvidence, memoryModels, memoryModelVersions, memoryModelEvidence, memoryJobs, heartbeatRuns, issues, type Db } from "@paperclipai/db";
 import { createObservationSchema, createMemoryModelSchema, rebuildMemoryModelSchema, derivedReviewSchema, EVIDENCE_SENSITIVITIES, type EvidenceSensitivity, type MemoryScope } from "@paperclipai/shared";
@@ -107,7 +108,7 @@ export function derivedMemoryService(db: Db) {
     createObservation: async (actor: AuthorizationActor, companyId: string, raw: z.input<typeof createObservationSchema>) => {
       const input = createObservationSchema.parse(raw); await assertV7Enabled(db, "memory_observations_v7"); await assertScope(db, actor, companyId, input.scope); await assertSaasDomainAdmission(db, companyId, "memory.use");
       return withV7ActivityTransaction(db, async (tx, publications) => {
-        await lockMemoryPrivacy(tx, companyId); await assertDerivedWorker(tx, actor, companyId);
+        await lockAnalyticalCompany(tx,companyId); await lockMemoryPrivacy(tx, companyId); await assertDerivedWorker(tx, actor, companyId);
         const roots = await derivedRoots(tx, actor, companyId, input.scope, input.purpose, input.evidence.map((edge) => edge.memoryRecordId));
         if (roots.some((root) => !memorySensitivityAllowed(root, input.sensitivity))) throw forbidden("Observation cannot reduce root sensitivity");
         const supporting = roots.filter((root) => input.evidence.some((edge) => edge.memoryRecordId === root.id && edge.relation === "supports"));
@@ -128,7 +129,7 @@ export function derivedMemoryService(db: Db) {
     reviewObservation: async (actor: AuthorizationActor, companyId: string, id: string, decision: "accept" | "reject" | "revoke", raw: z.infer<typeof derivedReviewSchema>) => {
       const input = derivedReviewSchema.parse(raw); await assertDerivedManager(db, actor, companyId);
       return withV7ActivityTransaction(db, async (tx, publications) => {
-        await lockMemoryPrivacy(tx, companyId); const row = await observation(actor, companyId, id, tx, true);
+        await lockAnalyticalCompany(tx,companyId); await lockMemoryPrivacy(tx, companyId); const row = await observation(actor, companyId, id, tx, true);
         if (row.version !== input.expectedVersion || ["revoked", "rejected", "superseded", "expired"].includes(row.status)) throw conflict("Observation changed");
         if (decision === "accept") {
           if (row.status !== "candidate" || row.supportCount < 2 || row.independentSourceCount < 2 || row.contradictionCount) throw conflict("Observation requires stronger independent supporting evidence");
@@ -152,7 +153,7 @@ export function derivedMemoryService(db: Db) {
     createModel: async (actor: AuthorizationActor, companyId: string, raw: z.infer<typeof createMemoryModelSchema>) => {
       const input = createMemoryModelSchema.parse(raw); await assertV7Enabled(db, "memory_models_v7"); await assertScope(db, actor, companyId, input.scope); await assertSaasDomainAdmission(db, companyId, "memory.use");
       return withV7ActivityTransaction(db, async (tx, publications) => {
-        await lockMemoryPrivacy(tx, companyId); await assertDerivedWorker(tx, actor, companyId); const sources = await modelSources(tx, actor, companyId, input);
+        await lockAnalyticalCompany(tx,companyId); await lockMemoryPrivacy(tx, companyId); await assertDerivedWorker(tx, actor, companyId); const sources = await modelSources(tx, actor, companyId, input);
         const [row] = await tx.insert(memoryModels).values({ companyId, modelKey: input.modelKey, name: input.name, scopeType: input.scope.type, scopeId: input.scope.id, purpose: input.purpose, sourceQuery: input.sourceQuery,
           content: sources.content, confidence: Math.min(...sources.roots.map((root) => root.confidenceScore)), sensitivity: sensitivity(sources.roots), sourceWatermark: sources.sourceWatermark, lastRebuiltAt: new Date() }).onConflictDoNothing().returning();
         if (!row) throw conflict("A model with this key already exists"); await writeModelVersion(tx, row, sources);
@@ -162,7 +163,7 @@ export function derivedMemoryService(db: Db) {
     reviewModel: async (actor: AuthorizationActor, companyId: string, id: string, decision: "accept" | "revoke", raw: z.infer<typeof derivedReviewSchema>) => {
       const input = derivedReviewSchema.parse(raw); await assertDerivedManager(db, actor, companyId);
       return withV7ActivityTransaction(db, async (tx, publications) => {
-        await lockMemoryPrivacy(tx, companyId); const row = await model(actor, companyId, id, tx, true);
+        await lockAnalyticalCompany(tx,companyId); await lockMemoryPrivacy(tx, companyId); const row = await model(actor, companyId, id, tx, true);
         if (row.version !== input.expectedVersion || row.status === "revoked") throw conflict("Model changed");
         if (decision === "accept") { if (row.status !== "candidate") throw conflict("Rebuild and review a current candidate first"); await modelLineage(tx, actor, row); }
         const [updated] = await tx.update(memoryModels).set({ status: decision === "accept" ? "active" : "revoked", reviewedByUserId: v7HumanActorId(actor), reviewedAt: new Date(), revokedAt: decision === "revoke" ? new Date() : null, updatedAt: new Date() }).where(eq(memoryModels.id, id)).returning();
@@ -172,7 +173,7 @@ export function derivedMemoryService(db: Db) {
     rebuildModel: async (actor: AuthorizationActor, companyId: string, id: string, raw: z.infer<typeof rebuildMemoryModelSchema>) => {
       const input = rebuildMemoryModelSchema.parse(raw); await assertDerivedManager(db, actor, companyId); await assertSaasDomainAdmission(db, companyId, "memory.use");
       return withV7ActivityTransaction(db, async (tx, publications) => {
-        await lockMemoryPrivacy(tx, companyId); const row = await model(actor, companyId, id, tx, true);
+        await lockAnalyticalCompany(tx,companyId); await lockMemoryPrivacy(tx, companyId); const row = await model(actor, companyId, id, tx, true);
         if (row.version !== input.expectedVersion || row.status === "revoked") throw conflict("Model changed");
         const sources = await modelSources(tx, actor, companyId, { ...input, modelKey: row.modelKey, name: row.name, purpose: row.purpose, sourceQuery: row.sourceQuery, scope: { type: row.scopeType as MemoryScope["type"], id: row.scopeId } });
         const sourceRefJson = { modelId: id, expectedVersion: row.version, memoryRecordIds: input.memoryRecordIds, observationIds: input.observationIds, recordIds: sources.roots.map((root) => root.id), sourceWatermark: sources.sourceWatermark,

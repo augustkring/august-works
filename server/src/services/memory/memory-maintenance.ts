@@ -1,3 +1,4 @@
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { invalidateCognitiveRecords } from "./cognitive-privacy.js";
 import { createHash } from "node:crypto";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
@@ -52,6 +53,7 @@ async function assertNativeMemoryIndex(db: Db) {
 /** Pure native maintenance. All effects and the job receipt commit together. */
 export async function executeMemoryMaintenance(db: Db, job: typeof memoryJobs.$inferSelect) {
   const source = sourceSchema.parse(job.sourceRefJson);
+  await lockAnalyticalCompany(db,job.companyId);
   await lockMemoryPrivacy(db, job.companyId);
   await assertMemoryRecordsRetained(db, job.companyId, source.recordIds);
   const records = await memoryMaintenanceSources(db, job.companyId, source.recordIds, { principal: source.requester });

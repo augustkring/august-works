@@ -1,3 +1,4 @@
+import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { invalidateCognitiveRecords } from "./cognitive-privacy.js";
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { createHash } from "node:crypto";
@@ -5,6 +6,7 @@ import { and, desc, eq, gt, inArray, isNull, lte, ne, or, sql } from "drizzle-or
 import type { Db } from "@paperclipai/db";
 import {
   agents,
+  authUsers,
   companyMemberships,
   heartbeatRuns,
   memoryBindings,
@@ -85,6 +87,7 @@ async function assertActorCompanyScope(
   const membership = await db
     .select({ id: companyMemberships.id })
     .from(companyMemberships)
+    .innerJoin(authUsers,eq(authUsers.id,companyMemberships.principalId))
     .where(
       and(
         eq(companyMemberships.companyId, companyId),
@@ -343,7 +346,7 @@ async function lockMemoryOperation(
   companyId: string,
   operationId: string,
 ) {
-  await lockMemoryPrivacy(db, companyId);
+  await lockAnalyticalCompany(db,companyId); await lockMemoryPrivacy(db,companyId);
   await db.execute(
     sql`select pg_advisory_xact_lock(
       hashtextextended(${`memory:operation:${companyId}:${operationId}`}, 0)
@@ -430,13 +433,26 @@ async function visibleMemorySources(db:Db,companyId:string,rows:(typeof memoryRe
 // Apply the public result limit after source qualification. Stable batches
 // avoid loading the company's complete Memory merely to find its first match.
 async function visibleMemoryPage(db:Db,companyId:string,actor:MemoryMutationActor,limit:number,
-  page:(offset:number)=>Promise<(typeof memoryRecords.$inferSelect)[]>) {
-  const visible:(typeof memoryRecords.$inferSelect)[]=[];
-  for(let offset=0;;offset+=100){
-    const rows=await page(offset);
-    visible.push(...await visibleMemorySources(db,companyId,rows,actor));
-    if(visible.length>=limit || rows.length<100)return visible.slice(0,limit);
-  }
+  page:(db:Db,offset:number)=>Promise<(typeof memoryRecords.$inferSelect)[]>) {
+  return db.transaction(async rawTx=>{
+    const tx=rawTx as unknown as Db;
+    await tx.execute(sql`set local statement_timeout='8s'`);
+    await lockAnalyticalCompany(tx,companyId); await lockMemoryPrivacy(tx,companyId);
+    await assertActorCompanyScope(tx,companyId,actor);
+    const deadline=performance.now()+8000;
+    const visible:(typeof memoryRecords.$inferSelect)[]=[];
+    for(let offset=0;;offset+=100){
+      const rows=await page(tx,offset);
+      visible.push(...await visibleMemorySources(tx,companyId,rows,actor));
+      if(performance.now()>deadline)throw conflict("Complete Memory source review exceeded its budget");
+      if(visible.length>=limit || rows.length<100){
+        // A later source may wait while an earlier reader grant is withdrawn.
+        const current=await visibleMemorySources(tx,companyId,visible.slice(0,limit),actor);
+        if(performance.now()>deadline)throw conflict("Complete Memory source review exceeded its budget");
+        return current;
+      }
+    }
+  });
 }
 async function assertMemorySourceAccess(db:Db,companyId:string,recordId:string,actor:MemoryMutationActor) {
   if(!await canActorReadMemorySources(db,companyId,learningActorFromPrincipal(companyId,actor.principal,actor.runId),recordId))throw notFound("Memory record not found");
@@ -629,7 +645,7 @@ export function memoryService(db: Db) {
       const result = await db.transaction(async (tx) => {
         const scopedDb = tx as unknown as Db;
         await assertPrivacyManagement(scopedDb, companyId, actor);
-        await lockMemoryPrivacy(scopedDb, companyId);
+        await lockAnalyticalCompany(scopedDb,companyId); await lockMemoryPrivacy(scopedDb,companyId);
         for (const marker of ledger.markers) {
           if (marker.kind === "record" ? !marker.recordId || marker.key !== memoryDeletionKey(companyId, "record", marker.recordId) : marker.recordId !== null) {
             throw unprocessable("Deletion marker identity is invalid", { code: "memory_deletion_marker_invalid" });
@@ -651,9 +667,10 @@ export function memoryService(db: Db) {
       const result = await db.transaction(async (tx) => {
         const scopedDb = tx as unknown as Db;
         await assertActorCompanyScope(scopedDb, companyId, actor);
-        await lockMemoryPrivacy(scopedDb, companyId);
+        await lockAnalyticalCompany(scopedDb,companyId); await lockMemoryPrivacy(scopedDb,companyId);
         const [record] = await scopedDb.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, companyId), eq(memoryRecords.id, recordId))).for("update");
         if (!record) throw notFound("Memory record not found");
+        if(!record.deletedAt)await assertMemorySourceAccess(scopedDb,companyId,record.id,actor);
         assertPrivateMemoryReadAllowed(record, actor);
         if (record.scopeType === "agent") assertPrivateMemoryWriter(record.ownerAgentId!, actor);
         else requireHumanOrSystem(actor, "delete");
@@ -672,7 +689,7 @@ export function memoryService(db: Db) {
       return db.transaction(async (tx) => {
         const scopedDb = tx as unknown as Db;
         await assertActorCompanyScope(scopedDb, companyId, actor);
-        await lockMemoryPrivacy(scopedDb, companyId);
+        await lockAnalyticalCompany(scopedDb,companyId); await lockMemoryPrivacy(scopedDb,companyId);
         const candidates = await scopedDb.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, companyId), memoryPayloadVisible(),
           actor.principal.type === "agent" ? and(eq(memoryRecords.scopeType, "agent"), eq(memoryRecords.ownerAgentId, actor.principal.agentId)) : ne(memoryRecords.scopeType, "agent")));
         const records=await visibleMemorySources(scopedDb,companyId,candidates,actor);
@@ -689,7 +706,7 @@ export function memoryService(db: Db) {
       const result = await db.transaction(async (tx) => {
         const scopedDb = tx as unknown as Db;
         await assertPrivacyManagement(scopedDb, companyId, actor);
-        await lockMemoryPrivacy(scopedDb, companyId);
+        await lockAnalyticalCompany(scopedDb,companyId); await lockMemoryPrivacy(scopedDb,companyId);
         const key = memoryDeletionKey(companyId, "source", [parsed.sourceProvider, parsed.sourceRef]);
         await scopedDb.insert(memoryDeletionMarkers).values({ companyId, key, kind: "source" }).onConflictDoNothing();
         const evidence = await scopedDb.select({ id: memoryEvidence.memoryRecordId }).from(memoryEvidence).where(and(
@@ -723,7 +740,7 @@ export function memoryService(db: Db) {
       const result = await db.transaction(async (tx) => {
         const scopedDb = tx as unknown as Db;
         await assertPrivacyManagement(scopedDb, companyId, actor);
-        await lockMemoryPrivacy(scopedDb, companyId);
+        await lockAnalyticalCompany(scopedDb,companyId); await lockMemoryPrivacy(scopedDb,companyId);
         const [stored] = await scopedDb.insert(memoryRetentionPolicies).values({ companyId, ...policy })
           .onConflictDoUpdate({ target: memoryRetentionPolicies.companyId, set: { ...policy, updatedAt: new Date() } }).returning();
         publications.push(await persistMemoryActivity(scopedDb, actor, { companyId, action: "memory.retention_policy_updated", recordId: companyId,
@@ -758,7 +775,7 @@ export function memoryService(db: Db) {
     ) => {
       requireHumanOrSystem(actor, "inspect");
       await assertActorCompanyScope(db, companyId, actor);
-      const query = db
+      return visibleMemoryPage(db,companyId,actor,input.limit,async (scopedDb,offset)=>scopedDb
         .select()
         .from(memoryRecords)
         .where(
@@ -775,8 +792,7 @@ export function memoryService(db: Db) {
           ),
         )
         .orderBy(desc(memoryRecords.updatedAt),memoryRecords.id)
-        .$dynamic();
-      return visibleMemoryPage(db,companyId,actor,input.limit,async offset=>query.limit(100).offset(offset));
+        .limit(100).offset(offset));
     },
 
     getShared: async (
@@ -787,7 +803,7 @@ export function memoryService(db: Db) {
       requireHumanOrSystem(actor, "inspect");
       await assertActorCompanyScope(db, companyId, actor);
       return db.transaction(async rawTx=>{
-        const tx=rawTx as unknown as Db;await lockMemoryPrivacy(tx,companyId);
+        const tx=rawTx as unknown as Db;await lockAnalyticalCompany(tx,companyId); await lockMemoryPrivacy(tx,companyId);
         const detail=await getRecordDetail(tx,companyId,recordId);
         if(!detail || detail.record.scopeType==="agent" || !await canActorReadMemorySources(tx,companyId,
           learningActorFromPrincipal(companyId,actor.principal,actor.runId),recordId))return null;
@@ -802,7 +818,7 @@ export function memoryService(db: Db) {
     ) => {
       await assertActorCompanyScope(db, companyId, actor);
       return db.transaction(async rawTx=>{
-        const tx=rawTx as unknown as Db;await lockMemoryPrivacy(tx,companyId);
+        const tx=rawTx as unknown as Db;await lockAnalyticalCompany(tx,companyId); await lockMemoryPrivacy(tx,companyId);
         const detail=await getRecordDetail(tx,companyId,recordId);
         if(!detail)return null;
         assertPrivateMemoryReadAllowed(detail.record,actor);
@@ -1059,7 +1075,7 @@ export function memoryService(db: Db) {
         const txDb = tx as unknown as Db;
         await assertActorCompanyScope(txDb, companyId, actor);
       await assertSaasDomainAdmission(txDb, companyId, "memory.use");
-        await lockMemoryPrivacy(txDb,companyId);
+        await lockAnalyticalCompany(txDb,companyId); await lockMemoryPrivacy(txDb,companyId);
 
         const source = await txDb
           .select()
@@ -1229,7 +1245,7 @@ export function memoryService(db: Db) {
         const txDb = tx as unknown as Db;
         await assertActorCompanyScope(txDb, companyId, actor);
       await assertSaasDomainAdmission(txDb, companyId, "memory.use");
-        await lockMemoryPrivacy(txDb,companyId);
+        await lockAnalyticalCompany(txDb,companyId); await lockMemoryPrivacy(txDb,companyId);
 
         const source = await txDb
           .select()
@@ -1400,6 +1416,7 @@ export function memoryService(db: Db) {
         await assertScopeReferences(txDb, companyId, parsed.data);
         await assertAgentPrivateOwnership(parsed.data, actor);
         await assertBindingAllowsCandidate(txDb, companyId, parsed.data);
+        await lockAnalyticalCompany(txDb,companyId);
         await assertMemorySourcesRetained(txDb, companyId, parsed.data.evidence);
 
         // Preserve the existing operation-id contract before semantic
@@ -1566,7 +1583,7 @@ export function memoryService(db: Db) {
         const txDb = tx as unknown as Db;
         await assertActorCompanyScope(txDb, companyId, actor);
       await assertSaasDomainAdmission(txDb, companyId, "memory.use");
-        await lockMemoryPrivacy(txDb,companyId);
+        await lockAnalyticalCompany(txDb,companyId); await lockMemoryPrivacy(txDb,companyId);
         const existing = await txDb
           .select()
           .from(memoryRecords)
@@ -1655,7 +1672,7 @@ export function memoryService(db: Db) {
 
       const reviewed = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
-        await lockMemoryPrivacy(txDb, companyId);
+        await lockAnalyticalCompany(txDb,companyId); await lockMemoryPrivacy(txDb,companyId);
         await assertActorCompanyScope(txDb, companyId, actor);
       await assertSaasDomainAdmission(txDb, companyId, "memory.use");
         const record = await txDb
@@ -1788,7 +1805,7 @@ export function memoryService(db: Db) {
 
       const revoked = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
-        await lockMemoryPrivacy(txDb, companyId);
+        await lockAnalyticalCompany(txDb,companyId); await lockMemoryPrivacy(txDb,companyId);
         await assertActorCompanyScope(txDb, companyId, actor);
         const record = await txDb
           .select()
@@ -1879,7 +1896,7 @@ export function memoryService(db: Db) {
 
       const asOf = input.asOf ?? new Date();
       const limit = Math.min(100, Math.max(1, input.limit ?? 50));
-      const query=db
+      return visibleMemoryPage(db,companyId,actor,limit,async (scopedDb,offset)=>scopedDb
         .select()
         .from(memoryRecords)
         .where(
@@ -1904,8 +1921,7 @@ export function memoryService(db: Db) {
           ),
         )
         .orderBy(desc(memoryRecords.observedAt),memoryRecords.id)
-        .$dynamic();
-      return visibleMemoryPage(db,companyId,actor,limit,async offset=>query.limit(100).offset(offset));
+        .limit(100).offset(offset));
     },
   };
 }

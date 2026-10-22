@@ -1,13 +1,15 @@
 import { createHash, randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
-import { agents, authUsers, companies, companyMemberships, contextManifests, createDb, heartbeatRuns, issues, memoryBindings, memoryBindingTargets, memoryRecords } from "@paperclipai/db";
+import { agents, authUsers, companies, companyMemberships, contextManifests, contextManifestMemoryRoots, createDb, heartbeatRuns, issues, issueComments, memoryBindings, memoryBindingTargets, memoryRecords, memoryModels, memoryModelVersions, memoryModelEvidence, memoryObservations, memoryObservationEvidence } from "@paperclipai/db";
 import { assertAnalyticalContextPayloadAccess } from "../services/analytical-context-authority.js";
 import type { AuthorizationActor } from "../services/authorization.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { contextManifestService } from "../services/context/context-manifest.js";
 import { canActorReadMemorySources, lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
 import type { ContextAuthorityDecision } from "@paperclipai/shared";
+import { initializeRunIdentity, reserveSteeredIdentity, acceptSteeredIdentity } from "../services/run-identity.js";
+import { lockAnalyticalCompany } from "../services/analytical-privacy.js";
 import { memoryService } from "../services/memory/memory-service.js";
 
 describe("Private ordinary payloads retain current source authority without analytical roots", () => {
@@ -191,7 +193,7 @@ describe("Private ordinary payloads retain current source authority without anal
     await db.insert(memoryBindingTargets).values({companyId,bindingId:binding!.id,targetType:"agent",targetId:agentId});
     return binding!;
   }
-  async function privateMemory() {
+  async function privateMemory(producerRunId=runId) {
     const binding = await privateMemoryBinding();
     return memoryService(db).createPrivateMemory(companyId,agentId,{
       bindingId:binding.id,memoryType:"lesson",title:"Private source lesson",content:"PRIVATE retained source",
@@ -203,7 +205,7 @@ describe("Private ordinary payloads retain current source authority without anal
         sourceVersion:null,sourceUpdatedAt:null,observedAt:new Date().toISOString(),
         excerptHash:createHash("sha256").update("PRIVATE retained source").digest("hex"),
         citation:{label:"Caller citation"},trustLevel:"low",relation:"supports"}],
-    },memoryActor(ownerId,runId));
+    },memoryActor(ownerId,producerRunId));
   }
   it("withholds Memory captured by the same agent for another human, ignoring copied producer metadata", async () => {
     const created = await privateMemory();
@@ -269,6 +271,232 @@ describe("Private ordinary payloads retain current source authority without anal
     const actor={principal:{type:"user" as const,userId:otherId}};
     expect((await memoryService(db).listEligible(companyId,{limit:1},actor)).map(row=>row.id)).toEqual([readable!.id]);
     expect((await memoryService(db).listReviewable(companyId,{limit:1},actor)).map(row=>row.id)).toEqual([readable!.id]);
+  });
+
+  it.each(["issue", "run"] as const)("retains ordinary private Memory Context authority on a public destination %s without analytical roots", async kind=>{
+    const created=await privateMemory();
+    const destinationId=randomUUID(),destinationRunId=randomUUID();
+    await db.insert(issues).values({id:destinationId,companyId,title:"Public destination",
+      responsibleUserId:ownerId,assigneeAgentId:agentId,createdByUserId:ownerId});
+    await db.insert(heartbeatRuns).values({id:destinationRunId,companyId,agentId,responsibleUserId:ownerId,
+      runtimeMode:"native",nativeIssueId:destinationId,status:"running"});
+    const source=await taskSelection();
+    source.decision.evidence={...source.decision.evidence,sourceClass:"private_memory",sourceProvider:"august_works_memory",
+      sourceType:"record",sourceRef:`memory://record/${created.record.id}`,sourceVersion:created.record.updatedAt.toISOString(),
+      metadata:{recordId:created.record.id},excerpt:"PRIVATE retained Memory Context"};
+    await contextManifestService(db).create({companyId,agentId,runId:destinationRunId,responsibleUserId:ownerId,
+      query:"Copied ordinary private source",policySnapshot:{},selected:[source]});
+    const scope=kind==="issue"?{issueId:destinationId}:{runId:destinationRunId};
+    await expect(assertAnalyticalContextPayloadAccess(db,companyId,human(ownerId),scope)).resolves.toBeUndefined();
+    await expect(assertAnalyticalContextPayloadAccess(db,companyId,human(otherId),scope)).rejects.toMatchObject({status:403});
+  });
+  it("retains a run-only manifest's actual task binding and refuses a different caller task", async()=>{
+    const result=await contextManifestService(db).create({companyId,agentId,runId,responsibleUserId:ownerId,
+      query:"Actual run binding",policySnapshot:{},selected:[]});
+    expect(result.manifest.issueId).toBe(issueId);
+    const [otherRun]=await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,otherRunId));
+    await expect(contextManifestService(db).create({companyId,agentId,runId,issueId:otherRun!.issueId!,responsibleUserId:ownerId,
+      query:"Caller substituted binding",policySnapshot:{},selected:[]})).rejects.toMatchObject({status:403});
+  });
+
+  it("takes the existing company lock before Memory when reading a retained copy", async()=>{
+    const created=await privateMemory();
+    let release!:()=>void,ready!:(pid:number)=>void,tryMemory!:()=>void;
+    const held=new Promise<void>(resolve=>{release=resolve;});
+    const readyPid=new Promise<number>(resolve=>{ready=resolve;});
+    const attempt=new Promise<void>(resolve=>{tryMemory=resolve;});
+    let acquired=false;
+    const blocker=db.transaction(async tx=>{
+      await lockAnalyticalCompany(tx as unknown as typeof db,companyId);
+      const [row]=await tx.execute<{pid:number}>(sql`select pg_backend_pid() as pid`);
+      ready(row!.pid);
+      await attempt;
+      const [result]=await tx.execute<{acquired:boolean}>(sql`select pg_try_advisory_xact_lock(hashtextextended(${`memory:privacy:${companyId}`},0)) as acquired`);
+      acquired=result!.acquired;
+      await held;
+    });
+    const pid=await readyPid;
+    const pending=memoryService(db).get(companyId,created.record.id,memoryActor(ownerId,runId));
+    try{
+      let waiting=false;
+      const until=Date.now()+8000;
+      while(Date.now()<until){
+        const [row]=await db.execute<{waiting:boolean}>(sql`select exists(select 1 from pg_stat_activity where ${pid}::integer=any(pg_blocking_pids(pid))) as waiting`);
+        if(row?.waiting){waiting=true;break;}
+        await new Promise(resolve=>setTimeout(resolve,10));
+      }
+      expect(waiting).toBe(true);
+    }finally{tryMemory();release();await blocker;}
+    expect(acquired).toBe(true);
+    await expect(pending).resolves.toMatchObject({record:{id:created.record.id}});
+  });
+  it.each(["eligible","reviewable"] as const)("rechecks %s Memory list admission after its native privacy lock wait",async kind=>{
+    let release!:()=>void,ready!:(pid:number)=>void;
+    const held=new Promise<void>(resolve=>{release=resolve;});
+    const readyPid=new Promise<number>(resolve=>{ready=resolve;});
+    const blocker=db.transaction(async tx=>{
+      await lockMemoryPrivacy(tx as unknown as typeof db,companyId);
+      const [row]=await tx.execute<{pid:number}>(sql`select pg_backend_pid() as pid`);
+      ready(row!.pid);await held;
+    });
+    const pid=await readyPid,actor={principal:{type:"user" as const,userId:ownerId}};
+    const pending=(kind==="eligible"?memoryService(db).listEligible(companyId,{limit:1},actor):
+      memoryService(db).listReviewable(companyId,{limit:1},actor)).then(value=>({value}),error=>({error}));
+    try{
+      let waiting=false;
+      const until=Date.now()+8000;
+      while(Date.now()<until){
+        const [row]=await db.execute<{waiting:boolean}>(sql`select exists(select 1 from pg_stat_activity where ${pid}::integer=any(pg_blocking_pids(pid))) as waiting`);
+        if(row?.waiting){waiting=true;break;}
+        await new Promise(resolve=>setTimeout(resolve,10));
+      }
+      expect(waiting).toBe(true);
+      await db.update(companyMemberships).set({status:"suspended"}).where(and(eq(companyMemberships.companyId,companyId),eq(companyMemberships.principalId,ownerId)));
+    }finally{release();await blocker;}
+    expect(await pending).toMatchObject({error:{status:403}});
+  });
+
+  it("keeps private agent Memory bound to its Human even when its producer run has company scope",async()=>{
+    const producerRunId=randomUUID();
+    await db.insert(heartbeatRuns).values({id:producerRunId,companyId,agentId,responsibleUserId:ownerId,runtimeMode:"native",status:"running"});
+    const created=await privateMemory(producerRunId);
+    await expect(memoryService(db).get(companyId,created.record.id,memoryActor(ownerId,runId))).resolves.toMatchObject({record:{id:created.record.id}});
+    await expect(memoryService(db).get(companyId,created.record.id,memoryActor(otherId,otherRunId))).resolves.toBeNull();
+  });
+  it("does not admit another agent's private Memory through the same Human's Context",async()=>{
+    const producerRunId=randomUUID();
+    await db.insert(heartbeatRuns).values({id:producerRunId,companyId,agentId,responsibleUserId:ownerId,runtimeMode:"native",status:"running"});
+    const created=await privateMemory(producerRunId),readerAgentId=randomUUID(),readerTaskId=randomUUID(),readerRunId=randomUUID();
+    await db.insert(agents).values({id:readerAgentId,companyId,name:"Other agent",role:"engineer",status:"idle",adapterType:"paperclip_runner"});
+    await db.insert(issues).values({id:readerTaskId,companyId,title:"Other agent task",responsibleUserId:ownerId,assigneeAgentId:readerAgentId});
+    await db.insert(heartbeatRuns).values({id:readerRunId,companyId,agentId:readerAgentId,responsibleUserId:ownerId,
+      runtimeMode:"native",nativeIssueId:readerTaskId,status:"running"});
+    const selected=await taskSelection();
+    selected.decision.evidence={...selected.decision.evidence,sourceClass:"private_memory",sourceProvider:"august_works_memory",
+      sourceType:"memory_record",sourceRef:`memory://record/${created.record.id}`,sourceVersion:created.record.updatedAt.toISOString(),
+      metadata:{recordId:created.record.id},excerpt:"PRIVATE other agent source"};
+    await expect(contextManifestService(db).create({companyId,agentId:readerAgentId,runId:readerRunId,responsibleUserId:ownerId,
+      query:"Unauthorized private Memory scope",policySnapshot:{},selected:[selected]})).rejects.toMatchObject({status:403});
+  });
+
+  it("does not transfer previously captured private Memory when native steering changes the same run's Human",async()=>{
+    const sourceTaskId=randomUUID(),producerRunId=randomUUID();
+    await db.insert(issues).values({id:sourceTaskId,companyId,title:"Public producer task",responsibleUserId:ownerId,assigneeAgentId:agentId});
+    await db.insert(heartbeatRuns).values({id:producerRunId,companyId,agentId,responsibleUserId:ownerId,
+      runtimeMode:"native",nativeIssueId:sourceTaskId,status:"running",contextSnapshot:{issueId:sourceTaskId}});
+    await initializeRunIdentity(db,{companyId,runId:producerRunId,responsibleUserId:ownerId,issueId:sourceTaskId,cause:"dispatch"});
+    const created=await privateMemory(producerRunId);
+    const [message]=await db.insert(issueComments).values({companyId,issueId:sourceTaskId,authorUserId:otherId,body:"New responsible Human instruction"}).returning();
+    const steering=await reserveSteeredIdentity(db,{companyId,runId:producerRunId,issueId:sourceTaskId,messageId:message!.id});
+    expect(steering?.status).toBe("pending");
+    // Exercise the native acknowledgement effect owner. This software fixture
+    // does not claim an actual provider transport acknowledgement.
+    await db.transaction(async tx=>acceptSteeredIdentity(tx,steering!));
+    const [run]=await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,producerRunId));
+    expect(run!.responsibleUserId).toBe(otherId);
+    await expect(memoryService(db).get(companyId,created.record.id,memoryActor(otherId,otherRunId))).resolves.toBeNull();
+    await expect(memoryService(db).get(companyId,created.record.id,memoryActor(ownerId,runId))).resolves.toMatchObject({record:{id:created.record.id}});
+  });
+
+  it("does not let the same agent erase another Human's private Memory",async()=>{
+    const producerRunId=randomUUID();
+    await db.insert(heartbeatRuns).values({id:producerRunId,companyId,agentId,responsibleUserId:ownerId,runtimeMode:"native",status:"running"});
+    const created=await privateMemory(producerRunId);
+    await expect(memoryService(db).forget(companyId,created.record.id,memoryActor(otherId,otherRunId))).rejects.toMatchObject({status:404});
+    const [retained]=await db.select().from(memoryRecords).where(eq(memoryRecords.id,created.record.id));
+    expect(retained!.deletedAt).toBeNull();
+    expect(retained!.content).toBe("PRIVATE retained source");
+  });
+
+  it("does not let claimed derived metadata discard a direct private Memory Context source",async()=>{
+    const created=await privateMemory();
+    const selected=await taskSelection();
+    selected.decision.evidence={...selected.decision.evidence,sourceClass:"private_memory",sourceProvider:"august_works_memory",
+      sourceType:"memory_record",sourceRef:`memory://record/${created.record.id}`,sourceVersion:created.record.updatedAt.toISOString(),
+      metadata:{recordId:created.record.id,derived:true,sourceMemoryIds:[]},excerpt:"PRIVATE source hidden by claimed empty roots"};
+    await expect(contextManifestService(db).create({companyId,agentId,runId:otherRunId,responsibleUserId:otherId,
+      query:"Forged empty provenance",policySnapshot:{},selected:[selected]})).rejects.toMatchObject({status:403});
+  });
+
+  it.each(["memory_model","memory_observation"] as const)("retains complete native %s roots even when metadata names only the public root",async type=>{
+    const privateSource=await privateMemory(),binding=await privateMemoryBinding();
+    const roots=await db.insert(memoryRecords).values([true,false].map(isPrivate=>({companyId,bindingId:binding.id,providerKey:"local",
+      memoryType:"observation" as const,scopeType:"company" as const,content:isPrivate?"PRIVATE shared derivative":"Public source",
+      sourceProvenanceQualified:true,sourceMemoryIds:isPrivate?[privateSource.record.id]:[],reviewState:"accepted" as const,
+      observedAt:new Date(),createdByActorType:"user" as const,createdByActorId:ownerId}))).returning();
+    const privateRoot=roots[0]!,publicRoot=roots[1]!,derivedId=randomUUID();
+    if(type==="memory_model"){
+      await db.insert(memoryModels).values({id:derivedId,companyId,modelKey:derivedId,name:"Combined model",scopeType:"company",
+        purpose:"general_work",sourceQuery:"Combined sources",content:"PRIVATE combined result",status:"active",confidence:1,
+        sensitivity:"internal",sourceWatermark:"a".repeat(64)});
+      await db.insert(memoryModelVersions).values({companyId,modelId:derivedId,version:1,content:"PRIVATE combined result",sourceWatermark:"a".repeat(64)});
+      await db.insert(memoryModelEvidence).values(roots.map(row=>({companyId,modelId:derivedId,modelVersion:1,memoryRecordId:row.id,
+        sourceVersion:row.updatedAt.toISOString(),relationship:"derived_from"})));
+    }else{
+      await db.insert(memoryObservations).values({id:derivedId,companyId,observationKey:derivedId,scopeType:"company",purpose:"general_work",
+        content:"PRIVATE combined result",status:"accepted",confidence:1,sensitivity:"internal",supportCount:2,contradictionCount:0,independentSourceCount:2});
+      await db.insert(memoryObservationEvidence).values(roots.map(row=>({companyId,observationId:derivedId,memoryRecordId:row.id,
+        sourceVersion:row.updatedAt.toISOString(),relationship:"supports",rootFingerprint:createHash("sha256").update(row.id).digest("hex")})));
+    }
+    const selected=await taskSelection();
+    selected.decision.evidence={...selected.decision.evidence,sourceClass:"accepted_memory",sourceProvider:"august_works_derived_memory",
+      sourceType:type,sourceRef:`memory://${type}/${derivedId}`,sourceVersion:"1",excerpt:"PRIVATE combined result",
+      metadata:{derived:true,sourceMemoryIds:[publicRoot.id],sourceMemoryVersions:{[publicRoot.id]:publicRoot.updatedAt.toISOString()}}};
+    await expect(contextManifestService(db).create({companyId,agentId,runId:otherRunId,responsibleUserId:otherId,
+      query:"Incomplete claimed lineage",policySnapshot:{},selected:[selected]})).rejects.toMatchObject({status:403});
+    const allowed=await contextManifestService(db).create({companyId,agentId,runId,responsibleUserId:ownerId,
+      query:"Complete actual native lineage",policySnapshot:{},selected:[selected]});
+    const retained=await db.select().from(contextManifestMemoryRoots).where(eq(contextManifestMemoryRoots.manifestId,allowed.manifest.id));
+    expect(retained.map(row=>row.memoryRecordId).sort()).toEqual([privateRoot.id,publicRoot.id].sort());
+  });
+  it("keeps the original private Memory Human and scope immutable, then clears personal provenance on erasure",async()=>{
+    const created=await privateMemory();
+    await db.update(memoryRecords).set({privateOwnerUserId:otherId}).where(eq(memoryRecords.id,created.record.id));
+    let [record]=await db.select().from(memoryRecords).where(eq(memoryRecords.id,created.record.id));
+    expect(record!.privateOwnerUserId).toBe(ownerId);
+    await expect(db.update(memoryRecords).set({scopeType:"company",scopeId:null,ownerAgentId:null})
+      .where(eq(memoryRecords.id,created.record.id))).rejects.toMatchObject({cause:{message:"private Memory scope identity is immutable"}});
+    await memoryService(db).forget(companyId,created.record.id,memoryActor(ownerId,runId));
+    [record]=await db.select().from(memoryRecords).where(eq(memoryRecords.id,created.record.id));
+    expect(record!.privateOwnerUserId).toBeNull();
+    expect(record!.sourceProvenanceQualified).toBe(false);
+    expect(record!.content).toBe("");
+  });
+  it("rejects a Context after native steering changes its actual Human during the Context insert run-row wait",async()=>{
+    const taskId=randomUUID(),producerRunId=randomUUID();
+    await db.insert(issues).values({id:taskId,companyId,title:"Public steered task",responsibleUserId:ownerId,assigneeAgentId:agentId});
+    await db.insert(heartbeatRuns).values({id:producerRunId,companyId,agentId,responsibleUserId:ownerId,
+      runtimeMode:"native",nativeIssueId:taskId,status:"running",contextSnapshot:{issueId:taskId}});
+    await initializeRunIdentity(db,{companyId,runId:producerRunId,responsibleUserId:ownerId,issueId:taskId,cause:"dispatch"});
+    const [message]=await db.insert(issueComments).values({companyId,issueId:taskId,authorUserId:otherId,body:"New Human instruction"}).returning();
+    const steering=await reserveSteeredIdentity(db,{companyId,runId:producerRunId,issueId:taskId,messageId:message!.id});
+    expect(steering?.status).toBe("pending");
+    let release!:()=>void,ready!:(pid:number)=>void;
+    const held=new Promise<void>(resolve=>{release=resolve;});
+    const readyPid=new Promise<number>(resolve=>{ready=resolve;});
+    const blocker=db.transaction(async tx=>{
+      await tx.select().from(issues).where(eq(issues.id,taskId)).for("update");
+      await tx.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,producerRunId)).for("update");
+      const [row]=await tx.execute<{pid:number}>(sql`select pg_backend_pid() as pid`);
+      ready(row!.pid);await held;
+      await acceptSteeredIdentity(tx,steering!);
+    });
+    const pid=await readyPid;
+    const pending=contextManifestService(db).create({companyId,agentId,runId:producerRunId,responsibleUserId:ownerId,
+      query:"Context queued before steering",policySnapshot:{},selected:[]}).then(value=>({value}),error=>({error}));
+    try{
+      let waiting=false;const until=Date.now()+8000;
+      while(Date.now()<until){
+        const [row]=await db.execute<{waiting:boolean}>(sql`select exists(select 1 from pg_stat_activity where ${pid}::integer=any(pg_blocking_pids(pid))) as waiting`);
+        if(row?.waiting){waiting=true;break;}
+        await new Promise(resolve=>setTimeout(resolve,10));
+      }
+      expect(waiting).toBe(true);
+    }finally{release();await blocker;}
+    expect(await pending).toMatchObject({error:{status:403}});
+    const [run]=await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id,producerRunId));
+    expect(run!.responsibleUserId).toBe(otherId);
+    expect(await db.select().from(contextManifests).where(eq(contextManifests.runId,producerRunId))).toHaveLength(0);
   });
 
 });

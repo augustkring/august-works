@@ -1,0 +1,68 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v10-private-payload.integration.test.ts (27 tests | 1 failed | 26 skipped) 11495ms
+     × does not let claimed derived metadata discard a direct private Memory Context source 1311ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-payload.integration.test.ts > Private ordinary payloads retain current source authority without analytical roots > does not let claimed derived metadata discard a direct private Memory Context source
+AssertionError: promise resolved "{ manifest: { …(9) }, …(1) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "items": [
++     {
++       "authorityDomain": "task_state",
++       "companyId": "26f6ec70-0b6b-4e8b-b8e0-4f9a8aa12e1e",
++       "contentHash": "776ebd6397345965509010c69a1773c3ec39c19d25a9e86b8f514ab320b13f41",
++       "createdAt": 2026-10-22T21:29:00.727Z,
++       "id": "58bcf046-6fec-4f0e-bd4a-3487fc6dfef9",
++       "manifestId": "173830e7-c25c-4141-9d30-4a85b5e05b36",
++       "rank": 0,
++       "retrievalScore": null,
++       "selectionReason": "preferred_authority",
++       "sensitivity": "internal",
++       "sourceClass": "private_memory",
++       "sourceProvider": "august_works_memory",
++       "sourceRef": "memory://record/d4ea4a53-0840-4d5b-8ac8-42c747196a8c",
++       "sourceVersion": "2026-10-22T21:29:00.434Z",
++       "trustLevel": "high",
++     },
++   ],
++   "manifest": {
++     "agentId": "e5cd016b-af57-4ce8-a293-ca2f74c4167c",
++     "companyId": "26f6ec70-0b6b-4e8b-b8e0-4f9a8aa12e1e",
++     "createdAt": 2026-10-22T21:29:00.727Z,
++     "id": "173830e7-c25c-4141-9d30-4a85b5e05b36",
++     "issueId": "63ea2e77-9569-4aa7-b087-d1cc318b41f9",
++     "policySnapshotHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
++     "projectId": null,
++     "queryHash": "1cc9ede8aeab54d27351abe44ea852618b0099e60fb3c390a59673724c18936d",
++     "runId": "385e26fc-7e47-4c59-9744-bc838c0bc74c",
++   },
+  }
+
+ ❯ src/__tests__/v10-private-payload.integration.test.ts:418:79
+    416|       metadata:{recordId:created.record.id,derived:true,sourceMemoryId…
+    417|     await expect(contextManifestService(db).create({companyId,agentId,…
+    418|       query:"Forged empty provenance",policySnapshot:{},selected:[sele…
+       |                                                                               ^
+    419|   });
+    420|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 26 skipped (27)
+   Start at  21:28:09
+   Duration  51.50s (transform 28.03s, setup 203ms, import 39.12s, tests 11.49s, environment 0ms)
+

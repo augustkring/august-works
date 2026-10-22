@@ -67,6 +67,11 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
     state.work++;
     const [row] = await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId,companyId),eq(memoryRecords.id,id),memoryPayloadVisible()));
     if (!row?.sourceProvenanceQualified || (row.expiresAt && row.expiresAt.getTime()<=Date.now())) return false;
+    const readerUserId=actor.type==="board"?actor.userId:actor.onBehalfOfUserId;
+    // A run may legitimately change Human after acknowledged steering. Its
+    // current identity cannot transfer an earlier private Memory to that Human.
+    if((row.scopeType==="agent" && !row.privateOwnerUserId)
+      || (row.privateOwnerUserId && row.privateOwnerUserId!==readerUserId))return false;
     if(ancestor && (row.revokedAt || row.retentionState==="expired" || row.validUntil && row.validUntil.getTime()<=Date.now()))return false;
     const ids = [...row.sourceRunIds,...row.sourceIssueIds,...row.sourceProjectIds,...row.sourceMemoryIds,...row.sourceFoundationRevisionIds];
     if (ids.length>256 || ids.some(value=>typeof value!=="string" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value))) return false;
@@ -104,7 +109,7 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
 export async function captureMemorySources(db: Db, companyId: string, actor: AuthorizationActor | undefined,
   scope:{type:string;id:string|null}, sourceMemoryIds:string[] = []) {
   const sources = {
-    sourceProvenanceQualified:false,sourceRunIds:[] as string[],sourceIssueIds:[] as string[],
+    sourceProvenanceQualified:false,privateOwnerUserId:null as string|null,sourceRunIds:[] as string[],sourceIssueIds:[] as string[],
     sourceProjectIds:[] as string[],sourceMemoryIds:[...new Set(sourceMemoryIds)],sourceFoundationRevisionIds:[] as string[],
   };
   if (!actor) return sources;
@@ -117,6 +122,7 @@ export async function captureMemorySources(db: Db, companyId: string, actor: Aut
     const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,actor.runId),
       eq(heartbeatRuns.agentId,actor.agentId),eq(heartbeatRuns.responsibleUserId,actor.onBehalfOfUserId))).for("share");
     if (!run || !["running","succeeded"].includes(run.status)) throw forbidden("Memory producer run is unavailable");
+    if(scope.type==="agent")sources.privateOwnerUserId=run.responsibleUserId;
     sources.sourceRunIds.push(run.id);
     if (run.issueId) sources.sourceIssueIds.push(run.issueId);
     const contexts = await db.select().from(contextManifests).where(and(eq(contextManifests.companyId,companyId),eq(contextManifests.agentId,actor.agentId),eq(contextManifests.runId,run.id))).limit(65);

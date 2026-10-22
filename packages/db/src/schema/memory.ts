@@ -159,6 +159,9 @@ export const memoryRecords = pgTable(
     // Server-stamped source identities survive ordinary correction/promotion.
     // No source FK: erasure withholds a copy instead of making it source-free.
     sourceProvenanceQualified: boolean("source_provenance_qualified").notNull().default(false),
+    // Actual Human at private capture; a steered run cannot transfer this scope.
+    // No auth FK: deleting the account must not release the retained copy.
+    privateOwnerUserId: text("private_owner_user_id"),
     sourceRunIds: uuid("source_run_ids").array().notNull().default(sql`'{}'::uuid[]`),
     sourceIssueIds: uuid("source_issue_ids").array().notNull().default(sql`'{}'::uuid[]`),
     sourceProjectIds: uuid("source_project_ids").array().notNull().default(sql`'{}'::uuid[]`),

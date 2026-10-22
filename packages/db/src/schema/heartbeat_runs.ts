@@ -26,6 +26,10 @@ export const heartbeatRuns = pgTable(
     scopeKind: text("scope_kind").$type<"company" | "issue">().notNull().default("company"),
     // Retained source identity, including a deleted-source tombstone. Never SET NULL.
     issueId: uuid("issue_id"),
+    // Native Context identities survive erasure. Qualification is separate:
+    // an empty historical array never proves there were no previous sources.
+    sourceContextManifestIds: uuid("source_context_manifest_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    sourceContextProvenanceQualified: boolean("source_context_provenance_qualified").notNull().default(false),
     invocationSource: text("invocation_source").notNull().default("on_demand"),
     triggerDetail: text("trigger_detail"),
     status: text("status").notNull().default("queued"),
@@ -101,6 +105,8 @@ export const heartbeatRuns = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
+    sourceContextBoundsCheck: check("heartbeat_runs_source_context_bounds_check", sql`cardinality(${table.sourceContextManifestIds}) <= 64
+      and array_position(${table.sourceContextManifestIds},null) is null`),
     scopeBindingCheck: check("heartbeat_runs_scope_binding_check", sql`(${table.scopeKind} = 'company' and ${table.issueId} is null) or ${table.scopeKind} = 'issue'`),
     companyIssueCreatedIdx: index("heartbeat_runs_company_issue_created_idx").on(table.companyId, table.issueId, table.createdAt),
     companyIdIdUq: uniqueIndex("heartbeat_runs_company_id_id_uq").on(

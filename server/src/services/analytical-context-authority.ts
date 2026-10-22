@@ -151,17 +151,21 @@ async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string
  const [sourceReceipt]=await db.execute<{erased:boolean}>(sql`select aw_workflow_memory_erased(${companyId}::uuid,${"runId"in scope?scope.runId:null}::uuid,${"issueId"in scope?scope.issueId:null}::uuid) as erased`);
  if(sourceReceipt?.erased)throw new HttpError(403,"Analytical conversation source access is unavailable",{code:"analytical_source_access_lost"});
  await assertLearnedWorkflowPayloadAccess(db,companyId,actor,scope,readScope);
- const nativeConversation="runId" in scope?await db.select({id:issues.id}).from(heartbeatRuns)
-  .innerJoin(issues,and(eq(issues.companyId,heartbeatRuns.companyId),eq(issues.id,heartbeatRuns.nativeIssueId)))
-  .where(and(eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,scope.runId),eq(heartbeatRuns.runtimeMode,"native"),or(sql`${issues.conversationAgentId} is not null`,sql`${issues.conversationRetiredAt} is not null`))).limit(1):[];
- const conversationIssueId="issueId" in scope?scope.issueId:nativeConversation[0]?.id;
+ const boundRun="runId" in scope?await db.select({issueId:heartbeatRuns.issueId}).from(heartbeatRuns)
+  .where(and(eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,scope.runId))).limit(1):[];
+ const conversationIssueId="issueId" in scope?scope.issueId:boundRun[0]?.issueId;
  const retired = await db.select({id:issues.id}).from(issues).where(and(eq(issues.companyId,companyId),sql`${issues.conversationRetiredAt} is not null`,
   "issueId" in scope?eq(issues.id,scope.issueId):sql`exists(select 1 from ${heartbeatRuns} h where h.company_id=${companyId}::uuid and h.id=${scope.runId}::uuid and h.native_issue_id=${issues.id})`)).limit(1);
  if(retired.length)throw new HttpError(403,"Analytical conversation source access is unavailable",{code:"analytical_source_access_lost"});
- const condition="issueId" in scope?eq(contextManifests.issueId,scope.issueId):or(eq(contextManifests.runId,scope.runId),conversationIssueId?eq(contextManifests.issueId,conversationIssueId):undefined,sql`exists(select 1 from ${agentExecutionManifests} e where e.company_id=${companyId}::uuid and e.run_id=${scope.runId}::uuid and e.context_manifest_id=${contextManifests.id})`);
- const hasRoots=await db.select({id:analyticalContextRoots.memoryRecordId}).from(contextManifests).innerJoin(contextManifestMemoryRoots,and(eq(contextManifestMemoryRoots.companyId,contextManifests.companyId),eq(contextManifestMemoryRoots.manifestId,contextManifests.id)))
-  .innerJoin(analyticalContextRoots,and(eq(analyticalContextRoots.companyId,contextManifests.companyId),eq(analyticalContextRoots.memoryRecordId,contextManifestMemoryRoots.memoryRecordId))).where(and(eq(contextManifests.companyId,companyId),condition)).limit(1);
- if(!hasRoots.length)return;
+ const condition="issueId" in scope?or(eq(contextManifests.issueId,scope.issueId),
+  sql`exists(select 1 from heartbeat_runs h where h.company_id=${companyId}::uuid and h.id=${contextManifests.runId} and h.agent_id=${contextManifests.agentId} and h.issue_id=${scope.issueId}::uuid)`):or(eq(contextManifests.runId,scope.runId),conversationIssueId?eq(contextManifests.issueId,conversationIssueId):undefined,sql`exists(select 1 from ${agentExecutionManifests} e where e.company_id=${companyId}::uuid and e.run_id=${scope.runId}::uuid and e.context_manifest_id=${contextManifests.id})`);
+ const retainedContexts=await db.select({id:contextManifests.id}).from(contextManifests)
+  .where(and(eq(contextManifests.companyId,companyId),condition)).limit(1);
+ if(!retainedContexts.length)return;
+ const hasRoots=await db.select({id:analyticalContextRoots.memoryRecordId}).from(contextManifests)
+  .innerJoin(contextManifestMemoryRoots,and(eq(contextManifestMemoryRoots.companyId,contextManifests.companyId),eq(contextManifestMemoryRoots.manifestId,contextManifests.id)))
+  .innerJoin(analyticalContextRoots,and(eq(analyticalContextRoots.companyId,contextManifests.companyId),eq(analyticalContextRoots.memoryRecordId,contextManifestMemoryRoots.memoryRecordId)))
+  .where(and(eq(contextManifests.companyId,companyId),condition)).limit(1);
  if(!actor)throw forbidden("A current reader is required for source-dependent analytical payloads");
  const {lockAnalyticalCompany}=await import("./analytical-privacy.js"),{lockMemoryPrivacy}=await import("./memory/memory-privacy.js");
  const inspect=()=>db.transaction(async rawTx=>{
@@ -172,6 +176,15 @@ async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string
   const erased=await tx.execute<{erased:boolean}>(sql`select aw_workflow_memory_erased(${companyId}::uuid,${"runId"in scope?scope.runId:null}::uuid,${conversationIssueId??null}::uuid) as erased`);
   if(erased[0]?.erased)throw forbidden("The analytical conversation source was erased or expired");
   const deadline=performance.now()+30000;
+  const memoryRoots=await tx.selectDistinct({id:contextManifestMemoryRoots.memoryRecordId}).from(contextManifests)
+   .innerJoin(contextManifestMemoryRoots,and(eq(contextManifestMemoryRoots.companyId,contextManifests.companyId),eq(contextManifestMemoryRoots.manifestId,contextManifests.id)))
+   .where(and(eq(contextManifests.companyId,companyId),condition)).limit(257);
+  if(memoryRoots.length>256)throw forbidden("The complete retained Context exceeds its source review budget");
+  const {canActorReadMemorySources}=await import("./memory/memory-privacy.js");
+  for(const root of memoryRoots){
+   if(performance.now()>deadline || !await canActorReadMemorySources(tx,companyId,actor,root.id))
+    throw forbidden("Retained Context source access is unavailable");
+  }
   const foundation=await tx.selectDistinct({ref:contextManifestItems.sourceRef}).from(contextManifests)
    .innerJoin(contextManifestItems,and(eq(contextManifestItems.companyId,contextManifests.companyId),eq(contextManifestItems.manifestId,contextManifests.id)))
    .where(and(eq(contextManifests.companyId,companyId),condition,eq(contextManifestItems.sourceProvider,"august_works_foundation"))).limit(257);
@@ -190,7 +203,7 @@ async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string
   }
  });
  try {
-  if(actor.type==="agent"){
+  if(actor.type==="agent" && hasRoots.length){
    const {withNativeAnalyticalReader}=await import("./analytical-reader.js");
    return await withNativeAnalyticalReader(db,companyId,actor,inspect,readScope);
   }
