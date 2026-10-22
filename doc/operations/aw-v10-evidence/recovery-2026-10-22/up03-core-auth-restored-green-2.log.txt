@@ -1,0 +1,17 @@
+2026-10-22T20:30:20Z
+e86f2e3bd0271418bcbdc49f50fe270d7ab3849a9d35b623692e4db1abe338d6  server/src/services/authorization.ts
+10e726d08d47688f6ca4c0a48cd5164b2dd82828f76d3df4bd8ef0316c51bb9f  server/src/__tests__/authorization-service.test.ts
+9f41bc0b885e6aed121bf5aca49f6aac67d5cd953392a66205ebf968b54a806e  packages/db/src/migrations/0503_furry_norman_osborn.sql
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+
+ Test Files  1 passed (1)
+      Tests  1 passed | 77 skipped (78)
+   Start at  20:30:22
+   Duration  37.51s (transform 10.55s, setup 296ms, import 19.79s, tests 16.64s, environment 0ms)
+
+VITEST_EXIT=0

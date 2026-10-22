@@ -41,6 +41,10 @@ export const issues = pgTable(
     projectWorkspaceId: uuid("project_workspace_id").references(() => projectWorkspaces.id, { onDelete: "set null" }),
     goalId: uuid("goal_id").references(() => goals.id),
     parentId: uuid("parent_id").references((): AnyPgColumn => issues.id),
+    visibility: text("visibility").notNull().default("open"),
+    // Immutable source identities outlive source erasure; missing sources deny reads.
+    privacyRootIssueId: uuid("privacy_root_issue_id"),
+    privacyParentIssueId: uuid("privacy_parent_issue_id"),
     title: text("title").notNull(),
     description: text("description"),
     status: text("status").notNull().default("backlog"),
@@ -102,6 +106,9 @@ export const issues = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
+    visibilityCheck: check("issues_visibility_check", sql`${table.visibility} in ('open', 'private')`),
+    privacyParentIdx: index("issues_company_privacy_parent_idx").on(table.companyId, table.privacyParentIssueId),
+    privacyRootIdx: index("issues_company_privacy_root_idx").on(table.companyId, table.privacyRootIssueId),
     conversationIdentityIdx: uniqueIndex("issues_conversation_identity_idx").on(table.companyId, table.conversationAgentId, table.conversationUserId),
     conversationRetirementCheck: check("issues_conversation_retirement_check", sql`${table.conversationRetiredAt} is null or (
       ${table.conversationAgentId} is null and ${table.conversationUserId} is null and ${table.conversationState} is null

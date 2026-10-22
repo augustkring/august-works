@@ -1,18 +1,22 @@
 import { isSaasDeployment } from "../deployment-profile.js";
-import { and, eq, inArray, is, isNull, sql } from "drizzle-orm";
+import { and, eq, inArray, is, isNull, sql, type SQL } from "drizzle-orm";
 import { PgTransaction } from "drizzle-orm/pg-core";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
+  agentApiKeys,
   agentExecutionManifests,
   authUsers,
   companyMemberships,
   heartbeatRuns,
   instanceUserRoles,
   issueComments,
+  issueAccessGrants,
+  issuePrivacySources,
   issues,
   principalPermissionGrants,
   projects,
+  projectAccessMembers,
   userInboxAgentPolicies,
 } from "@paperclipai/db";
 import type {
@@ -143,6 +147,8 @@ export type AuthorizationDecision = {
     | "deny_policy_restricted"
     | "deny_low_trust_boundary"
     | "deny_scope"
+    | "deny_issue_private"
+    | "deny_project_private"
     | "deny_unsupported_action";
   grant?: {
     principalType: PrincipalType;
@@ -260,6 +266,7 @@ type ProjectAuthorizationRow = {
   id: string;
   companyId: string;
   executionWorkspacePolicy: unknown;
+  visibility: string;
 };
 type IssueAuthorizationRow = {
   id: string;
@@ -273,6 +280,11 @@ type IssueAuthorizationRow = {
   executionPolicy: unknown;
   originKind: string | null;
   originId: string | null;
+  visibility: string;
+  privacyRootIssueId: string | null;
+  privacyParentIssueId: string | null;
+  responsibleUserId: string | null;
+  createdByUserId: string | null;
 };
 
 function evaluateAuthorizationPolicyForAssignment(
@@ -492,6 +504,153 @@ type ResponsibleUserActorWithMemo = AuthorizationActor & {
   __responsibleUserSnapshotMemo?: Map<string, Promise<ResponsibleUserSnapshot>>;
 };
 
+export type IssuePrivacyRow = { id: string; companyId: string };
+export type ProjectPrivacyRow = { id: string; companyId: string };
+const privacyUuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
+
+/** A private ACL narrows current authority; retained actor claims never supply it. */
+function privatePrincipalCurrent(actor: AuthorizationActor, company: SQL): SQL<boolean> {
+  const userId = actor.type === "board" ? actor.userId : actor.onBehalfOfUserId;
+  if (!userId || actor.type === "none" || actor.source === "local_implicit") return sql<boolean>`false`;
+  const human = sql<boolean>`exists (select 1 from ${authUsers} u join ${companyMemberships} m
+    on m.principal_id=u.id and m.principal_type='user' and m.company_id=${company} and m.status='active'
+    where u.id=${userId})`;
+  if (actor.type === "board") return human;
+  if (!actor.agentId || !privacyUuid.test(actor.agentId)) return sql<boolean>`false`;
+  const run = actor.runId && privacyUuid.test(actor.runId)
+    ? sql`exists(select 1 from ${heartbeatRuns} r where r.id=${actor.runId} and r.company_id=${company}
+        and r.agent_id=${actor.agentId} and r.responsible_user_id=${userId} and r.status='running')`
+    : sql`false`;
+  const key = actor.keyId && privacyUuid.test(actor.keyId)
+    ? sql`exists(select 1 from ${agentApiKeys} k where k.id=${actor.keyId} and k.company_id=${company}
+        and k.agent_id=${actor.agentId} and k.responsible_user_id=${userId} and k.revoked_at is null)`
+    : sql`false`;
+  return sql<boolean>`(${human} and exists(select 1 from ${agents} a where a.id=${actor.agentId}
+    and a.company_id=${company} and a.status not in ('paused','terminated','pending_approval','error')) and
+    ${actor.runId ? run : key} and ${actor.keyId ? key : sql`true`})`;
+}
+
+function projectPrincipalAccess(actor: AuthorizationActor, project: SQL, company: SQL): SQL<boolean> {
+  const subjectType = actor.type === "board" ? "user" : "agent";
+  const subjectId = actor.type === "board" ? actor.userId : actor.agentId;
+  if (!subjectId || actor.type === "none") return sql<boolean>`false`;
+  const own = sql`exists(select 1 from ${projectAccessMembers} m where m.company_id=${company}
+    and m.project_id=${project} and m.subject_type=${subjectType} and m.subject_id=${subjectId})`;
+  const human = actor.type === "agent" && actor.onBehalfOfUserId
+    ? sql`exists(select 1 from ${projectAccessMembers} m where m.company_id=${company}
+        and m.project_id=${project} and m.subject_type='user' and m.subject_id=${actor.onBehalfOfUserId})`
+    : sql`true`;
+  return sql<boolean>`(${privatePrincipalCurrent(actor, company)} and ${own} and ${human})`;
+}
+
+/** Downward grants do not grant access to ancestors or siblings. */
+function issuePrincipalAccess(actor: AuthorizationActor, issue: SQL, company: SQL): SQL<boolean> {
+  const principal = (type: "user" | "agent", id: string | null | undefined) => !id ? sql`false` : sql`exists (
+    with recursive acl_ancestors as (
+      select p.id,p.privacy_parent_issue_id,p.responsible_user_id,p.created_by_user_id,p.assignee_user_id,p.assignee_agent_id,p.project_id,0 as depth
+      from issues p where p.id=${issue} and p.company_id=${company}
+      union
+      select p.id,p.privacy_parent_issue_id,p.responsible_user_id,p.created_by_user_id,p.assignee_user_id,p.assignee_agent_id,p.project_id,c.depth+1
+      from issues p join acl_ancestors c on p.id=c.privacy_parent_issue_id where p.company_id=${company} and c.depth<64
+    ) select 1 from acl_ancestors n where
+      ${type === "user" ? sql`(n.responsible_user_id=${id} or n.created_by_user_id=${id} or n.assignee_user_id=${id})` : sql`n.assignee_agent_id=${id}`}
+      or exists(select 1 from ${issueAccessGrants} g where g.company_id=${company} and g.issue_id=n.id
+        and g.subject_type=${type} and g.subject_id=${id} and g.revoked_at is null)
+      or exists(select 1 from ${projectAccessMembers} m join projects p on p.id=m.project_id and p.company_id=m.company_id and p.visibility='private'
+        where m.company_id=${company} and m.project_id=n.project_id and m.subject_type=${type} and m.subject_id=${id})
+  )`;
+  const own = actor.type === "board" ? principal("user", actor.userId)
+    : actor.type === "agent" ? principal("agent", actor.agentId) : sql`false`;
+  const human = actor.type === "agent" ? principal("user", actor.onBehalfOfUserId) : sql`true`;
+  return sql<boolean>`(${privatePrincipalCurrent(actor, company)} and ${own} and ${human})`;
+}
+
+/** Privacy narrowing only. The caller still applies company/action authorization. */
+export async function projectReadSqlCondition(_db: Db | DbTransaction, actor: AuthorizationActor): Promise<SQL<boolean>> {
+  return sql<boolean>`(${projects.visibility}='open' or ${projectPrincipalAccess(actor, sql`${projects.id}`, sql`${projects.companyId}`)})`;
+}
+
+/** All retained Task sources survive ordinary moves and source erasure. The
+ * recursive population streams unique nodes into a 257-row materialized bound.
+ * Only a complete population of at most 256 enters cycle/ACL review; closure
+ * has at most 256² pairs. Cycles, missing/foreign sources and overflow deny. */
+export async function issueReadSqlCondition(_db: Db | DbTransaction, actor: AuthorizationActor): Promise<SQL<boolean>> {
+  const edges = sql`        select 'issue'::text as kind,i.privacy_parent_issue_id as id from issues i
+          where n.kind='issue' and i.id=n.id and i.company_id=${issues.companyId} and i.privacy_parent_issue_id is not null
+        union all select 'issue',i.privacy_root_issue_id from issues i
+          where n.kind='issue' and i.id=n.id and i.company_id=${issues.companyId} and i.privacy_root_issue_id is not null and i.privacy_root_issue_id<>i.id
+        union all select 'project',i.project_id from issues i
+          where n.kind='issue' and i.id=n.id and i.company_id=${issues.companyId} and i.project_id is not null
+        union all select 'run',case when i.origin_run_id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then i.origin_run_id::uuid end
+          from issues i where n.kind='issue' and i.id=n.id and i.company_id=${issues.companyId} and i.origin_run_id is not null
+            and not exists(select 1 from ${heartbeatRuns} own_run where own_run.company_id=i.company_id
+              and own_run.id::text=i.origin_run_id and coalesce(own_run.issue_id,own_run.native_issue_id)=i.id)
+        union all select s.source_kind,s.source_id from ${issuePrivacySources} s
+          where n.kind='issue' and s.issue_id=n.id and s.company_id=${issues.companyId}
+        union all select 'issue',coalesce(r.issue_id,r.native_issue_id,
+          case when coalesce(r.context_snapshot->>'issueId',r.context_snapshot->>'taskId') ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+            then coalesce(r.context_snapshot->>'issueId',r.context_snapshot->>'taskId')::uuid end)
+          from ${heartbeatRuns} r where n.kind='run' and r.id=n.id and r.company_id=${issues.companyId}
+            and (r.scope_kind='issue' or r.native_issue_id is not null or r.context_snapshot ? 'issueId' or r.context_snapshot ? 'taskId' or r.context_snapshot ? 'taskKey')
+`;
+  return sql<boolean>`(
+    with recursive privacy_nodes(kind,id) as (
+      select 'issue'::text,${issues.id}
+      union
+      select edge.kind,edge.id from privacy_nodes n cross join lateral (${edges}) edge
+    ), bounded as materialized (select * from privacy_nodes limit 257)
+    select case when (select count(*) from bounded)>256 then false else not exists (
+      with recursive source_edges as materialized (
+        select n.kind,n.id,edge.kind as source_kind,edge.id as source_id
+        from bounded n cross join lateral (${edges}) edge
+      ), reachable(kind,id,source_kind,source_id) as (
+        select kind,id,source_kind,source_id from source_edges
+        union
+        select r.kind,r.id,e.source_kind,e.source_id from reachable r
+          join source_edges e on e.kind=r.source_kind and e.id=r.source_id
+      )
+      select 1 from reachable where kind=source_kind and id=source_id
+      union all
+      select 1 from bounded n where
+        (n.kind='issue' and not exists(select 1 from issues i where i.id=n.id and i.company_id=${issues.companyId}
+          and (i.visibility='open' or ${issuePrincipalAccess(actor, sql`i.id`, sql`${issues.companyId}`)})))
+        or (n.kind='project' and not exists(select 1 from projects p where p.id=n.id and p.company_id=${issues.companyId}
+          and (p.visibility='open' or ${projectPrincipalAccess(actor, sql`p.id`, sql`${issues.companyId}`)})))
+        or (n.kind='run' and not exists(select 1 from ${heartbeatRuns} r where r.id=n.id and r.company_id=${issues.companyId}
+          and (r.context_snapshot->>'issueId' is null or r.context_snapshot->>'issueId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$')
+          and (r.context_snapshot->>'taskId' is null or r.context_snapshot->>'taskId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$')))
+    ) end
+  )`;
+}
+
+export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: AuthorizationActor, issue: IssuePrivacyRow) {
+  return (await db.select({ id: issues.id }).from(issues).where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId), await issueReadSqlCondition(db, actor))).limit(1)).length > 0;
+}
+export async function canActorReadProjectPrivacy(db: Db | DbTransaction, actor: AuthorizationActor, project: ProjectPrivacyRow) {
+  return (await db.select({ id: projects.id }).from(projects).where(and(eq(projects.id, project.id), eq(projects.companyId, project.companyId), await projectReadSqlCondition(db, actor))).limit(1)).length > 0;
+}
+
+/** Original persisted run binding, never caller-supplied scope or context facts.
+ * This narrows payload visibility; company/action and V8 copy checks still apply. */
+export async function canActorReadHeartbeatRunPrivacy(db: Db | DbTransaction, actor: AuthorizationActor, source: { id: string; companyId: string }): Promise<boolean> {
+  const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.id, source.id), eq(heartbeatRuns.companyId, source.companyId))).limit(1);
+  if (!run) return false;
+  const context = run.contextSnapshot ?? {};
+  const refs = new Set<string>();
+  for (const ref of [run.issueId, run.nativeIssueId, context.issueId, context.taskId]) {
+    if (ref == null) continue;
+    if (typeof ref !== "string" || !privacyUuid.test(ref)) return false;
+    refs.add(ref);
+  }
+  // A legacy task key is not proof of a truly unbound company run.
+  if (Object.hasOwn(context, "taskKey") && !refs.size) return false;
+  if (run.scopeKind === "company") return refs.size === 0 &&
+    !Object.hasOwn(context, "issueId") && !Object.hasOwn(context, "taskId");
+  if (run.scopeKind !== "issue" || !refs.size) return false;
+  for (const id of refs) if (!(await canActorReadIssuePrivacy(db, actor, { id, companyId: source.companyId }))) return false;
+  return true;
+}
+
 export function responsibleUserAuthzShadowMode() {
   const mode = process.env.PAPERCLIP_RESPONSIBLE_USER_AUTHZ_MODE?.trim().toLowerCase();
   const shadow = process.env.PAPERCLIP_RESPONSIBLE_USER_AUTHZ_SHADOW?.trim().toLowerCase();
@@ -572,8 +731,10 @@ const issueReadColumns = {
   id: issues.id, companyId: issues.companyId, projectId: issues.projectId, parentId: issues.parentId,
   assigneeAgentId: issues.assigneeAgentId, assigneeUserId: issues.assigneeUserId, checkoutRunId: issues.checkoutRunId,
   status: issues.status, executionPolicy: issues.executionPolicy, originKind: issues.originKind, originId: issues.originId,
+  visibility: issues.visibility, privacyRootIssueId: issues.privacyRootIssueId, privacyParentIssueId: issues.privacyParentIssueId,
+  responsibleUserId: issues.responsibleUserId, createdByUserId: issues.createdByUserId,
 };
-const projectReadColumns = { id: projects.id, companyId: projects.companyId, executionWorkspacePolicy: projects.executionWorkspacePolicy };
+const projectReadColumns = { id: projects.id, companyId: projects.companyId, executionWorkspacePolicy: projects.executionWorkspacePolicy, visibility: projects.visibility };
 
 // Only this native owner can construct the private row context. Caller DTOs
 // cannot supply row facts, policies, authorization results or a read capability.
@@ -857,6 +1018,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
         id: projects.id,
         companyId: projects.companyId,
         executionWorkspacePolicy: projects.executionWorkspacePolicy,
+        visibility: projects.visibility,
       })
       .from(projects)
       .where(eq(projects.id, projectId))
@@ -878,6 +1040,11 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
         executionPolicy: issues.executionPolicy,
         originKind: issues.originKind,
         originId: issues.originId,
+        visibility: issues.visibility,
+        privacyRootIssueId: issues.privacyRootIssueId,
+        privacyParentIssueId: issues.privacyParentIssueId,
+        responsibleUserId: issues.responsibleUserId,
+        createdByUserId: issues.createdByUserId,
       })
       .from(issues)
       .where(eq(issues.id, issueId))
@@ -2541,7 +2708,21 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       if (manifest) input = { ...input, enforceResponsibleUserIntersection: true };
     }
     const agentDecision = await decideBase(input);
-    const decision = await applyResponsibleUserIntersection(input, agentDecision);
+    let decision = await applyResponsibleUserIntersection(input, agentDecision);
+    if (decision.allowed && input.resource.type === "issue") {
+      const issueId = input.resource.issueId ?? input.resource.parentIssueId;
+      if (issueId && !(await canActorReadIssuePrivacy(db, input.actor, { id: issueId, companyId: input.resource.companyId }))) {
+        decision = deny({ action: input.action, reason: "deny_issue_private", explanation: "Task source access is unavailable." });
+      }
+      if (decision.allowed && input.resource.projectId && !input.resource.issueId &&
+        !(await canActorReadProjectPrivacy(db, input.actor, { id: input.resource.projectId, companyId: input.resource.companyId }))) {
+        decision = deny({ action: input.action, reason: "deny_project_private", explanation: "Project source access is unavailable." });
+      }
+    }
+    if (decision.allowed && input.action === "project:read" && input.resource.type === "project" && input.resource.projectId &&
+      !(await canActorReadProjectPrivacy(db, input.actor, { id: input.resource.projectId, companyId: input.resource.companyId }))) {
+      decision = deny({ action: input.action, reason: "deny_project_private", explanation: "Project source access is unavailable." });
+    }
     if (readSources && !readSources.active) throw new Error("Native Source read scope has ended");
     return decision;
   }

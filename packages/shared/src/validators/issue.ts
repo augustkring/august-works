@@ -679,6 +679,7 @@ function withCreateIssueStatusDefault<T extends z.ZodRawShape>(
 }
 
 const createIssueBaseSchema = z.object({
+  visibility: z.enum(["open", "private"]).optional().default("open"),
   projectId: z.string().guid().optional().nullable(),
   projectWorkspaceId: z.string().guid().optional().nullable(),
   goalId: z.string().guid().optional().nullable(),

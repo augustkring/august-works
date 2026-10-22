@@ -3508,6 +3508,13 @@
       "when": 1792698258876,
       "tag": "0502_swift_maria_hill",
       "breakpoints": true
+    },
+    {
+      "idx": 503,
+      "version": "7",
+      "when": 1792700162049,
+      "tag": "0503_furry_norman_osborn",
+      "breakpoints": true
     }
   ]
 }

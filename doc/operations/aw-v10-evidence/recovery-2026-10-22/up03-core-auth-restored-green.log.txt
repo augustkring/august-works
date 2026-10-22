@@ -1,0 +1,34 @@
+2026-10-22T20:26:41Z
+e86f2e3bd0271418bcbdc49f50fe270d7ab3849a9d35b623692e4db1abe338d6  server/src/services/authorization.ts
+395111484eaa16848c63c4fbe8e01ef5e06a004e8af0636784af7f446f34736f  server/src/__tests__/authorization-service.test.ts
+9f41bc0b885e6aed121bf5aca49f6aac67d5cd953392a66205ebf968b54a806e  packages/db/src/migrations/0503_furry_norman_osborn.sql
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/authorization-service.test.ts (78 tests | 78 skipped) 21744ms
+
+⎯⎯⎯⎯⎯⎯ Failed Suites 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/authorization-service.test.ts > authorization service
+Error: Hook timed out in 20000ms.
+If this is a long-running hook, pass a timeout value as the last argument or configure it globally with "hookTimeout".
+ ❯ src/__tests__/authorization-service.test.ts:175:3
+    173|   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatab…
+    174|
+    175|   beforeAll(async () => {
+       |   ^
+    176|     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-author…
+    177|     db = createDb(tempDb.connectionString);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  78 skipped (78)
+   Start at  20:26:43
+   Duration  38.45s (transform 8.00s, setup 504ms, import 15.28s, tests 21.74s, environment 1ms)
+
+VITEST_EXIT=1
