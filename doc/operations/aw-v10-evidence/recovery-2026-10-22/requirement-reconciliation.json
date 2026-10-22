@@ -1,0 +1,1273 @@
+{
+  "kind": "source work catalogue and reconciliation index; not acceptance evidence",
+  "brief": "doc/reference/blentera-v10/Blentera_Master_Build_Brief_V10_FINAL_v4.0_2026-10-18.md",
+  "briefSha256": "7f4387338e6c9ce82359801a92c802c55b9af5c92cd65d1b6271f8ae68970c22",
+  "recordedAt": "2026-10-22T22:23:26.749783+00:00",
+  "catalogueCoverage": {
+    "expectedWorkIds": 169,
+    "extractedUniqueWorkIds": 169,
+    "exactContiguous001Through169": true
+  },
+  "statusMeaning": {
+    "not_reconciled": "Retained implementation may exist. Complete V10 requirement and acceptance have not been reconciled on this reconstructed branch.",
+    "in_progress": "Bounded source work/receipts exist. Full requirement and hosted, Human, provider and release gates remain open."
+  },
+  "releaseQualification": "open; binding chapters/clauses, inherited registers, mandatory capability profile and release journeys still need complete reconciliation. Work-ID count is not contractual completeness.",
+  "items": [
+    {
+      "id": "V10-001",
+      "sourceLine": 6764,
+      "work": "Current-master/V8/V9/V10 reconciliation report.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-002",
+      "sourceLine": 6765,
+      "work": "Final product capability map generated from feature/domain catalogs.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-003",
+      "sourceLine": 6766,
+      "work": "Final launch-claim/evidence matrix.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-004",
+      "sourceLine": 6767,
+      "work": "V10 Safe Change records + migration dependency graph.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-005",
+      "sourceLine": 6771,
+      "work": "Canonical Blentera ProductIdentity contract (`blentera.com`, app/docs/status/trust origins, `hello@` main contact, no generic aliases/catch-all by default, Support/Security/Privacy routes and transactional sender identity).",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-006",
+      "sourceLine": 6772,
+      "work": "Paperclip + August Works customer-facing brand-token inventory, allow-list and CI leakage gate.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-007",
+      "sourceLine": 6773,
+      "work": "README/docs/app/email/announcement migration to Blentera.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-008",
+      "sourceLine": 6774,
+      "work": "Blentera-owned vulnerability disclosure + `security.txt` + `security@blentera.com`.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-009",
+      "sourceLine": 6775,
+      "work": "Blentera CLI/package/env compatibility and deprecation program.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-010",
+      "sourceLine": 6776,
+      "work": "`blentera.com` domain/OAuth/Slack/Teams/public-origin migration manifest + safe repository rename plan to `augustkring/blentera`.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-011",
+      "sourceLine": 6780,
+      "work": "upstream divergence inventory script/report.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-012",
+      "sourceLine": 6781,
+      "work": "upstream change classification/admission workflow.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-013",
+      "sourceLine": 6782,
+      "work": "security fast-path regression map.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-014",
+      "sourceLine": 6783,
+      "work": "provenance/cherry-pick evidence ledger.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-015",
+      "sourceLine": 6787,
+      "work": "capability maturity metadata.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-016",
+      "sourceLine": 6788,
+      "work": "capability docs/support/evidence linkage.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-017",
+      "sourceLine": 6789,
+      "work": "Preview/GA/Deprecated customer/admin projections.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-018",
+      "sourceLine": 6790,
+      "work": "deprecation/sunset tests.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-019",
+      "sourceLine": 6794,
+      "work": "CustomerOperation shared envelope/state machine.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-020",
+      "sourceLine": 6795,
+      "work": "durable operation persistence/service.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-021",
+      "sourceLine": 6796,
+      "work": "CompanyImport migration from process memory.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-022",
+      "sourceLine": 6797,
+      "work": "process-kill/restart/idempotency/unknown-outcome tests.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-023",
+      "sourceLine": 6798,
+      "work": "generic operation status UX.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-024",
+      "sourceLine": 6799,
+      "work": "evaluate export/delete/restore/provisioning for envelope adoption.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-025",
+      "sourceLine": 6803,
+      "work": "responsibility projection / owner-group contract.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-026",
+      "sourceLine": 6804,
+      "work": "member-removal responsibility preflight.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-027",
+      "sourceLine": 6805,
+      "work": "scoped time-bound coverage/delegation.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-028",
+      "sourceLine": 6806,
+      "work": "orphan scanner → Action needed.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-029",
+      "sourceLine": 6807,
+      "work": "critical contact / backup ownership readiness tests.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-030",
+      "sourceLine": 6808,
+      "work": "offboarding credential/revocation reconciliation.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-031",
+      "sourceLine": 6812,
+      "work": "Help Center IA/rebrand over existing docs infrastructure.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-032",
+      "sourceLine": 6813,
+      "work": "Help metadata + Screen Contract linking.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-033",
+      "sourceLine": 6814,
+      "work": "Help stale-link/version CI checks.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-034",
+      "sourceLine": 6815,
+      "work": "federated Universal Find contracts/adapters.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-035",
+      "sourceLine": 6816,
+      "work": "Workflows/Routines/Apps/Decisions/Insights search adapters.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-036",
+      "sourceLine": 6817,
+      "work": "Settings/help/navigation search adapters.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-037",
+      "sourceLine": 6818,
+      "work": "search partial-failure/security/accessibility tests.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-038",
+      "sourceLine": 6819,
+      "work": "Ask/Cmd+K deterministic Universal Find integration.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-039",
+      "sourceLine": 6823,
+      "work": "support case schema/service/API.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-040",
+      "sourceLine": 6824,
+      "work": "global Help / support intake UI.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-041",
+      "sourceLine": 6825,
+      "work": "customer-safe case timeline/replies.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-042",
+      "sourceLine": 6826,
+      "work": "safe support diagnostics.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-043",
+      "sourceLine": 6827,
+      "work": "support case → V6 support-session request flow.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-044",
+      "sourceLine": 6828,
+      "work": "Support Agent Package + approved Help retrieval.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-045",
+      "sourceLine": 6829,
+      "work": "human escalation/no-dead-end tests.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-046",
+      "sourceLine": 6830,
+      "work": "support provider adapter seam.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-047",
+      "sourceLine": 6831,
+      "work": "support privacy/retention/accessibility evidence.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-048",
+      "sourceLine": 6835,
+      "work": "managed status provider decision/adapter.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-049",
+      "sourceLine": 6836,
+      "work": "customer service-component catalog.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-050",
+      "sourceLine": 6837,
+      "work": "incident/maintenance publish path with role/audit.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-051",
+      "sourceLine": 6838,
+      "work": "in-app affected-company incident projection.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-052",
+      "sourceLine": 6839,
+      "work": "subscriber/notification integration.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-053",
+      "sourceLine": 6840,
+      "work": "postmortem/customer-communication templates.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-054",
+      "sourceLine": 6841,
+      "work": "status-provider outage/failover/manual publication runbook.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-055",
+      "sourceLine": 6845,
+      "work": "rebrand announcements/product notices.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-056",
+      "sourceLine": 6846,
+      "work": "notice class/targeting/action-required contract.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-057",
+      "sourceLine": 6847,
+      "work": "deprecation/sunset/migration notice.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-058",
+      "sourceLine": 6848,
+      "work": "notification preference/mandatory-notice semantics.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-059",
+      "sourceLine": 6849,
+      "work": "customer changelog surface.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-060",
+      "sourceLine": 6853,
+      "work": "Trust Center public IA/static surface.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-061",
+      "sourceLine": 6854,
+      "work": "trust-document evidence/version metadata.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-062",
+      "sourceLine": 6855,
+      "work": "gated enterprise assurance download/access.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-063",
+      "sourceLine": 6856,
+      "work": "subprocessors/data-region/security/accessibility/AI governance public pages.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-064",
+      "sourceLine": 6857,
+      "work": "legal/product document registry + acceptance receipts where required.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-065",
+      "sourceLine": 6858,
+      "work": "stale-evidence / false-certification negative tests.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-066",
+      "sourceLine": 6862,
+      "work": "connector lifecycle common contract.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-067",
+      "sourceLine": 6863,
+      "work": "scope/grant/version/freshness metadata.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-068",
+      "sourceLine": 6864,
+      "work": "webhook/subscription expiry/renewal engine.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-069",
+      "sourceLine": 6865,
+      "work": "missed-event/delta/full-reconciliation framework.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-070",
+      "sourceLine": 6866,
+      "work": "provider-deprecation lifecycle + notices.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-071",
+      "sourceLine": 6867,
+      "work": "reauth/permission-change Action needed UX.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-072",
+      "sourceLine": 6868,
+      "work": "connector lifecycle fault corpus.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-073",
+      "sourceLine": 6872,
+      "work": "model/provider dependency inventory.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-074",
+      "sourceLine": 6873,
+      "work": "model lifecycle metadata + retirement dates.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-075",
+      "sourceLine": 6874,
+      "work": "evaluation-backed migration workflow.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-076",
+      "sourceLine": 6875,
+      "work": "qualified fallback policy.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-077",
+      "sourceLine": 6876,
+      "work": "affected-agent/workflow retirement projection.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-078",
+      "sourceLine": 6877,
+      "work": "staged model migration + post-change monitoring.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-079",
+      "sourceLine": 6878,
+      "work": "region/data-use/cost compatibility tests.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-080",
+      "sourceLine": 6882,
+      "work": "normalized tenant resource metering projection.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-081",
+      "sourceLine": 6883,
+      "work": "admission/fairness/quota policy.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-082",
+      "sourceLine": 6884,
+      "work": "agent/workflow/background fan-out resource budgets.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-083",
+      "sourceLine": 6885,
+      "work": "analytical workload isolation/budgets.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-084",
+      "sourceLine": 6886,
+      "work": "noisy-neighbor load/fault tests.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-085",
+      "sourceLine": 6887,
+      "work": "per-tenant cost-to-serve/unit-economics view.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-086",
+      "sourceLine": 6888,
+      "work": "dedicated-capacity/service-profile seam.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-087",
+      "sourceLine": 6892,
+      "work": "API surface classification manifest.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-088",
+      "sourceLine": 6893,
+      "work": "public stable auth/company/idempotency contract.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-089",
+      "sourceLine": 6894,
+      "work": "RFC 9457 error contract where applicable.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-090",
+      "sourceLine": 6895,
+      "work": "webhook event/signature/replay/duplicate contract.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-091",
+      "sourceLine": 6896,
+      "work": "Deprecation/Sunset compatibility tests.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-092",
+      "sourceLine": 6897,
+      "work": "external API docs/examples generation.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-093",
+      "sourceLine": 6898,
+      "work": "rate/resource/noisy-neighbor API tests.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-094",
+      "sourceLine": 6902,
+      "work": "customer-problem evidence taxonomy.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-095",
+      "sourceLine": 6903,
+      "work": "support/feedback/incident → Issue/Learning/Decision bridge.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-096",
+      "sourceLine": 6904,
+      "work": "recurring-problem/root-cause review.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-097",
+      "sourceLine": 6905,
+      "work": "customer satisfaction/effort measurement pack.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-098",
+      "sourceLine": 6906,
+      "work": "improvement effectiveness/recurrence review.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-099",
+      "sourceLine": 6907,
+      "work": "internal customer-success service-health projection.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-100",
+      "sourceLine": 6911,
+      "work": "production hotspot responsibility map.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-101",
+      "sourceLine": 6912,
+      "work": "chat-channel policy/adapter extraction as V9 touches it.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-102",
+      "sourceLine": 6913,
+      "work": "heartbeat/tool-access/tool-gateway seam review.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-103",
+      "sourceLine": 6914,
+      "work": "onboarding/Agent/Inbox legacy convergence completion.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-104",
+      "sourceLine": 6915,
+      "work": "module-boundary regression expansion.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-105",
+      "sourceLine": 6916,
+      "work": "remove dead customer-facing Paperclip/legacy code after migration.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-106",
+      "sourceLine": 6920,
+      "work": "support escalation + support-session E2E.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-107",
+      "sourceLine": 6921,
+      "work": "public incident + in-app status + recovery E2E.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-108",
+      "sourceLine": 6922,
+      "work": "model retirement drill.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-109",
+      "sourceLine": 6923,
+      "work": "connector token/subscription expiry + missed-event drill.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-110",
+      "sourceLine": 6924,
+      "work": "user offboarding/orphan/coverage drill.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-111",
+      "sourceLine": 6925,
+      "work": "process-kill durable import/operation drill.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-112",
+      "sourceLine": 6926,
+      "work": "noisy-neighbor / denial-of-wallet drill.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-113",
+      "sourceLine": 6927,
+      "work": "Trust Center/procurement evidence audit.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-114",
+      "sourceLine": 6928,
+      "work": "full brand/public-surface leakage audit.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-115",
+      "sourceLine": 6929,
+      "work": "Universal Find/help/support representative usability.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-116",
+      "sourceLine": 6930,
+      "work": "export/delete/offboarding journey.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-117",
+      "sourceLine": 6931,
+      "work": "upstream intake/security-patch rehearsal.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-118",
+      "sourceLine": 6932,
+      "work": "integrated managed-customer golden journey.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-119",
+      "sourceLine": 6933,
+      "work": "final V6–V10 evidence reconciliation.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-120",
+      "sourceLine": 6934,
+      "work": "GA operating-readiness decision + temporary flag/legacy cleanup.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-121",
+      "sourceLine": 6940,
+      "work": "Agent-Native Operation Coverage Manifest + CI unexplained-UI-only gate.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-122",
+      "sourceLine": 6941,
+      "work": "canonical Blentera self-tool naming/metadata contract + safe `paperclip-self:*` compatibility/deprecation.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-123",
+      "sourceLine": 6942,
+      "work": "domain tool projection for Tasks/Projects/Work/Agents/Apps/Insights/Support according to least-authority modes.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-124",
+      "sourceLine": 6943,
+      "work": "represented-user / agent-principal / execution-identity binding for channel-originated operations.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-125",
+      "sourceLine": 6944,
+      "work": "Slack/Teams parameter-bound approval interaction over canonical approval state.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-126",
+      "sourceLine": 6945,
+      "work": "MCP 2026-07-28 server/SDK migration + protocol/auth conformance + supported legacy negotiation.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-127",
+      "sourceLine": 6946,
+      "work": "OpenClaw remote MCP onboarding/qualification (`mcp.servers` / Streamable HTTP) + tool-policy compatibility.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-128",
+      "sourceLine": 6947,
+      "work": "progressive tool-catalog resolution by identity/task/Role Pack/policy.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-129",
+      "sourceLine": 6948,
+      "work": "zero-web-day member/manager E2E + stale/replay/revoke/failure cases.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-130",
+      "sourceLine": 6949,
+      "work": "Agent-Native/ambient coverage audit + final release evidence.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-131",
+      "sourceLine": 6953,
+      "work": "legacy Paperclip Skill/AGENTS/Hermes instruction migration register.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-132",
+      "sourceLine": 6954,
+      "work": "canonical `skills/blentera-platform/SKILL.md` + focused references from §21B.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-133",
+      "sourceLine": 6955,
+      "work": "minimal always-on Co-worker bootstrap / AGENTS convergence.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-134",
+      "sourceLine": 6956,
+      "work": "platform-owned reserved Skill identity + immutable release/digest/provenance.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-135",
+      "sourceLine": 6957,
+      "work": "Execution Manifest platform-Skill/version/digest + operation/tool-contract hash binding.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-136",
+      "sourceLine": 6958,
+      "work": "Tool Gateway / operation-manifest dependency invalidation and Skill revalidation.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-137",
+      "sourceLine": 6959,
+      "work": "Blentera-native required Skill materialization + conformance.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-138",
+      "sourceLine": 6960,
+      "work": "OpenClaw required Skill delivery + precedence/shadow collision protection.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-139",
+      "sourceLine": 6961,
+      "work": "Hermes isolated-profile Skill delivery + conformance.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-140",
+      "sourceLine": 6962,
+      "work": "A2A/custom runtime Skill-equivalence qualification contract.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-141",
+      "sourceLine": 6963,
+      "work": "Platform Skill routing/reachability + overlap/negative-control eval suite.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-142",
+      "sourceLine": 6964,
+      "work": "Platform Skill authorization/adversarial/recovery eval suite.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-143",
+      "sourceLine": 6965,
+      "work": "cross-runtime champion/challenger conformance + release evidence.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-144",
+      "sourceLine": 6966,
+      "work": "legacy `paperclip` Skill compatibility/deprecation/removal.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-145",
+      "sourceLine": 6967,
+      "work": "final Co-worker Operating Knowledge coverage audit + field-regression hook.",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-146",
+      "sourceLine": 6743,
+      "work": "Ambiguous SQL replay repair",
+      "nativeOwnerOrContract": "DB client + domain receipts",
+      "requiredOutcome": "Committed-before-disconnect case cannot repeat a non-idempotent effect",
+      "reconciliation": "in_progress",
+      "evidence": [
+        "software-checkpoint.json"
+      ]
+    },
+    {
+      "id": "V10-147",
+      "sourceLine": 6744,
+      "work": "Auth metadata/logging audit parity",
+      "nativeOwnerOrContract": "Existing auth/logger owners",
+      "requiredOutcome": "Sentinel headers/redirects absent from logs; rejected JWT event retained",
+      "reconciliation": "in_progress",
+      "evidence": [
+        "jwt-audit-checkpoint.json",
+        "software-checkpoint.json"
+      ]
+    },
+    {
+      "id": "V10-148",
+      "sourceLine": 6745,
+      "work": "Outbound processor/notice cutover",
+      "nativeOwnerOrContract": "Telemetry/config/feedback/announcements",
+      "requiredOutcome": "Accepted Blentera deployment has no unintended upstream destination",
+      "reconciliation": "in_progress",
+      "evidence": [
+        "processor-defaults-checkpoint.json",
+        "telemetry-admission-checkpoint.json"
+      ]
+    },
+    {
+      "id": "V10-149",
+      "sourceLine": 6746,
+      "work": "Inherited execution-blocker closure",
+      "nativeOwnerOrContract": "V7 sandbox/model/runtime owners",
+      "requiredOutcome": "All three implementation groups actually enforced and qualified",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-150",
+      "sourceLine": 6747,
+      "work": "Qualified starter/default experience profile",
+      "nativeOwnerOrContract": "V6 activation + V7 packages + V9 activation",
+      "requiredOutcome": "A usable account reaches real first value without technical setup decisions",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-151",
+      "sourceLine": 6748,
+      "work": "Bilingual terminology and boundary states",
+      "nativeOwnerOrContract": "Existing i18n/components/semantic cards",
+      "requiredOutcome": "Paired editorial, structural and real-state browser acceptance",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-152",
+      "sourceLine": 6749,
+      "work": "Progressive workflow authoring completion",
+      "nativeOwnerOrContract": "Original workflow author/revision/test/publish owners",
+      "requiredOutcome": "Intent becomes a real reviewed, testable graph; drafts remain truthfully labeled",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-153",
+      "sourceLine": 6750,
+      "work": "Upstream private-task propagation",
+      "nativeOwnerOrContract": "Existing privacy/source/domain owners",
+      "requiredOutcome": "No private data leaks into any enabled derivative/notification/export path",
+      "reconciliation": "in_progress",
+      "evidence": [
+        "up03-native-0505-checkpoint.json",
+        "up03-context-memory-0506-checkpoint.json",
+        "up03-learning-private-checkpoint.json",
+        "up03-memory-resolver-checkpoint.json",
+        "up03-private-live-checkpoint.json",
+        "up03-live-session-checkpoint.json"
+      ]
+    },
+    {
+      "id": "V10-154",
+      "sourceLine": 6751,
+      "work": "Provider-independent decision substrate",
+      "nativeOwnerOrContract": "Existing connection/secret/accounting/governance",
+      "requiredOutcome": "Disabled/unconfigured core works; optional qualified consumer can be admitted",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-155",
+      "sourceLine": 6752,
+      "work": "Jev shadow/candidate qualification",
+      "nativeOwnerOrContract": "One registered suggestion consumer",
+      "requiredOutcome": "Measured bilingual net benefit and safe fallback; otherwise keep native baseline",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-156",
+      "sourceLine": 6753,
+      "work": "Deadline-driven scheduled work",
+      "nativeOwnerOrContract": "Existing coordinator/routine/monitor owners",
+      "requiredOutcome": "Commit/restart/Stop/standby/multi-worker tests pass",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-157",
+      "sourceLine": 6754,
+      "work": "Exact release/claim reconciliation",
+      "nativeOwnerOrContract": "Existing V4/V7/V8/V9/V10 registers",
+      "requiredOutcome": "No historical/source-only/fixture evidence silently becomes hosted acceptance",
+      "reconciliation": "in_progress",
+      "evidence": []
+    },
+    {
+      "id": "V10-158",
+      "sourceLine": 6975,
+      "work": "Atomic Board CLI consent and honest token scope",
+      "nativeOwnerOrContract": "UP-02 / CE-05; A",
+      "requiredOutcome": "Current membership, approval/cancel/replay races and key/audit atomicity pass",
+      "reconciliation": "in_progress",
+      "evidence": [
+        "board-cli-checkpoint.json",
+        "global-board-audit-checkpoint.json"
+      ]
+    },
+    {
+      "id": "V10-159",
+      "sourceLine": 6976,
+      "work": "Immediate scoped offboarding and no identity resurrection",
+      "nativeOwnerOrContract": "CE-06 / OWNER-01; A/E",
+      "requiredOutcome": "Revoked company access cannot return through stale headers, grants, jobs or restore",
+      "reconciliation": "in_progress",
+      "evidence": [
+        "up03-responsible-authority-checkpoint.json",
+        "up03-live-session-checkpoint.json"
+      ]
+    },
+    {
+      "id": "V10-160",
+      "sourceLine": 6977,
+      "work": "Durable runtime/Skill/assignment synchronization",
+      "nativeOwnerOrContract": "UP-04; B",
+      "requiredOutcome": "Committed revision eventually applies once semantically, with stale fencing and real session topology",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-161",
+      "sourceLine": 6978,
+      "work": "Accepted-message and run-finalization recovery",
+      "nativeOwnerOrContract": "UP-05/07; B",
+      "requiredOutcome": "Paused/stranded work, Stop and unknown effects recover truthfully without duplication",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-162",
+      "sourceLine": 6979,
+      "work": "Preserve exact workspace sources and bounded reconstruction",
+      "nativeOwnerOrContract": "UP-06; B",
+      "requiredOutcome": "No unique-work deletion, actual restore and explicit loss/reconstruction semantics",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-163",
+      "sourceLine": 6980,
+      "work": "Qualified production bundle and bounded performance changes",
+      "nativeOwnerOrContract": "UP-10 / PERF / REL; B/H",
+      "requiredOutcome": "Actual artifact boots, runs and stops; measured improvement preserves current rights",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-164",
+      "sourceLine": 6981,
+      "work": "Short activation composition over retained logical states",
+      "nativeOwnerOrContract": "UX-02/03 / ONB-01–12; C",
+      "requiredOutcome": "No fabricated skipped step, duplicate command, required project/website or technical first-run setup",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-165",
+      "sourceLine": 6982,
+      "work": "Real human result-review and revision lifecycle",
+      "nativeOwnerOrContract": "ONB-11R / MEM-03; C/D",
+      "requiredOutcome": "Owner/admin review is explicit; member handoff and terminal-plan revision preserve authority and evidence",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-166",
+      "sourceLine": 6983,
+      "work": "Complete auth/recovery/reauthentication and bilingual mail",
+      "nativeOwnerOrContract": "CE-03 / AUTH; A/C",
+      "requiredOutcome": "Every offered login method has a secure usable lifecycle and EN/DA delivery",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-167",
+      "sourceLine": 6984,
+      "work": "Complete paired copy and rendered state acceptance",
+      "nativeOwnerOrContract": "§35 / UX-01; C–H",
+      "requiredOutcome": "Both locales preserve action, actor, cost, data and status meaning across all critical states",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-168",
+      "sourceLine": 6985,
+      "work": "Mandatory beta profile and exact live evidence dossier",
+      "nativeOwnerOrContract": "§§47/55; H",
+      "requiredOutcome": "No required capability hidden by narrowing claims; real source/runtime/human/operator evidence",
+      "reconciliation": "not_reconciled",
+      "evidence": []
+    },
+    {
+      "id": "V10-169",
+      "sourceLine": 6986,
+      "work": "Compatibility and migration phase reconciliation",
+      "nativeOwnerOrContract": "MIG-01–07 / §7; every affected wave",
+      "requiredOutcome": "Current writer/state/recovery is defined for each phase and old/new combinations pass",
+      "reconciliation": "in_progress",
+      "evidence": [
+        "up03-native-0505-checkpoint.json",
+        "up03-context-memory-0506-checkpoint.json"
+      ]
+    }
+  ]
+}

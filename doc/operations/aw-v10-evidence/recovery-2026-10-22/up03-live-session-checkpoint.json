@@ -3,7 +3,8 @@
   "recordedAt": "2026-10-22T22:12:04.761300+00:00",
   "actualResults": {
     "red": "3 genuine failures /6 deselected: actual session deleted, expired, or replaced for same Human still delivered next native socket event. Baseline valid original session delivery succeeded first.",
-    "green": "15/15 pass:9 PostgreSQL/socket regressions and6 original upgrade tests."
+    "green": "15/15 pass:9 PostgreSQL/socket regressions and6 original upgrade tests.",
+    "currentAnalytical": "PASS3 selected actual original analytical/socket cases,52 deselected,81.48s on current session-check source and real persisted session fixtures."
   },
   "changes": "Original WebSocket admission reads persisted session/account/active memberships/admin role in one native SQL snapshot despite cached resolver result; actual source/session/key identity stays bound to the original connection. Existing analytical membership fixture now supplies a real persisted session instead of a fabricated random session DTO.",
   "pins": {
@@ -32,12 +33,29 @@
         "server/src/realtime/live-events-ws.ts": true,
         "server/src/services/authorization.ts": true
       }
+    },
+    "currentAnalytical": {
+      "recordedDuringCapture": "2026-10-22T22:12:20.606233+00:00",
+      "files": {
+        "server/src/__tests__/analytical-context-privacy.integration.test.ts": "b9b9d255137c7c401f58775ed6bb64c21489ba0a5ef7434f048ea13e91d14510",
+        "server/src/services/analytical-live-events.ts": "ee9cc8779aa53db463601bb9b6b5b4a16871d390e103a24eac36802fc7fa7bc5",
+        "server/src/realtime/live-events-ws.ts": "38e30f5a72ddcbf2622affac4fef3a3d96daaae92aab94743f0cdae5e7cd01e9",
+        "server/src/services/memory/memory-service.ts": "2ec4a5ea5efa4a90bba274dedea89f26e6520fb8885683a7ad4679a7571b6164",
+        "server/src/services/authorization.ts": "fc306dea21e6cbe992da30714a218e4c1ec92d8d80378e8df83f7affd3d4addb"
+      },
+      "unchangedAtActualExit": {
+        "server/src/__tests__/analytical-context-privacy.integration.test.ts": true,
+        "server/src/services/analytical-live-events.ts": true,
+        "server/src/realtime/live-events-ws.ts": true,
+        "server/src/services/memory/memory-service.ts": true,
+        "server/src/services/authorization.ts": true
+      }
     }
   },
   "limits": [
     "Normal typecheck predates this source wave; current check pending.",
-    "Three older analytical live cases passed before this session change; rerun on current source pending.",
     "Session expiry/removal or source revocation during a later source-review/database wait needs separate transactional qualification; these three tests revoke before native delivery admission.",
     "Agent Human intersection, Cloud identity lifetime, all nested/plugin producer sources, count/timing metadata and full V10 remain open."
-  ]
+  ],
+  "updatedAt": "2026-10-22T22:14:43.614559+00:00"
 }
