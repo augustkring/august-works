@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import {
   HUMAN_COMPANY_MEMBERSHIP_ROLE_LABELS,
@@ -7,6 +7,8 @@ import {
 } from "@paperclipai/shared";
 import { Shield, ShieldCheck, Trash2, UserPlus } from "lucide-react";
 import { accessApi, type CompanyMember } from "@/api/access";
+import { useAccountIdentity } from "@/api/companies-query";
+import { useV9PrivateReadAuthority } from "@/hooks/useV9PrivateReadAuthority";
 import { agentsApi } from "@/api/agents";
 import { ApiError } from "@/api/client";
 import { cloudApi } from "@/api/cloud";
@@ -43,6 +45,20 @@ export function CompanyAccess() {
   const { setBreadcrumbs } = useBreadcrumbs();
   const { pushToast } = useToast();
   const queryClient = useQueryClient();
+  const identity = useAccountIdentity({ refetchOnMount: false });
+  const principal = identity.localImplicit ? "local-board" : identity.userId ?? "";
+  const authority = useV9PrivateReadAuthority(principal, true);
+  const scope = useRef({ company: selectedCompanyId, principal, accountEpoch: authority.epoch, epoch: 0 });
+  if (scope.current.company !== selectedCompanyId || scope.current.principal !== principal ||
+    scope.current.accountEpoch !== authority.epoch) {
+    scope.current = { company: selectedCompanyId, principal, accountEpoch: authority.epoch,
+      epoch: scope.current.epoch + 1 };
+  }
+  const captureAccess = () => {
+    const epoch = scope.current.epoch;
+    return { companyId: selectedCompanyId!,
+      isCurrent: () => !!selectedCompanyId && epoch === scope.current.epoch && authority.canRead() };
+  };
   const [searchParams, setSearchParams] = useSearchParams();
   const cloud = useCloudInstance();
   const cloudStacksQuery = useQuery({
@@ -111,29 +127,37 @@ export function CompanyAccess() {
     enabled: !!selectedCompanyId && !!membersQuery.data?.access.canApproveJoinRequests,
   });
 
-  const refreshAccessData = async () => {
-    if (!selectedCompanyId) return;
-    await queryClient.invalidateQueries({ queryKey: queryKeys.access.companyMembers(selectedCompanyId) });
-    await queryClient.invalidateQueries({ queryKey: queryKeys.access.companyUserDirectory(selectedCompanyId) });
-    await queryClient.invalidateQueries({ queryKey: queryKeys.access.joinRequests(selectedCompanyId, "pending_approval") });
+  const refreshAccessData = async (receipt: ReturnType<typeof captureAccess>) => {
+    for (const queryKey of [
+      queryKeys.access.companyMembers(receipt.companyId),
+      queryKeys.access.companyUserDirectory(receipt.companyId),
+      queryKeys.access.joinRequests(receipt.companyId, "pending_approval"),
+    ]) {
+      if (!receipt.isCurrent()) return false;
+      await queryClient.invalidateQueries({ queryKey });
+    }
+    return receipt.isCurrent();
   };
 
   const updateMemberMutation = useMutation({
-    mutationFn: async (input: { memberId: string; membershipRole: CompanyMember["membershipRole"]; status: EditableMemberStatus }) => {
-      return accessApi.updateMember(selectedCompanyId!, input.memberId, {
+    mutationFn: async (input: { receipt: ReturnType<typeof captureAccess>; memberId: string; membershipRole: CompanyMember["membershipRole"]; status: EditableMemberStatus }) => {
+      if (!input.receipt.isCurrent()) throw new Error("Current account access changed");
+      return accessApi.updateMember(input.receipt.companyId, input.memberId, {
         membershipRole: input.membershipRole,
         status: input.status,
       });
     },
-    onSuccess: async () => {
+    onSuccess: async (_result, { receipt }) => {
+      if (!receipt.isCurrent()) return;
       setEditingMemberId(null);
-      await refreshAccessData();
+      if (!await refreshAccessData(receipt)) return;
       pushToast({
         title: "Member updated",
         tone: "success",
       });
     },
-    onError: (error) => {
+    onError: (error, { receipt }) => {
+      if (!receipt.isCurrent()) return;
       pushToast({
         title: "Failed to update member",
         body: error instanceof Error ? error.message : "Unknown error",
@@ -143,15 +167,19 @@ export function CompanyAccess() {
   });
 
   const approveJoinRequestMutation = useMutation({
-    mutationFn: (requestId: string) => accessApi.approveJoinRequest(selectedCompanyId!, requestId),
-    onSuccess: async () => {
-      await refreshAccessData();
+    mutationFn: (input: { requestId: string; receipt: ReturnType<typeof captureAccess> }) => {
+      if (!input.receipt.isCurrent()) throw new Error("Current account access changed");
+      return accessApi.approveJoinRequest(input.receipt.companyId, input.requestId);
+    },
+    onSuccess: async (_result, { receipt }) => {
+      if (!receipt.isCurrent() || !await refreshAccessData(receipt)) return;
       pushToast({
         title: "Join request approved",
         tone: "success",
       });
     },
-    onError: (error) => {
+    onError: (error, { receipt }) => {
+      if (!receipt.isCurrent()) return;
       pushToast({
         title: "Failed to approve join request",
         body: error instanceof Error ? error.message : "Unknown error",
@@ -161,15 +189,19 @@ export function CompanyAccess() {
   });
 
   const rejectJoinRequestMutation = useMutation({
-    mutationFn: (requestId: string) => accessApi.rejectJoinRequest(selectedCompanyId!, requestId),
-    onSuccess: async () => {
-      await refreshAccessData();
+    mutationFn: (input: { requestId: string; receipt: ReturnType<typeof captureAccess> }) => {
+      if (!input.receipt.isCurrent()) throw new Error("Current account access changed");
+      return accessApi.rejectJoinRequest(input.receipt.companyId, input.requestId);
+    },
+    onSuccess: async (_result, { receipt }) => {
+      if (!receipt.isCurrent() || !await refreshAccessData(receipt)) return;
       pushToast({
         title: "Join request rejected",
         tone: "success",
       });
     },
-    onError: (error) => {
+    onError: (error, { receipt }) => {
+      if (!receipt.isCurrent()) return;
       pushToast({
         title: "Failed to reject join request",
         body: error instanceof Error ? error.message : "Unknown error",
@@ -198,24 +230,30 @@ export function CompanyAccess() {
   });
 
   const archiveMemberMutation = useMutation({
-    mutationFn: async (input: { memberId: string; target: string }) => {
+    mutationFn: async (input: { receipt: ReturnType<typeof captureAccess>; memberId: string; target: string }) => {
+      if (!input.receipt.isCurrent()) throw new Error("Current account access changed");
       const reassignment =
         input.target.startsWith("agent:")
           ? { assigneeAgentId: input.target.slice("agent:".length), assigneeUserId: null }
           : input.target.startsWith("user:")
             ? { assigneeAgentId: null, assigneeUserId: input.target.slice("user:".length) }
             : null;
-      return accessApi.archiveMember(selectedCompanyId!, input.memberId, { reassignment });
+      return accessApi.archiveMember(input.receipt.companyId, input.memberId, { reassignment });
     },
-    onSuccess: async (result) => {
+    onSuccess: async (result, { receipt }) => {
+      if (!receipt.isCurrent()) return;
       setRemovingMemberId(null);
       setReassignmentTarget("__unassigned");
-      await refreshAccessData();
-      if (selectedCompanyId) {
-        await queryClient.invalidateQueries({ queryKey: queryKeys.issues.list(selectedCompanyId) });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.issues.listAssignedToMe(selectedCompanyId) });
-        await queryClient.invalidateQueries({ queryKey: queryKeys.issues.listTouchedByMe(selectedCompanyId) });
+      if (!await refreshAccessData(receipt)) return;
+      for (const queryKey of [
+        queryKeys.issues.list(receipt.companyId),
+        queryKeys.issues.listAssignedToMe(receipt.companyId),
+        queryKeys.issues.listTouchedByMe(receipt.companyId),
+      ]) {
+        if (!receipt.isCurrent()) return;
+        await queryClient.invalidateQueries({ queryKey });
       }
+      if (!receipt.isCurrent()) return;
       pushToast({
         title: "Member removed",
         body:
@@ -225,7 +263,8 @@ export function CompanyAccess() {
         tone: "success",
       });
     },
-    onError: (error) => {
+    onError: (error, { receipt }) => {
+      if (!receipt.isCurrent()) return;
       pushToast({
         title: "Failed to remove member",
         body: error instanceof Error ? error.message : "Unknown error",
@@ -349,8 +388,8 @@ export function CompanyAccess() {
                   approveLabel="Approve human"
                   rejectLabel="Reject human"
                   disabled={joinRequestActionPending}
-                  onApprove={() => approveJoinRequestMutation.mutate(request.id)}
-                  onReject={() => rejectJoinRequestMutation.mutate(request.id)}
+                  onApprove={() => approveJoinRequestMutation.mutate({ requestId: request.id, receipt: captureAccess() })}
+                  onReject={() => rejectJoinRequestMutation.mutate({ requestId: request.id, receipt: captureAccess() })}
                 />
               ))}
             </div>
@@ -486,6 +525,7 @@ export function CompanyAccess() {
               onClick={() => {
                 if (!editingMember) return;
                 updateMemberMutation.mutate({
+                  receipt: captureAccess(),
                   memberId: editingMember.id,
                   membershipRole: draftRole,
                   status: draftStatus,
@@ -573,6 +613,7 @@ export function CompanyAccess() {
               onClick={() => {
                 if (!removingMember) return;
                 archiveMemberMutation.mutate({
+                  receipt: captureAccess(),
                   memberId: removingMember.id,
                   target: reassignmentTarget,
                 });

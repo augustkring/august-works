@@ -1,191 +1,218 @@
 import net from "node:net";
-import { sql as drizzleSql } from "drizzle-orm";
-import { afterEach, describe, expect, it } from "vitest";
+import { sql } from "drizzle-orm";
 import type { Sql } from "postgres";
+import { describe, expect, it, vi } from "vitest";
+import { EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, startEmbeddedPostgresTestDatabase } from "./test-embedded-postgres.js";
 import { closeRegisteredClients, createDb } from "./client.js";
-import { isTransientWritePhaseError, withTransientWriteRetry } from "./transient-write-retry.js";
 
-/** The exact shape postgres.js raises when the socket write fails. */
-function writeClosedError(): Error {
-  const error = new Error("write CONNECTION_CLOSED db.example.internal:5432");
-  (error as Error & { code: string }).code = "CONNECTION_CLOSED";
-  return error;
-}
-
-/** A stub standing in for the root postgres.js client's `unsafe` surface. */
-function stubSql(behavior: { failures: number; error?: () => Error }) {
-  let calls = 0;
-  const state = {
-    get calls() {
-      return calls;
-    },
-  };
-  const unsafe = (_query: string, _parameters?: unknown[]) => {
-    calls += 1;
-    const attempt = calls;
-    const shouldFail = attempt <= behavior.failures;
-    const outcome = () =>
-      shouldFail
-        ? Promise.reject((behavior.error ?? writeClosedError)())
-        : Promise.resolve([{ attempt }]);
-    return {
-      then: (onFulfilled?: ((value: unknown) => unknown) | null, onRejected?: ((reason: unknown) => unknown) | null) =>
-        outcome().then(onFulfilled, onRejected),
-      values: () => outcome().then(() => [[attempt]]),
-    };
-  };
-  const sql = { unsafe } as unknown as Sql;
-  return { sql, state };
-}
-
-describe("isTransientWritePhaseError", () => {
-  it("matches only the write-phase connection-closed shape", () => {
-    expect(isTransientWritePhaseError(writeClosedError())).toBe(true);
-
-    const midQuery = new Error("read CONNECTION_CLOSED db.example.internal:5432");
-    (midQuery as Error & { code: string }).code = "CONNECTION_CLOSED";
-    expect(isTransientWritePhaseError(midQuery)).toBe(false);
-
-    const ended = new Error("write CONNECTION_ENDED db.example.internal:5432");
-    (ended as Error & { code: string }).code = "CONNECTION_ENDED";
-    expect(isTransientWritePhaseError(ended)).toBe(false);
-
-    expect(isTransientWritePhaseError(new Error("write CONNECTION_CLOSED x:1"))).toBe(false); // no code
-    expect(isTransientWritePhaseError(null)).toBe(false);
-  });
-});
-
-describe("withTransientWriteRetry", () => {
-  it("replays a query whose socket write failed, and returns the replay's rows", async () => {
-    const { sql, state } = stubSql({ failures: 1 });
-    const rows = await withTransientWriteRetry(sql).unsafe("select 1", []);
-    expect(rows).toEqual([{ attempt: 2 }]);
-    expect(state.calls).toBe(2);
-  });
-
-  it("replays the .values() form drizzle uses", async () => {
-    const { sql, state } = stubSql({ failures: 2 });
-    const values = await withTransientWriteRetry(sql).unsafe("select 1", []).values();
-    expect(values).toEqual([[3]]);
-    expect(state.calls).toBe(3);
-  });
-
-  it("gives up after the attempt budget and surfaces the driver error", async () => {
-    const { sql, state } = stubSql({ failures: Number.POSITIVE_INFINITY });
-    await expect(withTransientWriteRetry(sql).unsafe("select 1", [])).rejects.toThrow(
-      "write CONNECTION_CLOSED",
-    );
-    expect(state.calls).toBe(3);
-  });
-
-  it("does not replay an error that may have reached the server", async () => {
-    const midQuery = () => {
-      const error = new Error("read CONNECTION_CLOSED db.example.internal:5432");
-      (error as Error & { code: string }).code = "CONNECTION_CLOSED";
-      return error;
-    };
-    const { sql, state } = stubSql({ failures: Number.POSITIVE_INFINITY, error: midQuery });
-    await expect(withTransientWriteRetry(sql).unsafe("select 1", [])).rejects.toThrow(
-      "read CONNECTION_CLOSED",
-    );
-    expect(state.calls).toBe(1);
-  });
-
-  it("runs one execution no matter how many handlers attach to the pending query", async () => {
-    const { sql, state } = stubSql({ failures: 0 });
-    const pending = withTransientWriteRetry(sql).unsafe("select 1", []);
-    await Promise.all([pending, pending.catch(() => undefined), pending.then((rows) => rows)]);
-    expect(state.calls).toBe(1);
-  });
-
-  it("never executes a query twice when a caller both awaits it and takes its values", async () => {
-    // `.values()` selects the row shape of the one execution, like the driver.
-    // Starting a second execution here would repeat a mutation's effect.
-    const { sql, state } = stubSql({ failures: 0 });
-    const pending = withTransientWriteRetry(sql).unsafe("insert into t values (1)", []);
-    const rows = await pending;
-    const values = await pending.values();
-    expect(state.calls).toBe(1);
-    expect(values).toBe(rows);
-  });
-
-  it("takes the values shape when it is chosen before the query runs", async () => {
-    const { sql, state } = stubSql({ failures: 0 });
-    const pending = withTransientWriteRetry(sql).unsafe("select 1", []);
-    expect(await pending.values()).toEqual([[1]]);
-    expect(state.calls).toBe(1);
-  });
-});
-
-describe("createDb with the retrying client", () => {
-  // The same minimal wire-protocol fake as client-teardown-registry.test.ts:
-  // enough of the startup and query flow for drizzle to run a real query
-  // through the proxied client, proving the retry face is transparent.
-  function startFakePostgresServer(): Promise<{ server: net.Server; port: number }> {
-    const authOk = Buffer.from([0x52, 0, 0, 0, 8, 0, 0, 0, 0]);
-    const readyForQuery = Buffer.from([0x5a, 0, 0, 0, 5, 0x49]);
-    const emptyQueryReply = Buffer.concat([
-      Buffer.from([0x31, 0, 0, 0, 4]),
-      Buffer.from([0x32, 0, 0, 0, 4]),
-      Buffer.from([0x54, 0, 0, 0, 6, 0, 0]),
-      Buffer.from([0x43, 0, 0, 0, 0x0d, 0x53, 0x45, 0x4c, 0x45, 0x43, 0x54, 0x20, 0x30, 0]),
-    ]);
-    const server = net.createServer((socket) => {
-      let greeted = false;
-      socket.on("data", () => {
+/** A wire peer that receives the statement, then loses its acknowledgement. */
+async function startDisconnectingServer() {
+  const sockets = new Set<net.Socket>();
+  let receivedEffects = 0;
+  const extendedExecutions: Array<{ statement: string; prepared: boolean; parameters: Array<string | null> }> = [];
+  const ready = Buffer.from([0x5a, 0, 0, 0, 5, 0x49]);
+  const authOk = Buffer.from([0x52, 0, 0, 0, 8, 0, 0, 0, 0]);
+  const parseComplete = Buffer.from([0x31, 0, 0, 0, 4]);
+  const bindComplete = Buffer.from([0x32, 0, 0, 0, 4]);
+  const emptyRowDescription = Buffer.from([0x54, 0, 0, 0, 6, 0, 0]);
+  const commandComplete = Buffer.from([0x43, 0, 0, 0, 0x0d, ...Buffer.from("SELECT 0\0")]);
+  const server = net.createServer((socket) => {
+    sockets.add(socket);
+    socket.on("close", () => sockets.delete(socket));
+    socket.on("error", () => {});
+    let greeted = false;
+    let pending = Buffer.alloc(0);
+    const statements = new Map<string, { text: string; parameterTypes: number[] }>();
+    const portals = new Map<string, { statement: string; prepared: boolean; parameters: Array<string | null> }>();
+    socket.on("data", (chunk) => {
+      pending = Buffer.concat([pending, chunk]);
+      while (pending.length >= (greeted ? 5 : 4)) {
+        const size = greeted ? pending.readUInt32BE(1) + 1 : pending.readUInt32BE(0);
+        if (pending.length < size) return;
+        const message = pending.subarray(0, size);
+        pending = pending.subarray(size);
         if (!greeted) {
           greeted = true;
-          socket.write(Buffer.concat([authOk, readyForQuery]));
-          return;
+          socket.write(Buffer.concat([authOk, ready]));
+        } else if (message[0] === 0x51) { // Simple Query
+          const statement = message.subarray(5, -1).toString();
+          if (statement.includes("disconnect_effect")) {
+            receivedEffects += 1;
+            // The whole statement reached the peer. Its outcome is now
+            // ambiguous to the client, even though the error says "write".
+            socket.destroy();
+            return;
+          }
+          socket.write(Buffer.concat([commandComplete, ready]));
+        } else if (message[0] === 0x50) { // Parse
+          const nameEnd = message.indexOf(0, 5);
+          const textEnd = message.indexOf(0, nameEnd + 1);
+          const name = message.toString("utf8", 5, nameEnd);
+          const text = message.toString("utf8", nameEnd + 1, textEnd);
+          const count = message.readUInt16BE(textEnd + 1);
+          const parameterTypes = Array.from({ length: count }, (_, index) =>
+            message.readUInt32BE(textEnd + 3 + index * 4) || 23); // int4 for this fixture's integer parameters.
+          statements.set(name, { text, parameterTypes });
+          socket.write(parseComplete);
+        } else if (message[0] === 0x44) { // Describe statement
+          const name = message.toString("utf8", 6, message.length - 1);
+          const statement = statements.get(name)!;
+          const description = Buffer.alloc(7 + statement.parameterTypes.length * 4);
+          description[0] = 0x74; // ParameterDescription
+          description.writeUInt32BE(description.length - 1, 1);
+          description.writeUInt16BE(statement.parameterTypes.length, 5);
+          statement.parameterTypes.forEach((type, index) => description.writeUInt32BE(type, 7 + index * 4));
+          socket.write(Buffer.concat([description, emptyRowDescription]));
+        } else if (message[0] === 0x42) { // Bind
+          const portalEnd = message.indexOf(0, 5);
+          const nameEnd = message.indexOf(0, portalEnd + 1);
+          const portal = message.toString("utf8", 5, portalEnd);
+          const name = message.toString("utf8", portalEnd + 1, nameEnd);
+          let offset = nameEnd + 3 + message.readUInt16BE(nameEnd + 1) * 2;
+          const count = message.readUInt16BE(offset);
+          offset += 2;
+          const parameters: Array<string | null> = [];
+          for (let index = 0; index < count; index++) {
+            const length = message.readInt32BE(offset);
+            offset += 4;
+            parameters.push(length === -1 ? null : message.toString("utf8", offset, offset + length));
+            if (length !== -1) offset += length;
+          }
+          portals.set(portal, { statement: statements.get(name)!.text, prepared: name.length > 0, parameters });
+          socket.write(bindComplete);
+        } else if (message[0] === 0x45) { // Execute: Parse/Describe alone cannot execute an effect.
+          const execution = portals.get(message.toString("utf8", 5, message.indexOf(0, 5)))!;
+          extendedExecutions.push(execution);
+          if (execution.statement.includes("disconnect_effect")) {
+            receivedEffects += 1;
+            socket.destroy();
+            return;
+          }
+          socket.write(commandComplete);
+        } else if (message[0] === 0x53) { // Sync
+          socket.write(ready);
         }
-        socket.write(Buffer.concat([emptyQueryReply, readyForQuery]));
-      });
-      socket.on("error", () => {});
+      }
     });
-    return new Promise((resolve) => {
-      server.listen(0, "127.0.0.1", () => {
-        resolve({ server, port: (server.address() as net.AddressInfo).port });
+  });
+  await new Promise<void>((resolve) => server.listen(0, "127.0.0.1", resolve));
+  const port = (server.address() as net.AddressInfo).port;
+  return {
+    url: `postgres://test:test@127.0.0.1:${port}/test`,
+    receivedEffects: () => receivedEffects,
+    extendedExecutions: () => extendedExecutions,
+    close: async () => {
+      for (const socket of sockets) socket.destroy();
+      await new Promise<void>((resolve) => server.close(() => resolve()));
+    },
+  };
+}
+
+describe("database connection loss after statement delivery", () => {
+  it.each(["drizzle", "prepared"] as const)("does not replay a parameterized mutation (%s)", async (surface) => {
+    const peer = await startDisconnectingServer();
+    try {
+      // Keep the default client settings. Drizzle uses unsafe(), which selects
+      // unnamed statements; tagged client queries use named prepared statements.
+      const db = createDb(peer.url, { maxConnections: 1, connectTimeoutSeconds: 2 });
+      const client = db.$client;
+      const pending = surface === "drizzle"
+        ? db.execute(sql`insert into disconnect_effect(value) values (${42})`)
+        : client`insert into disconnect_effect(value) values (${42})`;
+      const error = await pending.then(() => null, (failure: unknown) => failure);
+      expect(error).toBeInstanceOf(Error);
+      const driverError = error instanceof Error && error.cause ? error.cause : error;
+      expect(driverError).toMatchObject({
+        code: "CONNECTION_CLOSED",
+        message: expect.stringContaining("write CONNECTION_CLOSED"),
       });
+      expect(peer.receivedEffects()).toBe(1);
+      expect(peer.extendedExecutions().filter((execution) => execution.statement.includes("disconnect_effect")))
+        .toEqual([{ statement: "insert into disconnect_effect(value) values ($1)", prepared: surface === "prepared", parameters: ["42"] }]);
+
+      const freshQuery = surface === "drizzle" ? db.execute(sql`select ${7}`) : client`select ${7}`;
+      await expect(freshQuery).resolves.toBeDefined();
+      expect(peer.extendedExecutions().at(-1))
+        .toEqual({ statement: "select $1", prepared: surface === "prepared", parameters: ["7"] });
+      expect(peer.receivedEffects()).toBe(1);
+    } finally {
+      await peer.close();
+      await closeRegisteredClients(peer.url);
+    }
+  });
+
+  for (const statement of [
+    "insert into disconnect_effect default values",
+    "select disconnect_effect()",
+    "with effect as (insert into disconnect_effect default values returning *) select * from effect",
+  ]) {
+    it.each(["rows", "values"] as const)(`does not replay ${statement} (%s)`, async (shape) => {
+      const peer = await startDisconnectingServer();
+      try {
+        const db = createDb(peer.url, { maxConnections: 1, connectTimeoutSeconds: 2, prepare: false });
+        const client = (db as unknown as { $client: Sql }).$client;
+        const pending = shape === "rows"
+          ? db.execute(sql.raw(statement))
+          : client.unsafe(statement).values();
+        // This is the real postgres.js error, not a mock that invents a
+        // distinct "read CONNECTION_CLOSED" shape for an in-flight query.
+        const error = await pending.then(() => null, (failure: unknown) => failure);
+        expect(error).toBeInstanceOf(Error);
+        const driverError = error instanceof Error && error.cause ? error.cause : error;
+        expect(driverError).toMatchObject({
+          code: "CONNECTION_CLOSED",
+          message: expect.stringContaining("write CONNECTION_CLOSED"),
+        });
+        expect(peer.receivedEffects()).toBe(1);
+
+        // Failing the ambiguous statement must not poison the pool. A new
+        // operation can reconnect, without resubmitting the failed effect.
+        await expect(db.execute(sql`select 0`)).resolves.toBeDefined();
+        expect(peer.receivedEffects()).toBe(1);
+      } finally {
+        await peer.close();
+        await closeRegisteredClients(peer.url);
+      }
     });
   }
+});
 
-  let server: net.Server | null = null;
-  let url: string | null = null;
-
-  afterEach(async () => {
-    if (url) await closeRegisteredClients(url);
-    if (server) await new Promise((resolve) => server!.close(resolve));
-    server = null;
-    url = null;
-  });
-
-  it("still answers ordinary drizzle queries through the proxy", async () => {
-    const started = await startFakePostgresServer();
-    server = started.server;
-    url = `postgres://test:test@127.0.0.1:${started.port}/test`;
-    const db = createDb(url, { connectTimeoutSeconds: 5, prepare: false });
-    await expect(db.execute(drizzleSql`select 0`)).resolves.toBeDefined();
-  });
-
-  it("leaves every other client surface reachable through the proxy", async () => {
-    // Drizzle itself only awaits `unsafe()` or takes its `.values()`, but the
-    // client is reachable as `db.$client`, and callers use it as a tagged
-    // template, open transactions on it, and end it. A wrapper that broke any
-    // of those would fail far from here, so pin them against the real driver.
-    const started = await startFakePostgresServer();
-    server = started.server;
-    url = `postgres://test:test@127.0.0.1:${started.port}/test`;
-    const db = createDb(url, { connectTimeoutSeconds: 5, prepare: false });
-    const client = (db as unknown as { $client: Sql }).$client;
-
-    await expect(client`select 1`).resolves.toBeDefined();
-    await expect(client.unsafe("select 1", [])).resolves.toBeDefined();
-    await expect(
-      client.begin(async (tx) => {
-        await tx.unsafe("select 1", []);
-        return "transaction result";
-      }),
-    ).resolves.toBe("transaction result");
-    await expect(client.end({ timeout: 1 })).resolves.toBeUndefined();
-  });
+describe("committed PostgreSQL mutation with injected acknowledgement loss", () => {
+  it("retains one committed increment and propagates uncertainty", async () => {
+    const database = await startEmbeddedPostgresTestDatabase("blentera-db-retry-");
+    try {
+      const db = createDb(database.connectionString, { maxConnections: 1 });
+      const client = db.$client;
+      await client.unsafe("create table disconnect_counter (value integer not null)");
+      await client.unsafe("insert into disconnect_counter values (0)");
+      const lostReply = Object.assign(new Error("write CONNECTION_CLOSED injected-after-commit"), {
+        code: "CONNECTION_CLOSED",
+      });
+      // Read the driver method's descriptor so this seam also reaches through
+      // the legacy proxy when reproducing the pre-fix duplicate execution.
+      const descriptor = Object.getOwnPropertyDescriptor(client, "unsafe")!;
+      const execute: typeof client.unsafe = descriptor.value;
+      const unsafe = vi.fn<typeof client.unsafe>(function <T extends unknown[]>(...args: Parameters<typeof client.unsafe>) {
+        const pending = execute<T>(...args);
+        const settle = pending.then.bind(pending);
+        // Real PostgreSQL has acknowledged the commit before we inject the
+        // lost reply. This models ACK loss; it is not a physical network test.
+        pending.then = (resolve, reject) => settle(() => { throw lostReply; }).then(resolve, reject);
+        return pending;
+      });
+      Object.defineProperty(client, "unsafe", { ...descriptor, value: unsafe });
+      try {
+        await expect(db.execute(sql`update disconnect_counter set value = value + 1`)).rejects.toMatchObject({
+          cause: lostReply,
+        });
+      } finally {
+        Object.defineProperty(client, "unsafe", descriptor);
+      }
+      const [row] = await client.unsafe("select value from disconnect_counter");
+      expect(row?.value).toBe(1);
+      expect(unsafe).toHaveBeenCalledTimes(1);
+    } finally {
+      await database.cleanup();
+    }
+  }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
 });

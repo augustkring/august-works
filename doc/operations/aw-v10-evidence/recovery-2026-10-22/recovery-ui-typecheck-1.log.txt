@@ -1,0 +1,12 @@
+
+> @paperclipai/ui@0.3.1 typecheck /workspace/blentera-v10/ui
+> tsc -b
+
+src/components/PluginOrganizationSwitcher.test.tsx(7,54): error TS2307: Cannot find module '@paperclipai/plugin-sdk/ui' or its corresponding type declarations.
+src/components/PluginOrganizationSwitcher.tsx(3,54): error TS2307: Cannot find module '@paperclipai/plugin-sdk/ui' or its corresponding type declarations.
+src/components/PluginOrganizationSwitcher.tsx(73,20): error TS7006: Parameter 'name' implicitly has an 'any' type.
+src/components/PluginOrganizationSwitcher.tsx(73,26): error TS7006: Parameter 'logoUrl' implicitly has an 'any' type.
+src/components/PluginOrganizationSwitcher.tsx(73,35): error TS7006: Parameter 'inMenu' implicitly has an 'any' type.
+/workspace/blentera-v10/ui:
+ ERR_PNPM_RECURSIVE_RUN_FIRST_FAIL  @paperclipai/ui@0.3.1 typecheck: `tsc -b`
+Exit status 1

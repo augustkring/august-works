@@ -11,7 +11,10 @@
 // objects/arrays. Caps depth so a hostile or accidental cycle can't pin
 // the logger.
 
+import { HTTP_LOG_SENSITIVE_HEADERS } from "./http-log-redaction.js";
+
 const SENSITIVE_KEYS = new Set<string>([
+  ...HTTP_LOG_SENSITIVE_HEADERS,
   // Provider setup payloads deliberately group all durable authentication
   // material under `credentials`. Redact the whole subtree instead of trying
   // to keep an ever-changing allowlist of provider-specific field names in

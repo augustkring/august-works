@@ -146,6 +146,13 @@ See [Supabase pricing](https://supabase.com/pricing) for current details.
 
 ## Connection loss during a transaction
 
+The root database client does not replay statements after a disconnect. A lost
+acknowledgement can hide an already committed write; even a `SELECT` or CTE can
+have side effects. A `write CONNECTION_CLOSED` error does not establish that
+PostgreSQL did not execute the statement. The owning domain must reconcile its
+durable operation identity before retrying an uncertain effect. Connection
+recovery still lets a new operation use a fresh pooled connection.
+
 When a database connection closes, its transaction fails. Paperclip does not
 replay that transaction. New requests can use a fresh connection from the pool.
 Queries from the failed transaction must keep failing, even after the pool

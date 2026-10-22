@@ -4,7 +4,22 @@ import { act } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { queryKeys } from "@/lib/queryKeys";
+import { v9SessionFixture } from "@/hooks/v9-session.test-support";
 import { CompanyAccess, CompanyAccessLegacyRoute } from "./CompanyAccess";
+
+const pushToastMock = vi.hoisted(() => vi.fn());
+const approveJoinRequestMock = vi.hoisted(() => vi.fn());
+const rejectJoinRequestMock = vi.hoisted(() => vi.fn());
+const companyState = vi.hoisted(() => ({ id: "company-1" }));
+
+vi.mock("@/api/auth", () => ({ authApi: { getSession: async () => v9SessionFixture("user-1") } }));
+
+beforeEach(() => {
+  companyState.id = "company-1";
+  approveJoinRequestMock.mockResolvedValue({});
+  rejectJoinRequestMock.mockResolvedValue({});
+});
 
 const listMembersMock = vi.hoisted(() => vi.fn());
 const listJoinRequestsMock = vi.hoisted(() => vi.fn());
@@ -32,8 +47,8 @@ vi.mock("@/api/access", () => ({
     updateMemberAccess: vi.fn(),
     archiveMember: (companyId: string, memberId: string, input: unknown) =>
       archiveMemberMock(companyId, memberId, input),
-    approveJoinRequest: vi.fn(),
-    rejectJoinRequest: vi.fn(),
+    approveJoinRequest: approveJoinRequestMock,
+    rejectJoinRequest: rejectJoinRequestMock,
     listInvites: (companyId: string, options: unknown) => listInvitesMock(companyId, options),
     createCompanyInvite: vi.fn(),
     revokeInvite: vi.fn(),
@@ -85,8 +100,8 @@ vi.mock("@/context/SidebarContext", () => ({
 
 vi.mock("@/context/CompanyContext", () => ({
   useCompany: () => ({
-    selectedCompanyId: "company-1",
-    selectedCompany: { id: "company-1", name: "Paperclip" },
+    selectedCompanyId: companyState.id,
+    selectedCompany: { id: companyState.id, name: "Paperclip" },
   }),
 }));
 
@@ -95,7 +110,7 @@ vi.mock("@/context/BreadcrumbContext", () => ({
 }));
 
 vi.mock("@/context/ToastContext", () => ({
-  useToast: () => ({ pushToast: vi.fn() }),
+  useToast: () => ({ pushToast: pushToastMock }),
 }));
 
 // eslint-disable-next-line @typescript-eslint/no-explicit-any
@@ -375,6 +390,131 @@ describe("CompanyAccess", () => {
     await act(async () => {
       root.unmount();
     });
+  });
+
+  it.each(["account", "renewed session", "withdraw and restore", "company", "unmount", "unchanged", "local trusted unchanged"])(
+    "fences a removal count after held access refresh: %s", async (change) => {
+      const root = createRoot(container);
+      const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+      client.setQueryData(queryKeys.auth.session, v9SessionFixture("user-1", change === "local trusted unchanged"));
+      const render = () => root.render(<QueryClientProvider client={client}><CompanyAccess /></QueryClientProvider>);
+      await act(async () => { render(); });
+      await flushReact();
+      await flushReact();
+      const remove = [...container.querySelectorAll("button")].find(button => button.textContent?.includes("Remove"));
+      await act(async () => { remove!.click(); });
+      await flushReact();
+      let release!: () => void;
+      const held = new Promise<void>(resolve => { release = resolve; });
+      const invalidate = vi.spyOn(client, "invalidateQueries").mockImplementationOnce(() => held);
+      const confirm = [...document.body.querySelectorAll("button")].find(button => button.textContent === "Remove member");
+      await act(async () => { confirm!.click(); });
+      await flushReact();
+      expect(archiveMemberMock).toHaveBeenCalledTimes(1);
+      expect(invalidate).toHaveBeenCalledTimes(1);
+      expect(pushToastMock).not.toHaveBeenCalled();
+
+      if (change === "account") client.setQueryData(queryKeys.auth.session, v9SessionFixture("user-2"));
+      if (change === "renewed session") {
+        const session = v9SessionFixture("user-1");
+        client.setQueryData(queryKeys.auth.session, { ...session, session: { ...session.session, id: "renewed-user-1" } });
+      }
+      if (change === "withdraw and restore") {
+        await act(async () => { await client.invalidateQueries({ queryKey: queryKeys.auth.session, refetchType: "none" }); });
+        await flushReact();
+        await act(async () => { client.setQueryData(queryKeys.auth.session, v9SessionFixture("user-1")); });
+      }
+      if (change === "company") {
+        companyState.id = "company-2";
+        await act(async () => { render(); });
+      }
+      if (change === "unmount") await act(async () => { root.unmount(); });
+      await flushReact();
+      await act(async () => { release(); });
+      await flushReact();
+      if (change === "unchanged" || change === "local trusted unchanged") {
+        expect(pushToastMock).toHaveBeenCalledWith({ title: "Member removed", body: "1 assigned task cleaned up.", tone: "success" });
+      } else {
+        expect(pushToastMock).not.toHaveBeenCalled();
+        expect(invalidate.mock.calls).toHaveLength(change === "withdraw and restore" ? 2 : 1);
+      }
+      if (change !== "unmount") await act(async () => { root.unmount(); });
+      client.clear();
+    },
+  );
+
+  it("denies dispatch when the same Human's session changes after clicking", async () => {
+    const root = createRoot(container);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(queryKeys.auth.session, v9SessionFixture("user-1"));
+    await act(async () => { root.render(<QueryClientProvider client={client}><CompanyAccess /></QueryClientProvider>); });
+    await flushReact();
+    await flushReact();
+    const remove = [...container.querySelectorAll("button")].find(button => button.textContent?.includes("Remove"));
+    await act(async () => { remove!.click(); });
+    await flushReact();
+    const confirm = [...document.body.querySelectorAll("button")].find(button => button.textContent === "Remove member");
+    await act(async () => {
+      confirm!.click();
+      const session = v9SessionFixture("user-1");
+      client.setQueryData(queryKeys.auth.session, { ...session, session: { ...session.session, id: "renewed-user-1" } });
+    });
+    await flushReact();
+    expect(archiveMemberMock).not.toHaveBeenCalled();
+    expect(pushToastMock).not.toHaveBeenCalled();
+    await act(async () => { root.unmount(); });
+    client.clear();
+  });
+
+  it.each(["success", "error"])("suppresses a late removal %s before refresh begins", async (outcome) => {
+    const root = createRoot(container);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(queryKeys.auth.session, v9SessionFixture("user-1"));
+    await act(async () => { root.render(<QueryClientProvider client={client}><CompanyAccess /></QueryClientProvider>); });
+    await flushReact();
+    await flushReact();
+    const remove = [...container.querySelectorAll("button")].find(button => button.textContent?.includes("Remove"));
+    await act(async () => { remove!.click(); });
+    await flushReact();
+    let finish!: () => void;
+    archiveMemberMock.mockReturnValueOnce(new Promise((resolve, reject) => {
+      finish = () => outcome === "success" ? resolve({ reassignedIssueCount: 719 }) : reject(new Error("Private old account error"));
+    }));
+    const invalidate = vi.spyOn(client, "invalidateQueries");
+    const confirm = [...document.body.querySelectorAll("button")].find(button => button.textContent === "Remove member");
+    await act(async () => { confirm!.click(); });
+    await flushReact();
+    // No React render is required for the canonical cache check to reject the old session.
+    client.setQueryData(queryKeys.auth.session, v9SessionFixture("user-2"));
+    await act(async () => { finish(); });
+    await flushReact();
+    expect(pushToastMock).not.toHaveBeenCalled();
+    expect(invalidate).not.toHaveBeenCalled();
+    await act(async () => { root.unmount(); });
+    client.clear();
+  });
+
+  it.each(["Approve human", "Reject human"])("suppresses %s acknowledgement after a held refresh and session renewal", async (label) => {
+    const root = createRoot(container);
+    const client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+    client.setQueryData(queryKeys.auth.session, v9SessionFixture("user-1"));
+    await act(async () => { root.render(<QueryClientProvider client={client}><CompanyAccess /></QueryClientProvider>); });
+    await flushReact();
+    await flushReact();
+    let release!: () => void;
+    const held = new Promise<void>(resolve => { release = resolve; });
+    vi.spyOn(client, "invalidateQueries").mockImplementationOnce(() => held);
+    const action = [...container.querySelectorAll("button")].find(button => button.textContent === label);
+    await act(async () => { action!.click(); });
+    await flushReact();
+    expect(label === "Approve human" ? approveJoinRequestMock : rejectJoinRequestMock).toHaveBeenCalledWith("company-1", "join-1");
+    const session = v9SessionFixture("user-1");
+    client.setQueryData(queryKeys.auth.session, { ...session, session: { ...session.session, id: "renewed-user-1" } });
+    await act(async () => { release(); });
+    await flushReact();
+    expect(pushToastMock).not.toHaveBeenCalled();
+    await act(async () => { root.unmount(); });
+    client.clear();
   });
 
   it("shows protected member removal reasons from the API", async () => {

@@ -1,5 +1,21 @@
+export const HTTP_LOG_SENSITIVE_HEADERS = [
+  "x-paperclip-cloud-tenant-token",
+  "x-paperclip-cloud-session-id",
+  "x-paperclip-cloud-runtime-identity",
+  "x-paperclip-cloud-control",
+  "x-paperclip-cloud-inspection",
+  "x-paperclip-tool-gateway-token",
+  "x-paperclip-workspace-readiness-token",
+  "x-paperclip-dev-server-status-token",
+  "x-openclaw-token",
+  "x-openclaw-auth",
+  "x-aw-relay-token",
+] as const;
+
 export const HTTP_LOG_REDACT_PATHS = [
   "req.headers.authorization",
+  // Redirects can carry a one-time login ticket or OAuth authorization code.
+  "res.headers.location",
   'req.headers["proxy-authorization"]',
   "req.headers.cookie",
   // "set-cookie" is normally a response header; keep the request-side
@@ -10,6 +26,7 @@ export const HTTP_LOG_REDACT_PATHS = [
   'req.headers["x-csrf-token"]',
   'req.headers["x-xsrf-token"]',
   'req.headers["x-api-key"]',
+  ...HTTP_LOG_SENSITIVE_HEADERS.map((name) => `req.headers["${name}"]`),
   // Runtime GitHub capabilities authorize credential acquisition for a live run.
   'req.headers["x-paperclip-github-capability"]',
   // Telegram's optional webhook verification header is a reusable bearer
