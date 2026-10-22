@@ -81,6 +81,8 @@ describe("Native capture source purpose stays inside its actual PostgreSQL trans
         });
       });
       expect(identities).toEqual(Array(3).fill({pid:receipt.backendPid,xid:receipt.transactionId}));
+      await expect(withNativeMemoryCaptureSources(tx,companyId,actor(),{...receipt,transactionId:"0"},async()=>true))
+        .rejects.toMatchObject({status:403});
     }));
   });
   it("denies another pooled connection despite an inherited active callback purpose",async()=>{
@@ -112,6 +114,24 @@ describe("Native capture source purpose stays inside its actual PostgreSQL trans
       await tx.update(memoryJobs).set({leaseExpiresAt:new Date(Date.now()-1000)}).where(eq(memoryJobs.id,jobId));
       await assertNativeMemoryCaptureSourcePrincipal(tx,companyId,actor());
     }))).rejects.toMatchObject({status:403});
+  });
+  it("keeps actual account, Human membership and Agent pins after purpose exit until outer commit",async()=>{
+    const probes=[
+      sql`select id from ${authUsers} where id=${userId} for update nowait`,
+      sql`select id from company_memberships where company_id=${companyId}::uuid and principal_type='user' and principal_id=${userId} for update nowait`,
+      sql`select id from ${agents} where id=${agentId}::uuid for update nowait`,
+    ];
+    await pinned(async(tx,receipt)=>{
+      await withNativeMemoryCaptureSources(tx,companyId,actor(),receipt,async()=>true);
+      for(const probe of probes){
+        const error=await db.transaction(other=>other.execute(probe)).then(()=>null,error=>error);
+        expect(error).toBeTruthy();
+        expect(error.code??error.cause?.code).toBe("55P03");
+      }
+    });
+    // The same actual probes succeed after commit, proving both the lock's
+    // lifetime and release, rather than relying on a mock invocation count.
+    for(const probe of probes)await db.transaction(other=>other.execute(probe));
   });
   it("captures and replays a completed producer without returning private record data or losing semantic dedup",async()=>{
     const operationId=randomUUID(),fingerprint="a".repeat(64);

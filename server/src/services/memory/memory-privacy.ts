@@ -80,6 +80,25 @@ export async function withNativeMemoryCaptureSources<T>(db: Db, companyId: strin
     return await nativeCaptureSources.run(permit,async()=>{
       await assertNativeMemoryCaptureSourcePrincipal(db,companyId,actor);
       await db.execute(sql`select id from ${memoryJobs} where id=${receipt.jobId}::uuid for update`);
+      try {
+        // Native account erasure and Agent deletion have different row orders.
+        // Never wait on their principal rows while holding this job/run. These
+        // positive pins last through the actual outer transaction's commit.
+        await db.execute(sql`select u.id from ${authUsers} u
+          join company_memberships m on m.principal_id=u.id and m.principal_type='user'
+            and m.company_id=${companyId}::uuid and m.status='active'
+          join ${agents} a on a.id=${actor.agentId}::uuid and a.company_id=m.company_id
+          where u.id=${actor.onBehalfOfUserId} and ${nativeMemoryCapturePrincipalCondition(actor,sql`${companyId}::uuid`)}
+          for share of u,m,a nowait`);
+      } catch (error) {
+        let cause:unknown=error;
+        for(let depth=0;depth<4 && cause && typeof cause==="object";depth++){
+          const current=cause as {code?:unknown;cause?:unknown};
+          if(current.code==="55P03")throw conflict("Memory capture source is busy",{code:"memory_capture_source_busy"});
+          cause=current.cause;
+        }
+        throw error;
+      }
       await assertNativeMemoryCaptureSourcePrincipal(db,companyId,actor);
       const result = await inspect();
       await assertNativeMemoryCaptureSourcePrincipal(db,companyId,actor);
