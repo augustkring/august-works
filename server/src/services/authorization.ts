@@ -500,10 +500,6 @@ type ResponsibleUserSnapshot = {
   activeMembership: { companyId: string; membershipRole?: string | null; status?: string } | null;
 };
 
-type ResponsibleUserActorWithMemo = AuthorizationActor & {
-  __responsibleUserSnapshotMemo?: Map<string, Promise<ResponsibleUserSnapshot>>;
-};
-
 export type IssuePrivacyRow = { id: string; companyId: string };
 export type ProjectPrivacyRow = { id: string; companyId: string };
 const privacyUuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
@@ -567,7 +563,7 @@ function issuePrincipalAccess(actor: AuthorizationActor, issue: SQL, company: SQ
 
 /** Privacy narrowing only. The caller still applies company/action authorization. */
 export async function projectReadSqlCondition(_db: Db | DbTransaction, actor: AuthorizationActor): Promise<SQL<boolean>> {
-  return sql<boolean>`(${projects.visibility}='open' or ${projectPrincipalAccess(actor, sql`${projects.id}`, sql`${projects.companyId}`)})`;
+  return taskSourcePrivacySqlCondition("project", sql`${projects.id}`, sql`${projects.companyId}`, actor);
 }
 
 /** All retained Task sources survive ordinary moves and source erasure. The
@@ -575,27 +571,34 @@ export async function projectReadSqlCondition(_db: Db | DbTransaction, actor: Au
  * Only a complete population of at most 256 enters cycle/ACL review; closure
  * has at most 256² pairs. Cycles, missing/foreign sources and overflow deny. */
 export async function issueReadSqlCondition(_db: Db | DbTransaction, actor: AuthorizationActor): Promise<SQL<boolean>> {
+  return taskSourcePrivacySqlCondition("issue", sql`${issues.id}`, sql`${issues.companyId}`, actor);
+}
+
+/** One native Task/Project source graph; this never authorizes a company action. */
+function taskSourcePrivacySqlCondition(kind: "issue" | "project", id: SQL, company: SQL, actor: AuthorizationActor): SQL<boolean> {
   const edges = sql`        select 'issue'::text as kind,i.privacy_parent_issue_id as id from issues i
-          where n.kind='issue' and i.id=n.id and i.company_id=${issues.companyId} and i.privacy_parent_issue_id is not null
+          where n.kind='issue' and i.id=n.id and i.company_id=${company} and i.privacy_parent_issue_id is not null
         union all select 'issue',i.privacy_root_issue_id from issues i
-          where n.kind='issue' and i.id=n.id and i.company_id=${issues.companyId} and i.privacy_root_issue_id is not null and i.privacy_root_issue_id<>i.id
+          where n.kind='issue' and i.id=n.id and i.company_id=${company} and i.privacy_root_issue_id is not null and i.privacy_root_issue_id<>i.id
         union all select 'project',i.project_id from issues i
-          where n.kind='issue' and i.id=n.id and i.company_id=${issues.companyId} and i.project_id is not null
+          where n.kind='issue' and i.id=n.id and i.company_id=${company} and i.project_id is not null
         union all select 'run',case when i.origin_run_id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then i.origin_run_id::uuid end
-          from issues i where n.kind='issue' and i.id=n.id and i.company_id=${issues.companyId} and i.origin_run_id is not null
+          from issues i where n.kind='issue' and i.id=n.id and i.company_id=${company} and i.origin_run_id is not null
             and not exists(select 1 from ${heartbeatRuns} own_run where own_run.company_id=i.company_id
               and own_run.id::text=i.origin_run_id and coalesce(own_run.issue_id,own_run.native_issue_id)=i.id)
+        union all select 'issue',source.id from projects p cross join lateral unnest(p.source_issue_ids) source(id)
+          where n.kind='project' and p.id=n.id and p.company_id=${company}
         union all select s.source_kind,s.source_id from ${issuePrivacySources} s
-          where n.kind='issue' and s.issue_id=n.id and s.company_id=${issues.companyId}
+          where n.kind='issue' and s.issue_id=n.id and s.company_id=${company}
         union all select 'issue',coalesce(r.issue_id,r.native_issue_id,
           case when coalesce(r.context_snapshot->>'issueId',r.context_snapshot->>'taskId') ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
             then coalesce(r.context_snapshot->>'issueId',r.context_snapshot->>'taskId')::uuid end)
-          from ${heartbeatRuns} r where n.kind='run' and r.id=n.id and r.company_id=${issues.companyId}
+          from ${heartbeatRuns} r where n.kind='run' and r.id=n.id and r.company_id=${company}
             and (r.scope_kind='issue' or r.native_issue_id is not null or r.context_snapshot ? 'issueId' or r.context_snapshot ? 'taskId' or r.context_snapshot ? 'taskKey')
 `;
   return sql<boolean>`(
     with recursive privacy_nodes(kind,id) as (
-      select 'issue'::text,${issues.id}
+      select ${kind}::text,${id}
       union
       select edge.kind,edge.id from privacy_nodes n cross join lateral (${edges}) edge
     ), bounded as materialized (select * from privacy_nodes limit 257)
@@ -612,11 +615,11 @@ export async function issueReadSqlCondition(_db: Db | DbTransaction, actor: Auth
       select 1 from reachable where kind=source_kind and id=source_id
       union all
       select 1 from bounded n where
-        (n.kind='issue' and not exists(select 1 from issues i where i.id=n.id and i.company_id=${issues.companyId}
-          and (i.visibility='open' or ${issuePrincipalAccess(actor, sql`i.id`, sql`${issues.companyId}`)})))
-        or (n.kind='project' and not exists(select 1 from projects p where p.id=n.id and p.company_id=${issues.companyId}
-          and (p.visibility='open' or ${projectPrincipalAccess(actor, sql`p.id`, sql`${issues.companyId}`)})))
-        or (n.kind='run' and not exists(select 1 from ${heartbeatRuns} r where r.id=n.id and r.company_id=${issues.companyId}
+        (n.kind='issue' and not exists(select 1 from issues i where i.id=n.id and i.company_id=${company}
+          and (i.visibility='open' or ${issuePrincipalAccess(actor, sql`i.id`, sql`${company}`)})))
+        or (n.kind='project' and not exists(select 1 from projects p where p.id=n.id and p.company_id=${company}
+          and p.source_provenance_qualified and (p.visibility='open' or ${projectPrincipalAccess(actor, sql`p.id`, sql`${company}`)})))
+        or (n.kind='run' and not exists(select 1 from ${heartbeatRuns} r where r.id=n.id and r.company_id=${company}
           and (r.context_snapshot->>'issueId' is null or r.context_snapshot->>'issueId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$')
           and (r.context_snapshot->>'taskId' is null or r.context_snapshot->>'taskId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$')))
     ) end
@@ -655,13 +658,6 @@ export function responsibleUserAuthzShadowMode() {
   const mode = process.env.PAPERCLIP_RESPONSIBLE_USER_AUTHZ_MODE?.trim().toLowerCase();
   const shadow = process.env.PAPERCLIP_RESPONSIBLE_USER_AUTHZ_SHADOW?.trim().toLowerCase();
   return mode === "shadow" || shadow === "1" || shadow === "true" || shadow === "yes";
-}
-
-function activeActorMembership(
-  memberships: Array<{ companyId: string; membershipRole?: string | null; status?: string }> | null | undefined,
-  companyId: string,
-) {
-  return memberships?.find((membership) => membership.companyId === companyId && membership.status === "active") ?? null;
 }
 
 function activeResponsibleUserCanAuthorizeIssueAction(
@@ -841,41 +837,6 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       userExists: Boolean(user),
       activeMembership: user ? membership : null,
     };
-  }
-
-  function getResponsibleUserSnapshot(input: {
-    actor: AuthorizationActor;
-    companyId: string;
-    userId: string;
-  }): Promise<ResponsibleUserSnapshot> {
-    const actorWithMemo = input.actor as ResponsibleUserActorWithMemo;
-    const key = `${input.companyId}:${input.userId}`;
-    actorWithMemo.__responsibleUserSnapshotMemo ??= new Map();
-    const requestMemo = actorWithMemo.__responsibleUserSnapshotMemo.get(key);
-    if (requestMemo) return requestMemo;
-
-    const actorMembership = input.actor.onBehalfOfUserId === input.userId
-      ? activeActorMembership(input.actor.onBehalfOfMemberships, input.companyId)
-      : null;
-    if (actorMembership) {
-      const promise = Promise.resolve({
-        userId: input.userId,
-        companyId: input.companyId,
-        userExists: true,
-        activeMembership: actorMembership,
-      });
-      actorWithMemo.__responsibleUserSnapshotMemo.set(key, promise);
-      return promise;
-    }
-
-    const promise = loadResponsibleUserSnapshot(input.companyId, input.userId);
-    actorWithMemo.__responsibleUserSnapshotMemo.set(key, promise);
-    void promise.catch(() => {
-      if (actorWithMemo.__responsibleUserSnapshotMemo?.get(key) === promise) {
-        actorWithMemo.__responsibleUserSnapshotMemo.delete(key);
-      }
-    });
-    return promise;
   }
 
   async function findGrant(
@@ -2273,11 +2234,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
         });
       }
 
-      const targetSnapshot = await getResponsibleUserSnapshot({
-        actor: input.actor,
-        companyId,
-        userId: targetUserId,
-      });
+      const targetSnapshot = await loadResponsibleUserSnapshot(companyId, targetUserId);
       if (!targetSnapshot.userExists || !targetSnapshot.activeMembership) {
         return deny({
           action: input.action,
@@ -2607,11 +2564,9 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     }
 
     const companyId = companyIdForResource(input.resource);
-    const snapshot = await getResponsibleUserSnapshot({
-      actor: input.actor,
-      companyId,
-      userId: responsibleUserId,
-    });
+    // Repeated decisions can follow row/operation lock waits on the same actor.
+    // Only current native account and membership rows supply Human authority.
+    const snapshot = await loadResponsibleUserSnapshot(companyId, responsibleUserId);
     const denyCode: AuthorizationDecision["code"] =
       snapshot.userExists && snapshot.activeMembership
         ? "RESPONSIBLE_USER_UNAUTHORIZED"

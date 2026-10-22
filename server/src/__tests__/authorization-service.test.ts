@@ -25,7 +25,7 @@ import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
-import { authorizationService, canActorReadIssuePrivacy, canActorReadHeartbeatRunPrivacy, issueReadSqlCondition, type AuthorizationActor } from "../services/authorization.js";
+import { authorizationService, canActorReadIssuePrivacy, canActorReadProjectPrivacy, canActorReadHeartbeatRunPrivacy, issueReadSqlCondition, type AuthorizationActor } from "../services/authorization.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -68,6 +68,7 @@ async function createProject(db: ReturnType<typeof createDb>, companyId: string,
     .values({
       companyId,
       name: `Project ${label} ${randomUUID()}`,
+      sourceProvenanceQualified: true,
     })
     .returning()
     .then((rows) => rows[0]!);
@@ -783,6 +784,47 @@ describeEmbeddedPostgres("authorization service", () => {
       allowed: true,
       reason: "allow_self",
     });
+  });
+
+  it("responsible authority freshness rejects same-actor skill effects after membership withdrawal", async () => {
+    const company = await createCompany(db, "ResponsibleSameActorWithdrawal");
+    const agent = await createAgent(db, company.id);
+    const userId = await createUser(db);
+    await grantAgentPermission(db, company.id, agent.id, "skills:create");
+    await db.insert(companyMemberships).values({ companyId: company.id, principalType: "user", principalId: userId, status: "active", membershipRole: "operator" });
+    const actor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: company.id, agentId: agent.id, onBehalfOfUserId: userId };
+    const authz = authorizationService(db);
+    const resource = { type: "company" as const, companyId: company.id };
+    await expect(authz.decide({ actor, action: "company_scope:read", resource, enforceResponsibleUserIntersection: true })).resolves.toMatchObject({ allowed: true });
+    await db.update(companyMemberships).set({ status: "suspended" }).where(and(eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, userId)));
+    await expect(authz.decide({ actor, action: "skill_config:update", resource, enforceResponsibleUserIntersection: true })).resolves.toMatchObject({ allowed: false, code: "RESPONSIBLE_USER_UNAVAILABLE" });
+    await db.update(companyMemberships).set({ status: "active" }).where(and(eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, userId)));
+    await expect(authz.decide({ actor, action: "skill_config:update", resource, enforceResponsibleUserIntersection: true })).resolves.toMatchObject({ allowed: true });
+  });
+
+  it("responsible authority freshness rejects membership DTO proof for a missing account", async () => {
+    const company = await createCompany(db, "ResponsibleMissingAccountDto");
+    const agent = await createAgent(db, company.id);
+    const userId = `missing-${randomUUID()}`;
+    await grantAgentPermission(db, company.id, agent.id, "skills:create");
+    const actor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: company.id, agentId: agent.id, onBehalfOfUserId: userId,
+      onBehalfOfMemberships: [{ companyId: company.id, status: "active", membershipRole: "operator" }] };
+    await expect(authorizationService(db).decide({ actor, action: "skill_config:update", resource: { type: "company", companyId: company.id }, enforceResponsibleUserIntersection: true }))
+      .resolves.toMatchObject({ allowed: false, code: "RESPONSIBLE_USER_UNAVAILABLE" });
+  });
+
+  it("responsible authority freshness rejects an erased account with retained membership on the same actor", async () => {
+    const company = await createCompany(db, "ResponsibleErasedAccount");
+    const agent = await createAgent(db, company.id);
+    const userId = await createUser(db);
+    await db.insert(companyMemberships).values({ companyId: company.id, principalType: "user", principalId: userId, status: "active", membershipRole: "operator" });
+    const actor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: company.id, agentId: agent.id, onBehalfOfUserId: userId };
+    const authz = authorizationService(db);
+    const request = { actor, action: "company_scope:read" as const, resource: { type: "company" as const, companyId: company.id }, enforceResponsibleUserIntersection: true };
+    await expect(authz.decide(request)).resolves.toMatchObject({ allowed: true });
+    await db.delete(authUsers).where(eq(authUsers.id, userId));
+    expect(await db.select().from(companyMemberships).where(and(eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, userId)))).toHaveLength(1);
+    await expect(authz.decide(request)).resolves.toMatchObject({ allowed: false, code: "RESPONSIBLE_USER_UNAVAILABLE" });
   });
 
   it("rechecks responsible-user membership on a new request actor after revocation", async () => {
@@ -2820,7 +2862,7 @@ describeEmbeddedPostgres("authorization service", () => {
       expect((await owner.decide(input)).allowed).toBe(true);
       await tx.update(companyMemberships).set({ status: "inactive" }).where(and(eq(companyMemberships.companyId, company.id), eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, userId)));
       const ordinary = await authorizationService(tx).decide(input);
-      expect(ordinary).toMatchObject({ allowed: false, code: "RESPONSIBLE_USER_UNAUTHORIZED" });
+      expect(ordinary).toMatchObject({ allowed: false, code: "RESPONSIBLE_USER_UNAVAILABLE" });
       expect(await owner.decide(input)).toEqual(ordinary);
     }));
   });
@@ -2909,7 +2951,7 @@ describeEmbeddedPostgres("authorization service", () => {
 
   it("private core retains old project sources across raw moves and denies deleted-source tombstones", async () => {
     const f = await privateFixture();
-    const [project] = await db.insert(projects).values({ companyId: f.company.id, name: "Private project", visibility: "private" }).returning();
+    const [project] = await db.insert(projects).values({ companyId: f.company.id, name: "Private project", visibility: "private", sourceProvenanceQualified: true }).returning();
     await db.insert(projectAccessMembers).values({ companyId: f.company.id, projectId: project.id, subjectType: "user", subjectId: f.owner });
     await db.update(issues).set({ projectId: project.id }).where(eq(issues.id, f.issue.id));
     expect(await canActorReadIssuePrivacy(db, f.human(f.owner), f.issue)).toBe(true);
@@ -2946,6 +2988,34 @@ describeEmbeddedPostgres("authorization service", () => {
     await db.delete(issues).where(eq(issues.id, f.issue.id));
     expect(await canActorReadHeartbeatRunPrivacy(db, f.human(f.owner), f.run)).toBe(false);
     expect((await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, f.run.id)))[0].issueId).toBe(f.issue.id);
+  });
+
+
+  it("project source privacy preserves all actual roots across updates and source erasure", async () => {
+    const f = await privateFixture();
+    const [project] = await db.insert(projects).values({ companyId: f.company.id, name: "Derived project", sourceProvenanceQualified: true, sourceIssueIds: [f.issue.id] }).returning();
+    expect(await canActorReadProjectPrivacy(db, f.human(f.owner), project)).toBe(true);
+    expect(await canActorReadProjectPrivacy(db, f.human(f.reader), project)).toBe(false);
+    const additionalSource = await createIssue(db, f.company.id);
+    await db.update(projects).set({ sourceIssueIds: [additionalSource.id] }).where(eq(projects.id, project.id));
+    await db.update(projects).set({ sourceIssueIds: [], name: "Renamed" }).where(eq(projects.id, project.id));
+    expect(new Set((await db.select().from(projects).where(eq(projects.id, project.id)))[0].sourceIssueIds))
+      .toEqual(new Set([f.issue.id, additionalSource.id]));
+    expect(await canActorReadProjectPrivacy(db, f.human(f.reader), project)).toBe(false);
+    await db.delete(issues).where(eq(issues.id, f.issue.id));
+    expect(await canActorReadProjectPrivacy(db, f.human(f.owner), project)).toBe(false);
+  });
+
+  it("project source privacy withholds unqualified history and rejects foreign roots or source cycles", async () => {
+    const f = await privateFixture();
+    const [unknown] = await db.insert(projects).values({ companyId: f.company.id, name: "Unqualified history" }).returning();
+    expect(await canActorReadProjectPrivacy(db, f.human(f.owner), unknown)).toBe(false);
+    const foreign = await createCompany(db, "ForeignProjectRoot"), foreignIssue = await createIssue(db, foreign.id);
+    const [project] = await db.insert(projects).values({ companyId: f.company.id, name: "Foreign root", sourceProvenanceQualified: true, sourceIssueIds: [foreignIssue.id] }).returning();
+    expect(await canActorReadProjectPrivacy(db, f.human(f.owner), project)).toBe(false);
+    const [cycle] = await db.insert(projects).values({ companyId: f.company.id, name: "Cycle", sourceProvenanceQualified: true, sourceIssueIds: [f.issue.id] }).returning();
+    await db.update(issues).set({ projectId: cycle.id }).where(eq(issues.id, f.issue.id));
+    expect(await canActorReadProjectPrivacy(db, f.human(f.owner), cycle)).toBe(false);
   });
 
 });

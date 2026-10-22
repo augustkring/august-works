@@ -156,6 +156,15 @@ export const memoryRecords = pgTable(
     createdByActorId: text("created_by_actor_id").notNull(),
     createdByOperationId: text("created_by_operation_id"),
 
+    // Server-stamped source identities survive ordinary correction/promotion.
+    // No source FK: erasure withholds a copy instead of making it source-free.
+    sourceProvenanceQualified: boolean("source_provenance_qualified").notNull().default(false),
+    sourceRunIds: uuid("source_run_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    sourceIssueIds: uuid("source_issue_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    sourceProjectIds: uuid("source_project_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    sourceMemoryIds: uuid("source_memory_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    sourceFoundationRevisionIds: uuid("source_foundation_revision_ids").array().notNull().default(sql`'{}'::uuid[]`),
+
     metadata: jsonb("metadata").$type<Record<string, unknown>>().notNull().default({}),
     createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
@@ -163,6 +172,9 @@ export const memoryRecords = pgTable(
   },
   (table) => ({
     companyIdIdUq: uniqueIndex("memory_records_company_id_id_uq").on(table.companyId, table.id),
+    sourceBoundsCheck: check("memory_records_source_bounds_check",sql`
+      cardinality(${table.sourceRunIds}) + cardinality(${table.sourceIssueIds}) + cardinality(${table.sourceProjectIds})
+      + cardinality(${table.sourceMemoryIds}) + cardinality(${table.sourceFoundationRevisionIds}) <= 256`),
     companyBindingFk: foreignKey({
       name: "memory_records_company_binding_fk",
       columns: [table.companyId, table.bindingId],

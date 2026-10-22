@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, uuid, text, timestamp, date, index, jsonb, unique, check, uniqueIndex } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, date, index, jsonb, unique, check, uniqueIndex, boolean } from "drizzle-orm/pg-core";
 import type { AgentEnvConfig, RoadmapPolicy } from "@paperclipai/shared";
 import { companies } from "./companies.js";
 import { goals } from "./goals.js";
@@ -16,6 +16,10 @@ export const projects = pgTable(
     visibility: text("visibility").notNull().default("open"),
     privacyOwnerUserId: text("privacy_owner_user_id"),
     personalOwnerUserId: text("personal_owner_user_id"),
+    // Server-stamped derivation roots, retained after source erasure. Empty
+    // roots are meaningful only when the native producer qualified them.
+    sourceIssueIds: uuid("source_issue_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    sourceProvenanceQualified: boolean("source_provenance_qualified").notNull().default(false),
     status: text("status").notNull().default("backlog"),
     leadAgentId: uuid("lead_agent_id").references(() => agents.id),
     targetDate: date("target_date"),
@@ -31,6 +35,7 @@ export const projects = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
+    sourceBoundCheck: check("projects_source_bound_check", sql`cardinality(${table.sourceIssueIds}) <= 256 and array_position(${table.sourceIssueIds},null) is null`),
     visibilityCheck: check("projects_visibility_check", sql`${table.visibility} in ('open', 'private')`),
     personalOwnerUq: uniqueIndex("projects_company_personal_owner_uq").on(table.companyId, table.personalOwnerUserId).where(sql`${table.personalOwnerUserId} is not null`),
     companyIdUq: unique("projects_company_id_uq").on(table.companyId, table.id),
