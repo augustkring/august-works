@@ -5,6 +5,7 @@ import { sql } from "drizzle-orm";
 import {
   activityLog,
   agents,
+  authUsers,
   companies,
   companyMemberships,
   createDb,
@@ -16,6 +17,8 @@ import {
   heartbeatRuns,
   instanceSettings,
   issueComments,
+  issueAccessGrants,
+  issuePrivacySources,
   issueInboxArchives,
   issueDocuments,
   issuePlanDecompositions,
@@ -48,6 +51,7 @@ import {
   WORKSPACE_WORKTREE_REQUIRES_PROJECT_REMEDIATION,
 } from "../services/execution-workspace-policy.ts";
 import { buildAgentMentionHref, buildProjectMentionHref, MAX_ISSUE_REQUEST_DEPTH, type IssueWorkMode } from "@paperclipai/shared";
+import { canActorReadIssuePrivacy } from "../services/authorization.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -7221,5 +7225,92 @@ describeEmbeddedPostgres("issueService.addComment createdByRunId", () => {
       .from(issueComments)
       .where(eq(issueComments.createdByRunId, runId));
     expect(duplicates).toHaveLength(1);
+  });
+});
+
+describeEmbeddedPostgres("issueService retained private source authority", () => {
+  let fixture: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
+  let db: ReturnType<typeof createDb>;
+  beforeAll(async () => {
+    fixture = await startEmbeddedPostgresTestDatabase("paperclip-private-task-domain-");
+    db = createDb(fixture.connectionString);
+  }, 60_000);
+  afterAll(async () => { await fixture?.cleanup(); });
+
+  async function privateFixture() {
+    const companyId = randomUUID(), owner = randomUUID(), assignee = randomUUID();
+    await db.insert(companies).values({ id: companyId, name: "Private domain", issuePrefix: `PR${companyId.slice(0, 6)}` });
+    await db.insert(authUsers).values([
+      { id: owner, name: "Private owner", email: `${owner}@example.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() },
+      { id: assignee, name: "Private assignee", email: `${assignee}@example.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() },
+    ]);
+    await db.insert(companyMemberships).values([owner, assignee].map(principalId => ({ companyId, principalType: "user", principalId,
+      membershipRole: "owner", status: "active" })));
+    const svc = issueService(db);
+    const parent = await svc.create(companyId, { title: "Protected source", visibility: "private", createdByUserId: owner,
+      responsibleUserId: owner, trustExplicitResponsibleUserId: true });
+    return { companyId, owner, assignee, parent, svc };
+  }
+
+  it("retains the old private parent after detach and does not replace source access with assignment", async () => {
+    const f = await privateFixture();
+    const child = await f.svc.create(f.companyId, { title: "Derived task", parentId: f.parent.id,
+      createdByUserId: f.owner, assigneeUserId: f.assignee });
+    expect(child).toMatchObject({ visibility: "private", privacyParentIssueId: f.parent.id });
+    const detached = await f.svc.update(child.id, { parentId: null, actorUserId: f.owner,
+      privacyActor: { type: "board", userId: f.owner, source: "session" } });
+    expect(detached).toMatchObject({ parentId: null, visibility: "private", privacyParentIssueId: f.parent.id });
+    expect(await db.select().from(issuePrivacySources).where(eq(issuePrivacySources.issueId, child.id)))
+      .toEqual(expect.arrayContaining([expect.objectContaining({ sourceKind: "issue", sourceId: f.parent.id })]));
+    const actor = { type: "board" as const, userId: f.assignee, source: "session" as const };
+    expect(await canActorReadIssuePrivacy(db, actor, child)).toBe(false);
+    const [grant] = await db.insert(issueAccessGrants).values({ companyId: f.companyId, issueId: f.parent.id,
+      subjectType: "user", subjectId: f.assignee, source: "explicit", grantedByUserId: f.owner }).returning();
+    expect(await canActorReadIssuePrivacy(db, actor, child)).toBe(true);
+    await db.update(issueAccessGrants).set({ revokedAt: new Date() }).where(eq(issueAccessGrants.id, grant.id));
+    expect(await canActorReadIssuePrivacy(db, actor, child)).toBe(false);
+    const assignment = await db.select().from(issueAccessGrants).where(eq(issueAccessGrants.issueId, child.id));
+    expect(assignment).toEqual(expect.arrayContaining([expect.objectContaining({ source: "assignment", subjectId: f.assignee, revokedAt: null })]));
+  });
+
+  it("does not replay a private idempotency receipt to a creator who lacks current source access", async () => {
+    const f = await privateFixture();
+    const idempotencyKey = randomUUID();
+    const first = await f.svc.create(f.companyId, { title: "Owned idempotency", visibility: "private", createdByUserId: f.owner,
+      idempotencyKey });
+    await expect(f.svc.create(f.companyId, { title: "Forged receipt", createdByUserId: f.assignee, idempotencyKey }))
+      .rejects.toThrow("Task not found");
+    expect((await db.select().from(issues).where(eq(issues.id, first.id)))[0]?.title).toBe("Owned idempotency");
+  });
+
+  it("denies a private update when membership is withdrawn during the actual issue-row wait", async () => {
+    const f = await privateFixture();
+    const held = deferred<number>(), release = deferred<void>();
+    const blocker = db.transaction(async tx => {
+      await tx.select({ id: issues.id }).from(issues).where(eq(issues.id, f.parent.id)).for("update");
+      const [backend] = await tx.execute(sql`select pg_backend_pid() as pid`);
+      held.resolve(Number(backend.pid));
+      await release.promise;
+    });
+    const holderPid = await held.promise;
+    const update = f.svc.update(f.parent.id, { title: "Late write must not land", actorUserId: f.owner,
+      privacyActor: { type: "board", userId: f.owner, source: "session" } });
+    const outcome = update.then(value => ({ value, error: null }), (error: unknown) => ({ value: null, error }));
+    // Observe the real database wait; a timer alone cannot prove the ordering.
+    let blocked = false;
+    try {
+      for (let attempt = 0; attempt < 200; attempt++) {
+        const rows = await db.execute(sql`select 1 from pg_stat_activity where ${holderPid}::integer = any(pg_blocking_pids(pid))`);
+        if (rows.length) { blocked = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(blocked).toBe(true);
+      await db.update(companyMemberships).set({ status: "suspended" }).where(eq(companyMemberships.principalId, f.owner));
+    } finally {
+      release.resolve();
+      await blocker;
+    }
+    expect((await outcome).error).toMatchObject({ message: "Task not found" });
+    expect((await db.select().from(issues).where(eq(issues.id, f.parent.id)))[0]?.title).toBe("Protected source");
   });
 });

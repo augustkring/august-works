@@ -55,6 +55,8 @@ const support = await getEmbeddedPostgresTestSupport();
       projectId: null, projectWorkspaceId: null, description: null, assigneeAgentId: null,
       status: "backlog", priority: "medium", billingCode: null, assigneeAdapterOverrides: null,
       executionWorkspaceSettings: null, labelIds: [], monitorNotes: null, monitorScheduledBy: null,
+      visibility: "open", privacyRootIssueId: null, privacyParentIssueId: null, privacySources: [],
+      responsibleUserId: null, createdByUserId: null,
     }])).rejects.toThrow(/cannot have new subtasks/);
     const ordinary = await svc.create(f.companyId, { title: "Ordinary" });
     await expect(svc.update(ordinary.id, { parentId: f.issueId })).rejects.toThrow(/cannot have new subtasks/);

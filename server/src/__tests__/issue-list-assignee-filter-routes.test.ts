@@ -3,7 +3,7 @@ import express from "express";
 import request from "supertest";
 import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { activityLog, agents, companies, companyMemberships, createDb, heartbeatRuns, issues, principalPermissionGrants } from "@paperclipai/db";
+import { activityLog, agents, authUsers, companies, companyMemberships, createDb, heartbeatRuns, issueAccessGrants, issues, principalPermissionGrants } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -46,6 +46,7 @@ describeEmbeddedPostgres("issue list routes assigneeAgentId filter", () => {
     await db.delete(principalPermissionGrants);
     await db.delete(companyMemberships);
     await db.delete(companies);
+    await db.delete(authUsers);
   });
 
   afterAll(async () => {
@@ -96,6 +97,54 @@ describeEmbeddedPostgres("issue list routes assigneeAgentId filter", () => {
       grantedByUserId: null,
     });
   }
+
+  it("rechecks private access on a warm compact cache before returning 304", async () => {
+    const companyId = randomUUID();
+    const owner = randomUUID(), reader = randomUUID(), issueId = randomUUID();
+    await db.insert(companies).values({ id: companyId, name: "Private cache", issuePrefix: uniqueIssuePrefix() });
+    await db.insert(authUsers).values([
+      { id: owner, name: "Owner", email: `${owner}@example.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() },
+      { id: reader, name: "Reader", email: `${reader}@example.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() },
+    ]);
+    await seedCloudTenantMember(companyId, owner);
+    await seedCloudTenantMember(companyId, reader);
+    await db.insert(issues).values({ id: issueId, companyId, title: "Private cache marker", visibility: "private",
+      privacyRootIssueId: issueId, responsibleUserId: owner, createdByUserId: owner });
+    const [grant] = await db.insert(issueAccessGrants).values({ companyId, issueId, subjectType: "user", subjectId: reader,
+      source: "explicit", grantedByUserId: owner }).returning();
+    const app = createApp(companyId);
+    const first = await request(app).get(`/api/companies/${companyId}/issues?view=compact`).set("x-test-user-id", reader);
+    expect(first.status).toBe(200);
+    expect(first.body.map((row: { id: string }) => row.id)).toEqual([issueId]);
+    expect(first.headers.etag).toBeTruthy();
+    await db.update(issueAccessGrants).set({ revokedAt: new Date() }).where(eq(issueAccessGrants.id, grant.id));
+    const after = await request(app).get(`/api/companies/${companyId}/issues?view=compact`)
+      .set("x-test-user-id", reader).set("If-None-Match", first.headers.etag);
+    expect(after.status).toBe(200);
+    expect(after.headers["x-paperclip-request-cache"]).toBe("hit");
+    expect(after.body).toEqual([]);
+    expect(after.headers.etag).not.toBe(first.headers.etag);
+    expect((await request(app).get(`/api/issues/${issueId}`).set("x-test-user-id", reader)).status).toBe(404);
+    expect((await request(app).get(`/api/issues/${issueId}`).set("x-test-user-id", owner)).status).toBe(200);
+  });
+
+  it("keeps private HTTP admission closed while derivative qualification is unfinished", async () => {
+    const companyId = randomUUID(), owner = randomUUID(), issueId = randomUUID();
+    await db.insert(companies).values({ id: companyId, name: "Admission boundary", issuePrefix: uniqueIssuePrefix() });
+    await db.insert(authUsers).values({ id: owner, name: "Owner", email: `${owner}@example.test`, emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+    await seedCloudTenantMember(companyId, owner);
+    await db.insert(issues).values({ id: issueId, companyId, title: "Qualification fixture", visibility: "private",
+      privacyRootIssueId: issueId, responsibleUserId: owner, createdByUserId: owner });
+    const app = createApp(companyId);
+    const create = await request(app).post(`/api/companies/${companyId}/issues`).set("x-test-user-id", owner)
+      .send({ title: "Private must wait", visibility: "private" });
+    expect(create.status).toBe(422);
+    const share = await request(app).post(`/api/issues/${issueId}/access-grants`).set("x-test-user-id", owner)
+      .send({ subjectType: "user", subjectId: owner });
+    expect(share.status).toBe(422);
+    expect(await db.select().from(issueAccessGrants).where(eq(issueAccessGrants.issueId, issueId))).toEqual([]);
+    expect((await db.select().from(issues).where(eq(issues.companyId, companyId))).map(row => row.id)).toEqual([issueId]);
+  });
 
   it("returns only unassigned issues for assigneeAgentId=null", async () => {
     const companyId = randomUUID();

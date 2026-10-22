@@ -23,6 +23,13 @@ export interface ImportIssueRow {
   ref: string;
   projectId: string | null;
   projectWorkspaceId: string | null;
+  /** Caller must classify legacy provenance explicitly; absence never means public. */
+  visibility: "open" | "private";
+  privacyRootIssueId: string | null;
+  privacyParentIssueId: string | null;
+  privacySources: Array<{ sourceKind: "issue" | "project" | "run"; sourceId: string }>;
+  responsibleUserId: string | null;
+  createdByUserId: string | null;
   title: string;
   description: string | null;
   assigneeAgentId: string | null;

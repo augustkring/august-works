@@ -18,6 +18,7 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import { companySearchExtractService } from "../services/company-search-extract.js";
+import { issueReadSqlCondition } from "../services/authorization.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -146,6 +147,18 @@ describeEmbeddedPostgres("companySearchExtractService", () => {
       "document_title",
     ]);
     expect(result.results[0]?.matchesTruncated).toBe(false);
+    expect(result.truncated).toBe(false);
+  });
+
+  it("omits private extraction sources before the page window and hasMore", async () => {
+    const companyId = await createCompany();
+    await createIssue(companyId, { title: "Private needle", visibility: "private", updatedAt: new Date("2026-10-22") });
+    const visible = await createIssue(companyId, { title: "Public needle", updatedAt: new Date("2026-10-21") });
+    const result = await svc.extract(companyId, companySearchExtractQuerySchema.parse({ contains: "needle", limit: 1 }), {
+      issueReadCondition: await issueReadSqlCondition(db, { type: "none" }),
+    });
+    expect(result.results.map(row => row.issueId)).toEqual([visible]);
+    expect(result.hasMore).toBe(false);
     expect(result.truncated).toBe(false);
   });
 

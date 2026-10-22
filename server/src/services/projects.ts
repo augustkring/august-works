@@ -1,10 +1,13 @@
 import { assertRoadmapFieldOwnership } from "./roadmap-field-ownership.js";
 import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
 import { lockBusinessEventCompany, suppressBusinessEventsForObject } from "./business-event-privacy.js";
-import { and, asc, desc, eq, inArray, isNull, sql } from "drizzle-orm";
+import { and, asc, desc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   projects,
+  projectAccessMembers,
+  authUsers,
+  companyMemberships,
   projectGoals,
   goals,
   issues,
@@ -31,13 +34,24 @@ import {
   type PluginManagedProjectDeclaration,
   type PluginManagedProjectResolution,
 } from "@paperclipai/shared";
-import { unprocessable } from "../errors.js";
+import { forbidden, unprocessable } from "../errors.js";
+import { canActorReadProjectPrivacy, type AuthorizationActor } from "./authorization.js";
+import { lockIssuePrivacyTree } from "./issues.js";
 import { listCurrentRuntimeServicesForProjectWorkspaces } from "./workspace-runtime-read-model.js";
 import { parseProjectExecutionWorkspacePolicy } from "./execution-workspace-policy.js";
 import { mergeProjectWorkspaceRuntimeConfig, readProjectWorkspaceRuntimeConfig } from "./project-workspace-runtime-config.js";
 import { resolveManagedProjectWorkspaceDir } from "../home-paths.js";
 
 type ProjectRow = typeof projects.$inferSelect;
+type DbTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+export async function ensureProjectAccessMember(executor: Pick<Db, "insert">, input: {
+  companyId: string; projectId: string; subjectType: "user" | "agent"; subjectId: string;
+}) {
+  const [member] = await executor.insert(projectAccessMembers).values(input).onConflictDoNothing().returning();
+  return member ?? null;
+}
+
 type ProjectWorkspaceRow = typeof projectWorkspaces.$inferSelect;
 type WorkspaceRuntimeServiceRow = typeof workspaceRuntimeServices.$inferSelect;
 const REPO_ONLY_CWD_SENTINEL = "/__paperclip_repo_only__";
@@ -360,6 +374,7 @@ async function attachListMetrics(
   db: Db,
   companyId: string,
   rows: ProjectWithGoals[],
+  issueReadCondition?: SQL<boolean>,
 ): Promise<ProjectWithGoals[]> {
   if (rows.length === 0) return rows;
 
@@ -372,7 +387,7 @@ async function attachListMetrics(
         count: sql<number>`count(*)::int`,
       })
       .from(issues)
-      .where(and(eq(issues.companyId, companyId), inArray(issues.projectId, projectIds), isNull(issues.conversationAgentId)))
+      .where(and(eq(issues.companyId, companyId), inArray(issues.projectId, projectIds), isNull(issues.conversationAgentId), issueReadCondition))
       .groupBy(issues.projectId),
     db
       .select({
@@ -573,15 +588,26 @@ export function projectService(db: Db) {
   const createProject = async (
     companyId: string,
     data: Omit<typeof projects.$inferInsert, "companyId"> & { goalIds?: string[] },
+    privacyTx?: DbTransaction,
   ): Promise<ProjectWithGoals> => {
+    if (data.visibility === "private" && !privacyTx) return db.transaction(tx => createProject(companyId, data, tx));
+    const executor = privacyTx ? privacyTx as unknown as Db : db;
+    if (data.visibility === "private") {
+      await lockIssuePrivacyTree(privacyTx!, companyId);
+      const [owner] = data.privacyOwnerUserId ? await executor.select({ id: authUsers.id }).from(authUsers)
+        .innerJoin(companyMemberships, and(eq(companyMemberships.principalId, authUsers.id),
+          eq(companyMemberships.principalType, "user"), eq(companyMemberships.companyId, companyId), eq(companyMemberships.status, "active")))
+        .where(eq(authUsers.id, data.privacyOwnerUserId)) : [];
+      if (!owner) throw forbidden("Private projects require a current human owner in this organization");
+    }
     const { goalIds: inputGoalIds, ...projectData } = data;
     const ids = resolveGoalIds({ goalIds: inputGoalIds, goalId: projectData.goalId });
-    if (ids && ids.length > 0) await assertGoalsBelongToCompany(db, companyId, ids);
+    if (ids && ids.length > 0) await assertGoalsBelongToCompany(executor, companyId, ids);
 
     // Note: color is intentionally NOT auto-assigned. New projects default to
     // `color = null` (neutral gray) unless an explicit color is supplied. See PAP-68.
 
-    const existingProjects = await db
+    const existingProjects = await executor
       .select({ id: projects.id, name: projects.name })
       .from(projects)
       .where(eq(projects.companyId, companyId));
@@ -594,18 +620,21 @@ export function projectService(db: Db) {
     // together (goalIds wins resolution, mirroring the update path).
     const legacyGoalId = ids?.[0] ?? null;
 
-    const row = await db
+    const row = await executor
       .insert(projects)
       .values({ ...projectData, goalId: legacyGoalId, companyId })
       .returning()
       .then((rows) => rows[0]);
 
     if (ids && ids.length > 0) {
-      await syncGoalLinks(db, row.id, companyId, ids);
+      await syncGoalLinks(executor, row.id, companyId, ids);
     }
+    if (row.visibility === "private") await ensureProjectAccessMember(executor, {
+      companyId, projectId: row.id, subjectType: "user", subjectId: row.privacyOwnerUserId!,
+    });
 
-    const [withGoals] = await attachGoals(db, [row]);
-    const [enriched] = withGoals ? await attachWorkspaces(db, [withGoals]) : [];
+    const [withGoals] = await attachGoals(executor, [row]);
+    const [enriched] = withGoals ? await attachWorkspaces(executor, [withGoals]) : [];
     return enriched!;
   };
 
@@ -623,7 +652,7 @@ export function projectService(db: Db) {
   };
 
   return {
-    list: async (companyId: string, opts: { includeArchived?: boolean } = {}): Promise<ProjectWithGoals[]> => {
+    list: async (companyId: string, opts: { includeArchived?: boolean; readCondition?: SQL<boolean>; issueReadCondition?: SQL<boolean> } = {}): Promise<ProjectWithGoals[]> => {
       // NOTE: this service default is intentionally the inverse of the HTTP route default.
       // The route (`GET /companies/:companyId/projects`) defaults `includeArchived` to `false`
       // (active-only) for its callers, but the service defaults to `true` so that existing
@@ -633,10 +662,10 @@ export function projectService(db: Db) {
       const where = includeArchived
         ? eq(projects.companyId, companyId)
         : and(eq(projects.companyId, companyId), isNull(projects.archivedAt));
-      const rows = await db.select().from(projects).where(where);
+      const rows = await db.select().from(projects).where(and(where, opts.readCondition));
       const withGoals = await attachGoals(db, rows);
       const withWorkspaces = await attachWorkspaces(db, withGoals);
-      return attachListMetrics(db, companyId, withWorkspaces);
+      return attachListMetrics(db, companyId, withWorkspaces, opts.issueReadCondition);
     },
 
     listByIds: async (companyId: string, ids: string[]): Promise<ProjectWithGoals[]> => {
@@ -865,25 +894,48 @@ export function projectService(db: Db) {
     update: async (
       id: string,
       data: Partial<typeof projects.$inferInsert> & { goalIds?: string[] },
+      actor?: AuthorizationActor,
+      privacyTx?: DbTransaction,
     ): Promise<ProjectWithGoals | null> => {
+      if (!privacyTx) return db.transaction(tx => projectService(db).update(id, data, actor, tx));
+      const executor = privacyTx as unknown as Db;
       const { goalIds: inputGoalIds, ...projectData } = data;
       const ids = resolveGoalIds({ goalIds: inputGoalIds, goalId: projectData.goalId });
-      const existingProject = await db
-        .select({ id: projects.id, companyId: projects.companyId, name: projects.name })
+      const existingProject = await executor
+        .select()
         .from(projects)
         .where(eq(projects.id, id))
         .then((rows) => rows[0] ?? null);
       if (!existingProject) return null;
-      await assertRoadmapFieldOwnership(db, existingProject.companyId, id, projectData, existingProject);
+      await lockIssuePrivacyTree(privacyTx, existingProject.companyId);
+      const [current] = await executor.select().from(projects).where(eq(projects.id, id)).for("update");
+      if (!current) return null;
+      if (actor && !(await canActorReadProjectPrivacy(executor, actor, current))) throw forbidden("Project not found");
+      if (projectData.visibility !== undefined && projectData.visibility !== current.visibility) {
+        if (!actor || actor.type !== "board" || actor.source === "local_implicit" || !actor.userId
+          || ![current.privacyOwnerUserId, current.personalOwnerUserId].includes(actor.userId)) {
+          throw forbidden("Only the current project privacy owner can change its audience");
+        }
+        const [member] = await executor.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+          eq(companyMemberships.companyId, current.companyId), eq(companyMemberships.principalType, "user"),
+          eq(companyMemberships.principalId, actor.userId), eq(companyMemberships.status, "active"),
+          sql`${companyMemberships.membershipRole} <> 'viewer'`,
+        ));
+        if (!member) throw forbidden("Current organization access is required");
+        if (projectData.visibility === "open") throw unprocessable("Publishing private source content requires an authorized publication operation");
+        await ensureProjectAccessMember(privacyTx, { companyId: current.companyId, projectId: current.id,
+          subjectType: "user", subjectId: actor.userId });
+      }
+      await assertRoadmapFieldOwnership(executor, existingProject.companyId, id, projectData, existingProject);
       if (ids && ids.length > 0) {
-        await assertGoalsBelongToCompany(db, existingProject.companyId, ids);
+        await assertGoalsBelongToCompany(executor, existingProject.companyId, ids);
       }
 
       if (projectData.name !== undefined) {
         const existingShortname = normalizeProjectUrlKey(existingProject.name);
         const nextShortname = normalizeProjectUrlKey(projectData.name);
         if (existingShortname !== nextShortname) {
-          const existingProjects = await db
+          const existingProjects = await executor
             .select({ id: projects.id, name: projects.name })
             .from(projects)
             .where(eq(projects.companyId, existingProject.companyId));
@@ -902,7 +954,8 @@ export function projectService(db: Db) {
         updates.goalId = ids.length > 0 ? ids[0] : null;
       }
 
-      const row = await db
+      if (actor && !(await canActorReadProjectPrivacy(executor, actor, current))) throw forbidden("Project not found");
+      const row = await executor
         .update(projects)
         .set(updates)
         .where(eq(projects.id, id))
@@ -911,11 +964,11 @@ export function projectService(db: Db) {
       if (!row) return null;
 
       if (ids !== undefined) {
-        await syncGoalLinks(db, id, row.companyId, ids);
+        await syncGoalLinks(executor, id, row.companyId, ids);
       }
 
-      const [withGoals] = await attachGoals(db, [row]);
-      const [enriched] = withGoals ? await attachWorkspaces(db, [withGoals]) : [];
+      const [withGoals] = await attachGoals(executor, [row]);
+      const [enriched] = withGoals ? await attachWorkspaces(executor, [withGoals]) : [];
       return enriched ?? null;
     },
 
@@ -1268,7 +1321,7 @@ export function projectService(db: Db) {
       return removed ? toWorkspace(removed) : null;
     },
 
-    resolveByReference: async (companyId: string, reference: string) => {
+    resolveByReference: async (companyId: string, reference: string, options: { readCondition?: SQL<boolean> } = {}) => {
       const raw = reference.trim();
       if (raw.length === 0) {
         return { project: null, ambiguous: false } as const;
@@ -1278,7 +1331,7 @@ export function projectService(db: Db) {
         const row = await db
           .select({ id: projects.id, companyId: projects.companyId, name: projects.name })
           .from(projects)
-          .where(and(eq(projects.id, raw), eq(projects.companyId, companyId)))
+          .where(and(eq(projects.id, raw), eq(projects.companyId, companyId), options.readCondition))
           .then((rows) => rows[0] ?? null);
         if (!row) return { project: null, ambiguous: false } as const;
         return {
@@ -1295,7 +1348,7 @@ export function projectService(db: Db) {
       const rows = await db
         .select({ id: projects.id, companyId: projects.companyId, name: projects.name })
         .from(projects)
-        .where(eq(projects.companyId, companyId));
+        .where(and(eq(projects.companyId, companyId), options.readCondition));
       const matches = rows.filter((row) => deriveProjectUrlKey(row.name, row.id) === urlKey);
       if (matches.length === 1) {
         const match = matches[0]!;

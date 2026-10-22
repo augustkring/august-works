@@ -12,6 +12,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { suppressAnalyticalSource } from "./analytical-privacy.js";
 import { forgetMemoryForDeletedIssue, lockMemoryPrivacy } from "./memory/memory-privacy.js";
 import { lockBusinessEventCompany, suppressBusinessEventsForObject } from "./business-event-privacy.js";
+import { canActorReadIssuePrivacy, canActorReadProjectPrivacy, type AuthorizationActor } from "./authorization.js";
 import {
   and,
   asc,
@@ -55,6 +56,8 @@ import {
   routineRuns,
   executionWorkspaces,
   issueApprovals,
+  issueAccessGrants,
+  issuePrivacySources,
   issueAttachments,
   issueCreateIdempotencyKeys,
   issueInboxArchives,
@@ -106,7 +109,7 @@ import {
   isUuidLike,
   normalizeIssueIdentifier as normalizeIssueReferenceIdentifier,
 } from "@paperclipai/shared";
-import { conflict, HttpError, notFound, unprocessable } from "../errors.js";
+import { conflict, forbidden, HttpError, notFound, unprocessable } from "../errors.js";
 import { isForeignKeyViolation } from "../db-errors.js";
 import { logger } from "../middleware/logger.js";
 import { parseObject } from "../adapters/utils.js";
@@ -1871,6 +1874,7 @@ export interface IssueFilters {
   includeLiveDescendantSummary?: boolean;
   hasPlanDocument?: boolean;
   lowTrustBoundary?: LowTrustBoundary & { companyId: string };
+  readCondition?: SQL<boolean>;
   q?: string;
   limit?: number;
   offset?: number;
@@ -1973,7 +1977,140 @@ async function assertExecutionTaskParent(db: Db, companyId: string, parentId?: s
 }
 
 type DbTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+export async function lockIssuePrivacyTree(tx: DbTransaction, companyId: string) {
+  await lockBusinessEventCompany(tx, companyId);
+  await lockMemoryPrivacy(tx as unknown as Db, companyId);
+  await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`issue-privacy-tree:${companyId}`}, 0))`);
+}
+
+/** Assignment is a retained reason, independent of explicit sharing and current membership. */
+export async function ensureAssignmentIssueAccessGrant(
+  tx: DbTransaction,
+  issue: typeof issues.$inferSelect,
+  previous: Pick<typeof issues.$inferSelect, "assigneeAgentId" | "assigneeUserId" | "visibility"> | null,
+  actor: { agentId?: string | null; userId?: string | null },
+) {
+  if (issue.visibility !== "private" || (previous?.visibility === "private"
+    && previous.assigneeAgentId === issue.assigneeAgentId && previous.assigneeUserId === issue.assigneeUserId)) return null;
+  const subjectType = issue.assigneeAgentId ? "agent" as const : issue.assigneeUserId ? "user" as const : null;
+  const subjectId = issue.assigneeAgentId ?? issue.assigneeUserId;
+  if (!subjectType || !subjectId) return null;
+  const [grant] = await tx.insert(issueAccessGrants).values({
+    companyId: issue.companyId, issueId: issue.id, subjectType, subjectId, source: "assignment",
+    grantedByAgentId: actor.agentId ?? null, grantedByUserId: actor.userId ?? null,
+  }).onConflictDoNothing().returning();
+  if (!grant) return null;
+  // The caller publishes only after its owning transaction commits.
+  const activity = await persistActivity(tx as unknown as Db, {
+    companyId: issue.companyId, actorType: actor.agentId ? "agent" : actor.userId ? "user" : "system",
+    actorId: actor.agentId ?? actor.userId ?? "issue_service", agentId: actor.agentId ?? null,
+    action: "issue_access_grant.created", entityType: "issue_access_grant", entityId: grant.id,
+    details: { issueId: issue.id, subjectType, subjectId, source: "assignment" },
+  });
+  return { grant, publication: activity.publication };
+}
+
+async function retainIssuePrivacySources(tx: DbTransaction, issue: typeof issues.$inferSelect,
+  sources: Array<{ sourceKind: "issue" | "project" | "run"; sourceId: string | null | undefined }>) {
+  const rows = sources.filter((source): source is { sourceKind: "issue" | "project" | "run"; sourceId: string } => Boolean(source.sourceId))
+    .filter(source => source.sourceKind !== "issue" || source.sourceId !== issue.id)
+    .map(source => ({ companyId: issue.companyId, issueId: issue.id, ...source }));
+  if (rows.some(source => !isUuidLike(source.sourceId))) throw unprocessable("Task privacy source identity is invalid");
+  if (rows.length) await tx.insert(issuePrivacySources).values(rows).onConflictDoNothing();
+}
+
+async function resolveIssuePrivacy(
+  tx: DbTransaction,
+  companyId: string,
+  next: Partial<typeof issues.$inferInsert> & { id: string },
+  previous: typeof issues.$inferSelect | null,
+  actorRunId?: string | null,
+  additionalIssueSources: string[] = [],
+) {
+  const sources: Array<{ sourceKind: "issue" | "project" | "run"; sourceId: string }> = [];
+  const parents = new Set([...additionalIssueSources, previous?.privacyParentIssueId, previous?.parentId, next.privacyParentIssueId,
+    next.privacyRootIssueId !== next.id ? next.privacyRootIssueId : null, next.parentId].filter((id): id is string => Boolean(id)));
+  const projectIds = new Set([previous?.projectId, next.projectId].filter((id): id is string => Boolean(id)));
+  let privacyParentIssueId = previous?.privacyParentIssueId ?? previous?.parentId ?? next.privacyParentIssueId ?? next.parentId ?? null;
+  let visibility = previous?.visibility === "private" || next.visibility === "private" ? "private" as const : "open" as const;
+  let privacyRootIssueId = previous?.privacyRootIssueId ?? null;
+  if (previous?.visibility === "private" && next.visibility === "open") {
+    throw unprocessable("Publishing private source content requires an authorized publication operation");
+  }
+  for (const runId of new Set([previous?.originRunId, next.originRunId, actorRunId].filter((id): id is string => Boolean(id)))) {
+    if (!isUuidLike(runId)) throw unprocessable("Task privacy source run is invalid");
+    const [run] = await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.id, runId), eq(heartbeatRuns.companyId, companyId)));
+    if (!run) throw notFound("Task privacy source is unavailable");
+    const context = run.contextSnapshot ?? {};
+    const candidates = [run.issueId, run.nativeIssueId, context.issueId, context.taskId].filter((id): id is string => typeof id === "string" && id.length > 0);
+    if (candidates.some(id => !isUuidLike(id)) || new Set(candidates).size > 1) throw unprocessable("Task privacy source run is ambiguous");
+    const sourceId = candidates[0];
+    if (run.scopeKind === "issue" && !sourceId) throw notFound("Task privacy source is unavailable");
+    if (sourceId === next.id) continue;
+    sources.push({ sourceKind: "run", sourceId: runId });
+    if (sourceId) { parents.add(sourceId); privacyParentIssueId ??= sourceId; }
+  }
+  for (const parentId of parents) {
+    if (parentId === next.id) throw unprocessable("A task cannot inherit its own privacy source");
+    const [parent] = await tx.select().from(issues).where(and(eq(issues.id, parentId), eq(issues.companyId, companyId)));
+    if (!parent) throw notFound("Task privacy source is unavailable");
+    sources.push({ sourceKind: "issue", sourceId: parentId });
+    if (!(await canActorReadIssuePrivacy(tx, { type: "none" }, parent))) {
+      visibility = "private";
+      privacyRootIssueId ??= parent.privacyRootIssueId ?? parent.id;
+    }
+  }
+  for (const projectId of projectIds) {
+    const [project] = await tx.select().from(projects).where(and(eq(projects.id, projectId), eq(projects.companyId, companyId)));
+    if (!project) throw notFound("Project not found");
+    sources.push({ sourceKind: "project", sourceId: projectId });
+    if (!(await canActorReadProjectPrivacy(tx, { type: "none" }, project))) visibility = "private";
+  }
+  if (visibility === "private") privacyRootIssueId ??= next.id;
+  return { visibility, privacyParentIssueId, privacyRootIssueId, sources };
+}
+
+async function assertIssuePrivacySourcesReadable(tx: DbTransaction, actor: AuthorizationActor,
+  companyId: string, sources: Array<{ sourceKind: "issue" | "project" | "run"; sourceId: string }>) {
+  for (const source of sources) {
+    if (source.sourceKind === "run") continue; // Its resolved owning task is also retained.
+    const readable = source.sourceKind === "issue"
+      ? await canActorReadIssuePrivacy(tx, actor, { id: source.sourceId, companyId })
+      : await canActorReadProjectPrivacy(tx, actor, { id: source.sourceId, companyId });
+    if (!readable) throw notFound("Task privacy source is unavailable");
+  }
+}
+
+/** Classification follows descendants; retained source edges remain authoritative. */
+export async function protectIssuePrivacyDescendants(tx: DbTransaction, source: typeof issues.$inferSelect,
+  publications: ActivityPublication[]) {
+  const result = await tx.execute(sql<{ id: string }>`
+    with recursive descendants(id) as (
+      select ${issues.id} from ${issues} where ${issues.companyId} = ${source.companyId} and ${issues.parentId} = ${source.id}
+      union
+      select child.id from ${issues} child join descendants parent on child.parent_id = parent.id
+      where child.company_id = ${source.companyId}
+    ) update ${issues} set visibility = 'private',
+      privacy_root_issue_id = coalesce(${issues.privacyRootIssueId}, ${source.privacyRootIssueId ?? source.id}::uuid),
+      privacy_parent_issue_id = coalesce(${issues.privacyParentIssueId}, ${issues.parentId}), updated_at = now()
+      where ${issues.companyId} = ${source.companyId} and ${issues.id} in (select id from descendants)
+      and ${issues.visibility} <> 'private' returning ${issues.id}
+  `);
+  const changedIds = result.map(row => {
+    if (typeof row.id !== "string") throw new Error("Invalid task privacy update receipt");
+    return row.id;
+  });
+  if (!changedIds.length) return;
+  const changed = await tx.select().from(issues).where(inArray(issues.id, changedIds));
+  for (const child of changed) {
+    const grant = await ensureAssignmentIssueAccessGrant(tx, child, null, {});
+    if (grant) publications.push(grant.publication);
+  }
+}
+
 type IssueCreateInput = Omit<typeof issues.$inferInsert, "companyId"> & {
+  privateWorkAdmission?: "closed";
   retireConversationId?: string;
   initialPlan?: string | null;
   labelIds?: string[];
@@ -3492,6 +3629,7 @@ async function liveDescendantCountMapForIssues(
   dbOrTx: any,
   companyId: string,
   issueIds: string[],
+  readCondition?: SQL<boolean>,
 ): Promise<Map<string, number>> {
   const uniqueIssueIds = [...new Set(issueIds)];
   const map = new Map<string, number>();
@@ -3507,12 +3645,17 @@ async function liveDescendantCountMapForIssues(
       liveDescendantCount: number;
     }>`
       WITH RECURSIVE
+        readable_issues AS MATERIALIZED (
+          SELECT ${issues.id} FROM ${issues} WHERE ${issues.companyId} = ${companyId}
+            AND ${readCondition ?? sql`true`}
+        ),
         target_issues(issue_id) AS (
           VALUES ${sql.join(targetRows, sql`, `)}
         ),
         live_issues(live_issue_id, parent_id) AS (
           SELECT DISTINCT live_issue.id, live_issue.parent_id
           FROM issues live_issue
+          JOIN readable_issues readable ON readable.id = live_issue.id
           JOIN heartbeat_runs live_run ON live_run.id = live_issue.execution_run_id
           WHERE live_issue.company_id = ${companyId}
             AND live_issue.hidden_at IS NULL
@@ -3523,6 +3666,7 @@ async function liveDescendantCountMapForIssues(
           SELECT DISTINCT live_issue.id, live_issue.parent_id
           FROM heartbeat_runs live_run
           JOIN issues live_issue ON live_issue.id::text = (live_run.context_snapshot ->> 'issueId')
+          JOIN readable_issues readable ON readable.id = live_issue.id
           WHERE live_issue.company_id = ${companyId}
             AND live_issue.hidden_at IS NULL
             AND live_issue.harness_kind IS NULL
@@ -3533,6 +3677,7 @@ async function liveDescendantCountMapForIssues(
           SELECT live_issues.live_issue_id, parent.id, parent.parent_id, ARRAY[live_issues.live_issue_id, parent.id]
           FROM live_issues
           JOIN issues parent ON parent.id = live_issues.parent_id
+          JOIN readable_issues readable ON readable.id = parent.id
           WHERE parent.company_id = ${companyId}
             AND parent.hidden_at IS NULL
             AND parent.harness_kind IS NULL
@@ -3544,6 +3689,7 @@ async function liveDescendantCountMapForIssues(
             live_ancestors.visited_issue_ids || parent.id
           FROM live_ancestors
           JOIN issues parent ON parent.id = live_ancestors.next_parent_id
+          JOIN readable_issues readable ON readable.id = parent.id
           WHERE parent.company_id = ${companyId}
             AND parent.hidden_at IS NULL
             AND parent.harness_kind IS NULL
@@ -4883,6 +5029,9 @@ async function listIssueReviewAttentionMap(
 }
 
 const issueListSelect = {
+  visibility: issues.visibility,
+  privacyRootIssueId: issues.privacyRootIssueId,
+  privacyParentIssueId: issues.privacyParentIssueId,
   externalConversationState: externalConversationStateSql(),
   conversationAgentId: issues.conversationAgentId,
   conversationUserId: issues.conversationUserId,
@@ -6242,6 +6391,7 @@ async function blockedInboxIssueConditions(
     visibleIssueCondition(),
     notInArray(issues.status, [...BLOCKED_INBOX_TERMINAL_STATUSES]),
   ];
+  if (filters?.readCondition) conditions.push(filters.readCondition);
   const touchedByUserId = filters?.touchedByUserId?.trim() || undefined;
   const inboxArchivedByUserId =
     filters?.inboxArchivedByUserId?.trim() || undefined;
@@ -6437,7 +6587,7 @@ async function listBlockedInboxIssues(
     listIssueReviewAttentionMap(dbOrTx, companyId, withRuns),
     listIssueBlockedInboxAttentionMap(dbOrTx, companyId, withRuns),
     includeLiveDescendantSummary
-      ? liveDescendantCountMapForIssues(dbOrTx, companyId, issueIds)
+      ? liveDescendantCountMapForIssues(dbOrTx, companyId, issueIds, filters?.readCondition)
       : Promise.resolve(new Map<string, number>()),
   ]);
 
@@ -7907,6 +8057,7 @@ export function issueService(db: Db) {
         }
       }
       if (filters?.afterId) conditions.push(gt(issues.id, filters.afterId));
+      if (filters?.readCondition) conditions.push(filters.readCondition);
       const assigneeAgentFilter = parseIssueAssigneeAgentFilter(
         filters?.assigneeAgentId,
       );
@@ -8058,7 +8209,7 @@ export function issueService(db: Db) {
       const issueSource = db.select(issueListSelect).from(issues);
       const searchedSource = hasSearch
         ? issueSource.innerJoin(sql`(
-            ${taskSearchCtes(companyId, taskSearch, true, and(...conditions))}
+            ${taskSearchCtes(companyId, taskSearch, true, and(...conditions), filters?.readCondition)}
             SELECT m.id, ${taskSearchScore(taskSearch)} AS score FROM matched m
           ) task_search`, sql`task_search.id = ${issues.id}`)
         : issueSource;
@@ -8118,7 +8269,7 @@ export function issueService(db: Db) {
           ? blockedByMapForIssues(db, companyId, issueIds)
           : Promise.resolve(new Map<string, IssueRelationIssueSummary[]>()),
         includeLiveDescendantSummary
-          ? liveDescendantCountMapForIssues(db, companyId, issueIds)
+          ? liveDescendantCountMapForIssues(db, companyId, issueIds, filters?.readCondition)
           : Promise.resolve(new Map<string, number>()),
       ]);
       const statsByIssueId = new Map(
@@ -8234,6 +8385,7 @@ export function issueService(db: Db) {
       }
 
       const conditions = [eq(issues.companyId, companyId), visibleIssueCondition()];
+      if (filters?.readCondition) conditions.push(filters.readCondition);
       if (!filters?.q?.trim()) {
         conditions.push(isNull(issues.conversationAgentId));
         if (!filters?.touchedByUserId && !filters?.unreadForUserId && !filters?.inboxArchivedByUserId) {
@@ -9772,8 +9924,12 @@ export function issueService(db: Db) {
       companyId: string,
       data: IssueCreateInput,
       dbOrTx: Db | DbTransaction = db,
+      postCommitActivityPublications?: ActivityPublication[],
     ) => {
+      const ownedPrivacyPublications: ActivityPublication[] = [];
+      const privacyPublications = postCommitActivityPublications ?? ownedPrivacyPublications;
       const {
+        privateWorkAdmission,
         initialPlan,
         retireConversationId,
         labelIds: inputLabelIds,
@@ -9817,6 +9973,7 @@ export function issueService(db: Db) {
         throw unprocessable("in_progress issues require an assignee");
       }
       const persist = async (tx: DbTransaction) => {
+        await lockIssuePrivacyTree(tx, companyId);
         await assertExecutionTaskParent(tx as unknown as Db, companyId, issueData.parentId);
         if (issueData.conversationAgentId && issueData.conversationUserId) {
           await lockBusinessEventCompany(tx, companyId);
@@ -9916,6 +10073,14 @@ export function issueService(db: Db) {
           if (existingIssue) deduplicationReason = "recent_open_title";
         }
         if (existingIssue) {
+          if (privateWorkAdmission === "closed" && !(await canActorReadIssuePrivacy(tx, { type: "none" }, existingIssue))) {
+            throw unprocessable("Private tasks are not available");
+          }
+          const actor: AuthorizationActor = issueData.createdByAgentId
+            ? { type: "agent", agentId: issueData.createdByAgentId, companyId, runId: actorRunId,
+                onBehalfOfUserId: actorResponsibleUserId }
+            : issueData.createdByUserId ? { type: "board", userId: issueData.createdByUserId, source: "session" } : { type: "none" };
+          if (!(await canActorReadIssuePrivacy(tx, actor, existingIssue))) throw notFound("Task not found");
           if (idempotencyKey) {
             await tx
               .insert(issueCreateIdempotencyKeys)
@@ -10172,8 +10337,21 @@ export function issueService(db: Db) {
           },
         );
 
+        issueData.id ??= randomUUID();
+        const privacy = await resolveIssuePrivacy(tx, companyId, { ...issueData, id: issueData.id }, null, actorRunId,
+          workspaceInheritanceIssueId ? [workspaceInheritanceIssueId] : []);
+        if (privateWorkAdmission === "closed" && privacy.visibility === "private") throw unprocessable("Private tasks are not available");
+        if (privacy.visibility === "private" && !responsibleUserId) throw unprocessable("Private tasks require a responsible user");
+        const creatorActor: AuthorizationActor = issueData.createdByAgentId
+          ? { type: "agent", agentId: issueData.createdByAgentId, companyId, runId: actorRunId ?? undefined,
+              onBehalfOfUserId: responsibleUserId ?? undefined }
+          : issueData.createdByUserId ? { type: "board", userId: issueData.createdByUserId, source: "session" } : { type: "none" };
+        await assertIssuePrivacySourcesReadable(tx, creatorActor, companyId, privacy.sources);
         const values = {
           ...issueData,
+          visibility: privacy.visibility,
+          privacyRootIssueId: privacy.privacyRootIssueId,
+          privacyParentIssueId: privacy.privacyParentIssueId,
           originRunId: issueData.originRunId ?? actorRunId ?? null,
           responsibleUserId,
           requestDepth: clampIssueRequestDepth(issueData.requestDepth),
@@ -10216,6 +10394,25 @@ export function issueService(db: Db) {
         );
 
         const [issue] = await tx.insert(issues).values(values).returning();
+        await retainIssuePrivacySources(tx, issue, privacy.sources);
+        if (issue.visibility === "private" && issue.createdByAgentId) {
+          const [grant] = await tx.insert(issueAccessGrants).values({
+            companyId, issueId: issue.id, subjectType: "agent", subjectId: issue.createdByAgentId,
+            source: "explicit", grantedByAgentId: issue.createdByAgentId,
+          }).onConflictDoNothing().returning();
+          if (grant) {
+            const activity = await persistActivity(tx as unknown as Db, {
+              companyId, actorType: "agent", actorId: issue.createdByAgentId, agentId: issue.createdByAgentId,
+              action: "issue_access_grant.created", entityType: "issue_access_grant", entityId: grant.id,
+              details: { issueId: issue.id, subjectType: "agent", subjectId: issue.createdByAgentId, source: "explicit" },
+            });
+            privacyPublications.push(activity.publication);
+          }
+        }
+        const assignmentGrant = await ensureAssignmentIssueAccessGrant(tx, issue, null, {
+          agentId: issue.createdByAgentId, userId: issue.createdByUserId,
+        });
+        if (assignmentGrant) privacyPublications.push(assignmentGrant.publication);
         if (idempotencyKey) {
           await tx.insert(issueCreateIdempotencyKeys).values({
             companyId,
@@ -10264,7 +10461,14 @@ export function issueService(db: Db) {
         );
         return withRelations;
       };
-      if (dbOrTx === db) return db.transaction(persist);
+      if (dbOrTx === db) {
+        const created = await db.transaction(persist);
+        if (!postCommitActivityPublications) for (const publication of ownedPrivacyPublications) {
+          try { publishActivity(publication); }
+          catch (err) { logger.warn({ err }, "Failed to publish committed task privacy activity"); }
+        }
+        return created;
+      }
       return persist(dbOrTx as DbTransaction);
     },
 
@@ -10291,10 +10495,22 @@ export function issueService(db: Db) {
       rows: ImportIssueRow[],
     ): Promise<void> => {
       if (rows.length === 0) return;
+      for (const row of rows) {
+        if (!["open", "private"].includes(row.visibility) || !Array.isArray(row.privacySources)
+          || row.privacySources.some(source => !["issue", "project", "run"].includes(source.sourceKind) || !isUuidLike(source.sourceId))
+          || [row.privacyRootIssueId, row.privacyParentIssueId].some(id => id !== null && !isUuidLike(id))) {
+          throw unprocessable("Imported task privacy provenance is required");
+        }
+        if (row.visibility === "private" && (!row.responsibleUserId || !row.privacyRootIssueId)) {
+          throw unprocessable("Imported private tasks require retained ownership and privacy provenance");
+        }
+      }
+      const privacyPublications: ActivityPublication[] = [];
       const isolatedWorkspacesEnabled = (
         await instanceSettings.getExperimental()
       ).enableIsolatedWorkspaces;
       await db.transaction(async (tx) => {
+        await lockIssuePrivacyTree(tx, companyId);
         // Self-correcting counter: seed from max(issue_number) so a drifted
         // company counter cannot mint colliding identifiers, then reserve the
         // whole range in one bump instead of one-per-issue.
@@ -10328,6 +10544,7 @@ export function issueService(db: Db) {
           string,
           {
             goalId: string | null;
+            visibility: string;
             defaultProjectWorkspaceId: string | null;
             defaultExecutionWorkspaceSettings: Record<string, unknown> | null;
           }
@@ -10338,6 +10555,7 @@ export function issueService(db: Db) {
           const projectRow = await tx
             .select({
               goalId: projects.goalId,
+              visibility: projects.visibility,
               executionWorkspacePolicy: projects.executionWorkspacePolicy,
             })
             .from(projects)
@@ -10379,6 +10597,7 @@ export function issueService(db: Db) {
             ) as Record<string, unknown> | null;
           const derived = {
             goalId: projectRow?.goalId ?? null,
+            visibility: projectRow?.visibility ?? "private",
             defaultProjectWorkspaceId,
             defaultExecutionWorkspaceSettings,
           };
@@ -10427,6 +10646,9 @@ export function issueService(db: Db) {
           let projectGoalId: string | null = null;
           if (projectId) {
             const derived = await loadProjectDerived(projectId);
+            if (derived.visibility === "private" && row.visibility !== "private") {
+              throw unprocessable("Imported task privacy conflicts with its destination project");
+            }
             projectGoalId = derived.goalId;
             if (!projectWorkspaceId)
               projectWorkspaceId = derived.defaultProjectWorkspaceId;
@@ -10458,6 +10680,9 @@ export function issueService(db: Db) {
           issueRows.push({
             id: row.id,
             companyId,
+            visibility: row.visibility,
+            privacyRootIssueId: row.privacyRootIssueId,
+            privacyParentIssueId: row.privacyParentIssueId,
             issueNumber,
             identifier,
             title: row.title,
@@ -10471,7 +10696,8 @@ export function issueService(db: Db) {
             projectWorkspaceId,
             executionWorkspaceSettings,
             goalId,
-            responsibleUserId: null,
+            responsibleUserId: row.responsibleUserId,
+            createdByUserId: row.createdByUserId,
             requestDepth: clampIssueRequestDepth(undefined),
             originKind: "manual",
             // The caller resolves parentId against ids in this same batch, so a
@@ -10500,7 +10726,41 @@ export function issueService(db: Db) {
 
         await insertRowsInChunks(tx, issues, issueRows);
         await insertRowsInChunks(tx, issueLabels, labelRows);
+        const originals = new Map(rows.map(row => [row.id, row]));
+        const checkedSources = new Set<string>();
+        for (let offset = 0; offset < rows.length; offset += DEFAULT_INSERT_CHUNK_ROWS) {
+          const stored = await tx.select().from(issues).where(and(eq(issues.companyId, companyId),
+            inArray(issues.id, rows.slice(offset, offset + DEFAULT_INSERT_CHUNK_ROWS).map(row => row.id))));
+          for (const issue of stored) {
+            const original = originals.get(issue.id)!;
+            const sources: Array<{ sourceKind: "issue" | "project" | "run"; sourceId: string | null | undefined }> = [...original.privacySources,
+              { sourceKind: "issue", sourceId: original.privacyParentIssueId },
+              { sourceKind: "issue", sourceId: original.privacyRootIssueId },
+              { sourceKind: "issue", sourceId: original.parentId },
+              { sourceKind: "project", sourceId: original.projectId },
+            ];
+            for (const source of sources) {
+              if (!source.sourceId) continue;
+              const key = `${source.sourceKind}:${source.sourceId}`;
+              if (checkedSources.has(key)) continue;
+              const table = source.sourceKind === "issue" ? issues : source.sourceKind === "project" ? projects : heartbeatRuns;
+              const [current] = await tx.select({ companyId: table.companyId }).from(table).where(eq(table.id, source.sourceId));
+              if (current && current.companyId !== companyId) throw unprocessable("Imported task privacy source belongs to another organization");
+              checkedSources.add(key);
+            }
+            await retainIssuePrivacySources(tx, issue, sources);
+            if (issue.visibility === "open" && !(await canActorReadIssuePrivacy(tx, { type: "none" }, issue))) {
+              throw unprocessable("Imported task source content is private or unavailable");
+            }
+            const grant = await ensureAssignmentIssueAccessGrant(tx, issue, null, { userId: original.createdByUserId });
+            if (grant) privacyPublications.push(grant.publication);
+          }
+        }
       });
+      for (const publication of privacyPublications) {
+        try { publishActivity(publication); }
+        catch (err) { logger.warn({ err }, "Failed to publish committed imported task privacy activity"); }
+      }
     },
 
     /**
@@ -10620,6 +10880,8 @@ export function issueService(db: Db) {
         actorRunId?: string | null;
         actorRunStopId?: string | null;
         actorUserId?: string | null;
+        privacyActor?: AuthorizationActor;
+        privateWorkAdmission?: "closed";
         companyGuard?: string;
       },
       dbOrTx: any = db,
@@ -10669,6 +10931,8 @@ export function issueService(db: Db) {
         actorRunId,
         actorRunStopId,
         actorUserId,
+        privacyActor,
+        privateWorkAdmission,
         companyGuard,
         ...issueData
       } = data;
@@ -10931,6 +11195,9 @@ export function issueService(db: Db) {
       }
 
       const runUpdate = async (tx: any) => {
+        const changesPrivacy = [issueData.visibility, issueData.parentId, issueData.projectId,
+          issueData.originRunId, issueData.privacyParentIssueId, issueData.privacyRootIssueId].some(value => value !== undefined);
+        if (changesPrivacy) await lockIssuePrivacyTree(tx, existing.companyId);
         // The receipt baseline must be read under the same row lock as the
         // write. Otherwise a concurrent update can be mistaken for a change
         // made by this request.
@@ -10941,6 +11208,18 @@ export function issueService(db: Db) {
           .for("update")
           .then((rows: Array<typeof issues.$inferSelect>) => rows[0] ?? null);
         if (!receiptExisting) return null;
+        if (privateWorkAdmission === "closed" && (!(await canActorReadIssuePrivacy(tx, { type: "none" }, receiptExisting))
+          || issueData.visibility === "private")) throw unprocessable("Private tasks are not available");
+        let privacy: Awaited<ReturnType<typeof resolveIssuePrivacy>> | undefined;
+        if (changesPrivacy) {
+          privacy = await resolveIssuePrivacy(tx, receiptExisting.companyId, {
+            ...receiptExisting, ...issueData, id: receiptExisting.id,
+          }, receiptExisting);
+          patch.visibility = privacy.visibility;
+          patch.privacyRootIssueId = privacy.privacyRootIssueId;
+          patch.privacyParentIssueId = privacy.privacyParentIssueId;
+          if (privateWorkAdmission === "closed" && privacy.visibility === "private") throw unprocessable("Private tasks are not available");
+        }
         if (actorAgentId && actorRunId) {
           // Recheck under a run lock: a request admitted before Stop must not
           // commit a late Done after cancellation revoked its credentials.
@@ -10997,6 +11276,31 @@ export function issueService(db: Db) {
                 (blockedByIssueIds !== undefined || issueData.unblockDescriptor !== undefined)))) {
           patch.statusVersion = sql`${issues.statusVersion} + 1` as unknown as number;
         }
+        let currentActor = privacyActor;
+        if (!currentActor && actorUserId) currentActor = { type: "board", userId: actorUserId, source: "session" };
+        if (!currentActor && actorAgentId) {
+          const [run] = actorRunId ? await tx.select().from(heartbeatRuns).where(and(
+            eq(heartbeatRuns.id, actorRunId), eq(heartbeatRuns.agentId, actorAgentId), eq(heartbeatRuns.companyId, receiptExisting.companyId),
+          )) : [];
+          currentActor = { type: "agent", agentId: actorAgentId, companyId: receiptExisting.companyId,
+            runId: actorRunId ?? undefined, onBehalfOfUserId: run?.responsibleUserId ?? undefined };
+        }
+        if (currentActor && !(await canActorReadIssuePrivacy(tx, currentActor, receiptExisting))) {
+          throw forbidden("Task not found");
+        }
+        if (issueData.visibility !== undefined && issueData.visibility !== receiptExisting.visibility) {
+          if (!currentActor || currentActor.type !== "board" || currentActor.source === "local_implicit"
+            || !currentActor.userId || ![receiptExisting.responsibleUserId, receiptExisting.createdByUserId].includes(currentActor.userId)) {
+            throw forbidden("Only the current task privacy owner can change its audience");
+          }
+          const [member] = await tx.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+            eq(companyMemberships.companyId, receiptExisting.companyId), eq(companyMemberships.principalType, "user"),
+            eq(companyMemberships.principalId, currentActor.userId), eq(companyMemberships.status, "active"),
+            sql`${companyMemberships.membershipRole} <> 'viewer'`,
+          ));
+          if (!member) throw forbidden("Current organization access is required");
+        }
+        if (currentActor && privacy) await assertIssuePrivacySourcesReadable(tx, currentActor, receiptExisting.companyId, privacy.sources);
         const updated = await tx
           .update(issues)
           .set(patch)
@@ -11004,6 +11308,14 @@ export function issueService(db: Db) {
           .returning()
           .then((rows: Array<typeof issues.$inferSelect>) => rows[0] ?? null);
         if (!updated) return null;
+        if (privacy) await retainIssuePrivacySources(tx, updated, privacy.sources);
+        const assignmentGrant = await ensureAssignmentIssueAccessGrant(tx, updated, receiptExisting, {
+          agentId: actorAgentId, userId: actorUserId,
+        });
+        if (assignmentGrant) activityPublications.push(assignmentGrant.publication);
+        if (updated.visibility === "private" && receiptExisting.visibility !== "private") {
+          await protectIssuePrivacyDescendants(tx, updated, activityPublications);
+        }
         // An operator explicitly choosing a disposition owns that decision,
         // including choosing In Review while the conversation is Idle.
         if (actorUserId && issueData.status !== undefined) {

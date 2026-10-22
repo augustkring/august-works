@@ -539,7 +539,9 @@ export function companySearchService(db: Db) {
   const extractService = companySearchExtractService(db);
   return {
     extract: extractService.extract,
-    search: async (companyId: string, query: CompanySearchQuery): Promise<CompanySearchResponse> => {
+    search: async (companyId: string, query: CompanySearchQuery,
+      options: { issueReadCondition?: SQL<boolean>; projectReadCondition?: SQL<boolean> } = {},
+    ): Promise<CompanySearchResponse> => {
       const taskSearch = parseTaskSearch(query.q);
       const normalizedQuery = taskSearch.normalizedQuery;
       const hasSearchText = normalizedQuery.length > 0;
@@ -570,6 +572,7 @@ export function companySearchService(db: Db) {
       const tokenCount = tokens.length;
 
       const issueFilters = issueFilterConditions(companyId, query);
+      if (options.issueReadCondition) issueFilters.push(options.issueReadCondition);
       const hasIssueOnlyFilters = issueOnlyFiltersActive(query);
 
       // Scope conditions over precomputed flag columns (alias-qualified).
@@ -718,7 +721,7 @@ export function companySearchService(db: Db) {
         }
 
         const resultRows = await db.execute(sql`
-          ${taskSearchCtes(companyId, taskSearch, scope !== "issues", and(...issueFilters))}
+          ${taskSearchCtes(companyId, taskSearch, scope !== "issues", and(...issueFilters), options.issueReadCondition)}
           ${sql.join(branches, sql` UNION ALL `)}
         `) as unknown as Array<SearchAggregateRow & Omit<IssueSearchRow, "commentSnippet" | "commentId" | "documentSnippet" | "documentTitle" | "documentKey">>;
 
@@ -897,7 +900,7 @@ export function companySearchService(db: Db) {
             updatedAt: projects.updatedAt,
           })
           .from(projects)
-          .where(and(eq(projects.companyId, companyId), isNull(projects.archivedAt), projectCondition))
+          .where(and(eq(projects.companyId, companyId), isNull(projects.archivedAt), projectCondition, options.projectReadCondition))
           .orderBy(desc(projects.updatedAt), desc(projects.id))
           .limit(fetchLimit);
       }
@@ -908,6 +911,7 @@ export function companySearchService(db: Db) {
         const artifactIssueConditions = [
           eq(issues.companyId, companyId),
           visibleIssueCondition(),
+          ...(options.issueReadCondition ? [options.issueReadCondition] : []),
           ...artifactIssueFilters,
         ];
         const documentArtifactConditions = [
@@ -984,7 +988,7 @@ export function companySearchService(db: Db) {
         const rows = await db
           .select({ count: sql<number>`count(*)::int` })
           .from(projects)
-          .where(and(eq(projects.companyId, companyId), isNull(projects.archivedAt), projectCondition));
+          .where(and(eq(projects.companyId, companyId), isNull(projects.archivedAt), projectCondition, options.projectReadCondition));
         return Number(rows[0]?.count ?? 0);
       }
 

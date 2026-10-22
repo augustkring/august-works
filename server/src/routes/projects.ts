@@ -1,6 +1,6 @@
 import { createHash } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
-import { activityLog } from "@paperclipai/db";
+import { activityLog, agents, authUsers, companyMemberships, projectAccessMembers, projects } from "@paperclipai/db";
 import { projectToolContext } from "../services/project-tool-context.js";
 import { persistActivity, publishActivity } from "../services/activity-log.js";
 import { z } from "zod";
@@ -10,6 +10,7 @@ import { Router, type Request, type Response } from "express";
 import type { Db } from "@paperclipai/db";
 import {
   createProjectSchema,
+  addProjectAccessMemberSchema,
   experienceProjectReceiptSchema,
   v9FeatureEnabled,
   createProjectWorkspaceSchema,
@@ -46,6 +47,9 @@ import { appendWithCap } from "../adapters/utils.js";
 import { assertEnvironmentSelectionForCompany } from "./environment-selection.js";
 import { environmentService } from "../services/environments.js";
 import { secretService } from "../services/secrets.js";
+import { canActorReadIssuePrivacy, canActorReadProjectPrivacy, issueReadSqlCondition, projectReadSqlCondition } from "../services/authorization.js";
+import { ensureProjectAccessMember } from "../services/projects.js";
+import { lockIssuePrivacyTree } from "../services/issues.js";
 
 const WORKSPACE_CONTROL_OUTPUT_MAX_CHARS = 256 * 1024;
 const SHARED_WORKSPACE_STOP_AND_RESTART_ACTIONS = new Set(["stop", "restart"]);
@@ -53,6 +57,29 @@ const SHARED_WORKSPACE_STOP_AND_RESTART_ACTIONS = new Set(["stop", "restart"]);
 export function projectRoutes(db: Db) {
   const router = Router();
   const svc = projectService(db);
+  // Private work stays unavailable until the complete source/delivery graph
+  // has qualified. There is no operator or request-body override.
+  router.use("/projects/:id", async (req, _res, next) => {
+    if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) return next();
+    const project = await svc.getById(req.params.id as string);
+    if (project) {
+      if (!(await canActorReadProjectPrivacy(db, req.actor, project))) throw notFound("Project not found");
+      if (!(await canActorReadProjectPrivacy(db, { type: "none" }, project))) throw unprocessable("Private projects are not available");
+    }
+    if (req.body?.visibility === "private") throw unprocessable("Private projects are not available");
+    next();
+  });
+  router.use("/companies/:companyId/projects", async (req, _res, next) => {
+    if (!["POST", "PUT", "PATCH", "DELETE"].includes(req.method)) return next();
+    if (req.body?.visibility === "private") throw unprocessable("Private projects are not available");
+    if (req.actor.type === "agent") {
+      const context = await projectToolContext(db, req.actor);
+      if (!context.issue || !(await canActorReadIssuePrivacy(db, { type: "none" }, context.issue))) {
+        throw unprocessable("Private projects are not available");
+      }
+    }
+    next();
+  });
 
   async function repositoryViewer(req: Request) {
     if (req.actor.type === "board") return { userId: req.actor.userId ?? null, localTrusted: req.actor.source === "local_implicit" };
@@ -137,7 +164,9 @@ export function projectRoutes(db: Db) {
     if (isUuidLike(rawId)) return rawId;
     const companyId = await resolveCompanyIdForProjectReference(req);
     if (!companyId) return rawId;
-    const resolved = await svc.resolveByReference(companyId, rawId);
+    const resolved = await svc.resolveByReference(companyId, rawId, {
+      readCondition: await projectReadSqlCondition(db, req.actor),
+    });
     if (resolved.ambiguous) {
       throw conflict("Project shortname is ambiguous in this company. Use the project ID.");
     }
@@ -151,8 +180,30 @@ export function projectRoutes(db: Db) {
       resource: { type: "project", companyId: project.companyId, projectId: project.id },
     });
     if (decision.allowed) return true;
-    res.status(403).json({ error: "Project is outside this actor's authorization boundary" });
+    res.status(404).json({ error: "Project not found" });
     return false;
+  }
+
+  async function getReadableProject(req: Request, res: Response, id: string) {
+    const project = await getAccessibleResource(req, res, svc.getById(id), "Project not found");
+    if (!project || !(await assertProjectReadAllowed(req, res, project))) return null;
+    return project;
+  }
+
+  async function requireProjectPrivacyOwner(executor: Db, req: Request, project: {
+    id: string; companyId: string; privacyOwnerUserId: string | null; personalOwnerUserId: string | null;
+  }) {
+    if (!(await canActorReadProjectPrivacy(executor, req.actor, project))) throw notFound("Project not found");
+    if (req.actor.type !== "board" || req.actor.source === "local_implicit" || !req.actor.userId
+      || ![project.privacyOwnerUserId, project.personalOwnerUserId].includes(req.actor.userId)) {
+      throw forbidden("Only the current project privacy owner can change its audience");
+    }
+    const [member] = await executor.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+      eq(companyMemberships.companyId, project.companyId), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, req.actor.userId), eq(companyMemberships.status, "active"),
+      sql`${companyMemberships.membershipRole} <> 'viewer'`,
+    ));
+    if (!member) throw forbidden("Current organization access is required");
   }
 
   async function assertRuntimeManageAllowed(req: Request, res: Response, companyId: string) {
@@ -195,7 +246,7 @@ export function projectRoutes(db: Db) {
 
   router.put("/projects/:id/repositories", validate(z.object({ repositoryIds: z.array(z.string().regex(/^\d+$/)) })), async (req, res) => {
     assertBoard(req);
-    const project = await getAccessibleResource(req, res, svc.getById(req.params.id as string), "Project not found");
+    const project = await getReadableProject(req, res, req.params.id as string);
     if (!project) return;
     const repositories = await selectedRepositories(req, project.companyId, req.body.repositoryIds, project.workspaces);
     const updated = await svc.replaceRepositories(project.id, repositories);
@@ -212,21 +263,24 @@ export function projectRoutes(db: Db) {
     const companyId = req.params.companyId as string;
     assertCompanyAccess(req, companyId);
     const includeArchived = req.query.includeArchived === "true";
-    const result = await svc.list(companyId, { includeArchived });
+    const result = await svc.list(companyId, {
+      includeArchived,
+      readCondition: await projectReadSqlCondition(db, req.actor),
+      issueReadCondition: await issueReadSqlCondition(db, req.actor),
+    });
     res.json(await filterProjectsForActor(req, result));
   });
 
   router.get("/projects/:id", async (req, res) => {
     const id = req.params.id as string;
-    const project = await getAccessibleResource(req, res, svc.getById(id), "Project not found");
+    const project = await getReadableProject(req, res, id);
     if (!project) return;
-    if (!(await assertProjectReadAllowed(req, res, project))) return;
     res.json(project);
   });
 
   router.get("/projects/:id/external-object-summary", async (req, res) => {
     const id = req.params.id as string;
-    const project = await getAccessibleResource(req, res, svc.getById(id), "Project not found");
+    const project = await getReadableProject(req, res, id);
     if (!project) return;
     const summary = await externalObjectsSvc.getProjectSummary(project.id);
     res.json(summary);
@@ -269,6 +323,11 @@ export function projectRoutes(db: Db) {
     const { workspace, repositoryIds, repositoryUrls, idempotencyKey, ...projectData } = req.body as CreateProjectPayload & { idempotencyKey?: string; repositoryUrls?: string[] };
     const runContext = req.actor.type === "agent" && req.actor.source === "agent_jwt" && req.actor.runId
       ? await projectToolContext(db, req.actor, true) : null;
+    if (req.actor.type === "agent" && !runContext) throw forbidden("Project tools require a current task-bound run");
+    projectData.privacyOwnerUserId = req.actor.type === "board" ? req.actor.userId ?? null : runContext?.userId ?? null;
+    projectData.sourceIssueIds = runContext ? [runContext.issue.id] : [];
+    projectData.sourceProvenanceQualified = req.actor.type === "board" || runContext !== null;
+    if (projectData.visibility === "private" && req.actor.source === "local_implicit") throw forbidden("Private projects require an authenticated human owner");
     await assertProjectEnvironmentSelection(
       companyId,
       readProjectPolicyEnvironmentId(projectData.executionWorkspacePolicy),
@@ -295,6 +354,7 @@ export function projectRoutes(db: Db) {
     const fingerprint = createHash("sha256").update(JSON.stringify({ projectData, workspace, repositoryIds, repositoryUrls })).digest("hex");
     const receiptKey = idempotencyKey ? `project:${companyId}:${actor.actorId}:${runContext?.issue.id ?? "board"}:${idempotencyKey}` : null;
     const result = await db.transaction(async (tx) => {
+      await lockIssuePrivacyTree(tx, companyId);
       if (receiptKey) {
         await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${receiptKey}, 0))`);
         const [prior] = await tx.select().from(activityLog).where(and(
@@ -305,12 +365,27 @@ export function projectRoutes(db: Db) {
           if (prior.details?.fingerprint !== fingerprint) throw conflict("Project idempotency key was used with different inputs");
           const project = await projectService(tx as unknown as Db).getById(prior.entityId);
           if (!project) throw conflict("Previously created project is no longer available");
+          if (!(await canActorReadProjectPrivacy(tx, req.actor, project))) throw notFound("Project not found");
           return { project, publication: null, duplicate: true };
         }
       }
-      if (runContext) await projectToolContext(tx as unknown as Db, req.actor, true);
+      const currentContext = runContext ? await projectToolContext(tx as unknown as Db, req.actor, true) : null;
+      const durableProjectData = { ...projectData };
+      if (currentContext) {
+        if (currentContext.issue.id !== runContext!.issue.id || !(await canActorReadIssuePrivacy(tx, req.actor, currentContext.issue))) {
+          throw notFound("Project source is unavailable");
+        }
+        if (!(await canActorReadIssuePrivacy(tx, { type: "none" }, currentContext.issue))) throw unprocessable("Private projects are not available");
+      }
       const service = projectService(tx as unknown as Db);
-      const project = repositories ? await service.createWithRepositories(companyId, projectData, repositories) : await service.create(companyId, projectData);
+      const project = repositories ? await service.createWithRepositories(companyId, durableProjectData, repositories) : await service.create(companyId, durableProjectData);
+      if (project.sourceProvenanceQualified !== true || !Array.isArray(project.sourceIssueIds)
+        || (currentContext && !project.sourceIssueIds.includes(currentContext.issue.id))) {
+        throw conflict("Project source binding is unavailable");
+      }
+      if (project.visibility === "private" && req.actor.type === "agent" && req.actor.agentId) {
+        await ensureProjectAccessMember(tx, { companyId, projectId: project.id, subjectType: "agent", subjectId: req.actor.agentId });
+      }
       const attachedUrls = new Set((repositories ?? []).map(repo => repo.url.toLowerCase()));
       const registeredUrls: typeof urlRepositories = [];
       for (const repo of urlRepositories) {
@@ -322,6 +397,7 @@ export function projectRoutes(db: Db) {
       const createdWorkspace = workspace ? await service.createWorkspace(project.id, workspace) : null;
       if (workspace && !createdWorkspace) throw unprocessable("Invalid project workspace payload");
       const hydrated = await service.getById(project.id);
+      if (!(await canActorReadProjectPrivacy(tx, req.actor, project))) throw notFound("Project not found");
       const activity = await persistActivity(tx as unknown as Db, {
         companyId, actorType: actor.actorType, actorId: actor.actorId, agentId: actor.agentId,
         runId: actor.runId, issueId: runContext?.issue.id,
@@ -341,6 +417,7 @@ export function projectRoutes(db: Db) {
     });
     if (result.publication) publishActivity(result.publication);
     if (result.project.env) await secretsSvc.syncEnvBindingsForTarget?.(companyId, { targetType: "project", targetId: result.project.id }, result.project.env);
+    if (!(await assertProjectReadAllowed(req, res, result.project))) return;
     if (result.duplicate) { res.status(200).json(result.project); return; }
     const telemetryClient = getTelemetryClient();
     if (telemetryClient) {
@@ -351,7 +428,7 @@ export function projectRoutes(db: Db) {
 
   router.patch("/projects/:id", validate(updateProjectSchema), async (req, res) => {
     const id = req.params.id as string;
-    const existing = await getAccessibleResource(req, res, svc.getById(id), "Project not found");
+    const existing = await getReadableProject(req, res, id);
     if (!existing) return;
     const body = { ...req.body };
     assertNoAgentHostWorkspaceCommandMutation(
@@ -371,7 +448,7 @@ export function projectRoutes(db: Db) {
         fieldPath: "env",
       });
     }
-    const project = await svc.update(id, body);
+    const project = await svc.update(id, body, req.actor);
     if (!project) {
       res.status(404).json({ error: "Project not found" });
       return;
@@ -409,15 +486,90 @@ export function projectRoutes(db: Db) {
 
   router.get("/projects/:id/workspaces", async (req, res) => {
     const id = req.params.id as string;
-    const existing = await getAccessibleResource(req, res, svc.getById(id), "Project not found");
+    const existing = await getReadableProject(req, res, id);
     if (!existing) return;
     const workspaces = await svc.listWorkspaces(id);
     res.json(workspaces);
   });
 
+  router.get("/projects/:id/access-members", async (req, res) => {
+    const project = await getReadableProject(req, res, req.params.id as string);
+    if (!project) return;
+    const rows = await db.select().from(projectAccessMembers).where(and(
+      eq(projectAccessMembers.companyId, project.companyId), eq(projectAccessMembers.projectId, project.id),
+    ));
+    if (!(await assertProjectReadAllowed(req, res, project))) return;
+    res.json(rows.map(row => ({ ...row, subjectDisplayName: null, subjectAvatarUrl: null })));
+  });
+
+  router.post("/projects/:id/access-members", validate(addProjectAccessMemberSchema), async (req, res) => {
+    assertBoard(req);
+    const existing = await getReadableProject(req, res, req.params.id as string);
+    if (!existing) return;
+    const result = await db.transaction(async tx => {
+      await lockIssuePrivacyTree(tx, existing.companyId);
+      const [project] = await tx.select().from(projects).where(eq(projects.id, existing.id)).for("update");
+      if (!project) throw notFound("Project not found");
+      await requireProjectPrivacyOwner(tx as unknown as Db, req, project);
+      const { subjectType, subjectId } = req.body as { subjectType: "user" | "agent"; subjectId: string };
+      const [subject] = subjectType === "agent"
+        ? await tx.select({ id: agents.id }).from(agents).where(and(eq(agents.id, subjectId), eq(agents.companyId, project.companyId)))
+        : await tx.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
+          eq(companyMemberships.companyId, project.companyId), eq(companyMemberships.principalType, "user"),
+          eq(companyMemberships.principalId, subjectId), eq(companyMemberships.status, "active"),
+        ));
+      if (!subject) throw unprocessable("Project access member must belong to this organization");
+      // A project membership never publishes any retained task source.
+      for (const sourceId of project.sourceIssueIds) {
+        if (subjectType !== "user" || !(await canActorReadIssuePrivacy(tx, { type: "board", userId: subjectId, source: "session" },
+          { id: sourceId, companyId: project.companyId }))) throw unprocessable("Sharing inherited source content requires an authorized publication operation");
+      }
+      const member = await ensureProjectAccessMember(tx, { companyId: project.companyId, projectId: project.id, subjectType, subjectId });
+      if (!member) {
+        const [prior] = await tx.select().from(projectAccessMembers).where(and(eq(projectAccessMembers.projectId, project.id),
+          eq(projectAccessMembers.companyId, project.companyId), eq(projectAccessMembers.subjectType, subjectType), eq(projectAccessMembers.subjectId, subjectId)));
+        return { member: prior, publication: null, created: false };
+      }
+      const actor = getActorInfo(req);
+      const activity = await persistActivity(tx as unknown as Db, { companyId: project.companyId, actorType: actor.actorType,
+        actorId: actor.actorId, agentId: actor.agentId, action: "project.access_member_added", entityType: "project", entityId: project.id,
+        details: { subjectType, subjectId } });
+      return { member, publication: activity.publication, created: true };
+    });
+    if (result.publication) publishActivity(result.publication);
+    res.status(result.created ? 201 : 200).json({ ...result.member, subjectDisplayName: null, subjectAvatarUrl: null });
+  });
+
+  router.delete("/projects/:id/access-members/:memberId", async (req, res) => {
+    assertBoard(req);
+    if (!isUuidLike(req.params.memberId as string)) throw notFound("Project access member not found");
+    const existing = await getReadableProject(req, res, req.params.id as string);
+    if (!existing) return;
+    const result = await db.transaction(async tx => {
+      await lockIssuePrivacyTree(tx, existing.companyId);
+      const [project] = await tx.select().from(projects).where(eq(projects.id, existing.id)).for("update");
+      if (!project) throw notFound("Project not found");
+      await requireProjectPrivacyOwner(tx as unknown as Db, req, project);
+      const [member] = await tx.select().from(projectAccessMembers).where(and(eq(projectAccessMembers.id, req.params.memberId as string),
+        eq(projectAccessMembers.companyId, project.companyId), eq(projectAccessMembers.projectId, project.id))).for("update");
+      if (!member) throw notFound("Project access member not found");
+      if (member.subjectType === "user" && [project.privacyOwnerUserId, project.personalOwnerUserId].includes(member.subjectId)) {
+        throw unprocessable("The project privacy owner cannot be removed");
+      }
+      await tx.delete(projectAccessMembers).where(eq(projectAccessMembers.id, member.id));
+      const actor = getActorInfo(req);
+      const activity = await persistActivity(tx as unknown as Db, { companyId: project.companyId, actorType: actor.actorType,
+        actorId: actor.actorId, agentId: actor.agentId, action: "project.access_member_removed", entityType: "project", entityId: project.id,
+        details: { subjectType: member.subjectType, subjectId: member.subjectId } });
+      return { member, publication: activity.publication };
+    });
+    publishActivity(result.publication);
+    res.json(result.member);
+  });
+
   router.post("/projects/:id/workspaces", validate(createProjectWorkspaceSchema), async (req, res) => {
     const id = req.params.id as string;
-    const existing = await getAccessibleResource(req, res, svc.getById(id), "Project not found");
+    const existing = await getReadableProject(req, res, id);
     if (!existing) return;
     assertNoAgentHostWorkspaceCommandMutation(
       req,
@@ -456,7 +608,7 @@ export function projectRoutes(db: Db) {
     async (req, res) => {
       const id = req.params.id as string;
       const workspaceId = req.params.workspaceId as string;
-      const existing = await getAccessibleResource(req, res, svc.getById(id), "Project not found");
+      const existing = await getReadableProject(req, res, id);
       if (!existing) return;
       assertNoAgentHostWorkspaceCommandMutation(
         req,
@@ -502,7 +654,7 @@ export function projectRoutes(db: Db) {
       return;
     }
 
-    const project = await getAccessibleResource(req, res, svc.getById(id), "Project not found");
+    const project = await getReadableProject(req, res, id);
     if (!project) return;
 
     const workspace = project.workspaces.find((entry) => entry.id === workspaceId) ?? null;
@@ -776,7 +928,7 @@ export function projectRoutes(db: Db) {
   router.delete("/projects/:id/workspaces/:workspaceId", async (req, res) => {
     const id = req.params.id as string;
     const workspaceId = req.params.workspaceId as string;
-    const existing = await getAccessibleResource(req, res, svc.getById(id), "Project not found");
+    const existing = await getReadableProject(req, res, id);
     if (!existing) return;
     const workspace = await svc.removeWorkspace(id, workspaceId);
     if (!workspace) {
@@ -804,7 +956,7 @@ export function projectRoutes(db: Db) {
 
   router.delete("/projects/:id", async (req, res) => {
     const id = req.params.id as string;
-    const existing = await getAccessibleResource(req, res, svc.getById(id), "Project not found");
+    const existing = await getReadableProject(req, res, id);
     if (!existing) return;
     const project = await svc.remove(id);
     if (!project) {

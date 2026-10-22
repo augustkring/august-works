@@ -23,6 +23,7 @@ import {
   companySearchBranchFetchLimit,
   companySearchService,
 } from "../services/company-search.js";
+import { issueReadSqlCondition, projectReadSqlCondition } from "../services/authorization.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -146,10 +147,40 @@ describeEmbeddedPostgres("companySearchService", () => {
       companyId,
       name: values.name ?? "Search project",
       description: values.description ?? null,
+      sourceProvenanceQualified: true,
       ...values,
     });
     return id;
   }
+
+  it("excludes private tasks and projects before counts, facets and pagination", async () => {
+    const companyId = await createCompany();
+    const foreignCompany = await createCompany("Foreign");
+    const hidden = await createIssue(companyId, { title: "needle private task", visibility: "private", priority: "critical" });
+    const publicId = await createIssue(companyId, { title: "needle public task", priority: "low" });
+    await createIssue(foreignCompany, { title: "needle foreign task" });
+    await createProject(companyId, { name: "needle private project", visibility: "private" });
+    const publicProject = await createProject(companyId, { name: "needle public project" });
+    const result = await svc.search(companyId, companySearchQuerySchema.parse({ q: "needle", limit: 1 }), {
+      issueReadCondition: await issueReadSqlCondition(db, { type: "none" }),
+      projectReadCondition: await projectReadSqlCondition(db, { type: "none" }),
+    });
+    expect(result.countsByType).toMatchObject({ issue: 1, project: 1 });
+    expect(result.filterOptionCounts.priority).toEqual({ low: 1 });
+    expect(result.results.every(row => row.id === publicId || row.id === publicProject)).toBe(true);
+    expect(JSON.stringify(result)).not.toContain(hidden);
+  });
+
+  it("does not let an unreadable literal task suppress a readable fuzzy task", async () => {
+    const companyId = await createCompany();
+    await createIssue(companyId, { title: "orchard", visibility: "private" });
+    const visible = await createIssue(companyId, { title: "orchrad" });
+    const result = await svc.search(companyId, companySearchQuerySchema.parse({ q: "orchard", scope: "issues" }), {
+      issueReadCondition: await issueReadSqlCondition(db, { type: "none" }),
+    });
+    expect(result.results.map(row => row.id)).toEqual([visible]);
+    expect(result.countsByType.issue).toBe(1);
+  });
 
   async function createLabel(companyId: string, values: Partial<typeof labels.$inferInsert> = {}) {
     const id = values.id ?? randomUUID();
