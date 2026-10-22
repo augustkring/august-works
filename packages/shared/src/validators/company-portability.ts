@@ -112,6 +112,14 @@ export const portabilitySkillManifestEntrySchema = z.object({
 });
 
 export const portabilityProjectManifestEntrySchema = z.object({
+  sourceCompanyId: z.string().uuid().optional(),
+  sourceProjectId: z.string().uuid().optional(),
+  visibility: z.enum(["open", "private"]).optional(),
+  privacyOwnerUserId: z.string().nullable().optional(),
+  personalOwnerUserId: z.string().nullable().optional(),
+  sourceIssueIds: z.array(z.string().uuid()).max(256).optional(),
+  sourceProjectIds: z.array(z.string().uuid()).max(256).optional(),
+  sourceProvenanceQualified: z.boolean().optional(),
   slug: z.string().min(1),
   name: z.string().min(1),
   path: z.string().min(1),
@@ -201,6 +209,14 @@ export const portabilityIssueAttachmentManifestEntrySchema = z.object({
 });
 
 export const portabilityIssueManifestEntrySchema = z.object({
+  sourceCompanyId: z.string().uuid().optional(),
+  sourceIssueId: z.string().uuid().optional(),
+  visibility: z.enum(["open", "private"]).optional(),
+  privacyRootIssueId: z.string().uuid().nullable().optional(),
+  privacyParentIssueId: z.string().uuid().nullable().optional(),
+  privacySources: z.array(z.object({ sourceKind: z.enum(["issue", "project", "run"]), sourceId: z.string().uuid() }).strict()).max(256).optional(),
+  responsibleUserId: z.string().nullable().optional(),
+  createdByUserId: z.string().nullable().optional(),
   slug: z.string().min(1),
   identifier: z.string().min(1).nullable(),
   title: z.string().min(1),

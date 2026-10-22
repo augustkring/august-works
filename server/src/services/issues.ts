@@ -12,7 +12,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { suppressAnalyticalSource } from "./analytical-privacy.js";
 import { forgetMemoryForDeletedIssue, lockMemoryPrivacy } from "./memory/memory-privacy.js";
 import { lockBusinessEventCompany, suppressBusinessEventsForObject } from "./business-event-privacy.js";
-import { canActorReadIssuePrivacy, canActorReadProjectPrivacy, type AuthorizationActor } from "./authorization.js";
+import { authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, type AuthorizationActor } from "./authorization.js";
+import { resolveTaskWatchdogMutationScope, taskWatchdogScopeAllowsIssueMutation } from "./task-watchdog-scope.js";
 import {
   and,
   asc,
@@ -45,6 +46,7 @@ import {
   agentWakeupRequests,
   agents,
   authUsers,
+  instanceUserRoles,
   approvals,
   assets,
   companies,
@@ -173,6 +175,7 @@ import type {
 } from "./import-write-types.js";
 import {
   summarizeIssueWatchdog,
+  taskWatchdogService,
   upsertIssueWatchdogForIssue,
 } from "./task-watchdogs.js";
 import {
@@ -2049,6 +2052,7 @@ async function resolveIssuePrivacy(
     if (run.scopeKind === "issue" && !sourceId) throw notFound("Task privacy source is unavailable");
     if (sourceId === next.id) continue;
     sources.push({ sourceKind: "run", sourceId: runId });
+    if (!(await canActorReadHeartbeatRunPrivacy(tx, { type: "none" }, run))) visibility = "private";
     if (sourceId) { parents.add(sourceId); privacyParentIssueId ??= sourceId; }
   }
   for (const parentId of parents) {
@@ -2074,12 +2078,33 @@ async function resolveIssuePrivacy(
 async function assertIssuePrivacySourcesReadable(tx: DbTransaction, actor: AuthorizationActor,
   companyId: string, sources: Array<{ sourceKind: "issue" | "project" | "run"; sourceId: string }>) {
   for (const source of sources) {
-    if (source.sourceKind === "run") continue; // Its resolved owning task is also retained.
-    const readable = source.sourceKind === "issue"
+    const readable = source.sourceKind === "run"
+      ? await canActorReadHeartbeatRunPrivacy(tx, actor, { id: source.sourceId, companyId })
+      : source.sourceKind === "issue"
       ? await canActorReadIssuePrivacy(tx, actor, { id: source.sourceId, companyId })
       : await canActorReadProjectPrivacy(tx, actor, { id: source.sourceId, companyId });
     if (!readable) throw notFound("Task privacy source is unavailable");
   }
+}
+
+async function pinIssueMutationHuman(tx: DbTransaction, actor: AuthorizationActor, companyId: string) {
+  if (actor.type === "none" || actor.source === "local_implicit") return;
+  const userId = actor.type === "agent" ? actor.onBehalfOfUserId : actor.userId;
+  if (!userId) throw forbidden("Current organization access is required");
+  const [user] = await tx.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, userId)).for("share");
+  if (!user) throw forbidden("Current organization access is required");
+  const [member] = await tx.select({ role: companyMemberships.membershipRole }).from(companyMemberships).where(and(
+    eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+    eq(companyMemberships.principalId, userId), eq(companyMemberships.status, "active"),
+  )).for("share");
+  if (member && member.role !== "viewer") return;
+  if (actor.type === "board") {
+    const [role] = await tx.select({ id: instanceUserRoles.id }).from(instanceUserRoles).where(and(
+      eq(instanceUserRoles.userId, userId), eq(instanceUserRoles.role, "instance_admin"),
+    )).for("share");
+    if (role) return;
+  }
+  throw forbidden("Current organization access is required");
 }
 
 /** Classification follows descendants; retained source edges remain authoritative. */
@@ -3888,6 +3913,7 @@ async function listIssueBlockerAttentionMap(
   dbOrTx: any,
   companyId: string,
   issueRows: IssueBlockerAttentionInputNode[],
+  readCondition?: SQL<boolean>,
 ): Promise<Map<string, IssueBlockerAttention>> {
   const roots = issueRows.filter(
     (row) => row.companyId === companyId && row.status === "blocked",
@@ -3952,6 +3978,7 @@ async function listIssueBlockerAttentionMap(
             eq(issueRelations.type, "blocks"),
             inArray(issueRelations.relatedIssueId, chunk),
             eq(issues.companyId, companyId),
+            readCondition,
           ),
         );
       const childRowsPromise: Promise<IssueBlockerAttentionQueryRow[]> = dbOrTx
@@ -3973,6 +4000,7 @@ async function listIssueBlockerAttentionMap(
           and(
             eq(issues.companyId, companyId),
             inArray(issues.parentId, chunk),
+            readCondition,
             notInArray(
               issues.status,
               BLOCKER_ATTENTION_CHILD_TERMINAL_STATUSES,
@@ -4150,6 +4178,7 @@ async function listIssueBlockerAttentionMap(
           and(
             eq(issues.companyId, companyId),
             eq(issues.originKind, BLOCKER_ATTENTION_OPEN_RECOVERY_ORIGIN_KIND),
+            readCondition,
             visibleIssueCondition(),
             notInArray(
               issues.status,
@@ -5717,6 +5746,7 @@ async function listIssueBlockedInboxAttentionMap(
   dbOrTx: any,
   companyId: string,
   issueRows: BlockedInboxIssueRow[],
+  readCondition?: SQL<boolean>,
 ): Promise<Map<string, IssueBlockedInboxAttention>> {
   const rowIssueIds = [...new Set(issueRows.map((row) => row.id))];
   const result = new Map<string, IssueBlockedInboxAttention>();
@@ -5731,6 +5761,7 @@ async function listIssueBlockedInboxAttentionMap(
           and(
             eq(issues.companyId, companyId),
             visibleIssueCondition(),
+            readCondition,
             ne(issues.status, "done"),
           ),
         ),
@@ -6326,6 +6357,7 @@ async function listIssueBlockedInboxAttentionMap(
       dbOrTx,
       companyId,
       [row],
+      readCondition,
     );
     const blockerState = blockerAttention.get(row.id);
     if (
@@ -6583,9 +6615,9 @@ async function listBlockedInboxIssues(
       : Promise.resolve([]),
     lastActivityStatsForIssues(dbOrTx, companyId, issueIds),
     blockedByMapForIssues(dbOrTx, companyId, issueIds),
-    listIssueBlockerAttentionMap(dbOrTx, companyId, withRuns),
+    listIssueBlockerAttentionMap(dbOrTx, companyId, withRuns, filters?.readCondition),
     listIssueReviewAttentionMap(dbOrTx, companyId, withRuns),
-    listIssueBlockedInboxAttentionMap(dbOrTx, companyId, withRuns),
+    listIssueBlockedInboxAttentionMap(dbOrTx, companyId, withRuns, filters?.readCondition),
     includeLiveDescendantSummary
       ? liveDescendantCountMapForIssues(dbOrTx, companyId, issueIds, filters?.readCondition)
       : Promise.resolve(new Map<string, number>()),
@@ -6708,7 +6740,7 @@ async function countBlockedInboxIssues(
   if (rows.length === 0) return 0;
 
   const blockedInboxAttentionByIssueId =
-    await listIssueBlockedInboxAttentionMap(dbOrTx, companyId, rows);
+    await listIssueBlockedInboxAttentionMap(dbOrTx, companyId, rows, filters?.readCondition);
   const rawSearchInput = filters?.q?.trim() ?? "";
   const rawSearch = rawSearchInput.toLowerCase();
   const commentSearchMatchIssueIds = new Set<string>();
@@ -8028,6 +8060,18 @@ export function issueService(db: Db) {
     clearCheckoutRunIfTerminal,
     addStopRelayCommentIfNeeded,
 
+    currentReadMetrics: async (companyId: string, issueIds: string[], readCondition: SQL<boolean>,
+      include: { blockers: boolean; inbox: boolean; descendants: boolean }) => {
+      const rows = issueIds.length ? await db.select().from(issues).where(and(eq(issues.companyId, companyId),
+        inArray(issues.id, issueIds), readCondition)) : [];
+      const [blockers, inbox, descendants] = await Promise.all([
+        include.blockers ? listIssueBlockerAttentionMap(db, companyId, rows, readCondition) : Promise.resolve(new Map<string, IssueBlockerAttention>()),
+        include.inbox ? listIssueBlockedInboxAttentionMap(db, companyId, rows, readCondition) : Promise.resolve(new Map<string, IssueBlockedInboxAttention>()),
+        include.descendants ? liveDescendantCountMapForIssues(db, companyId, rows.map(row => row.id), readCondition) : Promise.resolve(new Map<string, number>()),
+      ]);
+      return { blockers, inbox, descendants };
+    },
+
     list: async (companyId: string, filters?: IssueFilters) => {
       if (filters?.sortField === "id" && filters.attention) {
         throw unprocessable("ID ordering is not supported for blocked attention lists");
@@ -8286,10 +8330,10 @@ export function issueService(db: Db) {
         reviewAttentionByIssueId,
         blockedInboxAttentionByIssueId,
       ] = await Promise.all([
-        listIssueBlockerAttentionMap(db, companyId, withRuns),
+        listIssueBlockerAttentionMap(db, companyId, withRuns, filters?.readCondition),
         listIssueReviewAttentionMap(db, companyId, withRuns),
         includeBlockedInboxAttention
-          ? listIssueBlockedInboxAttentionMap(db, companyId, withRuns)
+          ? listIssueBlockedInboxAttentionMap(db, companyId, withRuns, filters?.readCondition)
           : Promise.resolve(new Map<string, IssueBlockedInboxAttention>()),
       ]);
 
@@ -8534,6 +8578,7 @@ export function issueService(db: Db) {
       issueIds: string[],
       userId: string,
       archivedAt: Date = new Date(),
+      dbOrTx: Db | DbTransaction = db,
     ): Promise<void> => {
       if (issueIds.length === 0) return;
       const now = new Date();
@@ -8548,7 +8593,7 @@ export function issueService(db: Db) {
         createdAt: now,
         updatedAt: now,
       }));
-      await insertRowsInChunks(db, issueInboxArchives, rows);
+      await insertRowsInChunks(dbOrTx, issueInboxArchives, rows);
     },
 
     unarchiveInbox: async (
@@ -9237,8 +9282,9 @@ export function issueService(db: Db) {
       companyId: string,
       issueRows: IssueBlockerAttentionInputNode[],
       dbOrTx: any = db,
+      readCondition?: SQL<boolean>,
     ) => {
-      return listIssueBlockerAttentionMap(dbOrTx, companyId, issueRows);
+      return listIssueBlockerAttentionMap(dbOrTx, companyId, issueRows, readCondition);
     },
 
     listReviewAttention: async (
@@ -10347,6 +10393,7 @@ export function issueService(db: Db) {
               onBehalfOfUserId: responsibleUserId ?? undefined }
           : issueData.createdByUserId ? { type: "board", userId: issueData.createdByUserId, source: "session" } : { type: "none" };
         await assertIssuePrivacySourcesReadable(tx, creatorActor, companyId, privacy.sources);
+        if (privacy.visibility === "private") await pinIssueMutationHuman(tx, creatorActor, companyId);
         const values = {
           ...issueData,
           visibility: privacy.visibility,
@@ -10413,6 +10460,9 @@ export function issueService(db: Db) {
           agentId: issue.createdByAgentId, userId: issue.createdByUserId,
         });
         if (assignmentGrant) privacyPublications.push(assignmentGrant.publication);
+        if (issue.visibility === "private" && !(await canActorReadIssuePrivacy(tx, creatorActor, issue))) {
+          throw forbidden("Private task creation is outside the current actor authority");
+        }
         if (idempotencyKey) {
           await tx.insert(issueCreateIdempotencyKeys).values({
             companyId,
@@ -10493,6 +10543,8 @@ export function issueService(db: Db) {
     importIssues: async (
       companyId: string,
       rows: ImportIssueRow[],
+      dbOrTx: Db | DbTransaction = db,
+      options: { actor?: AuthorizationActor; privateWorkAdmission?: "closed"; postCommitActivityPublications?: ActivityPublication[] } = {},
     ): Promise<void> => {
       if (rows.length === 0) return;
       for (const row of rows) {
@@ -10505,11 +10557,12 @@ export function issueService(db: Db) {
           throw unprocessable("Imported private tasks require retained ownership and privacy provenance");
         }
       }
-      const privacyPublications: ActivityPublication[] = [];
+      if (dbOrTx !== db && !options.postCommitActivityPublications) throw new Error("Nested task import requires an outer-commit publication queue");
+      const privacyPublications = options.postCommitActivityPublications ?? [];
       const isolatedWorkspacesEnabled = (
         await instanceSettings.getExperimental()
       ).enableIsolatedWorkspaces;
-      await db.transaction(async (tx) => {
+      await dbOrTx.transaction(async (tx) => {
         await lockIssuePrivacyTree(tx, companyId);
         // Self-correcting counter: seed from max(issue_number) so a drifted
         // company counter cannot mint colliding identifiers, then reserve the
@@ -10535,6 +10588,15 @@ export function issueService(db: Db) {
           .set({ issueCounter: base + rows.length })
           .where(eq(companies.id, companyId));
 
+        if (options.actor) {
+          await pinIssueMutationHuman(tx, options.actor, companyId);
+          const admission = await authorizationService(tx).decide({ actor: options.actor, action: "company_scope:read",
+            resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true });
+          if (!admission.allowed) throw forbidden("Current organization access is required for import");
+        }
+        if (options.privateWorkAdmission === "closed" && rows.some(row => row.visibility === "private")) {
+          throw unprocessable("Private tasks are not available");
+        }
         const defaultCompanyGoal = await getDefaultCompanyGoal(tx, companyId);
         const defaultGoalId = defaultCompanyGoal?.id ?? null;
 
@@ -10726,6 +10788,17 @@ export function issueService(db: Db) {
 
         await insertRowsInChunks(tx, issues, issueRows);
         await insertRowsInChunks(tx, issueLabels, labelRows);
+        const retainedRows = rows.flatMap(row => [...row.privacySources,
+          { sourceKind: "issue" as const, sourceId: row.privacyParentIssueId },
+          { sourceKind: "issue" as const, sourceId: row.privacyRootIssueId },
+          { sourceKind: "issue" as const, sourceId: row.parentId },
+          { sourceKind: "project" as const, sourceId: row.projectId },
+        ].filter((source): source is { sourceKind: "issue" | "project" | "run"; sourceId: string } =>
+          Boolean(source.sourceId) && !(source.sourceKind === "issue" && source.sourceId === row.id))
+          .map(source => ({ companyId, issueId: row.id, ...source })));
+        for (let offset = 0; offset < retainedRows.length; offset += DEFAULT_INSERT_CHUNK_ROWS) {
+          await tx.insert(issuePrivacySources).values(retainedRows.slice(offset, offset + DEFAULT_INSERT_CHUNK_ROWS)).onConflictDoNothing();
+        }
         const originals = new Map(rows.map(row => [row.id, row]));
         const checkedSources = new Set<string>();
         for (let offset = 0; offset < rows.length; offset += DEFAULT_INSERT_CHUNK_ROWS) {
@@ -10748,16 +10821,20 @@ export function issueService(db: Db) {
               if (current && current.companyId !== companyId) throw unprocessable("Imported task privacy source belongs to another organization");
               checkedSources.add(key);
             }
-            await retainIssuePrivacySources(tx, issue, sources);
+            const readableSources = sources.filter((source): source is { sourceKind: "issue" | "project" | "run"; sourceId: string } => Boolean(source.sourceId));
+            if (options.actor) await assertIssuePrivacySourcesReadable(tx, options.actor, companyId, readableSources);
             if (issue.visibility === "open" && !(await canActorReadIssuePrivacy(tx, { type: "none" }, issue))) {
               throw unprocessable("Imported task source content is private or unavailable");
             }
             const grant = await ensureAssignmentIssueAccessGrant(tx, issue, null, { userId: original.createdByUserId });
             if (grant) privacyPublications.push(grant.publication);
+            if (options.actor && !(await canActorReadIssuePrivacy(tx, options.actor, issue))) {
+              throw unprocessable("Imported task source graph is unavailable");
+            }
           }
         }
       });
-      for (const publication of privacyPublications) {
+      if (!options.postCommitActivityPublications) for (const publication of privacyPublications) {
         try { publishActivity(publication); }
         catch (err) { logger.warn({ err }, "Failed to publish committed imported task privacy activity"); }
       }
@@ -10769,11 +10846,12 @@ export function issueService(db: Db) {
      */
     addImportedComments: async (
       rows: ImportIssueCommentRow[],
+      dbOrTx: Db | DbTransaction = db,
     ): Promise<void> => {
       if (rows.length === 0) return;
       const censorUsernameInLogs = (await instanceSettings.getGeneral())
         .censorUsernameInLogs;
-      await db.transaction(async (tx) => {
+      await dbOrTx.transaction(async (tx) => {
         const commentRows = rows.map((row) => {
           const createdAt = row.createdAt ? new Date(row.createdAt) : null;
           return {
@@ -10840,9 +10918,10 @@ export function issueService(db: Db) {
      */
     addImportedAttachments: async (
       rows: ImportIssueAttachmentRow[],
+      dbOrTx: Db | DbTransaction = db,
     ): Promise<void> => {
       if (rows.length === 0) return;
-      await db.transaction(async (tx) => {
+      await dbOrTx.transaction(async (tx) => {
         const assetRows: Array<Record<string, unknown>> = [];
         const attachmentRows: Array<Record<string, unknown>> = [];
         for (const row of rows) {
@@ -11285,6 +11364,27 @@ export function issueService(db: Db) {
           currentActor = { type: "agent", agentId: actorAgentId, companyId: receiptExisting.companyId,
             runId: actorRunId ?? undefined, onBehalfOfUserId: run?.responsibleUserId ?? undefined };
         }
+        if (currentActor) {
+          const scope = await resolveTaskWatchdogMutationScope(tx, currentActor);
+          if (scope.kind === "invalid") throw forbidden(scope.detail);
+          if (scope.kind === "watchdog") {
+            const allowed = await taskWatchdogScopeAllowsIssueMutation(tx, scope, receiptExisting);
+            if (allowed.kind !== "watchdog") throw forbidden("Task-watchdog target is unavailable");
+            if (scope.watchdogIssueId !== receiptExisting.id) {
+              const current = await taskWatchdogService(tx).revalidateMutationScope(scope);
+              if (!current.allowed) throw conflict(current.reason);
+            }
+          } else {
+            await pinIssueMutationHuman(tx, currentActor, receiptExisting.companyId);
+            const decision = await authorizationService(tx).decide({ actor: currentActor,
+              action: "issue:mutate", enforceResponsibleUserIntersection: true,
+              resource: { type: "issue", companyId: receiptExisting.companyId, issueId: receiptExisting.id,
+                projectId: receiptExisting.projectId, parentIssueId: receiptExisting.parentId,
+                assigneeAgentId: receiptExisting.assigneeAgentId, assigneeUserId: receiptExisting.assigneeUserId,
+                status: receiptExisting.status, originKind: receiptExisting.originKind, originId: receiptExisting.originId } });
+            if (!decision.allowed) throw forbidden("Task mutation is outside the current actor authority");
+          }
+        }
         if (currentActor && !(await canActorReadIssuePrivacy(tx, currentActor, receiptExisting))) {
           throw forbidden("Task not found");
         }
@@ -11301,6 +11401,11 @@ export function issueService(db: Db) {
           if (!member) throw forbidden("Current organization access is required");
         }
         if (currentActor && privacy) await assertIssuePrivacySourcesReadable(tx, currentActor, receiptExisting.companyId, privacy.sources);
+        const retainedBefore: Array<{ sourceKind: string; sourceId: string }> = privacy ? await tx.select({ sourceKind: issuePrivacySources.sourceKind, sourceId: issuePrivacySources.sourceId })
+          .from(issuePrivacySources).where(and(eq(issuePrivacySources.companyId, receiptExisting.companyId), eq(issuePrivacySources.issueId, id))) : [];
+        const retainedKeys = new Set(retainedBefore.map(source => `${source.sourceKind}:${source.sourceId}`));
+        const privacyGraphChanged = privacy && (privacy.visibility !== receiptExisting.visibility || privacy.sources.some(source =>
+          source.sourceId !== id && !retainedKeys.has(`${source.sourceKind}:${source.sourceId}`)));
         const updated = await tx
           .update(issues)
           .set(patch)
@@ -11313,6 +11418,9 @@ export function issueService(db: Db) {
           agentId: actorAgentId, userId: actorUserId,
         });
         if (assignmentGrant) activityPublications.push(assignmentGrant.publication);
+        if (currentActor && privacyGraphChanged && !(await canActorReadIssuePrivacy(tx, currentActor, updated))) {
+          throw unprocessable("Task source graph is unavailable");
+        }
         if (updated.visibility === "private" && receiptExisting.visibility !== "private") {
           await protectIssuePrivacyDescendants(tx, updated, activityPublications);
         }

@@ -198,12 +198,15 @@ export function projectRoutes(db: Db) {
       || ![project.privacyOwnerUserId, project.personalOwnerUserId].includes(req.actor.userId)) {
       throw forbidden("Only the current project privacy owner can change its audience");
     }
+    const [user] = await executor.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, req.actor.userId)).for("share");
+    if (!user) throw forbidden("Current organization access is required");
     const [member] = await executor.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
       eq(companyMemberships.companyId, project.companyId), eq(companyMemberships.principalType, "user"),
       eq(companyMemberships.principalId, req.actor.userId), eq(companyMemberships.status, "active"),
       sql`${companyMemberships.membershipRole} <> 'viewer'`,
-    ));
+    )).for("share");
     if (!member) throw forbidden("Current organization access is required");
+    if (!(await canActorReadProjectPrivacy(executor, req.actor, project))) throw notFound("Project not found");
   }
 
   async function assertRuntimeManageAllowed(req: Request, res: Response, companyId: string) {
@@ -378,7 +381,7 @@ export function projectRoutes(db: Db) {
         if (!(await canActorReadIssuePrivacy(tx, { type: "none" }, currentContext.issue))) throw unprocessable("Private projects are not available");
       }
       const service = projectService(tx as unknown as Db);
-      const project = repositories ? await service.createWithRepositories(companyId, durableProjectData, repositories) : await service.create(companyId, durableProjectData);
+      const project = repositories ? await service.createWithRepositories(companyId, durableProjectData, repositories, req.actor) : await service.create(companyId, durableProjectData, tx, req.actor);
       if (project.sourceProvenanceQualified !== true || !Array.isArray(project.sourceIssueIds)
         || (currentContext && !project.sourceIssueIds.includes(currentContext.issue.id))) {
         throw conflict("Project source binding is unavailable");
@@ -522,6 +525,10 @@ export function projectRoutes(db: Db) {
       // A project membership never publishes any retained task source.
       for (const sourceId of project.sourceIssueIds) {
         if (subjectType !== "user" || !(await canActorReadIssuePrivacy(tx, { type: "board", userId: subjectId, source: "session" },
+          { id: sourceId, companyId: project.companyId }))) throw unprocessable("Sharing inherited source content requires an authorized publication operation");
+      }
+      for (const sourceId of project.sourceProjectIds) {
+        if (subjectType !== "user" || !(await canActorReadProjectPrivacy(tx, { type: "board", userId: subjectId, source: "session" },
           { id: sourceId, companyId: project.companyId }))) throw unprocessable("Sharing inherited source content requires an authorized publication operation");
       }
       const member = await ensureProjectAccessMember(tx, { companyId: project.companyId, projectId: project.id, subjectType, subjectId });

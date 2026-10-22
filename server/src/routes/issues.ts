@@ -37,6 +37,7 @@ import {
   activityLog,
   agentWakeupRequests,
   agents,
+  authUsers,
   approvals,
   chatConversations,
   chatEndpoints,
@@ -286,7 +287,7 @@ import {
   lockIssuePrivacyTree,
   type IssuePostCommitAction,
 } from "../services/issues.js";
-import { authorizationDeniedDetails, canActorReadIssuePrivacy, canActorReadProjectPrivacy, issueReadSqlCondition, projectReadSqlCondition } from "../services/authorization.js";
+import { authorizationDeniedDetails, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, issueReadSqlCondition, projectReadSqlCondition } from "../services/authorization.js";
 import { persistActivity } from "../services/activity-log.js";
 import { stalledReviewDecisionService } from "../services/stalled-review-decisions.js";
 import { environmentService } from "../services/environments.js";
@@ -5306,12 +5307,15 @@ export function issueRoutes(
       || ![issue.responsibleUserId, issue.createdByUserId].includes(req.actor.userId)) {
       throw forbidden("Only the current task privacy owner can change its audience");
     }
+    const [user] = await executor.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, req.actor.userId)).for("share");
+    if (!user) throw forbidden("Current organization access is required");
     const [member] = await executor.select({ id: companyMemberships.id }).from(companyMemberships).where(and(
       eq(companyMemberships.companyId, issue.companyId), eq(companyMemberships.principalType, "user"),
       eq(companyMemberships.principalId, req.actor.userId), eq(companyMemberships.status, "active"),
       sql`${companyMemberships.membershipRole} <> 'viewer'`,
-    ));
+    )).for("share");
     if (!member) throw forbidden("Current organization access is required");
+    if (!(await canActorReadIssuePrivacy(executor, req.actor, issue))) throw notFound("Issue not found");
   }
 
   function presentIssueAccessReason<T>(reason: T) {
@@ -5390,11 +5394,23 @@ export function issueRoutes(
     return { blockedBy: projected.blockedBy, blocks: projected.blocks };
   }
 
-  async function currentIssueListBody<T extends Parameters<typeof redactIssueRelationEdgesOnRows>[2][number]>(
+  async function currentIssueListBody<T extends Parameters<typeof redactIssueRelationEdgesOnRows>[2][number] & { liveDescendantCount?: number }>(
     req: Request, companyId: string, rows: T[],
   ) {
     const currentIds = await readableIssueEdgeIds(req, companyId, rows.map(issue => issue.id));
-    return redactIssueRelationEdgesOnRows(req, companyId, rows.filter(issue => currentIds.has(issue.id)));
+    const currentRows = rows.filter(issue => currentIds.has(issue.id));
+    const include = { blockers: currentRows.some(row => row.blockerAttention !== undefined),
+      inbox: currentRows.some(row => row.blockedInboxAttention !== undefined),
+      descendants: currentRows.some(row => row.liveDescendantCount !== undefined) };
+    if (!include.blockers && !include.inbox && !include.descendants) return redactIssueRelationEdgesOnRows(req, companyId, currentRows);
+    // Cached counts and attention also depend on other Tasks' current ACLs.
+    const metrics = await svc.currentReadMetrics(companyId, currentRows.map(row => row.id),
+      await issueReadSqlCondition(db, req.actor), include);
+    return redactIssueRelationEdgesOnRows(req, companyId, currentRows.map(row => ({ ...row,
+      ...(row.blockerAttention !== undefined ? { blockerAttention: metrics.blockers.get(row.id) } : {}),
+      ...(row.blockedInboxAttention !== undefined ? { blockedInboxAttention: metrics.inbox.get(row.id) ?? null } : {}),
+      ...(row.liveDescendantCount !== undefined ? { liveDescendantCount: metrics.descendants.get(row.id) ?? 0 } : {}),
+    })));
   }
 
   async function redactIssueReferenceEdges<T extends {
@@ -8752,7 +8768,7 @@ export function issueRoutes(
       wakeCommentId ? svc.getComment(wakeCommentId) : null,
       svc.getRelationSummaries(issue.id),
       svc
-        .listBlockerAttention(issue.companyId, [issue])
+        .listBlockerAttention(issue.companyId, [issue], db, await issueReadSqlCondition(db, req.actor))
         .then((map) => map.get(issue.id) ?? null),
       svc
         .listReviewAttention(issue.companyId, [issue])
@@ -9141,9 +9157,9 @@ export function issueRoutes(
       if (!subject) throw unprocessable("Task access recipient must belong to this organization");
       const sources = await tx.select().from(issuePrivacySources).where(and(eq(issuePrivacySources.companyId, issue.companyId), eq(issuePrivacySources.issueId, issue.id)));
       for (const source of sources) {
-        if (source.sourceKind === "run") continue;
         const target = subjectType === "user" ? { type: "board" as const, userId: subjectId, source: "session" as const } : { type: "none" as const };
-        const canRead = source.sourceKind === "issue" ? await canActorReadIssuePrivacy(tx, target, { id: source.sourceId, companyId: issue.companyId })
+        const canRead = source.sourceKind === "run" ? await canActorReadHeartbeatRunPrivacy(tx, target, { id: source.sourceId, companyId: issue.companyId })
+          : source.sourceKind === "issue" ? await canActorReadIssuePrivacy(tx, target, { id: source.sourceId, companyId: issue.companyId })
           : await canActorReadProjectPrivacy(tx, target, { id: source.sourceId, companyId: issue.companyId });
         if (!canRead) throw unprocessable("Sharing inherited source content requires an authorized publication operation");
       }
@@ -9226,7 +9242,7 @@ export function issueRoutes(
       documentsSvc.getIssueDocumentPayload(issue),
       svc.getRelationSummaries(issue.id),
       svc
-        .listBlockerAttention(issue.companyId, [issue])
+        .listBlockerAttention(issue.companyId, [issue], db, await issueReadSqlCondition(db, req.actor))
         .then((map) => map.get(issue.id) ?? null),
       svc
         .listReviewAttention(issue.companyId, [issue])

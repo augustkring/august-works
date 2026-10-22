@@ -530,7 +530,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     const body = companyPortabilityExportSchema.parse(req.body);
     if (body.includeV7State && (typeof body.expectedUserId!=="string" || req.actor.type!=="board" || req.actor.userId!==body.expectedUserId)) throw conflict("Account changed; reload the export page",{code:"ACCOUNT_CHANGED"});
     const allowExternalInstructions = await assertExternalInstructionExportAllowed(req, companyId, body);
-    const result = await portability.exportBundle(companyId, body, { allowExternalInstructions, ...(body.includeV7State ? { actor: req.actor } : {}) });
+    const result = await portability.exportBundle(companyId, body, { allowExternalInstructions, actor: req.actor });
     res.json(result);
   });
 
@@ -625,6 +625,8 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
         assertImportTargetAccess(req, importBody.target);
         const activity = importedCompanyActivityContext(actor, importBody.include ?? null);
         const result = await portability.importBundle(importBody, boardUserId, {
+          actor: req.actor,
+          privateWorkAdmission: "closed",
           pauseAutomations: importBody.pauseAutomations === true,
         });
         // The import is committed. Settlement (hooks) runs before the
@@ -1126,7 +1128,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     const body = companyPortabilityExportSchema.parse(req.body);
     if (body.includeV7State && (typeof body.expectedUserId!=="string" || req.actor.type!=="board" || req.actor.userId!==body.expectedUserId)) throw conflict("Account changed; reload the export page",{code:"ACCOUNT_CHANGED"});
     const allowExternalInstructions = await assertExternalInstructionExportAllowed(req, companyId, body);
-    const preview = await portability.previewExport(companyId, body, { allowExternalInstructions });
+    const preview = await portability.previewExport(companyId, body, { allowExternalInstructions, actor: req.actor });
     res.json(preview);
   });
 
@@ -1136,7 +1138,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     const body = companyPortabilityExportSchema.parse(req.body);
     if (body.includeV7State && (typeof body.expectedUserId!=="string" || req.actor.type!=="board" || req.actor.userId!==body.expectedUserId)) throw conflict("Account changed; reload the export page",{code:"ACCOUNT_CHANGED"});
     const allowExternalInstructions = await assertExternalInstructionExportAllowed(req, companyId, body);
-    const result = await portability.exportBundle(companyId, body, { allowExternalInstructions, ...(body.includeV7State ? { actor: req.actor } : {}) });
+    const result = await portability.exportBundle(companyId, body, { allowExternalInstructions, actor: req.actor });
     res.json(result);
   });
 
@@ -1171,6 +1173,8 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     const result = await portability.importBundle(body, req.actor.type === "board" ? req.actor.userId : null, {
       mode: "agent_safe",
       sourceCompanyId: companyId,
+      actor: req.actor,
+      privateWorkAdmission: "closed",
       pauseAutomations: body.pauseAutomations === true,
     });
     await logActivity(db, {

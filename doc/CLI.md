@@ -466,6 +466,17 @@ Notes:
   or `/api/agents/me` and then reads only that scoped company.
 - `company create` requires board/instance-admin authentication because it is
   an instance-wide setup command.
+- Company package format 8 preserves task and project ownership and native source
+  restrictions. Export and preview include only sources readable by the current
+  actor. Task/project copies currently require verified sources in the existing
+  target organization; legacy packages without that proof and cross-organization
+  copies are refused until explicit source publication is supported. Access loss
+  or deletion of a retained source can withhold its copies.
+- Private task/project HTTP writes remain temporarily unavailable while their
+  complete delivery checks are unfinished. Downloading a readable package does
+  not grant publication or copy permission. Routine copies and native imports
+  from restricted task, Memory, or learned Foundation context also remain
+  unavailable where the target cannot retain those source restrictions.
 - Deletion is server-gated by `PAPERCLIP_ENABLE_COMPANY_DELETION`.
 - With agent authentication, company deletion is company-scoped. Use the current company ID/prefix (for example via `--company-id` or `PAPERCLIP_COMPANY_ID`), not another company.
 

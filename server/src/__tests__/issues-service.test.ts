@@ -1,5 +1,6 @@
+import { projectService } from "../services/projects.js";
 import { randomUUID } from "node:crypto";
-import { asc, eq } from "drizzle-orm";
+import { and, asc, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
 import {
@@ -9,6 +10,7 @@ import {
   companies,
   companyMemberships,
   createDb,
+  EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
   documentRevisions,
   documents,
   environments,
@@ -7234,7 +7236,7 @@ describeEmbeddedPostgres("issueService retained private source authority", () =>
   beforeAll(async () => {
     fixture = await startEmbeddedPostgresTestDatabase("paperclip-private-task-domain-");
     db = createDb(fixture.connectionString);
-  }, 60_000);
+  }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
   afterAll(async () => { await fixture?.cleanup(); });
 
   async function privateFixture() {
@@ -7310,7 +7312,104 @@ describeEmbeddedPostgres("issueService retained private source authority", () =>
       release.resolve();
       await blocker;
     }
-    expect((await outcome).error).toMatchObject({ message: "Task not found" });
+    expect((await outcome).error).toMatchObject({ status: 403 });
     expect((await db.select().from(issues).where(eq(issues.id, f.parent.id)))[0]?.title).toBe("Protected source");
+  });
+
+  it("rolls back a task move that creates a retained task-project source cycle", async () => {
+    const f = await privateFixture();
+    const actor = { type: "board" as const, userId: f.owner, source: "session" as const };
+    const project = await projectService(db).create(f.companyId, { name: "Task-derived project", visibility: "private",
+      privacyOwnerUserId: f.owner, sourceIssueIds: [f.parent.id], sourceProjectIds: [], sourceProvenanceQualified: true }, undefined, actor);
+    await expect(f.svc.update(f.parent.id, { projectId: project.id, actorUserId: f.owner, privacyActor: actor }))
+      .rejects.toMatchObject({ status: 422 });
+    expect((await db.select().from(issues).where(eq(issues.id, f.parent.id)))[0]?.projectId).toBeNull();
+    expect(await db.select().from(issuePrivacySources).where(and(eq(issuePrivacySources.issueId, f.parent.id),
+      eq(issuePrivacySources.sourceKind, "project"), eq(issuePrivacySources.sourceId, project.id)))).toEqual([]);
+  });
+
+  it("rolls back a project update that creates a retained project-task source cycle", async () => {
+    const f = await privateFixture();
+    const actor = { type: "board" as const, userId: f.owner, source: "session" as const };
+    const projectsSvc = projectService(db);
+    const project = await projectsSvc.create(f.companyId, { name: "Source-free private project", visibility: "private",
+      privacyOwnerUserId: f.owner, sourceIssueIds: [], sourceProjectIds: [], sourceProvenanceQualified: true }, undefined, actor);
+    const child = await f.svc.create(f.companyId, { title: "Project-derived task", projectId: project.id, createdByUserId: f.owner });
+    await expect(projectsSvc.update(project.id, { sourceIssueIds: [child.id] }, actor)).rejects.toMatchObject({ status: 422 });
+    expect((await db.select().from(projects).where(eq(projects.id, project.id)))[0]?.sourceIssueIds).toEqual([]);
+  });
+
+  it("retains an independent assignment grant after a private assignment handoff until explicitly revoked", async () => {
+    const f = await privateFixture();
+    const child = await f.svc.create(f.companyId, { title: "Private handoff", visibility: "private",
+      createdByUserId: f.owner, assigneeUserId: f.assignee });
+    const actor = { type: "board" as const, userId: f.assignee, source: "session" as const };
+    expect(await canActorReadIssuePrivacy(db, actor, child)).toBe(true);
+    await f.svc.update(child.id, { assigneeUserId: f.owner, actorUserId: f.assignee, privacyActor: actor });
+    const [current] = await db.select().from(issues).where(eq(issues.id, child.id));
+    expect(current.assigneeUserId).toBe(f.owner);
+    expect(current.responsibleUserId).toBe(f.owner);
+    expect(await canActorReadIssuePrivacy(db, actor, current)).toBe(true);
+    const [retainedGrant] = await db.select().from(issueAccessGrants).where(and(
+      eq(issueAccessGrants.issueId, child.id), eq(issueAccessGrants.subjectId, f.assignee),
+      eq(issueAccessGrants.source, "assignment"),
+    ));
+    expect(retainedGrant).toMatchObject({ revokedAt: null });
+    await db.update(issueAccessGrants).set({ revokedAt: new Date() }).where(eq(issueAccessGrants.id, retainedGrant.id));
+    expect(await canActorReadIssuePrivacy(db, actor, current)).toBe(false);
+  });
+
+  it("commits an authorized private handoff when a previously revoked assignment grant leaves only current-assignee access", async () => {
+    const f = await privateFixture();
+    const child = await f.svc.create(f.companyId, { title: "Current assignee handoff", visibility: "private",
+      createdByUserId: f.owner, assigneeUserId: f.assignee });
+    const actor = { type: "board" as const, userId: f.assignee, source: "session" as const };
+    await db.update(issueAccessGrants).set({ revokedAt: new Date() }).where(and(
+      eq(issueAccessGrants.issueId, child.id), eq(issueAccessGrants.subjectId, f.assignee),
+      eq(issueAccessGrants.source, "assignment"),
+    ));
+    expect(await canActorReadIssuePrivacy(db, actor, child)).toBe(true);
+    await f.svc.update(child.id, { assigneeUserId: f.owner, actorUserId: f.assignee, privacyActor: actor });
+    const [current] = await db.select().from(issues).where(eq(issues.id, child.id));
+    expect(current).toMatchObject({ assigneeUserId: f.owner, responsibleUserId: f.owner, createdByUserId: f.owner });
+    expect(await canActorReadIssuePrivacy(db, actor, current)).toBe(false);
+    const formerAssigneeGrants = await db.select().from(issueAccessGrants).where(and(
+      eq(issueAccessGrants.issueId, child.id), eq(issueAccessGrants.subjectId, f.assignee),
+    ));
+    expect(formerAssigneeGrants).toHaveLength(1);
+    expect(formerAssigneeGrants[0].revokedAt).toBeInstanceOf(Date);
+    // This is an internal mutation result. External committed-but-unreadable
+    // response qualification remains closed with private HTTP admission.
+  });
+
+  it("rechecks the canonical mutation role after a public task row wait", async () => {
+    const f = await privateFixture();
+    const issue = await f.svc.create(f.companyId, { title: "Public original", createdByUserId: f.owner });
+    const held = deferred<number>(), release = deferred<void>();
+    const blocker = db.transaction(async tx => {
+      await tx.select({ id: issues.id }).from(issues).where(eq(issues.id, issue.id)).for("update");
+      const [backend] = await tx.execute(sql`select pg_backend_pid() as pid`);
+      held.resolve(Number(backend.pid));
+      await release.promise;
+    });
+    const holderPid = await held.promise;
+    const outcome = f.svc.update(issue.id, { title: "Stale owner write", actorUserId: f.owner,
+      privacyActor: { type: "board", userId: f.owner, source: "session" } })
+      .then(value => ({ value, error: null }), (error: unknown) => ({ value: null, error }));
+    try {
+      let blocked = false;
+      for (let attempt = 0; attempt < 200; attempt++) {
+        const rows = await db.execute(sql`select 1 from pg_stat_activity where ${holderPid}::integer = any(pg_blocking_pids(pid))`);
+        if (rows.length) { blocked = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(blocked).toBe(true);
+      await db.update(companyMemberships).set({ membershipRole: "viewer" }).where(eq(companyMemberships.principalId, f.owner));
+    } finally {
+      release.resolve();
+      await blocker;
+    }
+    expect((await outcome).error).toMatchObject({ status: 403 });
+    expect((await db.select().from(issues).where(eq(issues.id, issue.id)))[0]?.title).toBe("Public original");
   });
 });

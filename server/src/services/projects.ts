@@ -8,6 +8,7 @@ import {
   projectAccessMembers,
   authUsers,
   companyMemberships,
+  instanceUserRoles,
   projectGoals,
   goals,
   issues,
@@ -35,7 +36,7 @@ import {
   type PluginManagedProjectResolution,
 } from "@paperclipai/shared";
 import { forbidden, unprocessable } from "../errors.js";
-import { canActorReadProjectPrivacy, type AuthorizationActor } from "./authorization.js";
+import { authorizationService, canActorReadProjectPrivacy, type AuthorizationActor } from "./authorization.js";
 import { lockIssuePrivacyTree } from "./issues.js";
 import { listCurrentRuntimeServicesForProjectWorkspaces } from "./workspace-runtime-read-model.js";
 import { parseProjectExecutionWorkspacePolicy } from "./execution-workspace-policy.js";
@@ -44,6 +45,26 @@ import { resolveManagedProjectWorkspaceDir } from "../home-paths.js";
 
 type ProjectRow = typeof projects.$inferSelect;
 type DbTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+async function pinProjectMutationHuman(tx: DbTransaction, actor: AuthorizationActor, companyId: string) {
+  if (actor.source === "local_implicit") return;
+  const userId = actor.type === "agent" ? actor.onBehalfOfUserId : actor.userId;
+  if (!userId) throw forbidden("Current organization access is required");
+  const [user] = await tx.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, userId)).for("share");
+  if (!user) throw forbidden("Current organization access is required");
+  const [member] = await tx.select({ role: companyMemberships.membershipRole }).from(companyMemberships).where(and(
+    eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
+    eq(companyMemberships.principalId, userId), eq(companyMemberships.status, "active"),
+  )).for("share");
+  if (member && member.role !== "viewer") return;
+  if (actor.type === "board") {
+    const [role] = await tx.select({ id: instanceUserRoles.id }).from(instanceUserRoles).where(and(
+      eq(instanceUserRoles.userId, userId), eq(instanceUserRoles.role, "instance_admin"),
+    )).for("share");
+    if (role) return;
+  }
+  throw forbidden("Project mutation is outside the current actor authority");
+}
 
 export async function ensureProjectAccessMember(executor: Pick<Db, "insert">, input: {
   companyId: string; projectId: string; subjectType: "user" | "agent"; subjectId: string;
@@ -589,11 +610,20 @@ export function projectService(db: Db) {
     companyId: string,
     data: Omit<typeof projects.$inferInsert, "companyId"> & { goalIds?: string[] },
     privacyTx?: DbTransaction,
+    actor?: AuthorizationActor,
   ): Promise<ProjectWithGoals> => {
-    if (data.visibility === "private" && !privacyTx) return db.transaction(tx => createProject(companyId, data, tx));
+    if ((data.visibility === "private" || actor) && !privacyTx) return db.transaction(tx => createProject(companyId, data, tx, actor));
+    if (privacyTx && actor) {
+      await lockIssuePrivacyTree(privacyTx, companyId);
+      await pinProjectMutationHuman(privacyTx, actor, companyId);
+      const decision = await authorizationService(privacyTx).decide({ actor, action: "company_scope:read",
+        resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true });
+      if (!decision.allowed) throw forbidden("Current organization access is required");
+    }
     const executor = privacyTx ? privacyTx as unknown as Db : db;
     if (data.visibility === "private") {
       await lockIssuePrivacyTree(privacyTx!, companyId);
+      await pinProjectMutationHuman(privacyTx!, { type: "board", userId: data.privacyOwnerUserId, source: "session" }, companyId);
       const [owner] = data.privacyOwnerUserId ? await executor.select({ id: authUsers.id }).from(authUsers)
         .innerJoin(companyMemberships, and(eq(companyMemberships.principalId, authUsers.id),
           eq(companyMemberships.principalType, "user"), eq(companyMemberships.companyId, companyId), eq(companyMemberships.status, "active")))
@@ -632,6 +662,7 @@ export function projectService(db: Db) {
     if (row.visibility === "private") await ensureProjectAccessMember(executor, {
       companyId, projectId: row.id, subjectType: "user", subjectId: row.privacyOwnerUserId!,
     });
+    if (actor && !(await canActorReadProjectPrivacy(executor, actor, row))) throw forbidden("Project source is unavailable");
 
     const [withGoals] = await attachGoals(executor, [row]);
     const [enriched] = withGoals ? await attachWorkspaces(executor, [withGoals]) : [];
@@ -843,10 +874,10 @@ export function projectService(db: Db) {
       };
     },
 
-    createWithRepositories: async (companyId: string, data: Parameters<typeof createProject>[1], repositories: import("@paperclipai/shared").ProjectRepository[]): Promise<ProjectWithGoals> => {
+    createWithRepositories: async (companyId: string, data: Parameters<typeof createProject>[1], repositories: import("@paperclipai/shared").ProjectRepository[], actor?: AuthorizationActor): Promise<ProjectWithGoals> => {
       return db.transaction(async (tx) => {
         const service = projectService(tx as unknown as Db);
-        const project = await service.create(companyId, data);
+        const project = await service.create(companyId, data, tx, actor);
         for (const repo of repositories) {
           await service.createWorkspace(project.id, { name: repo.fullName, repoUrl: repo.url, metadata: { githubRepositoryId: repo.id } });
         }
@@ -954,7 +985,12 @@ export function projectService(db: Db) {
         updates.goalId = ids.length > 0 ? ids[0] : null;
       }
 
-      if (actor && !(await canActorReadProjectPrivacy(executor, actor, current))) throw forbidden("Project not found");
+      if (actor) {
+        await pinProjectMutationHuman(privacyTx, actor, current.companyId);
+        const decision = await authorizationService(privacyTx).decide({ actor, action: "project:read",
+          enforceResponsibleUserIntersection: true, resource: { type: "project", companyId: current.companyId, projectId: current.id } });
+        if (!decision.allowed || !(await canActorReadProjectPrivacy(executor, actor, current))) throw forbidden("Project not found");
+      }
       const row = await executor
         .update(projects)
         .set(updates)
@@ -962,6 +998,7 @@ export function projectService(db: Db) {
         .returning()
         .then((rows) => rows[0] ?? null);
       if (!row) return null;
+      if (actor && !(await canActorReadProjectPrivacy(privacyTx, actor, row))) throw unprocessable("Project source graph is unavailable");
 
       if (ids !== undefined) {
         await syncGoalLinks(executor, id, row.companyId, ids);

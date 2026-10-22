@@ -146,6 +146,38 @@ describeEmbeddedPostgres("issue list routes assigneeAgentId filter", () => {
     expect((await db.select().from(issues).where(eq(issues.companyId, companyId))).map(row => row.id)).toEqual([issueId]);
   });
 
+  it("recomputes cached descendant and blocker counts after a child privacy grant is revoked", async () => {
+    const companyId = randomUUID(), owner = randomUUID(), reader = randomUUID(), parentId = randomUUID(), childId = randomUUID();
+    await db.insert(companies).values({ id: companyId, name: "Private cached metrics", issuePrefix: uniqueIssuePrefix() });
+    await db.insert(authUsers).values([owner, reader].map(id => ({ id, name: "Metrics member", email: `${id}@example.test`,
+      emailVerified: true, createdAt: new Date(), updatedAt: new Date() })));
+    await seedCloudTenantMember(companyId, owner);
+    await seedCloudTenantMember(companyId, reader);
+    await db.insert(issues).values({ id: parentId, companyId, title: "Public blocked parent", status: "blocked" });
+    await db.insert(issues).values({ id: childId, companyId, parentId, title: "Private child metric marker", identifier: "PRIVATE-METRIC-2",
+      visibility: "private", privacyRootIssueId: childId, privacyParentIssueId: parentId, status: "in_progress",
+      responsibleUserId: owner, createdByUserId: owner, assigneeUserId: owner });
+    const [grant] = await db.insert(issueAccessGrants).values({ companyId, issueId: childId, subjectType: "user",
+      subjectId: reader, source: "explicit", grantedByUserId: owner }).returning();
+    const agentId = randomUUID(), runId = randomUUID();
+    await db.insert(agents).values({ id: agentId, companyId, name: "Metrics run agent", role: "engineer", adapterType: "process" });
+    await db.insert(heartbeatRuns).values({ id: runId, companyId, agentId, status: "running", responsibleUserId: owner,
+      scopeKind: "issue", issueId: childId, nativeIssueId: childId, contextSnapshot: { issueId: childId } });
+    await db.update(issues).set({ executionRunId: runId }).where(eq(issues.id, childId));
+    const app = createApp(companyId);
+    const path = `/api/companies/${companyId}/issues?view=compact&status=blocked&includeLiveDescendantSummary=true`;
+    const first = await request(app).get(path).set("x-test-user-id", reader);
+    expect(first.status).toBe(200);
+    expect(first.body[0]).toMatchObject({ id: parentId, liveDescendantCount: 1, blockerAttention: { unresolvedBlockerCount: 1 } });
+    await db.update(issueAccessGrants).set({ revokedAt: new Date() }).where(eq(issueAccessGrants.id, grant.id));
+    const after = await request(app).get(path).set("x-test-user-id", reader).set("If-None-Match", first.headers.etag);
+    expect(after.status).toBe(200);
+    expect(after.headers["x-paperclip-request-cache"]).toBe("hit");
+    expect(after.body[0]).toMatchObject({ id: parentId, liveDescendantCount: 0, blockerAttention: { unresolvedBlockerCount: 0 } });
+    expect(JSON.stringify(after.body)).not.toContain(childId);
+    expect(JSON.stringify(after.body)).not.toContain("PRIVATE-METRIC-2");
+  });
+
   it("returns only unassigned issues for assigneeAgentId=null", async () => {
     const companyId = randomUUID();
     const assigneeAgentId = randomUUID();

@@ -315,6 +315,8 @@ export {
   portabilitySidebarOrderSchema,
   portabilityAgentManifestEntrySchema,
   portabilitySkillManifestEntrySchema,
+  portabilityProjectManifestEntrySchema,
+  portabilityIssueManifestEntrySchema,
   portabilityManifestSchema,
   portabilitySourceSchema,
   portabilityTargetSchema,

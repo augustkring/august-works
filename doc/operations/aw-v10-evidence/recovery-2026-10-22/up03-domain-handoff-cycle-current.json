@@ -1,0 +1,47 @@
+{
+  "command": "NODE_OPTIONS=--max-old-space-size=2048 GOMEMLIMIT=2GiB GOMAXPROCS=2 node node_modules/vitest/vitest.mjs run server/src/__tests__/issues-service.test.ts --maxWorkers=1 -t 'issueService retained private source authority'",
+  "verdict": "PASS:8 passed,127 skipped;125.33s (96.58s imports,28.11s tests)",
+  "qualifiedScope": [
+    "Private project creation inserts its owner access member in the same transaction before qualifying current actor access; valid project creation now reaches both cycle mutations.",
+    "Task-to-derived-project and project-to-derived-task cycle updates reject and roll back newly retained source bindings.",
+    "Private assignment handoff preserves an independent assignment grant until explicit revocation.",
+    "Revoking the assignment grant before handoff leaves live current-assignee access; the authorized handoff commits, preserves the original privacy owner, and leaves the former assignee without current read access.",
+    "Four existing retained-source/idempotency/post-wait Human membership and role cases passed."
+  ],
+  "limitations": [
+    "This is the eight-case native service group, not full domain, portability, HTTP, or V10 qualification.",
+    "Private HTTP mutations remain temporarily closed; external committed-but-unreadable handoff response and compound task/comment receipt semantics remain unimplemented and unqualified.",
+    "Existing source publication and complete V8 Memory/Foundation retained-source graph and count admission remain open.",
+    "Only these twenty owned source/test hashes were verified unchanged; this is not a whole dependency graph immutability claim.",
+    "The earlier actual5PASS/3FAIL capture is preserved separately. Its incorrect handoff expectation was corrected without automatically revoking grants or changing access policy.",
+    "The preceding whole-workspace typecheck passed the server compiler before failing four UI fixtures; these subsequent two owner/test changes require a current compiler check."
+  ],
+  "sourcePinsVerifiedUnchangedAtActualExit": {
+    "server/src/services/issues.ts": "4e3f0b6647a1b150181beca5be1c2da8fbfc0069c61d700a3b8465d2df5e3b23",
+    "server/src/services/projects.ts": "c3c715b2e8ca8e10766310968274747d75d5ae51345747980780662475dd1bcf",
+    "server/src/services/company-portability.ts": "4ba04be3df98b614fccf91394d4465a6dc11cc53428ebffb4ab6ae389bea14ad",
+    "server/src/services/documents.ts": "44d1a3ab531db3cd40b3fdb045fc0a8d90b353c3340dea6955ad62237e527055",
+    "server/src/services/work-products.ts": "a36eeb7cb016c3bc4656b9b743e2132fd55a92790c3ec083ebce78c6717064ba",
+    "server/src/services/company-search.ts": "de448a1316bee278512560187a3f899c9a0ddd62a9031752d40993b86ce0627d",
+    "server/src/services/company-search-extract.ts": "c3c6b31544f0f18f4c192ad51c334d498e517c5881be7ba6558a35f57aecd276",
+    "server/src/services/task-search.ts": "1a2624ec337b814229188d87ff3d4cb55ca74dcda3b072147b1c5661fac4ffd5",
+    "server/src/routes/issues.ts": "85290fc1bfcf0734ddf8015edc9b75b8a9d7e1d7f05a0bc1fddac5e80af8c249",
+    "server/src/routes/projects.ts": "72dfdb5d8c346778e88ce58ff7538b9e49fb3ac7f3d1e146b183748dc971ff6d",
+    "server/src/routes/companies.ts": "cde03012827f0d9745f7faf83b773dad143819122c845990c69974c66931b3c4",
+    "packages/shared/src/index.ts": "795fad3cb56c04bca566696102be2c39994ed89b376b662da4f1118356497c90",
+    "packages/shared/src/types/company-portability.ts": "81e2f4cc84167cd3e879dfbdb067cf50d0395a3b96fb3e7fb57ce9e5ad86cf39",
+    "packages/shared/src/validators/company-portability.ts": "5de9e8929cae3d32c5b183028436ed9bd7ec85ac49603e03fa9790db14801bb7",
+    "packages/shared/src/validators/index.ts": "5e7e9bcc2746a5ddbb906edbf614a6e61cadba83323970d2ceea76cc552a7c4d",
+    "server/src/__tests__/issues-service.test.ts": "9f26e4a20aee04d7bc1e235fd4af95b20bb41101dc4d00df4a1d2b6b40db4cda",
+    "server/src/__tests__/issue-list-assignee-filter-routes.test.ts": "cfaac94be187cf77fde8f7f4c838e3aae83c36c367f38c4288329b6e93770c2a",
+    "server/src/__tests__/company-search-service.test.ts": "4f4257dc43bda61812100969db8bfb9a23d8bedb8d166e13f605691dc36917f4",
+    "server/src/__tests__/company-search-extract-service.test.ts": "e8a3f522b16fca536247ef30ae7eb7ef321d13a36cef6b3fd22a123bc66c812b",
+    "server/src/__tests__/company-portability-import-batching.test.ts": "47024fdd1af9bb8b0a30154fe504d76747488b52b5441425e26f3ec369573d5c"
+  },
+  "logs": [
+    {
+      "path": "up03-domain-handoff-cycle-current.log.txt",
+      "sha256": "8031b4f69af8fd94bb5a333c17668c6427b41c8181dcb6af916df0d5e02c71b0"
+    }
+  ]
+}

@@ -1,3 +1,4 @@
+import { issueReadSqlCondition, projectReadSqlCondition } from "./authorization.js";
 import { externalConversationStateSql } from "./slack-conversation-state.js";
 import { and, desc, eq, gte, inArray, isNotNull, isNull, notInArray, or, sql } from "drizzle-orm";
 import type { SQL } from "drizzle-orm";
@@ -542,6 +543,8 @@ export function companySearchService(db: Db) {
     search: async (companyId: string, query: CompanySearchQuery,
       options: { issueReadCondition?: SQL<boolean>; projectReadCondition?: SQL<boolean> } = {},
     ): Promise<CompanySearchResponse> => {
+      const issueReadCondition = options.issueReadCondition ?? await issueReadSqlCondition(db, { type: "none" });
+      const projectReadCondition = options.projectReadCondition ?? await projectReadSqlCondition(db, { type: "none" });
       const taskSearch = parseTaskSearch(query.q);
       const normalizedQuery = taskSearch.normalizedQuery;
       const hasSearchText = normalizedQuery.length > 0;
@@ -572,7 +575,7 @@ export function companySearchService(db: Db) {
       const tokenCount = tokens.length;
 
       const issueFilters = issueFilterConditions(companyId, query);
-      if (options.issueReadCondition) issueFilters.push(options.issueReadCondition);
+      if (issueReadCondition) issueFilters.push(issueReadCondition);
       const hasIssueOnlyFilters = issueOnlyFiltersActive(query);
 
       // Scope conditions over precomputed flag columns (alias-qualified).
@@ -721,7 +724,7 @@ export function companySearchService(db: Db) {
         }
 
         const resultRows = await db.execute(sql`
-          ${taskSearchCtes(companyId, taskSearch, scope !== "issues", and(...issueFilters), options.issueReadCondition)}
+          ${taskSearchCtes(companyId, taskSearch, scope !== "issues", and(...issueFilters), issueReadCondition)}
           ${sql.join(branches, sql` UNION ALL `)}
         `) as unknown as Array<SearchAggregateRow & Omit<IssueSearchRow, "commentSnippet" | "commentId" | "documentSnippet" | "documentTitle" | "documentKey">>;
 
@@ -900,7 +903,7 @@ export function companySearchService(db: Db) {
             updatedAt: projects.updatedAt,
           })
           .from(projects)
-          .where(and(eq(projects.companyId, companyId), isNull(projects.archivedAt), projectCondition, options.projectReadCondition))
+          .where(and(eq(projects.companyId, companyId), isNull(projects.archivedAt), projectCondition, projectReadCondition))
           .orderBy(desc(projects.updatedAt), desc(projects.id))
           .limit(fetchLimit);
       }
@@ -911,7 +914,7 @@ export function companySearchService(db: Db) {
         const artifactIssueConditions = [
           eq(issues.companyId, companyId),
           visibleIssueCondition(),
-          ...(options.issueReadCondition ? [options.issueReadCondition] : []),
+          ...(issueReadCondition ? [issueReadCondition] : []),
           ...artifactIssueFilters,
         ];
         const documentArtifactConditions = [
@@ -988,7 +991,7 @@ export function companySearchService(db: Db) {
         const rows = await db
           .select({ count: sql<number>`count(*)::int` })
           .from(projects)
-          .where(and(eq(projects.companyId, companyId), isNull(projects.archivedAt), projectCondition, options.projectReadCondition));
+          .where(and(eq(projects.companyId, companyId), isNull(projects.archivedAt), projectCondition, projectReadCondition));
         return Number(rows[0]?.count ?? 0);
       }
 

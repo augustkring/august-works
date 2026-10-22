@@ -1,0 +1,33 @@
+{
+  "command": "NODE_OPTIONS=--max-old-space-size=2048 GOMEMLIMIT=2GiB GOMAXPROCS=2 node node_modules/vitest/vitest.mjs run server/src/__tests__/company-search-service.test.ts server/src/__tests__/company-search-extract-service.test.ts --maxWorkers=1 -t '\\(native\\)'",
+  "verdict": "Expected behavior RED: 3 failed, 36 skipped, 49.03s",
+  "actualFailures": [
+    "Private result counts/facets included for native caller without explicit predicate.",
+    "Unreadable literal task suppressed readable fuzzy task.",
+    "Private extraction source consumed page window."
+  ],
+  "launchSourcePins": {
+    "server/src/services/company-search.ts": "eb90e237e04336cd610d79c1b881a0f1115cfbd8c0d32ce068cc8b312f3173c9",
+    "server/src/services/company-search-extract.ts": "75086d85e0871ec6570c6e2b7e888016f72d3c4c39f712eb862fbff2f3bb155b",
+    "server/src/__tests__/company-search-service.test.ts": "4f4257dc43bda61812100969db8bfb9a23d8bedb8d166e13f605691dc36917f4",
+    "server/src/__tests__/company-search-extract-service.test.ts": "e8a3f522b16fca536247ef30ae7eb7ef321d13a36cef6b3fd22a123bc66c812b"
+  },
+  "sourceComparisonAfterIntentionalFix": {
+    "server/src/services/company-search.ts": {
+      "committedSourceMatchesLaunchPin": true
+    },
+    "server/src/services/company-search-extract.ts": {
+      "committedSourceMatchesLaunchPin": true
+    },
+    "server/src/__tests__/company-search-service.test.ts": {
+      "currentFixtureMatchesLaunchPin": true
+    },
+    "server/src/__tests__/company-search-extract-service.test.ts": {
+      "currentFixtureMatchesLaunchPin": true
+    }
+  },
+  "provenanceLimit": "Production search files were intentionally fixed immediately after actual test exit, before a separate post-run hash check. The unchanged old committed files match the launch pins; fixtures remained unchanged. No temporary source swaps were used. This is not whole-graph immutability proof.",
+  "log": "up03-search-native-red.log.txt",
+  "logSha256": "8b1b206d5bda098a4188507434145d88c0de806f000e9fb8f64f96cc5e2a2589",
+  "green": "Pending current fixed-owner actual tests."
+}

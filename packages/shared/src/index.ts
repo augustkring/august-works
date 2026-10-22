@@ -2484,6 +2484,8 @@ export {
   portabilityCompanyManifestEntrySchema,
   portabilitySidebarOrderSchema,
   portabilityAgentManifestEntrySchema,
+  portabilityProjectManifestEntrySchema,
+  portabilityIssueManifestEntrySchema,
   portabilityManifestSchema,
   portabilitySourceSchema,
   portabilityTargetSchema,

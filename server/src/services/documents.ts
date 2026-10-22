@@ -34,6 +34,8 @@ function nextAvailableDocumentKey(sourceKey: string, existingKeys: string[]) {
   throw conflict("Unable to choose a new document key for locked document", { key: sourceKey });
 }
 
+type ImportDbTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
 export function extractLegacyPlanBody(description: string | null | undefined) {
   if (!description) return null;
   const match = /<plan>\s*([\s\S]*?)\s*<\/plan>/i.exec(description);
@@ -524,7 +526,7 @@ export function documentService(db: Db) {
      * `latest_revision_id` can be written inline. Documents, their initial
      * revisions, and the issue links are each inserted in chunked statements.
      */
-    createIssueDocumentsForImport: async (rows: ImportIssueDocumentRow[]): Promise<void> => {
+    createIssueDocumentsForImport: async (rows: ImportIssueDocumentRow[], dbOrTx: Db | ImportDbTransaction = db): Promise<void> => {
       if (rows.length === 0) return;
       const now = new Date();
       const documentRows: Array<Record<string, unknown>> = [];
@@ -576,7 +578,7 @@ export function documentService(db: Db) {
           updatedAt: now,
         });
       }
-      await db.transaction(async (tx) => {
+      await dbOrTx.transaction(async (tx) => {
         await insertRowsInChunks(tx, documents, documentRows);
         await insertRowsInChunks(tx, documentRevisions, revisionRows);
         await insertRowsInChunks(tx, issueDocuments, linkRows);

@@ -82,6 +82,14 @@ export interface CompanyPortabilityEmbeddedAssetManifestEntry {
 }
 
 export interface CompanyPortabilityProjectManifestEntry {
+  sourceCompanyId?: string;
+  sourceProjectId?: string;
+  visibility?: "open" | "private";
+  privacyOwnerUserId?: string | null;
+  personalOwnerUserId?: string | null;
+  sourceIssueIds?: string[];
+  sourceProjectIds?: string[];
+  sourceProvenanceQualified?: boolean;
   slug: string;
   name: string;
   path: string;
@@ -175,6 +183,14 @@ export interface CompanyPortabilityIssueAttachmentManifestEntry {
 }
 
 export interface CompanyPortabilityIssueManifestEntry {
+  sourceCompanyId?: string;
+  sourceIssueId?: string;
+  visibility?: "open" | "private";
+  privacyRootIssueId?: string | null;
+  privacyParentIssueId?: string | null;
+  privacySources?: Array<{ sourceKind: "issue" | "project" | "run"; sourceId: string }>;
+  responsibleUserId?: string | null;
+  createdByUserId?: string | null;
   slug: string;
   identifier: string | null;
   title: string;

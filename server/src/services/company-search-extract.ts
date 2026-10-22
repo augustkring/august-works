@@ -1,3 +1,4 @@
+import { issueReadSqlCondition } from "./authorization.js";
 import { and, asc, desc, eq, gte, inArray, isNull, or, sql } from "drizzle-orm";
 import type { SQL, SQLWrapper } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
@@ -154,6 +155,7 @@ export function companySearchExtractService(db: Db) {
     extract: async (companyId: string, query: CompanySearchExtractQuery,
       options: { issueReadCondition?: SQL<boolean> } = {},
     ): Promise<CompanySearchExtractResponse> => {
+      const issueReadCondition = options.issueReadCondition ?? await issueReadSqlCondition(db, { type: "none" });
       const containsPattern = `%${escapeLikePattern(query.contains)}%`;
       const urlPattern = urlContainsPattern(query.contains);
       const scopeConditions: SQL[] = [];
@@ -198,7 +200,7 @@ export function companySearchExtractService(db: Db) {
       const conditions: SQL[] = [
         eq(issues.companyId, companyId),
         visibleIssueCondition(),
-        ...(options.issueReadCondition ? [options.issueReadCondition] : []),
+        ...(issueReadCondition ? [issueReadCondition] : []),
         or(...scopeConditions)!,
       ];
       if (query.status.length > 0) conditions.push(inArray(issues.status, query.status));

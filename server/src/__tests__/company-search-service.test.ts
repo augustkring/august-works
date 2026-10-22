@@ -5,6 +5,7 @@ import {
   agents,
   companies,
   createDb,
+  EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
   documents,
   issueComments,
   issueDocuments,
@@ -81,7 +82,7 @@ describeEmbeddedPostgres("companySearchService", () => {
     db = createDb(tempDb.connectionString);
     svc = companySearchService(db);
     await db.execute(sql.raw("CREATE EXTENSION IF NOT EXISTS pg_trgm"));
-  }, 20_000);
+  }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
 
   afterEach(async () => {
     await db.delete(issueDocuments);
@@ -153,7 +154,7 @@ describeEmbeddedPostgres("companySearchService", () => {
     return id;
   }
 
-  it("excludes private tasks and projects before counts, facets and pagination", async () => {
+  it.each(["native", "filtered"] as const)("excludes private tasks and projects before counts, facets and pagination (%s)", async mode => {
     const companyId = await createCompany();
     const foreignCompany = await createCompany("Foreign");
     const hidden = await createIssue(companyId, { title: "needle private task", visibility: "private", priority: "critical" });
@@ -161,23 +162,23 @@ describeEmbeddedPostgres("companySearchService", () => {
     await createIssue(foreignCompany, { title: "needle foreign task" });
     await createProject(companyId, { name: "needle private project", visibility: "private" });
     const publicProject = await createProject(companyId, { name: "needle public project" });
-    const result = await svc.search(companyId, companySearchQuerySchema.parse({ q: "needle", limit: 1 }), {
+    const result = await svc.search(companyId, companySearchQuerySchema.parse({ q: "needle", limit: 1 }), mode === "filtered" ? {
       issueReadCondition: await issueReadSqlCondition(db, { type: "none" }),
       projectReadCondition: await projectReadSqlCondition(db, { type: "none" }),
-    });
+    } : undefined);
     expect(result.countsByType).toMatchObject({ issue: 1, project: 1 });
     expect(result.filterOptionCounts.priority).toEqual({ low: 1 });
     expect(result.results.every(row => row.id === publicId || row.id === publicProject)).toBe(true);
     expect(JSON.stringify(result)).not.toContain(hidden);
   });
 
-  it("does not let an unreadable literal task suppress a readable fuzzy task", async () => {
+  it.each(["native", "filtered"] as const)("does not let an unreadable literal task suppress a readable fuzzy task (%s)", async mode => {
     const companyId = await createCompany();
     await createIssue(companyId, { title: "orchard", visibility: "private" });
     const visible = await createIssue(companyId, { title: "orchrad" });
-    const result = await svc.search(companyId, companySearchQuerySchema.parse({ q: "orchard", scope: "issues" }), {
+    const result = await svc.search(companyId, companySearchQuerySchema.parse({ q: "orchard", scope: "issues" }), mode === "filtered" ? {
       issueReadCondition: await issueReadSqlCondition(db, { type: "none" }),
-    });
+    } : undefined);
     expect(result.results.map(row => row.id)).toEqual([visible]);
     expect(result.countsByType.issue).toBe(1);
   });

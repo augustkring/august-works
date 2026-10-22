@@ -1,0 +1,64 @@
+{
+  "checks": [
+    {
+      "log": "up03-domain-current-focused.log.txt",
+      "logSha256": "e210c228a2241dd0a6be0a1b70f7af88919e72aa244b02e70d5f517627b793b8",
+      "verdict": "FAIL: 5 passed, 1 failed, 161 skipped; one route suite import failed",
+      "scope": "Four native issue source/postwait cases and one search case passed; extraction duplicate fixture identifier and missing shared root schema export failed. Not whole domain qualification.",
+      "sourcePins": {
+        "server/src/services/issues.ts": "6f6a11b9dd3b5f8da726a40ee8566ad826020e86848c3c0ee25da2270e02845f",
+        "server/src/services/projects.ts": "d6858aa1c0fb219a016bb06d135553b3550bc2a8893be8c61c44c742f475fe0c",
+        "server/src/services/company-portability.ts": "96bbf4f7b3892a6277c37ffaaaf959ae8a5731f4faee289666c713b45336be9a",
+        "server/src/services/documents.ts": "44d1a3ab531db3cd40b3fdb045fc0a8d90b353c3340dea6955ad62237e527055",
+        "server/src/services/work-products.ts": "a36eeb7cb016c3bc4656b9b743e2132fd55a92790c3ec083ebce78c6717064ba",
+        "server/src/services/company-search.ts": "eb90e237e04336cd610d79c1b881a0f1115cfbd8c0d32ce068cc8b312f3173c9",
+        "server/src/services/company-search-extract.ts": "75086d85e0871ec6570c6e2b7e888016f72d3c4c39f712eb862fbff2f3bb155b",
+        "server/src/services/task-search.ts": "1a2624ec337b814229188d87ff3d4cb55ca74dcda3b072147b1c5661fac4ffd5",
+        "server/src/routes/issues.ts": "67946cc7bcd71762dff85a6b5ca91fe9ae7a41b8487e90d81539d87616d1dad1",
+        "server/src/routes/projects.ts": "9094526678aff5d439658675084126113da84a453fd1ce8e9cfb1de8d5996622",
+        "server/src/routes/companies.ts": "cde03012827f0d9745f7faf83b773dad143819122c845990c69974c66931b3c4",
+        "packages/shared/src/types/company-portability.ts": "81e2f4cc84167cd3e879dfbdb067cf50d0395a3b96fb3e7fb57ce9e5ad86cf39",
+        "packages/shared/src/validators/company-portability.ts": "5de9e8929cae3d32c5b183028436ed9bd7ec85ac49603e03fa9790db14801bb7",
+        "packages/shared/src/validators/index.ts": "5e7e9bcc2746a5ddbb906edbf614a6e61cadba83323970d2ceea76cc552a7c4d",
+        "server/src/__tests__/issues-service.test.ts": "93b52f200e5ee5ca2b9f80f250026d6ab93da1dcbee7f8299cf682ad4109c77c",
+        "server/src/__tests__/issue-list-assignee-filter-routes.test.ts": "cfaac94be187cf77fde8f7f4c838e3aae83c36c367f38c4288329b6e93770c2a",
+        "server/src/__tests__/company-search-service.test.ts": "aae6a07f5faf638a636d9b8470f25a79758ce3b1d50fd2e792e871c1165aee2a",
+        "server/src/__tests__/company-search-extract-service.test.ts": "88115cb18ff18e12b74fc7f27bf93270c70dc66e12f3d6a426a9a593e01c4e0e"
+      }
+    },
+    {
+      "log": "up03-domain-current-focused2.log.txt",
+      "logSha256": "d810ad4f8b3ee666f9ddf1019f972e7aabcc4618b0d7d65ef301f038e06bd51b",
+      "verdict": "PASS: 7 passed, 21 skipped",
+      "scope": "Three private route admission/cache/metric cases, three existing private logging cases, one extraction page-window case only.",
+      "sourcePins": {
+        "server/src/services/issues.ts": "6f6a11b9dd3b5f8da726a40ee8566ad826020e86848c3c0ee25da2270e02845f",
+        "server/src/services/projects.ts": "d6858aa1c0fb219a016bb06d135553b3550bc2a8893be8c61c44c742f475fe0c",
+        "server/src/services/company-portability.ts": "fcdf000b536dae6622e6e3fb6955f330286e6f6e25f9c1402cb20301717d86f6",
+        "server/src/services/documents.ts": "44d1a3ab531db3cd40b3fdb045fc0a8d90b353c3340dea6955ad62237e527055",
+        "server/src/services/work-products.ts": "a36eeb7cb016c3bc4656b9b743e2132fd55a92790c3ec083ebce78c6717064ba",
+        "server/src/services/company-search.ts": "eb90e237e04336cd610d79c1b881a0f1115cfbd8c0d32ce068cc8b312f3173c9",
+        "server/src/services/company-search-extract.ts": "75086d85e0871ec6570c6e2b7e888016f72d3c4c39f712eb862fbff2f3bb155b",
+        "server/src/services/task-search.ts": "1a2624ec337b814229188d87ff3d4cb55ca74dcda3b072147b1c5661fac4ffd5",
+        "server/src/routes/issues.ts": "67946cc7bcd71762dff85a6b5ca91fe9ae7a41b8487e90d81539d87616d1dad1",
+        "server/src/routes/projects.ts": "9094526678aff5d439658675084126113da84a453fd1ce8e9cfb1de8d5996622",
+        "server/src/routes/companies.ts": "cde03012827f0d9745f7faf83b773dad143819122c845990c69974c66931b3c4",
+        "packages/shared/src/index.ts": "795fad3cb56c04bca566696102be2c39994ed89b376b662da4f1118356497c90",
+        "packages/shared/src/types/company-portability.ts": "81e2f4cc84167cd3e879dfbdb067cf50d0395a3b96fb3e7fb57ce9e5ad86cf39",
+        "packages/shared/src/validators/company-portability.ts": "5de9e8929cae3d32c5b183028436ed9bd7ec85ac49603e03fa9790db14801bb7",
+        "packages/shared/src/validators/index.ts": "5e7e9bcc2746a5ddbb906edbf614a6e61cadba83323970d2ceea76cc552a7c4d",
+        "server/src/__tests__/issues-service.test.ts": "93b52f200e5ee5ca2b9f80f250026d6ab93da1dcbee7f8299cf682ad4109c77c",
+        "server/src/__tests__/issue-list-assignee-filter-routes.test.ts": "cfaac94be187cf77fde8f7f4c838e3aae83c36c367f38c4288329b6e93770c2a",
+        "server/src/__tests__/company-search-service.test.ts": "aae6a07f5faf638a636d9b8470f25a79758ce3b1d50fd2e792e871c1165aee2a",
+        "server/src/__tests__/company-search-extract-service.test.ts": "b3df9c28a505b193096921f490077ad656fa528cfc0f259b24cac8c31b32b161",
+        "server/src/__tests__/company-portability-import-batching.test.ts": "07f9bd71b3ea0617033fd5a8c2c9f1a922bd667856a7bafe47d58adaff9aef9e"
+      }
+    }
+  ],
+  "limitations": [
+    "Latest portability serialization, source-sharing and viewer pin fixes were saved after these captures.",
+    "Portability batch tests and current normal server typecheck remain pending.",
+    "The pinned source scope is explicit; this is not a claim that every transitive workspace source was immutable.",
+    "Private HTTP work admission remains temporarily closed; whole private-work graph/publication/UI qualification is incomplete."
+  ]
+}

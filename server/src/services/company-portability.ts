@@ -1,5 +1,7 @@
+import { logger } from "../middleware/logger.js";
 import { exportCompanyStateV7 } from "./enterprise/portability.js";
-import type { AuthorizationActor } from "./authorization.js";
+import { authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, issueReadSqlCondition, projectReadSqlCondition, type AuthorizationActor } from "./authorization.js";
+import { assertAnalyticalContextPayloadAccess } from "./analytical-context-authority.js";
 import { agentAppearanceSchema } from "@paperclipai/shared";
 import { createHash, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
@@ -10,6 +12,10 @@ import { and, eq, inArray } from "drizzle-orm";
 import {
   builtInManagedResources,
   issueRelations,
+  issuePrivacySources,
+  heartbeatRuns,
+  issues as issueRows,
+  projects as projectRows,
   principalPermissionGrants,
   type Db,
 } from "@paperclipai/db";
@@ -65,6 +71,9 @@ import {
   issueCommentPresentationSchema,
   normalizeAgentUrlKey,
   PERMISSION_KEYS,
+  isUuidLike,
+  portabilityIssueManifestEntrySchema,
+  portabilityProjectManifestEntrySchema,
 } from "@paperclipai/shared";
 import { sha256HexOfBytes } from "@paperclipai/shared/portability-hash";
 import {
@@ -74,7 +83,7 @@ import {
 import { requireOpenCodeModelId } from "@paperclipai/adapter-opencode-local/server";
 import { findServerAdapter } from "../adapters/index.js";
 import { formatAttachmentSize, MAX_ATTACHMENT_BYTES } from "../attachment-types.js";
-import { forbidden, notFound, unprocessable } from "../errors.js";
+import { HttpError, forbidden, notFound, unprocessable } from "../errors.js";
 import { ghFetch, gitHubApiBase, resolveRawGitHubUrl } from "./github-fetch.js";
 import type { StorageService } from "../storage/types.js";
 import { accessService } from "./access.js";
@@ -87,7 +96,8 @@ import { companySkillService } from "./company-skills.js";
 import { companyService } from "./companies.js";
 import { validateCron } from "./cron.js";
 import { documentService } from "./documents.js";
-import { issueService } from "./issues.js";
+import { issueService, lockIssuePrivacyTree } from "./issues.js";
+import { publishActivity, type ActivityPublication } from "./activity-log.js";
 import { instanceSettingsService } from "./instance-settings.js";
 import { projectService } from "./projects.js";
 import { workProductService } from "./work-products.js";
@@ -196,10 +206,16 @@ const DEFAULT_INCLUDE: CompanyPortabilityInclude = {
 const DEFAULT_COLLISION_STRATEGY: CompanyPortabilityCollisionStrategy = "rename";
 // The bundle shape this build reads and writes. Bundles began declaring
 // their schemaVersion in the .paperclip.yaml extension at 6; undeclared
-// bundles are read as 5, the last unstamped shape. 7 adds preserved task
-// timestamps and parent links; 5/6 bundles still import, with those fields
-// falling back to import-time defaults.
-const BUNDLE_SCHEMA_VERSION = 7;
+// bundles are read as 5, the last unstamped shape. 8 preserves native privacy
+// provenance. Older clients must refuse this shape instead of discarding its
+// restrictions. Legacy task/project copies require current source proof.
+const BUNDLE_SCHEMA_VERSION = 8;
+const portableIssuePrivacySchema = portabilityIssueManifestEntrySchema.pick({ sourceCompanyId: true, sourceIssueId: true,
+  visibility: true, privacyRootIssueId: true, privacyParentIssueId: true, privacySources: true,
+  responsibleUserId: true, createdByUserId: true });
+const portableProjectPrivacySchema = portabilityProjectManifestEntrySchema.pick({ sourceCompanyId: true, sourceProjectId: true,
+  visibility: true, privacyOwnerUserId: true, personalOwnerUserId: true, sourceIssueIds: true, sourceProjectIds: true,
+  sourceProvenanceQualified: true });
 const UNSTAMPED_BUNDLE_SCHEMA_VERSION = 5;
 const DEFAULT_IMPORTED_LABEL_COLOR = "#6366f1";
 // Blob entries are content-addressed by sha256; the store itself is
@@ -755,6 +771,8 @@ type ImportPlanInternal = {
 type ImportMode = "board_full" | "agent_safe";
 
 type ImportBehaviorOptions = {
+  actor?: AuthorizationActor;
+  privateWorkAdmission?: "closed";
   mode?: ImportMode;
   sourceCompanyId?: string | null;
   pauseAutomations?: boolean;
@@ -2372,7 +2390,7 @@ function isEmptyArray(value: unknown): boolean {
   return Array.isArray(value) && value.length === 0;
 }
 
-function stripEmptyValues(value: unknown, opts?: { preserveEmptyStrings?: boolean }): unknown {
+function stripEmptyValues(value: unknown, opts?: { preserveEmptyStrings?: boolean; preserveNativePrivacyProvenance?: boolean }): unknown {
   if (Array.isArray(value)) {
     const next = value
       .map((entry) => stripEmptyValues(entry, opts))
@@ -2382,6 +2400,13 @@ function stripEmptyValues(value: unknown, opts?: { preserveEmptyStrings?: boolea
   if (isPlainRecord(value)) {
     const next: Record<string, unknown> = {};
     for (const [key, entry] of Object.entries(value)) {
+      if (opts?.preserveNativePrivacyProvenance && typeof value.sourceCompanyId === "string" && [
+        "privacyRootIssueId", "privacyParentIssueId", "privacySources", "responsibleUserId", "createdByUserId",
+        "privacyOwnerUserId", "personalOwnerUserId", "sourceIssueIds", "sourceProjectIds",
+      ].includes(key)) {
+        next[key] = entry;
+        continue;
+      }
       const cleaned = stripEmptyValues(entry, opts);
       if (cleaned === undefined) continue;
       next[key] = cleaned;
@@ -2862,7 +2887,7 @@ function parseYamlFile(raw: string): Record<string, unknown> {
   return parseYamlFrontmatter(raw);
 }
 
-function buildYamlFile(value: Record<string, unknown>, opts?: { preserveEmptyStrings?: boolean }) {
+function buildYamlFile(value: Record<string, unknown>, opts?: { preserveEmptyStrings?: boolean; preserveNativePrivacyProvenance?: boolean }) {
   const cleaned = stripEmptyValues(value, opts);
   if (!isPlainRecord(cleaned)) return "{}\n";
   return renderYamlBlock(cleaned, 0).join("\n") + "\n";
@@ -3385,6 +3410,7 @@ function buildManifestFromPackageFiles(
       .map(([workspaceKey, entry]) => normalizePortableProjectWorkspaceExtension(workspaceKey, entry))
       .filter((entry): entry is CompanyPortabilityProjectWorkspaceManifestEntry => entry !== null);
     manifest.projects.push({
+      ...portableProjectPrivacySchema.parse(extension),
       slug,
       name: asString(frontmatter.name) ?? slug,
       path: projectPath,
@@ -3432,6 +3458,7 @@ function buildManifestFromPackageFiles(
       || routineExtension !== null
       || legacyRecurrence !== null;
     manifest.issues.push({
+      ...portableIssuePrivacySchema.parse(extension),
       slug,
       identifier: asString(extension.identifier),
       title: asString(frontmatter.name) ?? asString(frontmatter.title) ?? slug,
@@ -3475,7 +3502,7 @@ function buildManifestFromPackageFiles(
     }
   }
 
-  if (bundleSchemaVersion < BUNDLE_SCHEMA_VERSION && manifest.issues.length > 0) {
+  if (bundleSchemaVersion < 7 && manifest.issues.length > 0) {
     const predated = bundleSchemaVersion < 6
       ? "label, blocker, document, work product, monitor, attachment, embedded image, task timestamp, and parent link transfer"
       : "task timestamp and parent link transfer";
@@ -3547,6 +3574,8 @@ export function parseGitHubSourceUrl(rawUrl: string) {
 }
 
 
+type ImportDbTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
 export function companyPortabilityService(db: Db, storage?: StorageService) {
   const companies = companyService(db);
   const agents = agentService(db);
@@ -3559,6 +3588,109 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
   const secrets = secretService(db);
   const documentsSvc = documentService(db);
   const workProductsSvc = workProductService(db);
+
+  async function validateCopySources(manifest: CompanyPortabilityManifest, target: CompanyPortabilityImport["target"],
+    include: CompanyPortabilityInclude, actor: AuthorizationActor, admission?: "closed", sourceDb: Db | ImportDbTransaction = db) {
+    const tasks = include.issues ? manifest.issues : [];
+    const projects = include.projects ? manifest.projects : [];
+    if (!tasks.length && !projects.length && actor.type === "agent") {
+      if (!actor.companyId || !isUuidLike(actor.companyId) || !actor.agentId || !isUuidLike(actor.agentId)
+        || !actor.runId || !isUuidLike(actor.runId)) throw unprocessable("Native content import requires a persisted run");
+      const [run] = await sourceDb.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.id, actor.runId), eq(heartbeatRuns.companyId, actor.companyId), eq(heartbeatRuns.agentId, actor.agentId)));
+      if (!run) throw notFound("Import source run is unavailable");
+      const access = await authorizationService(sourceDb).decide({ actor, action: "company_scope:read",
+        resource: { type: "company", companyId: actor.companyId }, enforceResponsibleUserIntersection: true });
+      if (!access.allowed) throw forbidden("Current source organization access is required");
+      await assertAnalyticalContextPayloadAccess(sourceDb, actor.companyId, actor, { runId: run.id });
+      // Unsupported target owners cannot retain private task, Memory, or learned
+      // Foundation sources yet. An anonymous source check only narrows admission;
+      // it does not authorize a transfer or certify the complete producer graph.
+      try { await assertAnalyticalContextPayloadAccess(sourceDb, actor.companyId, { type: "none" }, { runId: run.id }); }
+      catch (error) {
+        if (error instanceof HttpError && [403,404,409,422].includes(error.status)) {
+          throw unprocessable("Importing restricted native context requires retained target provenance");
+        }
+        throw error;
+      }
+    }
+    if (!tasks.length && !projects.length) return { tasks: new Map<string, { source: typeof issueRows.$inferSelect;
+      visibility: "open" | "private"; sources: Array<{ sourceKind: "issue" | "project" | "run"; sourceId: string }> }>(),
+      projects: new Map<string, { source: typeof projectRows.$inferSelect; visibility: "open" | "private";
+        sourceIssueIds: string[]; sourceProjectIds: string[] }>() };
+    if (target.mode !== "existing_company") throw unprocessable("Task and project source release across organizations requires an authorized publication operation");
+    const companyId = target.companyId;
+    const decision = await authorizationService(sourceDb).decide({ actor, action: "company_scope:read",
+      resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true });
+    if (!decision.allowed) throw forbidden("Current source organization access is required");
+    const humanId = actor.type === "agent" ? actor.onBehalfOfUserId : actor.userId;
+    if (actor.type === "agent" && !actor.runId) throw unprocessable("Native content import requires a persisted task-bound run");
+    if (actor.type === "agent" && actor.runId && (!isUuidLike(actor.runId) || !actor.agentId || !isUuidLike(actor.agentId))) {
+      throw notFound("Import source run is unavailable");
+    }
+    const actorRun = actor.type === "agent" && actor.runId ? await sourceDb.select().from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.id, actor.runId), eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.agentId, actor.agentId ?? ""),
+    )).then(rows => rows[0] ?? null) : null;
+    if (actor.type === "agent" && actor.runId && (!actorRun || !(await canActorReadHeartbeatRunPrivacy(sourceDb, actor, actorRun)))) {
+      throw notFound("Import source run is unavailable");
+    }
+    const taskProofs = new Map<string, { source: typeof issueRows.$inferSelect; visibility: "open" | "private";
+      sources: Array<{ sourceKind: "issue" | "project" | "run"; sourceId: string }> }>();
+    for (const task of tasks) {
+      if (task.recurring) throw unprocessable("Copying source content into a recurring task requires retained native routine provenance");
+      if (task.sourceCompanyId !== companyId || !task.sourceIssueId || !task.visibility || !Array.isArray(task.privacySources)
+        || task.privacyRootIssueId === undefined || task.privacyParentIssueId === undefined
+        || task.responsibleUserId === undefined || task.createdByUserId === undefined) {
+        throw unprocessable("Task copy requires current native privacy provenance; legacy or foreign provenance cannot be assumed public");
+      }
+      const [source] = await sourceDb.select().from(issueRows).where(and(eq(issueRows.id, task.sourceIssueId), eq(issueRows.companyId, companyId)));
+      if (!source || !(await canActorReadIssuePrivacy(sourceDb, actor, source))) throw notFound("Task source is unavailable");
+      await assertAnalyticalContextPayloadAccess(sourceDb, companyId, actor, { issueId: source.id });
+      if (source.visibility !== task.visibility || source.privacyRootIssueId !== task.privacyRootIssueId
+        || source.privacyParentIssueId !== task.privacyParentIssueId || source.responsibleUserId !== task.responsibleUserId
+        || source.createdByUserId !== task.createdByUserId) throw unprocessable("Task source ownership or privacy changed; export its current state");
+      const visibility = await canActorReadIssuePrivacy(sourceDb, { type: "none" }, source)
+        && (!actorRun || await canActorReadHeartbeatRunPrivacy(sourceDb, { type: "none" }, actorRun)) ? "open" : "private";
+      if (visibility === "private" && admission === "closed") throw unprocessable("Private tasks are not available");
+      if (visibility === "private" && (!humanId || ![source.responsibleUserId, source.createdByUserId].includes(humanId))) {
+        throw forbidden("The current task source owner must copy protected content");
+      }
+      const currentSources = await sourceDb.select({ sourceKind: issuePrivacySources.sourceKind, sourceId: issuePrivacySources.sourceId })
+        .from(issuePrivacySources).where(and(eq(issuePrivacySources.companyId, companyId), eq(issuePrivacySources.issueId, source.id)));
+      const sources = [...task.privacySources, ...currentSources.map(entry => {
+        if (entry.sourceKind !== "issue" && entry.sourceKind !== "project" && entry.sourceKind !== "run") {
+          throw unprocessable("Task source provenance is invalid");
+        }
+        return { sourceKind: entry.sourceKind, sourceId: entry.sourceId };
+      }), { sourceKind: "issue" as const, sourceId: source.id }];
+      if (actorRun) sources.push({ sourceKind: "run", sourceId: actorRun.id });
+      taskProofs.set(task.slug, { source, visibility, sources });
+    }
+    const projectProofs = new Map<string, { source: typeof projectRows.$inferSelect; visibility: "open" | "private";
+      sourceIssueIds: string[]; sourceProjectIds: string[] }>();
+    for (const project of projects) {
+      if (project.sourceCompanyId !== companyId || !project.sourceProjectId || !project.visibility
+        || !Array.isArray(project.sourceIssueIds) || !Array.isArray(project.sourceProjectIds)
+        || project.privacyOwnerUserId === undefined || project.personalOwnerUserId === undefined || project.sourceProvenanceQualified !== true) {
+        throw unprocessable("Project copy requires current native privacy provenance; legacy or foreign provenance cannot be assumed public");
+      }
+      const [source] = await sourceDb.select().from(projectRows).where(and(eq(projectRows.id, project.sourceProjectId), eq(projectRows.companyId, companyId)));
+      if (!source || !source.sourceProvenanceQualified || !(await canActorReadProjectPrivacy(sourceDb, actor, source))) throw notFound("Project source is unavailable");
+      if (source.visibility !== project.visibility || source.privacyOwnerUserId !== project.privacyOwnerUserId
+        || source.personalOwnerUserId !== project.personalOwnerUserId) throw unprocessable("Project source ownership or privacy changed; export its current state");
+      const visibility = await canActorReadProjectPrivacy(sourceDb, { type: "none" }, source)
+        && (!actorRun || await canActorReadHeartbeatRunPrivacy(sourceDb, { type: "none" }, actorRun)) ? "open" : "private";
+      if (visibility === "private" && admission === "closed") throw unprocessable("Private projects are not available");
+      if (visibility === "private" && (!humanId || ![source.privacyOwnerUserId, source.personalOwnerUserId].includes(humanId))) {
+        throw forbidden("The current project source owner must copy protected content");
+      }
+      if (actorRun && !actorRun.issueId) throw unprocessable("Project import requires a persisted task-bound source run");
+      projectProofs.set(project.slug, { source, visibility,
+        sourceIssueIds: [...new Set([...source.sourceIssueIds, ...(actorRun?.issueId ? [actorRun.issueId] : [])])],
+        sourceProjectIds: [...new Set([...source.sourceProjectIds, source.id])] });
+    }
+    return { tasks: taskProofs, projects: projectProofs };
+  }
   const strictSecretsMode = process.env.PAPERCLIP_SECRETS_STRICT_MODE === "true";
   const defaultSecretProvider = getConfiguredSecretProvider();
 
@@ -3935,9 +4067,18 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     const projectsSvc = projectService(db);
     const issuesSvc = issueService(db);
     const routinesSvc = routineService(db);
-    const allProjectsRaw = include.projects || include.issues ? await projectsSvc.list(companyId) : [];
+    const exportActor = options.actor ?? { type: "none" as const };
+    const companyDecision = await authorizationService(db).decide({ actor: exportActor, action: "company_scope:read",
+      resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true });
+    if (!companyDecision.allowed) throw forbidden("Current organization access is required for export");
+    const issueCondition = await issueReadSqlCondition(db, exportActor);
+    const projectCondition = await projectReadSqlCondition(db, exportActor);
+    const allProjectsRaw = include.projects || include.issues ? await projectsSvc.list(companyId,
+      { readCondition: projectCondition, issueReadCondition: issueCondition }) : [];
     const allProjects = allProjectsRaw.filter((project) => !project.archivedAt);
-    const allRoutinesRaw = include.issues ? await routinesSvc.list(companyId) : [];
+    // Routine copies need their own retained native source binding before payload export.
+    const allRoutinesRaw: Awaited<ReturnType<typeof routinesSvc.list>> = [];
+    if (include.issues) warnings.push("Routine export is unavailable until retained routine source provenance is qualified.");
     const builtInRoutineRows = allRoutinesRaw.filter((routine) =>
       managedRoutineIds.has(routine.id) || routine.originKind === "built_in_agent_bundle"
     );
@@ -3978,7 +4119,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     };
     for (const selector of input.issues ?? []) {
       const issue = await resolveIssueBySelector(selector);
-      if (!issue || issue.companyId !== companyId) {
+      if (!issue || issue.companyId !== companyId || !(await canActorReadIssuePrivacy(db, exportActor, issue))) {
         if (builtInRoutineById.has(selector.trim())) {
           warnings.push(`Routine selector "${selector}" is a built-in managed routine and was skipped.`);
           continue;
@@ -4009,7 +4150,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         continue;
       }
       selectedProjects.set(match.id, match);
-      const projectIssues = await issuesSvc.list(companyId, { projectId: match.id });
+      const projectIssues = await issuesSvc.list(companyId, { projectId: match.id, readCondition: issueCondition });
       for (const issue of projectIssues) {
         selectedIssues.set(issue.id, issue);
       }
@@ -4025,7 +4166,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     }
 
     if (include.issues && selectedIssues.size === 0) {
-      const allIssues = await issuesSvc.list(companyId);
+      const allIssues = await issuesSvc.list(companyId, { readCondition: issueCondition });
       for (const issue of allIssues) {
         selectedIssues.set(issue.id, issue);
         if (issue.projectId) {
@@ -4051,6 +4192,9 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       .sort((left, right) => (left.identifier ?? left.title).localeCompare(right.identifier ?? right.title));
     const selectedRoutineSummaries = Array.from(selectedRoutines.values())
       .sort((left, right) => left.title.localeCompare(right.title));
+    for (const issue of selectedIssueRows) {
+      await assertAnalyticalContextPayloadAccess(db, companyId, exportActor, { issueId: issue.id });
+    }
     const selectedRoutineRows = (
       await Promise.all(selectedRoutineSummaries.map((routine) => routinesSvc.getDetail(routine.id)))
     ).filter((routine): routine is RoutineLike => routine !== null);
@@ -4281,6 +4425,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     }
 
     for (const project of selectedProjectRows) {
+      if (!(await canActorReadProjectPrivacy(db, exportActor, project))) throw notFound("Project export source is unavailable");
       const slug = projectSlugById.get(project.id)!;
       const projectPath = `projects/${slug}/PROJECT.md`;
       const envInputsStart = envInputs.length;
@@ -4320,7 +4465,11 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           env: buildEnvInputMap(projectEnvInputs),
         };
       }
-      paperclipProjectsOut[slug] = isPlainRecord(extension) ? extension : {};
+      paperclipProjectsOut[slug] = { ...(isPlainRecord(extension) ? extension : {}),
+        sourceCompanyId: companyId, sourceProjectId: project.id, visibility: project.visibility,
+        privacyOwnerUserId: project.privacyOwnerUserId, personalOwnerUserId: project.personalOwnerUserId,
+        sourceIssueIds: project.sourceIssueIds, sourceProjectIds: project.sourceProjectIds,
+        sourceProvenanceQualified: project.sourceProvenanceQualified };
     }
 
     const referencedLabelIds = new Set<string>();
@@ -4402,6 +4551,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       const relationSummaries = details.relationSummaries;
       const blockedBySlugs: string[] = [];
       for (const blocker of relationSummaries.blockedBy) {
+        if (!(await canActorReadIssuePrivacy(db, exportActor, { id: blocker.id, companyId }))) continue;
         const blockerSlug = taskSlugByIssueId.get(blocker.id);
         if (blockerSlug) {
           blockedBySlugs.push(blockerSlug);
@@ -4410,9 +4560,10 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         }
       }
       blockedBySlugs.sort((left, right) => left.localeCompare(right));
-      unexportedBlockerEdgeCount += relationSummaries.blocks
-        .filter((blocked) => !taskSlugByIssueId.has(blocked.id))
-        .length;
+      for (const blocked of relationSummaries.blocks) {
+        if (!taskSlugByIssueId.has(blocked.id)
+          && await canActorReadIssuePrivacy(db, exportActor, { id: blocked.id, companyId })) unexportedBlockerEdgeCount += 1;
+      }
       // Parent links travel by task slug like blockers; a parent outside the
       // export selection drops the edge and is counted for one warning.
       let parentTaskSlug: string | null = null;
@@ -4542,7 +4693,12 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           hadSchedule: issue.monitorNextCheckAt != null ? true : undefined,
         },
       });
-      paperclipTasksOut[taskSlug] = isPlainRecord(extension) ? extension : {};
+      const privacySources = await db.select({ sourceKind: issuePrivacySources.sourceKind, sourceId: issuePrivacySources.sourceId })
+        .from(issuePrivacySources).where(and(eq(issuePrivacySources.companyId, companyId), eq(issuePrivacySources.issueId, issue.id)));
+      paperclipTasksOut[taskSlug] = { ...(isPlainRecord(extension) ? extension : {}),
+        sourceCompanyId: companyId, sourceIssueId: issue.id, visibility: issue.visibility,
+        privacyRootIssueId: issue.privacyRootIssueId, privacyParentIssueId: issue.privacyParentIssueId, privacySources,
+        responsibleUserId: issue.responsibleUserId, createdByUserId: issue.createdByUserId };
     }
 
     if (unexportedBlockerEdgeCount > 0) {
@@ -4715,7 +4871,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         tasks: Object.keys(paperclipTasks).length > 0 ? paperclipTasks : undefined,
         routines: Object.keys(paperclipRoutines).length > 0 ? paperclipRoutines : undefined,
       },
-      { preserveEmptyStrings: true },
+      { preserveEmptyStrings: true, preserveNativePrivacyProvenance: true },
     );
 
     let finalFiles = filterExportFiles(files, input.selectedFiles, paperclipExtensionPath);
@@ -4778,6 +4934,16 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     resolved.manifest.envInputs = dedupeEnvInputs(envInputs);
     resolved.warnings.unshift(...warnings);
 
+    for (const project of selectedProjectRows) {
+      if (!(await canActorReadProjectPrivacy(db, exportActor, project))) throw notFound("Project export source is unavailable");
+    }
+    for (const issue of selectedIssueRows) {
+      if (!(await canActorReadIssuePrivacy(db, exportActor, issue))) throw notFound("Task export source is unavailable");
+      await assertAnalyticalContextPayloadAccess(db, companyId, exportActor, { issueId: issue.id });
+    }
+    const finalCompanyDecision = await authorizationService(db).decide({ actor: exportActor, action: "company_scope:read",
+      resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true });
+    if (!finalCompanyDecision.allowed) throw forbidden("Current organization access is required for export");
     return {
       rootPath,
       manifest: resolved.manifest,
@@ -4790,7 +4956,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
   async function previewExport(
     companyId: string,
     input: CompanyPortabilityExport,
-    options: { allowExternalInstructions?: boolean } = {},
+    options: { allowExternalInstructions?: boolean; actor?: AuthorizationActor } = {},
   ): Promise<CompanyPortabilityExportPreviewResult> {
     const previewInput: CompanyPortabilityExport = {
       ...input,
@@ -4807,6 +4973,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     }
     const exported = await exportBundle(companyId, previewInput, {
       preview: true,
+      actor: options.actor,
       allowExternalInstructions: options.allowExternalInstructions,
     });
     return {
@@ -5252,6 +5419,9 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     const importedAutomationPausedAt = pauseAutomations ? new Date() : null;
     const warnings = [...plan.preview.warnings];
     const include = plan.include;
+    const importActor: AuthorizationActor = options?.actor ?? (actorUserId
+      ? { type: "board", userId: actorUserId, source: "session" } : { type: "none" });
+    const copySources = await validateCopySources(sourceManifest, input.target, include, importActor, options?.privateWorkAdmission);
 
     if (include.agents) {
       const importedAgentSlugs = new Set(
@@ -5373,6 +5543,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     }
 
     if (!targetCompany) throw notFound("Target company not found");
+    const targetCompanyId = targetCompany.id;
 
     const importedAgentEnvSlugs = new Set(
       plan.preview.plan.agentPlans
@@ -5790,6 +5961,13 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               )
             : null;
           const projectPatch = {
+            visibility: copySources.projects.get(manifestProject.slug)?.visibility,
+            privacyOwnerUserId: copySources.projects.get(manifestProject.slug)?.source.privacyOwnerUserId,
+            personalOwnerUserId: copySources.projects.get(manifestProject.slug)?.source.personalOwnerUserId,
+            sourceIssueIds: copySources.projects.get(manifestProject.slug)?.sourceIssueIds,
+            sourceProjectIds: copySources.projects.get(manifestProject.slug)?.sourceProjectIds.filter(sourceId =>
+              planProject.action !== "update" || sourceId !== planProject.existingProjectId),
+            sourceProvenanceQualified: copySources.projects.has(manifestProject.slug),
             name: planProject.plannedName,
             description: manifestProject.description,
             leadAgentId: projectLeadAgentId,
@@ -5805,7 +5983,11 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
 
           let projectId: string | null = null;
           if (planProject.action === "update" && planProject.existingProjectId) {
-            const updated = await projects.update(planProject.existingProjectId, projectPatch);
+            const updated = await db.transaction(async tx => {
+              await lockIssuePrivacyTree(tx, targetCompanyId);
+              await validateCopySources(sourceManifest, input.target, include, importActor, options?.privateWorkAdmission, tx);
+              return projects.update(planProject.existingProjectId!, projectPatch, importActor, tx);
+            });
             if (!updated) {
               warnings.push(`Skipped update for missing project ${planProject.existingProjectId}.`);
               resultProjects.push({
@@ -5828,7 +6010,11 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               reason: planProject.reason,
             });
           } else {
-            const created = await projects.create(targetCompany.id, projectPatch);
+            const created = await db.transaction(async tx => {
+              await lockIssuePrivacyTree(tx, targetCompanyId);
+              await validateCopySources(sourceManifest, input.target, include, importActor, options?.privateWorkAdmission, tx);
+              return projects.create(targetCompanyId, projectPatch, tx, importActor);
+            });
             projectId = created.id;
             importedSlugToProjectId.set(planProject.slug, created.id);
             existingProjectSlugToId.set(created.urlKey, created.id);
@@ -6247,8 +6433,18 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
               warnings.push(`Task ${manifestIssue.slug} attachment ${attachmentLabel} could not be imported: ${error instanceof Error ? error.message : String(error)}`);
             }
           }
+          const privacyProof = copySources.tasks.get(manifestIssue.slug);
+          if (!privacyProof) throw unprocessable("Task copy privacy provenance is unavailable");
           issueRows.push({
             id: issueId,
+            visibility: privacyProof.visibility,
+            privacyRootIssueId: privacyProof.visibility === "private"
+              ? privacyProof.source.privacyRootIssueId ?? privacyProof.source.id
+              : privacyProof.source.privacyRootIssueId,
+            privacyParentIssueId: privacyProof.source.privacyParentIssueId,
+            privacySources: privacyProof.sources,
+            responsibleUserId: privacyProof.source.responsibleUserId,
+            createdByUserId: privacyProof.source.createdByUserId,
             ref: manifestIssue.slug,
             projectId: projectId ?? null,
             projectWorkspaceId: projectWorkspaceId ?? null,
@@ -6337,24 +6533,36 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         // statements, turning what used to be one round-trip per row into a
         // handful per table. Empty buffers are skipped so an issues-free import
         // (e.g. routines only) issues no writes at all.
-        if (issueRows.length > 0) await issues.importIssues(targetCompany.id, issueRows);
-        // Imported issues are historical work, not new inbox items. Seed a
-        // per-user inbox archive for the importing board user so a large import
-        // (a real 1,418-task company shipped every task to the inbox) does not
-        // flood it: the inbox "mine" query hides archived issues, and genuine
-        // new activity still resurfaces them. Agent/system imports (no board
-        // user) have no inbox to protect, so the seeding is skipped.
-        if (actorUserId && issueRows.length > 0) {
-          await issues.archiveImportedInbox(
-            targetCompany.id,
-            issueRows.map((row) => row.id),
-            actorUserId,
-          );
+        const publications: ActivityPublication[] = [];
+        await db.transaction(async (tx) => {
+          await lockIssuePrivacyTree(tx, targetCompanyId);
+          await validateCopySources(sourceManifest, input.target, include, importActor, options?.privateWorkAdmission, tx);
+          if (issueRows.length > 0) await issues.importIssues(targetCompanyId, issueRows, tx, { actor: importActor,
+            privateWorkAdmission: options?.privateWorkAdmission, postCommitActivityPublications: publications });
+          // Imported issues are historical work, not new inbox items. Seed a
+          // per-user inbox archive for the importing board user so a large import
+          // (a real 1,418-task company shipped every task to the inbox) does not
+          // flood it: the inbox "mine" query hides archived issues, and genuine
+          // new activity still resurfaces them. Agent/system imports (no board
+          // user) have no inbox to protect, so the seeding is skipped.
+          if (actorUserId && issueRows.length > 0) {
+            await issues.archiveImportedInbox(
+              targetCompanyId,
+              issueRows.map((row) => row.id),
+              actorUserId,
+              new Date(),
+              tx,
+            );
+          }
+          if (commentRows.length > 0) await issues.addImportedComments(commentRows, tx);
+          if (documentRows.length > 0) await documentsSvc.createIssueDocumentsForImport(documentRows, tx);
+          if (workProductRows.length > 0) await workProductsSvc.createManyForImport(workProductRows, tx);
+          if (attachmentRows.length > 0) await issues.addImportedAttachments(attachmentRows, tx);
+        });
+        for (const publication of publications) {
+          try { publishActivity(publication); }
+          catch (err) { logger.warn({ err }, "Failed to publish committed imported task activity"); }
         }
-        if (commentRows.length > 0) await issues.addImportedComments(commentRows);
-        if (documentRows.length > 0) await documentsSvc.createIssueDocumentsForImport(documentRows);
-        if (workProductRows.length > 0) await workProductsSvc.createManyForImport(workProductRows);
-        if (attachmentRows.length > 0) await issues.addImportedAttachments(attachmentRows);
 
         if (blockedByBySlug.size > 0) {
           const acceptedAdjacency = new Map<string, string[]>();
