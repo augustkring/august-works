@@ -1,0 +1,6 @@
+ALTER TABLE "auth_security_events" DROP CONSTRAINT "auth_security_events_action_ck";--> statement-breakpoint
+ALTER TABLE "auth_security_events" ADD COLUMN "board_api_key_id" uuid;--> statement-breakpoint
+CREATE INDEX "auth_security_events_expiry_idx" ON "auth_security_events" USING btree ("expires_at","id");--> statement-breakpoint
+ALTER TABLE "auth_security_events" ADD CONSTRAINT "auth_security_events_board_key_ck" CHECK (("auth_security_events"."action" in ('board_api_key_created','board_api_key_revoked') and "auth_security_events"."board_api_key_id" is not null and "auth_security_events"."user_id" is not null and "auth_security_events"."company_id" is null)
+        or ("auth_security_events"."action" not in ('board_api_key_created','board_api_key_revoked') and "auth_security_events"."board_api_key_id" is null));--> statement-breakpoint
+ALTER TABLE "auth_security_events" ADD CONSTRAINT "auth_security_events_action_ck" CHECK ("auth_security_events"."action" in ('verification_requested','email_verified','password_reset_requested','password_reset_completed','sessions_revoked','invite_accepted','board_api_key_created','board_api_key_revoked'));

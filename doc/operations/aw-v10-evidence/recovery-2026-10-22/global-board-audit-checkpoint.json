@@ -1,0 +1,143 @@
+{
+  "date": "2026-10-22",
+  "requirements": "UP-02 / V10-158: zero-company durable key audit and post-key-wait replay authority",
+  "sourceHashesObservedAtCheckpoint": {
+    "packages/db/src/schema/saas_lifecycle.ts": "e465817bfe9e956cf1a09382fd0bc0163eb8ec4302e41a9096253ec1b3d9efee",
+    "packages/db/src/migrations/0502_swift_maria_hill.sql": "ff1f116270eef8f88bba0171ba8de427f689e78bacebc80c4f936aefc928f12e",
+    "packages/db/src/migrations/meta/0502_snapshot.json": "88bdd916c79e2f7f6b80bed9c5810be6312e68b2736140febd5c70250940c9ef",
+    "packages/db/src/migrations/meta/_journal.json": "74e02aa09f7f57d8552b97e597492a7ee77a1219fe11322331ca4f8834f4f434",
+    "server/src/services/board-auth.ts": "a8c0dd5d5bad62230e634ff6dcdabcd2963f9fca57ba327738156e975fc51bbc",
+    "server/src/services/board-auth.test.ts": "75c8acfd68f8a16815167f3612b30fc5cc7565316e4e9558c0e1842229dbd28f",
+    "server/src/services/saas/auth-delivery.ts": "ecb6c3469b03b198788a52842beea79c0a02118143fc71fcd88a9b03821b5bef",
+    "server/src/services/saas/platform.ts": "d7f5e4e5ec734aaf36635c7d3efcfe6db5b01f6bb33b2c0f7dc7d52a8e5bef1d",
+    "server/src/index.ts": "eea037087755b013cffec1ca479a75c5df485090296098072c3f0bdeca57d0a8",
+    "server/src/__tests__/server-startup-feedback-export.test.ts": "2cf154ccf68f3f060fccd498ebdde1fe901ab8590a6454a7cb9677f24afa6000",
+    "doc/CLI.md": "bc54f9a7c588bce636078d5cb69ac3c2d7e67438d8fbb678d7b1cb5eada2657c"
+  },
+  "runs": [
+    {
+      "command": "pnpm db:generate",
+      "result": "PASS",
+      "log": "up02-global-audit-generate.log.txt",
+      "observations": [
+        "Generated0502 SQL/snapshot/journal through ordinary workflow",
+        "Snapshot delta only public.auth_security_events; generated cleanup of unrelated tracked old snapshots restored exactly"
+      ]
+    },
+    {
+      "command": "node node_modules/vitest/vitest.mjs run server/src/services/board-auth.test.ts --maxWorkers=1",
+      "result": "PASS",
+      "testsPassed": 21,
+      "log": "up02-global-audit-service-green.log.txt",
+      "source": "Before subsequent held-key replay regression and reorder; not recast as final-source run"
+    },
+    {
+      "result": "FAIL",
+      "log": "up02-global-audit-startup-parse-failure.log.txt",
+      "reason": "Added duplicate existing test import; zero tests. Removed only new duplicate, retained original import."
+    },
+    {
+      "command": "node node_modules/vitest/vitest.mjs run server/src/__tests__/server-startup-feedback-export.test.ts --maxWorkers=1",
+      "result": "PASS",
+      "testsPassed": 22,
+      "log": "up02-global-audit-startup-final-green.log.txt",
+      "scope": "Actual startup/general maintenance wiring with existing mocked DB; bounded DELETE semantics separately run against actual PostgreSQL. Existing repeated-start MaxListeners warnings retained."
+    },
+    {
+      "command": "pnpm --filter @paperclipai/db typecheck",
+      "result": "PASS",
+      "log": "up02-global-audit-db-typecheck.log.txt",
+      "scope": "Includes ordinary migration numbering/safety and TypeScript; unchanged final DB sources"
+    },
+    {
+      "command": "node node_modules/vitest/vitest.mjs run server/src/services/board-auth.test.ts --maxWorkers=1 -t 'after an approved replay waits'",
+      "result": "FAIL",
+      "testsFailed": 2,
+      "deselectedByNameFilter": 21,
+      "log": "up02-replay-key-lock-original-red.log.txt",
+      "source": "Original access-before-key-lock order; actual pg_blocking_pids confirms held key before membership/admin-role withdrawal"
+    },
+    {
+      "command": "node node_modules/vitest/vitest.mjs run server/src/services/board-auth.test.ts server/src/__tests__/cli-auth-routes.test.ts --maxWorkers=1",
+      "result": "PASS",
+      "testsPassed": 43,
+      "testFiles": 2,
+      "log": "up02-global-audit-replay-final-green.log.txt",
+      "scope": "23 service cases (real migrated PostgreSQL where applicable) and20 route cases. Not43 independent live deployment cases. Final11 own-file hashes stable; not a whole graph pin."
+    },
+    {
+      "command": "pnpm --filter @paperclipai/server typecheck",
+      "result": "FAIL",
+      "log": "up02-server-typecheck-current.log.txt",
+      "reason": "Three TypeScript errors in new dynamic HTTP test import tuple/default typing. Replaced hand-written module tuple with inferred import function return type; no assertion removed or cast added.",
+      "sourceHoldException": "Duplicate startup test import corrected while normal SDK prerequisite was building. No whole-command immutable pin claimed."
+    },
+    {
+      "command": "pnpm --filter @paperclipai/server typecheck",
+      "result": "PASS",
+      "log": "up02-server-typecheck-final.log.txt",
+      "scope": "Normal Runner protocol/eval/release/replay and SDK prerequisites followed by actual full server tsc; after final global/replay/import corrections."
+    }
+  ],
+  "logs": [
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up02-global-audit-generate.log.txt",
+      "sha256": "88942ec9df1b8e53c5c620d70a1300b7b8a47b82710d1351053aa16afc7f89f2",
+      "sizeBytes": 23818
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up02-global-audit-service-green.log.txt",
+      "sha256": "bd3cf192bbdda1e872db696e32803dac9c93ed1d9ed825cad04df74b7b2ae826",
+      "sizeBytes": 2455
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up02-global-audit-startup-parse-failure.log.txt",
+      "sha256": "aea26995757e55a09ab81ebfccaf6d475b5d0bffaa12ed9b4afd1e14aeaff32e",
+      "sizeBytes": 4736
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up02-global-audit-startup-final-green.log.txt",
+      "sha256": "41644ddaff76a4bcafcff98df20fe41d8c8517a76d21151081a76da1756fbc0b",
+      "sizeBytes": 981
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up02-global-audit-db-typecheck.log.txt",
+      "sha256": "d2be944d049061005c38b2f822647334d1d700a86e136ca6b4e751e84b98aa9d",
+      "sizeBytes": 381
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up02-replay-key-lock-original-red.log.txt",
+      "sha256": "e1027223a3e06d873447754e456d16bd96588bebe12d3e108cb09fd433efe980",
+      "sizeBytes": 1871
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up02-global-audit-replay-final-green.log.txt",
+      "sha256": "e92268c6189f49804fc2a5309908254083984917818acc3d4cb8e05df85997e1",
+      "sizeBytes": 2456
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up02-server-typecheck-current.log.txt",
+      "sha256": "952a570e35836cb675b28a53f595622c44efcda12b6f1ae925f4689c7da4554c",
+      "sizeBytes": 9509
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up02-server-typecheck-final.log.txt",
+      "sha256": "ad88e7ca73b69cd6ece32f89fbb5b91916fac0e0089d3f7172020ca4a3c84254",
+      "sizeBytes": 7859
+    }
+  ],
+  "review": {
+    "independentGlobalReviewer": "Sol account_privacy_rebuild, not author; schema prefix/snapshot consistency, atomic receipts, no credential fields/FKs, zero-company revoke and unconditional bounded native expiry inspected. No blocker found.",
+    "additionalReplayFinding": "Root identified access-before-key-wait gap; independent reviewer confirmed. Minimal original challenge\u2192key lock order now precedes current access resolution. Both actual held-key regressions fail before and pass after.",
+    "rootReview": "Full new source/test diffs, actual bounded SQL and original native maintenance registration inspected. No new event registry/scheduler, grant cache, actor authority or generic SQL replay introduced."
+  },
+  "migrationCompatibility": "0502 preserves all six old auth action variants and nullable attribution. New key events require opaque user/key IDs and NULL company. Apply normal migration before new writer deployment; mixed-deployment/upgrade/restore qualification remains separate.",
+  "limitations": [
+    "Retained opaque user/key attribution is pseudonymous personal security evidence, not anonymous or immediate erasure",
+    "Expiry batch is capped at1000 per existing native sweep; offline servers do not run retention",
+    "Ordinary CLI typecheck currently running separately; no result inferred",
+    "Whole-repository required checks, assembled browser/provider journeys and full V10 source/operating qualification remain open"
+  ],
+  "sourceComplete": false,
+  "prReady": false
+}

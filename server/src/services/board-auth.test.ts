@@ -1,10 +1,11 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
-import { activityLog, authUsers, boardApiKeys, cliAuthChallenges, companies, companyMemberships, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, getEmbeddedPostgresTestSupport, instanceUserRoles, startEmbeddedPostgresTestDatabase } from "@paperclipai/db";
+import { activityLog, authSecurityEvents, authUsers, boardApiKeys, cliAuthChallenges, companies, companyMemberships, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, getEmbeddedPostgresTestSupport, instanceUserRoles, startEmbeddedPostgresTestDatabase } from "@paperclipai/db";
 import { subscribeCompanyLiveEvents } from "./live-events.js";
 import type { Db } from "@paperclipai/db";
 import { boardAuthService } from "./board-auth.js";
+import { pruneExpiredAuthSecurityEvents } from "./saas/auth-delivery.js";
 
 describe("boardAuthService touchBoardApiKey", () => {
   it("retries the audit write after a transient failure", async () => {
@@ -49,9 +50,10 @@ const databaseSuite = support.supported ? describe : describe.skip;
 databaseSuite("CLI challenge authority and transitions (real PostgreSQL)", () => {
   let db: ReturnType<typeof createDb>;
   let temporary: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | undefined;
-  let http: [typeof import("express"), typeof import("supertest"), typeof import("../middleware/auth.js"), typeof import("../routes/access.js"), typeof import("../middleware/error-handler.js")];
+  const importHttp = () => Promise.all([import("express"), import("supertest"), import("../middleware/auth.js"), import("../routes/access.js"), import("../middleware/error-handler.js")]);
+  let http: Awaited<ReturnType<typeof importHttp>>;
   beforeAll(async () => {
-    http = await Promise.all([import("express"), import("supertest"), import("../middleware/auth.js"), import("../routes/access.js"), import("../middleware/error-handler.js")]);
+    http = await importHttp();
     temporary = await startEmbeddedPostgresTestDatabase("board-cli-challenge-");
     db = createDb(temporary.connectionString);
   }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
@@ -87,6 +89,21 @@ databaseSuite("CLI challenge authority and transitions (real PostgreSQL)", () =>
       await new Promise(resolve => setTimeout(resolve, 10));
     }
     throw new Error("CLI challenge contender did not reach the held database lock");
+  }
+
+  async function waitForReplayKeyLock(blockingPid: number) {
+    const deadline = Date.now() + 5_000;
+    while (Date.now() < deadline) {
+      const rows = await db.execute<{ waiting: boolean }>(sql`
+        select exists(select 1 from pg_stat_activity
+          where datname = current_database() and pid <> pg_backend_pid()
+          and ${blockingPid} = any(pg_blocking_pids(pid))
+          and query ilike '%board_api_keys%') as waiting
+      `);
+      if (rows[0]?.waiting) return;
+      await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    throw new Error("CLI replay did not block on the held Board key transaction");
   }
 
   it("keeps pending tokens unusable and stores only independent secret digests", async () => {
@@ -143,6 +160,43 @@ databaseSuite("CLI challenge authority and transitions (real PostgreSQL)", () =>
     expect(result).toHaveProperty("error");
     expect("error" in result ? String(result.error) : "").toContain("requested organization");
     expect(await f.service.findBoardApiKeyByToken(f.pendingBoardToken)).toBeNull();
+  });
+
+  it.each(["membership", "instance_admin"] as const)("rechecks %s authority after an approved replay waits for the real key lock", async authority => {
+    const f = await fixture();
+    if (authority === "instance_admin") {
+      await db.insert(instanceUserRoles).values({ userId: f.userId, role: "instance_admin" });
+      await db.update(cliAuthChallenges).set({ requestedAccess: "instance_admin_required" }).where(eq(cliAuthChallenges.id, f.challenge.id));
+    }
+    const approved = await f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userId);
+    const keyId = approved.challenge.boardApiKeyId!;
+    let release!: () => void, locked!: (pid: number) => void;
+    const held = new Promise<number>(resolve => { locked = resolve; });
+    const unlock = new Promise<void>(resolve => { release = resolve; });
+    const holder = db.transaction(async tx => {
+      await tx.execute(sql`select id from board_api_keys where id = ${keyId} for update`);
+      const [backend] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      locked(backend.pid); await unlock;
+    });
+    const blockingPid = await held;
+    const replay = f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userId)
+      .then(value => ({ value }), error => ({ error }));
+    try {
+      await waitForReplayKeyLock(blockingPid);
+      if (authority === "membership") {
+        await db.update(companyMemberships).set({ status: "suspended" }).where(eq(companyMemberships.principalId, f.userId));
+      } else {
+        await db.delete(instanceUserRoles).where(eq(instanceUserRoles.userId, f.userId));
+      }
+    } finally { release(); await holder; }
+    const result = await replay;
+    expect(result).toHaveProperty("error");
+    expect("error" in result ? result.error : null).toMatchObject({ status: 403 });
+    expect(await db.select().from(boardApiKeys).where(eq(boardApiKeys.userId, f.userId))).toHaveLength(1);
+    const receipts = await db.select().from(authSecurityEvents).where(eq(authSecurityEvents.userId, f.userId));
+    expect(receipts).toHaveLength(1);
+    expect(receipts[0]).toMatchObject({ action: "board_api_key_created", boardApiKeyId: keyId });
+    expect(await f.service.getCliAuthChallengeBySecret(f.challenge.id, f.challengeSecret)).toEqual(approved.challenge);
   });
 
   it("serializes cancellation behind an actual approval transaction without cancelling its live key", async () => {
@@ -377,6 +431,76 @@ databaseSuite("CLI challenge authority and transitions (real PostgreSQL)", () =>
     expect(revoked).toHaveLength(1);
     expect(revoked[0]).toMatchObject({ entityType: "board_api_key", entityId: key.id, companyId: f.companyId });
     expect(JSON.stringify(audit)).not.toContain(key.token);
+  });
+
+  it("retains an atomic global receipt for own-key revocation without any company authority or history", async () => {
+    const f = await fixture();
+    await db.delete(companyMemberships).where(eq(companyMemberships.principalId, f.userId));
+    const key = await f.service.createNamedBoardApiKey({ userId: f.userId, name: "private-name-canary" });
+    const events = () => db.select().from(authSecurityEvents).where(eq(authSecurityEvents.userId, f.userId));
+    expect(await db.select().from(activityLog).where(eq(activityLog.actorId, f.userId))).toHaveLength(0);
+    const created = await events();
+    expect(created).toHaveLength(1);
+    expect(created[0]).toMatchObject({ action: "board_api_key_created", boardApiKeyId: key.id, userId: f.userId, companyId: null });
+    expect(created[0].expiresAt.getTime() - created[0].createdAt.getTime()).toBe(90 * 86_400_000);
+    expect(JSON.stringify(created)).not.toContain(key.token);
+    expect(JSON.stringify(created)).not.toContain("private-name-canary");
+    expect(await f.service.revokeBoardApiKey(key.id, { userId: f.otherUserId, revokedVia: "cli_auth_logout" })).toBeNull();
+    await db.execute(sql.raw(`alter table auth_security_events add constraint board_global_revoke_failure check (user_id != '${f.userId}' or action != 'board_api_key_revoked')`));
+    try {
+      await expect(f.service.revokeBoardApiKey(key.id, { userId: f.userId, revokedVia: "cli_auth_logout" })).rejects.toThrow();
+      expect(await f.service.findBoardApiKeyByToken(key.token)).not.toBeNull();
+      expect(await events()).toHaveLength(1);
+    } finally { await db.execute(sql`alter table auth_security_events drop constraint board_global_revoke_failure`); }
+    const retries = await Promise.all([0, 1].map(() => f.service.revokeBoardApiKey(key.id, { userId: f.userId, revokedVia: "cli_auth_logout" })));
+    expect(retries.filter(Boolean)).toHaveLength(1);
+    expect(await f.service.findBoardApiKeyByToken(key.token)).toBeNull();
+    const retained = await events();
+    expect(retained.map(row => row.action).sort()).toEqual(["board_api_key_created", "board_api_key_revoked"]);
+    expect(retained.every(row => row.boardApiKeyId === key.id && row.companyId === null)).toBe(true);
+    expect(await db.select().from(activityLog).where(eq(activityLog.actorId, f.userId))).toHaveLength(0);
+    await db.delete(authUsers).where(eq(authUsers.id, f.userId));
+    expect(await events()).toEqual(retained);
+  });
+
+  it("rolls back zero-company key creation and consent when global auditing fails and records only the first approval", async () => {
+    const f = await fixture();
+    await db.delete(companyMemberships).where(eq(companyMemberships.principalId, f.userId));
+    const pending = await f.service.createCliAuthChallenge({ command: "paperclipai", requestedAccess: "board" });
+    await db.execute(sql.raw(`alter table auth_security_events add constraint board_global_create_failure check (user_id != '${f.userId}' or action != 'board_api_key_created')`));
+    try {
+      await expect(f.service.createNamedBoardApiKey({ userId: f.userId, name: "rolled-back" })).rejects.toThrow();
+      await expect(f.service.approveCliAuthChallenge(pending.challenge.id, pending.challengeSecret, f.userId)).rejects.toThrow();
+      expect(await db.select().from(boardApiKeys).where(eq(boardApiKeys.userId, f.userId))).toHaveLength(0);
+      expect(await db.select().from(authSecurityEvents).where(eq(authSecurityEvents.userId, f.userId))).toHaveLength(0);
+      expect(await f.service.getCliAuthChallengeBySecret(pending.challenge.id, pending.challengeSecret)).toMatchObject({ approvedAt: null, boardApiKeyId: null });
+    } finally { await db.execute(sql`alter table auth_security_events drop constraint board_global_create_failure`); }
+    const approved = await f.service.approveCliAuthChallenge(pending.challenge.id, pending.challengeSecret, f.userId);
+    expect(await f.service.approveCliAuthChallenge(pending.challenge.id, pending.challengeSecret, f.userId)).toMatchObject({ created: false });
+    const receipts = await db.select().from(authSecurityEvents).where(eq(authSecurityEvents.userId, f.userId));
+    expect(receipts).toHaveLength(1);
+    expect(receipts[0]).toMatchObject({ action: "board_api_key_created", boardApiKeyId: approved.challenge.boardApiKeyId, companyId: null });
+    expect(await db.select().from(activityLog).where(eq(activityLog.actorId, f.userId))).toHaveLength(0);
+  });
+
+  it("bounds native auth-event retention and preserves existing auth actions and the strict expiry boundary", async () => {
+    const userId = randomUUID(), now = new Date();
+    const oldActions = ["verification_requested", "email_verified", "password_reset_requested", "password_reset_completed", "sessions_revoked", "invite_accepted"];
+    await db.insert(authSecurityEvents).values(Array.from({ length: 1003 }, (_, i) => ({
+      userId, action: oldActions[i % oldActions.length], expiresAt: new Date(now.getTime() - 1),
+    })));
+    await db.insert(authSecurityEvents).values([
+      { userId, action: "sessions_revoked", expiresAt: now },
+      { userId, action: "board_api_key_revoked", boardApiKeyId: randomUUID(), expiresAt: new Date(now.getTime() + 1000) },
+    ]);
+    await expect(db.insert(authSecurityEvents).values({ userId, action: "board_api_key_created", expiresAt: now })).rejects.toThrow();
+    await expect(db.insert(authSecurityEvents).values({ userId, action: "sessions_revoked", boardApiKeyId: randomUUID(), expiresAt: now })).rejects.toThrow();
+    expect(await pruneExpiredAuthSecurityEvents(db, now)).toHaveLength(1000);
+    expect(await pruneExpiredAuthSecurityEvents(db, now)).toHaveLength(3);
+    expect(await pruneExpiredAuthSecurityEvents(db, now)).toHaveLength(0);
+    const retained = await db.select().from(authSecurityEvents).where(eq(authSecurityEvents.userId, userId));
+    expect(retained).toHaveLength(2);
+    expect(retained.every(row => row.expiresAt >= now)).toBe(true);
   });
 
   it("keeps consent terminal after physical key deletion and never reassigns its pending token", async () => {

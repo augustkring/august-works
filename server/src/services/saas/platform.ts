@@ -15,9 +15,8 @@ import { createStorageService } from "../../storage/service.js";
 import { runtimeCommercialService } from "../runtime/commercial.js";
 import { notificationService } from "../notifications/notifications.js";
 import { randomUUID } from "node:crypto";
-import { and, eq, lt, sql } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import {
-  authSecurityEvents,
   platformSchedulerLeases,
   type Db,
 } from "@paperclipai/db";
@@ -354,15 +353,6 @@ export function saasPlatform(
       flag: "billing_v6",
       interval: 300000,
       run: () => billing.reconcileSubscriptions(),
-    },
-    {
-      key: "auth-event-retention",
-      flag: "transactional_email_v6",
-      interval: 3600000,
-      run: () =>
-        db
-          .delete(authSecurityEvents)
-          .where(lt(authSecurityEvents.expiresAt, new Date())),
     },
   ];
   async function tick() {

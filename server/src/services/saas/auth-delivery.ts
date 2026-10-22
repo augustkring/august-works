@@ -1,4 +1,5 @@
 import { authSecurityEvents, type Db } from "@paperclipai/db";
+import { sql } from "drizzle-orm";
 import {
   v6FeatureEnabled,
   type PublicOriginConfig,
@@ -7,6 +8,17 @@ import {
 import type { SaasAuthDelivery } from "../../auth/better-auth.js";
 import type { transactionalEmail } from "../notifications/transactional-email.js";
 import { sha256 } from "./crypto.js";
+
+/** Native retention runs for every deployment, independently of email delivery. */
+export async function pruneExpiredAuthSecurityEvents(db: Db, now = new Date()) {
+  return db.execute(sql`delete from ${authSecurityEvents}
+    where ${authSecurityEvents.expiresAt} < ${now.toISOString()}::timestamptz
+      and ${authSecurityEvents.id} in (
+        select ${authSecurityEvents.id} from ${authSecurityEvents}
+        where ${authSecurityEvents.expiresAt} < ${now.toISOString()}::timestamptz
+        order by ${authSecurityEvents.expiresAt}, ${authSecurityEvents.id} limit 1000
+      ) returning ${authSecurityEvents.id}`);
+}
 
 export function saasAuthDelivery(
   db: Db,

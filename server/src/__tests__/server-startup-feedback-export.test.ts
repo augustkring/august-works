@@ -2,6 +2,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { chmodSync, mkdirSync, mkdtempSync, readFileSync, rmSync, statSync, symlinkSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import path from "node:path";
+import * as authDelivery from "../services/saas/auth-delivery.js";
 
 const ORIGINAL_PAPERCLIP_API_URL = process.env.PAPERCLIP_API_URL;
 const ORIGINAL_PAPERCLIP_RUNTIME_API_URL = process.env.PAPERCLIP_RUNTIME_API_URL;
@@ -569,6 +570,24 @@ describe("startServer feedback export wiring", () => {
       storageService: { id: "storage-service" },
       serverPort: 3210,
     });
+  });
+
+  it("runs auth-event retention without SaaS, email or heartbeat feature admission", async () => {
+    const prune = vi.spyOn(authDelivery, "pruneExpiredAuthSecurityEvents");
+    let maintenance: (() => void) | undefined;
+    const intervals = vi.spyOn(globalThis, "setInterval").mockImplementation(((callback: () => void, delay: number) => {
+      if (delay === EXECUTION_RECONCILIATION_INTERVAL_MS) maintenance = callback;
+      return 1 as unknown as ReturnType<typeof setInterval>;
+    }) as typeof setInterval);
+    try {
+      await startServer();
+      await new Promise<void>(resolve => setImmediate(resolve));
+      expect(prune).toHaveBeenCalledTimes(1);
+      expect(maintenance).toBeDefined();
+      maintenance!();
+      await new Promise<void>(resolve => setImmediate(resolve));
+      expect(prune).toHaveBeenCalledTimes(2);
+    } finally { prune.mockRestore(); intervals.mockRestore(); }
   });
 
   it("never invokes the retired review detector at startup or on periodic recovery", async () => {

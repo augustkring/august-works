@@ -3,6 +3,7 @@ import { and, eq, gt, isNull, or, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   activityLog,
+  authSecurityEvents,
   authUsers,
   boardApiKeys,
   cliAuthChallenges,
@@ -203,6 +204,10 @@ export function boardAuthService(db: Db) {
       const [revoked] = await tx.update(boardApiKeys).set({ revokedAt: now, lastUsedAt: now })
         .where(and(eq(boardApiKeys.id, key.id), eq(boardApiKeys.userId, input.userId), isNull(boardApiKeys.revokedAt))).returning();
       if (!revoked) return null;
+      await tx.insert(authSecurityEvents).values({
+        userId: key.userId, boardApiKeyId: key.id, action: "board_api_key_revoked",
+        createdAt: now, expiresAt: new Date(now.getTime() + 90 * 86_400_000),
+      });
       for (const companyId of companyIds) {
         await logActivity(tx as unknown as Db, {
           companyId, actorType: "user", actorId: key.userId, action: "board_api_key.revoked", entityType: "board_api_key", entityId: key.id,
@@ -243,6 +248,11 @@ export function boardAuthService(db: Db) {
       })
       .returning()
       .then((rows) => rows[0]);
+      const now = new Date();
+      await tx.insert(authSecurityEvents).values({
+        userId: input.userId, boardApiKeyId: key.id, action: "board_api_key_created",
+        createdAt: now, expiresAt: new Date(now.getTime() + 90 * 86_400_000),
+      });
       for (const companyId of await activityCompanyIdsForAccess(access, input.requestedCompanyId, tx)) {
         await logActivity(tx as unknown as Db, {
           companyId, actorType: "user", actorId: input.userId,
@@ -417,6 +427,10 @@ export function boardAuthService(db: Db) {
         if (challenge.approvedByUserId !== userId) {
           throw conflict("CLI auth challenge was approved by another user");
         }
+        if (!challenge.boardApiKeyId) throw conflict("Approved Board API key is no longer active");
+        // Read current authority only after the final key-lock wait.
+        await tx.execute(sql`select ${boardApiKeys.id} from ${boardApiKeys}
+          where ${boardApiKeys.id} = ${challenge.boardApiKeyId} for update`);
       }
 
       const access = await resolveBoardAccess(userId, tx);
@@ -432,9 +446,6 @@ export function boardAuthService(db: Db) {
       if (challenge.expiresAt.getTime() <= Date.now()) return { status: "expired" as const, challenge };
 
       if (status === "approved") {
-        if (!challenge.boardApiKeyId) throw conflict("Approved Board API key is no longer active");
-        await tx.execute(sql`select ${boardApiKeys.id} from ${boardApiKeys}
-          where ${boardApiKeys.id} = ${challenge.boardApiKeyId} for update`);
         const [key] = await tx.select().from(boardApiKeys).where(and(
           eq(boardApiKeys.id, challenge.boardApiKeyId!), eq(boardApiKeys.userId, userId),
           isNull(boardApiKeys.revokedAt), or(isNull(boardApiKeys.expiresAt), gt(boardApiKeys.expiresAt, new Date())),
@@ -473,6 +484,10 @@ export function boardAuthService(db: Db) {
         .then((rows) => rows[0] ?? challenge);
 
       const companyIds = await activityCompanyIdsForAccess(access, challenge.requestedCompanyId, tx);
+      await tx.insert(authSecurityEvents).values({
+        userId, boardApiKeyId: updated.boardApiKeyId!, action: "board_api_key_created",
+        createdAt: approvedAt, expiresAt: new Date(approvedAt.getTime() + 90 * 86_400_000),
+      });
       for (const companyId of companyIds) {
         await logActivity(tx as unknown as Db, {
           companyId, actorType: "user", actorId: userId,

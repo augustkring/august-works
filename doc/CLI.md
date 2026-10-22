@@ -37,8 +37,11 @@ Creation and revocation store their available company audit records in the same
 transaction as the key change; a later notification failure cannot repeat that
 change. Trusted historical creation/challenge context can supply an own-key
 revocation audit destination after membership loss. It grants no current company
-access. When no company audit destination survives, owner revocation still works,
-but global durable-receipt coverage remains an open qualification gap.
+access. Each first creation and successful revocation also records one global
+authentication security event, even without a company audit destination. This
+receipt contains only the opaque user/key IDs, action and timestamps. It survives
+key/account removal and expires after ninety days; native maintenance removes
+expired events in bounded batches independently of email feature settings.
 
 Challenge creation is limited to twenty requests per minute per resolved client
 IP and polling to 120, with separate process-local budgets. Configure

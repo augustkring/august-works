@@ -19,7 +19,7 @@ import { installSaasAdapterNetworkPolicy } from "./services/saas/adapter-network
 import { instrumentationReady, shutdownInstrumentation } from "./instrumentation.js";
 import { assertSaasRolloutReady, activePublicAppOrigins } from "./aw-deployment.js";
 import { assertDatabaseRestoreAdmission } from "./services/saas/database-admission.js";
-import { saasAuthDelivery } from "./services/saas/auth-delivery.js";
+import { pruneExpiredAuthSecurityEvents, saasAuthDelivery } from "./services/saas/auth-delivery.js";
 import { setupPublicOriginUpgradeGuard } from "./middleware/public-origin-guard.js";
 import { sentryReady, shutdownSentry, captureException } from "./sentry.js";
 import { waitForPendingRunFailureReports } from "./services/run-failure-report.js";
@@ -1251,6 +1251,7 @@ async function startServerWithDatabaseTeardown(
       const result = await processAnalysisService(db).sweepExpired();
       if (result.erasedDefinitions > 0) logger.info(result, "Process retention sweep removed expired definitions and runs");
     }],
+    ["auth_event_retention", () => pruneExpiredAuthSecurityEvents(db)],
     ["analytical_retention", async () => {
       const result = await eraseExpiredAnalyticalLineage(db);
       if (result.erasedManifests > 0) logger.info(result, "Analytical retention sweep removed expired manifests and dependent payloads");
