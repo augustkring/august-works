@@ -628,6 +628,10 @@ async function insertCandidate(
   if (!record) throw new Error("Memory candidate insert returned no row");
 
   await insertEvidenceRows(tx, companyId, record.id, input.evidence);
+  // Every new-row producer shares this final effect admission. An INSERT can
+  // wait on a foreign key after capture, while its Agent/Human loses authority.
+  if(!await canActorReadMemorySources(tx,companyId,learningActorFromPrincipal(companyId,actor.principal,actor.runId),record.id))
+    throw forbidden("Memory candidate source access is unavailable");
 
   return record;
 }
@@ -845,8 +849,6 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
             },
           }),
         );
-        if(!await canActorReadMemorySources(txDb,companyId,learningActorFromPrincipal(companyId,actor.principal,actor.runId),created.id))
-          throw forbidden("Memory candidate source access is unavailable");
         return { recordId: created.id, resolution: resolution.metadata, replayed:false as const };
         };
         return nativeCapture

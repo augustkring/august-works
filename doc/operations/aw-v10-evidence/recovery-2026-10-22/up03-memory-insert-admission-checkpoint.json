@@ -1,0 +1,265 @@
+{
+  "status": "Bounded shared Memory insert admission checkpoint; no whole V10/all-channel readiness claim",
+  "productionChanges": [
+    "Original Memory read admitted logic extracted once into memorySourceActorCurrent and reused at producer capture entry and final qualification. Running producer requires actual current Agent/run/Human; completed producer keeps only existing verified native capture purpose.",
+    "Original insertCandidate now checks current complete Memory source authority after row and evidence INSERT, before returning to every new-row caller and before activity/publication. Failure rolls back the whole native transaction.",
+    "Removed redundant new-row check from runCandidate only; retained its existing in-place attachment checks, native purpose, replay and deferred publications."
+  ],
+  "callers": [
+    "Shared insert serves ordinary candidate, private create, private correction, private share and shared correction.",
+    "Only production system principal traced is local-board: Board routes reject private scope. Maintenance rejects nonlocal system principals; unknown nonlocal system provenance is not upgraded or granted."
+  ],
+  "captures": [
+    {
+      "path": "up03-memory-paused-producer-red.log",
+      "sha256": "f4b1c28f88685972b9738b3de4994a285c5dc415fb96989c8d6867dbb25c43c3",
+      "result": "CLOSED exit1:1 genuine PG FAIL,5assertion failures,35.73s",
+      "pins": [
+        {
+          "path": "server/src/services/memory/memory-service.ts",
+          "sha256": "b97bc5ffb6e6ce48e7786bfffcaede8c3a68ed9082252022b179626e8ab0e112"
+        },
+        {
+          "path": "server/src/services/memory/memory-privacy.ts",
+          "sha256": "b2923f165509c6e6ccfb58775f38355bcc42ce2b2b993c228e7908ca952f0897"
+        },
+        {
+          "path": "server/src/services/authorization.ts",
+          "sha256": "984fba3faeeed57b8daeab457bebeccce0f78b7be8a56f8db3399f179419f774"
+        },
+        {
+          "path": "server/src/services/analytical-reader.ts",
+          "sha256": "510590d7a1043b5feebe14f4e3b838025fdbb40d70e3c099077f4c277ffcdc06"
+        },
+        {
+          "path": "server/src/services/context/context-manifest.ts",
+          "sha256": "429c9f292664d941d2a00e6e19c643b831f7979aebdd80f3483e3f32702b8cf8"
+        },
+        {
+          "path": "server/src/services/learning/learning-analytical-sources.ts",
+          "sha256": "d866a84b51773948e0c52094a95b9b41085f7d9d319343647e21a8a377cc41c4"
+        },
+        {
+          "path": "server/src/services/foundation-authoring-source.ts",
+          "sha256": "d733fe594344887cbfdd7e36dc102bbd78df9c3d08c413542547337db342eb51"
+        },
+        {
+          "path": "server/src/services/run-identity.ts",
+          "sha256": "1316cdd648edcf77fe51d459c1d0bc2ab5605b0efb689169bc744ab0c7092b05"
+        },
+        {
+          "path": "packages/db/src/migrations/0506_wild_thanos.sql",
+          "sha256": "37cc0e72b1ad77f659b918fdd1333602dfb2a21b54b75a6896ed8c7dcf5b4bd0"
+        },
+        {
+          "path": "server/src/__tests__/memory-paused-producer.integration.test.ts",
+          "sha256": "196799b79422bd7e6d49dd4f75945e3a6b5dfde876d7abc68f543dce4d7f233e"
+        }
+      ],
+      "detail": "Open native Task/current Human/running run/no Context, then actual Agent pause before private create; returned404 AFTER committed Memory,evidence,private_created audit and actual company live-event.",
+      "fixturePhase": "Original singlecase fixture; later expanded without weakening these five assertions."
+    },
+    {
+      "path": "up03-memory-paused-producer-red-2.log",
+      "sha256": "30753d322d2d2b1fde424907755cd3484f69abb49fbd03d0b6498415a8207a28",
+      "result": "CLOSED exit1:2 genuine PG FAIL,10assertion failures,24.88s",
+      "pins": [
+        {
+          "path": "server/src/services/memory/memory-service.ts",
+          "sha256": "b97bc5ffb6e6ce48e7786bfffcaede8c3a68ed9082252022b179626e8ab0e112"
+        },
+        {
+          "path": "server/src/services/memory/memory-privacy.ts",
+          "sha256": "b2923f165509c6e6ccfb58775f38355bcc42ce2b2b993c228e7908ca952f0897"
+        },
+        {
+          "path": "server/src/services/authorization.ts",
+          "sha256": "984fba3faeeed57b8daeab457bebeccce0f78b7be8a56f8db3399f179419f774"
+        },
+        {
+          "path": "server/src/services/analytical-reader.ts",
+          "sha256": "510590d7a1043b5feebe14f4e3b838025fdbb40d70e3c099077f4c277ffcdc06"
+        },
+        {
+          "path": "server/src/services/context/context-manifest.ts",
+          "sha256": "429c9f292664d941d2a00e6e19c643b831f7979aebdd80f3483e3f32702b8cf8"
+        },
+        {
+          "path": "server/src/services/learning/learning-analytical-sources.ts",
+          "sha256": "d866a84b51773948e0c52094a95b9b41085f7d9d319343647e21a8a377cc41c4"
+        },
+        {
+          "path": "server/src/services/foundation-authoring-source.ts",
+          "sha256": "d733fe594344887cbfdd7e36dc102bbd78df9c3d08c413542547337db342eb51"
+        },
+        {
+          "path": "server/src/services/run-identity.ts",
+          "sha256": "1316cdd648edcf77fe51d459c1d0bc2ab5605b0efb689169bc744ab0c7092b05"
+        },
+        {
+          "path": "packages/db/src/migrations/0506_wild_thanos.sql",
+          "sha256": "37cc0e72b1ad77f659b918fdd1333602dfb2a21b54b75a6896ed8c7dcf5b4bd0"
+        },
+        {
+          "path": "server/src/__tests__/memory-paused-producer.integration.test.ts",
+          "sha256": "8349954578c76d6c1f27283859da4d4423c5881235fecb4a1635c98e9124b006"
+        }
+      ],
+      "detail": "Adds actual binding-row FOR UPDATE causing Memory INSERT FK wait. pg_blocking_pids observed holder52109/waiter52108; query asserted Memory INSERT. Agent was idle, run running and canonical accountable company admission positive before pause. Pause while blocked then release still committed allfour effects before404.",
+      "fixturePhase": "Same expanded2case fixture used for current result."
+    },
+    {
+      "path": "up03-memory-paused-producer-green.log",
+      "sha256": "ef2474d8ab1f784cb458e24da987e40422e398c1891b11d54fe6b60a44b473b8",
+      "result": "CLOSED exit1:15PASS plus1steering TESTBODY timeout30000ms,4files,379.21s",
+      "pins": [
+        {
+          "path": "server/src/services/memory/memory-service.ts",
+          "sha256": "94c0a50d3068747641d18fd2a561ef5c9fe59a3f26930dfa03df9df1a0a75938"
+        },
+        {
+          "path": "server/src/services/memory/memory-privacy.ts",
+          "sha256": "3515861aa9ad55a09b979bf77d26de00017ea92b61bcacd2b7ab774d15882470"
+        },
+        {
+          "path": "server/src/services/authorization.ts",
+          "sha256": "984fba3faeeed57b8daeab457bebeccce0f78b7be8a56f8db3399f179419f774"
+        },
+        {
+          "path": "server/src/services/analytical-reader.ts",
+          "sha256": "510590d7a1043b5feebe14f4e3b838025fdbb40d70e3c099077f4c277ffcdc06"
+        },
+        {
+          "path": "server/src/services/context/context-manifest.ts",
+          "sha256": "429c9f292664d941d2a00e6e19c643b831f7979aebdd80f3483e3f32702b8cf8"
+        },
+        {
+          "path": "server/src/services/learning/learning-analytical-sources.ts",
+          "sha256": "9d6b79adf487027c26b2a597139cb8fbcee7dd0994c11742e9cd8eb74b916783"
+        },
+        {
+          "path": "server/src/services/foundation-authoring-source.ts",
+          "sha256": "d733fe594344887cbfdd7e36dc102bbd78df9c3d08c413542547337db342eb51"
+        },
+        {
+          "path": "server/src/services/run-identity.ts",
+          "sha256": "1316cdd648edcf77fe51d459c1d0bc2ab5605b0efb689169bc744ab0c7092b05"
+        },
+        {
+          "path": "server/src/services/memory/memory-jobs.ts",
+          "sha256": "3007279f864f2ce2f5db248bf19126f6260e455a2a8a75b4889be890dd2f9faa"
+        },
+        {
+          "path": "server/src/services/memory/memory-post-run-extraction.ts",
+          "sha256": "bf48704f3b03c85f8ca8244153a485c2667ec742924167d30cd550ac180155f5"
+        },
+        {
+          "path": "packages/db/src/schema/learning.ts",
+          "sha256": "13e0f1e4935edfdacae972ff47d42886de959eb6a1c22f070ba8a996079cdf29"
+        },
+        {
+          "path": "packages/db/src/schema/derived_memory.ts",
+          "sha256": "3f368914b043afe361eb87d8b4b2ab112e0b2e6e17392e7f37abfeb896783362"
+        },
+        {
+          "path": "packages/db/src/migrations/0507_lethal_star_brand.sql",
+          "sha256": "73e67a785c0f4c82e600e082ebbf4747cbf6c3e2cceb12d1b2051985f958cd47"
+        },
+        {
+          "path": "server/src/__tests__/memory-paused-producer.integration.test.ts",
+          "sha256": "8349954578c76d6c1f27283859da4d4423c5881235fecb4a1635c98e9124b006"
+        },
+        {
+          "path": "server/src/__tests__/memory-native-capture-purpose.integration.test.ts",
+          "sha256": "7b86ab8bf0fe39d12b6c5fe336c79650d28069eac026e2a22c7607730957d67a"
+        },
+        {
+          "path": "server/src/__tests__/memory-resolver-private-lineage.integration.test.ts",
+          "sha256": "c955f1e2bd01301c913156a74ba1cf49d73920c4ccbae1e2a61d97657d0602ae"
+        },
+        {
+          "path": "server/src/__tests__/memory-candidate-steered-producer.integration.test.ts",
+          "sha256": "11d79fbdb78e8cbd79d7295d2a75585b547aaa4923e55a1f46450526ffc0ec85"
+        }
+      ],
+      "detail": "Paused2, native purpose7 and resolver6 allPASS. Steering1 did not produce a semantic verdict because its unchanged30s test timed out under concurrent captures. Reported body59.10s; no16combinedPASS claim."
+    },
+    {
+      "path": "up03-memory-steered-new-solo-green.log",
+      "sha256": "3f5031a17ea40f701d3ca02162c047dbb71beb6d8ea7775bbea34a8563786c6e",
+      "result": "CLOSED exit0:isolated steering1/1PASS,50.87s total,test+setup11.68s",
+      "pins": [
+        {
+          "path": "server/src/services/memory/memory-service.ts",
+          "sha256": "94c0a50d3068747641d18fd2a561ef5c9fe59a3f26930dfa03df9df1a0a75938"
+        },
+        {
+          "path": "server/src/services/memory/memory-privacy.ts",
+          "sha256": "3515861aa9ad55a09b979bf77d26de00017ea92b61bcacd2b7ab774d15882470"
+        },
+        {
+          "path": "server/src/services/authorization.ts",
+          "sha256": "984fba3faeeed57b8daeab457bebeccce0f78b7be8a56f8db3399f179419f774"
+        },
+        {
+          "path": "server/src/services/analytical-reader.ts",
+          "sha256": "510590d7a1043b5feebe14f4e3b838025fdbb40d70e3c099077f4c277ffcdc06"
+        },
+        {
+          "path": "server/src/services/context/context-manifest.ts",
+          "sha256": "429c9f292664d941d2a00e6e19c643b831f7979aebdd80f3483e3f32702b8cf8"
+        },
+        {
+          "path": "server/src/services/learning/learning-analytical-sources.ts",
+          "sha256": "9d6b79adf487027c26b2a597139cb8fbcee7dd0994c11742e9cd8eb74b916783"
+        },
+        {
+          "path": "server/src/services/foundation-authoring-source.ts",
+          "sha256": "d733fe594344887cbfdd7e36dc102bbd78df9c3d08c413542547337db342eb51"
+        },
+        {
+          "path": "server/src/services/run-identity.ts",
+          "sha256": "1316cdd648edcf77fe51d459c1d0bc2ab5605b0efb689169bc744ab0c7092b05"
+        },
+        {
+          "path": "server/src/services/memory/memory-jobs.ts",
+          "sha256": "e050a0c660ecc7cc4947359c315dbdd0b9192250e8aad70aa74d21f825e61e34"
+        },
+        {
+          "path": "server/src/services/memory/memory-maintenance.ts",
+          "sha256": "0991d062c6ced13ef1e95741db49552d129756c95ec23d1adcd3082ce6253498"
+        },
+        {
+          "path": "server/src/services/memory/memory-post-run-extraction.ts",
+          "sha256": "bf48704f3b03c85f8ca8244153a485c2667ec742924167d30cd550ac180155f5"
+        },
+        {
+          "path": "packages/db/src/schema/learning.ts",
+          "sha256": "13e0f1e4935edfdacae972ff47d42886de959eb6a1c22f070ba8a996079cdf29"
+        },
+        {
+          "path": "packages/db/src/schema/derived_memory.ts",
+          "sha256": "3f368914b043afe361eb87d8b4b2ab112e0b2e6e17392e7f37abfeb896783362"
+        },
+        {
+          "path": "packages/db/src/migrations/0507_lethal_star_brand.sql",
+          "sha256": "73e67a785c0f4c82e600e082ebbf4747cbf6c3e2cceb12d1b2051985f958cd47"
+        },
+        {
+          "path": "server/src/__tests__/memory-candidate-steered-producer.integration.test.ts",
+          "sha256": "11d79fbdb78e8cbd79d7295d2a75585b547aaa4923e55a1f46450526ffc0ec85"
+        }
+      ],
+      "detail": "Root held other HEAVY/LIGHT jobs. Exact same steering fixture and30s timeout; no assertion/timeout changes. A2 production identical to15PASS+timeout capture. Root jobs/maintenance integration froze at new explicit pins before this independent isolated run."
+    }
+  ],
+  "verification": "Every capture verified all listed upfront pins unchanged at actual exit; PostgreSQL cleanup closed. Canonical full migrator,pool3,worker1,Node2GiB. RED ran0506 baseline, current ranRoot0507 source-evidence FK migration explicitly recorded in current pins; no silent same-schema claim.",
+  "currentOutcome": "Actual evidence is15PASS in combined run plus unchanged isolated steering1PASS, not16simultaneousPASS. Both pre-paused and actual post-capture INSERT-wait withdrawal now403 with zero Memory/evidence/audit/company events.",
+  "limits": [
+    "No blanket all-running-producer permission/principal row pinning through commit claimed; this phase adds current in-transaction source/effect checks. Existing completed-capture principal pins remain scoped to native capture purpose.",
+    "Source-dependent permission pins, temporal policy-anchor versus exact payload graph closure, mixed-writer/rollback admission and lost historical provenance remain separate/open.",
+    "Current Root0507 future receipts prevent source-FK cascade shrink; they cannot reconstruct already-lost historical edges.",
+    "The earlier full workspace28199PASS was before these2owner edits; new normal server typecheck was pending Root execution at checkpoint time.",
+    "Parent owns maintenance deferred-publication fix and its independent regression; no Root files are included in this commit."
+  ]
+}

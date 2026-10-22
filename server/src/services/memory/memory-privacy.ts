@@ -121,30 +121,33 @@ export async function canActorReadMemorySources(db: Db, companyId: string, actor
   };
   return inherited?read():memorySourceReads.run(state,read);
 }
+async function memorySourceActorCurrent(db:Db,companyId:string,actor:AuthorizationActor|undefined):Promise<boolean> {
+  if(!actor)return false;
+  const {authorizationService}=await import("../authorization.js");
+  if (actor.type === "agent") {
+    if (!actor.runId || !actor.agentId || !actor.onBehalfOfUserId) return false;
+    const [run] = await db.select({id:heartbeatRuns.id}).from(heartbeatRuns)
+    .innerJoin(agents,and(eq(agents.companyId,heartbeatRuns.companyId),eq(agents.id,heartbeatRuns.agentId))).where(and(
+      eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,actor.runId),eq(heartbeatRuns.agentId,actor.agentId),
+      eq(heartbeatRuns.responsibleUserId,actor.onBehalfOfUserId),eq(heartbeatRuns.status,"running"),
+      sql`${agents.status} not in ('paused','terminated','pending_approval','error')`,
+    ));
+    if (!run) {
+      const [capture] = await db.execute<{allowed:boolean}>(sql`select ${nativeMemoryCapturePrincipalCondition(actor,sql`${companyId}::uuid`)} as allowed`);
+      if (!capture?.allowed) return false;
+    }
+  }else if(actor.type==="board" && actor.source!=="local_implicit"){
+    if(!actor.userId)return false;
+    const [account]=await db.select({id:authUsers.id}).from(authUsers).where(eq(authUsers.id,actor.userId));
+    if(!account)return false;
+  }
+  return (await authorizationService(db).decide({actor,action:"company_scope:read",resource:{type:"company",companyId},enforceResponsibleUserIntersection:true})).allowed;
+}
 async function inspectMemorySourceAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,recordId:string,
   state:{deadline:number;work:number}):Promise<boolean> {
   if (!actor) return false;
   const { authorizationService, canActorReadIssuePrivacy, canActorReadProjectPrivacy, canActorReadHeartbeatRunPrivacy } = await import("../authorization.js");
-  const admitted = async () => {
-    if (actor.type === "agent") {
-      if (!actor.runId || !actor.agentId || !actor.onBehalfOfUserId) return false;
-      const [run] = await db.select({id:heartbeatRuns.id}).from(heartbeatRuns)
-      .innerJoin(agents,and(eq(agents.companyId,heartbeatRuns.companyId),eq(agents.id,heartbeatRuns.agentId))).where(and(
-        eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,actor.runId),eq(heartbeatRuns.agentId,actor.agentId),
-        eq(heartbeatRuns.responsibleUserId,actor.onBehalfOfUserId),eq(heartbeatRuns.status,"running"),
-        sql`${agents.status} not in ('paused','terminated','pending_approval','error')`,
-      ));
-      if (!run) {
-        const [capture] = await db.execute<{allowed:boolean}>(sql`select ${nativeMemoryCapturePrincipalCondition(actor,sql`${companyId}::uuid`)} as allowed`);
-        if (!capture?.allowed) return false;
-      }
-    }else if(actor.type==="board" && actor.source!=="local_implicit"){
-      if(!actor.userId)return false;
-      const [account]=await db.select({id:authUsers.id}).from(authUsers).where(eq(authUsers.id,actor.userId));
-      if(!account)return false;
-    }
-    return (await authorizationService(db).decide({actor,action:"company_scope:read",resource:{type:"company",companyId},enforceResponsibleUserIntersection:true})).allowed;
-  };
+  const admitted = () => memorySourceActorCurrent(db,companyId,actor);
   if (!await admitted()) return false;
   const active = new Set<string>(), visited = new Set<string>();
   const runs = new Set<string>(), tasks = new Set<string>(), projectIds = new Set<string>(), revisions = new Set<string>();
@@ -204,7 +207,7 @@ export async function captureMemorySources(db: Db, companyId: string, actor: Aut
   };
   if (!actor) return sources;
   const {authorizationService} = await import("../authorization.js");
-  if (!(await authorizationService(db).decide({actor,action:"company_scope:read",resource:{type:"company",companyId},enforceResponsibleUserIntersection:true})).allowed)
+  if (!await memorySourceActorCurrent(db,companyId,actor))
     throw forbidden("Memory producer authority is unavailable");
   if (scope.type==="project" && scope.id) sources.sourceProjectIds.push(scope.id);
   if (actor.type==="agent") {
@@ -268,7 +271,7 @@ export async function captureMemorySources(db: Db, companyId: string, actor: Aut
       await assertLearnedAssetAnalyticalSources(db,companyId,"document_revision",id,actor,"task");
     }
   }
-  if (performance.now()>deadline || !(await authorizationService(db).decide({actor,action:"company_scope:read",resource:{type:"company",companyId},enforceResponsibleUserIntersection:true})).allowed)
+  if (performance.now()>deadline || !await memorySourceActorCurrent(db,companyId,actor))
     throw forbidden("Memory producer authority changed");
   sources.sourceProvenanceQualified=true;
   return sources;
