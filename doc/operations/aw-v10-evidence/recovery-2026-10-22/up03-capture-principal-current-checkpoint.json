@@ -1,0 +1,39 @@
+{
+  "recordedAt": "2026-10-22T22:55:29.551939+00:00",
+  "sourcePins": {
+    "recordedBeforeCapture": "2026-10-22T22:52:27.442555+00:00",
+    "files": {
+      "server/src/__tests__/company-portability.test.ts": "56e5dcf2b81bcc0189ed75329b668e0d0a89531af2d16299b821505fb698b911",
+      "server/src/__tests__/memory-native-capture-purpose.integration.test.ts": "7b86ab8bf0fe39d12b6c5fe336c79650d28069eac026e2a22c7607730957d67a",
+      "server/src/services/memory/memory-jobs.test.ts": "eb0be49963e3267c9368e90971a4ff83434f741d85b1163335169aadd31232c0",
+      "server/src/services/memory/memory-jobs.ts": "3007279f864f2ce2f5db248bf19126f6260e455a2a8a75b4889be890dd2f9faa",
+      "server/src/services/memory/memory-post-run-extraction.test.ts": "021814352089206bd626b475bf98870b087c317c86a592a9db17f05a661321ad",
+      "server/src/services/memory/memory-privacy.ts": "b2923f165509c6e6ccfb58775f38355bcc42ce2b2b993c228e7908ca952f0897",
+      "server/src/services/memory/memory-post-run-extraction.ts": "bf48704f3b03c85f8ca8244153a485c2667ec742924167d30cd550ac180155f5",
+      "server/src/services/memory/memory-service.ts": "b97bc5ffb6e6ce48e7786bfffcaede8c3a68ed9082252022b179626e8ab0e112",
+      "server/src/services/authorization.ts": "984fba3faeeed57b8daeab457bebeccce0f78b7be8a56f8db3399f179419f774",
+      "server/src/services/analytical-reader.ts": "510590d7a1043b5feebe14f4e3b838025fdbb40d70e3c099077f4c277ffcdc06",
+      "packages/db/src/client.ts": "e6d02b0ed11848d635a06af54cc643873f948b6a3ab2b29da5b475c2592f744e"
+    }
+  },
+  "sessionId": 70606,
+  "exitCode": 0,
+  "passedTests": 35,
+  "testFiles": 2,
+  "durationSeconds": 158.48,
+  "log": "up03-capture-principal-current-tests.log.txt",
+  "scope": [
+    "Actual native capture jobs, existing scheduler/retention/recovery cases and extractor tests.",
+    "Three actual contested principal-row cases: no effects while busy, classified immutable failed history and original native bounded retry, successful capture after lock release.",
+    "Persistent contention stops at maxAttempts=2 with no Memory/evidence/audit/publication.",
+    "Existing extraction contracts run with real Human/Agent memberships, immutable native Task binding and an actual leased physical transaction; default no-receipt write denies."
+  ],
+  "limits": [
+    "No separate old-source RED claimed for new contention tests.",
+    "Source-free project fixture explicitly qualified; no historical qualification inferred.",
+    "Extractor fixture uses actual native leases/savepoints; production enqueue/claim/settle is qualified separately in the job cases.",
+    "Retries are bounded by existing attempts; no new delayed retry scheduler introduced.",
+    "Source-dependent permission/grant lifetime, immutable accepted semantic result, operation binding on attachment and complete temporal graph remain open.",
+    "Whole-workspace checks are separately pending."
+  ]
+}

@@ -7,7 +7,7 @@ import { isDeepStrictEqual } from "node:util";
 import { executeMemoryMaintenance, memoryMaintenanceInputSchema, memoryMaintenanceSources } from "./memory-maintenance.js";
 import { executeModelRebuild } from "./derived-memory.js";
 import { memoryService, type MemoryMutationActor } from "./memory-service.js";
-import { conflict, unprocessable } from "../../errors.js";
+import { conflict, HttpError, unprocessable } from "../../errors.js";
 import { publishActivity, type ActivityPublication } from "../activity-log.js";
 import {
   and,
@@ -501,6 +501,46 @@ export function memoryJobService(
     };
   }
 
+  async function failAndRetry(tx: Db, job: MemoryJob, now: Date, errorCode: string, message: string): Promise<boolean> {
+    await tx
+      .update(memoryJobs)
+      .set({
+        status: "failed",
+        executionOwnerId: null,
+        leaseExpiresAt: null,
+        finishedAt: now,
+        errorCode,
+        error: message,
+        updatedAt: now,
+      })
+      .where(eq(memoryJobs.id, job.id));
+
+    if (job.attemptNumber >= maxAttempts) {
+      return false;
+    }
+
+    const nextAttempt = job.attemptNumber + 1;
+    await tx
+      .insert(memoryJobs)
+      .values({
+        companyId: job.companyId,
+        operationType: job.operationType,
+        status: "queued",
+        jobKey: job.jobKey,
+        attemptNumber: nextAttempt,
+        retryOfJobId: job.id,
+        sourceHeartbeatRunId: job.sourceHeartbeatRunId,
+        sourceMemoryRecordId: job.sourceMemoryRecordId,
+        sourceRefJson: job.sourceRefJson,
+        submittedAt: now,
+        createdAt: now,
+        updatedAt: now,
+      })
+      .onConflictDoNothing();
+    return true;
+  }
+
+
   async function executeClaimed(job: MemoryJob): Promise<void> {
     const now = new Date();
     try {
@@ -575,6 +615,22 @@ export function memoryJobService(
         now: new Date(),
       });
     } catch (error) {
+      if(job.operationType==="capture" && error instanceof HttpError && error.status===409
+        && record(error.details).code==="memory_capture_source_busy"){
+        // Keep immutable failed history and use the existing bounded retry
+        // attempt, without treating a busy source lock as an authority grant.
+        await db.transaction(async tx=>{
+          const [owned]=await tx.select().from(memoryJobs).where(and(
+            eq(memoryJobs.id,job.id),eq(memoryJobs.companyId,job.companyId),eq(memoryJobs.operationType,"capture"),
+            eq(memoryJobs.status,"running"),eq(memoryJobs.executionOwnerId,ownerId),
+            sql`${memoryJobs.leaseExpiresAt}>clock_timestamp()`,
+          )).for("update");
+          if(owned)await failAndRetry(tx,owned,new Date(),"memory_capture_source_busy","Native capture source authority is busy; retry is bounded by the job attempt limit.");
+        });
+        logger.info({jobId:job.id},"Memory capture source lock is busy");
+        return;
+      }
+
       await settle(job, {
         status: "failed",
         errorCode: "memory_job_handler_failed",
@@ -625,42 +681,8 @@ export function memoryJobService(
           .then((rows) => rows[0] ?? null);
         if (!locked) return { recovered: false, retried: false };
 
-        await tx
-          .update(memoryJobs)
-          .set({
-            status: "failed",
-            executionOwnerId: null,
-            leaseExpiresAt: null,
-            finishedAt: now,
-            errorCode: "worker_lost",
-            error: "Memory job lease expired before terminal completion.",
-            updatedAt: now,
-          })
-          .where(eq(memoryJobs.id, locked.id));
-
-        if (locked.attemptNumber >= maxAttempts) {
-          return { recovered: true, retried: false };
-        }
-
-        const nextAttempt = locked.attemptNumber + 1;
-        await tx
-          .insert(memoryJobs)
-          .values({
-            companyId: locked.companyId,
-            operationType: locked.operationType,
-            status: "queued",
-            jobKey: locked.jobKey,
-            attemptNumber: nextAttempt,
-            retryOfJobId: locked.id,
-            sourceHeartbeatRunId: locked.sourceHeartbeatRunId,
-            sourceMemoryRecordId: locked.sourceMemoryRecordId,
-            sourceRefJson: locked.sourceRefJson,
-            submittedAt: now,
-            createdAt: now,
-            updatedAt: now,
-          })
-          .onConflictDoNothing();
-        return { recovered: true, retried: true };
+        const retried=await failAndRetry(tx,locked,now,"worker_lost","Memory job lease expired before terminal completion.");
+        return {recovered:true,retried};
       });
       if (outcome.recovered) recovered += 1;
       if (outcome.retried) retried += 1;

@@ -429,6 +429,62 @@ describePg("Memory jobs", () => {
     }
   });
 
+  it.each(["account", "membership", "agent"] as const)("retries a busy %s pin through native attempt history and succeeds after release",async principal=>{
+    const seeded=await seedCaptureRun(),service=memoryJobService(db,{ownerId:"busy-capture-worker",maxAttempts:3});
+    await service.enqueuePostRunCapture(seeded.run);
+    const claimed=await service.claimNext();
+    expect(claimed).toBeTruthy();
+    const auditsBefore=await db.select().from(activityLog),events:unknown[]=[];
+    const unsubscribe=subscribeCompanyLiveEvents(seeded.companyId,event=>events.push(event));
+    try {
+      await db.transaction(async holder=>{
+        if(principal==="account")await holder.select().from(authUsers).where(eq(authUsers.id,seeded.userId)).for("update");
+        else if(principal==="agent")await holder.select().from(agents).where(eq(agents.id,seeded.agent.id)).for("update");
+        else await holder.select().from(companyMemberships).where(eq(companyMemberships.principalId,seeded.userId)).for("update");
+        await service.executeClaimed(claimed!);
+        expect(await db.select().from(memoryRecords)).toEqual([]);
+        expect(await db.select().from(memoryEvidence)).toEqual([]);
+        expect(await db.select().from(activityLog)).toEqual(auditsBefore);
+        expect(events).toEqual([]);
+        const attempts=await db.select().from(memoryJobs).orderBy(memoryJobs.attemptNumber);
+        expect(attempts).toHaveLength(2);
+        expect(attempts[0]).toMatchObject({id:claimed!.id,status:"failed",errorCode:"memory_capture_source_busy",executionOwnerId:null});
+        expect(attempts[1]).toMatchObject({status:"queued",attemptNumber:2,retryOfJobId:claimed!.id,sourceHeartbeatRunId:seeded.run.id});
+      });
+      const retry=await service.claimNext();
+      expect(retry?.attemptNumber).toBe(2);
+      await service.executeClaimed(retry!);
+      const [completed]=await db.select().from(memoryJobs).where(eq(memoryJobs.id,retry!.id));
+      expect(completed?.status).toBe("succeeded");
+      expect(await db.select().from(memoryRecords)).toHaveLength(1);
+      expect(events.length).toBeGreaterThan(0);
+    } finally {unsubscribe();}
+  });
+
+  it("bounds source-contention retries without committing Memory or activity",async()=>{
+    const seeded=await seedCaptureRun(),service=memoryJobService(db,{ownerId:"bounded-busy-worker",maxAttempts:2});
+    await service.enqueuePostRunCapture(seeded.run);
+    const auditsBefore=await db.select().from(activityLog),events:unknown[]=[];
+    const unsubscribe=subscribeCompanyLiveEvents(seeded.companyId,event=>events.push(event));
+    try {
+      await db.transaction(async holder=>{
+        await holder.select().from(authUsers).where(eq(authUsers.id,seeded.userId)).for("update");
+        for(let attempt=1;attempt<=2;attempt++){
+          const claimed=await service.claimNext();expect(claimed?.attemptNumber).toBe(attempt);
+          await service.executeClaimed(claimed!);
+        }
+        expect(await service.claimNext()).toBeNull();
+      });
+      const attempts=await db.select().from(memoryJobs).orderBy(memoryJobs.attemptNumber);
+      expect(attempts).toHaveLength(2);
+      expect(attempts.every(row=>row.status==="failed" && row.errorCode==="memory_capture_source_busy")).toBe(true);
+      expect(await db.select().from(memoryRecords)).toEqual([]);
+      expect(await db.select().from(memoryEvidence)).toEqual([]);
+      expect(await db.select().from(activityLog)).toEqual(auditsBefore);
+      expect(events).toEqual([]);
+    } finally {unsubscribe();}
+  });
+
   it("recovers an expired lease into immutable failed history and a new retry attempt", async () => {
     const seeded = await seedCaptureRun();
     const svc = memoryJobService(db, {
