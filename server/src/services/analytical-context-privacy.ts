@@ -7,7 +7,7 @@ import type {AuthorizationActor} from "./authorization.js";
 import {assertAnalyticalReader,withNativeAnalyticalReader} from "./analytical-reader.js";
 import {nativeSha256} from "./native-runtime/canonical.js";
 import {lockAnalyticalCompany} from "./analytical-privacy.js";
-import {lockMemoryPrivacy,memoryDeletionKey,purgeMemoryRecords} from "./memory/memory-privacy.js";
+import {lockMemoryPrivacy,memoryDeletionKey,purgeMemoryRecords,captureMemorySources} from "./memory/memory-privacy.js";
 import {conflict,forbidden} from "../errors.js";
 
 /** Private in-process boundary: the callback must read the actual source owners
@@ -64,6 +64,7 @@ export async function retainAnalyticalContextResult<T>(tx:Db,companyId:string,ac
   if(!binding||binding.providerKey!=="local"||!binding.enabled)throw conflict("The native analytical retention binding is unavailable");
   const id=randomUUID(),contentHash=nativeSha256({authorityPins:authority.pins,sources:sources.map(s=>({id:s.id,inputHash:s.inputHash,definitionHash:s.definitionHash})).sort((a,b)=>a.id.localeCompare(b.id)),result:captured.result});
   await tx.insert(memoryRecords).values({id,companyId,bindingId:binding.id,providerKey:"local",memoryType:"observation",scopeType:"agent",scopeId:actor.agentId,ownerAgentId:actor.agentId,
+   ...await captureMemorySources(tx,companyId,actor,{type:"agent",id:actor.agentId}),
    content:"Private analytical retention root; not a verified Task outcome",reviewState:"rejected",verificationState:"unverified",sensitivityLabel:"restricted",confidenceScore:0,importance:0,
    observedAt:now,expiresAt,createdByActorType:"system",createdByActorId:"native_analytical_retention"});
   await tx.insert(analyticalContextRoots).values({companyId,memoryRecordId:id,sourceCount:ids.length,authorityPins:authority.pins,contentHash,deletionKey:memoryDeletionKey(companyId,"record",id),createdAt:now,expiresAt});

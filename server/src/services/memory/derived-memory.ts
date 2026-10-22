@@ -10,7 +10,7 @@ import { conflict, forbidden, notFound } from "../../errors.js";
 import { memoryService } from "./memory-service.js";
 import { cognitiveMemoryActor } from "./cognitive-memory.js";
 import { memorySensitivityAllowed } from "./memory-retrieval.js";
-import { lockMemoryPrivacy, memoryPayloadVisible } from "./memory-privacy.js";
+import { lockMemoryPrivacy, memoryPayloadVisible, canActorReadMemorySources } from "./memory-privacy.js";
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { persistActivity } from "../activity-log.js";
@@ -42,6 +42,7 @@ export async function derivedRoots(db: Db, actor: AuthorizationActor, companyId:
   const uniqueIds = [...new Set(ids)]; if (!uniqueIds.length || uniqueIds.length > 64) throw conflict("Derived intelligence requires bounded surviving Memory roots");
   const roots = await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, companyId), inArray(memoryRecords.id, uniqueIds), memoryPayloadVisible()));
   if (roots.length !== uniqueIds.length) throw notFound("Derived source Memory not found");
+  for(const root of roots)if(!await canActorReadMemorySources(db,companyId,actor,root.id))throw forbidden("Derived source access is unavailable");
   const now = Date.now();
   if (roots.some((root) => root.scopeType !== scope.type || root.scopeId !== scope.id || root.ownerAgentId !== null || root.deletedAt || root.revokedAt
     || root.reviewState !== "accepted" || root.retentionState !== "active" || root.supersededByRecordId || (root.validFrom && root.validFrom.getTime() > now)

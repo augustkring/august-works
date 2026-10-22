@@ -19,7 +19,7 @@ import type {
 } from "@paperclipai/shared";
 import { conflict, forbidden, unprocessable } from "../../errors.js";
 import { learningAssetRoots,retainLearnedAssetsInContext } from "../learning/learning-assets.js";
-import { lockMemoryPrivacy, memoryPayloadVisible } from "../memory/memory-privacy.js";
+import { lockMemoryPrivacy, memoryPayloadVisible, canActorReadMemorySources } from "../memory/memory-privacy.js";
 import {lockAnalyticalCompany} from "../analytical-privacy.js";
 import {authorizationService,canActorReadHeartbeatRunPrivacy,canActorReadIssuePrivacy,canActorReadProjectPrivacy,type AuthorizationActor} from "../authorization.js";
 
@@ -280,6 +280,7 @@ export function contextManifestService(db: Db) {
         if (rootIds.length) {
           const roots = await tx.select({ id: memoryRecords.id, updatedAt: memoryRecords.updatedAt }).from(memoryRecords).where(and(eq(memoryRecords.companyId, input.companyId), inArray(memoryRecords.id, rootIds), memoryPayloadVisible()));
           if (roots.length !== rootIds.length) throw forbidden("Context Memory roots cross a company boundary");
+          for(const root of roots)if(!await canActorReadMemorySources(sourceDb,input.companyId,sourceActor,root.id))throw forbidden("Context Memory source access is unavailable");
           if (roots.some(root => learnedRoots.has(root.id) && learnedRoots.get(root.id) !== root.updatedAt.toISOString())) throw conflict("Learned Context roots changed during assembly");
           for (const { decision } of input.selected) {
             const item = decision.evidence;

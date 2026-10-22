@@ -6,7 +6,7 @@ import { assertAnalyticalContextPayloadAccess } from "../services/analytical-con
 import type { AuthorizationActor } from "../services/authorization.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { contextManifestService } from "../services/context/context-manifest.js";
-import { lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
+import { canActorReadMemorySources, lockMemoryPrivacy } from "../services/memory/memory-privacy.js";
 import type { ContextAuthorityDecision } from "@paperclipai/shared";
 import { memoryService } from "../services/memory/memory-service.js";
 
@@ -229,4 +229,46 @@ describe("Private ordinary payloads retain current source authority without anal
     ));
     await expect(memoryService(db).get(companyId,created.record.id,memoryActor(ownerId,runId))).resolves.toBeNull();
   });
+  it("denies cyclic Memory lineage while allowing a complete diamond", async () => {
+    const binding = await privateMemoryBinding();
+    const ids = Array.from({length:4},()=>randomUUID());
+    await db.insert(memoryRecords).values(ids.map((id,index)=>({
+      id,companyId,bindingId:binding.id,providerKey:"local",memoryType:"lesson" as const,
+      scopeType:"company" as const,content:"Explicit source-free fixture",
+      sourceProvenanceQualified:true,sourceMemoryIds:index===0?[ids[1]!,ids[2]!]:index===3?[]:[ids[3]!],
+      observedAt:new Date(),createdByActorType:"user" as const,createdByActorId:ownerId,
+    })));
+    await expect(canActorReadMemorySources(db,companyId,human(ownerId),ids[0]!)).resolves.toBe(true);
+    await db.update(memoryRecords).set({sourceMemoryIds:[ids[0]!]}).where(eq(memoryRecords.id,ids[3]!));
+    await expect(canActorReadMemorySources(db,companyId,human(ownerId),ids[0]!)).resolves.toBe(false);
+  });
+  it("does not admit source-free Memory through a membership whose actual account was deleted", async () => {
+    const binding=await privateMemoryBinding();
+    const [record]=await db.insert(memoryRecords).values({companyId,bindingId:binding.id,providerKey:"local",
+      memoryType:"lesson",scopeType:"company",content:"Explicit source-free fixture",sourceProvenanceQualified:true,
+      observedAt:new Date(),createdByActorType:"user",createdByActorId:ownerId}).returning();
+    await expect(canActorReadMemorySources(db,companyId,human(ownerId),record!.id)).resolves.toBe(true);
+    await db.delete(authUsers).where(eq(authUsers.id,ownerId));
+    await expect(canActorReadMemorySources(db,companyId,human(ownerId),record!.id)).resolves.toBe(false);
+  });
+  it("withholds Memory when its current reader agent is paused", async () => {
+    const created=await privateMemory();
+    await db.update(agents).set({status:"paused"}).where(eq(agents.id,agentId));
+    await expect(memoryService(db).get(companyId,created.record.id,memoryActor(ownerId,runId))).resolves.toBeNull();
+  });
+  it("applies Memory source authority before both eligible and reviewable result limits", async () => {
+    const binding=await privateMemoryBinding();
+    const now=new Date();
+    const [readable]=await db.insert(memoryRecords).values({companyId,bindingId:binding.id,providerKey:"local",
+      memoryType:"lesson",scopeType:"company",content:"Readable last result",sourceProvenanceQualified:true,
+      reviewState:"accepted",observedAt:now,updatedAt:now,createdByActorType:"user",createdByActorId:ownerId}).returning();
+    await db.insert(memoryRecords).values(Array.from({length:3},(_,i)=>({companyId,bindingId:binding.id,providerKey:"local",
+      memoryType:"lesson" as const,scopeType:"company" as const,content:"PRIVATE preceding result",sourceProvenanceQualified:true,
+      sourceIssueIds:[issueId],reviewState:"accepted" as const,observedAt:new Date(now.getTime()+i+1),
+      updatedAt:new Date(now.getTime()+i+1),createdByActorType:"user" as const,createdByActorId:ownerId})));
+    const actor={principal:{type:"user" as const,userId:otherId}};
+    expect((await memoryService(db).listEligible(companyId,{limit:1},actor)).map(row=>row.id)).toEqual([readable!.id]);
+    expect((await memoryService(db).listReviewable(companyId,{limit:1},actor)).map(row=>row.id)).toEqual([readable!.id]);
+  });
+
 });

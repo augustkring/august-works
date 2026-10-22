@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
-import { activityLog, companies, companyMemberships, createDb, memoryBindings, memoryBindingTargets, memoryEvidence, memoryJobs, memoryRecords } from "@paperclipai/db";
+import { activityLog, authUsers, companies, companyMemberships, createDb, memoryBindings, memoryBindingTargets, memoryEvidence, memoryJobs, memoryRecords } from "@paperclipai/db";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { memoryService } from "./memory-service.js";
@@ -29,11 +29,12 @@ suite("Governed native Memory maintenance", () => {
     const [company] = await db.insert(companies).values({ name: "Maintenance", issuePrefix: `M${randomUUID().slice(0, 6).toUpperCase()}` }).returning();
     const companyId = company!.id, userId = `owner-${randomUUID()}`;
     fixtureCompanies.add(companyId);
+    await db.insert(authUsers).values({id:userId,name:"Maintenance owner",email:`${randomUUID()}@example.test`,createdAt:new Date(),updatedAt:new Date()});
     await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId, membershipRole: "owner", status: "active" });
     const [binding] = await db.insert(memoryBindings).values({ companyId, key: "shared", name: "Local Memory", providerKey: "local", enabled: true, config: {} }).returning();
     await db.insert(memoryBindingTargets).values({ companyId, bindingId: binding!.id, targetType: "company", targetId: companyId });
     const records = await db.insert(memoryRecords).values([0, 1].map((index) => ({ companyId, bindingId: binding!.id, providerKey: "local",
-      memoryType: "observation" as const, scopeType: "company" as const, scopeId: null, title: duplicate ? "Same reviewed claim" : `Reviewed claim ${index}`,
+      sourceProvenanceQualified:true, memoryType: "observation" as const, scopeType: "company" as const, scopeId: null, title: duplicate ? "Same reviewed claim" : `Reviewed claim ${index}`,
       content: duplicate ? "An identical reviewed claim with preserved supporting evidence." : `Reviewed claim ${index}. ${"Full source detail. ".repeat(20)}`,
       summary: duplicate ? "Same summary" : `Reviewed summary ${index}.`, observedAt: new Date(), reviewState: "accepted" as const,
       verificationState: "human_verified" as const, createdByActorType: "user" as const, createdByActorId: userId }))).returning();

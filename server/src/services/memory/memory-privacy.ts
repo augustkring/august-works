@@ -1,14 +1,16 @@
 import { createHash } from "node:crypto";
+import { AsyncLocalStorage } from "node:async_hooks";
 import { and, eq, inArray, isNull, lte, or, sql } from "drizzle-orm";
 import { agentExecutionManifests,providerTraceRecords, memoryDeletionMarkers, memoryEvidence, memoryJobs, memoryRecords, memoryRetentionPolicies,
-  contextManifests, contextManifestMemoryRoots, saasRunLogs, saasRunLogChunks, activityLog, issueThreadInteractions, toolAccessAuditEvents, toolActionRequests, toolCallEvents, toolInvocations,
-  heartbeatRuns, heartbeatRunEvents, agentWakeupRequests, issues, issueComments, issueDocuments, documents, documentRevisions,
+  contextManifests, contextManifestItems, contextManifestMemoryRoots, saasRunLogs, saasRunLogChunks, activityLog, issueThreadInteractions, toolAccessAuditEvents, toolActionRequests, toolCallEvents, toolInvocations,
+  heartbeatRuns, heartbeatRunEvents, agentWakeupRequests, agents, authUsers, issues, issueComments, issueDocuments, documents, documentRevisions,
   nativeRunResults, workAssessments, statusDecisions, nativeRunFinalizations, completionContracts, issueWorkProducts, agentTaskSessions, agentRuntimeState,
   workflowRuns, workflowStepRuns, workflowWaits, workflowRunReviews, workflowOptimizerEvaluations, workflowOptimizerObservations, automationArtifacts, automationArtifactVersions, type Db } from "@paperclipai/db";
 import { notificationPreferenceProposals, foundationChangeProposals, foundationSections, routines, routineRevisions, routineTriggers, routineDocuments, routineRuns, companySecretBindings } from "@paperclipai/db";
 import { eraseAnalyticalSourcesUnderMemory } from "../analytical-source-erasure.js";
 import { eraseBusinessEventObjectUnderMemory } from "../business-event-payload-erasure.js";
-import { conflict } from "../../errors.js";
+import { conflict, forbidden, HttpError } from "../../errors.js";
+import type { AuthorizationActor } from "../authorization.js";
 import { invalidateCognitiveRecords } from "./cognitive-privacy.js";
 import { invalidateDerivedMemory } from "./derived-privacy.js";
 
@@ -18,6 +20,137 @@ export function memoryDeletionKey(companyId: string, kind: "record" | "operation
 
 export async function lockMemoryPrivacy(db: Db, companyId: string) {
   await db.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`memory:privacy:${companyId}`}, 0))`);
+}
+
+/** Current source authority, independent of a Memory record's display scope.
+ * A shared/corrected copy keeps every original root. Unknown history is withheld. */
+const memorySourceReads=new AsyncLocalStorage<{active:Set<string>;deadline:number;work:number}>();
+export async function canActorReadMemorySources(db: Db, companyId: string, actor: AuthorizationActor | undefined, recordId: string):Promise<boolean> {
+  const inherited=memorySourceReads.getStore(),state=inherited??{active:new Set<string>(),deadline:performance.now()+8000,work:0};
+  const key=`${companyId}:${recordId}`;
+  if(state.active.has(key) || performance.now()>state.deadline || state.work>=256)return false;
+  const read=async()=>{
+    state.active.add(key);
+    try{return await inspectMemorySourceAccess(db,companyId,actor,recordId,state);}
+    finally{state.active.delete(key);}
+  };
+  return inherited?read():memorySourceReads.run(state,read);
+}
+async function inspectMemorySourceAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,recordId:string,
+  state:{deadline:number;work:number}):Promise<boolean> {
+  if (!actor) return false;
+  const { authorizationService, canActorReadIssuePrivacy, canActorReadProjectPrivacy, canActorReadHeartbeatRunPrivacy } = await import("../authorization.js");
+  const admitted = async () => {
+    if (actor.type === "agent") {
+      if (!actor.runId || !actor.agentId || !actor.onBehalfOfUserId) return false;
+      const [run] = await db.select({id:heartbeatRuns.id}).from(heartbeatRuns)
+      .innerJoin(agents,and(eq(agents.companyId,heartbeatRuns.companyId),eq(agents.id,heartbeatRuns.agentId))).where(and(
+        eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,actor.runId),eq(heartbeatRuns.agentId,actor.agentId),
+        eq(heartbeatRuns.responsibleUserId,actor.onBehalfOfUserId),eq(heartbeatRuns.status,"running"),
+        sql`${agents.status} not in ('paused','terminated','pending_approval','error')`,
+      ));
+      if (!run) return false;
+    }else if(actor.type==="board" && actor.source!=="local_implicit"){
+      if(!actor.userId)return false;
+      const [account]=await db.select({id:authUsers.id}).from(authUsers).where(eq(authUsers.id,actor.userId));
+      if(!account)return false;
+    }
+    return (await authorizationService(db).decide({actor,action:"company_scope:read",resource:{type:"company",companyId},enforceResponsibleUserIntersection:true})).allowed;
+  };
+  if (!await admitted()) return false;
+  const active = new Set<string>(), visited = new Set<string>();
+  const runs = new Set<string>(), tasks = new Set<string>(), projectIds = new Set<string>(), revisions = new Set<string>();
+  const deadline = state.deadline;
+  const visit = async (id:string,ancestor=false):Promise<boolean> => {
+    if (active.has(id) || performance.now()>deadline || visited.size>=256 || state.work>=256) return false;
+    if (visited.has(id)) return true;
+    state.work++;
+    const [row] = await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId,companyId),eq(memoryRecords.id,id),memoryPayloadVisible()));
+    if (!row?.sourceProvenanceQualified || (row.expiresAt && row.expiresAt.getTime()<=Date.now())) return false;
+    if(ancestor && (row.revokedAt || row.retentionState==="expired" || row.validUntil && row.validUntil.getTime()<=Date.now()))return false;
+    const ids = [...row.sourceRunIds,...row.sourceIssueIds,...row.sourceProjectIds,...row.sourceMemoryIds,...row.sourceFoundationRevisionIds];
+    if (ids.length>256 || ids.some(value=>typeof value!=="string" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value))) return false;
+    visited.add(id);active.add(id);
+    row.sourceRunIds.forEach(value=>runs.add(value));row.sourceIssueIds.forEach(value=>tasks.add(value));
+    row.sourceProjectIds.forEach(value=>projectIds.add(value));row.sourceFoundationRevisionIds.forEach(value=>revisions.add(value));
+    if (row.scopeType==="project") {
+      if (!row.scopeId || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(row.scopeId)) return false;
+      projectIds.add(row.scopeId);
+    }
+    for (const source of row.sourceMemoryIds) if (!await visit(source,true)) return false;
+    active.delete(id);
+    return visited.size+runs.size+tasks.size+projectIds.size+revisions.size<=256;
+  };
+  if (!await visit(recordId)) return false;
+  for (const id of runs) if (performance.now()>deadline || !await canActorReadHeartbeatRunPrivacy(db,actor,{companyId,id})) return false;
+  for (const id of tasks) if (performance.now()>deadline || !await canActorReadIssuePrivacy(db,actor,{companyId,id})) return false;
+  for (const id of projectIds) if (performance.now()>deadline || !await canActorReadProjectPrivacy(db,actor,{companyId,id})) return false;
+  if (revisions.size) {
+    if (!(await authorizationService(db).decide({actor,action:"foundation:read",resource:{type:"company",companyId},enforceResponsibleUserIntersection:true})).allowed) return false;
+    const {assertLearnedAssetAnalyticalSources} = await import("../learning/learning-analytical-sources.js");
+    for (const id of revisions) {
+      if (performance.now()>deadline) return false;
+      const [source] = await db.select({id:documentRevisions.id}).from(documentRevisions).where(and(eq(documentRevisions.companyId,companyId),eq(documentRevisions.id,id)));
+      if (!source) return false;
+      try {await assertLearnedAssetAnalyticalSources(db,companyId,"document_revision",id,actor,"task");}
+      catch(error){if(error instanceof HttpError && [403,404,409,422].includes(error.status))return false;throw error;}
+    }
+  }
+  return performance.now()<=deadline && await admitted();
+}
+
+/** Only actual producer/run and persisted Context owners stamp these columns.
+ * Caller citations and metadata never qualify a producer or remove a source. */
+export async function captureMemorySources(db: Db, companyId: string, actor: AuthorizationActor | undefined,
+  scope:{type:string;id:string|null}, sourceMemoryIds:string[] = []) {
+  const sources = {
+    sourceProvenanceQualified:false,sourceRunIds:[] as string[],sourceIssueIds:[] as string[],
+    sourceProjectIds:[] as string[],sourceMemoryIds:[...new Set(sourceMemoryIds)],sourceFoundationRevisionIds:[] as string[],
+  };
+  if (!actor) return sources;
+  const {authorizationService} = await import("../authorization.js");
+  if (!(await authorizationService(db).decide({actor,action:"company_scope:read",resource:{type:"company",companyId},enforceResponsibleUserIntersection:true})).allowed)
+    throw forbidden("Memory producer authority is unavailable");
+  if (scope.type==="project" && scope.id) sources.sourceProjectIds.push(scope.id);
+  if (actor.type==="agent") {
+    if (!actor.runId || !actor.agentId || !actor.onBehalfOfUserId) throw forbidden("Memory requires its actual accountable producer run");
+    const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId,companyId),eq(heartbeatRuns.id,actor.runId),
+      eq(heartbeatRuns.agentId,actor.agentId),eq(heartbeatRuns.responsibleUserId,actor.onBehalfOfUserId))).for("share");
+    if (!run || !["running","succeeded"].includes(run.status)) throw forbidden("Memory producer run is unavailable");
+    sources.sourceRunIds.push(run.id);
+    if (run.issueId) sources.sourceIssueIds.push(run.issueId);
+    const contexts = await db.select().from(contextManifests).where(and(eq(contextManifests.companyId,companyId),eq(contextManifests.agentId,actor.agentId),eq(contextManifests.runId,run.id))).limit(65);
+    if (contexts.length>64) throw forbidden("Complete Memory producer Context exceeds its source budget");
+    if (contexts.length) {
+      const contextIds=contexts.map(row=>row.id);
+      sources.sourceProjectIds.push(...contexts.flatMap(row=>row.projectId?[row.projectId]:[]));
+      const roots=await db.select({id:contextManifestMemoryRoots.memoryRecordId}).from(contextManifestMemoryRoots)
+        .where(and(eq(contextManifestMemoryRoots.companyId,companyId),inArray(contextManifestMemoryRoots.manifestId,contextIds))).limit(257);
+      if (roots.length>256) throw forbidden("Complete Memory roots exceed their source budget");
+      sources.sourceMemoryIds.push(...roots.map(row=>row.id));
+      const items=await db.select().from(contextManifestItems).where(and(eq(contextManifestItems.companyId,companyId),inArray(contextManifestItems.manifestId,contextIds))).limit(257);
+      if (items.length>256) throw forbidden("Complete Memory Context exceeds its source budget");
+      for (const item of items) {
+        if (item.sourceProvider==="august_works_tasks") {
+          const ref=/^issue:\/\/([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})$/i.exec(item.sourceRef);
+          if (!ref) throw forbidden("Memory Task provenance is unavailable");
+          sources.sourceIssueIds.push(ref[1]!);
+        } else if (item.sourceProvider==="august_works_foundation") {
+          const ref=/^foundation:\/\/[a-f0-9-]{36}\/([a-f0-9-]{36})\/(?:\d+|whole)$/i.exec(item.sourceRef);
+          if (!ref || item.sourceVersion!==ref[1]) throw forbidden("Memory Foundation provenance is unavailable");
+          sources.sourceFoundationRevisionIds.push(ref[1]!);
+        }
+      }
+    }
+  } else if (actor.type!=="board" || (!actor.userId && actor.source!=="local_implicit")) return sources;
+  for (const key of ["sourceRunIds","sourceIssueIds","sourceProjectIds","sourceMemoryIds","sourceFoundationRevisionIds"] as const)
+    sources[key]=[...new Set(sources[key])].sort();
+  if (sources.sourceRunIds.length+sources.sourceIssueIds.length+sources.sourceProjectIds.length+sources.sourceMemoryIds.length+sources.sourceFoundationRevisionIds.length>256)
+    throw forbidden("Complete Memory provenance exceeds its source budget");
+  if (!(await authorizationService(db).decide({actor,action:"company_scope:read",resource:{type:"company",companyId},enforceResponsibleUserIntersection:true})).allowed)
+    throw forbidden("Memory producer authority changed");
+  sources.sourceProvenanceQualified=true;
+  return sources;
 }
 
 export function memoryPayloadVisible() {
@@ -77,6 +210,7 @@ export async function purgeMemoryRecords(db: Db, companyId: string, rootIds: str
   while (frontier.length) {
     const lineage = await db.select({ id: memoryRecords.id }).from(memoryRecords).where(and(eq(memoryRecords.companyId, companyId),
       or(inArray(memoryRecords.supersedesRecordId, frontier), inArray(memoryRecords.supersededByRecordId, frontier),
+        sql`${memoryRecords.sourceMemoryIds} && ARRAY[${sql.join(frontier.map(id=>sql`${id}::uuid`),sql`, `)}]::uuid[]`,
         sql`${memoryRecords.metadata} ->> 'promotedFromPrivateRecordId' in (${sql.join(frontier.map((id) => sql`${id}`), sql`, `)})`)));
     const evidence = await db.select({ id: memoryEvidence.memoryRecordId }).from(memoryEvidence).where(and(
       eq(memoryEvidence.companyId, companyId), inArray(memoryEvidence.sourceRef, frontier.flatMap((id) =>
@@ -362,7 +496,9 @@ export async function forgetMemoryForDeletedIssue(db: Db, companyId: string, iss
   const roots = await db.select({ id: memoryEvidence.memoryRecordId }).from(memoryEvidence).where(and(
     eq(memoryEvidence.companyId, companyId), inArray(memoryEvidence.sourceProvider, ["august_works_memory_agent_tool", "august_works_post_run_extraction"]),
     sql`${memoryEvidence.sourceRef} like ${`run://%/issue/${issueId}`}`));
-  return purgeMemoryRecords(db, companyId, [...new Set(roots.map((row) => row.id))]);
+  const retained=await db.select({id:memoryRecords.id}).from(memoryRecords).where(and(eq(memoryRecords.companyId,companyId),
+    sql`${issueId}::uuid=any(${memoryRecords.sourceIssueIds})`));
+  return purgeMemoryRecords(db, companyId, [...new Set([...roots,...retained].map((row) => row.id))]);
 }
 
 export async function expireMemoryPayloads(db: Db, companyId: string, now: Date) {

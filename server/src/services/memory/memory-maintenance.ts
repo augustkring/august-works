@@ -78,18 +78,25 @@ export async function executeMemoryMaintenance(db: Db, job: typeof memoryJobs.$i
     }
     let supersededCount = 0;
     for (const group of groups.values()) {
+      // ponytail: consolidate independent roots; keep derived lineages separate
+      // until a dedicated acyclic merge is required and qualified.
+      if(group.some(row=>row.sourceMemoryIds.length))continue;
       group.sort((left, right) => left.createdAt.getTime() - right.createdAt.getTime() || left.id.localeCompare(right.id));
       const canonical = group[0]!;
       for (const duplicate of group.slice(1)) {
         const evidence = await db.select().from(memoryEvidence).where(and(eq(memoryEvidence.companyId, job.companyId), eq(memoryEvidence.memoryRecordId, duplicate.id)));
         if (evidence.length) await db.insert(memoryEvidence).values(evidence.map(({ id: _id, memoryRecordId: _recordId, ...item }) => ({ ...item, memoryRecordId: canonical.id })));
+        // Actual selected source identity, independent of its copied citations.
+        const sourceMemoryIds=[...new Set([...canonical.sourceMemoryIds,duplicate.id])];
+        await db.update(memoryRecords).set({sourceMemoryIds,updatedAt:now}).where(and(eq(memoryRecords.companyId,job.companyId),eq(memoryRecords.id,canonical.id)));
+        canonical.sourceMemoryIds=sourceMemoryIds;
         await db.update(memoryRecords).set({ supersededByRecordId: canonical.id, retentionState: "superseded", updatedAt: now })
           .where(and(eq(memoryRecords.companyId, job.companyId), eq(memoryRecords.id, duplicate.id), isNull(memoryRecords.supersededByRecordId)));
         await invalidateCognitiveRecords(db, job.companyId, [duplicate.id]);
         supersededCount++;
       }
     }
-    result = { scannedRecordCount: records.length, supersededCount, canonicalRecordCount: groups.size };
+    result = { scannedRecordCount: records.length, supersededCount, canonicalRecordCount: records.length-supersededCount };
   } else if (job.operationType === "compaction" || job.operationType === "reflection") {
     const reflection = job.operationType === "reflection";
     if (reflection && !source.proposedLesson) throw unprocessable("Reflection requires an explicit owner-proposed lesson");
@@ -113,7 +120,7 @@ export async function executeMemoryMaintenance(db: Db, job: typeof memoryJobs.$i
       createdByOperationId: `memory-compaction:${job.jobKey}`, metadata: { sourceMemoryRecordIds: source.recordIds, maintenanceJobId: job.id },
       evidence: records.map((row) => ({ sourceClass: "accepted_memory", sourceProvider: "august_works_memory_maintenance", sourceType: "record",
         sourceRef: `memory://${row.id}`, sourceVersion: row.updatedAt.toISOString(), sourceUpdatedAt: row.updatedAt.toISOString(), observedAt: now.toISOString(),
-        excerptHash: createHash("sha256").update(row.summary?.trim() ? row.summary : row.content).digest("hex"), citation: { label: "Reviewed source Memory", href: `/memory/${row.id}` }, trustLevel: "low", relation: "supports" })) }, { principal: source.requester });
+        excerptHash: createHash("sha256").update(row.summary?.trim() ? row.summary : row.content).digest("hex"), citation: { label: "Reviewed source Memory", href: `/memory/${row.id}` }, trustLevel: "low", relation: "supports" })) }, { principal: source.requester }, records.map(row=>row.id));
     result = { proposedRecordId: candidate.record.id, reviewState: candidate.record.reviewState, sourceRecordCount: records.length };
   } else throw unprocessable("Maintenance operation is unavailable");
   const audit = await persistActivity(db, { companyId: job.companyId, actorType: source.requester.type,

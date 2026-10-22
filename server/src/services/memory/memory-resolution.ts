@@ -1,4 +1,5 @@
-import { memoryPayloadVisible } from "./memory-privacy.js";
+import { memoryPayloadVisible, canActorReadMemorySources } from "./memory-privacy.js";
+import type { AuthorizationActor } from "../authorization.js";
 import { createHash } from "node:crypto";
 import {
   and,
@@ -138,10 +139,11 @@ async function currentComparableRecords(
   companyId: string,
   input: MemoryCandidateInputParsed,
   now: Date,
+  actor: AuthorizationActor | undefined,
 ): Promise<MemoryRecord[]> {
   if (input.scope.type === "agent") return [];
 
-  return db
+  const query=db
     .select()
     .from(memoryRecords)
     .where(
@@ -172,8 +174,15 @@ async function currentComparableRecords(
         or(isNull(memoryRecords.expiresAt), gt(memoryRecords.expiresAt, now)),
       ),
     )
-    .orderBy(desc(memoryRecords.observedAt), desc(memoryRecords.updatedAt))
-    .limit(MAX_RESOLUTION_CANDIDATES);
+    .orderBy(desc(memoryRecords.observedAt), desc(memoryRecords.updatedAt),memoryRecords.id)
+    .$dynamic();
+  const visible:MemoryRecord[]=[];
+  for(let offset=0;;offset+=MAX_RESOLUTION_CANDIDATES){
+    const rows=await query.limit(MAX_RESOLUTION_CANDIDATES).offset(offset);
+    for(const row of rows)if(await canActorReadMemorySources(db,companyId,actor,row.id))visible.push(row);
+    if(visible.length>=MAX_RESOLUTION_CANDIDATES || rows.length<MAX_RESOLUTION_CANDIDATES)
+      return visible.slice(0,MAX_RESOLUTION_CANDIDATES);
+  }
 }
 
 async function novelEvidenceFor(
@@ -212,7 +221,7 @@ export async function resolveMemoryCandidate(
   db: Db,
   companyId: string,
   input: MemoryCandidateInputParsed,
-  options: { now?: Date } = {},
+  options: { now?: Date; actor: AuthorizationActor | undefined },
 ): Promise<MemoryCandidateResolution> {
   const now = options.now ?? new Date();
 
@@ -228,7 +237,7 @@ export async function resolveMemoryCandidate(
     };
   }
 
-  const records = await currentComparableRecords(db, companyId, input, now);
+  const records = await currentComparableRecords(db, companyId, input, now, options.actor);
   if (records.length === 0) {
     return {
       metadata: resolutionMetadata({
