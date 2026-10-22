@@ -8,6 +8,9 @@ import {
   agents,
   authUsers,
   companyMemberships,
+  contextManifestItems,
+  contextManifestMemoryRoots,
+  contextManifests,
   heartbeatRuns,
   memoryBindings,
   memoryBindingTargets,
@@ -1464,15 +1467,43 @@ export function memoryService(db: Db) {
           resolution.metadata.kind === "corroboration" ||
           attachesToExistingPendingContradiction
         ) {
-          const target = resolution.target;
-          if (!target) {
+          const resolvedTarget = resolution.target;
+          if (!resolvedTarget) {
             throw new Error(
               `Memory ${resolution.metadata.kind} resolution is missing its target record`,
             );
           }
+          const [target] = await txDb.select().from(memoryRecords).where(and(
+            eq(memoryRecords.companyId,companyId),eq(memoryRecords.id,resolvedTarget.id),memoryPayloadVisible(),
+          )).for("update");
+          if(!target || target.updatedAt.getTime()!==resolvedTarget.updatedAt.getTime())
+            throw conflict("Memory resolution target changed before attachment",{code:"memory_resolution_conflict"});
+          await assertMemorySourceAccess(txDb,companyId,target.id,actor);
 
           const provenance=await captureMemorySources(txDb,companyId,learningActorFromPrincipal(companyId,actor.principal,actor.runId),parsed.data.scope,sourceMemoryIds);
-          await txDb.update(memoryRecords).set({
+          if(provenance.sourceMemoryIds.includes(target.id)){
+            // Only the exact current native selection can be a no-op input to
+            // its own unchanged claim. Caller IDs and old receipts cannot erase
+            // a dependency; all other captured roots remain in the union.
+            if(actor.principal.type!=="agent" || !actor.runId)
+              throw conflict("Memory self-source requires its current native selection",{code:"memory_resolution_source_conflict"});
+            const version=target.updatedAt.toISOString();
+            const receipts=await txDb.select({version:contextManifestMemoryRoots.sourceVersion,pinned:sql<boolean>`exists(
+              select 1 from ${contextManifestItems} item where item.company_id=${companyId}::uuid
+                and item.manifest_id=${contextManifestMemoryRoots.manifestId} and item.source_provider='august_works_memory'
+                and item.source_ref=${`memory://record/${target.id}`} and item.source_version=${version})`})
+              .from(contextManifestMemoryRoots).innerJoin(contextManifests,and(
+                eq(contextManifests.companyId,contextManifestMemoryRoots.companyId),eq(contextManifests.id,contextManifestMemoryRoots.manifestId),
+              )).where(and(eq(contextManifests.companyId,companyId),eq(contextManifests.runId,actor.runId),
+                eq(contextManifests.agentId,actor.principal.agentId),eq(contextManifestMemoryRoots.memoryRecordId,target.id))).limit(65);
+            if(!receipts.length || receipts.length>64 || receipts.some(receipt=>receipt.version!==version || !receipt.pinned))
+              throw conflict("Memory self-source selection changed before attachment",{code:"memory_resolution_source_conflict"});
+            provenance.sourceMemoryIds=provenance.sourceMemoryIds.filter(id=>id!==target.id);
+          }
+          const sourceKeys=["sourceRunIds","sourceIssueIds","sourceProjectIds","sourceMemoryIds","sourceFoundationRevisionIds"] as const;
+          const sourceChanges=target.sourceProvenanceQualified!==(target.sourceProvenanceQualified && provenance.sourceProvenanceQualified)
+            || sourceKeys.some(key=>provenance[key].some(id=>!target[key].includes(id)));
+          if(resolution.metadata.kind!=="duplicate" || sourceChanges)await txDb.update(memoryRecords).set({
             sourceProvenanceQualified:target.sourceProvenanceQualified && provenance.sourceProvenanceQualified,
             sourceRunIds:[...new Set([...target.sourceRunIds,...provenance.sourceRunIds])],
             sourceIssueIds:[...new Set([...target.sourceIssueIds,...provenance.sourceIssueIds])],
@@ -1506,6 +1537,11 @@ export function memoryService(db: Db) {
             );
           }
 
+          // A distinct descendant or another retained source may lead back to
+          // this target. Use the original current source owner before commit,
+          // so failed attachment rolls back lineage, evidence and audit alike.
+          if(!await canActorReadMemorySources(txDb,companyId,learningActorFromPrincipal(companyId,actor.principal,actor.runId),target.id))
+            throw conflict("Memory attachment sources are unavailable or cyclic",{code:"memory_resolution_source_conflict"});
           return { recordId: target.id, resolution: resolution.metadata };
         }
 
