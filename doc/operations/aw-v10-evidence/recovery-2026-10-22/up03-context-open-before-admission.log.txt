@@ -1,0 +1,53 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v10-private-payload.integration.test.ts (12 tests | 1 failed | 11 skipped) 14709ms
+     × reauthorizes after waiting for the existing Context privacy transaction (open) 940ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-payload.integration.test.ts > Private ordinary payloads retain current source authority without analytical roots > reauthorizes after waiting for the existing Context privacy transaction (open)
+AssertionError: expected { value: { manifest: { …(9) }, …(1) } } to match object { error: { status: 403 } }
+(3 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "error": {
+-     "status": 403,
++   "value": {
++     "items": [],
++     "manifest": {
++       "agentId": "1ff62d18-bae1-425e-bc21-eef896eabd10",
++       "companyId": "c1c158e1-0373-499f-a22f-556338ab9783",
++       "createdAt": 2026-10-22T20:31:49.590Z,
++       "id": "64c74ca0-8a2c-4b8c-910a-2fdd55ce9025",
++       "issueId": "0f6dd108-c3dd-474d-b0b3-0dc865f6848d",
++       "policySnapshotHash": "44136fa355b3678a1146ad16f7e8649e94fb4fc21fe77e8310c060f61caaff8a",
++       "projectId": null,
++       "queryHash": "a7b539c5d6093d2528d6ddb80c7ff06a23c17c0a0c90ad6efb7c07552ce3beef",
++       "runId": "db9c455d-732d-45fb-8d7a-df5bbaf83e80",
++     },
+    },
+  }
+
+ ❯ src/__tests__/v10-private-payload.integration.test.ts:114:27
+    112|       await blocker;
+    113|     }
+    114|     expect(await pending).toMatchObject({ error: { status: 403 } });
+       |                           ^
+    115|     expect(await db.select().from(contextManifests).where(eq(contextMa…
+    116|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 11 skipped (12)
+   Start at  20:31:23
+   Duration  27.20s (transform 7.12s, setup 152ms, import 11.94s, tests 14.71s, environment 0ms)
+

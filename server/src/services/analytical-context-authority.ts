@@ -2,7 +2,7 @@ import {and,eq,inArray,or,sql} from "drizzle-orm";
 import {analyticalContextDependencies,analyticalContextRoots,contextManifestMemoryRoots,contextManifestItems,contextManifests,agentExecutionManifests,decisionContextVersions,decisionOutcomeReviewReceipts,processAnalysisVersions,issues,heartbeatRuns,workflowStepRuns,workflowRuns,type Db} from "@paperclipai/db";
 import {analyticalContextAuthorityPinSchema,type AnalyticalContextAuthorityPin} from "@paperclipai/shared";
 import {z} from "zod";
-import type {AuthorizationActor} from "./authorization.js";
+import {canActorReadHeartbeatRunPrivacy,canActorReadIssuePrivacy,type AuthorizationActor} from "./authorization.js";
 import type {NativeReadScope} from "./analytical-reader.js";
 import {HttpError,conflict,forbidden,unprocessable} from "../errors.js";
 
@@ -142,6 +142,12 @@ export async function assertAnalyticalContextPayloadAccess(db:Db,companyId:strin
 }
 
 async function assertDirectAnalyticalContextPayloadAccess(db:Db,companyId:string,actor:AuthorizationActor|undefined,scope:{issueId:string}|{runId:string},readScope?:NativeReadScope) {
+ // Ordinary conversation prose has source privacy even without analytical
+ // retention roots. Every actual ancestor goes through this same narrowing.
+ if(!actor || !("issueId" in scope
+   ? await canActorReadIssuePrivacy(db,actor,{companyId,id:scope.issueId})
+   : await canActorReadHeartbeatRunPrivacy(db,actor,{companyId,id:scope.runId})))
+   throw new HttpError(403,"Native task source access is unavailable",{code:"analytical_source_access_lost"});
  const [sourceReceipt]=await db.execute<{erased:boolean}>(sql`select aw_workflow_memory_erased(${companyId}::uuid,${"runId"in scope?scope.runId:null}::uuid,${"issueId"in scope?scope.issueId:null}::uuid) as erased`);
  if(sourceReceipt?.erased)throw new HttpError(403,"Analytical conversation source access is unavailable",{code:"analytical_source_access_lost"});
  await assertLearnedWorkflowPayloadAccess(db,companyId,actor,scope,readScope);

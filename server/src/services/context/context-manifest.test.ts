@@ -2,7 +2,9 @@ import { randomUUID } from "node:crypto";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   agents,
+  authUsers,
   companies,
+  companyMemberships,
   contextManifestItems,
   contextManifests,
   createDb,
@@ -36,7 +38,9 @@ describeEmbeddedPostgres("Context Manifest service", () => {
     await db.delete(contextManifests);
     await db.delete(heartbeatRuns);
     await db.delete(agents);
+    await db.delete(companyMemberships);
     await db.delete(companies);
+    await db.delete(authUsers);
   });
 
   afterAll(async () => {
@@ -45,12 +49,15 @@ describeEmbeddedPostgres("Context Manifest service", () => {
 
   async function seedCompanyAndAgent(name: string) {
     const companyId = randomUUID();
+    const userId = randomUUID();
+    await db.insert(authUsers).values({id:userId,name:"Current Context owner",email:`${userId}@example.test`,createdAt:new Date(),updatedAt:new Date()});
     await db.insert(companies).values({
       id: companyId,
       name,
       issuePrefix: `C${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
       requireBoardApprovalForNewAgents: false,
     });
+    await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:userId,status:"active",membershipRole:"owner"});
     const [agent] = await db.insert(agents).values({
       companyId,
       name: `${name} Agent`,
@@ -60,7 +67,7 @@ describeEmbeddedPostgres("Context Manifest service", () => {
       runtimeConfig: {},
       permissions: {},
     }).returning();
-    return { companyId, agent: agent! };
+    return { companyId, userId, agent: agent! };
   }
 
   function evidence(companyId: string, excerpt: string): EvidenceItem {
@@ -100,6 +107,7 @@ describeEmbeddedPostgres("Context Manifest service", () => {
     const [run] = await db.insert(heartbeatRuns).values({
       companyId: seeded.companyId,
       agentId: seeded.agent.id,
+      responsibleUserId:seeded.userId,
     }).returning();
     const rawQuery = "secret customer question that must not be stored";
     const rawExcerpt = "sensitive selected evidence that must not be stored in the manifest";

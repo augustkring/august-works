@@ -21,7 +21,7 @@ import { conflict, forbidden, unprocessable } from "../../errors.js";
 import { learningAssetRoots,retainLearnedAssetsInContext } from "../learning/learning-assets.js";
 import { lockMemoryPrivacy, memoryPayloadVisible } from "../memory/memory-privacy.js";
 import {lockAnalyticalCompany} from "../analytical-privacy.js";
-import type {AuthorizationActor} from "../authorization.js";
+import {authorizationService,canActorReadHeartbeatRunPrivacy,canActorReadIssuePrivacy,canActorReadProjectPrivacy,type AuthorizationActor} from "../authorization.js";
 
 type JsonScalar = string | number | boolean | null;
 type CanonicalJson = JsonScalar | CanonicalJson[] | { [key: string]: CanonicalJson };
@@ -108,7 +108,7 @@ async function assertManifestReferences(db: Db, input: CreateContextManifestInpu
       .then((rows) => rows[0] ?? null),
     input.runId
       ? db
-          .select({ id: heartbeatRuns.id, agentId: heartbeatRuns.agentId })
+          .select({ id: heartbeatRuns.id, agentId: heartbeatRuns.agentId, responsibleUserId:heartbeatRuns.responsibleUserId })
           .from(heartbeatRuns)
           .where(
             and(
@@ -172,19 +172,54 @@ async function assertManifestReferences(db: Db, input: CreateContextManifestInpu
       throw unprocessable("Context manifest selection reason is invalid");
     }
   }
+  return run;
 }
 
 export function contextManifestService(db: Db) {
   return {
     create: async (input: CreateContextManifestInput) => {
-      await assertManifestReferences(db, input);
-
       const queryHash = hashContextQuery(input.query);
       const policySnapshotHash = hashContextPolicySnapshot(input.policySnapshot);
 
       return db.transaction(async (tx) => {
         await lockAnalyticalCompany(tx as unknown as Db,input.companyId);
         await lockMemoryPrivacy(tx as unknown as Db, input.companyId);
+        const sourceDb = tx as unknown as Db;
+        const run = await assertManifestReferences(sourceDb, input);
+        if (!run?.responsibleUserId || (input.responsibleUserId && input.responsibleUserId !== run.responsibleUserId))
+          throw forbidden("Context requires its actual accountable run");
+        const sourceActor:AuthorizationActor={type:"agent",source:"agent_jwt",companyId:input.companyId,agentId:input.agentId,runId:run.id,onBehalfOfUserId:run.responsibleUserId};
+        // Retrieval may have waited while membership or sharing changed. The
+        // original privacy transaction owns admission of the retained copy.
+        const assertScopePrivacy = async () => {
+          const admission = await authorizationService(sourceDb).decide({actor:sourceActor,action:"company_scope:read",
+            resource:{type:"company",companyId:input.companyId},enforceResponsibleUserIntersection:true});
+          if (!admission.allowed) throw forbidden("Context source access is unavailable");
+          if ((input.issueId && !await canActorReadIssuePrivacy(sourceDb,sourceActor,{companyId:input.companyId,id:input.issueId}))
+            || (input.runId && !await canActorReadHeartbeatRunPrivacy(sourceDb,sourceActor,{companyId:input.companyId,id:input.runId}))
+            || (input.projectId && !await canActorReadProjectPrivacy(sourceDb,sourceActor,{companyId:input.companyId,id:input.projectId})))
+            throw forbidden("Context source access is unavailable");
+        };
+        await assertScopePrivacy();
+        const selectedTaskIds: string[] = [];
+        for (const {decision} of input.selected) {
+          const evidence = decision.evidence;
+          if (evidence.sourceProvider !== "august_works_tasks") continue;
+          const ref = /^issue:\/\/([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})$/i.exec(evidence.sourceRef);
+          if (!ref) throw forbidden("Context source access is unavailable");
+          const [current] = await tx.select({updatedAt:issues.updatedAt}).from(issues)
+            .where(and(eq(issues.companyId,input.companyId),eq(issues.id,ref[1]!))).for("share");
+          if (!current || !await canActorReadIssuePrivacy(sourceDb,sourceActor,{companyId:input.companyId,id:ref[1]!}))
+            throw forbidden("Context source access is unavailable");
+          if (current.updatedAt.toISOString() !== evidence.sourceVersion)
+            throw conflict("Context task changed during assembly");
+          selectedTaskIds.push(ref[1]!);
+        }
+        // A later selected row may have waited after an earlier source passed.
+        await assertScopePrivacy();
+        for (const id of selectedTaskIds)
+          if (!await canActorReadIssuePrivacy(sourceDb,sourceActor,{companyId:input.companyId,id}))
+            throw forbidden("Context source access is unavailable");
         const [manifest] = await tx
           .insert(contextManifests)
           .values({
@@ -223,7 +258,6 @@ export function contextManifestService(db: Db) {
 
         const learnedRoots = new Map<string, string>();
         const learnedAssets:{type:string;id:string}[]=[];
-        const sourceActor:AuthorizationActor={type:"agent",source:"agent_jwt",companyId:input.companyId,agentId:input.agentId,runId:input.runId??undefined,onBehalfOfUserId:input.responsibleUserId??null};
         const purpose = input.policySnapshot && typeof input.policySnapshot === "object" && "intent" in input.policySnapshot && typeof input.policySnapshot.intent === "string" ? input.policySnapshot.intent : "general_work";
         for (const { decision } of input.selected) {
           const evidence = decision.evidence;
@@ -264,6 +298,11 @@ export function contextManifestService(db: Db) {
         }
 
         await retainLearnedAssetsInContext(tx as unknown as Db,input.companyId,sourceActor,manifest!.id,learnedAssets);
+
+        await assertScopePrivacy();
+        for (const id of selectedTaskIds)
+          if (!await canActorReadIssuePrivacy(sourceDb,sourceActor,{companyId:input.companyId,id}))
+            throw forbidden("Context source access is unavailable");
 
         return { manifest: manifest!, items };
       });

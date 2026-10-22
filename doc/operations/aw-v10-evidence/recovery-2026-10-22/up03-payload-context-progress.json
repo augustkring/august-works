@@ -1,0 +1,77 @@
+{
+  "status": "partial_in_progress_not_pr_ready",
+  "scope": "UP-03 original payload/Context owners; Memory failures reproduced and still open",
+  "runs": [
+    {
+      "log": "up03-payload-before-guard.log.txt",
+      "sha256": "ed33c0a86390e790970983cd083ee7b1c42e55feb821d9e140aea151f6fb186a"
+    },
+    {
+      "log": "up03-context-before-guard.log.txt",
+      "sha256": "b40bc6980df28fd859705f3bb9b7347f182559f9d8842683754460677ae98f1d"
+    },
+    {
+      "log": "up03-payload-context-guarded.log.txt",
+      "sha256": "673e21a4e668edc9cf7912916733672e748e519a4f39c7219a1b1adf4eda7b07"
+    },
+    {
+      "log": "up03-payload-context-final.log.txt",
+      "sha256": "dded875bd1f114d8dbefe5cdc8410bee3b50283fbc4c8cdb22347549b238cf56"
+    },
+    {
+      "log": "up03-selected-row-memory-before.log.txt",
+      "sha256": "6ab987ba3f2e0a4ea5e1b423969100b42f5d255ec3c52e355375b3c756d8d72c"
+    }
+  ],
+  "outcomes": {
+    "up03-payload-before-guard": "4 actual PostgreSQL failures: unauthorized ordinary payload reads resolved",
+    "up03-context-before-guard": "1 actual PostgreSQL failure, 4 deselected: membership suspended during observed Memory lock wait still committed a Context manifest",
+    "up03-payload-context-guarded": "5 actual PostgreSQL passes after first guards",
+    "up03-payload-context-final": "11 passes in 2 files (7 payload/Context, 4 existing Context); subsequent review found a selected-row wait gap",
+    "up03-selected-row-memory-before": "4 actual failures, 7 deselected: selected-row wait and 3 Memory provenance failures"
+  },
+  "limitations": [
+    "Focused software receipts only; no deployed/provider/native acceptance.",
+    "Test file was extended between runs. Counts are separate executions, not distinct aggregate cases.",
+    "Initial test versions were not archived before extension; logs are retained, current cases remain in the extended test.",
+    "Current Memory sources have not been fixed; corresponding tests intentionally remain red.",
+    "Current full typecheck/test/build and complete two-organization cross-channel qualification remain open.",
+    "No full-graph immutable source pin: other domain source work continued in parallel; these owner files were held during their final capture.",
+    "Original Context fixture now uses an actual account/membership/run Human; all original assertions remain.",
+    "Later 0504 project/Memory source-closure work will require new checks."
+  ],
+  "current_focused_result": "13 passed, 3 Memory cases deselected; 2 files; 45.59 seconds; exit 0",
+  "current_status": "Context/task/run software checkpoint only; all 3 reproduced Memory failures remain OPEN and their tests remain active when no name filter is supplied",
+  "additional_runs": [
+    {
+      "log": "up03-context-selected-row-guarded.log.txt",
+      "sha256": "0a4b71d727fdc261aafee8f60fbefb8655e4732e2154610ecaa2e645f640b501"
+    },
+    {
+      "log": "up03-context-open-before-admission.log.txt",
+      "sha256": "0c6fcbcd63c4938b17f0a27ded2765997622a45ca8440c5b3166b7c697e059f7"
+    },
+    {
+      "log": "up03-context-accountable-admission.log.txt",
+      "sha256": "07d4881676d9fbecb0d1892fafbefaa87ec5c342f323f5873e7e50a98cd91a46"
+    },
+    {
+      "log": "up03-context-accountable-admission-final.log.txt",
+      "sha256": "41dd01d4cb64ff3243e3f6baf085ebbce218b01350c97fd3c88a8daafa7c35b4"
+    }
+  ],
+  "additional_outcomes": {
+    "up03-context-selected-row-guarded": "12 passed, 3 Memory deselected; selected-source row wait fixed",
+    "up03-context-open-before-admission": "1 actual failure, 11 deselected; open-task Context still admitted after membership suspension",
+    "up03-context-accountable-admission": "9 payload/Context passed, 3 Memory deselected; 4 existing Context tests failed only fixture teardown because new membership rows had not been explicitly deleted before company NO ACTION FK",
+    "up03-context-accountable-admission-final": "13 passed, 3 Memory deselected after correct fixture cleanup; actual persisted run Human and canonical enforced company intersection rechecked after waits and before returning from original owner"
+  },
+  "source_hashes_after_closed_final_run": {
+    "server/src/services/analytical-context-authority.ts": "20a7b741f1a37a3eb18dff4a23e8853cd29c96bf9ae85452f2341b4c54ca59f8",
+    "server/src/services/context/context-manifest.ts": "725369003b2f655a2131b7d5ab322b15689ded76223ce4be7b729b7d53812540",
+    "server/src/services/context/context-manifest.test.ts": "092f826db596fd58106126233cc944c3fd8a07b7d2f648550cd82a1c48f08c7d",
+    "server/src/__tests__/v10-private-payload.integration.test.ts": "d69124212b71036d010bdcfa2ec2a36b4b907f6c81f6f9a53eca128abd8999b0",
+    "server/src/services/authorization.ts": "e86f2e3bd0271418bcbdc49f50fe270d7ab3849a9d35b623692e4db1abe338d6"
+  },
+  "review": "Independent Sol review found selected-task lock wait and all-open company-admission gaps; actual PostgreSQL regressions reproduced both before fixes."
+}
