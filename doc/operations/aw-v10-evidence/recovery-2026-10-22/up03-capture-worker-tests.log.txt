@@ -1,0 +1,62 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[22:46:15] [33mWARN[39m: [36mMemory job failed[39m [90m{"jobId":"64efe20c-cc13-47a3-8313-e81ff86fbf41","operationType":"capture"}[39m
+    err: {
+      "type": "HttpError",
+      "message": "Memory capture job lease was lost",
+      "stack":
+          Error: Memory capture job lease was lost
+              at conflict (/workspace/blentera-v10/server/src/errors.ts:29:10)
+              at /workspace/blentera-v10/server/src/services/memory/memory-jobs.ts:536:29
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at scope (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+              at sql.begin (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+              at Object.executeClaimed (/workspace/blentera-v10/server/src/services/memory/memory-jobs.ts:527:9)
+              at /workspace/blentera-v10/server/src/services/memory/memory-jobs.test.ts:389:7
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+      "status": 409
+    }
+[22:46:15] [33mWARN[39m: [36mMemory job failed[39m [90m{"jobId":"5bcba5fa-7009-44da-b50b-599fe1ab4545","operationType":"capture"}[39m
+    err: {
+      "type": "HttpError",
+      "message": "Memory capture job lease was lost",
+      "stack":
+          Error: Memory capture job lease was lost
+              at conflict (/workspace/blentera-v10/server/src/errors.ts:29:10)
+              at /workspace/blentera-v10/server/src/services/memory/memory-jobs.ts:536:29
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at scope (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+              at sql.begin (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+              at Object.executeClaimed (/workspace/blentera-v10/server/src/services/memory/memory-jobs.ts:527:9)
+              at /workspace/blentera-v10/server/src/services/memory/memory-jobs.test.ts:389:7
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+      "status": 409
+    }
+[22:46:18] [33mWARN[39m: [36mMemory job failed[39m [90m{"jobId":"c6e0429f-919b-44e5-bb7f-62e33ddf769a","operationType":"capture"}[39m
+    err: {
+      "type": "HttpError",
+      "message": "Memory candidate source access is unavailable",
+      "stack":
+          Error: Memory candidate source access is unavailable
+              at forbidden (/workspace/blentera-v10/server/src/errors.ts:21:10)
+              at inspect (/workspace/blentera-v10/server/src/services/memory/memory-service.ts:849:17)
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at /workspace/blentera-v10/server/src/services/memory/memory-privacy.ts:84:22
+              at withNativeMemoryCaptureSources (/workspace/blentera-v10/server/src/services/memory/memory-privacy.ts:80:12)
+              at scope (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+              at runCandidate (/workspace/blentera-v10/server/src/services/memory/memory-service.ts:662:23)
+              at Object.captureCandidate (/workspace/blentera-v10/server/src/services/memory/memory-service.ts:1635:21)
+              at Object.extract (/workspace/blentera-v10/server/src/services/memory/memory-post-run-extraction.ts:736:28)
+              at executeCapture (/workspace/blentera-v10/server/src/services/memory/memory-jobs.ts:370:20)
+      "status": 403
+    }
+
+ Test Files  1 passed (1)
+      Tests  13 passed (13)
+   Start at  22:44:54
+   Duration  87.14s (transform 44.84s, setup 298ms, import 62.58s, tests 23.79s, environment 0ms)
+

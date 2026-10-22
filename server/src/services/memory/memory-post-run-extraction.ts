@@ -7,7 +7,6 @@ import {
   issues,
   memoryBindings,
   memoryBindingTargets,
-  memoryRecords,
 } from "@paperclipai/db";
 import {
   AUTHORED_AGENT_DEFINITION_KEY,
@@ -17,9 +16,9 @@ import {
 } from "@paperclipai/shared";
 import { HttpError } from "../../errors.js";
 import { containsProtectedSemanticData } from "../../vendor/paperclip-runner/index.js";
-import { logActivity } from "../activity-log.js";
+import { logActivity, type ActivityPublication } from "../activity-log.js";
 import { instanceSettingsService } from "../instance-settings.js";
-import { memoryService, type MemoryMutationActor } from "./memory-service.js";
+import { memoryService, type MemoryMutationActor, type MemoryServiceOptions } from "./memory-service.js";
 
 const POST_RUN_EXTRACTION_VERSION = "v1";
 const MAX_RESULT_CANDIDATES = 8;
@@ -460,30 +459,6 @@ function extractionFingerprint(input: {
   });
 }
 
-function existingExtractionFingerprint(
-  recordRow: typeof memoryRecords.$inferSelect,
-): string | null {
-  return stringValue(record(recordRow.metadata).postRunExtractionFingerprint);
-}
-
-async function existingOperationRecord(
-  db: Db,
-  companyId: string,
-  operationId: string,
-) {
-  return db
-    .select()
-    .from(memoryRecords)
-    .where(
-      and(
-        eq(memoryRecords.companyId, companyId),
-        eq(memoryRecords.createdByOperationId, operationId),
-      ),
-    )
-    .limit(1)
-    .then((rows) => rows[0] ?? null);
-}
-
 function emptyResult(runId: string): MemoryPostRunExtractionResult {
   return {
     runId,
@@ -511,6 +486,7 @@ async function auditExtraction(
   run: HeartbeatRun,
   issueId: string | null,
   result: MemoryPostRunExtractionResult,
+  postCommitPublications?: ActivityPublication[],
 ): Promise<void> {
   if (
     result.proposed === 0 &&
@@ -540,12 +516,12 @@ async function auditExtraction(
       skipped: result.skipped,
       skipReasons: result.skipReasons,
     },
-  });
+  }, postCommitPublications);
 }
 
-export function memoryPostRunExtractionService(db: Db) {
+export function memoryPostRunExtractionService(db: Db, options: MemoryServiceOptions = {}) {
   const settings = instanceSettingsService(db);
-  const memory = memoryService(db);
+  const memory = memoryService(db, options);
 
   return {
     extract: async (run: HeartbeatRun): Promise<MemoryPostRunExtractionResult> => {
@@ -591,7 +567,7 @@ export function memoryPostRunExtractionService(db: Db) {
         memoryPostRunCandidateProposalListSchema.safeParse(rawCandidates);
       if (!parsedCandidates.success) {
         addSkip(result, "candidate_contract_invalid");
-        await auditExtraction(db, run, null, result);
+        await auditExtraction(db, run, null, result, options.postCommitPublications);
         return result;
       }
 
@@ -608,7 +584,7 @@ export function memoryPostRunExtractionService(db: Db) {
         stringValue(context.taskId);
       if (!issueId) {
         addSkip(result, "source_task_unavailable");
-        await auditExtraction(db, run, null, result);
+        await auditExtraction(db, run, null, result, options.postCommitPublications);
         return result;
       }
 
@@ -631,7 +607,7 @@ export function memoryPostRunExtractionService(db: Db) {
         .then((rows) => rows[0] ?? null);
       if (!issue) {
         addSkip(result, "source_task_unavailable");
-        await auditExtraction(db, run, issueId, result);
+        await auditExtraction(db, run, issueId, result, options.postCommitPublications);
         return result;
       }
 
@@ -700,22 +676,6 @@ export function memoryPostRunExtractionService(db: Db) {
           candidate,
         });
 
-        const existing = await existingOperationRecord(
-          db,
-          run.companyId,
-          operationId,
-        );
-        if (existing) {
-          if (
-            existingExtractionFingerprint(existing) === candidateFingerprint
-          ) {
-            result.duplicates += 1;
-          } else {
-            addSkip(result, "operation_conflict");
-          }
-          continue;
-        }
-
         const subject = subjectFor(candidate);
         const input: MemoryCandidateInputParsed = {
           bindingId: binding.binding.id,
@@ -773,12 +733,12 @@ export function memoryPostRunExtractionService(db: Db) {
         };
 
         try {
-          const resolved = await memory.createCandidate(
+          const resolved = await memory.captureCandidate(
             run.companyId,
             input,
             actor,
           );
-          switch (resolved.resolution.kind) {
+          switch (resolved.resolutionKind) {
             case "new":
               result.persisted += 1;
               break;
@@ -803,18 +763,6 @@ export function memoryPostRunExtractionService(db: Db) {
             error.status === 409 &&
             record(error.details).code === "memory_operation_conflict"
           ) {
-            const raced = await existingOperationRecord(
-              db,
-              run.companyId,
-              operationId,
-            );
-            if (
-              raced &&
-              existingExtractionFingerprint(raced) === candidateFingerprint
-            ) {
-              result.duplicates += 1;
-              continue;
-            }
             addSkip(result, "operation_conflict");
             continue;
           }
@@ -822,7 +770,7 @@ export function memoryPostRunExtractionService(db: Db) {
         }
       }
 
-      await auditExtraction(db, run, issue.id, result);
+      await auditExtraction(db, run, issue.id, result, options.postCommitPublications);
       return result;
     },
   };

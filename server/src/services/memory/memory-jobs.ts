@@ -8,7 +8,7 @@ import { executeMemoryMaintenance, memoryMaintenanceInputSchema, memoryMaintenan
 import { executeModelRebuild } from "./derived-memory.js";
 import { memoryService, type MemoryMutationActor } from "./memory-service.js";
 import { conflict, unprocessable } from "../../errors.js";
-import { publishActivity } from "../activity-log.js";
+import { publishActivity, type ActivityPublication } from "../activity-log.js";
 import {
   and,
   asc,
@@ -32,7 +32,7 @@ import { isUniqueViolation } from "../../db-errors.js";
 import { logger } from "../../middleware/logger.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { memoryPostRunExtractionService } from "./memory-post-run-extraction.js";
-import { expireMemoryPayloads, lockMemoryPrivacy, reapplyMemoryDeletionMarkers } from "./memory-privacy.js";
+import { expireMemoryPayloads, lockMemoryPrivacy, reapplyMemoryDeletionMarkers, type NativeMemoryCaptureReceipt } from "./memory-privacy.js";
 
 const MEMORY_JOB_VERSION = "v1";
 const DEFAULT_LEASE_MS = 5 * 60_000;
@@ -92,7 +92,6 @@ export function memoryJobService(
   const leaseMs = options.leaseMs ?? DEFAULT_LEASE_MS;
   const maxAttempts = options.maxAttempts ?? DEFAULT_MAX_ATTEMPTS;
   const settings = instanceSettingsService(db);
-  const extraction = memoryPostRunExtractionService(db);
 
   async function enqueue(input: {
     companyId: string;
@@ -351,11 +350,11 @@ export function memoryJobService(
       );
   }
 
-  async function executeCapture(job: MemoryJob) {
+  async function executeCapture(tx: Db, job: MemoryJob, receipt: NativeMemoryCaptureReceipt, publications: ActivityPublication[]) {
     if (!job.sourceHeartbeatRunId) {
       throw new Error("memory_capture_source_run_missing");
     }
-    const run = await db
+    const run = await tx
       .select()
       .from(heartbeatRuns)
       .where(
@@ -365,9 +364,12 @@ export function memoryJobService(
         ),
       )
       .limit(1)
+      .for("share")
       .then((rows) => rows[0] ?? null);
-    if (!run) throw new Error("memory_capture_source_run_unavailable");
-    const result = await extraction.extract(run);
+    if (!run || run.status !== "succeeded") throw new Error("memory_capture_source_run_unavailable");
+    const result = await memoryPostRunExtractionService(tx, {
+      nativeCaptureReceipt: receipt, postCommitPublications: publications,
+    }).extract(run);
     return {
       summary:
         `Capture proposed ${result.proposed}, persisted ${result.persisted}, duplicates ${result.duplicates}, corroborations ${result.corroborations}, updates ${result.updates}, contradictions ${result.contradictions}, skipped ${result.skipped}.`,
@@ -521,13 +523,38 @@ export function memoryJobService(
         return;
       }
       if (job.operationType === "capture") {
-        const output = await executeCapture(job);
-        await settle(job, {
-          status: "succeeded",
-          resultSummary: output.summary,
-          resultJson: output.result,
-          now: new Date(),
+        const publications: ActivityPublication[] = [];
+        await db.transaction(async (tx) => {
+          await lockAnalyticalCompany(tx, job.companyId);
+          await lockMemoryPrivacy(tx, job.companyId);
+          const [owned] = await tx.select().from(memoryJobs).where(and(
+            eq(memoryJobs.id, job.id), eq(memoryJobs.companyId, job.companyId),
+            eq(memoryJobs.operationType, "capture"), eq(memoryJobs.status, "running"),
+            eq(memoryJobs.executionOwnerId, ownerId),
+            sql`${memoryJobs.leaseExpiresAt} > clock_timestamp()`,
+          )).for("update");
+          if (!owned) throw conflict("Memory capture job lease was lost");
+          await tx.execute(sql`set local statement_timeout = '5000'`);
+          await assertSaasDomainAdmission(tx, owned.companyId, "memory.use");
+          const [identity] = await tx.execute<{ backendPid: number; transactionId: string }>(
+            sql`select pg_backend_pid() as "backendPid", pg_current_xact_id()::text as "transactionId"`,
+          );
+          if (!identity) throw new Error("Memory capture transaction identity unavailable");
+          const output = await executeCapture(tx, owned, {
+            jobId: owned.id, executionOwnerId: ownerId, ...identity,
+          }, publications);
+          const [current] = await tx.select({ id: memoryJobs.id }).from(memoryJobs).where(and(
+            eq(memoryJobs.id, owned.id), eq(memoryJobs.companyId, owned.companyId),
+            eq(memoryJobs.operationType, "capture"), eq(memoryJobs.status, "running"),
+            eq(memoryJobs.executionOwnerId, ownerId),
+            sql`${memoryJobs.leaseExpiresAt} > clock_timestamp()`,
+          ));
+          if (!current) throw conflict("Memory capture job lease expired during capture");
+          await settle(owned, {
+            status: "succeeded", resultSummary: output.summary, resultJson: output.result,
+          }, tx);
         });
+        publications.forEach(publishActivity);
         return;
       }
       if (job.operationType === "retention") {

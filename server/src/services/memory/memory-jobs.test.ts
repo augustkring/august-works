@@ -1,9 +1,11 @@
 import { randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
   agents,
+  authUsers,
+  EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
   companies,
   companyMemberships,
   createDb,
@@ -23,6 +25,7 @@ import {
 } from "../../__tests__/helpers/embedded-postgres.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { memoryService } from "./memory-service.js";
+import { subscribeCompanyLiveEvents } from "../live-events.js";
 import { memoryJobService } from "./memory-jobs.js";
 
 const support = await getEmbeddedPostgresTestSupport();
@@ -49,8 +52,8 @@ describePg("Memory jobs", () => {
 
   beforeAll(async () => {
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-memory-jobs-");
-    db = createDb(tempDb.connectionString);
-  }, 20_000);
+    db = createDb(tempDb.connectionString, { maxConnections: 3 });
+  }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
 
   afterEach(async () => {
     await db.delete(activityLog);
@@ -66,6 +69,7 @@ describePg("Memory jobs", () => {
     await db.delete(agents);
     await db.delete(companies);
     await db.delete(instanceSettings);
+    await db.delete(authUsers);
   });
 
   afterAll(async () => {
@@ -82,6 +86,7 @@ describePg("Memory jobs", () => {
       requireBoardApprovalForNewAgents: false,
       defaultResponsibleUserId: userId,
     });
+    await db.insert(authUsers).values({id:userId,name:"Native capture Human",email:`${userId}@example.test`,createdAt:new Date(),updatedAt:new Date()});
     await db.insert(companyMemberships).values({
       companyId,
       principalType: "user",
@@ -108,6 +113,7 @@ describePg("Memory jobs", () => {
     const [project] = await db.insert(projects).values({
       companyId,
       name: "Memory Job Project",
+      sourceProvenanceQualified: true,
     }).returning();
     const [issue] = await db.insert(issues).values({
       companyId,
@@ -149,6 +155,8 @@ describePg("Memory jobs", () => {
       companyId,
       agentId: agent!.id,
       status: "succeeded",
+      runtimeMode: "native",
+      nativeIssueId: issue!.id,
       responsibleUserId: userId,
       startedAt: new Date(now.getTime() - 60_000),
       finishedAt: now,
@@ -364,6 +372,61 @@ describePg("Memory jobs", () => {
       reviewState: "pending",
       content: BASE_CANDIDATE.content,
     });
+  });
+
+  it.each(["expired", "replaced"] as const)("does not capture or publish from a %s lease", async change => {
+    const seeded=await seedCaptureRun(),service=memoryJobService(db,{ownerId:"original-capture-worker"});
+    await service.enqueuePostRunCapture(seeded.run);
+    const claimed=await service.claimNext();
+    expect(claimed).toBeTruthy();
+    await db.update(memoryJobs).set(change==="expired"
+      ? {leaseExpiresAt:new Date(Date.now()-1000)} : {executionOwnerId:"replacement-worker"})
+      .where(eq(memoryJobs.id,claimed!.id));
+    const events:unknown[]=[];
+    const unsubscribe=subscribeCompanyLiveEvents(seeded.companyId,event=>events.push(event));
+    const auditsBefore=await db.select().from(activityLog);
+    try {
+      await service.executeClaimed(claimed!);
+      expect(await db.select().from(memoryRecords)).toEqual([]);
+      expect(await db.select().from(memoryEvidence)).toEqual([]);
+      expect(await db.select().from(activityLog)).toEqual(auditsBefore);
+      expect(events).toEqual([]);
+      const [current]=await db.select().from(memoryJobs).where(eq(memoryJobs.id,claimed!.id));
+      if(change==="replaced")expect(current).toMatchObject({status:"running",executionOwnerId:"replacement-worker"});
+      else expect(current?.status).toBe("failed");
+    } finally {unsubscribe();}
+  });
+
+  it("rolls back an inserted candidate, audit and publication when its lease expires during the write",async()=>{
+    const seeded=await seedCaptureRun(),service=memoryJobService(db,{ownerId:"expiring-capture-worker",leaseMs:2000});
+    await service.enqueuePostRunCapture(seeded.run);
+    // PostgreSQL sequences survive rollback: prove the INSERT was reached,
+    // rather than accepting a pre-admission rejection as this regression proof.
+    await db.execute(sql`create sequence capture_insert_reached`);
+    await db.execute(sql`create function delay_capture_insert() returns trigger language plpgsql as $$
+      begin perform nextval('capture_insert_reached'); perform pg_sleep(2.2); return NEW; end $$`);
+    await db.execute(sql`create trigger delay_capture_insert after insert on memory_records
+      for each row execute function delay_capture_insert()`);
+    const auditsBefore=await db.select().from(activityLog),events:unknown[]=[];
+    const unsubscribe=subscribeCompanyLiveEvents(seeded.companyId,event=>events.push(event));
+    try {
+      const claimed=await service.claimNext();
+      expect(claimed).toBeTruthy();
+      await service.executeClaimed(claimed!);
+      const [reached]=await db.execute<{is_called:boolean}>(sql`select is_called from capture_insert_reached`);
+      expect(reached?.is_called).toBe(true);
+      expect(await db.select().from(memoryRecords)).toEqual([]);
+      expect(await db.select().from(memoryEvidence)).toEqual([]);
+      expect(await db.select().from(activityLog)).toEqual(auditsBefore);
+      expect(events).toEqual([]);
+      const [current]=await db.select().from(memoryJobs).where(eq(memoryJobs.id,claimed!.id));
+      expect(current?.status).toBe("failed");
+    } finally {
+      unsubscribe();
+      await db.execute(sql`drop trigger delay_capture_insert on memory_records`);
+      await db.execute(sql`drop function delay_capture_insert()`);
+      await db.execute(sql`drop sequence capture_insert_reached`);
+    }
   });
 
   it("recovers an expired lease into immutable failed history and a new retry attempt", async () => {
