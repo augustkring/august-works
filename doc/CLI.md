@@ -6,6 +6,53 @@ Paperclip CLI now supports both:
 - instance setup/diagnostics (`onboard`, `doctor`, `configure`, `env`, `allowed-hostname`, `env-lab`)
 - control-plane client operations (issues, approvals, agents, activity, dashboard)
 
+## Browser-approved Board authentication
+
+```sh
+npx paperclipai auth login --api-base <instance-url>
+npx paperclipai auth logout --api-base <instance-url>
+```
+
+Login creates a ten-minute challenge and prints its browser approval link.
+Sign in, review the client and full Board authority, and approve only a request
+you started in your own terminal. The pending token cannot authenticate before
+approval. The CLI verifies its current identity before storing the credential.
+The default key expires after thirty days; logout attempts server revocation
+and removes the local credential. Check the reported `revoked` result.
+
+A Board key is a human developer/operator credential across the organizations
+that person can currently access. A requested company supplies audit context;
+it does not restrict the key to that company. Instance-admin requests also
+require the current instance-admin role. Never give a Board key to a Co-worker,
+agent environment or model context; use the existing scoped agent/tool gateway
+credentials for those paths.
+
+Approval and cancellation serialize on the same challenge. Another person
+cannot take over an approved challenge. Same-owner replay rechecks current
+authority and the original key; deleting or revoking that key cannot turn the
+old approval into another key. Cancelling an approved challenge does not revoke
+its key. Consent is never automatically resubmitted after an error.
+
+Creation and revocation store their available company audit records in the same
+transaction as the key change; a later notification failure cannot repeat that
+change. Trusted historical creation/challenge context can supply an own-key
+revocation audit destination after membership loss. It grants no current company
+access. When no company audit destination survives, owner revocation still works,
+but global durable-receipt coverage remains an open qualification gap.
+
+Challenge creation is limited to twenty requests per minute per resolved client
+IP and polling to 120, with separate process-local budgets. Configure
+`TRUST_PROXY` for the actual trusted proxy boundary. HTTP 429 reads honor
+`Retry-After` within the original challenge expiry; recovery continues the same
+challenge and never creates another one. Browser reads have at most three such
+retries and a ten-minute maximum window. Other failures remain visible.
+
+Automatic authentication recovery identifies the command as `paperclipai`.
+Argument values, credentials and private content are not copied into the
+persisted challenge label. Explicit login and connect flows use fixed labels.
+Challenge API responses and approval documents use `no-store` and
+`no-referrer`; approval-page state is scoped to the current Human/session.
+
 ## Security: safe invocation for content-bearing arguments
 
 Use `npx paperclipai` for any command whose argument can hold untrusted or

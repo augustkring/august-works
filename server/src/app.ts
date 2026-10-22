@@ -1154,10 +1154,12 @@ export async function createApp(
           res.status(404).end();
           return;
         }
+        const cliApproval = req.path === "/cli-auth" || req.path.startsWith("/cli-auth/");
+        if (cliApproval) res.set("Referrer-Policy", "no-referrer");
         res
           .status(200)
           .set("Content-Type", "text/html")
-          .set("Cache-Control", "no-cache")
+          .set("Cache-Control", cliApproval ? "no-store" : "no-cache")
           .end(readBrandedStaticIndexHtml(uiDist));
       });
     } else {
@@ -1250,6 +1252,9 @@ export async function createApp(
       }
       try {
         const html = await renderViteHtml.render(req.originalUrl);
+        if (req.path === "/cli-auth" || req.path.startsWith("/cli-auth/")) {
+          res.set({ "Cache-Control": "no-store", "Referrer-Policy": "no-referrer" });
+        }
         res.status(200).set({ "Content-Type": "text/html" }).end(html);
       } catch (err) {
         next(err);

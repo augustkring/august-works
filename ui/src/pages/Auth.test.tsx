@@ -1,6 +1,10 @@
 // @vitest-environment jsdom
 
 import { flushSync } from "react-dom";
+import { act as reactAct } from "react";
+import { CliAuthPage } from "./CliAuth";
+import { ApiError } from "../api/client";
+import { v9SessionFixture } from "../hooks/v9-session.test-support";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { MemoryRouter, Route, Routes } from "react-router-dom";
@@ -290,4 +294,246 @@ describe("AuthPage", () => {
     await act(async () => { root.unmount(); });
   });
 
+});
+
+describe("CliAuthPage rate-limit recovery", () => {
+  const challengeId = "00000000-0000-4000-8000-000000000429";
+  const challengeToken = "synthetic-cli-approval-fixture-token";
+  const challengePath = `/api/cli-auth/challenges/${challengeId}?token=${challengeToken}`;
+  const challengeQueryKey = ["cli-auth-challenge", challengeId, challengeToken, "operator", "session-operator", 0];
+  const fetchCli = vi.fn<typeof fetch>();
+  let cliContainer: HTMLDivElement;
+  let cliRoot: ReturnType<typeof createRoot> | undefined;
+  let cliClient: QueryClient | undefined;
+
+  function response(body: unknown, status = 200) {
+    return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
+  }
+
+  function pending(expiresAt = new Date(Date.now() + 10 * 60_000).toISOString()) {
+    return { id: challengeId, status: "pending", command: "paperclipai auth login", clientName: "paperclipai cli",
+      requestedAccess: "board", requestedCompanyId: null, requestedCompanyName: null, approvedAt: null,
+      cancelledAt: null, expiresAt, approvedByUser: null, requiresSignIn: false, canApprove: true, currentUserId: "operator" };
+  }
+
+  async function advance(milliseconds: number) {
+    await reactAct(async () => { await vi.advanceTimersByTimeAsync(milliseconds); });
+    await reactAct(async () => { await vi.advanceTimersByTimeAsync(0); });
+  }
+
+  async function mountCli(knownSession = true) {
+    cliClient = new QueryClient({ defaultOptions: { queries: { retry: false, gcTime: Infinity, refetchOnMount: false } } });
+    if (knownSession) cliClient.setQueryData(queryKeys.auth.session, v9SessionFixture("operator"));
+    cliRoot = createRoot(cliContainer);
+    await reactAct(async () => {
+      cliRoot!.render(<MemoryRouter initialEntries={[`/cli-auth/${challengeId}?token=${challengeToken}`]}>
+        <QueryClientProvider client={cliClient!}><Routes>
+          <Route path="/cli-auth/:id" element={<CliAuthPage />} />
+        </Routes></QueryClientProvider>
+      </MemoryRouter>);
+    });
+    await advance(0);
+  }
+
+  beforeEach(() => {
+    vi.useFakeTimers();
+    vi.setSystemTime(new Date("2026-10-15T20:00:00Z"));
+    fetchCli.mockReset();
+    vi.stubGlobal("fetch", fetchCli);
+    getSessionMock.mockResolvedValue(v9SessionFixture("operator"));
+    void i18n.changeLanguage("en");
+    cliContainer = document.createElement("div");
+    document.body.appendChild(cliContainer);
+  });
+
+  afterEach(async () => {
+    await reactAct(async () => { cliRoot?.unmount(); });
+    cliClient?.clear();
+    cliRoot = undefined;
+    cliClient = undefined;
+    cliContainer.remove();
+    vi.useRealTimers();
+    vi.unstubAllGlobals();
+    vi.clearAllMocks();
+  });
+
+  it("waits for the real API retry hint and recovers approval without a reload or automatic mutation", async () => {
+    fetchCli.mockResolvedValueOnce(response({ error: "Too many CLI auth requests", details: { retryAfterSeconds: 2 } }, 429))
+      .mockResolvedValueOnce(response(pending()));
+    await mountCli();
+    expect(fetchCli).toHaveBeenCalledTimes(1);
+    expect(cliContainer.textContent).toContain("Retrying shortly");
+    expect(cliContainer.textContent).not.toContain("CLI auth challenge unavailable");
+    await advance(1999);
+    expect(fetchCli).toHaveBeenCalledTimes(1);
+    await advance(1);
+    expect(fetchCli).toHaveBeenCalledTimes(2);
+    expect(cliClient!.getQueryState(challengeQueryKey)).toMatchObject({ status: "success", fetchStatus: "idle", data: { status: "pending" } });
+    await advance(1);
+    expect(cliContainer.textContent).toContain("Approve Blentera CLI access");
+    expect(fetchCli.mock.calls.map(([url, init]) => [String(url), init?.method]))
+      .toEqual([[challengePath, "GET"], [challengePath, "GET"]]);
+  });
+
+  it.each([400, 401, 403, 404, 410, 500])("does not retry an ordinary approval GET failure with HTTP%s", async status => {
+    fetchCli.mockImplementation(async () => response({ error: "Challenge unavailable" }, status));
+    await mountCli();
+    expect(cliContainer.textContent).toContain("CLI auth challenge unavailable");
+    expect(cliClient!.getQueryState(challengeQueryKey)?.error).toBeInstanceOf(ApiError);
+    await advance(10 * 60_000);
+    expect(fetchCli).toHaveBeenCalledTimes(1);
+  });
+
+  it("uses a nonzero fallback and stops after three retries when the actual challenge expiry is unknown", async () => {
+    fetchCli.mockImplementation(async () => response({ error: "Too many CLI auth requests" }, 429));
+    await mountCli();
+    expect(cliClient!.getQueryData(challengeQueryKey)).toBeUndefined();
+    await advance(59_999);
+    expect(fetchCli).toHaveBeenCalledTimes(1);
+    await advance(1);
+    expect(fetchCli).toHaveBeenCalledTimes(2);
+    await advance(60_000);
+    expect(fetchCli).toHaveBeenCalledTimes(3);
+    await advance(60_000);
+    expect(fetchCli).toHaveBeenCalledTimes(4);
+    expect(cliClient!.getQueryState(challengeQueryKey)).toMatchObject({ status: "error", fetchStatus: "idle", error: { status: 429 } });
+    await advance(1);
+    expect(cliContainer.textContent).toContain("CLI auth challenge unavailable");
+    await advance(10 * 60_000);
+    expect(fetchCli).toHaveBeenCalledTimes(4);
+  });
+
+  it("does not schedule a hinted retry beyond the actual expiry from an earlier successful read", async () => {
+    fetchCli.mockResolvedValueOnce(response(pending(new Date(Date.now() + 1500).toISOString())))
+      .mockImplementation(async () => response({ error: "Too many CLI auth requests", details: { retryAfterSeconds: 2 } }, 429));
+    await mountCli();
+    expect(cliContainer.textContent).toContain("Approve Blentera CLI access");
+    await reactAct(async () => { void cliClient!.invalidateQueries({ queryKey: challengeQueryKey }); });
+    await advance(0);
+    expect(fetchCli).toHaveBeenCalledTimes(2);
+    expect(cliContainer.textContent).toContain("CLI auth challenge unavailable");
+    await advance(10 * 60_000);
+    expect(fetchCli).toHaveBeenCalledTimes(2);
+  });
+
+  it("does not shorten a hint that falls outside the finite page retry window", async () => {
+    fetchCli.mockImplementation(async () => response({ error: "Too many CLI auth requests", details: { retryAfterSeconds: 600 } }, 429));
+    await mountCli();
+    expect(cliContainer.textContent).toContain("CLI auth challenge unavailable");
+    await advance(20 * 60_000);
+    expect(fetchCli).toHaveBeenCalledTimes(1);
+  });
+
+  it("retries only the rate-limited read after one operator approval, without resubmitting it", async () => {
+    let reads = 0;
+    fetchCli.mockImplementation(async (_url, init) => {
+      if (init?.method === "POST") return response({ approved: true, status: "approved" });
+      reads += 1;
+      if (reads === 2) return response({ error: "Too many CLI auth requests", details: { retryAfterSeconds: 2 } }, 429);
+      return response({ ...pending(), status: reads > 2 ? "approved" : "pending" });
+    });
+    await mountCli();
+    const approve = [...cliContainer.querySelectorAll("button")].find(button => button.textContent === "Approve CLI access");
+    expect(approve).toBeDefined();
+    await reactAct(async () => { approve!.click(); });
+    await advance(0);
+    expect(fetchCli.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+    expect(reads).toBe(2);
+    await advance(2000);
+    expect(reads).toBe(3);
+    expect(cliClient!.getQueryState(challengeQueryKey)).toMatchObject({ status: "success", fetchStatus: "idle", data: { status: "approved" } });
+    await advance(1);
+    expect(cliContainer.textContent).toContain("CLI access approved");
+    expect(fetchCli.mock.calls.filter(([, init]) => init?.method === "POST").map(([url]) => String(url)))
+      .toEqual([`/api/cli-auth/challenges/${challengeId}/approve`]);
+  });
+
+  it("waits for an authoritative session before reading viewer-specific challenge details", async () => {
+    let resolveSession!: (session: ReturnType<typeof v9SessionFixture>) => void;
+    getSessionMock.mockReturnValueOnce(new Promise(resolve => { resolveSession = resolve; }));
+    fetchCli.mockResolvedValue(response(pending()));
+    await mountCli(false);
+    expect(fetchCli).not.toHaveBeenCalled();
+    resolveSession(v9SessionFixture("operator"));
+    await advance(2);
+    expect(fetchCli).toHaveBeenCalledTimes(1);
+    expect(cliContainer.textContent).toContain("Approve Blentera CLI access");
+  });
+
+  it("recovers a failed session read without submitting consent", async () => {
+    getSessionMock.mockRejectedValueOnce(new Error("Session unavailable"));
+    fetchCli.mockResolvedValue(response(pending()));
+    await mountCli(false);
+    await advance(2);
+    expect(cliContainer.textContent).toContain("Your sign-in could not be checked");
+    expect(fetchCli).not.toHaveBeenCalled();
+    getSessionMock.mockResolvedValue(v9SessionFixture("operator"));
+    const retry = [...cliContainer.querySelectorAll("button")].find(button => button.textContent === "Check sign-in again");
+    await reactAct(async () => { retry!.click(); });
+    await advance(2);
+    expect(cliContainer.textContent).toContain("Approve Blentera CLI access");
+    expect(fetchCli.mock.calls.every(([, init]) => init?.method === "GET")).toBe(true);
+  });
+
+  it("denies consent dispatch after a same-Human session renewal in the click boundary", async () => {
+    fetchCli.mockResolvedValue(response(pending()));
+    await mountCli();
+    const approve = [...cliContainer.querySelectorAll("button")].find(button => button.textContent === "Approve CLI access");
+    await reactAct(async () => {
+      approve!.click();
+      const session = v9SessionFixture("operator");
+      cliClient!.setQueryData(queryKeys.auth.session, { ...session, session: { ...session.session, id: "renewed-session" } });
+    });
+    await advance(2);
+    expect(fetchCli.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
+    expect(cliContainer.textContent).not.toContain("Current account access changed");
+  });
+
+  it.each(["success", "failure"])("suppresses late consent %s after the current Human changes", async outcome => {
+    let finish!: () => void;
+    fetchCli.mockImplementation(async (_url, init) => init?.method === "POST"
+      ? new Promise((resolve, reject) => { finish = () => outcome === "success" ? resolve(response({ approved: true })) : reject(new Error("Private old Human error")); })
+      : response(pending()));
+    await mountCli();
+    const approve = [...cliContainer.querySelectorAll("button")].find(button => button.textContent === "Approve CLI access");
+    await reactAct(async () => { approve!.click(); });
+    await advance(0);
+    cliClient!.setQueryData(queryKeys.auth.session, v9SessionFixture("other-human"));
+    await advance(2);
+    const reads = fetchCli.mock.calls.filter(([, init]) => init?.method === "GET").length;
+    await reactAct(async () => { finish(); });
+    await advance(2);
+    expect(fetchCli.mock.calls.filter(([, init]) => init?.method === "GET")).toHaveLength(reads);
+    expect(fetchCli.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+    expect(cliContainer.textContent).not.toContain("CLI access approved");
+    expect(cliContainer.textContent).not.toContain("Private old Human error");
+  });
+
+  it("does not reuse a prior Human's cached organization name for the same challenge capability", async () => {
+    fetchCli.mockResolvedValueOnce(response({ ...pending(), requestedCompanyName: "Private previous organization" }));
+    await mountCli();
+    expect(cliContainer.textContent).toContain("Private previous organization");
+    let release!: () => void;
+    fetchCli.mockImplementation(() => new Promise(resolve => { release = () => resolve(response(pending())); }));
+    cliClient!.setQueryData(queryKeys.auth.session, v9SessionFixture("other-human"));
+    await advance(2);
+    expect(cliContainer.textContent).not.toContain("Private previous organization");
+    expect(fetchCli).toHaveBeenCalledTimes(2);
+    await reactAct(async () => { release(); });
+    await advance(2);
+    expect(cliContainer.textContent).not.toContain("Private previous organization");
+  });
+
+  it("explains full cross-organization developer authority, expiry and Co-worker exclusion in Danish", async () => {
+    await i18n.changeLanguage("da");
+    fetchCli.mockResolvedValue(response(pending()));
+    await mountCli();
+    expect(cliContainer.textContent).toContain("Godkend CLI-adgang til Blentera");
+    expect(cliContainer.textContent).toContain("fuld Board-adgang til de organisationer");
+    expect(cliContainer.textContent).toContain("aldrig til en Co-worker");
+    expect(cliContainer.textContent).toContain("30 dage");
+    expect(cliContainer.textContent).toContain("Godkendelsesanmodningen udløber");
+    expect(document.head.querySelector('meta[name="referrer"]')?.getAttribute("content")).toBe("no-referrer");
+    expect(fetchCli.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
+  });
 });

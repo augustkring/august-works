@@ -1,0 +1,135 @@
+{
+  "date": "2026-10-22",
+  "requirement": "V10-158 / UP-02 Board CLI consent vertical, checkpoint",
+  "upstreamCommit": "2befcd9a0a087ef82506e1649140dd307b90e96a",
+  "sourceHashesObservedAtCheckpoint": {
+    "server/src/services/board-auth.ts": "1b8e7608341bbcfa04a32c2a48a4c6c7fadcc222bd3ea6f9f52d43098927b94f",
+    "server/src/services/board-auth.test.ts": "d01ae8fc5da63e86fadfda2c0f739c07748908e0dd55a5b6658a075610561b68",
+    "server/src/routes/access.ts": "bf6da60f55a9e312afad41f8117f6b4f26f8603984dcf082e705a4beb6e39dc6",
+    "server/src/__tests__/cli-auth-routes.test.ts": "c738429b3cd84d4101c6b675f7131bc099d2fed90efa496822ea22ee446e7b95",
+    "cli/src/client/board-auth.ts": "3abf51cf0ae3560f4474bbbfc98a8cb562a0ddad2245f0b7cef4bd5b7d5cd848",
+    "cli/src/client/command-label.ts": "797bfce9390c447c467f4c05d66ee6e93e7c8c15479d690b1013a4025331c163",
+    "cli/src/__tests__/board-auth.test.ts": "3454eed96bf77801d20c192dafff65eefd133beca18641c72232094565335e4b",
+    "ui/src/pages/CliAuth.tsx": "13c842917d23ca655c94101fbd03883e06bfc85a20aae012e46bb3cd23a31793",
+    "ui/src/pages/Auth.test.tsx": "e1a0681c36418c97ac828c684807dbee0d5388943636e1e5cabdf582fe2e199f",
+    "ui/src/i18n/experience/en.json": "c0d0730db299d77549bce52c5817420bbea5761337726d14b82ee3e6b0d8a0f7",
+    "ui/src/i18n/experience/da.json": "c36c85d4289d84f32ad0914a455da55b835cc7ed012d3d8cacde8ffd0df33ea4",
+    "server/src/app.ts": "9499ac151f08d14e795e7d1b39107ceb45bdb347bca4fade6ceceaf6f54f05e6",
+    "doc/CLI.md": "3e041cf169994e2a1a01c0dde00553170d0a75925d8d99487064eb723d34a916"
+  },
+  "pinningLimitation": "Source hashes observed at checkpoint; no whole-graph upfront pin claimed. Failed and subsequent captures are separate. Final sticky-approval branch and argv helper each have their additional check; earlier 37-case suite is explicitly earlier source.",
+  "runs": [
+    {
+      "log": "up02-service-initial-green.log.txt",
+      "result": "FAIL",
+      "testsPassed": 15,
+      "testsFailed": 2,
+      "corrections": "Cold test-only full route import moved to fixture setup; actual HTTP deadline unchanged. Existing recursive sanitizer remains unchanged; durable key identity moved to canonical entityType/entityId for new audit rows."
+    },
+    {
+      "command": "node node_modules/vitest/vitest.mjs run server/src/services/board-auth.test.ts server/src/__tests__/cli-auth-routes.test.ts --maxWorkers=1",
+      "log": "up02-service-routes-green.log.txt",
+      "result": "PASS",
+      "testsPassed": 37,
+      "source": "Before reviewer correction for physical key deletion. These 37 are not recast as an exact-final-source run.",
+      "observations": [
+        "Original fully migrated PostgreSQL service/key/audit transactions",
+        "Approval/cancel/owner races, lock-wait membership change, revocation and audit failure",
+        "Actual HTTP handshake and bounded rate budgets; injected post-commit publication warnings retained"
+      ]
+    },
+    {
+      "log": "up02-ui-initial-green.log.txt",
+      "result": "FAIL",
+      "testsPassed": 6,
+      "testsFailed": 10,
+      "correction": "Existing auth fixture hydrated through canonical session cache; product session gate was retained."
+    },
+    {
+      "log": "up02-ui-final-green.log.txt",
+      "result": "PASS",
+      "testsPassed": 30,
+      "note": "Use raw log for projects. Final UI/copy bytes stable. Includes auth lifecycle and actual Danish consent copy."
+    },
+    {
+      "command": "node node_modules/vitest/vitest.mjs run cli/src/__tests__/board-auth.test.ts --maxWorkers=1",
+      "log": "up02-cli-final-green.log.txt",
+      "result": "PASS",
+      "testsPassed": 14,
+      "observations": [
+        "Same-challenge Retry-After within original deadline; no automatic reconsent",
+        "Actual challenge POST default label excludes synthetic raw argv credential/content canaries"
+      ]
+    },
+    {
+      "log": "up02-deleted-key-green.log.txt",
+      "result": "PASS",
+      "testsPassed": 1,
+      "deselectedByNameFilter": 17,
+      "note": "Focused final-source real-PG correction; precise name filter must be verified from original agent capture before repeating.",
+      "observations": [
+        "Physical board_api_keys DELETE triggers actual FK SET NULL",
+        "Retained approvedAt stays terminal; same/other approvers cannot resurrect key"
+      ]
+    },
+    {
+      "command": "pnpm check:token-gates",
+      "log": "up02-token-gates.log.txt",
+      "result": "PASS"
+    }
+  ],
+  "logs": [
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up02-service-initial-green.log.txt",
+      "sha256": "e91d091daa044f7cfeda1eaca3f58b3497dd54833f6143c584e064f43d40d2fd",
+      "sizeBytes": 3608
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up02-service-routes-green.log.txt",
+      "sha256": "2ebba48d800e6ac2ace15ee2813154978fd27a0b6a05ed3966df8f4e11d8173d",
+      "sizeBytes": 2456
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up02-ui-initial-green.log.txt",
+      "sha256": "9e79fc86ff0dc234594ed948e11c752cede54ef35c3174487f535d72caaae8b6",
+      "sizeBytes": 6100
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up02-ui-final-green.log.txt",
+      "sha256": "f8ff8bfff327a8338979c27aa76619871fec5360b1f3c74d10d9c9339ec7a053",
+      "sizeBytes": 521
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up02-cli-final-green.log.txt",
+      "sha256": "8608705fe0c5ada5e99b6512afd43e5d83445c523b96ce0e576f7a5791acb0cd",
+      "sizeBytes": 515
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up02-deleted-key-green.log.txt",
+      "sha256": "3deb505c2f0fecaac8d7d476ba3a2104d1d2ea0db1d11d9062e1bc0a3719a724",
+      "sizeBytes": 533
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/up02-token-gates.log.txt",
+      "sha256": "c1c757b9e9f2ecda1deecd4a037fcc7c49285b496f25744d4c17d3778b33b3af",
+      "sizeBytes": 314
+    }
+  ],
+  "review": {
+    "independentReviewer": "Sol account_privacy_rebuild (not author)",
+    "findings": [
+      "Deleted key FK null reopened approved consent; fixed approvedAt terminality and absent-key refusal",
+      "Raw argv in default command label persisted credentials/content; original helper now returns only static client identity"
+    ],
+    "closure": "Reviewer inspected both corrections; actual focused regressions pass. Root independently read complete production service, route/app/CLI diffs and full UI page.",
+    "remaining": "Current normal server/CLI/UI typechecks pending normal Runner build and source holds"
+  },
+  "limitations": [
+    "No-surviving-company/global durable audit receipt coverage remains open; own-key revocation is not blocked by lost membership",
+    "File-descriptor correction is separate source work in progress",
+    "Process-local rate budgets are not a distributed global limiter",
+    "Whole-repository checks, browser evidence, full UP-02 integration and complete V10 acceptance remain open"
+  ],
+  "sourceComplete": false,
+  "prReady": false
+}
