@@ -1,0 +1,42 @@
+{
+  "recordedAt": "2026-10-22T22:43:25.013803+00:00",
+  "scope": "Four existing company-scope HeartbeatRun test/story fixtures gain required scopeKind and issueId fields; no assertions or production contracts weakened.",
+  "sourcePins": {
+    "recordedDuringCapture": "2026-10-22T22:33:57.958593+00:00",
+    "files": {
+      "ui/src/components/ActivityCharts.test.tsx": "1f172a8767a4f2b3f80e5a8893f8ab07e1df1f18f776979ba4061b3822450d9a",
+      "ui/src/lib/inbox.test.ts": "62c3898eb730a8c27cdff763a93f355c0def029488b49cc3492bc483a372cb3b",
+      "ui/src/pages/Inbox.test.tsx": "f1d3f441b55250b3238c33a7f0fe5f951e4fe633dd16eda7ecbfad4e98d3c69b",
+      "ui/storybook/stories/data-viz-misc.stories.tsx": "63b06336e3c0ac77d2a8ee8070b7b8344bbf56ca1dbe2aef2aeaff4cf32855e6"
+    }
+  },
+  "checks": {
+    "types": {
+      "exitCode": 0,
+      "sessionId": 35470,
+      "log": "up03-ui-run-fixtures-types.log.txt"
+    },
+    "tests": {
+      "exitCode": 0,
+      "sessionId": 64936,
+      "log": "up03-ui-run-fixtures-tests.log.txt",
+      "passedTests": 92
+    },
+    "token-gates": {
+      "exitCode": 0,
+      "sessionId": 62528,
+      "log": "up03-ui-run-fixtures-token-gates.log.txt"
+    }
+  },
+  "precedingWholeWorkspaceCheck": {
+    "sessionId": 60744,
+    "exitCode": 1,
+    "log": "up03-workspace-types-first.log.txt",
+    "finding": "UI typecheck failed at four old fixtures. Server native typecheck and earlier packages passed before this failure; whole-workspace success is not established.",
+    "sourceLimit": "Domain owners were held through exit, then two domain files changed. This is historical failure evidence, not qualification of current complete source."
+  },
+  "limits": [
+    "Whole-workspace typecheck must be rerun at a coherent checkpoint.",
+    "Whole-workspace tests and build are outstanding."
+  ]
+}
