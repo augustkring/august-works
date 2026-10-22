@@ -1,9 +1,10 @@
 import { z } from "zod";
+import { PRODUCT_IDENTITY } from "./product-identity.js";
 
 export const FEEDBACK_CONTACTS = {
-  support: "mailto:support@blentera.com",
-  security: "mailto:security@blentera.com",
-  privacy: "mailto:privacy@blentera.com",
+  support: `mailto:${PRODUCT_IDENTITY.supportEmail}`,
+  security: `mailto:${PRODUCT_IDENTITY.securityEmail}`,
+  privacy: `mailto:${PRODUCT_IDENTITY.privacyEmail}`,
 } as const;
 export const feedbackCategorySchema = z.enum([
   "BUG",

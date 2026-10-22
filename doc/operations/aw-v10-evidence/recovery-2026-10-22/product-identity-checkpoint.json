@@ -1,0 +1,114 @@
+{
+  "date": "2026-10-22",
+  "requirements": "V10-005/007/008 partial: product identity and browser entry points",
+  "sourceHashesObservedAtCheckpoint": {
+    "packages/shared/src/product-identity.ts": "085231253fdee6684f2d088a4b9bf183da1c3f5ecc6a27a423e3716570ee350f",
+    "packages/shared/src/index.ts": "47c35825a098cb187ce157bff150506db19378667696f72d54c6bb6d3167ebed",
+    "packages/shared/src/customer-feedback.ts": "0f49bdcaf851b08f3dab373ba79b49d0809072d47fa5d88f7aeae1f2315804c7",
+    "ui/src/components/ErrorRecoverySurface.tsx": "ece8c9b1321fa58fa2e55f8eb21c046ace44836155a7b56f177761a3aa3434fd",
+    "ui/src/pages/CustomerSupport.tsx": "e8c83639da3f0e2445f9344381edc0e373119678af9324753b5b19b5c963a438",
+    "ui/src/lib/pwa-install-mode.test.ts": "1dde4a7c9fa88a4bf1b9e68e9644fcb62b3fa498a3025aa7b79e77c2bf45d383",
+    "ui/index.html": "93e529d0bf9c1fd558799069dd8206072f0e0b322210ae1caec46b097b7d002a",
+    "ui/public/site.webmanifest": "abca20384a6a32b770eb35d9cb60dc9441c00f1ff5c7524c12c92a9d68dccb47",
+    "SECURITY.md": "3d2104074756c8a5dfa3b8f87e0005cd5db744d46b2954c51ede3162763efbb5",
+    "ui/public/favicon.ico": "6520e45f55d74a2a53205facfcec214972ec2936c94ab7af442dfbb429ab9534",
+    "ui/public/favicon.svg": "b81f28509bdecaf971db2048efa00b5d3daa2c0efd91a6efa7cc12a2ab72a657",
+    "ui/public/favicon-16x16.png": "6291f0e1ced5206907f711a02afc094dd200a7172e6951a15a723a6bad9955b1",
+    "ui/public/favicon-32x32.png": "b8fc825629aee43b96d503e92e058db090cfa261ba1ace520e79b4ecf49ddcd8",
+    "ui/public/apple-touch-icon.png": "31a7354dfd09916a31d2bcc6afc74d3dd4efeabf58e3589553caecbb987f43ac",
+    "ui/public/android-chrome-192x192.png": "e11916854b6c6efbda2ff3e8c0b676781a80515f7276d7af3306b6f0a0a788dc",
+    "ui/public/android-chrome-512x512.png": "d2f8bd292e3a94ff0157033a42c6c57b1f584d3f921b689e70cc5942389b90f8",
+    "ui/public/android-chrome-maskable-512x512.png": "f673592ee603ebf7346aae698f5d5ad896334c029090dd54f4bf6c25b74d42c1"
+  },
+  "runs": [
+    {
+      "command": "node node_modules/vitest/vitest.mjs run ui/src/lib/pwa-install-mode.test.ts ui/src/components/ErrorRecoverySurface.test.tsx ui/src/pages/CustomerSupport.test.tsx packages/shared/src/feedback-images.test.ts --maxWorkers=1",
+      "result": "PASS",
+      "testsPassed": 17,
+      "log": "product-identity-green.log.txt",
+      "note": "Before later exact production icon copying and maskable asset path update. Existing paired provider-independent recovery/contact behavior remains covered."
+    },
+    {
+      "command": "node node_modules/vitest/vitest.mjs run ui/src/lib/pwa-install-mode.test.ts --maxWorkers=1",
+      "result": "PASS",
+      "testsPassed": 3,
+      "log": "product-identity-pwa-final.log.txt",
+      "note": "Final manifest/assets; overlaps previous 17 and is not added as 20 distinct tests."
+    },
+    {
+      "command": "pnpm --filter @paperclipai/ui typecheck",
+      "result": "PASS",
+      "log": "product-identity-ui-typecheck.log.txt",
+      "note": "After final TypeScript changes; subsequent asset copying changes no TypeScript."
+    },
+    {
+      "command": "pnpm check:token-gates",
+      "result": "PASS",
+      "log": "product-identity-token-gates.log.txt",
+      "note": "Four token gates clean; final component bytes unchanged afterward."
+    }
+  ],
+  "assets": {
+    "verifiedCopiedAssets": [
+      {
+        "source": "doc/assets/branding/blentera/v1.0/Blentera_Logo_Package_PRODUCTION_MASTER/favicon/favicon.ico",
+        "target": "ui/public/favicon.ico",
+        "sha256": "6520e45f55d74a2a53205facfcec214972ec2936c94ab7af442dfbb429ab9534",
+        "sourceManifestMatch": true
+      },
+      {
+        "source": "doc/assets/branding/blentera/v1.0/Blentera_Logo_Package_PRODUCTION_MASTER/favicon/favicon.svg",
+        "target": "ui/public/favicon.svg",
+        "sha256": "b81f28509bdecaf971db2048efa00b5d3daa2c0efd91a6efa7cc12a2ab72a657",
+        "sourceManifestMatch": true
+      },
+      {
+        "source": "doc/assets/branding/blentera/v1.0/Blentera_Logo_Package_PRODUCTION_MASTER/favicon/favicon-16x16.png",
+        "target": "ui/public/favicon-16x16.png",
+        "sha256": "6291f0e1ced5206907f711a02afc094dd200a7172e6951a15a723a6bad9955b1",
+        "sourceManifestMatch": true
+      },
+      {
+        "source": "doc/assets/branding/blentera/v1.0/Blentera_Logo_Package_PRODUCTION_MASTER/favicon/favicon-32x32.png",
+        "target": "ui/public/favicon-32x32.png",
+        "sha256": "b8fc825629aee43b96d503e92e058db090cfa261ba1ace520e79b4ecf49ddcd8",
+        "sourceManifestMatch": true
+      },
+      {
+        "source": "doc/assets/branding/blentera/v1.0/Blentera_Logo_Package_PRODUCTION_MASTER/app-icons/apple-touch-icon-180.png",
+        "target": "ui/public/apple-touch-icon.png",
+        "sha256": "31a7354dfd09916a31d2bcc6afc74d3dd4efeabf58e3589553caecbb987f43ac",
+        "sourceManifestMatch": true
+      },
+      {
+        "source": "doc/assets/branding/blentera/v1.0/Blentera_Logo_Package_PRODUCTION_MASTER/app-icons/pwa-192.png",
+        "target": "ui/public/android-chrome-192x192.png",
+        "sha256": "e11916854b6c6efbda2ff3e8c0b676781a80515f7276d7af3306b6f0a0a788dc",
+        "sourceManifestMatch": true
+      },
+      {
+        "source": "doc/assets/branding/blentera/v1.0/Blentera_Logo_Package_PRODUCTION_MASTER/app-icons/pwa-512.png",
+        "target": "ui/public/android-chrome-512x512.png",
+        "sha256": "d2f8bd292e3a94ff0157033a42c6c57b1f584d3f921b689e70cc5942389b90f8",
+        "sourceManifestMatch": true
+      },
+      {
+        "source": "doc/assets/branding/blentera/v1.0/Blentera_Logo_Package_PRODUCTION_MASTER/app-icons/pwa-maskable-512.png",
+        "target": "ui/public/android-chrome-maskable-512x512.png",
+        "sha256": "f673592ee603ebf7346aae698f5d5ad896334c029090dd54f4bf6c25b74d42c1",
+        "sourceManifestMatch": true
+      }
+    ],
+    "note": "Exact supplied production bytes, verified against retained checksums; no image transformation or QA-image acceptance claimed."
+  },
+  "limitations": [
+    "Code-owned presentation metadata grants no deployment origin, credential, authorization or mailbox authority",
+    "Null legal facts/URLs are intentionally unresolved, not invented; operator/legal information and actual public documents remain required",
+    "Targets do not prove DNS, mail delivery, monitored inboxes or transactional sender qualification",
+    "Static browser entry names, contact projections and icon bytes only; complete brand leakage audit, public routes/security.txt, bilingual bootstrap recovery, legal/notices and deployed browser acceptance remain open",
+    "No physical visual/accessibility or live provider qualification is claimed",
+    "Whole repository required checks and full V10 implementation remain pending"
+  ],
+  "sourceComplete": false,
+  "prReady": false
+}

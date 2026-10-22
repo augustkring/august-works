@@ -1,4 +1,5 @@
 import { useLayoutEffect, useRef } from "react";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import en from "../i18n/experience/en.json";
 import da from "../i18n/experience/da.json";
 
@@ -22,7 +23,7 @@ export function ErrorRecoverySurface({ scope, onBack }: {
         <button type="button" className="inline-flex min-h-11 items-center rounded-md bg-primary px-4 text-sm font-medium text-primary-foreground focus-visible:outline focus-visible:outline-ring" onClick={() => window.location.reload()}>{copy.reload}</button>
       </div>
       <p className="text-sm text-muted-foreground">{copy.supportExplanation}</p>
-      <a href="mailto:support@blentera.com" className="inline-flex min-h-11 items-center underline focus-visible:outline focus-visible:outline-ring">{copy.support}</a>
+      <a href={`mailto:${PRODUCT_IDENTITY.supportEmail}`} className="inline-flex min-h-11 items-center underline focus-visible:outline focus-visible:outline-ring">{copy.support}</a>
     </Region>
   );
 }
