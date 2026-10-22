@@ -9,7 +9,8 @@
     "server/src/__tests__/announcement-feed.test.ts": "21c7cf4abf8aa0a46c30cc144e4bc834a4c200d3e44504fd0f4ba88b8692cfb1",
     "server/src/__tests__/announcements-routes.test.ts": "231f54de0391bdbc41979aebbe98a391e70d2569968733db91066e82f4b92985",
     "packages/shared/src/announcements.ts": "5064ef8906eefa1facc50d762b400b4f5f906a70df2a44144430fa89b07c8c45",
-    "doc/operations/blentera-outbound-processors.md": "3a33a4d37328858a7e0aedc7b64b5320cc07422f6c54d7f2fbcf2aea023ab7df"
+    "doc/operations/blentera-outbound-processors.md": "3a33a4d37328858a7e0aedc7b64b5320cc07422f6c54d7f2fbcf2aea023ab7df",
+    "doc/ANNOUNCEMENTS.md": "26e368703757a31870f22ba21ef1f1014e6236df4bee0f420c331ea17c38429f"
   },
   "pinningLimitation": "Hashes observed after tests; no upfront whole-source-graph pin is claimed. Unrelated Board CLI files changed during some captures. Subsequent telemetry changes to separate config field require their own evidence.",
   "runs": [
@@ -116,7 +117,7 @@
   ],
   "review": {
     "feedback": "Independent Sol reviewer found telemetry-purpose aliases; reproduced, fixed and reviewer closure received. No additional concrete blocker found.",
-    "announcements": "Root authored and reviewed full existing owner/callers/tests; independent review requested and pending at this checkpoint."
+    "announcements": "Independent Sol reviewer traced config\u2192index\u2192app\u2192feed/current/media and actual opt-in matrix. Found stale current ANNOUNCEMENTS runbook; corrected default/enablement instructions and distinguished historical upstream publishing examples. No other concrete source blocker reported. Documentation-only correction after tests."
   },
   "limitations": [
     "First-party Telemetry is separate work in progress",
