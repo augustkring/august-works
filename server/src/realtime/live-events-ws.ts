@@ -288,7 +288,7 @@ export function setupLiveEventsWebSocketServer(
           return;
         }
         const admitted = await analyticalLiveEventForReader(db, event, current.actor);
-        if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(admitted));
+        if (admitted && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(admitted));
       }).catch((err) => {
         logger.warn({ err, companyId: context.companyId }, "live event admission failed");
         socket.close(1011, "live admission unavailable");

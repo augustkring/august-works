@@ -31,7 +31,7 @@ import {analyticalLiveEventForReader} from "../services/analytical-live-events.j
 import {appendHeartbeatRunEvent} from "../services/heartbeat-run-events.js";
 import type {LiveEvent} from "@paperclipai/shared";
 import {and,eq,sql} from "drizzle-orm";
-import {agents,authUsers,companies,companyMemberships,heartbeatRuns,heartbeatRunEvents,issues,issueComments,businessMetrics,businessMetricVersions,businessMetricPublications,businessMetricObservations,governanceObligations,analyticalLineageManifests,analyticalContextRoots,analyticalContextDependencies,memoryRecords,contextManifestMemoryRoots,providerTraceRecords,memoryJobs,createDb} from "@paperclipai/db";
+import {agents,authSessions,authUsers,companies,companyMemberships,heartbeatRuns,heartbeatRunEvents,issues,issueComments,businessMetrics,businessMetricVersions,businessMetricPublications,businessMetricObservations,governanceObligations,analyticalLineageManifests,analyticalContextRoots,analyticalContextDependencies,memoryRecords,contextManifestMemoryRoots,providerTraceRecords,memoryJobs,createDb} from "@paperclipai/db";
 import {afterAll,beforeAll,beforeEach,describe,expect,it,vi} from "vitest";
 import {instanceSettingsService} from "../services/instance-settings.js";
 import {businessMetricService} from "../services/business-metrics/service.js";
@@ -436,32 +436,37 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
   await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,f.sourceId));
   await expect(assertAnalyticalContextPayloadAccess(db,companyId,board,{issueId:saved.task.id})).rejects.toMatchObject({status:403,details:{code:"analytical_source_access_lost"}});
  });
- it("reauthorizes actual WebSocket output at delivery and exposes only native identities on source loss",async()=>{
+ it("reauthorizes actual WebSocket output at delivery without broadcasting private source identities on source loss",async()=>{
   const f=await fixture();await f.capture();
-  const http=createServer(),wss=setupLiveEventsWebSocketServer(http,db,{deploymentMode:"local_trusted"});
+  const sessionId=randomUUID(),now=new Date();
+  await db.insert(authSessions).values({id:sessionId,userId,token:randomUUID(),createdAt:now,updatedAt:now,expiresAt:new Date(now.getTime()+60000)});
+  const http=createServer(),wss=setupLiveEventsWebSocketServer(http,db,{deploymentMode:"authenticated",resolveSessionFromHeaders:async()=>({session:{id:sessionId,userId},user:{id:userId,email:null,name:null}})});
   http.listen(0,"127.0.0.1");await once(http,"listening");const address=http.address() as {port:number};
   const socket=new WebSocket(`ws://127.0.0.1:${address.port}/api/companies/${companyId}/events/ws`);
   const read=()=>new Promise<LiveEvent>((resolve,reject)=>{const timer=setTimeout(()=>reject(new Error("Native live event delivery timed out")),5000);socket.once("message",data=>{clearTimeout(timer);resolve(JSON.parse(data.toString()));});});
   try{
    await once(socket,"open");
-   const event={companyId,type:"heartbeat.run.log" as const,payload:{runId,issueId:randomUUID(),chunk:"Synthetic original analytical live fact"}};
+   const event={companyId,type:"heartbeat.run.log" as const,payload:{runId,issueId,chunk:"Synthetic original analytical live fact"}};
    const before=read();publishLiveEvent(event);expect((await before).payload.chunk).toContain("analytical live fact");
    await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,f.sourceId));
-   const denied=read();publishLiveEvent(event);const loss=await denied;
-   expect(loss).toMatchObject({type:"analytical.context.access_lost",payload:{runId,issueId,code:"analytical_source_access_lost"}});
-   expect(JSON.stringify(loss)).not.toContain("analytical live fact");expect(Object.keys(loss.payload).sort()).toEqual(["code","issueId","runId"]);
+   const denied=read();publishLiveEvent(event);
+   publishLiveEvent({companyId,type:"agent.status",payload:{marker:"authorized barrier"}});
+   const next=await denied;
+   expect(next).toMatchObject({type:"agent.status",payload:{marker:"authorized barrier"}});
+   expect(JSON.stringify(next)).not.toContain(runId);expect(JSON.stringify(next)).not.toContain(issueId);
    await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,f.sourceId));
    const restored=read();publishLiveEvent(event);expect((await restored).payload.chunk).toContain("analytical live fact");
   }finally{const closed=once(socket,"close");socket.terminate();await closed;await new Promise<void>(resolve=>wss.close(resolve));await new Promise<void>((resolve,reject)=>http.close(error=>error?reject(error):resolve()));}
  });
  it("checks all earlier conversation roots for a later native output and refuses a static agent key without native reader authority",async()=>{
   const f=await fixture();await f.capture();
+  const reader={type:"board" as const,source:"session" as const,userId};
   const laterRun=randomUUID();await db.insert(heartbeatRuns).values({id:laterRun,companyId,agentId,nativeIssueId:issueId,runtimeMode:"native",status:"running",responsibleUserId:userId});
   const event:LiveEvent={id:1,companyId,type:"heartbeat.run.progress",createdAt:new Date().toISOString(),payload:{runId:laterRun,lastAssistantSnippet:"Synthetic borrowed analytical fact"}};
-  expect(await analyticalLiveEventForReader(db,event,board)).toEqual(event);
-  expect(await analyticalLiveEventForReader(db,event,{type:"agent",source:"agent_key",companyId,agentId,keyId:randomUUID(),onBehalfOfUserId:userId})).toMatchObject({type:"analytical.context.access_lost"});
+  expect(await analyticalLiveEventForReader(db,event,reader)).toEqual(event);
+  expect(await analyticalLiveEventForReader(db,event,{type:"agent",source:"agent_key",companyId,agentId,keyId:randomUUID(),onBehalfOfUserId:userId})).toBeNull();
   await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,f.sourceId));
-  const denied=await analyticalLiveEventForReader(db,event,board);expect(denied).toMatchObject({type:"analytical.context.access_lost",payload:{runId:laterRun,issueId}});expect(JSON.stringify(denied)).not.toContain("borrowed analytical fact");
+  expect(await analyticalLiveEventForReader(db,event,reader)).toBeNull();
  });
  it("closes an already connected native browser after its current company membership is revoked",async()=>{
   const f=await fixture();await f.capture();
