@@ -14,6 +14,8 @@ import {
   EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
   instanceUserRoles,
   heartbeatRuns,
+  contextManifests,
+  contextManifestItems,
   issueComments,
   issues,
   principalPermissionGrants,
@@ -3016,6 +3018,89 @@ describeEmbeddedPostgres("authorization service", () => {
     const [cycle] = await db.insert(projects).values({ companyId: f.company.id, name: "Cycle", sourceProvenanceQualified: true, sourceIssueIds: [f.issue.id] }).returning();
     await db.update(issues).set({ projectId: cycle.id }).where(eq(issues.id, f.issue.id));
     expect(await canActorReadProjectPrivacy(db, f.human(f.owner), cycle)).toBe(false);
+  });
+
+  it("native graph preserves the current conversation Human and Agent even for open tasks", async () => {
+    const f = await privateFixture();
+    const [conversation] = await db.insert(issues).values({ companyId: f.company.id, title: "Owned conversation", visibility: "open", status: "in_progress",
+      conversationAgentId: f.agent.id, conversationUserId: f.owner, conversationState: "active", assigneeAgentId: f.agent.id }).returning();
+    expect(await canActorReadIssuePrivacy(db, f.human(f.owner), conversation)).toBe(true);
+    expect(await canActorReadIssuePrivacy(db, { ...f.human(f.reader), isInstanceAdmin: true }, conversation)).toBe(false);
+    await db.insert(issueAccessGrants).values({ companyId: f.company.id, issueId: conversation.id, subjectType: "user", subjectId: f.reader, source: "explicit" });
+    expect(await canActorReadIssuePrivacy(db, f.human(f.reader), conversation)).toBe(false);
+    expect(await canActorReadIssuePrivacy(db, f.worker, conversation)).toBe(true);
+    const [readerRun] = await db.insert(heartbeatRuns).values({ companyId: f.company.id, agentId: f.agent.id, responsibleUserId: f.reader, status: "running" }).returning();
+    expect(await canActorReadIssuePrivacy(db, { ...f.worker, runId: readerRun.id, onBehalfOfUserId: f.reader }, conversation)).toBe(false);
+    const otherAgent = await createAgent(db, f.company.id);
+    const [otherRun] = await db.insert(heartbeatRuns).values({ companyId: f.company.id, agentId: otherAgent.id, responsibleUserId: f.owner, status: "running" }).returning();
+    expect(await canActorReadIssuePrivacy(db, { ...f.worker, agentId: otherAgent.id, runId: otherRun.id }, conversation)).toBe(false);
+    expect(await canActorReadIssuePrivacy(db, { type: "board", source: "local_implicit" }, conversation)).toBe(false);
+    await db.update(issues).set({ conversationAgentId: null, conversationUserId: null, conversationState: null, conversationRetiredAt: new Date(),
+      status: "cancelled", hiddenAt: new Date(), assigneeAgentId: null }).where(eq(issues.id, conversation.id));
+    expect(await canActorReadIssuePrivacy(db, f.human(f.owner), conversation)).toBe(false);
+  });
+
+  it("native graph retains all copied Project sources across changes and erasure", async () => {
+    const f = await privateFixture();
+    const [source] = await db.insert(projects).values({ companyId: f.company.id, name: "Private original", visibility: "private", sourceProvenanceQualified: true }).returning();
+    await db.insert(projectAccessMembers).values({ companyId: f.company.id, projectId: source.id, subjectType: "user", subjectId: f.owner });
+    const [copy] = await db.insert(projects).values({ companyId: f.company.id, name: "Open copy", sourceProvenanceQualified: true, sourceProjectIds: [source.id] }).returning();
+    expect(await canActorReadProjectPrivacy(db, f.human(f.owner), copy)).toBe(true);
+    expect(await canActorReadProjectPrivacy(db, f.human(f.reader), copy)).toBe(false);
+    const additional = await createProject(db, f.company.id, "Additional source");
+    await db.update(projects).set({ sourceProjectIds: [additional.id] }).where(eq(projects.id, copy.id));
+    await db.update(projects).set({ sourceProjectIds: [] }).where(eq(projects.id, copy.id));
+    expect(new Set((await db.select().from(projects).where(eq(projects.id, copy.id)))[0].sourceProjectIds)).toEqual(new Set([source.id, additional.id]));
+    await db.delete(projects).where(eq(projects.id, source.id));
+    expect(await canActorReadProjectPrivacy(db, f.human(f.owner), copy)).toBe(false);
+  });
+
+  async function persistTaskContext(companyId: string, agentId: string, runId: string, sourceId: string, issueId: string | null = null) {
+    const [manifest] = await db.insert(contextManifests).values({ companyId, agentId, runId, issueId, queryHash: "a".repeat(64), policySnapshotHash: "b".repeat(64) }).returning();
+    await db.insert(contextManifestItems).values({ companyId, manifestId: manifest.id, sourceClass: "task", sourceProvider: "august_works_tasks", sourceRef: `issue://${sourceId}`,
+      sourceVersion: "1", contentHash: "c".repeat(64), trustLevel: "high", sensitivity: "internal", rank: 0, selectionReason: "Actual persisted native-source software fixture" });
+    return manifest;
+  }
+
+  it("native graph narrows unbound runs by actual Context Tasks and retains copied Task roots after Context erasure", async () => {
+    const f = await privateFixture();
+    const [run] = await db.insert(heartbeatRuns).values({ companyId: f.company.id, agentId: f.agent.id, responsibleUserId: f.owner, status: "succeeded" }).returning();
+    const manifest = await persistTaskContext(f.company.id, f.agent.id, run.id, f.issue.id);
+    expect(await canActorReadHeartbeatRunPrivacy(db, f.human(f.owner), run)).toBe(true);
+    expect(await canActorReadHeartbeatRunPrivacy(db, f.human(f.reader), run)).toBe(false);
+    const [copy] = await db.insert(issues).values({ companyId: f.company.id, title: "Copied Context payload", originRunId: run.id }).returning();
+    expect(await db.select().from(issuePrivacySources).where(and(eq(issuePrivacySources.issueId, copy.id), eq(issuePrivacySources.sourceKind, "issue"), eq(issuePrivacySources.sourceId, f.issue.id)))).toHaveLength(1);
+    await db.delete(contextManifests).where(eq(contextManifests.id, manifest.id));
+    expect(await canActorReadIssuePrivacy(db, f.human(f.owner), copy)).toBe(true);
+    expect(await canActorReadIssuePrivacy(db, f.human(f.reader), copy)).toBe(false);
+  });
+
+  it("native graph follows run-only Context through actual Task binding and denies malformed refs without self cycles", async () => {
+    const f = await privateFixture();
+    const task = await createIssue(db, f.company.id);
+    const [run] = await db.insert(heartbeatRuns).values({ companyId: f.company.id, agentId: f.agent.id, responsibleUserId: f.owner, nativeIssueId: task.id, status: "succeeded" }).returning();
+    await persistTaskContext(f.company.id, f.agent.id, run.id, f.issue.id);
+    expect(await canActorReadIssuePrivacy(db, f.human(f.owner), task)).toBe(true);
+    expect(await canActorReadIssuePrivacy(db, f.human(f.reader), task)).toBe(false);
+    const self = await createIssue(db, f.company.id);
+    const [selfRun] = await db.insert(heartbeatRuns).values({ companyId: f.company.id, agentId: f.agent.id, responsibleUserId: f.owner, nativeIssueId: self.id, status: "succeeded" }).returning();
+    await persistTaskContext(f.company.id, f.agent.id, selfRun.id, self.id, self.id);
+    expect(await canActorReadIssuePrivacy(db, f.human(f.owner), self)).toBe(true);
+    const malformed = await createIssue(db, f.company.id);
+    const [malformedRun] = await db.insert(heartbeatRuns).values({ companyId: f.company.id, agentId: f.agent.id, responsibleUserId: f.owner, nativeIssueId: malformed.id, status: "succeeded" }).returning();
+    await persistTaskContext(f.company.id, f.agent.id, malformedRun.id, "invalid-source");
+    expect(await canActorReadIssuePrivacy(db, f.human(f.owner), malformed)).toBe(false);
+    expect(await canActorReadHeartbeatRunPrivacy(db, f.human(f.owner), malformedRun)).toBe(false);
+  });
+
+  it("native graph rejects excess work from duplicate Context edges", async () => {
+    const f = await privateFixture();
+    const [run] = await db.insert(heartbeatRuns).values({ companyId: f.company.id, agentId: f.agent.id, responsibleUserId: f.owner, status: "succeeded" }).returning();
+    const manifest = await persistTaskContext(f.company.id, f.agent.id, run.id, f.issue.id);
+    await db.insert(contextManifestItems).values(Array.from({ length: 256 }, (_, index) => ({ companyId: f.company.id, manifestId: manifest.id,
+      sourceClass: "task", sourceProvider: "august_works_tasks", sourceRef: `issue://${f.issue.id}`, sourceVersion: "1", contentHash: "d".repeat(64),
+      trustLevel: "high", sensitivity: "internal", rank: index + 1, selectionReason: "Repeated native root exceeds complete-work budget" })));
+    expect(await canActorReadHeartbeatRunPrivacy(db, f.human(f.owner), run)).toBe(false);
   });
 
 });

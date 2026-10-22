@@ -19,6 +19,7 @@ export const projects = pgTable(
     // Server-stamped derivation roots, retained after source erasure. Empty
     // roots are meaningful only when the native producer qualified them.
     sourceIssueIds: uuid("source_issue_ids").array().notNull().default(sql`'{}'::uuid[]`),
+    sourceProjectIds: uuid("source_project_ids").array().notNull().default(sql`'{}'::uuid[]`),
     sourceProvenanceQualified: boolean("source_provenance_qualified").notNull().default(false),
     status: text("status").notNull().default("backlog"),
     leadAgentId: uuid("lead_agent_id").references(() => agents.id),
@@ -35,7 +36,8 @@ export const projects = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
-    sourceBoundCheck: check("projects_source_bound_check", sql`cardinality(${table.sourceIssueIds}) <= 256 and array_position(${table.sourceIssueIds},null) is null`),
+    sourceBoundCheck: check("projects_source_bound_check", sql`cardinality(${table.sourceIssueIds}) + cardinality(${table.sourceProjectIds}) <= 256
+      and array_position(${table.sourceIssueIds},null) is null and array_position(${table.sourceProjectIds},null) is null`),
     visibilityCheck: check("projects_visibility_check", sql`${table.visibility} in ('open', 'private')`),
     personalOwnerUq: uniqueIndex("projects_company_personal_owner_uq").on(table.companyId, table.personalOwnerUserId).where(sql`${table.personalOwnerUserId} is not null`),
     companyIdUq: unique("projects_company_id_uq").on(table.companyId, table.id),

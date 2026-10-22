@@ -566,16 +566,27 @@ export async function projectReadSqlCondition(_db: Db | DbTransaction, actor: Au
   return taskSourcePrivacySqlCondition("project", sql`${projects.id}`, sql`${projects.companyId}`, actor);
 }
 
-/** All retained Task sources survive ordinary moves and source erasure. The
- * recursive population streams unique nodes into a 257-row materialized bound.
- * Only a complete population of at most 256 enters cycle/ACL review; closure
- * has at most 256² pairs. Cycles, missing/foreign sources and overflow deny. */
+/** All retained Task sources survive ordinary moves and source erasure. Nodes
+ * and each node's actual enumerated edges have separate 256-entry budgets;
+ * repeated refs cannot hide incomplete work behind a small unique population.
+ * Cycles, missing/foreign sources and either overflow deny. */
 export async function issueReadSqlCondition(_db: Db | DbTransaction, actor: AuthorizationActor): Promise<SQL<boolean>> {
   return taskSourcePrivacySqlCondition("issue", sql`${issues.id}`, sql`${issues.companyId}`, actor);
 }
 
 /** One native Task/Project source graph; this never authorizes a company action. */
-function taskSourcePrivacySqlCondition(kind: "issue" | "project", id: SQL, company: SQL, actor: AuthorizationActor): SQL<boolean> {
+function taskSourcePrivacySqlCondition(kind: "issue" | "project" | "run", id: SQL, company: SQL, actor: AuthorizationActor): SQL<boolean> {
+  const contextRoots = sql`
+    select 'issue'::text as kind,case when c.agent_id=r.agent_id then c.issue_id end as id
+      where c.issue_id is not null or c.agent_id<>r.agent_id
+    union all select 'project',c.project_id where c.project_id is not null
+    union all select 'issue',case when item.source_ref ~* '^issue://[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+      then substring(item.source_ref from 9)::uuid end
+      from context_manifest_items item where item.company_id=c.company_id and item.manifest_id=c.id
+        and item.source_provider='august_works_tasks'`;
+  const humanId = actor.type === "board" ? actor.userId : actor.onBehalfOfUserId;
+  const conversationIdentity = sql`(${privatePrincipalCurrent(actor, company)} and i.conversation_user_id=${humanId ?? null}
+    and ${actor.type === "board" ? sql`true` : actor.type === "agent" && actor.agentId ? sql`i.conversation_agent_id=${actor.agentId}` : sql`false`})`;
   const edges = sql`        select 'issue'::text as kind,i.privacy_parent_issue_id as id from issues i
           where n.kind='issue' and i.id=n.id and i.company_id=${company} and i.privacy_parent_issue_id is not null
         union all select 'issue',i.privacy_root_issue_id from issues i
@@ -588,34 +599,52 @@ function taskSourcePrivacySqlCondition(kind: "issue" | "project", id: SQL, compa
               and own_run.id::text=i.origin_run_id and coalesce(own_run.issue_id,own_run.native_issue_id)=i.id)
         union all select 'issue',source.id from projects p cross join lateral unnest(p.source_issue_ids) source(id)
           where n.kind='project' and p.id=n.id and p.company_id=${company}
+        union all select 'project',source.id from projects p cross join lateral unnest(p.source_project_ids) source(id)
+          where n.kind='project' and p.id=n.id and p.company_id=${company}
         union all select s.source_kind,s.source_id from ${issuePrivacySources} s
           where n.kind='issue' and s.issue_id=n.id and s.company_id=${company}
-        union all select 'issue',coalesce(r.issue_id,r.native_issue_id,
-          case when coalesce(r.context_snapshot->>'issueId',r.context_snapshot->>'taskId') ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
-            then coalesce(r.context_snapshot->>'issueId',r.context_snapshot->>'taskId')::uuid end)
-          from ${heartbeatRuns} r where n.kind='run' and r.id=n.id and r.company_id=${company}
-            and (r.scope_kind='issue' or r.native_issue_id is not null or r.context_snapshot ? 'issueId' or r.context_snapshot ? 'taskId' or r.context_snapshot ? 'taskKey')
+        union all select 'issue',ref.id from ${heartbeatRuns} r cross join lateral (
+          select r.issue_id as id where r.issue_id is not null
+          union all select r.native_issue_id where r.native_issue_id is not null
+          union all select case when r.context_snapshot->>'issueId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+            then (r.context_snapshot->>'issueId')::uuid end where r.context_snapshot ? 'issueId'
+          union all select case when r.context_snapshot->>'taskId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+            then (r.context_snapshot->>'taskId')::uuid end where r.context_snapshot ? 'taskId'
+          union all select null::uuid where r.scope_kind='issue' and r.issue_id is null and r.native_issue_id is null
+            and not coalesce(r.context_snapshot ? 'issueId',false) and not coalesce(r.context_snapshot ? 'taskId',false)
+        ) ref where n.kind='run' and r.id=n.id and r.company_id=${company}
+        union all select root.kind,root.id from ${heartbeatRuns} r
+          join context_manifests c on c.company_id=r.company_id and c.run_id=r.id
+          cross join lateral (${contextRoots}) root
+          where r.company_id=${company} and ((n.kind='run' and r.id=n.id)
+            or (n.kind='issue' and coalesce(r.issue_id,r.native_issue_id)=n.id
+              and (root.id is null or root.kind<>'issue' or root.id<>n.id)))
 `;
+  const enumeratedEdges = sql`select * from (${edges}) native_edges limit 257`;
   return sql<boolean>`(
     with recursive privacy_nodes(kind,id) as (
       select ${kind}::text,${id}
       union
-      select edge.kind,edge.id from privacy_nodes n cross join lateral (${edges}) edge
+      select edge.kind,edge.id from privacy_nodes n cross join lateral (${enumeratedEdges}) edge
     ), bounded as materialized (select * from privacy_nodes limit 257)
     select case when (select count(*) from bounded)>256 then false else not exists (
       with recursive source_edges as materialized (
         select n.kind,n.id,edge.kind as source_kind,edge.id as source_id
-        from bounded n cross join lateral (${edges}) edge
+        from bounded n cross join lateral (${enumeratedEdges}) edge
       ), reachable(kind,id,source_kind,source_id) as (
         select kind,id,source_kind,source_id from source_edges
         union
         select r.kind,r.id,e.source_kind,e.source_id from reachable r
           join source_edges e on e.kind=r.source_kind and e.id=r.source_id
       )
+      select 1 from source_edges group by kind,id having count(*)>256
+      union all
       select 1 from reachable where kind=source_kind and id=source_id
       union all
       select 1 from bounded n where
         (n.kind='issue' and not exists(select 1 from issues i where i.id=n.id and i.company_id=${company}
+          and i.conversation_retired_at is null and ((i.conversation_agent_id is null and i.conversation_user_id is null)
+            or ${conversationIdentity})
           and (i.visibility='open' or ${issuePrincipalAccess(actor, sql`i.id`, sql`${company}`)})))
         or (n.kind='project' and not exists(select 1 from projects p where p.id=n.id and p.company_id=${company}
           and p.source_provenance_qualified and (p.visibility='open' or ${projectPrincipalAccess(actor, sql`p.id`, sql`${company}`)})))
@@ -647,11 +676,13 @@ export async function canActorReadHeartbeatRunPrivacy(db: Db | DbTransaction, ac
   }
   // A legacy task key is not proof of a truly unbound company run.
   if (Object.hasOwn(context, "taskKey") && !refs.size) return false;
-  if (run.scopeKind === "company") return refs.size === 0 &&
-    !Object.hasOwn(context, "issueId") && !Object.hasOwn(context, "taskId");
-  if (run.scopeKind !== "issue" || !refs.size) return false;
-  for (const id of refs) if (!(await canActorReadIssuePrivacy(db, actor, { id, companyId: source.companyId }))) return false;
-  return true;
+  if (run.scopeKind === "company") {
+    if (refs.size || Object.hasOwn(context, "issueId") || Object.hasOwn(context, "taskId")) return false;
+  } else if (run.scopeKind !== "issue" || !refs.size) return false;
+  return (await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+    eq(heartbeatRuns.id, source.id), eq(heartbeatRuns.companyId, source.companyId),
+    taskSourcePrivacySqlCondition("run", sql`${heartbeatRuns.id}`, sql`${heartbeatRuns.companyId}`, actor),
+  )).limit(1)).length > 0;
 }
 
 export function responsibleUserAuthzShadowMode() {
