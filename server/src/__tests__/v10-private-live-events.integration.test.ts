@@ -3,6 +3,7 @@ import { once } from "node:events";
 import { createServer } from "node:http";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { WebSocket } from "ws";
+import { eq } from "drizzle-orm";
 import { agents, authSessions, authUsers, companies, companyMemberships, createDb,
   EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, heartbeatRuns, issues, projectAccessMembers, projects } from "@paperclipai/db";
 import type { LiveEvent } from "@paperclipai/shared";
@@ -74,6 +75,38 @@ describe("Private source identities at native live delivery", () => {
       expect(JSON.stringify(received)).not.toContain("PRIVATE");
     }finally{
       const closed=once(socket,"close");socket.terminate();await closed;
+      await new Promise<void>(resolve=>wss.close(resolve));
+      await new Promise<void>((resolve,reject)=>http.close(error=>error?reject(error):resolve()));
+    }
+  });
+  it.each(["deleted","expired","replaced"] as const)("ends the original socket when its actual session is %s, even with the same cached Human",async change=>{
+    const sessionId=randomUUID(),now=new Date();let resolvedSessionId=sessionId;
+    const sessionRow={id:sessionId,userId:readerId,token:randomUUID(),createdAt:now,updatedAt:now,expiresAt:new Date(now.getTime()+60000)};
+    await db.insert(authSessions).values(sessionRow);
+    const http=createServer(),wss=setupLiveEventsWebSocketServer(http,db,{deploymentMode:"authenticated",deploymentProfile:"saas",
+      resolveSessionFromHeaders:async()=>({session:{id:resolvedSessionId,userId:readerId},user:{id:readerId,email:null,name:null}})});
+    http.listen(0,"127.0.0.1");await once(http,"listening");
+    const address=http.address();if(!address||typeof address==="string")throw new Error("Missing native listener");
+    const socket=new WebSocket(`ws://127.0.0.1:${address.port}/api/companies/${companyId}/events/ws`);
+    try{
+      await once(socket,"open");
+      const baseline=once(socket,"message");
+      publishLiveEvent({companyId,type:"agent.status",payload:{marker:"valid original session"}});
+      expect(JSON.parse((await baseline)[0].toString()).payload.marker).toBe("valid original session");
+      if(change==="deleted")await db.delete(authSessions).where(eq(authSessions.id,sessionId));
+      else if(change==="expired")await db.update(authSessions).set({expiresAt:new Date(Date.now()-1000)}).where(eq(authSessions.id,sessionId));
+      else{
+        resolvedSessionId=randomUUID();
+        await db.insert(authSessions).values({...sessionRow,id:resolvedSessionId,token:randomUUID()});
+      }
+      const outcome=Promise.race([
+        once(socket,"close").then(([code])=>({kind:"closed",code})),
+        once(socket,"message").then(()=>({kind:"message"})),
+      ]);
+      publishLiveEvent({companyId,type:"agent.status",payload:{marker:"withdrawn original session"}});
+      expect(await outcome).toEqual({kind:"closed",code:1008});
+    }finally{
+      if(socket.readyState!==WebSocket.CLOSED){const closed=once(socket,"close");socket.terminate();await closed;}
       await new Promise<void>(resolve=>wss.close(resolve));
       await new Promise<void>((resolve,reject)=>http.close(error=>error?reject(error):resolve()));
     }

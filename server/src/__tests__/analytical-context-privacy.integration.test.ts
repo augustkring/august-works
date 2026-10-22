@@ -470,7 +470,9 @@ describe.skipIf(!support.supported)("Native analytical Context retention on Post
  });
  it("closes an already connected native browser after its current company membership is revoked",async()=>{
   const f=await fixture();await f.capture();
-  const http=createServer(),wss=setupLiveEventsWebSocketServer(http,db,{deploymentMode:"authenticated",resolveSessionFromHeaders:async()=>({user:{id:userId},session:{id:randomUUID()}} as never)});
+  const sessionId=randomUUID(),now=new Date();
+  await db.insert(authSessions).values({id:sessionId,userId,token:randomUUID(),createdAt:now,updatedAt:now,expiresAt:new Date(now.getTime()+60000)});
+  const http=createServer(),wss=setupLiveEventsWebSocketServer(http,db,{deploymentMode:"authenticated",resolveSessionFromHeaders:async()=>({user:{id:userId},session:{id:sessionId,userId}})});
   http.listen(0,"127.0.0.1");await once(http,"listening");const address=http.address() as {port:number};
   const socket=new WebSocket(`ws://127.0.0.1:${address.port}/api/companies/${companyId}/events/ws`),received:string[]=[];
   socket.on("message",data=>received.push(data.toString()));

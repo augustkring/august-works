@@ -2,9 +2,9 @@ import { createHash } from "node:crypto";
 import type { IncomingMessage, Server as HttpServer } from "node:http";
 import { createRequire } from "node:module";
 import type { Duplex } from "node:stream";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, gt, isNull, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { agentApiKeys, companyMemberships, instanceUserRoles } from "@paperclipai/db";
+import { agentApiKeys, authSessions, authUsers, companyMemberships, instanceUserRoles } from "@paperclipai/db";
 import type { AwDeploymentProfile, DeploymentMode } from "@paperclipai/shared";
 import type { BetterAuthSessionResult } from "../auth/better-auth.js";
 import { logger } from "../middleware/logger.js";
@@ -178,34 +178,26 @@ async function authorizeUpgrade(
 
     const session = await opts.resolveSessionFromHeaders(headersFromIncomingMessage(req));
     const userId = session?.user?.id;
-    if (!userId) return null;
+    if (!userId || !session.session?.id || session.session.userId !== userId) return null;
 
-    const [roleRow, memberships] = await Promise.all([
-      opts.deploymentProfile === "saas" ? Promise.resolve(null) : db
-        .select({ id: instanceUserRoles.id })
-        .from(instanceUserRoles)
-        .where(and(eq(instanceUserRoles.userId, userId), eq(instanceUserRoles.role, "instance_admin")))
-        .then((rows) => rows[0] ?? null),
-      db
-        .select({ companyId: companyMemberships.companyId })
-        .from(companyMemberships)
-        .where(
-          and(
-            eq(companyMemberships.principalType, "user"),
-            eq(companyMemberships.principalId, userId),
-            eq(companyMemberships.status, "active"),
-          ),
-        ),
-    ]);
-
-    const hasCompanyMembership = memberships.some((row) => row.companyId === companyId);
-    if (!roleRow && !hasCompanyMembership) return null;
+    // A cached session resolver cannot keep a deleted/expired login alive.
+    // Read the actual account, session and current company authority together.
+    const [access] = await db.select({
+      sessionId: authSessions.id,
+      companyIds: sql<string[]>`array(select m.company_id::text from ${companyMemberships} m
+        where m.principal_type='user' and m.principal_id=${userId} and m.status='active')`,
+      isInstanceAdmin: opts.deploymentProfile === "saas" ? sql<boolean>`false`
+        : sql<boolean>`exists(select 1 from ${instanceUserRoles} r where r.user_id=${userId} and r.role='instance_admin')`,
+    }).from(authSessions).innerJoin(authUsers,eq(authUsers.id,authSessions.userId)).where(and(
+      eq(authSessions.id,session.session.id),eq(authSessions.userId,userId),gt(authSessions.expiresAt,new Date()),
+    )).limit(1);
+    if (!access || (!access.isInstanceAdmin && !access.companyIds.includes(companyId))) return null;
 
     return {
       companyId,
       actorType: "board",
       actorId: userId,
-      actor: { type: "board", userId, source: "session", companyIds: memberships.map(row => row.companyId), isInstanceAdmin: !!roleRow, ignoreInstanceAdmin: opts.deploymentProfile === "saas" },
+      actor: { type: "board", userId, sessionId: access.sessionId, source: "session", companyIds: access.companyIds, isInstanceAdmin: access.isInstanceAdmin, ignoreInstanceAdmin: opts.deploymentProfile === "saas" },
     };
   }
 
@@ -283,7 +275,10 @@ export function setupLiveEventsWebSocketServer(
       delivery = delivery.then(async () => {
         if (socket.readyState !== WebSocket.OPEN) return;
         const current = await authorizeUpgrade(db, req, context.companyId, new URL(req.url!, "http://localhost"), opts);
-        if (!current || current.actorType !== context.actorType || current.actorId !== context.actorId) {
+        if (!current || current.actorType !== context.actorType || current.actorId !== context.actorId
+          || current.actor.source !== context.actor.source
+          || (current.actor.type === "board" && context.actor.type === "board" && current.actor.sessionId !== context.actor.sessionId)
+          || (current.actor.type === "agent" && context.actor.type === "agent" && current.actor.keyId !== context.actor.keyId)) {
           socket.close(1008, "live access changed");
           return;
         }
