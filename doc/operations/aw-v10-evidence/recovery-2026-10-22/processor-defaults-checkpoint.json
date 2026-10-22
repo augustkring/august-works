@@ -1,0 +1,130 @@
+{
+  "date": "2026-10-22",
+  "requirement": "V10-148 partial: feedback and announcement processor defaults",
+  "sourceHashesObservedAtCheckpoint": {
+    "server/src/config.ts": "7c6ae7a9d5631ba234bc59807dfda204c0ad732f5f82c538ecac80063c9041f9",
+    "server/src/services/feedback-share-client.ts": "2123559dfdaecdfdc62f683990170d5bc617070cf1f448d78863d395678a9a66",
+    "server/src/__tests__/feedback-share-client.test.ts": "a6535b893d41d509a36df75c0ea370a56e0d86a6e81d67a53b20b356e991cdd3",
+    "server/src/services/announcement-feed.ts": "f8d2419c36353f8a375b50280cb3462f484e1c6aec21d724d8bbaf37cfb3993e",
+    "server/src/__tests__/announcement-feed.test.ts": "21c7cf4abf8aa0a46c30cc144e4bc834a4c200d3e44504fd0f4ba88b8692cfb1",
+    "server/src/__tests__/announcements-routes.test.ts": "231f54de0391bdbc41979aebbe98a391e70d2569968733db91066e82f4b92985",
+    "packages/shared/src/announcements.ts": "5064ef8906eefa1facc50d762b400b4f5f906a70df2a44144430fa89b07c8c45",
+    "doc/operations/blentera-outbound-processors.md": "3a33a4d37328858a7e0aedc7b64b5320cc07422f6c54d7f2fbcf2aea023ab7df"
+  },
+  "pinningLimitation": "Hashes observed after tests; no upfront whole-source-graph pin is claimed. Unrelated Board CLI files changed during some captures. Subsequent telemetry changes to separate config field require their own evidence.",
+  "runs": [
+    {
+      "log": "feedback-processor-red-2.log.txt",
+      "result": "FAIL",
+      "testsFailed": 2,
+      "testsPassed": 1,
+      "source": "original hardcoded feedback processor and redirect behavior; early regression set"
+    },
+    {
+      "log": "feedback-processor-error-red-1.log.txt",
+      "result": "FAIL",
+      "testsFailed": 2,
+      "testsPassed": 7,
+      "source": "first feedback fix before suppressing receiver error body"
+    },
+    {
+      "log": "feedback-processor-green-2.log.txt",
+      "result": "PASS",
+      "testsPassed": 9,
+      "source": "feedback service and tests before adding loadConfig regression"
+    },
+    {
+      "log": "feedback-config-purpose-red.log.txt",
+      "result": "FAIL",
+      "testsFailed": 2,
+      "testsPassed": 9,
+      "source": "original telemetry-to-feedback URL/token config aliases"
+    },
+    {
+      "log": "feedback-config-purpose-green.log.txt",
+      "result": "PASS",
+      "testsPassed": 11,
+      "command": "node node_modules/vitest/vitest.mjs run server/src/__tests__/feedback-share-client.test.ts --maxWorkers=1"
+    },
+    {
+      "log": "feedback-processor-integration-green.log.txt",
+      "result": "PASS",
+      "testsPassed": 46,
+      "testFiles": 3,
+      "command": "node node_modules/vitest/vitest.mjs run server/src/__tests__/feedback-share-client.test.ts server/src/__tests__/feedback-service.test.ts server/src/__tests__/server-startup-feedback-export.test.ts --maxWorkers=1",
+      "note": "Observed MaxListenersExceededWarning retained. No suppressed errors or claim that warning was fixed."
+    },
+    {
+      "log": "announcement-opt-in-red.log.txt",
+      "result": "FAIL",
+      "testsFailed": 6,
+      "testsPassed": 1,
+      "deselectedByNameFilter": 18,
+      "command": "node node_modules/vitest/vitest.mjs run server/src/__tests__/announcement-feed.test.ts -t 'requires both explicit|applies the same opt-in' --maxWorkers=1",
+      "source": "original announcement source/config defaults"
+    },
+    {
+      "log": "announcement-opt-in-green.log.txt",
+      "result": "PASS",
+      "testsPassed": 36,
+      "testFiles": 2,
+      "command": "node node_modules/vitest/vitest.mjs run server/src/__tests__/announcement-feed.test.ts server/src/__tests__/announcements-routes.test.ts --maxWorkers=1",
+      "source": "explicit opted-in test feeds; original cache, asset, sanitization and real PostgreSQL dismissal invariants retained"
+    }
+  ],
+  "logs": [
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/feedback-processor-red-2.log.txt",
+      "sha256": "fdd92693b7b776ffde3400dc65ba461877fb411d64a3675d6a9b9b97c5e018dc",
+      "sizeBytes": 2359
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/feedback-processor-error-red-1.log.txt",
+      "sha256": "0661240bcc6a7414bfb6fc73cd914025c4aae1d38a51d56a45ced1f15cfacd53",
+      "sizeBytes": 2674
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/feedback-processor-green-2.log.txt",
+      "sha256": "63dde1e8e4ce75b5c9701bf8cc29f3c4f9a9e10992bc43efdc40cdd543336987",
+      "sizeBytes": 515
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/feedback-config-purpose-red.log.txt",
+      "sha256": "9cadb918d53726e30a8c47b03b7a798653db454a919f7b290c51df3104099111",
+      "sizeBytes": 2725
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/feedback-config-purpose-green.log.txt",
+      "sha256": "3705863963faf042790c2e80c6e7c2ebe7a4d4e34ceac20bd161e841c129cb33",
+      "sizeBytes": 516
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/feedback-processor-integration-green.log.txt",
+      "sha256": "cb5d25318ff5812d91693db6ad36433a1841b5588c21373cc77e869abc785b6d",
+      "sizeBytes": 982
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/announcement-opt-in-red.log.txt",
+      "sha256": "d99cb9fc81452f43482ea6570c0525bffe6365970653474d77257457576593d8",
+      "sizeBytes": 4466
+    },
+    {
+      "path": "doc/operations/aw-v10-evidence/recovery-2026-10-22/announcement-opt-in-green.log.txt",
+      "sha256": "a5750c48b338583fb0ca81def69a0e7a8a2039e81c98c4816eba8b09dfab3150",
+      "sizeBytes": 1031
+    }
+  ],
+  "review": {
+    "feedback": "Independent Sol reviewer found telemetry-purpose aliases; reproduced, fixed and reviewer closure received. No additional concrete blocker found.",
+    "announcements": "Root authored and reviewed full existing owner/callers/tests; independent review requested and pending at this checkpoint."
+  },
+  "limitations": [
+    "First-party Telemetry is separate work in progress",
+    "Full outbound path inventory, processor legal/region/retention qualification and deployment notices remain open",
+    "Normal server typecheck and whole-repository required checks pending",
+    "HTTP loopback redirect test uses two real owned local servers; ordinary feedback receiver tests use synthetic fetch. No real customer data or paid receiver was used.",
+    "Not source complete or PR ready"
+  ],
+  "sourceComplete": false,
+  "prReady": false
+}

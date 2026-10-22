@@ -2,18 +2,58 @@ import { createHash } from "node:crypto";
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { announcementFeedService, ANNOUNCEMENT_CACHE_MS, ANNOUNCEMENT_FAILURE_MS } from "../services/announcement-feed.js";
 import { logger } from "../middleware/logger.js";
+import { loadConfig } from "../config.js";
 
+const ownedFeed = { enabled: true, feedUrl: "https://notices.example.test/v1/current.json" };
 const item = { id: "new-projects", eyebrow: "New", title: "Projects", description: "Organize your work.", primaryAction: { kind: "route", label: "Open", path: "/projects" } };
 const json = (announcement: unknown = item, etag = '"v1"') => new Response(JSON.stringify({ schemaVersion: 1, announcement }), { headers: { "Content-Type": "application/json", ETag: etag } });
-afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); });
+afterEach(() => { vi.useRealTimers(); vi.restoreAllMocks(); vi.unstubAllEnvs(); });
 describe("announcement feed", () => {
+  it.each([
+    {},
+    { enabled: true },
+    { feedUrl: "https://notices.example.test/current.json" },
+  ])("requires both explicit enablement and an owned destination: %j", async options => {
+    const fetch = vi.fn().mockImplementation(async () => json());
+    const service = announcementFeedService({ version: "1.0.0", fetch, ...options });
+    expect(await service.current()).toBeNull();
+    expect(await service.image(item.id)).toBeNull();
+    expect(await service.animation(item.id)).toBeNull();
+    expect(fetch).not.toHaveBeenCalled();
+  });
+
+  it.each([
+    [undefined, undefined],
+    ["true", undefined],
+    [undefined, "https://notices.example.test/current.json"],
+    ["true", "https://notices.example.test/current.json"],
+  ])("applies the same opt-in gate through loadConfig (%s, %s)", async (enabled, destination) => {
+    vi.stubEnv("PAPERCLIP_CONFIG", `/tmp/blentera-notices-missing-config-${process.pid}.json`);
+    vi.stubEnv("AW_DEPLOYMENT_PROFILE", "local");
+    vi.stubEnv("AW_PLATFORM_ENV", undefined);
+    vi.stubEnv("PAPERCLIP_MANAGED_CONFIG", undefined);
+    vi.stubEnv("PAPERCLIP_CLOUD_TENANT_SERVER_TOKEN", undefined);
+    vi.stubEnv("PAPERCLIP_TAILNET_BIND_HOST", "127.0.0.1");
+    vi.stubEnv("PAPERCLIP_ANNOUNCEMENTS_ENABLED", enabled);
+    vi.stubEnv("PAPERCLIP_ANNOUNCEMENTS_FEED_URL", destination);
+    const config = loadConfig();
+    expect(config.announcementsEnabled).toBe(enabled === "true");
+    expect(config.announcementsFeedUrl).toBe(destination ?? "");
+    const fetch = vi.fn().mockImplementation(async () => json());
+    const service = announcementFeedService({
+      enabled: config.announcementsEnabled, feedUrl: config.announcementsFeedUrl, version: "1.0.0", fetch,
+    });
+    expect(await service.current()).toEqual(enabled === "true" && destination ? item : null);
+    expect(fetch).toHaveBeenCalledTimes(enabled === "true" && destination ? 1 : 0);
+  });
+
   it("treats a 404 as quiet empty content, drops stale ETags, and recovers after cooldown", async () => {
     let now = 0;
     const warn = vi.spyOn(logger, "warn");
     const fetch = vi.fn().mockImplementationOnce(async () => json())
       .mockImplementationOnce(async () => new Response("Not found", { status: 404 }))
       .mockImplementationOnce(async () => json({ ...item, id: "restored" }));
-    const service = announcementFeedService({ version: "1.0.0", now: () => now, fetch });
+    const service = announcementFeedService({ ...ownedFeed, version: "1.0.0", now: () => now, fetch });
     expect(await service.current()).toEqual(item);
     now += ANNOUNCEMENT_CACHE_MS;
     expect(await service.current()).toBeNull();
@@ -30,7 +70,7 @@ describe("announcement feed", () => {
   it("deduplicates requests, caches for an hour, then revalidates with ETag", async () => {
     let now = 0;
     const fetch = vi.fn().mockImplementationOnce(async () => json()).mockResolvedValueOnce(new Response(null, { status: 304 }));
-    const service = announcementFeedService({ version: "2026.913.0", now: () => now, fetch });
+    const service = announcementFeedService({ ...ownedFeed, version: "2026.913.0", now: () => now, fetch });
     expect(await Promise.all([service.current(), service.current()])).toEqual([item, item]);
     expect(fetch).toHaveBeenCalledTimes(1);
     now = ANNOUNCEMENT_CACHE_MS - 1;
@@ -44,7 +84,7 @@ describe("announcement feed", () => {
   it("withdraws, updates same-ID copy and discovers new IDs after refresh", async () => {
     let now = 0;
     const fetch = vi.fn().mockImplementationOnce(async () => json()).mockImplementationOnce(async () => json({ ...item, title: "Corrected" }, '"v2"')).mockImplementationOnce(async () => json(null)).mockImplementationOnce(async () => json({ ...item, id: "next" }));
-    const service = announcementFeedService({ version: "2026.913.0", now: () => now, fetch });
+    const service = announcementFeedService({ ...ownedFeed, version: "2026.913.0", now: () => now, fetch });
     expect((await service.current())?.id).toBe(item.id);
     now += ANNOUNCEMENT_CACHE_MS;
     expect((await service.current())?.title).toBe("Corrected");
@@ -62,7 +102,7 @@ describe("announcement feed", () => {
   ])("suppresses invalid/unavailable feeds and observes failure cooldown", async (response) => {
     let now = 0;
     const fetch = vi.fn().mockImplementationOnce(async () => response()).mockImplementationOnce(async () => json());
-    const service = announcementFeedService({ version: "1.0.0", now: () => now, fetch });
+    const service = announcementFeedService({ ...ownedFeed, version: "1.0.0", now: () => now, fetch });
     expect(await service.current()).toBeNull();
     now = ANNOUNCEMENT_FAILURE_MS - 1;
     expect(await service.current()).toBeNull();
@@ -72,7 +112,7 @@ describe("announcement feed", () => {
   });
   it("bounds a hung fetch to three seconds", async () => {
     vi.useFakeTimers();
-    const service = announcementFeedService({ version: "1.0.0", fetch: () => new Promise(() => {}) });
+    const service = announcementFeedService({ ...ownedFeed, version: "1.0.0", fetch: () => new Promise(() => {}) });
     const result = service.current();
     await vi.advanceTimersByTimeAsync(3000);
     expect(await result).toBeNull();
@@ -80,7 +120,7 @@ describe("announcement feed", () => {
   it("does not fetch when disabled or an operator URL is invalid", async () => {
     const fetch = vi.fn();
     for (const options of [{ enabled: false }, { feedUrl: "http://localhost/feed" }, { feedUrl: "https://user:secret@example.com/feed" }]) {
-      const service = announcementFeedService({ version: "1.0.0", fetch, ...options });
+      const service = announcementFeedService({ ...ownedFeed, version: "1.0.0", fetch, ...options });
       expect(await service.current()).toBeNull();
       expect(await service.image(item.id)).toBeNull();
       expect(await service.animation(item.id)).toBeNull();
@@ -89,28 +129,28 @@ describe("announcement feed", () => {
   });
   it("expires a cached announcement and filters version-incompatible content", async () => {
     let now = 0;
-    const service = announcementFeedService({ version: "1.0.0", now: () => now, fetch: async () => json({ ...item, expiresAt: "1970-01-01T00:00:01Z" }) });
+    const service = announcementFeedService({ ...ownedFeed, version: "1.0.0", now: () => now, fetch: async () => json({ ...item, expiresAt: "1970-01-01T00:00:01Z" }) });
     expect(await service.current()).not.toBeNull();
     now = 1000;
     expect(await service.current()).toBeNull();
-    expect(await announcementFeedService({ version: "1.0.0", fetch: async () => json({ ...item, minimumPaperclipVersion: "2.0.0" }) }).current()).toBeNull();
+    expect(await announcementFeedService({ ...ownedFeed, version: "1.0.0", fetch: async () => json({ ...item, minimumPaperclipVersion: "2.0.0" }) }).current()).toBeNull();
   });
   it("proxies only the current content-addressed image and caches bytes", async () => {
     const bytes = Buffer.from("test-image");
     const path = `assets/${createHash("sha256").update(bytes).digest("hex")}.png`;
     const fetch = vi.fn().mockImplementationOnce(async () => json({ ...item, image: { path, alt: "" } })).mockImplementationOnce(async () => new Response(bytes, { headers: { "Content-Type": "image/png" } }));
-    const service = announcementFeedService({ version: "1.0.0", fetch });
+    const service = announcementFeedService({ ...ownedFeed, version: "1.0.0", fetch });
     expect(await service.image("other")).toBeNull();
     const images = await Promise.all([service.image(item.id), service.image(item.id)]);
     expect(images[0]?.bytes).toEqual(bytes);
     expect(images[1]).toEqual(images[0]);
     await service.image(item.id);
     expect(fetch).toHaveBeenCalledTimes(2);
-    expect(String(fetch.mock.calls[1][0])).toBe(`https://pages.paperclip.ing/announcements/v1/${path}`);
+    expect(String(fetch.mock.calls[1][0])).toBe(`https://notices.example.test/v1/${path}`);
   });
   it("rejects image digest mismatches and cools down image retries", async () => {
     const fetch = vi.fn().mockImplementationOnce(async () => json({ ...item, image: { path: `assets/${"0".repeat(64)}.png`, alt: "" } })).mockImplementation(async () => new Response("wrong", { headers: { "Content-Type": "image/png" } }));
-    const service = announcementFeedService({ version: "1.0.0", fetch });
+    const service = announcementFeedService({ ...ownedFeed, version: "1.0.0", fetch });
     expect(await service.image(item.id)).toBeNull();
     expect(await service.image(item.id)).toBeNull();
     expect(fetch).toHaveBeenCalledTimes(2);
@@ -120,7 +160,7 @@ describe("announcement feed", () => {
     const path = `assets/${createHash("sha256").update(bytes).digest("hex")}.html`;
     const fetch = vi.fn().mockImplementationOnce(async () => json({ ...item, image: { path: `assets/${"0".repeat(64)}.png`, alt: "Poster" }, animation: { path, alt: "Team" } }))
       .mockImplementationOnce(async () => new Response(bytes, { headers: { "Content-Type": "text/html; charset=utf-8" } }));
-    const service = announcementFeedService({ version: "1.0.0", feedUrl: "https://mirror.example/preview/current.json", fetch });
+    const service = announcementFeedService({ ...ownedFeed, version: "1.0.0", feedUrl: "https://mirror.example/preview/current.json", fetch });
     expect(await service.animation("wrong-id")).toBeNull();
     const result = await Promise.all([service.animation(item.id), service.animation(item.id)]);
     expect(result[0]?.bytes.toString()).toContain("Team");
@@ -139,7 +179,7 @@ describe("announcement feed", () => {
     const path = `assets/${createHash("sha256").update(html).digest("hex")}.html`;
     const fetch = vi.fn().mockImplementationOnce(async () => json({ ...item, image: { path: `assets/${"0".repeat(64)}.png`, alt: "Poster" }, animation: { path, alt: "Team" } }))
       .mockImplementation(async () => new Response(html, { status, headers: { "Content-Type": contentType } }));
-    const service = announcementFeedService({ version: "1.0.0", fetch });
+    const service = announcementFeedService({ ...ownedFeed, version: "1.0.0", fetch });
     expect(await service.animation(item.id)).toBeNull();
     expect(await service.animation(item.id)).toBeNull();
     expect((await service.current())?.id).toBe(item.id);

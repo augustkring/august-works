@@ -1,7 +1,7 @@
 import { createHash } from "node:crypto";
 import {
   ANNOUNCEMENT_IMAGE_MAX_BYTES, ANNOUNCEMENT_MANIFEST_MAX_BYTES, ANNOUNCEMENT_ANIMATION_MAX_BYTES,
-  DEFAULT_ANNOUNCEMENT_FEED_URL, announcementManifestSchema, isAnnouncementEligible,
+  announcementManifestSchema, isAnnouncementEligible,
   type AnnouncementManifest,
 } from "@paperclipai/shared";
 import { guardedRemoteHttpFetch } from "./remote-http-fetch.js";
@@ -69,7 +69,7 @@ export function announcementFeedService(options: AnnouncementFeedOptions) {
   };
 
   function endpoint() {
-    const url = new URL(options.feedUrl ?? DEFAULT_ANNOUNCEMENT_FEED_URL);
+    const url = new URL(options.feedUrl!);
     if (url.protocol !== "https:" || url.username || url.password || url.hash || url.search) {
       throw new Error("Announcement feed must be an HTTPS URL without credentials, query, or fragment");
     }
@@ -133,7 +133,7 @@ export function announcementFeedService(options: AnnouncementFeedOptions) {
   }
 
   async function current() {
-    if (options.enabled === false) return null;
+    if (options.enabled !== true || !options.feedUrl?.trim()) return null;
     if (pending) await pending;
     else if (now() >= nextCheck) {
       pending = refresh().finally(() => { pending = null; });
