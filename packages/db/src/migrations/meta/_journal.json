@@ -3536,6 +3536,13 @@
       "when": 1792704303597,
       "tag": "0506_wild_thanos",
       "breakpoints": true
+    },
+    {
+      "idx": 507,
+      "version": "7",
+      "when": 1792710624688,
+      "tag": "0507_lethal_star_brand",
+      "breakpoints": true
     }
   ]
 }

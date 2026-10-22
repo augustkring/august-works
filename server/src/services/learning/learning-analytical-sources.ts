@@ -21,12 +21,12 @@ export async function assertLearningAnalyticalSources(db:Db,actor:AuthorizationA
   const erased=await db.execute<{erased:boolean}>(sql`select aw_learning_cycle_erased(${cycle.companyId}::uuid,${cycle.id}::uuid) as erased`);
   if(erased[0]?.erased)throw lost();
   const roots=await db.select({id:learningEvidence.memoryRecordId,version:learningEvidence.sourceVersion,currentVersion:memoryRecords.updatedAt})
-   .from(learningEvidence).innerJoin(memoryRecords,and(eq(memoryRecords.companyId,learningEvidence.companyId),eq(memoryRecords.id,learningEvidence.memoryRecordId)))
+   .from(learningEvidence).leftJoin(memoryRecords,and(eq(memoryRecords.companyId,learningEvidence.companyId),eq(memoryRecords.id,learningEvidence.memoryRecordId)))
    .where(and(eq(learningEvidence.companyId,cycle.companyId),eq(learningEvidence.cycleId,cycle.id))).limit(257);
   if(!roots.length||roots.length>256)throw lost();
   const {canActorReadMemorySources}=await import("../memory/memory-privacy.js");
   for(const root of roots){
-   if(performance.now()>deadline||root.currentVersion.toISOString()!==root.version
+   if(performance.now()>deadline||!root.currentVersion||root.currentVersion.toISOString()!==root.version
     ||!await canActorReadMemorySources(db,cycle.companyId,actor,root.id))throw lost();
   }
   if(performance.now()>deadline)throw lost();
