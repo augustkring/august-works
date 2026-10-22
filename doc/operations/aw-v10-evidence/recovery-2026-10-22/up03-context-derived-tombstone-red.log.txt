@@ -1,0 +1,270 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/context-derived-source-tombstones.integration.test.ts (2 tests | 2 failed) 12470ms
+     × denies retained conversation payload when one of its two Memory roots is physically deleted 990ms
+     × denies model payload when deleting an observation would remove only its private evidence 242ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/context-derived-source-tombstones.integration.test.ts > Source deletion preserves Context and model restrictions > denies retained conversation payload when one of its two Memory roots is physically deleted
+AssertionError: expected [ Array(1) ] to deeply equal [ …(2) ]
+
+- Expected
++ Received
+
+  [
+-   "417d011a-6f4c-47cd-83a1-cc5715f674ad",
+    "5cd17941-d65f-4ab0-be77-7dbc3655227e",
+  ]
+
+ ❯ src/__tests__/context-derived-source-tombstones.integration.test.ts:46:67
+     44|     await db.delete(memoryRecords).where(eq(memoryRecords.id, f.roots[…
+     45|     const retained = await db.select().from(contextManifestMemoryRoots…
+     46|     expect.soft(retained.map(root => root.memoryRecordId).sort()).toEq…
+       |                                                                   ^
+     47|     await expect.soft(assertAnalyticalContextPayloadAccess(db, f.compa…
+     48|     await expect.soft(assertAnalyticalContextPayloadAccess(db, f.compa…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/6]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/context-derived-source-tombstones.integration.test.ts > Source deletion preserves Context and model restrictions > denies retained conversation payload when one of its two Memory roots is physically deleted
+AssertionError: promise resolved "undefined" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+undefined
+
+ ❯ src/__tests__/context-derived-source-tombstones.integration.test.ts:47:98
+     45|     const retained = await db.select().from(contextManifestMemoryRoots…
+     46|     expect.soft(retained.map(root => root.memoryRecordId).sort()).toEq…
+     47|     await expect.soft(assertAnalyticalContextPayloadAccess(db, f.compa…
+       |                                                                                                  ^
+     48|     await expect.soft(assertAnalyticalContextPayloadAccess(db, f.compa…
+     49|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/6]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/context-derived-source-tombstones.integration.test.ts > Source deletion preserves Context and model restrictions > denies retained conversation payload when one of its two Memory roots is physically deleted
+AssertionError: promise resolved "undefined" instead of rejecting
+
+- Expected:
+Error {
+  "message": "rejected promise",
+}
+
++ Received:
+undefined
+
+ ❯ src/__tests__/context-derived-source-tombstones.integration.test.ts:48:97
+     46|     expect.soft(retained.map(root => root.memoryRecordId).sort()).toEq…
+     47|     await expect.soft(assertAnalyticalContextPayloadAccess(db, f.compa…
+     48|     await expect.soft(assertAnalyticalContextPayloadAccess(db, f.compa…
+       |                                                                                                 ^
+     49|   });
+     50|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/6]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/context-derived-source-tombstones.integration.test.ts > Source deletion preserves Context and model restrictions > denies model payload when deleting an observation would remove only its private evidence
+AssertionError: expected [ Array(1) ] to deeply equal [ …(2) ]
+
+- Expected
++ Received
+
+  [
+-   "444afdc6-bb28-4eaa-8998-4a4a98bfe8c1",
+    "77eef53a-75ac-454c-8336-e62bc20985a0",
+  ]
+
+ ❯ src/__tests__/context-derived-source-tombstones.integration.test.ts:65:67
+     63|     await db.delete(memoryObservations).where(eq(memoryObservations.id…
+     64|     const retained = await db.select().from(memoryModelEvidence).where…
+     65|     expect.soft(retained.map(root => root.memoryRecordId).sort()).toEq…
+       |                                                                   ^
+     66|     await expect.soft(modelLineage(db, f.reader, model!)).rejects.toMa…
+     67|     await expect.soft(modelLineage(db, f.owner, model!)).rejects.toMat…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/6]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/context-derived-source-tombstones.integration.test.ts > Source deletion preserves Context and model restrictions > denies model payload when deleting an observation would remove only its private evidence
+AssertionError: promise resolved "{ evidence: [ { …(10) } ], …(2) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "evidence": [
++     {
++       "companyId": "d2b71f62-2b1f-49e9-8177-acd665c09927",
++       "createdAt": 2026-10-22T23:38:58.146Z,
++       "id": "2bf63b74-b118-4090-a8df-7c958159d834",
++       "memoryRecordId": "77eef53a-75ac-454c-8336-e62bc20985a0",
++       "modelId": "8dc12caa-d543-45c2-9188-799497e308e1",
++       "modelVersion": 1,
++       "observationId": null,
++       "observationVersion": null,
++       "relationship": "derived_from",
++       "sourceVersion": "2026-10-22T23:38:58.118Z",
++     },
++   ],
++   "observations": [],
++   "roots": [
++     {
++       "bindingId": "e5c416c4-3c0c-41d6-869b-50da9dbc20f7",
++       "companyId": "d2b71f62-2b1f-49e9-8177-acd665c09927",
++       "confidenceScore": 0.5,
++       "content": "Independent public payload",
++       "createdAt": 2026-10-22T23:38:58.118Z,
++       "createdByActorId": "c74da4ad-d991-4452-acb8-9c482533ba64",
++       "createdByActorType": "user",
++       "createdByOperationId": null,
++       "deletedAt": null,
++       "expiresAt": null,
++       "id": "77eef53a-75ac-454c-8336-e62bc20985a0",
++       "importance": 50,
++       "memoryType": "outcome",
++       "metadata": {},
++       "observedAt": 2026-10-22T23:38:58.116Z,
++       "ownerAgentId": null,
++       "privateOwnerUserId": null,
++       "providerKey": "local",
++       "retentionPolicy": "standard",
++       "retentionState": "active",
++       "reviewState": "accepted",
++       "revocationReason": null,
++       "revokedAt": null,
++       "revokedByActorId": null,
++       "revokedByActorType": null,
++       "scopeId": null,
++       "scopeType": "company",
++       "sensitivityLabel": "internal",
++       "sourceFoundationRevisionIds": [],
++       "sourceIssueIds": [],
++       "sourceMemoryIds": [],
++       "sourceProjectIds": [],
++       "sourceProvenanceQualified": true,
++       "sourceRunIds": [],
++       "subjectId": null,
++       "subjectType": null,
++       "summary": null,
++       "supersededByRecordId": null,
++       "supersedesRecordId": null,
++       "title": null,
++       "updatedAt": 2026-10-22T23:38:58.118Z,
++       "validFrom": null,
++       "validUntil": null,
++       "verificationState": "human_verified",
++     },
++   ],
+  }
+
+ ❯ src/__tests__/context-derived-source-tombstones.integration.test.ts:66:58
+     64|     const retained = await db.select().from(memoryModelEvidence).where…
+     65|     expect.soft(retained.map(root => root.memoryRecordId).sort()).toEq…
+     66|     await expect.soft(modelLineage(db, f.reader, model!)).rejects.toMa…
+       |                                                          ^
+     67|     await expect.soft(modelLineage(db, f.owner, model!)).rejects.toMat…
+     68|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/6]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/context-derived-source-tombstones.integration.test.ts > Source deletion preserves Context and model restrictions > denies model payload when deleting an observation would remove only its private evidence
+AssertionError: promise resolved "{ evidence: [ { …(10) } ], …(2) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "evidence": [
++     {
++       "companyId": "d2b71f62-2b1f-49e9-8177-acd665c09927",
++       "createdAt": 2026-10-22T23:38:58.146Z,
++       "id": "2bf63b74-b118-4090-a8df-7c958159d834",
++       "memoryRecordId": "77eef53a-75ac-454c-8336-e62bc20985a0",
++       "modelId": "8dc12caa-d543-45c2-9188-799497e308e1",
++       "modelVersion": 1,
++       "observationId": null,
++       "observationVersion": null,
++       "relationship": "derived_from",
++       "sourceVersion": "2026-10-22T23:38:58.118Z",
++     },
++   ],
++   "observations": [],
++   "roots": [
++     {
++       "bindingId": "e5c416c4-3c0c-41d6-869b-50da9dbc20f7",
++       "companyId": "d2b71f62-2b1f-49e9-8177-acd665c09927",
++       "confidenceScore": 0.5,
++       "content": "Independent public payload",
++       "createdAt": 2026-10-22T23:38:58.118Z,
++       "createdByActorId": "c74da4ad-d991-4452-acb8-9c482533ba64",
++       "createdByActorType": "user",
++       "createdByOperationId": null,
++       "deletedAt": null,
++       "expiresAt": null,
++       "id": "77eef53a-75ac-454c-8336-e62bc20985a0",
++       "importance": 50,
++       "memoryType": "outcome",
++       "metadata": {},
++       "observedAt": 2026-10-22T23:38:58.116Z,
++       "ownerAgentId": null,
++       "privateOwnerUserId": null,
++       "providerKey": "local",
++       "retentionPolicy": "standard",
++       "retentionState": "active",
++       "reviewState": "accepted",
++       "revocationReason": null,
++       "revokedAt": null,
++       "revokedByActorId": null,
++       "revokedByActorType": null,
++       "scopeId": null,
++       "scopeType": "company",
++       "sensitivityLabel": "internal",
++       "sourceFoundationRevisionIds": [],
++       "sourceIssueIds": [],
++       "sourceMemoryIds": [],
++       "sourceProjectIds": [],
++       "sourceProvenanceQualified": true,
++       "sourceRunIds": [],
++       "subjectId": null,
++       "subjectType": null,
++       "summary": null,
++       "supersededByRecordId": null,
++       "supersedesRecordId": null,
++       "title": null,
++       "updatedAt": 2026-10-22T23:38:58.118Z,
++       "validFrom": null,
++       "validUntil": null,
++       "verificationState": "human_verified",
++     },
++   ],
+  }
+
+ ❯ src/__tests__/context-derived-source-tombstones.integration.test.ts:67:57
+     65|     expect.soft(retained.map(root => root.memoryRecordId).sort()).toEq…
+     66|     await expect.soft(modelLineage(db, f.reader, model!)).rejects.toMa…
+     67|     await expect.soft(modelLineage(db, f.owner, model!)).rejects.toMat…
+       |                                                         ^
+     68|   });
+     69| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/6]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed (2)
+   Start at  23:37:37
+   Duration  80.53s (transform 44.80s, setup 213ms, import 67.31s, tests 12.47s, environment 1ms)
+
