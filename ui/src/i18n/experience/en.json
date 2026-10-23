@@ -3110,6 +3110,8 @@
     "firstAgentDefault": "Chief of staff"
   },
   "supportCases": {
+    "exportInclude": "Include support cases you can currently view, with their full customer-visible history. Internal notes, credentials and support-access grants are excluded. This archive cannot restore live cases.",
+    "exportAccountChanged": "Your account changed. Reload the export page.",
     "recoveringRequest": "Checking your previous submission…",
     "recoveredRequest": "Your previous submission has a saved receipt. Open the case to continue.",
     "resumeRequest": "The previous result is not confirmed. This page cannot restore its text. Re-enter the text to retry the same request, or check its receipt again.",
@@ -3144,7 +3146,7 @@
     "category": "What is this about?",
     "impact": "How has this affected you? (optional)",
     "noImpact": "Not supplied",
-    "submit": "Send support request",
+    "submit": "Send to support",
     "retrySubmit": "Retry the same request",
     "deliveryPending": "Received; delivery pending",
     "deliveryUnknown": "The result is not confirmed. Retry the same request to check its status; do not create a duplicate.",

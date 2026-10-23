@@ -462,13 +462,17 @@ describe.sequential("company portability routes", () => {
       1,
       companyId,
       exportRequest,
-      { allowExternalInstructions: false },
+      { allowExternalInstructions: false, actor: {
+        type: "agent", agentId: ceoAgentId, companyId, source: "agent_key", runId: "run-1",
+      } },
     );
     expect(mockCompanyPortabilityService.exportBundle).toHaveBeenNthCalledWith(
       2,
       companyId,
       exportRequest,
-      { allowExternalInstructions: false },
+      { allowExternalInstructions: false, actor: {
+        type: "agent", agentId: ceoAgentId, companyId, source: "agent_key", runId: "run-1",
+      } },
     );
   });
 
@@ -489,6 +493,62 @@ describe.sequential("company portability routes", () => {
       expect(res.body.rootPath).toBe("paperclip");
     }
     expect(mockCompanyPortabilityService.exportBundle).toHaveBeenCalledTimes(2);
+  });
+
+  it.sequential("keeps CEO-agent exports available by default but rejects support-case opt-in on all export routes", async () => {
+    const app = await createApp({
+      type: "agent",
+      agentId: ceoAgentId,
+      companyId,
+      source: "agent_key",
+      runId: "run-1",
+    });
+    const withSupport = { include: { supportCases: true }, expectedUserId: "user-1" };
+
+    const ordinary = await request(app).post(`/api/companies/${companyId}/export`).send(exportRequest);
+    expect(ordinary.status).toBe(200);
+    expect(mockCompanyPortabilityService.exportBundle).toHaveBeenCalledTimes(1);
+
+    mockCompanyPortabilityService.exportBundle.mockClear();
+    for (const path of [
+      `/api/companies/${companyId}/export`,
+      `/api/companies/${companyId}/exports/preview`,
+      `/api/companies/${companyId}/exports`,
+    ]) {
+      const response = await request(app).post(path).send(withSupport);
+      expect(response.status).toBe(403);
+      expect(response.body.error).toContain("Board account");
+    }
+    expect(mockCompanyPortabilityService.exportBundle).not.toHaveBeenCalled();
+    expect(mockCompanyPortabilityService.previewExport).not.toHaveBeenCalled();
+  });
+
+  it.sequential("requires the current Board principal for support-case export, preview, and download", async () => {
+    const app = await createApp(boardActor("user-1"));
+    for (const path of [
+      `/api/companies/${companyId}/export`,
+      `/api/companies/${companyId}/exports/preview`,
+      `/api/companies/${companyId}/exports`,
+    ]) {
+      for (const expectedUserId of [undefined, "another-user"]) {
+        const body = { include: { supportCases: true }, ...(expectedUserId ? { expectedUserId } : {}) };
+        const response = await request(app).post(path).send(body);
+        expect(response.status).toBe(409);
+        expect(response.body.details?.code).toBe("ACCOUNT_CHANGED");
+      }
+    }
+    expect(mockCompanyPortabilityService.exportBundle).not.toHaveBeenCalled();
+    expect(mockCompanyPortabilityService.previewExport).not.toHaveBeenCalled();
+
+    const authorizedBody = { include: { supportCases: true }, expectedUserId: "user-1" };
+    const legacy = await request(app).post(`/api/companies/${companyId}/export`).send(authorizedBody);
+    const preview = await request(app).post(`/api/companies/${companyId}/exports/preview`).send(authorizedBody);
+    const safe = await request(app).post(`/api/companies/${companyId}/exports`).send(authorizedBody);
+    expect(legacy.status).toBe(200);
+    expect(preview.status).toBe(200);
+    expect(safe.status).toBe(200);
+    expect(mockCompanyPortabilityService.exportBundle).toHaveBeenCalledTimes(2);
+    expect(mockCompanyPortabilityService.previewExport).toHaveBeenCalledTimes(1);
   });
 
   it.sequential("requires instance-admin access when a company export includes external instructions", async () => {
@@ -559,7 +619,11 @@ describe.sequential("company portability routes", () => {
     expect(mockCompanyPortabilityService.exportBundle).toHaveBeenCalledWith(
       companyId,
       exportRequest,
-      { allowExternalInstructions: true },
+      { allowExternalInstructions: true, actor: {
+        type: "board", userId: "instance-admin", companyIds: [companyId],
+        memberships: [{ companyId, status: "active", membershipRole: "admin" }],
+        source: "session", isInstanceAdmin: true,
+      } },
     );
   });
 
@@ -608,7 +672,11 @@ describe.sequential("company portability routes", () => {
     expect(mockCompanyPortabilityService.exportBundle).toHaveBeenCalledWith(
       companyId,
       selectedAgentRequest,
-      { allowExternalInstructions: false },
+      { allowExternalInstructions: false, actor: {
+        type: "board", userId: "company-admin", companyIds: [companyId],
+        memberships: [{ companyId, status: "active", membershipRole: "admin" }],
+        source: "session", isInstanceAdmin: false,
+      } },
     );
   });
 
@@ -647,7 +715,11 @@ describe.sequential("company portability routes", () => {
     expect(mockCompanyPortabilityService.exportBundle).toHaveBeenCalledWith(
       companyId,
       companyOnlyRequest,
-      { allowExternalInstructions: false },
+      { allowExternalInstructions: false, actor: {
+        type: "board", userId: "company-admin", companyIds: [companyId],
+        memberships: [{ companyId, status: "active", membershipRole: "admin" }],
+        source: "session", isInstanceAdmin: false,
+      } },
     );
   });
 
@@ -942,7 +1014,9 @@ describe.sequential("company portability routes", () => {
     expect(accepted.body.statusUrl).toMatch(/^\/api\/companies\/import\/jobs\/tenant-import-/);
     expect(accepted.body.retryAfterMs).toBe(1000);
     await waitForCondition(() => mockCompanyPortabilityService.importBundle.mock.calls.length === 1, "import job start");
-    expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledWith(importRequest, "cloud-user-1", { pauseAutomations: false });
+    expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledWith(importRequest, "cloud-user-1", {
+      pauseAutomations: false, actor: cloudTenantActor(), privateWorkAdmission: "closed",
+    });
     expect(mockLogActivity).not.toHaveBeenCalled();
 
     resolveImport(createImportResult("updated"));
@@ -1067,7 +1141,7 @@ describe.sequential("company portability routes", () => {
     expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledWith(
       { ...importRequest, pauseAutomations: true },
       "cloud-user-1",
-      { pauseAutomations: true },
+      { pauseAutomations: true, actor: cloudTenantActor(), privateWorkAdmission: "closed" },
     );
   });
 
@@ -1091,7 +1165,9 @@ describe.sequential("company portability routes", () => {
     expect(accepted.body.statusUrl).toMatch(/^\/api\/companies\/import\/jobs\/import-/);
     expect(accepted.body.statusUrl).not.toMatch(/\/jobs\/tenant-import-/);
     await waitForCondition(() => mockCompanyPortabilityService.importBundle.mock.calls.length === 1, "board import start");
-    expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledWith(importRequest, "board-user-a", { pauseAutomations: false });
+    expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledWith(importRequest, "board-user-a", {
+      pauseAutomations: false, actor: boardActor("board-user-a"), privateWorkAdmission: "closed",
+    });
 
     const fullResult = createImportResult("created");
     resolveImport(fullResult);
@@ -1268,7 +1344,9 @@ describe.sequential("company portability routes", () => {
     expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledWith(
       { ...importRequest, pauseAutomations: true },
       null,
-      { mode: "agent_safe", sourceCompanyId: companyId, pauseAutomations: true },
+      { mode: "agent_safe", sourceCompanyId: companyId, pauseAutomations: true,
+        actor: { type: "agent", agentId: ceoAgentId, companyId, source: "agent_key", runId: "run-1" },
+        privateWorkAdmission: "closed" },
     );
   });
 
@@ -1290,7 +1368,9 @@ describe.sequential("company portability routes", () => {
     // consumes; the other import fields ride along from the JSON meta field.
     expect(call[0]).toEqual({ ...importMeta, source: { type: "inline", rootPath: "paperclip", files } });
     expect(call[1]).toBe("board-user-a");
-    expect(call[2]).toEqual({ pauseAutomations: false });
+    expect(call[2]).toEqual({
+      pauseAutomations: false, actor: boardActor("board-user-a"), privateWorkAdmission: "closed",
+    });
   });
 
   it.sequential("previews a company from a multipart zip upload", async () => {

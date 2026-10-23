@@ -3110,6 +3110,8 @@
     "firstAgentDefault": "Stabschef"
   },
   "supportCases": {
+    "exportInclude": "Medtag supportsager, du har adgang til nu, med hele den kundevendte historik. Interne noter, legitimationsoplysninger og supportadgang er udeladt. Arkivet kan ikke genskabe aktive sager.",
+    "exportAccountChanged": "Din konto er ændret. Genindlæs eksportsiden.",
     "recoveringRequest": "Kontrollerer din tidligere indsendelse…",
     "recoveredRequest": "Din tidligere indsendelse har en gemt kvittering. Åbn sagen for at fortsætte.",
     "resumeRequest": "Det tidligere resultat er ikke bekræftet. Siden kan ikke gendanne teksten. Indtast teksten igen for at gentage samme anmodning, eller kontrollér kvitteringen igen.",
@@ -3144,7 +3146,7 @@
     "category": "Hvad drejer det sig om?",
     "impact": "Hvordan har det påvirket dig? (valgfrit)",
     "noImpact": "Ikke angivet",
-    "submit": "Send supportanmodning",
+    "submit": "Send til support",
     "retrySubmit": "Prøv at sende den samme anmodning igen",
     "deliveryPending": "Modtaget; afventer levering",
     "deliveryUnknown": "Resultatet er ikke bekræftet. Prøv igen med den samme anmodning for at kontrollere status; opret ikke en dublet.",

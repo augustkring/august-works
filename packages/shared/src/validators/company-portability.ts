@@ -15,6 +15,7 @@ export const portabilityIncludeSchema = z
     projects: z.boolean().optional(),
     issues: z.boolean().optional(),
     skills: z.boolean().optional(),
+    supportCases: z.boolean().optional(),
   })
   .partial();
 
@@ -265,6 +266,7 @@ export const portabilityManifestSchema = z.object({
     projects: z.boolean(),
     issues: z.boolean(),
     skills: z.boolean(),
+    supportCases: z.boolean().optional(),
   }),
   company: portabilityCompanyManifestEntrySchema.nullable(),
   sidebar: portabilitySidebarOrderSchema.nullable(),

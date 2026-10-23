@@ -375,6 +375,16 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     }
   }
 
+  function assertSupportCaseExportAccess(req: Request, body: z.infer<typeof companyPortabilityExportSchema>) {
+    if (!body.include?.supportCases) return;
+    if (req.actor.type !== "board") {
+      throw forbidden("Only a Board account can export support cases");
+    }
+    if (typeof body.expectedUserId !== "string" || req.actor.userId !== body.expectedUserId) {
+      throw conflict("Account changed; reload the export page", { code: "ACCOUNT_CHANGED" });
+    }
+  }
+
   router.get("/", async (req, res) => {
     assertBoard(req);
     const scope = req.query.scope;
@@ -528,6 +538,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     const companyId = req.params.companyId as string;
     await assertSameCompanyCeoAgentOrBoard(req, companyId, "company exports");
     const body = companyPortabilityExportSchema.parse(req.body);
+    assertSupportCaseExportAccess(req, body);
     if (body.includeV7State && (typeof body.expectedUserId!=="string" || req.actor.type!=="board" || req.actor.userId!==body.expectedUserId)) throw conflict("Account changed; reload the export page",{code:"ACCOUNT_CHANGED"});
     const allowExternalInstructions = await assertExternalInstructionExportAllowed(req, companyId, body);
     const result = await portability.exportBundle(companyId, body, { allowExternalInstructions, actor: req.actor });
@@ -1126,6 +1137,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     const companyId = req.params.companyId as string;
     await assertSameCompanyCeoAgentOrBoard(req, companyId, "company exports");
     const body = companyPortabilityExportSchema.parse(req.body);
+    assertSupportCaseExportAccess(req, body);
     if (body.includeV7State && (typeof body.expectedUserId!=="string" || req.actor.type!=="board" || req.actor.userId!==body.expectedUserId)) throw conflict("Account changed; reload the export page",{code:"ACCOUNT_CHANGED"});
     const allowExternalInstructions = await assertExternalInstructionExportAllowed(req, companyId, body);
     const preview = await portability.previewExport(companyId, body, { allowExternalInstructions, actor: req.actor });
@@ -1136,6 +1148,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     const companyId = req.params.companyId as string;
     await assertSameCompanyCeoAgentOrBoard(req, companyId, "company exports");
     const body = companyPortabilityExportSchema.parse(req.body);
+    assertSupportCaseExportAccess(req, body);
     if (body.includeV7State && (typeof body.expectedUserId!=="string" || req.actor.type!=="board" || req.actor.userId!==body.expectedUserId)) throw conflict("Account changed; reload the export page",{code:"ACCOUNT_CHANGED"});
     const allowExternalInstructions = await assertExternalInstructionExportAllowed(req, companyId, body);
     const result = await portability.exportBundle(companyId, body, { allowExternalInstructions, actor: req.actor });

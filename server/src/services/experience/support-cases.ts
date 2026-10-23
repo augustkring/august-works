@@ -1,4 +1,4 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { and, desc, eq, sql, type SQL } from "drizzle-orm";
 import {
@@ -8,7 +8,7 @@ import {
 import {
   createSupportCaseSchema, replySupportCaseSchema, closeSupportCaseSchema, deriveSupportCaseSubject,
   supportCaseReadQuerySchema, supportCaseDetailSchema, supportCaseListSchema, supportCaseDataPolicySchema, supportCaseIntakePolicySchema,
-  SUPPORT_CASE_LIMITS, type SupportCaseDataPolicy,
+  SUPPORT_CASE_LIMITS, type SupportCaseDataPolicy, type SupportCaseDetail,
 } from "@paperclipai/shared";
 import { conflict, forbidden, notFound, tooManyRequests, unprocessable } from "../../errors.js";
 import { pinCurrentBoardActor, type AuthorizationActor } from "../authorization.js";
@@ -112,7 +112,7 @@ export function customerSupportCaseService(db: Db, options: { dataPolicy: Readon
   }
   async function budget(companyId: string, userId: string) {
     const now = Date.now(), cutoff = now - 600000, key = "support-case:" + digest(userId) + ":" + digest(companyId);
-    const [row] = await db.insert(authRateLimits).values({ id: key, key, count: 1, lastRequest: now })
+    const [row] = await db.insert(authRateLimits).values({ id: randomUUID(), key, count: 1, lastRequest: now })
       .onConflictDoUpdate({ target: authRateLimits.key, set: {
         count: sql`case when ${authRateLimits.lastRequest}<${cutoff} then 1 else ${authRateLimits.count}+1 end`,
         lastRequest: sql`case when ${authRateLimits.lastRequest}<${cutoff} then ${now} else ${authRateLimits.lastRequest} end`,
@@ -149,6 +149,55 @@ export function customerSupportCaseService(db: Db, options: { dataPolicy: Readon
     return new Date(clock.at);
   }
   return {
+    /** Export construction remains inside this original authorization owner and
+     * physical transaction. The projection is data, never an escaped grant. */
+    async withExport<T>(actor: AuthorizationActor, companyId: string, expectedUserId: string,
+      work: (tx: Db, archive: {
+        schema: "blentera.support-cases.v1"; companyId: string; exportedAt: string;
+        caseCount: number; eventCount: number; contentSha256: string; exclusions: string[];
+        cases: SupportCaseDetail[];
+      }) => Promise<T>) {
+      return within(actor, companyId, expectedUserId, true, async (tx, userId, administrator, publications) => {
+        // ponytail: the existing bundle is in memory; reject beyond these
+        // ceilings rather than truncate. Use the native durable streaming
+        // export owner when larger support archives are needed.
+        const rows = await tx.select().from(supportCases).where(visible(companyId, userId, administrator))
+          .orderBy(supportCases.createdAt, supportCases.id).limit(1001).for("share", { noWait: true });
+        if (rows.length > 1000) throw unprocessable("Support archive exceeds the 1000-case export limit");
+        const cases: SupportCaseDetail[] = [];
+        let eventCount = 0, bytes = 0;
+        for (const row of rows) {
+          const first = await detail(tx, row, userId, administrator);
+          const timeline = [...first.timeline];
+          let cursor = first.nextCursor;
+          while (cursor) {
+            const page = await detail(tx, row, userId, administrator, {
+              expectedUserId, beforeCreatedAt: cursor.createdAt, beforeId: cursor.id,
+            });
+            timeline.unshift(...page.timeline);
+            cursor = page.nextCursor;
+            if (eventCount + timeline.length > 10000) throw unprocessable("Support archive exceeds the 10000-event export limit");
+          }
+          eventCount += timeline.length;
+          if (eventCount > 10000) throw unprocessable("Support archive exceeds the 10000-event export limit");
+          const exported = { ...first, timeline, nextCursor: null };
+          bytes += Buffer.byteLength(JSON.stringify(exported), "utf8");
+          if (bytes > 16 * 1024 * 1024) throw unprocessable("Support archive exceeds the 16 MiB export limit");
+          cases.push(exported);
+        }
+        const archive = { schema: "blentera.support-cases.v1" as const, companyId,
+          exportedAt: (await now(tx)).toISOString(), caseCount: cases.length, eventCount,
+          contentSha256: digest(cases), cases,
+          exclusions: ["Internal support notes", "Provider identifiers and delivery attempts", "Credentials and privileged support grants", "Legal holds and internal processing policy", "Erased or expired content"] };
+        const result = await work(tx, archive);
+        // Export may wait on other native domains. Recheck at the actual return,
+        // after all bundle construction, while original rows remain pinned.
+        for (const row of rows) await currentCase(tx, companyId, userId, administrator, row.id);
+        await logActivity(tx, { companyId, actorType: "user", actorId: userId,
+          action: "support.cases_exported", entityType: "company", entityId: companyId, details: null }, publications);
+        return result;
+      });
+    },
     async intakePolicy(actor: AuthorizationActor, companyId: string, expectedUserId: string) {
       return within(actor, companyId, expectedUserId, false, async () => supportCaseIntakePolicySchema.parse(configuredPolicy
         ? { available: true, recipientName: configuredPolicy.recipientName, privacyNoticeUrl: configuredPolicy.privacyNoticeUrl,

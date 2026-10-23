@@ -590,6 +590,8 @@ describe("company portability", () => {
       },
     }, { actor: nativeActor });
 
+    expect(exported.files["blentera-support-cases-v1.json"]).toBeUndefined();
+    expect(exported.manifest.includes.supportCases).not.toBe(true);
     expect(asTextFile(exported.files["COMPANY.md"])).toContain('name: "Paperclip"');
     expect(asTextFile(exported.files["COMPANY.md"])).toContain('schema: "agentcompanies/v1"');
     expect(asTextFile(exported.files["agents/claudecoder/AGENTS.md"])).toContain("You are ClaudeCoder.");
@@ -1845,6 +1847,46 @@ describe("company portability", () => {
         portability: "portable",
       },
     ]);
+  });
+
+  it("keeps support case archives reserved and informational during import", async () => {
+    const portability = companyPortabilityService({} as any);
+    const archivePath = "blentera-support-cases-v1.json";
+    const source = {
+      type: "inline" as const,
+      files: {
+        "COMPANY.md": "---\nname: Imported Support Archive\n---\n",
+        [archivePath]: JSON.stringify({ schema: "blentera.support-cases.v1", cases: [{ description: "private support text" }] }),
+      },
+    };
+    const requestBase = {
+      source,
+      include: { company: true, agents: false, projects: false, issues: false },
+      target: { mode: "new_company" as const, newCompanyName: "Imported Support Archive" },
+      collisionStrategy: "rename" as const,
+    };
+
+    await expect(portability.previewImport({
+      ...requestBase,
+      selectedFiles: ["COMPANY.md", archivePath],
+    })).rejects.toMatchObject({ status: 422 });
+    await expect(portability.previewImport({
+      ...requestBase,
+      include: { ...requestBase.include, supportCases: true },
+      selectedFiles: ["COMPANY.md"],
+    })).rejects.toMatchObject({ status: 422 });
+    await expect(portability.importBundle({
+      ...requestBase,
+      selectedFiles: ["COMPANY.md", archivePath],
+    }, "user-1")).rejects.toMatchObject({ status: 422 });
+    expect(companySvc.create).not.toHaveBeenCalled();
+
+    const imported = await portability.importBundle({
+      ...requestBase,
+      selectedFiles: ["COMPANY.md"],
+    }, "user-1");
+    expect(imported.company.action).toBe("created");
+    expect(companySvc.create).toHaveBeenCalledTimes(1);
   });
 
   it("materializes required agent env inputs from import secretValues as company secrets", async () => {

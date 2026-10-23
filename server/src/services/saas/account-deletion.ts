@@ -1,3 +1,4 @@
+import { randomUUID } from "node:crypto";
 import { verifyPassword } from "better-auth/crypto";
 import { and, eq, inArray, lt, sql } from "drizzle-orm";
 import {
@@ -34,7 +35,7 @@ export function accountDeletionService(
     // Commit the attempt budget independently so a wrong password cannot roll it back.
     const [budget] = await db
       .insert(authRateLimits)
-      .values({ id: key, key, count: 1, lastRequest: now.getTime() })
+      .values({ id: randomUUID(), key, count: 1, lastRequest: now.getTime() })
       .onConflictDoUpdate({
         target: authRateLimits.key,
         set: {

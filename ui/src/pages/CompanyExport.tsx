@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from "react";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import type {
   Agent,
   CompanyPortabilityFileEntry,
@@ -23,6 +23,8 @@ import { MarkdownBody } from "../components/MarkdownBody";
 import { toCompanyRelativePath } from "@/lib/company-routes";
 import { cn } from "../lib/utils";
 import { queryKeys } from "../lib/queryKeys";
+import { hasCurrentV9Session } from "../hooks/useV9CurrentAccount";
+import { useTranslation } from "react-i18next";
 import { formatBytes } from "../lib/issue-output";
 import { createZipArchive, estimateZipArchiveSize } from "../lib/zip";
 import {
@@ -627,12 +629,14 @@ function previewErrorMessage(error: unknown): string {
 
 export function CompanyExport() {
   const { selectedCompanyId, selectedCompany } = useCompany();
+  const client = useQueryClient();
+  const { t } = useTranslation("experience");
   const { setBreadcrumbs } = useBreadcrumbs();
   const { pushToast } = useToastActions();
   const navigate = useNavigate();
   const location = useLocation();
   const initialFileFromUrl = useRef(filePathFromLocation(location.pathname));
-  const { data: session } = useQuery({
+  const { data: session, isFetching: sessionRechecking } = useQuery({
     queryKey: queryKeys.auth.session,
     queryFn: () => authApi.getSession(),
   });
@@ -655,6 +659,9 @@ export function CompanyExport() {
   });
 
   const [includeV7State, setIncludeV7State] = useState(false);
+  const [includeSupportCases, setIncludeSupportCases] = useState(false);
+  const supportExportReady = !!session?.user.id && !sessionRechecking && hasCurrentV9Session(client, session.user.id, session.session?.id ?? null);
+  useEffect(() => { setIncludeSupportCases(false); }, [selectedCompanyId, session?.user.id, session?.session?.id]);
   const [exportData, setExportData] = useState<CompanyPortabilityExportPreviewResult | null>(null);
   const [selectedFile, setSelectedFile] = useState<string | null>(null);
   const [expandedDirs, setExpandedDirs] = useState<Set<string>>(new Set());
@@ -804,16 +811,19 @@ export function CompanyExport() {
   const downloadMutation = useMutation({
     mutationFn: async () => {
       const captured={...exportScope.current};
+      const supportSessionId = includeSupportCases ? session?.session?.id ?? null : null;
+      if (includeSupportCases && (!captured.userId || !hasCurrentV9Session(client, captured.userId, supportSessionId))) throw new Error(t("supportCases.exportAccountChanged"));
       const result=await companiesApi.exportBundle(selectedCompanyId!, {
-        include: { company: true, agents: true, projects: true, issues: includeIssues, skills: categories.skills },
+        include: { company: true, agents: true, projects: true, issues: includeIssues, skills: categories.skills, supportCases: includeSupportCases },
         includeV7State,
-        ...(includeV7State ? {expectedUserId:captured.userId} : {}),
-        selectedFiles: Array.from(checkedFiles).sort(),
+        ...((includeV7State || includeSupportCases) ? {expectedUserId:captured.userId} : {}),
+        selectedFiles: [...checkedFiles, ...(includeSupportCases ? ["blentera-support-cases-v1.json"] : [])].sort(),
         sidebarOrder,
       });
-      return {captured,result};
+      return {captured,result,supportSessionId};
     },
-    onSuccess: ({captured,result}) => {
+    onSuccess: ({captured,result,supportSessionId}) => {
+      if (supportSessionId && (!captured.userId || !hasCurrentV9Session(client, captured.userId, supportSessionId))) return;
       if(captured.companyId!==exportScope.current.companyId || captured.userId!==exportScope.current.userId) return;
       const resultCheckedFiles = new Set(Object.keys(result.files));
       downloadZip(result, resultCheckedFiles, result.files);
@@ -1155,6 +1165,10 @@ export function CompanyExport() {
       <label className="flex items-center gap-2 px-5 py-3 text-sm">
         <input type="checkbox" disabled={!session?.user.id} checked={includeV7State} onChange={(e) => setIncludeV7State(e.target.checked)} />
         Include company V7 state: Foundation, shared Memory, eligible observations and models, Playbooks, Role Packs, package deployments, Workflows and governance. Requires current company ownership; private agent Memory and credentials are excluded.
+      </label>
+      <label className="flex items-center gap-2 px-5 py-3 text-sm">
+        <input type="checkbox" disabled={!supportExportReady} checked={includeSupportCases} onChange={(event) => setIncludeSupportCases(event.target.checked)} />
+        {t("supportCases.exportInclude")}
       </label>
       {/* Two-column layout */}
       <div className="grid gap-4 xl:h-(--sz-calc-30) xl:grid-cols-(--gtc-25) xl:gap-0">

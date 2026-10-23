@@ -13,7 +13,8 @@ import { customerSupportRoutes } from "../routes/customer-support.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { eraseAccountAccess } from "../services/saas/account-deletion.js";
 import { subscribeCompanyLiveEvents } from "../services/live-events.js";
-import { eraseExpiredSupportCases } from "../services/experience/support-cases.js";
+import { companyPortabilityService } from "../services/company-portability.js";
+import { customerSupportCaseService, eraseExpiredSupportCases } from "../services/experience/support-cases.js";
 import { startEmbeddedPostgresTestDatabase, getEmbeddedPostgresTestSupport } from "./helpers/embedded-postgres.js";
 
 const embedded = await getEmbeddedPostgresTestSupport();
@@ -31,6 +32,7 @@ const policy = {
   const users = Object.fromEntries(["opener", "member", "owner", "admin", "foreign"].map(name => [name, randomUUID()])) as Record<string, string>;
   const tokens = Object.fromEntries(Object.keys(users).map(name => [name, `support-${randomUUID()}`])) as Record<string, string>;
   let app: express.Express;
+  const failureCodes: string[][] = [];
   const path = (companyId: string) => `/api/companies/${companyId}/support`;
   const auth = (name: string) => ({ Authorization: `Bearer ${tokens[name]}` });
   const create = (companyId: string, name: string, description: string, key = randomUUID()) => request(app)
@@ -67,9 +69,20 @@ const policy = {
     app = express(); app.use(express.json());
     app.use(actorMiddleware(db, { deploymentMode: "authenticated" }));
     app.use("/api", customerSupportRoutes(db, { runtimeEnv: { AW_SUPPORT_CASE_DATA_POLICY_JSON: JSON.stringify(policy) } }));
+    app.use((error: unknown, _req: express.Request, _res: express.Response, next: express.NextFunction) => {
+      const codes: string[] = [];
+      for (let depth = 0, cause = error; depth < 8 && cause && typeof cause === "object"; depth++, cause = (cause as { cause?: unknown }).cause) {
+        const code = (cause as { code?: unknown }).code;
+        if (typeof code === "string" && /^[A-Z0-9_]{1,80}$/.test(code)) codes.push(code);
+        const constraint = (cause as { constraint_name?: unknown; constraint?: unknown }).constraint_name ?? (cause as { constraint?: unknown }).constraint;
+        if (typeof constraint === "string" && ["auth_rate_limits_pkey", "support_case_events_pkey", "support_case_events_request_idx", "support_cases_pkey"].includes(constraint)) codes.push(constraint);
+      }
+      failureCodes.push(codes);
+      next(error);
+    });
     app.use(errorHandler);
   }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
-  beforeEach(async () => { await db.delete(authRateLimits); });
+  beforeEach(async () => { failureCodes.length = 0; await db.delete(authRateLimits); });
   afterAll(async () => { await fixture?.cleanup(); }, 30000);
 
   it("creates a local receipt with defaults and only the public customer projection", async () => {
@@ -89,14 +102,83 @@ const policy = {
       expect(JSON.stringify(response.body)).not.toContain(privateField);
   });
 
-  it("serializes concurrent create retries to one effect and rejects changed content on the same key", async () => {
+  it("exports only current visible cases with every timeline page and no private operation facts", async () => {
+    const own = await create(companyA, "opener", "Export-visible customer canary");
+    const other = await create(companyA, "member", "Other-member export canary");
+    const foreign = await create(companyB, "foreign", "Foreign-company export canary");
+    for (const response of [own, other, foreign]) expect(response.status).toBe(201);
+    await db.insert(supportCaseEvents).values(Array.from({ length: 55 }, (_, index) => ({
+      companyId: companyA, caseId: own.body.id, authorUserId: users.opener!, kind: "customer_reply" as const,
+      body: `Historical response ${index}`, customerStatus: "RECEIVED" as const,
+      requestKey: randomUUID(), requestHash: createHash("sha256").update(`fixture-${index}`).digest("hex"),
+      createdAt: new Date(Date.now() + index),
+    })));
+    await db.update(supportCases).set({ legalHold: true, holdReason: "Private hold canary", providerCaseRef: "Private provider canary" })
+      .where(eq(supportCases.id, own.body.id));
+    const actor = async (name: string) => {
+      const [key] = await db.select().from(boardApiKeys).where(eq(boardApiKeys.userId, users[name]!));
+      return { type: "board" as const, source: "board_key" as const, userId: users[name]!, keyId: key!.id, authenticatedKeyHash: key!.keyHash };
+    };
+    const service = customerSupportCaseService(db, { dataPolicy: null });
+    const exportEvents: { payload: Record<string, unknown> }[] = [];
+    const unsubscribe = subscribeCompanyLiveEvents(companyA, event => exportEvents.push(event));
+    const mine = await service.withExport(await actor("opener"), companyA, users.opener!, async (tx, archive) => {
+      const [physical] = await tx.execute<{ id: number; transaction: string }>(sql`select pg_backend_pid() as id,pg_current_xact_id()::text as transaction`);
+      expect(physical?.id).toBeGreaterThan(0);
+      expect(physical?.transaction).toMatch(/^\d+$/);
+      await expect(db.transaction(async otherTx => {
+        await otherTx.execute(sql`select id from companies where id=${companyA}::uuid for update nowait`);
+      })).rejects.toBeTruthy();
+      return archive;
+    }).finally(unsubscribe);
+    expect(exportEvents).toEqual([expect.objectContaining({ payload: expect.objectContaining({
+      action: "support.cases_exported", entityType: "company", entityId: companyA, details: null,
+    }) })]);
+    expect(mine.cases.map(row => row.id)).toContain(own.body.id);
+    expect(mine.cases.map(row => row.id)).not.toContain(other.body.id);
+    expect(mine.cases.find(row => row.id === own.body.id)?.timeline).toHaveLength(56);
+    expect(mine.cases.find(row => row.id === own.body.id)?.nextCursor).toBeNull();
+    expect(mine.contentSha256).toBe(createHash("sha256").update(JSON.stringify(mine.cases)).digest("hex"));
+    for (const canary of ["Private hold canary", "Private provider canary", "requestHash", "dataPolicy", "deliveryAttemptId", "Foreign-company export canary", "Other-member export canary"])
+      expect(JSON.stringify(mine)).not.toContain(canary);
+    const input = { include: { company: false, agents: false, projects: false, issues: false, skills: false }, expectedUserId: users.owner! };
+    const portability = companyPortabilityService(db);
+    const ordinary = await portability.exportBundle(companyA, input, { actor: await actor("owner") });
+    expect(ordinary.files).not.toHaveProperty("blentera-support-cases-v1.json");
+    const exported = await portability.exportBundle(companyA, { ...input, include: { ...input.include, supportCases: true } }, { actor: await actor("owner") });
+    expect(exported.manifest.includes.supportCases).toBe(true);
+    const archive = JSON.parse(exported.files["blentera-support-cases-v1.json"] as string);
+    expect(archive.cases.map((row: { id: string }) => row.id)).toEqual(expect.arrayContaining([own.body.id, other.body.id]));
+    expect(JSON.stringify(archive)).not.toContain("Foreign-company export canary");
+    const deselected = await portability.exportBundle(companyA, { ...input, include: { ...input.include, supportCases: true }, selectedFiles: [] }, { actor: await actor("owner") });
+    expect(deselected.files).not.toHaveProperty("blentera-support-cases-v1.json");
+    expect(deselected.manifest.includes.supportCases).toBe(false);
+  });
+
+  it("rechecks support expiry after export construction instead of returning a stale archive", async () => {
+    const created = await create(companyA, "opener", "Expires while another export domain is assembled");
+    expect(created.status).toBe(201);
+    const [key] = await db.select().from(boardApiKeys).where(eq(boardApiKeys.userId, users.opener!));
+    const actor = { type: "board" as const, source: "board_key" as const, userId: users.opener!, keyId: key!.id, authenticatedKeyHash: key!.keyHash };
+    await db.update(supportCases).set({ expiresAt: new Date(Date.now() + 2000) }).where(eq(supportCases.id, created.body.id));
+    await expect(customerSupportCaseService(db, { dataPolicy: null }).withExport(actor, companyA, users.opener!, async (tx, archive) => {
+      expect(archive.cases.map(row => row.id)).toContain(created.body.id);
+      await tx.execute(sql`select pg_sleep(2.1)`);
+      return archive;
+    })).rejects.toMatchObject({ status: 404 });
+  });
+
+  it.each(Array.from({ length: 32 }, (_, index) => index))("serializes concurrent create retries to one effect and rejects changed content on the same key (%i)", async () => {
     const key = randomUUID();
     const [a, b] = await Promise.all([create(companyA, "opener", "One request", key), create(companyA, "opener", "One request", key.toUpperCase())]);
-    expect([a.status, b.status]).toEqual([201, 201]);
+    expect([a.status, b.status], JSON.stringify(failureCodes)).toEqual([201, 201]);
     expect(a.body.id).toBe(b.body.id);
     expect(await db.select().from(supportCases).where(eq(supportCases.id, a.body.id))).toHaveLength(1);
     expect(await db.select().from(supportCaseEvents).where(and(eq(supportCaseEvents.caseId, a.body.id), eq(supportCaseEvents.requestKey, key)))).toHaveLength(1);
     expect((await create(companyA, "opener", "Changed request", key)).status).toBe(409);
+    const budgets = await db.select().from(authRateLimits);
+    expect(budgets).toHaveLength(1);
+    expect(budgets[0]!.count).toBe(3);
   });
 
   it("limits member visibility to their own cases while current owner and admin can read company cases", async () => {

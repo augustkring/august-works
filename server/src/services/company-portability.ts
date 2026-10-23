@@ -124,9 +124,11 @@ import {
 } from "./native-runtime/provider-profile.js";
 import { managedAgentProfileService } from "./managed-agent-profiles.js";
 import { remoteAgentProfileService } from "./remote-agent-profiles.js";
+import { customerSupportCaseService } from "./experience/support-cases.js";
 
 const EXPORT_READ_CONCURRENCY = 8;
 const EXPORT_ISSUE_READ_CONCURRENCY = 2;
+const SUPPORT_CASE_ARCHIVE_PATH = "blentera-support-cases-v1.json";
 
 async function mapWithConcurrency<T, R>(
   items: readonly T[],
@@ -201,6 +203,7 @@ const DEFAULT_INCLUDE: CompanyPortabilityInclude = {
   projects: false,
   issues: false,
   skills: false,
+  supportCases: false,
 };
 
 const DEFAULT_COLLISION_STRATEGY: CompanyPortabilityCollisionStrategy = "rename";
@@ -1922,6 +1925,7 @@ function normalizeInclude(input?: Partial<CompanyPortabilityInclude>): CompanyPo
     projects: input?.projects ?? DEFAULT_INCLUDE.projects,
     issues: input?.issues ?? DEFAULT_INCLUDE.issues,
     skills: input?.skills ?? DEFAULT_INCLUDE.skills,
+    supportCases: input?.supportCases ?? DEFAULT_INCLUDE.supportCases,
   };
 }
 
@@ -3976,6 +3980,39 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     input: CompanyPortabilityExport,
     options: { preview?: boolean; allowExternalInstructions?: boolean; actor?: AuthorizationActor } = {},
   ): Promise<CompanyPortabilityExportResult> {
+    if (input.include?.supportCases) {
+      if (!options.actor || !input.expectedUserId) {
+        throw forbidden("A current Board account is required to export support cases");
+      }
+      const selectedArchive = !input.selectedFiles || input.selectedFiles.some(
+        (entry) => normalizePortablePath(entry) === SUPPORT_CASE_ARCHIVE_PATH,
+      );
+      if (!selectedArchive) {
+        const result = await exportBundle(companyId, { ...input, include: { ...input.include, supportCases: false } }, options);
+        result.manifest.includes.supportCases = false;
+        return result;
+      }
+      return customerSupportCaseService(db, { dataPolicy: null }).withExport(
+        options.actor,
+        companyId,
+        input.expectedUserId,
+        async (tx, archive) => {
+          const result = await companyPortabilityService(tx as Db, storage).exportBundle(
+            companyId,
+            { ...input, include: { ...input.include, supportCases: false } },
+            options,
+          );
+          if (selectedArchive) {
+            const file = JSON.stringify(archive, null, 2) + "\n";
+            if (Buffer.byteLength(file, "utf8") > 16 * 1024 * 1024)
+              throw unprocessable("Support archive exceeds the 16 MiB export limit");
+            result.files[SUPPORT_CASE_ARCHIVE_PATH] = file;
+          }
+          result.manifest.includes.supportCases = selectedArchive;
+          return result;
+        },
+      );
+    }
     const include = normalizeInclude({
       ...input.include,
       agents: input.agents && input.agents.length > 0 ? true : input.include?.agents,
@@ -4999,8 +5036,14 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     options?: ImportBehaviorOptions,
   ): Promise<ImportPlanInternal> {
     const mode = resolveImportMode(options);
+    if (input.include?.supportCases) {
+      throw unprocessable("Support case archives are informational and cannot be imported as live cases.");
+    }
     const requestedInclude = normalizeInclude(input.include);
     const source = applySelectedFilesToSource(await resolveSource(input.source), input.selectedFiles);
+    if (Object.keys(source.files).some((entry) => normalizePortablePath(entry) === SUPPORT_CASE_ARCHIVE_PATH)) {
+      throw unprocessable("Support case archives are informational and cannot be imported as live cases.");
+    }
     const manifest = source.manifest;
     const include: CompanyPortabilityInclude = {
       company: requestedInclude.company && manifest.company !== null,
@@ -5008,6 +5051,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       projects: requestedInclude.projects && manifest.projects.length > 0,
       issues: requestedInclude.issues && manifest.issues.length > 0,
       skills: requestedInclude.skills && manifest.skills.length > 0,
+      supportCases: false,
     };
     const collisionStrategy = input.collisionStrategy ?? DEFAULT_COLLISION_STRATEGY;
     if (mode === "agent_safe" && collisionStrategy === "replace") {

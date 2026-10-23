@@ -1,0 +1,116 @@
+{
+  "checkpoint": "SUP-01 support cases and opt-in portability export / rate-budget race",
+  "recordedAt": "2026-10-23",
+  "scope": "Bounded native support export, private logging, UI export, and shared auth-rate-budget concurrency evidence. This does not qualify complete SUP-01/SUP-02, delivery or operator processing, deployment readiness, or the full V10 release.",
+  "sourcePins": {
+    "file": "support-export-final-current-pins.txt",
+    "result": "All21 final source pins matched after actual native browser, logger tests and final server compiler exit0; all processes closed."
+  },
+  "finalRuns": [
+    {
+      "name": "Native support API, export integration, and 32-pair rate-budget concurrency run",
+      "result": "107 tests passed across 4 files; exit 0. Includes 32 concurrent support create pairs, idempotent single-effect behavior, and the rate-budget count assertion.",
+      "log": "support-rate-race-fixed-native.log",
+      "exit": "support-rate-race-fixed-native.exit",
+      "exitCode": 0,
+      "pins": "support-rate-race-fixed.sources"
+    },
+    {
+      "name": "Company portability route regressions",
+      "result": "44 tests passed; exit 0.",
+      "log": "support-export-routes-reviewed.log",
+      "exit": "support-export-routes-reviewed.exit",
+      "exitCode": 0
+    },
+    {
+      "name": "Private HTTP logging and URL-policy regressions",
+      "result": "117 tests passed across 2 files; exit 0.",
+      "log": "support-export-private-logs.log",
+      "exit": "support-export-private-logs.exit",
+      "exitCode": 0,
+      "pins": "support-diagnostic-and-log.sources"
+    },
+    {
+      "name": "Company export UI regressions",
+      "result": "31 tests passed across 2 files; exit 0.",
+      "log": "support-export-ui-final.log",
+      "exit": "support-export-ui-final.exit",
+      "exitCode": 0
+    },
+    {
+      "name": "Shared contract typecheck",
+      "result": "Passed; exit 0.",
+      "log": "support-export-shared-types.log",
+      "exit": "support-export-shared-types.exit",
+      "exitCode": 0
+    },
+    {
+      "name": "Final UI typecheck",
+      "result": "Passed; exit 0.",
+      "log": "support-export-final-ui-types.log",
+      "exit": "support-export-final-ui-types.exit",
+      "exitCode": 0,
+      "pins": "support-export-final-current-pins.txt"
+    },
+    {
+      "name": "Token gates",
+      "result": "Clean; exit 0.",
+      "log": "support-export-final-token-gates.log",
+      "exit": "support-export-final-token-gates.exit",
+      "exitCode": 0
+    },
+    {
+      "name": "Final URL sanitizer and actual HTTP logger regressions, including mounted invite routes",
+      "result": "137 tests passed across3files; exit0. Success and404 canaries cover /api/invites, /invites and /invite.",
+      "log": "support-invite-log-final.log",
+      "exit": "support-invite-log-final.exit",
+      "exitCode": 0,
+      "pins": "support-export-final-current-pins.txt"
+    },
+    {
+      "name": "Final server typecheck",
+      "result": "Passed, exit0, frozen final sources.",
+      "log": "support-export-final-server-types.log",
+      "exit": "support-export-final-server-types.exit",
+      "exitCode": 0,
+      "pins": "support-export-final-current-pins.txt"
+    }
+  ],
+  "retainedFailuresAndLimits": [
+    {
+      "name": "32-pair pre-fix concurrency baseline",
+      "result": "28 passed, 4 failed with SQLSTATE 23505. The old diagnostic did not capture the exact constraint name; this is not evidence identifying the failed unique index.",
+      "artifacts": [
+        "support-concurrent-constraint-baseline.log",
+        "support-concurrent-constraint-baseline.exit",
+        "support-concurrent-constraint-baseline.sources"
+      ]
+    },
+    {
+      "name": "Earlier eight-pair reproduction",
+      "result": "23 passed, 1 failed with SQLSTATE 23505; retained as a reproduction, not used as final qualification.",
+      "artifacts": [
+        "support-export-native-concurrency-reviewed.log",
+        "support-export-native-concurrency-reviewed.exit",
+        "support-concurrent-eight-diagnostic-test.txt.gz"
+      ]
+    },
+    {
+      "name": "Initial combined portability suite",
+      "result": "157 tests: 86 passed and 71 failed. This included 62 service expectations/fixtures and 9 route-argument expectations; route expectations were corrected and the focused route suite passed, while the 62 service failures remain unresolved and are not dismissed as regressions or qualified by this checkpoint.",
+      "artifacts": [
+        "support-export-native-initial.log",
+        "support-export-native-initial.exit",
+        "support-export-native-initial.sources",
+        "support-export-initial-company-portability.test.ts.txt.gz",
+        "support-export-initial-company-portability-routes.test.ts.txt.gz"
+      ]
+    },
+    {
+      "name": "Portability failure audit",
+      "result": "Read-only follow-up identified54 failed export fixtures blocked by missing native current actor/company; downstream serializer behavior remains unqualified. Eight failed import cases require explicit cross-company source publication, not merely a fixture actor. Existing deliberate rejection assertions remain authoritative."
+    }
+  ],
+  "rateBudgetChange": "All four custom authRateLimits upserts now use an independent random UUID for the row id while preserving the logical key and its ON CONFLICT target. No consumer was found that depends on id equaling key. The pre-fix failure is consistent with a concurrent insert race, but the old diagnostic did not record the exact constraint and the checkpoint does not claim that the primary-key constraint was proven to be the cause.",
+  "archivedScratch": "Closed support-export-*, support-concurrent-*, and support-rate-race-* artifacts were copied from /workspace/v10-preparation. Active browser work, unrelated files, and tsbuildinfo were excluded."
+}

@@ -77,6 +77,8 @@ export function isPrivateExperienceHttpRequest(method: string | undefined, url: 
     || /^\/api\/companies\/[^/]+\/experience\/company(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]*\/experience\/(?:analytics|observations)(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/experience\/support-access(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/[^/]*\/support(?:\/|$)/i.test(pathname)
+    || /^\/api\/companies\/(?:[^/]*\/)?(?:export|exports|import|imports)(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/(?:[^/]*\/)*support-sessions(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/agent-package-installations\/[^/]+\/experience(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]+\/agents\/[^/]+\/experience(?:\/|$)/i.test(pathname)
@@ -110,6 +112,14 @@ export function privateExperienceLogUrl(url: string): string {
   if (/\/experience\/observations(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/observations/:operation";
   if (/\/experience\/analytics(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/analytics";
   if (/\/experience\/support-access(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/experience/support-access";
+  if (/^\/api\/companies\/[^/]*\/support(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/support/:operation";
+  const portabilityRoute = pathname.match(/^\/api\/companies\/(?:(?<companyId>[^/]*)\/)?(?<kind>exports?|imports?)(?:\/|$)/i);
+  if (portabilityRoute?.groups) {
+    const kind = portabilityRoute.groups.kind!.toLowerCase();
+    return portabilityRoute.groups.companyId === undefined
+      ? `/api/companies/${kind}/:operation`
+      : `/api/companies/:companyId/${kind}/:operation`;
+  }
   if (/\/support-sessions(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/support-sessions/:operation";
   if (/\/agent-package-installations\/[^/]+\/experience(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/agent-package-installations/:installationId/experience";
   if (/^\/api\/agent-packages(?:\/|$)/i.test(pathname)) return "/api/agent-packages/:operation";
