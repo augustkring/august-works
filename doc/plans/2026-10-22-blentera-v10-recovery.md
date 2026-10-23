@@ -473,3 +473,6 @@ Actual HTTP key rotation baseline2FAIL211.24s. Actual JWT expiry/native cookie s
 ### 2026-10-23 — Shared support intake policy
 
 Add the customer-case contract alongside original V6 support-access history. Shared EN/DA categories/impact/status/description wording match §11; only description is required customer input, category defaults Other, impact defaults null and subject/context remain optional. Automatic context accepts only typed removable surface/operation/time/safe-error fields. Published bounds are shared by commands and future UI. Five focused policy cases2.04s and shared compiler both actual/durable0; exact files in `support-case-shared-checkpoint.json`. No case persistence, gateway, privacy lifecycle or complete support-flow qualification yet.
+
+
+Correction to the shared support checkpoint: Root accidentally replaced the existing test path when adding new coverage. Restore all seven original V6 approval assertions from dba57adfc, merge imports and append the five new cases. Final combined12PASS13.06s and shared compiler actual/durable0; original source bodies/assertions unchanged. Initial five-case evidence remains explicitly limited. See `support-case-shared-restored-checkpoint.json`.
