@@ -248,7 +248,7 @@ it("shows the customer action on a waiting case, keeps its last confirmed detail
   expect(container.textContent).toContain("Your account or access changed");
 });
 
-it("ignores a late create acknowledgement after the account changes", async () => {
+it.each(["account", "session"])("ignores a late create acknowledgement after the %s changes", async change => {
   let resolveCreate!: (value: unknown) => void;
   vi.spyOn(api, "get").mockImplementation(async (path) => {
     if (path.includes("/policy?")) return policy as never;
@@ -262,7 +262,7 @@ it("ignores a late create acknowledgement after the account changes", async () =
   await clickSubmit();
   await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
 
-  state.userId = "new-support-user";
+  if (change === "account") state.userId = "new-support-user";
   state.sessionId = "00000000-0000-4000-8000-000000000007";
   client.setQueryData(queryKeys.auth.session, { user: { id: state.userId }, session: { id: state.sessionId, userId: state.userId } });
   await rerender();

@@ -69,7 +69,7 @@ export function CustomerSupportCases({ onReturn }: { onReturn?: () => void } = {
     <div className="mx-auto w-full max-w-3xl space-y-6 p-4 sm:p-6">
       {selectedCompanyId && principal ? (
         <CustomerSupportCasesForAccount
-          key={`${selectedCompanyId}:${principal}`}
+          key={`${selectedCompanyId}:${principal}:${identity.sessionId}`}
           companyId={selectedCompanyId}
           principal={principal}
           onReturn={onReturn}
@@ -164,7 +164,7 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
   const ready = selectedCompanyId === companyId && identity.settled && !identity.localImplicit &&
     identity.userId === principal && !identity.failed && !accessLost &&
     hasCurrentV9Session(client, principal, identity.sessionId);
-  const baseKey = useMemo(() => ["customer-support-cases", companyId, principal] as const, [companyId, principal]);
+  const baseKey = useMemo(() => ["customer-support-cases", companyId, principal, identity.sessionId] as const, [companyId, principal, identity.sessionId]);
   useEffect(() => {
     mounted.current = true;
     return () => {
@@ -175,7 +175,7 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
   }, [client, baseKey]);
   const scope = `${companyId}:${principal}:${identity.sessionId}:${identity.authorityEpoch}:${accessEpoch}`;
   activeScope.current = scope;
-  const readKey = [...baseKey, identity.sessionId, identity.authorityEpoch, accessEpoch] as const;
+  const readKey = [...baseKey, identity.authorityEpoch, accessEpoch] as const;
   function current() { return mounted.current && activeScope.current === scope && hasCurrentV9Session(client, principal, identity.sessionId); }
   function queryString(cursor: { createdAt: string; id: string } | null = null) {
     const params = new URLSearchParams({ expectedUserId: principal });
