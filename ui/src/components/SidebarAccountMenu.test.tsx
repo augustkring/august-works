@@ -4,8 +4,12 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { queryKeys } from "../lib/queryKeys";
+import { i18n } from "../i18n";
 import { SidebarAccountMenu } from "./SidebarAccountMenu";
 import { SidebarAccountMenu as ProductionSidebarAccountMenu } from "./SidebarAccountMenu.production";
+import { CustomerFeedbackDialog } from "./CustomerFeedbackDialog";
+import { api } from "../api/client";
+import { v9SessionFixture } from "../hooks/v9-session.test-support";
 import { TooltipProvider } from "@/components/ui/tooltip";
 
 const mockAuthApi = vi.hoisted(() => ({
@@ -26,6 +30,9 @@ const mockNavigateTopLevel = vi.hoisted(() => vi.fn());
 vi.mock("@/api/auth", () => ({
   authApi: mockAuthApi,
 }));
+vi.mock("../api/auth", () => ({
+  authApi: mockAuthApi,
+}));
 
 vi.mock("@/lib/browserNavigation", () => ({
   navigateTopLevel: mockNavigateTopLevel,
@@ -43,6 +50,11 @@ vi.mock("@/lib/router", () => ({
   Link: ({ children, to, ...props }: { children: React.ReactNode; to: string }) => (
     <a href={to} {...props}>{children}</a>
   ),
+  useLocation: () => ({ pathname: "/PAP/dashboard" }),
+}));
+
+vi.mock("../context/CompanyContext", () => ({
+  useCompany: () => ({ selectedCompanyId: "company-1", selectedCompany: { issuePrefix: "PAP" } }),
 }));
 
 vi.mock("../context/SidebarContext", () => ({
@@ -99,6 +111,7 @@ describe("SidebarAccountMenu", () => {
   afterEach(() => {
     container.remove();
     document.body.innerHTML = "";
+    vi.restoreAllMocks();
     vi.clearAllMocks();
   });
 
@@ -129,25 +142,14 @@ describe("SidebarAccountMenu", () => {
     expect(accountTrigger?.classList).toContain("hover:text-sidebar-accent-foreground");
     expect(accountTrigger?.classList).not.toContain("hover:bg-background");
 
-    const feedbackButton = container.querySelector<HTMLAnchorElement>(
-      'a[aria-label="Share feedback"]',
-    );
-    expect(feedbackButton?.getAttribute("href")).toBe("https://paperclip.ing/feedback");
-    expect(feedbackButton?.getAttribute("target")).toBe("_blank");
-    expect(feedbackButton?.classList).toContain("text-muted-foreground/50");
-    expect(feedbackButton?.classList).not.toContain("text-border");
-    expect(feedbackButton?.classList).not.toContain("text-muted-foreground");
-    expect(feedbackButton?.classList).toContain("hover:bg-sidebar-accent");
-    expect(feedbackButton?.classList).toContain("hover:text-sidebar-accent-foreground");
-    expect(feedbackButton?.classList).not.toContain("hover:bg-background");
-    expect(feedbackButton?.querySelector("svg")?.classList).toContain("lucide-flag");
-    expect(feedbackButton?.getAttribute("data-slot")).toBe("tooltip-trigger");
-    expect(feedbackButton?.hasAttribute("title")).toBe(false);
+    expect(container.querySelector('a[aria-label="Share feedback"]')).toBeNull();
+    expect(container.querySelector('button[aria-label="Share feedback"]')).toBeNull();
+    expect(container.querySelector('a[href="https://paperclip.ing/feedback"]')).toBeNull();
 
     await act(async () => root.unmount());
   });
 
-  it("keeps the classic feedback control visible beside the profile trigger", async () => {
+  it("hides feedback when first-party feedback is disabled instead of linking upstream", async () => {
     const root = createRoot(container);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
 
@@ -168,17 +170,9 @@ describe("SidebarAccountMenu", () => {
     expect(accountTrigger?.classList).toContain("rounded-lg");
     expect(accountTrigger?.classList).toContain("hover:bg-accent/50");
 
-    const feedbackButton = container.querySelector<HTMLAnchorElement>(
-      'a[aria-label="Share feedback"]',
-    );
-    expect(feedbackButton?.getAttribute("href")).toBe("https://paperclip.ing/feedback");
-    expect(feedbackButton?.getAttribute("target")).toBe("_blank");
-    expect(feedbackButton?.classList).toContain("text-muted-foreground/50");
-    expect(feedbackButton?.classList).not.toContain("text-border");
-    expect(feedbackButton?.classList).not.toContain("text-muted-foreground");
-    expect(feedbackButton?.classList).toContain("hover:bg-accent/50");
-    expect(feedbackButton?.querySelector("svg")?.classList).toContain("lucide-flag");
-    expect(feedbackButton?.getAttribute("data-slot")).toBe("tooltip-trigger");
+    expect(container.querySelector('button[aria-label="Share feedback"]')).toBeNull();
+    expect(container.querySelector('a[aria-label="Share feedback"]')).toBeNull();
+    expect(container.querySelector('a[href="https://paperclip.ing/feedback"]')).toBeNull();
 
     await act(async () => {
       accountTrigger?.dispatchEvent(new MouseEvent("click", { bubbles: true }));
@@ -189,6 +183,52 @@ describe("SidebarAccountMenu", () => {
     expect(popover?.textContent).not.toContain("Feedback");
     expect(popover?.querySelector('a[href="https://paperclip.ing/feedback"]')).toBeNull();
 
+    await act(async () => root.unmount());
+  });
+
+  it.each([["production", ProductionSidebarAccountMenu, "Share feedback"], ["standard", SidebarAccountMenu, "Feedback"]] as const)("opens the mounted first-party feedback composer from the %s account menu", async (_variant, Menu, label) => {
+    await i18n.changeLanguage("en");
+    mockInstanceSettingsApi.getExperimental.mockResolvedValue({ customer_feedback_v9: true });
+    mockAuthApi.getSession.mockResolvedValue(v9SessionFixture("user-1"));
+    vi.spyOn(api, "get").mockResolvedValue({
+      contacts: {
+        support: "mailto:support@blentera.com",
+        security: "mailto:security@blentera.com",
+        privacy: "mailto:privacy@blentera.com",
+      },
+      attachments: {
+        enabled: true,
+        reason: "validation_required",
+        types: ["image/png", "image/jpeg", "image/webp"],
+        maxFiles: 3,
+        maxBytes: 10485760,
+      },
+    });
+    const root = createRoot(container);
+    const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+
+    await act(async () => {
+      root.render(
+        <QueryClientProvider client={queryClient}>
+          <TooltipProvider>
+            <Menu deploymentMode="authenticated" />
+            <CustomerFeedbackDialog />
+          </TooltipProvider>
+        </QueryClientProvider>,
+      );
+    });
+    await flushReact();
+
+    const feedbackButton = container.querySelector<HTMLButtonElement>(
+      `button[aria-label="${label}"]`,
+    );
+    expect(feedbackButton).not.toBeNull();
+    expect(container.querySelector('a[href="https://paperclip.ing/feedback"]')).toBeNull();
+    await act(async () => feedbackButton?.click());
+    await flushReact();
+
+    expect(document.querySelector('[role="dialog"]')).not.toBeNull();
+    expect(document.querySelector('[role="dialog"] h2')?.textContent).toBe("Share feedback");
     await act(async () => root.unmount());
   });
 
@@ -214,7 +254,8 @@ describe("SidebarAccountMenu", () => {
     await flushReact();
     await flushReact();
 
-    expect(container.querySelector('a[aria-label="Share feedback"]')).not.toBeNull();
+    expect(container.querySelector('a[aria-label="Share feedback"]')).toBeNull();
+    expect(container.querySelector('a[href="https://paperclip.ing/feedback"]')).toBeNull();
     expect(container.textContent).toContain("Jane Example");
     expect(container.textContent).not.toContain("jane@example.com");
 

@@ -426,3 +426,10 @@ Actual original metric/strategy consumers initially21FAIL/24PASS, exactly reprod
 ### 2026-10-23 — Canonical identity in new account correspondence
 
 Original auth/invitation subjects and account notification subject/message reuse PRODUCT_IDENTITY. Original encrypted outbox, URL, expiry, recipient, dedupe and queued historical payload semantics remain. Existing actual account/invitation/notification three suites30PASS176.38s; final server compiler0 and exact pins match, processes closed. See `brand-account-notification-checkpoint.json`. This is product wording only; CE03 shared EN/DA mail/landing flow and actual sender/provider/hosted qualification remain open.
+
+
+### 2026-10-23 — First-party feedback from daily account navigation
+
+Both original account menus use intended canonical docs origin and existing first-party feedback composer/event under original feature policy. Production layout mounts that original composer; upstream fallback removed. Original composer current-account/preview/API rules remain. Dashboard/Company Access product labels reuse PRODUCT_IDENTITY.
+
+Actual old production menu fails real-composer component check1FAIL16.58s. First combined run14FAIL/47PASS144.61s includes original5s CompanyAccess timeout with cascading failures and Root wrong standard-menu label selector. Correct only selector; original Account29PASS27.40s isolated and other three suites32PASS117.18s separately. Final UI types/token gates0, exact6 pins match, checks closed. See `brand-daily-navigation-checkpoint.json`. No full layout/browser or deployed docs claim; broad V10/PR/release gates remain open.

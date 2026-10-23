@@ -5,6 +5,7 @@ import {
   hidesCompanyPage,
   type Agent,
 } from "@paperclipai/shared";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { Shield, ShieldCheck, Trash2, UserPlus } from "lucide-react";
 import { accessApi, type CompanyMember } from "@/api/access";
 import { useAccountIdentity } from "@/api/companies-query";
@@ -677,7 +678,7 @@ export function CompanyAccessLegacyRoute() {
         <div className="space-y-2">
           <h2 className="text-sm font-semibold">Advanced permissions unavailable</h2>
           <p className="text-sm text-muted-foreground">
-            Core Paperclip keeps enforcing organization boundaries and any existing restrictive policy data, but editing advanced permissions requires an installed extension.
+            Core {PRODUCT_IDENTITY.productName} keeps enforcing organization boundaries and any existing restrictive policy data, but editing advanced permissions requires an installed extension.
           </p>
           {errorMessage ? (
             <p className="text-sm text-destructive">Plugin extensions unavailable: {errorMessage}</p>
