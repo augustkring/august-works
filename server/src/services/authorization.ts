@@ -65,6 +65,8 @@ export type AuthorizationActor =
     agentId?: string | null;
     companyId?: string | null;
     keyId?: string | null;
+    /** Fingerprint retained by the original credential verifier, never client input. */
+    authenticatedKeyHash?: string | null;
     keyScope?: AgentApiKeyScope | null;
     runId?: string | null;
     onBehalfOfUserId?: string | null;
@@ -2717,7 +2719,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       if (actor.source === "board_key") {
         if (!actor.keyId) return null;
         const [key] = await db.select().from(boardApiKeys).where(eq(boardApiKeys.id, actor.keyId)).for("share", { noWait: true });
-        if (!key || key.userId !== actor.userId || key.revokedAt || (key.expiresAt && key.expiresAt.getTime() <= Date.now())) return null;
+        if (!key || key.keyHash !== actor.authenticatedKeyHash || key.userId !== actor.userId || key.revokedAt || (key.expiresAt && key.expiresAt.getTime() <= Date.now())) return null;
         if (key.expiresAt && readSources) readSources.credentialExpiresAt = Math.min(readSources.credentialExpiresAt ?? Infinity, key.expiresAt.getTime());
       }
       // Native instance roles are read by isInstanceAdmin below. A DTO bit is
@@ -2735,7 +2737,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     let keyScope = actor.keyScope;
     if (actor.keyId) {
       const [key] = await db.select().from(agentApiKeys).where(eq(agentApiKeys.id, actor.keyId)).for("share", { noWait: true });
-      if (!key || key.companyId !== companyId || key.agentId !== actor.agentId || key.revokedAt || key.responsibleUserId !== actor.onBehalfOfUserId) return null;
+      if (!key || key.keyHash !== actor.authenticatedKeyHash || key.companyId !== companyId || key.agentId !== actor.agentId || key.revokedAt || key.responsibleUserId !== actor.onBehalfOfUserId) return null;
       const parsed = agentApiKeyScopeSchema.safeParse(key.scopeConfig ?? { kind: "standard" });
       if (!parsed.success) return null;
       // Keep the original authenticated request ceiling after Source row waits;

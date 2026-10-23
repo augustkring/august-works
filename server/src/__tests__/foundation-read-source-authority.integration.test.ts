@@ -1,9 +1,13 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import express from "express";
+import request from "supertest";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { agents, agentApiKeys, authUsers, companies, companyMemberships, createDb,
   EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, heartbeatRuns, issues, principalPermissionGrants, instanceUserRoles, boardApiKeys } from "@paperclipai/db";
 import { authorizationService, type AuthorizationActor } from "../services/authorization.js";
+import { actorMiddleware } from "../middleware/auth.js";
+import { errorHandler } from "../middleware/error-handler.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 
 function deferred() { let resolve!: () => void; const promise = new Promise<void>(r => { resolve = r; }); return { promise, resolve }; }
@@ -27,8 +31,9 @@ describe("Foundation native Source authority lifetime", () => {
     await db.insert(principalPermissionGrants).values([{ companyId, principalType: "user", principalId: userId, permissionKey: "foundation:read" },
       { companyId, principalType: "agent", principalId: agentId, permissionKey: "foundation:read" }]);
     await db.insert(heartbeatRuns).values({ id: runId, companyId, agentId, responsibleUserId: userId, status: "running", runtimeMode: "native" });
-    await db.insert(agentApiKeys).values({ id: keyId, companyId, agentId, responsibleUserId: userId, name: "Actual credential", keyHash: randomUUID() });
-    const actor: AuthorizationActor = { type: "agent", source: "agent_key", agentId, companyId, keyId, runId, onBehalfOfUserId: userId };
+    const keyHash = randomUUID();
+    await db.insert(agentApiKeys).values({ id: keyId, companyId, agentId, responsibleUserId: userId, name: "Actual credential", keyHash });
+    const actor: AuthorizationActor = { type: "agent", source: "agent_key", agentId, companyId, keyId, authenticatedKeyHash: keyHash, runId, onBehalfOfUserId: userId };
     const human: AuthorizationActor = { type: "board", source: "session", userId };
     return { companyId, userId, agentId, runId, keyId, actor, human };
   }
@@ -55,6 +60,7 @@ describe("Foundation native Source authority lifetime", () => {
   });
   it("requires both current grants, actual Human existence, and native key scope instead of actor hints", async () => {
     const s = await seed(); expect.soft((await scoped(s)).allowed).toBe(true);
+    expect((await scoped(s, { ...s.actor, authenticatedKeyHash: undefined })).allowed).toBe(false);
     await db.delete(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId, s.companyId), eq(principalPermissionGrants.principalType, "user")));
     expect((await scoped(s)).allowed).toBe(false);
     await db.insert(principalPermissionGrants).values({ companyId: s.companyId, principalType: "user", principalId: s.userId, permissionKey: "foundation:read" });
@@ -150,9 +156,10 @@ describe("Foundation native Source authority lifetime", () => {
     } finally { vi.unstubAllEnvs(); }
   });
   it("pins actual Board credentials and refuses expiration or revocation", async () => {
-    const s = await seed(), keyId = randomUUID();
-    await db.insert(boardApiKeys).values({ id: keyId, userId: s.userId, name: "Actual Board key", keyHash: randomUUID(), expiresAt: new Date(Date.now() + 60000) });
-    const actor: AuthorizationActor = { ...s.human, source: "board_key", keyId };
+    const s = await seed(), keyId = randomUUID(), keyHash = randomUUID();
+    await db.insert(boardApiKeys).values({ id: keyId, userId: s.userId, name: "Actual Board key", keyHash, expiresAt: new Date(Date.now() + 60000) });
+    const actor: AuthorizationActor = { ...s.human, source: "board_key", keyId, authenticatedKeyHash: keyHash };
+    expect((await scoped(s, { ...actor, authenticatedKeyHash: undefined })).allowed).toBe(false);
     const ready = deferred(), release = deferred();
     const outer = db.transaction(async tx => { const decision = await authorizationService(tx).withReadSources(s.companyId, [], [], owner => owner.decide(input(s, actor)));
       ready.resolve(); await release.promise; return decision; });
@@ -221,6 +228,65 @@ describe("Foundation native Source authority lifetime", () => {
     const request = { ...input(s, s.human), scope };
     expect((await authorizationService(db).decide(request)).allowed).toBe(true);
     expect((await db.transaction(tx => authorizationService(tx).withReadSources(s.companyId, [], [], owner => owner.decide(request)))).allowed).toBe(false);
+  });
+
+  it.each(["agent", "board"] as const)("rechecks the authenticated %s token hash after a real Source row wait", async credentialKind => {
+    const s = await seed(), issueId = randomUUID();
+    const token = `fixture-${credentialKind}-${randomUUID()}`;
+    const keyHash = createHash("sha256").update(token).digest("hex");
+    const credentialId = credentialKind === "agent" ? s.keyId : randomUUID();
+    if (credentialKind === "agent") {
+      await db.update(agentApiKeys).set({ keyHash }).where(eq(agentApiKeys.id, credentialId));
+    } else {
+      await db.insert(boardApiKeys).values({ id: credentialId, userId: s.userId, name: "Actual authenticated Board credential", keyHash });
+    }
+    await db.insert(issues).values({ id: issueId, companyId: s.companyId, title: "Actual authenticated Source wait", createdByUserId: s.userId });
+    const app = express();
+    app.use(actorMiddleware(db, { deploymentMode: "authenticated" }));
+    app.get("/source-read", async (req, res, next) => {
+      try {
+        expect(req.actor.source).toBe(credentialKind === "agent" ? "agent_key" : "board_key");
+        expect(req.actor.keyId).toBe(credentialId);
+        const decision = await db.transaction(tx => authorizationService(tx).withReadSources(s.companyId, [issueId], [],
+          owner => owner.decide(input(s, req.actor))));
+        res.status(decision.allowed ? 200 : 403).json({ allowed: decision.allowed });
+      } catch (error) { next(error); }
+    });
+    app.use(errorHandler);
+    const probe = (bearer = token) => request(app).get("/source-read").set("Authorization", `Bearer ${bearer}`).set("x-paperclip-run-id", s.runId);
+    expect((await probe()).status).toBe(200);
+    const held = deferred(), release = deferred();
+    let holderPid = 0;
+    const holder = db.transaction(async tx => {
+      const [backend] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      holderPid = backend!.pid;
+      await tx.execute(sql`select id from issues where id=${issueId} for update`);
+      held.resolve(); await release.promise;
+    });
+    await held.promise;
+    const pending = probe().then(response => response);
+    const replacementToken = `fixture-replacement-${randomUUID()}`;
+    try {
+      let blocked = false;
+      for (let i = 0; i < 100 && !blocked; i++) {
+        const [activity] = await db.execute<{ blocked: boolean }>(sql`select exists(
+          select 1 from pg_stat_activity where ${holderPid}=any(pg_blocking_pids(pid))) as blocked`);
+        blocked = activity!.blocked;
+        if (!blocked) await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(blocked).toBe(true);
+      const replacementHash = createHash("sha256").update(replacementToken).digest("hex");
+      if (credentialKind === "agent") {
+        await db.update(agentApiKeys).set({ keyHash: replacementHash }).where(eq(agentApiKeys.id, credentialId));
+      } else {
+        await db.update(boardApiKeys).set({ keyHash: replacementHash }).where(eq(boardApiKeys.id, credentialId));
+      }
+    } finally { release.resolve(); await holder; }
+    const response = await pending;
+    expect(response.status).toBe(403);
+    expect(response.body.allowed).toBe(false);
+    expect((await probe(replacementToken)).status).toBe(200);
+    expect((await probe()).status).toBe(401);
   });
 
 });
