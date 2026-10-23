@@ -10,6 +10,7 @@ import { heartbeatMemoryPayloadRetained, heartbeatMemoryPayloadVisible } from ".
 import { assertNativeAnalyticalRunPayloadAccess } from "./analytical-context-authority.js";
 import { applyWorkspaceRestoreFailure } from "@paperclipai/adapter-utils/workspace-restore-result";
 import { hasWorkspaceRestoreFailure } from "@paperclipai/shared";
+import type { NativePayloadSourceInput } from "@paperclipai/shared";
 import { externalConversationStateSql, nonIdleSlackIssueCondition } from "./slack-conversation-state.js";
 import { settleSlackConversation } from "./slack-conversation-lifecycle.js";
 import { publicChatTaskUrl } from "./chat-task-url.js";
@@ -23237,6 +23238,7 @@ export function heartbeatService(
         let nativeBootstrapTaskPlanSources: DocumentRevisionSourceCapture[] | null = null;
         let nativeBootstrapPlanningSources: DocumentRevisionSourceCapture[] | null = null;
         let nativeBootstrapAncestorSources: NativeTaskSourceCapture[] | null = null;
+        const nativeBootstrapInteractionSources: Array<Extract<NativePayloadSourceInput, { kind: "interaction" }>> = [];
         let nativeRunnerInstanceId: string | null = null;
         if (nativeRuntimeResolution.kind === "native") {
           if (!issueRef) {
@@ -23564,6 +23566,7 @@ export function heartbeatService(
                     agentId: agent.id,
                   },
                   contextSnapshot: context,
+                  onSourceCapture: (source) => { nativeBootstrapInteractionSources.push(source); },
                 })
               : await materializeNativeInteractionResponses({
                   db,
@@ -23583,6 +23586,7 @@ export function heartbeatService(
                     : interactionId
                       ? [interactionId]
                       : [],
+                  onSourceCapture: (source) => { nativeBootstrapInteractionSources.push(source); },
                 });
             const runnerAdapterConfig = parseObject(agent.adapterConfig);
             const managedProfile =
@@ -23904,6 +23908,7 @@ export function heartbeatService(
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapInlineWakeCommentSources: inlineWakeCommentSourceCaptures }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapWakeCommentSources }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapContinuationCommentSources: continuationCommentSources }),
+                  ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapInteractionSources }),
                   nativeExecutionInput:
                     lockedProfile.nativeExecutionInput ?? nativeExecution,
                   nativeToolContractFingerprint:

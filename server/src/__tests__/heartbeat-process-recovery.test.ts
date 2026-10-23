@@ -16,6 +16,7 @@ import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
 import { and, eq, or, inArray, sql } from "drizzle-orm";
+import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import {
   afterAll,
   afterEach,
@@ -2722,6 +2723,8 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
           options: [{ id: "continue", label: "Continue", freeText: true }] }] },
         result: { version: 1, answers: [{ questionId: "direction", optionIds: ["continue"], otherText: answerText }] },
       }).returning();
+      const [questionVersion] = await db.select({ version: sql<string>`extract(epoch from ${issueThreadInteractions.updatedAt})::text` })
+        .from(issueThreadInteractions).where(eq(issueThreadInteractions.id, question!.id));
       const deletedBody = "Deleted continuation body must stay absent";
       await db.insert(issueComments).values({ companyId: plan.document.companyId, issueId,
         body: deletedBody, authorUserId: "responsible-user", deletedAt: new Date() });
@@ -2775,6 +2778,11 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
               answers: [{ questionId: "direction", optionIds: ["continue"], otherText: deliveredAnswer }],
             } },
           }] });
+          const input = profile.nativeExecutionInput as { interactionResponses: unknown[] };
+          expect(profile.nativeBootstrapInteractionSources).toEqual([{
+            kind: "interaction", issueId, interactionId: question!.id, sourceVersion: questionVersion!.version,
+            contentHash: nativeSha256(input.interactionResponses[0]),
+          }]);
           expect(JSON.stringify(profile.nativeExecutionInput)).not.toContain(deletedBody);
           expect(JSON.stringify(profile.nativeExecutionInput)).toContain(deliveredBody);
           if (redactSecret) expect(JSON.stringify(profile.nativeExecutionInput)).not.toContain(registeredSecret);
@@ -2784,6 +2792,8 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
           await documentService(db).upsertIssueDocument({ issueId, key: "plan", format: "markdown", body: "Later plan revision",
             baseRevisionId: plan.document.latestRevisionId });
           await db.update(issueComments).set({ body: "Later inline comment body", updatedAt: new Date() }).where(eq(issueComments.id, comment!.id));
+          await db.update(issueThreadInteractions).set({ title: "Later question title", updatedAt: new Date() })
+            .where(eq(issueThreadInteractions.id, question!.id));
           const [after] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, id));
           expect(after!.runnerProfileJson).toEqual(retained);
           await heartbeat.cancelRun(id);

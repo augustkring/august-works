@@ -9,6 +9,7 @@ import {
   asc,
   desc,
   eq,
+  getTableColumns,
   inArray,
   isNotNull,
   isNull,
@@ -2981,10 +2982,17 @@ export function issueThreadInteractionService(
         woken,
       };
     },
-    listForIssue: async (issueId: string) => {
+    listForIssue: async (issueId: string, options?: {
+      onSourceVersionSelected?: (interactionId: string, sourceVersion: string) => void;
+    }) => {
       const [rows, issueStatus] = await Promise.all([
         db
-          .select()
+          .select({
+            ...getTableColumns(issueThreadInteractions),
+            ...(options?.onSourceVersionSelected ? {
+              selectedSourceVersion: sql<string>`extract(epoch from ${issueThreadInteractions.updatedAt})::text`,
+            } : {}),
+          })
           .from(issueThreadInteractions)
           .where(eq(issueThreadInteractions.issueId, issueId))
           .orderBy(
@@ -2998,8 +3006,11 @@ export function issueThreadInteractionService(
           .then((issueRows) => issueRows[0]?.status ?? null),
       ]);
 
-      return rows.map((row) =>
-        hydrateInteraction(
+      return rows.map(({ selectedSourceVersion, ...row }) => {
+        if (typeof selectedSourceVersion === "string") {
+          options?.onSourceVersionSelected?.(row.id, selectedSourceVersion);
+        }
+        return hydrateInteraction(
           issueStatus &&
             isTerminalIssueStatus(issueStatus) &&
             row.status === "pending"
@@ -3010,8 +3021,8 @@ export function issueThreadInteractionService(
                 resolvedAt: row.updatedAt,
               }
             : row,
-        ),
-      );
+        );
+      });
     },
 
     getById: async (interactionId: string) => {

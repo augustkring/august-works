@@ -65,7 +65,11 @@ import { questionResponseDeliveryValues } from "../question-response-delivery.js
 import { resolveExternalChatQuestionResponse } from "./external-chat-question-response.js";
 import { materializeExternalChatQuestionResponseInput } from "./external-chat-question-response-input.js";
 import * as nativeInteractionBridge from "./native-interaction-bridge.js";
-import type { AskUserQuestionsInteraction } from "@paperclipai/shared";
+import { nativeSha256 } from "./canonical.js";
+import type {
+  AskUserQuestionsInteraction,
+  NativePayloadSourceInput,
+} from "@paperclipai/shared";
 import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
 import { createLocalDiskStorageProvider } from "../../storage/local-disk-provider.js";
 import { createStorageService } from "../../storage/service.js";
@@ -1903,6 +1907,19 @@ describe("native external-chat response wait", () => {
     const { fixture, parents } = await seedSequentialQuestionChain();
     await attestAnswer(fixture);
     const parent = parents[0]!;
+    const sourceVersions = new Map(
+      (await db
+        .select({
+          id: issueThreadInteractions.id,
+          sourceVersion: sql<string>`extract(epoch from ${issueThreadInteractions.updatedAt})::text`,
+        })
+        .from(issueThreadInteractions)
+        .where(eq(issueThreadInteractions.issueId, fixture.issueId)))
+        .map((row) => [row.id, row.sourceVersion]),
+    );
+    const sourceCaptures: Array<
+      Extract<NativePayloadSourceInput, { kind: "interaction" }>
+    > = [];
     let reached!: () => void;
     let release!: () => void;
     const ready = new Promise<void>((resolve) => {
@@ -1916,14 +1933,16 @@ describe("native external-chat response wait", () => {
     const spy = vi
       .spyOn(nativeInteractionBridge, "materializeNativeInteractionResponses")
       .mockImplementationOnce(async (input) => {
+        const responses = await original(input);
         reached();
         await released;
-        return original(input);
+        return responses;
       });
     const prompt = materializeExternalChatQuestionResponseInput({
       db,
       binding: fixture,
       contextSnapshot: fixture.context,
+      onSourceCapture: (source) => sourceCaptures.push(source),
     });
     let mutation: Promise<void> | null = null;
     let mutationPid = 0;
@@ -1973,22 +1992,43 @@ describe("native external-chat response wait", () => {
         );
         expect(waiting!.waiting).toBe(true);
       });
+      expect(sourceCaptures).toEqual([]);
       release();
       const captured = await prompt;
       await mutation;
+      expect(sourceCaptures).toHaveLength(captured.length);
+      expect(new Set(sourceCaptures.map((source) => source.interactionId)).size).toBe(
+        captured.length,
+      );
+      for (const response of captured) {
+        expect(response).not.toHaveProperty("selectedSourceVersion");
+        const source = sourceCaptures.find(
+          (candidate) => candidate.interactionId === response.interactionId,
+        );
+        expect(source).toEqual({
+          kind: "interaction",
+          issueId: fixture.issueId,
+          interactionId: response.interactionId,
+          sourceVersion: sourceVersions.get(response.interactionId),
+          contentHash: nativeSha256(response),
+        });
+      }
       expect(captured.map((response) => response.interactionId)).toEqual([
         parent.interactionId,
         fixture.interactionId,
       ]);
       expect(JSON.stringify(captured)).toContain("Cobalt");
       expect(JSON.stringify(captured)).not.toContain("Amber");
+      const capturesBeforeDeniedRetry = sourceCaptures.slice();
       await expect(
         materializeExternalChatQuestionResponseInput({
           db,
           binding: fixture,
           contextSnapshot: fixture.context,
+          onSourceCapture: (source) => sourceCaptures.push(source),
         }),
       ).rejects.toThrow("reviewed_chat_execution_binding_not_authorized");
+      expect(sourceCaptures).toEqual(capturesBeforeDeniedRetry);
     } finally {
       release();
       await Promise.allSettled([prompt, ...(mutation ? [mutation] : [])]);

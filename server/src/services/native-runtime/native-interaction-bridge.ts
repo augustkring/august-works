@@ -13,7 +13,7 @@ import {
   statusDecisions,
   workAssessments,
 } from "@paperclipai/db";
-import { getAgentWorkEligibility } from "@paperclipai/shared";
+import { getAgentWorkEligibility, type NativePayloadSourceInput } from "@paperclipai/shared";
 import { issueThreadInteractionService } from "../issue-thread-interactions.js";
 import { commitNativeStatusDecision } from "./status-decision-committer.js";
 import { nativeSha256 } from "./canonical.js";
@@ -159,11 +159,15 @@ export async function materializeNativeInteractionResponses(input: {
   runId: string;
   agentId: string;
   interactionIds: string[];
+  onSourceCapture?: (source: Extract<NativePayloadSourceInput, { kind: "interaction" }>) => void;
 }): Promise<NativeInteractionResponseEnvelope[]> {
   const requestedIds = new Set(input.interactionIds.filter(Boolean));
   if (requestedIds.size === 0) return [];
+  const selectedVersions = new Map<string, string>();
   const [interactions, issue] = await Promise.all([
-    issueThreadInteractionService(input.db).listForIssue(input.issueId),
+    issueThreadInteractionService(input.db).listForIssue(input.issueId, input.onSourceCapture ? {
+      onSourceVersionSelected: (id, version) => { selectedVersions.set(id, version); },
+    } : undefined),
     input.db.select({ status: issues.status }).from(issues).where(and(
       eq(issues.id, input.issueId),
       eq(issues.companyId, input.companyId),
@@ -405,11 +409,22 @@ export async function materializeNativeInteractionResponses(input: {
   }
   // Redact before constructing native input, including formatted answers and
   // the legacy question projection, without changing stored resolution proof.
-  return createRunSecretRedactionRegistry(input.db).redactForIssue(
+  const redacted = await createRunSecretRedactionRegistry(input.db).redactForIssue(
     input.companyId,
     input.issueId,
     responses.sort((left, right) => left.interactionId.localeCompare(right.interactionId)),
   );
+  if (input.onSourceCapture) {
+    for (const response of redacted) {
+      const sourceVersion = selectedVersions.get(response.interactionId);
+      if (!sourceVersion) throw new NativeInteractionBridgeError(
+        "native_interaction_source_missing", "Selected interaction version is unavailable",
+      );
+      input.onSourceCapture({ kind: "interaction", issueId: input.issueId,
+        interactionId: response.interactionId, sourceVersion, contentHash: nativeSha256(response) });
+    }
+  }
+  return redacted;
 }
 
 export type LegacyQuestionResponseWakeProjection = {
