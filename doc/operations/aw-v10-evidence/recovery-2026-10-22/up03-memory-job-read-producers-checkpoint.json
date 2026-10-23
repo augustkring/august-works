@@ -1,0 +1,58 @@
+{
+  "recordedAt": "2026-10-23T00:24:47.050014+00:00",
+  "scope": "Test-only actual native producer and current-authority qualification of previously committed original MemoryJob read owner. No production changes.",
+  "productionCheckpoint": "b3707d9902d2cdec47d5b4be1034cac2c3f6ef1d",
+  "session": 6479,
+  "exitCode": 0,
+  "testFilesPassed": 1,
+  "testsPassed": 9,
+  "durationSeconds": 83.42,
+  "testSeconds": 28.61,
+  "command": "source /workspace/v10-preparation/env.sh; GOMEMLIMIT=1GiB GOMAXPROCS=2 NODE_OPTIONS=--max-old-space-size=2048 node node_modules/vitest/vitest.mjs run server/src/__tests__/memory-job-read-authority.integration.test.ts --maxWorkers=1",
+  "fixture": "Actual embedded PostgreSQL, original full migration set through0508, pool maximum3, original native producers and leased Memory worker; disposable cluster cleanup completed and process absence checked after actual exit.",
+  "sourceVerification": "All17 upfront pins verified exact unchanged after actual exit. Root87563 LIGHT1 was the only other native importer; no heavy active. Source/runtime holds released only after actual exit.",
+  "sourceSha256": {
+    "server/src/__tests__/memory-job-read-authority.integration.test.ts": "28ffa8a44b6108ae93646f8f3bbb0c014cecdeba89db449f21cfc48a17170dd7",
+    "server/src/services/memory/memory-jobs.ts": "5289bb0614c8346660575d2ae7d40f0c2a2e4c0f7b257ad22f6893fe04abd22e",
+    "server/src/services/memory/derived-memory.ts": "fba3b81f80d0917c3989e1ed32ee17dd7b2b14772bec5ad143b8b1287bcdd2f7",
+    "server/src/services/memory/memory-maintenance.ts": "0991d062c6ced13ef1e95741db49552d129756c95ec23d1adcd3082ce6253498",
+    "server/src/services/memory/memory-post-run-extraction.ts": "bf48704f3b03c85f8ca8244153a485c2667ec742924167d30cd550ac180155f5",
+    "server/src/services/memory/memory-service.ts": "94c0a50d3068747641d18fd2a561ef5c9fe59a3f26930dfa03df9df1a0a75938",
+    "server/src/services/memory/memory-privacy.ts": "3515861aa9ad55a09b979bf77d26de00017ea92b61bcacd2b7ab774d15882470",
+    "server/src/services/memory/cognitive-memory.ts": "30ad908a601f62c69c801f12ed76fcd1fccb008c49da86e40b183273e2b83c3e",
+    "server/src/services/experience/memory-maintenance-history.ts": "55152870a519e1ffba0db548caf74e2786c7c25c42a19d3345fd3a45aa9b1e7c",
+    "server/src/routes/memory.ts": "312e5568023b8b091edd11f41e0cabea55474aba3ec465327e9a539e77fdb086",
+    "server/src/services/authorization.ts": "984fba3faeeed57b8daeab457bebeccce0f78b7be8a56f8db3399f179419f774",
+    "server/src/services/analytical-context-authority.ts": "4de35b517fdb14dbd9d4fda5974c335c9c06c1161689383f09735c1522f90502",
+    "server/src/services/analytical-reader.ts": "510590d7a1043b5feebe14f4e3b838025fdbb40d70e3c099077f4c277ffcdc06",
+    "server/src/services/context/context-manifest.ts": "429c9f292664d941d2a00e6e19c643b831f7979aebdd80f3483e3f32702b8cf8",
+    "server/src/services/learning/learning-analytical-sources.ts": "9d6b79adf487027c26b2a597139cb8fbcee7dd0994c11742e9cd8eb74b916783",
+    "packages/db/src/migrations/0507_lethal_star_brand.sql": "73e67a785c0f4c82e600e082ebbf4747cbf6c3e2cceb12d1b2051985f958cd47",
+    "packages/db/src/migrations/0508_deep_black_cat.sql": "9687be3d6e5624d267740293992965cc8ef5dea08b052b4319fefe67d66bcd70"
+  },
+  "originalFourCaseProof": {
+    "commit": "b3707d9902d2cdec47d5b4be1034cac2c3f6ef1d",
+    "receipt": "up03-memory-job-read-checkpoint.json",
+    "exactFixtureSha256": "59c47609e19ac845d01a68711dbd4145e99b86ae78d05872027d9feb10f44571",
+    "backup": "/workspace/v10-preparation/up03-memory-job-read-qualified-four-case.test.ts",
+    "meaning": "Original4PASS17348 and all earlier failures remain preserved. Current expanded fixture adds feature flags/new helpers and five scenarios; original four assertions retained and rerun."
+  },
+  "newCases": [
+    "Actual public native Task/run + actual private Memory create/share/Human-review + original Context selection. Original enqueuePostRunCapture and leased worker persist one candidate. Actual source Human Alice reads queued/succeeded job; Bob current administrator cannot. Mismatched persisted run source denies.",
+    "Original createModel -> rebuildModel queued job -> leased worker success with actual model version2/watermark. Alice allowed, Bob denied before/after. Controlled persisted result mutations missing/foreign modelUUID, stale version/watermark, unknown field deny. Controlled source modelUUID missing/foreign plus matching native jobKey denies; restored original allows; changed actual source version denies.",
+    "Original compaction worker over two actual accepted public Memory rows produces real proposed Memory. Current Bob administrator initially reads job. Actual forget of proposed result denies both readers although original input sourceRef remains intact.",
+    "Every root required: public + private native index inputs deny Bob. Unknown/malformed metadata, missing version population, missing/foreign actual root IDs and invalid UUID deny. Original retention policy + due-retention producer + leased worker actually expires payload; aggregate retention job stays hidden before/after because complete readable sources are not enumerated.",
+    "Positive current manager proof before actual Memory advisory lock wait. pg_blocking_pids confirms real waiting reader; demotion during wait yields HTTP403 without old jobUUID. Restoring manager admits; actual authUsers deletion while membership remains denies."
+  ],
+  "limits": [
+    "Persisted nativeResult semantic envelope is an explicit software enqueue/extractor fixture, not native Runner/provider acceptance or host qualification. Privacy authority comes from actual persisted Task/run/Human and original Context/Memory source owners; no metadata permission grant.",
+    "Negative mutations are deliberate faults in actual disposable PostgreSQL persisted source/result rows, not claims that an external API permits those writes.",
+    "This A suite does not independently qualify reflection (separate B native reflection positive exists), mutating dedupe post-effect history, all erasure job families, missing historical source reconstruction, universal native dispatch receipts or mixed-writer/rollback admission.",
+    "No new production fix, current whole-workspace typecheck, provider/host proof or completeV10 claim follows from this test-only checkpoint.",
+    "Existing cooperative5s review deadline does not cancel an already-running bounded original Memory/analytical helper; prior receipt limits remain."
+  ],
+  "artifactsSha256": {
+    "up03-memory-job-read-producers-current.log": "6e438f5f8bb314eec9cc47494bd991393e9b9be28774d2bfaa515e200cbb7f3d",
+    "up03-memory-job-read-producers-current-before.sha256": "535431a3ae03d60440bbd01c61355514ca944a19e10d30852d7d9679e8167d68"
+  }
+}
