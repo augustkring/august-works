@@ -1,0 +1,33 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v10-private-live-events.integration.test.ts (12 tests | 3 failed | 9 skipped) 12176ms
+     × ends a session deleted during an actual native source-lock wait before sending 262ms
+     × ends a session expired during an actual native source-lock wait before sending 36ms
+     × ends a session replaced during an actual native source-lock wait before sending 223ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-live-events.integration.test.ts > Private source identities at native live delivery > ends a session deleted during an actual native source-lock wait before sending
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-live-events.integration.test.ts > Private source identities at native live delivery > ends a session expired during an actual native source-lock wait before sending
+ FAIL  |@paperclipai/server| src/__tests__/v10-private-live-events.integration.test.ts > Private source identities at native live delivery > ends a session replaced during an actual native source-lock wait before sending
+AssertionError: expected null not to be null
+ ❯ src/__tests__/v10-private-live-events.integration.test.ts:125:21
+    123|     // fixture qualifies its actual source read, not accepted extracti…
+    124|     const job = await memoryJobService(db).enqueuePostRunCapture(run!);
+    125|     expect(job).not.toBeNull();
+       |                     ^
+    126|     expect(await canActorReadMemoryJob(db, companyId, actor(readerId),…
+    127|     const http = createServer(), wss = setupLiveEventsWebSocketServer(…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  3 failed | 9 skipped (12)
+   Start at  00:06:35
+   Duration  54.50s (transform 29.34s, setup 204ms, import 41.56s, tests 12.18s, environment 0ms)
+

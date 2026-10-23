@@ -1,8 +1,9 @@
 import { createHash } from "node:crypto";
 import type { IncomingMessage, Server as HttpServer } from "node:http";
 import { createRequire } from "node:module";
+import { isDeepStrictEqual } from "node:util";
 import type { Duplex } from "node:stream";
-import { and, eq, gt, isNull, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { agentApiKeys, authSessions, authUsers, companyMemberships, instanceUserRoles } from "@paperclipai/db";
 import type { AwDeploymentProfile, DeploymentMode } from "@paperclipai/shared";
@@ -167,7 +168,7 @@ async function authorizeUpgrade(
           companyId,
           actorType: "board",
           actorId: cloudActor.userId,
-          actor: { type: "board", userId: cloudActor.userId, source: "cloud_tenant", companyIds: cloudActor.companyIds },
+          actor: { type: "board", userId: cloudActor.userId, source: "cloud_tenant", companyIds: [...new Set(cloudActor.companyIds)].sort() },
         };
       }
     }
@@ -185,11 +186,11 @@ async function authorizeUpgrade(
     const [access] = await db.select({
       sessionId: authSessions.id,
       companyIds: sql<string[]>`array(select m.company_id::text from ${companyMemberships} m
-        where m.principal_type='user' and m.principal_id=${userId} and m.status='active')`,
+        where m.principal_type='user' and m.principal_id=${userId} and m.status='active' order by m.company_id)`,
       isInstanceAdmin: opts.deploymentProfile === "saas" ? sql<boolean>`false`
         : sql<boolean>`exists(select 1 from ${instanceUserRoles} r where r.user_id=${userId} and r.role='instance_admin')`,
     }).from(authSessions).innerJoin(authUsers,eq(authUsers.id,authSessions.userId)).where(and(
-      eq(authSessions.id,session.session.id),eq(authSessions.userId,userId),gt(authSessions.expiresAt,new Date()),
+      eq(authSessions.id,session.session.id),eq(authSessions.userId,userId),sql`${authSessions.expiresAt}>clock_timestamp()`,
     )).limit(1);
     if (!access || (!access.isInstanceAdmin && !access.companyIds.includes(companyId))) return null;
 
@@ -212,16 +213,19 @@ async function authorizeUpgrade(
     return null;
   }
 
-  await db
+  const [currentKey] = await db
     .update(agentApiKeys)
     .set({ lastUsedAt: new Date() })
-    .where(eq(agentApiKeys.id, key.id));
+    .where(and(eq(agentApiKeys.id, key.id), eq(agentApiKeys.companyId, companyId),
+      eq(agentApiKeys.keyHash, tokenHash), isNull(agentApiKeys.revokedAt)))
+    .returning();
+  if (!currentKey) return null;
 
   return {
     companyId,
     actorType: "agent",
-    actorId: key.agentId,
-    actor: { type: "agent", source: "agent_key", agentId: key.agentId, companyId: key.companyId, keyId: key.id, keyScope: key.scopeConfig, onBehalfOfUserId: key.responsibleUserId },
+    actorId: currentKey.agentId,
+    actor: { type: "agent", source: "agent_key", agentId: currentKey.agentId, companyId: currentKey.companyId, keyId: currentKey.id, keyScope: currentKey.scopeConfig, onBehalfOfUserId: currentKey.responsibleUserId },
   };
 }
 
@@ -283,7 +287,15 @@ export function setupLiveEventsWebSocketServer(
           return;
         }
         const admitted = await analyticalLiveEventForReader(db, event, current.actor);
-        if (admitted && socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(admitted));
+        if (!admitted || socket.readyState !== WebSocket.OPEN) return;
+        // Source review may wait on native locks. The credential and effective
+        // actor used by that review must still be current before bytes leave.
+        const final = await authorizeUpgrade(db, req, context.companyId, new URL(req.url!, "http://localhost"), opts);
+        if (!final || !isDeepStrictEqual(final.actor, current.actor)) {
+          socket.close(1008, "live access changed");
+          return;
+        }
+        if (socket.readyState === WebSocket.OPEN) socket.send(JSON.stringify(admitted));
       }).catch((err) => {
         logger.warn({ err, companyId: context.companyId }, "live event admission failed");
         socket.close(1011, "live admission unavailable");
