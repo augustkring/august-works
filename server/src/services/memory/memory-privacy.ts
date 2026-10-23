@@ -357,7 +357,7 @@ export async function purgeMemoryRecords(db: Db, companyId: string, rootIds: str
   }
   await db.delete(memoryEvidence).where(and(eq(memoryEvidence.companyId, companyId), inArray(memoryEvidence.memoryRecordId, [...ids])));
   await db.update(memoryRecords).set({ content: "", title: null, summary: null, subjectType: null, subjectId: null,
-    metadata: {}, deletedAt: now, updatedAt: now, retentionState: "expired", reviewState: "rejected",
+    metadata: {}, payloadSourceSnapshot: null, deletedAt: now, updatedAt: now, retentionState: "expired", reviewState: "rejected",
     revokedAt: null, revokedByActorType: null, revokedByActorId: null, revocationReason: null,
   }).where(and(eq(memoryRecords.companyId, companyId), inArray(memoryRecords.id, [...ids])));
   await db.update(memoryJobs).set({ sourceRefJson: {}, resultJson: null, resultSummary: null, error: null,

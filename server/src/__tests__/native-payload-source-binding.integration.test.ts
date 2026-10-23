@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { assets, companies, createDb, documentRevisions, documents, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
@@ -6,6 +7,7 @@ import { assets, companies, createDb, documentRevisions, documents, EMBEDDED_POS
 import type { NativePayloadSourceSnapshot } from "@paperclipai/shared";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { issueService } from "../services/issues.js";
+import { purgeMemoryRecords } from "../services/memory/memory-privacy.js";
 
 describe("Native payload source snapshot binds its original payload owner", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>, companyId: string;
@@ -43,6 +45,16 @@ describe("Native payload source snapshot binds its original payload owner", () =
             'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as content
       ) actual_body
     ) where target.id=${id}::uuid`);
+  }
+
+  async function memorySnapshotWithoutIssueSources(id: string, dbOrTx = db) {
+    const [forged] = await dbOrTx.execute<{ snapshot: NativePayloadSourceSnapshot }>(sql`select
+      content || jsonb_build_object('digest',encode(sha256(convert_to(content::text,'UTF8')),'hex')) as snapshot
+      from (select (m.payload_source_snapshot - 'digest') || jsonb_build_object('owner',
+        (m.payload_source_snapshot->'owner') || jsonb_build_object('contentHash',
+          public.aw_native_payload_body_hash('memory_record',to_jsonb(m) || '{"source_issue_ids":[]}'::jsonb))) as content
+        from memory_records m where m.company_id=${companyId}::uuid and m.id=${id}::uuid) candidate`);
+    return forged!.snapshot;
   }
 
   it("keeps pre-protocol payloads unknown and refuses an in-place upgrade", async () => {
@@ -143,6 +155,66 @@ describe("Native payload source snapshot binds its original payload owner", () =
       expect(untouched!.payloadSourceSnapshot).not.toBeNull();
       expect(untouched!.payloadSourceSnapshotInvalidated).toBe(false);
     }
+  });
+
+  it("erases a captured Memory without depending on an evidence-row invalidation", async () => {
+    const [binding] = await db.insert(memoryBindings).values({ companyId, key: randomUUID(), name: "Erasure binding", providerKey: "local" }).returning();
+    const [memory] = await db.insert(memoryRecords).values({ companyId, bindingId: binding!.id, providerKey: "local", memoryType: "lesson",
+      scopeType: "company", title: "Captured private title", content: "Captured private memory", metadata: { private: "content" },
+      observedAt: new Date(), createdByActorType: "system", createdByActorId: "test", payloadSourceProtocolVersion: 1 }).returning();
+    await bindOwner("memory_records", "memory_record", memory!.id);
+    await db.transaction(async tx => {
+      await purgeMemoryRecords(tx as unknown as typeof db, companyId, [memory!.id]);
+    });
+    const [erased] = await db.select().from(memoryRecords).where(eq(memoryRecords.id, memory!.id));
+    expect(erased).toMatchObject({ content: "", title: null, summary: null, metadata: {}, retentionState: "expired",
+      payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: true });
+    expect(erased!.deletedAt).toBeInstanceOf(Date);
+    await expect(bindOwner("memory_records", "memory_record", memory!.id)).rejects.toMatchObject({ cause: { code: "23514" } });
+  });
+
+  it("validates Memory captures after its retained source arrays have been restored", async () => {
+    const source = await insert(0);
+    const [binding] = await db.insert(memoryBindings).values({ companyId, key: randomUUID(), name: "Retained source binding", providerKey: "local" }).returning();
+    const [memory] = await db.insert(memoryRecords).values({ companyId, bindingId: binding!.id, providerKey: "local", memoryType: "lesson",
+      scopeType: "company", content: "Retained source content", sourceIssueIds: [source.id], observedAt: new Date(),
+      createdByActorType: "system", createdByActorId: "test", payloadSourceProtocolVersion: 1 }).returning();
+    await bindOwner("memory_records", "memory_record", memory!.id);
+    // This digest binds the attempted removal, before the retention trigger
+    // restores the old source. It must never bind the final stored row.
+    const forged = await memorySnapshotWithoutIssueSources(memory!.id);
+    await expect(db.update(memoryRecords).set({ sourceIssueIds: [], payloadSourceSnapshot: forged })
+      .where(eq(memoryRecords.id, memory!.id))).rejects.toMatchObject({ cause: { code: "23514" } });
+    const [retained] = await db.select().from(memoryRecords).where(eq(memoryRecords.id, memory!.id));
+    expect(retained!.sourceIssueIds).toEqual([source.id]);
+    expect(retained!.payloadSourceSnapshot!.owner.contentHash).not.toBe(forged.owner.contentHash);
+  });
+
+  it("invalidates an inconsistent Memory capture left by the old trigger order during migration", async () => {
+    const source = await insert(0);
+    const [binding] = await db.insert(memoryBindings).values({ companyId, key: randomUUID(), name: "Upgrade source binding", providerKey: "local" }).returning();
+    const [memory] = await db.insert(memoryRecords).values({ companyId, bindingId: binding!.id, providerKey: "local", memoryType: "lesson",
+      scopeType: "company", content: "Original retained content", sourceIssueIds: [source.id], observedAt: new Date(),
+      createdByActorType: "system", createdByActorId: "test", payloadSourceProtocolVersion: 1 }).returning();
+    await bindOwner("memory_records", "memory_record", memory!.id);
+    const migration = await readFile(new URL("../../../packages/db/src/migrations/0516_memory_payload_binding_order.sql", import.meta.url), "utf8");
+    // Reproduce the old write ordering and run the actual upgrade in one
+    // transaction, so failure cannot leave the test database's triggers moved.
+    await db.transaction(async tx => {
+      await tx.execute(sql`alter trigger zz_memory_records_payload_source_binding on memory_records rename to memory_records_payload_source_binding`);
+      const forged = await memorySnapshotWithoutIssueSources(memory!.id, tx as unknown as typeof db);
+      await tx.update(memoryRecords).set({ sourceIssueIds: [], payloadSourceSnapshot: forged }).where(eq(memoryRecords.id, memory!.id));
+      const [inconsistent] = await tx.execute<{ invalid: boolean }>(sql`select
+        (m.payload_source_snapshot #>> '{owner,contentHash}') is distinct from
+        public.aw_native_payload_body_hash('memory_record',to_jsonb(m)) as invalid
+        from memory_records m where m.id=${memory!.id}::uuid`);
+      expect(inconsistent!.invalid).toBe(true);
+      for (const statement of migration.split("--> statement-breakpoint")) await tx.execute(sql.raw(statement));
+      const [repaired] = await tx.select().from(memoryRecords).where(eq(memoryRecords.id, memory!.id));
+      expect(repaired).toMatchObject({ content: "Original retained content", sourceIssueIds: [source.id],
+        payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: true });
+    });
+    await expect(bindOwner("memory_records", "memory_record", memory!.id)).rejects.toMatchObject({ cause: { code: "23514" } });
   });
 
   it("rejects rebinding after an existing snapshot was explicitly invalidated to unknown", async () => {
