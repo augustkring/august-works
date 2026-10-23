@@ -1,0 +1,109 @@
+# Blentera V10 native payload source contract
+
+Source-only implementation proposal. Existing native Task/private Memory regression remains open; this document supplies no implementation or release qualification.
+
+Native captured-input / dispatch source contract refinement — 2026-10-23
+STATUS: READ-ONLY DESIGN. No production/schema/test changes, migration or check launched. Extends up03-native-payload-receipt-design.txt. Existing Task/private-Memory RED remains open; source tracing is not GREEN qualification.
+
+1. Actual delivered input owners and existing proof
+
+A. Task/bootstrap prompt: heartbeat.ts buildPaperclipTaskMarkdown (8526), taskMarkdownInput (20860), native constructor (23578), and nativeExecutionInput persistence (23773).
+- Task id/title/description/work mode, up to6 ancestors, sanitized current wake comment(s), interactions/accepted-plan routing, exact plan document/revision/body, continuation summary, and conversation replay can enter task text.
+- getIssueExecutionContext/current body and ancestors are live DB reads; rendered string alone does not retain their body versions or captured payload roots.
+- conversationReplay in agent-conversations.ts356 selects up to40 exact current nondeleted comment rows, then returns only author/body strings (8000 chars each). Preserve row IDs/version/body hashes BEFORE render discards them.
+- Inline wake snapshots retain comment IDs/createdAt and attachment descriptors, but not a complete current body-version/content-root receipt. Metadata/sourceTrust affect trust presentation, not permission provenance.
+- Questions/answer chains and plan/review bodies are separate persisted interaction/revision sources; include actual returned source revision/result digest. Do not infer them from model text.
+
+B. Governed Context: context/context-runtime.ts assembleFreshNativeGovernedContext invokes Context engine then returns ONLY markdown. Its actual manifest exists in DB but the return value discards manifest identity.
+- Change the original internal return contract, when implemented, to carry the actual created manifest reference together with markdown. No search for latest Context by timestamp and no parsing rendered citations as authority.
+- context-manifest.ts already pins selected native Task version under SHARE, checks exact updatedAt vs sourceVersion, stores contentHash (title+excerpt), and pins Memory roots/current versions. It does NOT snapshot the selected Task body's then-current payload dependency closure.
+- Selected Task sourceVersion/contentHash identifies the captured rendition; future Task edits must not silently replace that rendition's dependency roots. Current Task ACL remains independently revocable.
+
+C. V5 execution inventory: agent-runtime-fabric.ts prepare + execution_manifests schema.
+- Existing manifest pins actual Context refs, Skill/version, Playbook/revision, RolePack/version, capabilities, provider/policy, Agent identity and responsible Human.
+- It has no universal Task/body/ancestor/comment/attachment/plan receipt. Fabric can returnnull with featureoff; cannot make this optional feature the mandatory privacy proof without explicitly changing that product contract.
+- Manifest is once-per-run. Re-prepare creates fresh Context/authorization rows while reusing stored manifest. Do not assume stored manifest.contextManifests equals every subsequently delivered input.
+- Existing learned pin retention adds Memory roots to actual local Context and retains learned assets. Reuse this authority owner; version pins/catalog eligibility are not payload grants.
+
+D. Instruction/Skill/Playbook/Knowledge/Memory assets: native-runtime/runtime-context.ts341/372/420.
+- NativeRuntimeContext includes prompt digest, instructions content-addressed bundle, selected Skill version+bundle and aggregateDigest.
+- materializeInstructionBundle appends authored Playbook bodies, selected approved Knowledge revision bodies and approved work-preference Memory bodies into the instruction entry file.
+- buildRetainedNativeRuntimeContext stamps actual authored Memory Context roots, selected Knowledge version/body hashes, Playbook revision/body hashes, and authored definition hash BEFORE materialization, even without V5 fabric.
+- Keep exact asset digest/version refs and these original source roots in the input receipt; a SHA proves bytes, not current permission. Current authored/learned source checks remain required.
+- Eager skills use resolved actual versions; on-demand loadSkill/loadPlaybook are additional later actual reads. On-demand pins must retain original source dependencies before returning body, not merely claim that catalog selection equals loaded bytes.
+
+E. Attachments after persistence: native-session-executor.ts7210/7230 calls stageNativeRunnerWakeAttachments and appends stagedPrompt to a NEW parsed execution.task.prompt before executePaperclipNativeSessionWithinScope.
+- Therefore runnerProfileJson.nativeExecutionInput is NOT the final complete provider prompt.
+- native-runner-file-handoff.ts803/929 reads actual tenant Task/attachment/comment/asset binding; readBoundedStorageObject verifies asset byteSize+sha256 before staging bytes. Returned stage descriptors omit that verified SHA; internal receipt must retain it without adding wire authority or local paths.
+- Unavailable/remote-unsupported attachments are explicit omissions, not delivered payload. Include only actual descriptor/omission source policy plus verified bytes for successfully staged items; never substitute another file.
+- NativeChatAttachmentReadScope.read can later return historical exact conversation bytes, SHA and sourceCommentId/attachmentId after current authorization. Its process-local scope/lifetime is not durable provenance. Add native source stamping before body/path becomes available to provider; never persist temporary workspace paths.
+
+F. Paged comments and later tools: current-wake-comments.ts resolves exact comment-ID binding and bindingDigest, creates full snapshotDigest, and persists ordered page receipt in actual run.resultJson before response.
+- Last-page receipt is overwritten; full snapshotDigest and binding IDs can qualify the original snapshot, but are not a complete append-only history of every different later input snapshot.
+- Native tools that return Task/Memory/Foundation/procedure/connector content are additional inputs. Preserve their original existing audit/Context/retained-root owner; do not mark a run complete solely because its initial bootstrap was complete.
+- Tool catalog/management API reference/static prompt strings are source-free policy/configuration content only when original server owner proves that category; arbitrary tool response prose is not.
+
+2. Lifetime, steering and recovery
+
+- heartbeat23378 reuses persisted input; native-session-resume.ts267 deep-compares parsed existing input and refuses rewrite. Recovery must preserve original admitted bytes/receipt, not reassemble current Task data into old input.
+- run-identity.ts accepts acknowledged same-run Human steering and changes actual run Human/activeIdentityContext; it does not rewrite bootstrap input. Immutable input provenance records original accountable identity; current reader/effect principal must always be fresh actual Agent x Human. Steering is never private-source publication.
+- continuation-contract.ts can replace nativeExecutionInput only at fenced uncompleted contract CAS. No production caller found by complete symbol search. Treat as dormant exception requiring receipt preservation/digest CAS before activation; do not claim it is today's normal mutation path.
+- Warm session continuation can retain prior turns/transcript/workspace. A new run needs prior actual retained input source closure or bounded qualified prior-run receipt, not just matching session ID/provider/workspace. Unknown pre-protocol session cannot become source-free by restart/fresh input construction. Fresh protocol session vs retained prior history must be explicit admission.
+
+3. Smallest proposed native persistence contract (representation requires schema-owner review)
+
+- Reuse existing heartbeat runnerProfileJson.nativeExecutionInput for already persisted bytes; do not duplicate private prose into a new provenance table.
+- Add a closed SERVER-ONLY native-input source receipt on that ORIGINAL run owner (candidate runnerProfileJson.nativeInputSources). No new table, generic registry, actor DTO grant, public receipt or permission cache.
+- Bind company/run/Agent/Task, exact bootstrap input digest, actual final dispatch/staged-attachment digest, and original source identity/version/hash snapshots. Families are closed to the actual native inputs above: base Task + ancestors; comments/interactions; document revisions; asset/attachment/comment tuples; actual Context IDs; authored definition and Skill/Playbook/Knowledge revision+asset hashes; prior retained session inputs.
+- For each copied body source, retain its THEN-CURRENT PAYLOAD root closure and a separate CURRENT POLICY anchor. Bare Task UUID/updatedAt/hash cannot recover lost old dependencies. A body receipt's provenance version is not a grant and need not equal today's edited body when old immutable captured roots remain known; current ACL/erasure still narrows it.
+- Record before first provider transport. Post-bootstrap actual input reads append retained source sets through their ORIGINAL owners before returning data. Union only; no caller-declared completeness, no body/ID inference from metadata, no generic event collector that guesses what the model used.
+- Source snapshot capture must be after relevant source/run waits under existing BusinessEvent -> Memory -> source/privacy ordering, with current actual Human/Agent admission. Filesystem hashing/staging does not hold principal locks across I/O: retain verified hash, then final source revalidation+receipt commit before transport. Failures stop dispatch; cleanup stays with existing staging owner.
+- Run0506 source_context_provenance_qualified is INSERT-only/no false->true update. Distinguish protocol-capable writer admission at run INSERT from base-input receipt READY after actual assembly/staging. Child payload effects require BOTH a new-protocol run and complete ready receipt; a newly inserted protocol bit alone does not prove future or initial data already captured. Old runs stayfalse; old warm-session history remains unknown.
+- At a Task/Project/Memory effect, pin actual run SHARE and snapshot its current retained Context IDs plus exact ready base-input root closure inside SAME native effect transaction. Commit these exact payload dependencies with the effect, not after commit. Context append/steering must serialize on that actual row; current Human rechecked after final waits.
+- The earlier proposed Task/Project payload_context_manifest_ids is sufficient ONLY if every captured non-Context body dependency is flattened into equivalent original retained Context/root receipts. It cannot represent unretained comments/assets/procedure roots by itself. Stop at this representation boundary: do not silently omit unsupported source families or add a pointer to a MUTABLE latest-run receipt and call it an exact old snapshot. Copy the bounded exact root closure into the original child owner's retained source fields, or add only the missing closed original-owner payload field after review.
+- Native comments, documents and attachments created from a run likewise need creation-time source snapshots at their ORIGINAL writers. createdByRunId/originatingRunId alone cannot recover which earlier Context inputs existed at creation. Unknown historical/native-copy versions remain unqualified; current body hash is not a reconstruction algorithm.
+
+4. Original graph roles and temporal counterexamples
+
+- Extend only original authorization.ts bounded graph: distinct POLICY vs PAYLOAD nodes; exact source/company existence; complete cardinality/work budgets; active-path cycle detection. No second source engine.
+- Own producer run/Task are POLICY anchors: current private Task/conversation/project/parent/current Human restrictions apply, but do not expand their later body/current Contexts as an old payload dependency.
+- Actual captured base Task body + selected Task/Memory/Foundation roots are PAYLOAD snapshots. Expand only captured Context/root snapshots, never every future Context of source run or current Task body.
+- T0 public Task -> runR ready receipt with no Memory inputs -> M1. Later ContextC onR selectsM1: M1 stays readable to original current Agent/Human because M1's producer anchor is POLICY, not R's future ContextC. A new M2 created afterC retains actual M1 payload; M1 never gains C retroactively.
+- Duplicate/corroboration after selectingM1: keep existing resolver exact selected-target sourceVersion/locked-row receipt rule. Direct target self-edge can disappear only when no new payload/evidence/authority consequence is discarded. Indirect M1 -> Foundation -> Learning -> M1 still denies. No general ancestor cycle skip.
+- Old selected Task body whose current row later changes: retain old captured body roots; independently evaluate current Task privacy/parent/project/membership/erasure. Do not inject later body input roots and call a false cycle a security requirement.
+- Selecting the own Task is not permission to drop provenance: reuse its exact pinned body/version/root snapshot rather than a live self-payload edge; the own Task POLICY anchor remains. Exact same body snapshot can be deduplicated, while different/indirect payload cycles still deny.
+- Same canonical graph must filter SQL BEFORE count/list/search/facets/fuzzy fallback/limit. Async detail guard cannot close title/count leaks. Existing genuine Task/privateMemory RED must turn green with allowed original owner/Agent positive.
+
+5. Canonical Foundation permission / transaction lifetime
+
+- Canonical authority remains authorization.ts decide(action foundation:read, actual company resource, enforceResponsibleUserIntersection:true), including actual grant scope/key/trust/Agent x Human behavior. Do not replicate it as a membership-only SQL IAM predicate.
+- Normal owner/admin company membership alone is not a Foundation grant. Canonical local-implicit and nonSaaS instance-admin branches DO exist; document/preserve reviewed canonical semantics rather than falsely claim every decision needs direct grant. A Foundation allow never bypasses private Memory/Task roots or actual current accountable Human requirements.
+- withReadSources currently whitelists only issue:read/project:read; foundation:read presentlydenies there. Extend ONLY this original owner with same-company company-resource Foundation read, not arbitrary new actions.
+- Existing prepared membership/instance-role reads, findGrant, loadResponsibleUserSnapshot/loadAgent are fresh but not row-pinned. Pin ONLY actual positive native authority facts used by original Foundation decision (actual user/account, active membership, applicable Agent/run/key/grants/instance-role), on actual outer PgTransaction. NOWAIT is the existing proven option when native account/Agent revocation order can invert; busy denies/409, never permission grant or generic retry bypass. Review specific grant/key revocation order and test it.
+- Current issueReadSqlCondition/projectReadSqlCondition return SQL from autocommit callers and do not use db. Temporary internal TX followed by escaped SQL is INVALID. Actual SELECT/count/page execution must stay inside SAME canonical native read transaction/company callback. Check active callback scope + actual physical transaction if a proof can otherwise escape; no DBregistry or global cached allow.
+- Pass actual known company from owning query. Cross-company owner must qualify each actual bounded company through original permission owner inside same transaction; actor.companyId/DTO membership lists are not actual query scope. No unbounded company enumeration or blanket Foundation boolean for multi-tenant SQL.
+- Original query owners requiring transaction adaptation include issues/projects routes and list/read/count functions; company-search/search-extract/portability; native metrics/strategy withReadSources users. Original row source owner is the canonical reuse boundary, not adding per-UI checkboxes.
+
+6. Next actual qualification (NOT RUN)
+
+1) Existing7-assertion native Task/privateMemory RED -> green for SQL list/search/detail/count beforelimits, plus Alice/AgentA positive; missing/foreign/tombstoned source and unknown histories denied.
+2) TaskI -> M1 -> later ContextI selectsM1 -> original actor still reads and duplicate/corroboration no-op does not append selfroot or commit corrupt row. Fresh private consequences remain retained.
+3) Actual Memory -> Foundation -> Learning -> Memory active-path cycle denies; legitimate diamond passes.
+4) Capture base Task/private ancestor/comment/plan/attachment roots, then edit current body/add later Context: earlier payload retains EXACT old inputs; new effect captures new inputs; current ACL withdrawal revokes both.
+5) First provider transport observes committed ready receipt including staged verified asset SHA; induced receipt failure sends no first transport. Unsupported/omitted attachment never becomes fake delivered file.
+6) Restart reuses exact receipt; same-run acknowledged Human steer cannot adopt earlier private source; fresh run with retained warm session preserves prior roots or refuses unknown session history.
+7) On-demand Skill/Playbook/comment page/chat attachment actual return stamps receipt before effect capture; lost response may overretain conservatively, never authorize omitted sources.
+8) Canonical Foundation parity: normal Human no grant; Agent-only/Human-only grants; limited-scope grant; key/trust restriction; actual account/role/grant withdrawal during held native wait; positive exact grants/current source; same physical TX and escaped/autocommit-proof denial.
+
+No production implementation, schema lease or release assertion follows from this design. Source/completeness, old writer/rollback admission, all native tool reads, copying writers and every delivery surface remain explicit qualification gates.
+
+7. Explicit schema / owner decisions before implementation
+
+A. Preferred first source container is a closed server-owned field on existing heartbeatRuns.runnerProfileJson, bound to nativeExecutionInput digest; alternatively dedicated original heartbeat columns if SQL validation/immutability cannot be enforced safely in existing profile JSON. No new receipt table. Base receipt immutable; additional actual input roots append-only. Effect copies exact bounded closure, not a mutable latest receipt pointer. Schema owner must choose representation and native trigger enforcement before coding.
+B. Earlier Task/Project payload Context UUID arrays may remain minimal if actual bootstrap/non-Context sources are converted to equivalent original retained source receipts. Otherwise add only missing closed payload-root fields on original Task/Project/Memory/comment/document/attachment owners. Do not silently declare the arrays sufficient before mapping every delivered family.
+C. Existing selected Context Task item needs exact body-root snapshot plus sourceVersion/contentHash; decide typed item columns versus validated server-only item metadata with immutable DB enforcement. Caller-provided item metadata cannot certify completeness.
+D. New run INSERT protocol capability vs later immutable base-ready receipt must be separately enforced. Current0506 false historical rows and unknown warm sessions stay unqualified. No in-place false->true upgrade. Mixed-writer/old-reader/rollback admission remains a deployment gate; this design does not close it.
+E. Foundation permission proof: extend original withReadSources whitelist only same-company foundation:read on company resource, native positive-row pins and transaction lifetime; move actual source-sensitive SQL execution into that owner callback. Autocommit condition construction cannot create reusable permission SQL. Review concrete query-owner adaptations and pin lock order; preserve canonical local/instance exceptions and actual Human/Agent source narrowing rather than cloning a permissive membership predicate.
+F. Dynamic tools/continuation/history: choose the exact supported first-wave input families before setting protocol capability for any constructor. Unsupported tool response/source family refuses source-qualified derivative effects; it is not silently treated as source-free. Ordinary native worker functionality and terminal claimed Memory capture semantics must remain explicitly supported, not disabled through a new opaque flag.
+
+Finalized source-only on2026-10-23. All repository files remain untouched by this design task; no production/schema/check/session action performed. Existing actual RED and existing qualified checkpoints remain bounded to their recorded source bytes.
