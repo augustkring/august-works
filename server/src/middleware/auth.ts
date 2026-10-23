@@ -450,6 +450,7 @@ export function actorMiddleware(db: Db, opts: ActorMiddlewareOptions): RequestHa
         agentId: claims.sub,
         companyId: claims.company_id,
         keyId: undefined,
+        authenticatedCredentialExpiresAt: claims.exp * 1000,
         keyScope,
         runId: claims.run_id,
         onBehalfOfUserId,

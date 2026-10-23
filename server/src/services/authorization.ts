@@ -67,6 +67,7 @@ export type AuthorizationActor =
     keyId?: string | null;
     /** Fingerprint retained by the original credential verifier, never client input. */
     authenticatedKeyHash?: string | null;
+    authenticatedCredentialExpiresAt?: number | null;
     keyScope?: AgentApiKeyScope | null;
     runId?: string | null;
     onBehalfOfUserId?: string | null;
@@ -2711,6 +2712,11 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
   // Row locks qualify the original canonical loaders; they do not grant access.
   // NOWAIT avoids reversing account erasure / Agent lifecycle lock ordering.
   async function pinFoundationActor(actor: AuthorizationActor, companyId: string): Promise<AuthorizationActor | null> {
+    const expiresAt = actor.authenticatedCredentialExpiresAt;
+    if (expiresAt != null) {
+      if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return null;
+      if (readSources) readSources.credentialExpiresAt = Math.min(readSources.credentialExpiresAt ?? Infinity, expiresAt);
+    }
     if (actor.type === "board" && actor.source === "local_implicit") return actor;
     if (actor.type === "board") {
       if (!actor.userId) return null;

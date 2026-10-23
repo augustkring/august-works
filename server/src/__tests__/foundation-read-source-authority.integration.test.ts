@@ -7,6 +7,7 @@ import { agents, agentApiKeys, authUsers, companies, companyMemberships, createD
   EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, heartbeatRuns, issues, principalPermissionGrants, instanceUserRoles, boardApiKeys } from "@paperclipai/db";
 import { authorizationService, type AuthorizationActor } from "../services/authorization.js";
 import { actorMiddleware } from "../middleware/auth.js";
+import { createLocalAgentJwt, verifyLocalAgentJwt } from "../agent-auth-jwt.js";
 import { errorHandler } from "../middleware/error-handler.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 
@@ -287,6 +288,76 @@ describe("Foundation native Source authority lifetime", () => {
     expect(response.body.allowed).toBe(false);
     expect((await probe(replacementToken)).status).toBe(200);
     expect((await probe()).status).toBe(401);
+  });
+
+  it.each(["source_wait", "callback_return"] as const)("does not outlive an actual JWT across %s", async phase => {
+    const s = await seed(), issueId = randomUUID();
+    await db.insert(issues).values({ id: issueId, companyId: s.companyId, title: "Actual JWT lifetime wait", createdByUserId: s.userId });
+    vi.stubEnv("PAPERCLIP_AGENT_JWT_SECRET", `fixture-${randomUUID()}`);
+    vi.stubEnv("PAPERCLIP_AGENT_JWT_TTL_SECONDS", "4");
+    const entered = deferred(), release = deferred();
+    let holdCallback = false;
+    const app = express();
+    app.use(actorMiddleware(db, { deploymentMode: "authenticated" }));
+    app.get("/jwt-source-read", async (req, res, next) => {
+      try {
+        expect(req.actor.source).toBe("agent_jwt");
+        const decision = await db.transaction(tx => authorizationService(tx).withReadSources(s.companyId, [issueId], [], async owner => {
+          const result = await owner.decide(input(s, req.actor));
+          if (holdCallback) {
+            entered.resolve();
+            expect(result.allowed).toBe(true);
+            await release.promise;
+          }
+          return result;
+        }));
+        res.status(decision.allowed ? 200 : 403).json({ allowed: decision.allowed });
+      } catch (error) { next(error); }
+    });
+    app.use(errorHandler);
+    const mint = () => createLocalAgentJwt(s.agentId, s.companyId, "process", s.runId, s.userId)!;
+    const probe = (token: string) => request(app).get("/jwt-source-read").set("Authorization", `Bearer ${token}`);
+    let holder: Promise<unknown> | undefined;
+    let pending: Promise<request.Response> | undefined;
+    try {
+      expect((await probe(mint())).status).toBe(200);
+      const token = mint(), claims = verifyLocalAgentJwt(token)!;
+      expect(claims).not.toBeNull();
+      let holderPid = 0;
+      if (phase === "source_wait") {
+        holder = db.transaction(async tx => {
+          const [backend] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+          holderPid = backend!.pid;
+          await tx.execute(sql`select id from issues where id=${issueId} for update`);
+          entered.resolve(); await release.promise;
+        });
+        await entered.promise;
+      } else { holdCallback = true; }
+      pending = probe(token).then(response => response);
+      if (phase === "source_wait") {
+        let blocked = false;
+        for (let i = 0; i < 100 && !blocked; i++) {
+          const [activity] = await db.execute<{ blocked: boolean }>(sql`select exists(
+            select 1 from pg_stat_activity where ${holderPid}=any(pg_blocking_pids(pid))) as blocked`);
+          blocked = activity!.blocked;
+          if (!blocked) await new Promise(resolve => setTimeout(resolve, 10));
+        }
+        expect(blocked).toBe(true);
+      } else { await entered.promise; }
+      expect(verifyLocalAgentJwt(token)).not.toBeNull();
+      await new Promise(resolve => setTimeout(resolve, Math.max(0, claims.exp * 1000 - Date.now() + 20)));
+      expect(verifyLocalAgentJwt(token)).toBeNull();
+      release.resolve(); await holder;
+      const response = await pending;
+      expect(response.status).toBe(403);
+      expect(response.body.allowed).not.toBe(true);
+      holdCallback = false;
+      expect((await probe(mint())).status).toBe(200);
+      expect((await probe(token)).status).toBe(401);
+    } finally {
+      release.resolve(); await holder; await pending;
+      vi.unstubAllEnvs();
+    }
   });
 
 });
