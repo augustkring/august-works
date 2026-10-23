@@ -25,6 +25,7 @@ import type {
   SaasUsage,
 } from "@paperclipai/shared";
 import { api, ApiError } from "./client";
+import { AuthApiError } from "./auth";
 const companyPath = (id: string) => "/companies/" + encodeURIComponent(id);
 const scoped = (path: string, userId: string) =>
   path +
@@ -628,10 +629,16 @@ export async function saasAuthAction(
   });
   if (!response.ok) {
     const value = await response.json().catch(() => null);
-    throw new Error(
+    const code = typeof value?.code === "string" ? value.code
+      : typeof value?.error?.code === "string" ? value.error.code
+        : typeof value?.details?.code === "string" ? value.details.code : null;
+    throw new AuthApiError(
       typeof value?.message === "string"
         ? value.message
         : "The request failed. Please try again.",
+      response.status,
+      value,
+      code,
     );
   }
 }

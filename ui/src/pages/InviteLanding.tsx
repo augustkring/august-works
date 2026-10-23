@@ -15,6 +15,8 @@ import { clearPendingInviteToken, rememberPendingInviteToken } from "../lib/invi
 import { queryKeys } from "../lib/queryKeys";
 import { formatDate } from "../lib/utils";
 import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
+import { hasValidNewLocalPasswordLength, LOCAL_PASSWORD_MAX_LENGTH, LOCAL_PASSWORD_MAX_UTF16_LENGTH, LOCAL_PASSWORD_MIN_LENGTH } from "@paperclipai/shared/local-password-policy";
+import { useTranslation } from "@/i18n";
 
 type AuthMode = "sign_in" | "sign_up";
 type AuthFeedback = { tone: "error" | "info"; message: string };
@@ -208,6 +210,7 @@ function AwaitingJoinApprovalPanel({
 }
 
 export function InviteLandingPage() {
+  const { t } = useTranslation("experience");
   const queryClient = useQueryClient();
   const navigate = useNavigate();
   const { setSelectedCompanyId } = useCompany();
@@ -326,8 +329,9 @@ export function InviteLandingPage() {
 
   const authCanSubmit =
     email.trim().length > 0 &&
-    password.trim().length > 0 &&
-    (authMode === "sign_in" || (name.trim().length > 0 && password.trim().length >= 8));
+    (authMode === "sign_in"
+      ? password.length > 0
+      : name.trim().length > 0 && hasValidNewLocalPasswordLength(password));
 
   const acceptMutation = useMutation({
     mutationFn: async () => {
@@ -419,7 +423,11 @@ export function InviteLandingPage() {
       }
     },
     onError: (err) => {
-      const nextFeedback = mapInviteAuthFeedback(err, authMode, email);
+      const code = getAuthErrorCode(err) ?? readNestedString(err, ["body", "details", "code"]) ?? readNestedString(err, ["body", "code"]);
+      const passwordError = authMode === "sign_up" && (code === "PASSWORD_TOO_COMMON" || code === "PASSWORD_TOO_SHORT" || code === "PASSWORD_TOO_LONG");
+      const nextFeedback = passwordError
+        ? { tone: "error" as const, message: t(`authFlow.${code === "PASSWORD_TOO_COMMON" ? "passwordTooCommon" : code === "PASSWORD_TOO_LONG" ? "passwordTooLong" : "passwordTooShort"}`) }
+        : mapInviteAuthFeedback(err, authMode, email);
       if (getAuthErrorCode(err) === "USER_ALREADY_EXISTS_USE_ANOTHER_EMAIL") {
         setAuthMode("sign_in");
         setPassword("");
@@ -720,7 +728,10 @@ export function InviteLandingPage() {
                     event.preventDefault();
                     if (authMutation.isPending) return;
                     if (!authCanSubmit) {
-                      setAuthFeedback({ tone: "error", message: "Please fill in all required fields." });
+                      const passwordHasError = authMode === "sign_up" && name.trim() && email.trim() && password.length > 0;
+                      setAuthFeedback({ tone: "error", message: passwordHasError
+                        ? t((password.length > LOCAL_PASSWORD_MAX_UTF16_LENGTH || [...password].length > LOCAL_PASSWORD_MAX_LENGTH) ? "authFlow.passwordTooLong" : "authFlow.passwordTooShort")
+                        : "Please fill in all required fields." });
                       return;
                     }
                     authMutation.mutate();
@@ -781,12 +792,15 @@ export function InviteLandingPage() {
                         setAuthFeedback(null);
                       }}
                       autoComplete={authMode === "sign_in" ? "current-password" : "new-password"}
+                      minLength={authMode === "sign_up" ? LOCAL_PASSWORD_MIN_LENGTH : undefined}
+                      maxLength={authMode === "sign_up" ? LOCAL_PASSWORD_MAX_UTF16_LENGTH : undefined}
                       required
                       aria-required="true"
                       aria-invalid={authFeedback?.tone === "error" ? true : undefined}
                       aria-describedby={authFeedback ? authErrorId : undefined}
                     />
                   </label>
+                  {authMode === "sign_up" && <p className="text-xs text-muted-foreground">{t("authFlow.passwordMinimum")}</p>}
                   {authFeedback ? (
                     <p
                       id={authErrorId}

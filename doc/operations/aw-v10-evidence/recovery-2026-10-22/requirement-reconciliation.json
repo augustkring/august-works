@@ -46,8 +46,11 @@
       "id": "V10-005",
       "sourceLine": 6771,
       "work": "Canonical Blentera ProductIdentity contract (`blentera.com`, app/docs/status/trust origins, `hello@` main contact, no generic aliases/catch-all by default, Support/Security/Privacy routes and transactional sender identity).",
-      "reconciliation": "not_reconciled",
-      "evidence": []
+      "reconciliation": "in_progress",
+      "evidence": [
+        "brand-account-notification-checkpoint.json",
+        "brand-daily-navigation-checkpoint.json"
+      ]
     },
     {
       "id": "V10-006",
@@ -60,8 +63,11 @@
       "id": "V10-007",
       "sourceLine": 6773,
       "work": "README/docs/app/email/announcement migration to Blentera.",
-      "reconciliation": "not_reconciled",
-      "evidence": []
+      "reconciliation": "in_progress",
+      "evidence": [
+        "brand-account-notification-checkpoint.json",
+        "brand-daily-navigation-checkpoint.json"
+      ]
     },
     {
       "id": "V10-008",
@@ -1113,7 +1119,8 @@
         "up03-learning-private-checkpoint.json",
         "up03-memory-resolver-checkpoint.json",
         "up03-private-live-checkpoint.json",
-        "up03-live-session-checkpoint.json"
+        "up03-live-session-checkpoint.json",
+        "up03-native-source-lifetimes-checkpoint.json"
       ]
     },
     {
@@ -1236,8 +1243,10 @@
       "work": "Complete auth/recovery/reauthentication and bilingual mail",
       "nativeOwnerOrContract": "CE-03 / AUTH; A/C",
       "requiredOutcome": "Every offered login method has a secure usable lifecycle and EN/DA delivery",
-      "reconciliation": "not_reconciled",
-      "evidence": []
+      "reconciliation": "in_progress",
+      "evidence": [
+        "local-password-policy-checkpoint.json"
+      ]
     },
     {
       "id": "V10-167",

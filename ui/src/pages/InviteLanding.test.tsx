@@ -228,7 +228,7 @@ describe("InviteLandingPage", () => {
       inputValueSetter!.call(emailInput, "jane@example.com");
       emailInput!.dispatchEvent(new Event("input", { bubbles: true }));
       emailInput!.dispatchEvent(new Event("change", { bubbles: true }));
-      inputValueSetter!.call(passwordInput, "supersecret");
+      inputValueSetter!.call(passwordInput, "long-enough-password");
       passwordInput!.dispatchEvent(new Event("input", { bubbles: true }));
       passwordInput!.dispatchEvent(new Event("change", { bubbles: true }));
     });
@@ -246,7 +246,7 @@ describe("InviteLandingPage", () => {
     expect(signUpEmailMock).toHaveBeenCalledWith({
       name: "Jane Example",
       email: "jane@example.com",
-      password: "supersecret",
+      password: "long-enough-password",
     });
     expect(container.textContent).toContain("An account already exists for jane@example.com. Sign in below to continue with this invite.");
     expect(container.querySelector('input[name="name"]')).toBeNull();
@@ -516,7 +516,7 @@ describe("InviteLandingPage", () => {
       nameInput!.dispatchEvent(new Event("input", { bubbles: true }));
       inputValueSetter!.call(emailInput, "jane@example.com");
       emailInput!.dispatchEvent(new Event("input", { bubbles: true }));
-      inputValueSetter!.call(passwordInput, "supersecret");
+      inputValueSetter!.call(passwordInput, "long-enough-password");
       passwordInput!.dispatchEvent(new Event("input", { bubbles: true }));
     });
 
@@ -534,7 +534,7 @@ describe("InviteLandingPage", () => {
     expect(signUpEmailMock).toHaveBeenCalledWith({
       name: "Jane Example",
       email: "jane@example.com",
-      password: "supersecret",
+      password: "long-enough-password",
     });
     expect(acceptInviteMock).toHaveBeenCalledWith("pcp_invite_test", { requestType: "human" });
     expect(setSelectedCompanyIdMock).toHaveBeenCalledWith("company-1", { source: "manual" });

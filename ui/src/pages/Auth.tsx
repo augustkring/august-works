@@ -13,6 +13,7 @@ import { ThemeToggle } from "@/components/ThemeToggle";
 import { useSaasCapabilities } from "@/hooks/useSaasCapabilities";
 import { Link } from "@/lib/router";
 import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
+import { hasValidNewLocalPasswordLength, LOCAL_PASSWORD_MAX_LENGTH, LOCAL_PASSWORD_MAX_UTF16_LENGTH, LOCAL_PASSWORD_MIN_LENGTH } from "@paperclipai/shared/local-password-policy";
 
 type AuthMode = "sign_in" | "sign_up";
 
@@ -79,14 +80,18 @@ export function AuthPage() {
     onError: (err) => {
       const code = err && typeof err === "object" && "code" in err ? err.code : null;
       setError(code === "INVALID_EMAIL_OR_PASSWORD" || (err instanceof Error && err.message === "Invalid email or password")
-        ? "authFlow.credentialsInvalid" : "authFlow.failed");
+        ? "authFlow.credentialsInvalid"
+        : code === "PASSWORD_TOO_COMMON" ? "authFlow.passwordTooCommon"
+          : code === "PASSWORD_TOO_SHORT" ? "authFlow.passwordTooShort"
+            : code === "PASSWORD_TOO_LONG" ? "authFlow.passwordTooLong" : "authFlow.failed");
     },
   });
 
   const canSubmit =
     email.trim().length > 0 &&
-    password.trim().length > 0 &&
-    (mode === "sign_in" || (name.trim().length > 0 && password.trim().length >= (saas.data ? 12 : 8)));
+    (mode === "sign_in"
+      ? password.length > 0
+      : name.trim().length > 0 && hasValidNewLocalPasswordLength(password));
 
   if (isSessionLoading) {
     return (
@@ -128,8 +133,9 @@ export function AuthPage() {
               event.preventDefault();
               if (mutation.isPending) return;
               if (!canSubmit) {
-                setError(mode === "sign_up" && name.trim() && email.trim() && password.trim()
-                  ? "authFlow.passwordTooShort" : "authFlow.requiredFields");
+                setError(mode === "sign_up" && name.trim() && email.trim() && password.length > 0
+                  ? ((password.length > LOCAL_PASSWORD_MAX_UTF16_LENGTH || [...password].length > LOCAL_PASSWORD_MAX_LENGTH) ? "authFlow.passwordTooLong" : "authFlow.passwordTooShort")
+                  : "authFlow.requiredFields");
                 return;
               }
               mutation.mutate();
@@ -180,17 +186,18 @@ export function AuthPage() {
                 value={password}
                 onChange={(event) => setPassword(event.target.value)}
                 autoComplete={mode === "sign_in" ? "current-password" : "new-password"}
-                minLength={mode === "sign_up" ? (saas.data ? 12 : 8) : undefined}
+                minLength={mode === "sign_up" ? LOCAL_PASSWORD_MIN_LENGTH : undefined}
+                maxLength={mode === "sign_up" ? LOCAL_PASSWORD_MAX_UTF16_LENGTH : undefined}
                 required
                 aria-required="true"
                 aria-invalid={error ? true : undefined}
                 aria-describedby={error ? errorId : undefined}
               />
             </div>
-            {mode === "sign_up" && <p className="text-sm text-muted-foreground">{t("authFlow.passwordMinimum", { count: saas.data ? 12 : 8 })}</p>}
+            {mode === "sign_up" && <p className="text-sm text-muted-foreground">{t("authFlow.passwordMinimum")}</p>}
             {error && (
               <p ref={errorSummary} tabIndex={-1} id={errorId} role="alert" className="text-xs text-destructive">
-                {t(error, { count: saas.data ? 12 : 8 })}
+                {t(error)}
               </p>
             )}
             <Button

@@ -1,3 +1,5 @@
+import { LOCAL_PASSWORD_MIN_LENGTH, LOCAL_PASSWORD_MAX_UTF16_LENGTH } from "@paperclipai/shared/local-password-policy";
+import { localPasswordPolicy } from "./local-password-policy.js";
 import { enterpriseAuthPlugins, ENTERPRISE_DISABLED_AUTH_PATHS } from "./enterprise-auth-plugins.js";
 import { enterpriseIdentityPolicies, enterpriseSubjectBindings, ssoProvider, scimConnectionBinding, scimIdentityTombstone, scimSubject, scimUser, scimProjectionGrant, scimGroup, scimGroupMember, companyMemberships, principalPermissionGrants, activityLog } from "@paperclipai/db";
 import type { Request, RequestHandler } from "express";
@@ -296,13 +298,14 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
         ...(enterprisePlugins.length ? { ssoProvider,scimConnectionBinding,scimIdentityTombstone,scimSubject,scimUser,scimProjectionGrant,scimGroup,scimGroupMember,awEnterprisePolicy:enterpriseIdentityPolicies,awEnterpriseBinding:enterpriseSubjectBindings,awCompanyMembership:companyMemberships,awPermissionGrant:principalPermissionGrants,awActivity:activityLog } : {}),
       },
     }),
+    hooks: { before: localPasswordPolicy },
     emailAndPassword: {
       enabled: true,
+      minPasswordLength: LOCAL_PASSWORD_MIN_LENGTH,
+      maxPasswordLength: LOCAL_PASSWORD_MAX_UTF16_LENGTH,
       requireEmailVerification: saasDelivery?.verificationRequired ?? false,
       disableSignUp: config.deploymentProfile === "saas" ? !(saasDelivery?.signupEnabled) : config.authDisableSignUp,
       ...(saasDelivery ? {
-        minPasswordLength: 12,
-        maxPasswordLength: 128,
         resetPasswordTokenExpiresIn: 900,
         revokeSessionsOnPasswordReset: true,
         sendResetPassword: saasDelivery.sendPasswordReset,

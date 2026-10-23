@@ -262,6 +262,34 @@ describe("AuthPage", () => {
       root.unmount();
     });
   });
+  it("validates new passwords by Unicode code points while keeping the exact submitted value", async () => {
+    const { root } = await mount();
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    const createLink = [...container.querySelectorAll("button")].find(button => button.textContent === "Create one");
+    await act(async () => { createLink!.click(); });
+    await flushReact();
+    const name = container.querySelector('input[name="name"]') as HTMLInputElement;
+    const email = container.querySelector('input[name="email"]') as HTMLInputElement;
+    const password = container.querySelector('input[name="password"]') as HTMLInputElement;
+    expect(password.minLength).toBe(15);
+    expect(password.maxLength).toBe(256);
+    await act(async () => {
+      setter.call(name, "Jane"); name.dispatchEvent(new Event("input", { bubbles: true }));
+      setter.call(email, "jane@example.com"); email.dispatchEvent(new Event("input", { bubbles: true }));
+      setter.call(password, "😀".repeat(8)); password.dispatchEvent(new Event("input", { bubbles: true }));
+      container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    expect(signUpEmailMock).not.toHaveBeenCalled();
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("at least 15 characters");
+    await act(async () => {
+      setter.call(password, "😀".repeat(15)); password.dispatchEvent(new Event("input", { bubbles: true }));
+      container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await flushReact(); await flushReact();
+    expect(signUpEmailMock).toHaveBeenCalledWith({ name: "Jane", email: "jane@example.com", password: "😀".repeat(15) });
+    await act(async () => { root.unmount(); });
+  });
+
   it("changes authentication language without submitting credentials and translates a refused request while preserving email", async () => {
     vi.mocked(saasApi.capabilities).mockResolvedValue({ profile: "saas", signup: true, emailVerification: true,
       enterpriseSso: false, onboarding: true, billing: false, checkout: false, runtime: false,

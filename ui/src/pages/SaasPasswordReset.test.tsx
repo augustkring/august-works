@@ -50,6 +50,15 @@ it("keeps a failed password change unconfirmed without exposing the native error
   expect(host.querySelector("input")!.value).toBe("Private-valid-password");
   expect(document.activeElement).toBe(host.querySelector('[role="alert"]')); expect(action).toHaveBeenCalledOnce();
 });
+it.each(["en", "da"])("shows safe common-password advice and keeps the entered value in %s", async language => {
+  await mount("/saas/reset-password?token=original", language);
+  action.mockRejectedValue(Object.assign(new Error("PRIVATE-COMMON-PASSWORD-DETAIL"), { code: "PASSWORD_TOO_COMMON" }));
+  await enter("Private-valid-password"); await submit();
+  await vi.waitFor(() => expect(host.querySelector('[role="alert"]')).toBeTruthy());
+  expect(host.textContent).toContain(language === "en" ? "Choose a different password" : "Vælg en anden adgangskode");
+  expect(host.textContent).not.toContain("PRIVATE-COMMON-PASSWORD-DETAIL");
+  expect(host.querySelector("input")!.value).toBe("Private-valid-password");
+});
 it("a new recovery token clears the previous password and cannot inherit its late success", async () => {
   await mount("/saas/reset-password?token=first");
   let finish!: (value: object) => void; action.mockImplementation(() => new Promise(resolve => { finish = resolve; }));

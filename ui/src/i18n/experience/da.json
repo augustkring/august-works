@@ -49,7 +49,11 @@
     "changed": "Din adgangskode er ændret. Log ind med din nye adgangskode.",
     "requested": "Hvis der findes en konto med denne e-mail, modtager du snart et link til nulstilling.",
     "changeUnconfirmed": "Ændringen kunne ikke bekræftes. Prøv at logge ind med din nye adgangskode, eller anmod om et nyt link til nulstilling.",
-    "requestUnconfirmed": "Anmodningen kunne ikke bekræftes. Prøv igen, eller kontakt support."
+    "requestUnconfirmed": "Anmodningen kunne ikke bekræftes. Prøv igen, eller kontakt support.",
+    "passwordMinimum": "Brug 15–128 tegn. Mellemrum er tilladt.",
+    "passwordTooShort": "Brug mindst 15 tegn. Mellemrum tæller med.",
+    "passwordTooLong": "Brug højst 128 tegn.",
+    "passwordTooCommon": "Vælg en anden adgangskode; denne er for almindelig."
   },
   "agentDraftReview": {
     "scenarioNumber": "Repræsentativt scenarie {{number}}",
@@ -1626,8 +1630,10 @@
     "failed": "Kontoanmodningen kunne ikke gennemføres. Kontrollér dine oplysninger, og prøv igen.",
     "companyFailed": "Virksomhedslogin kunne ikke gennemføres. Kontrollér din arbejdsmail, og prøv igen.",
     "requiredFields": "Udfyld alle obligatoriske felter.",
-    "passwordMinimum": "Brug mindst {{count}} tegn i din adgangskode.",
-    "passwordTooShort": "Din adgangskode skal indeholde mindst {{count}} tegn."
+    "passwordMinimum": "Brug 15–128 tegn. Mellemrum er tilladt.",
+    "passwordTooShort": "Brug mindst 15 tegn. Mellemrum tæller med.",
+    "passwordTooLong": "Brug højst 128 tegn.",
+    "passwordTooCommon": "Vælg en anden adgangskode; denne er for almindelig."
   },
   "memoryMaintenance": {
     "title": "Hukommelsens vedligeholdelseshistorik",

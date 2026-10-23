@@ -49,7 +49,11 @@
     "changed": "Your password has been changed. Sign in with your new password.",
     "requested": "If this email has an account, a reset link will arrive shortly.",
     "changeUnconfirmed": "The password change could not be confirmed. Try signing in with your new password, or request a new reset link.",
-    "requestUnconfirmed": "The reset request could not be confirmed. Try again or contact support."
+    "requestUnconfirmed": "The reset request could not be confirmed. Try again or contact support.",
+    "passwordMinimum": "Use 15–128 characters. Spaces are allowed.",
+    "passwordTooShort": "Use at least 15 characters. Spaces count toward the minimum.",
+    "passwordTooLong": "Use no more than 128 characters.",
+    "passwordTooCommon": "Choose a different password; this one is too common."
   },
   "agentDraftReview": {
     "scenarioNumber": "Representative scenario {{number}}",
@@ -1626,8 +1630,10 @@
     "failed": "The account request could not be completed. Check your details and try again.",
     "companyFailed": "Company sign-in could not be completed. Check your work email and try again.",
     "requiredFields": "Please fill in all required fields.",
-    "passwordMinimum": "Use at least {{count}} characters for your password.",
-    "passwordTooShort": "Your password must contain at least {{count}} characters."
+    "passwordMinimum": "Use 15–128 characters. Spaces are allowed.",
+    "passwordTooShort": "Use at least 15 characters. Spaces count toward the minimum.",
+    "passwordTooLong": "Use no more than 128 characters.",
+    "passwordTooCommon": "Choose a different password; this one is too common."
   },
   "memoryMaintenance": {
     "title": "Memory maintenance history",
