@@ -3110,6 +3110,11 @@
     "firstAgentDefault": "Stabschef"
   },
   "supportCases": {
+    "recoveringRequest": "Kontrollerer din tidligere indsendelse…",
+    "recoveredRequest": "Din tidligere indsendelse har en gemt kvittering. Åbn sagen for at fortsætte.",
+    "resumeRequest": "Det tidligere resultat er ikke bekræftet. Siden kan ikke gendanne teksten. Indtast teksten igen for at gentage samme anmodning, eller kontrollér kvitteringen igen.",
+    "checkReceipt": "Kontrollér kvittering",
+    "returnToRequest": "Tilbage til den tidligere anmodning",
     "sending": "Sender til support…",
     "sendingReply": "Sender svar…",
     "closing": "Afslutter supportsag…",

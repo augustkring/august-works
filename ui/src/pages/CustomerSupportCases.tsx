@@ -25,6 +25,18 @@ import { Link, useLocation, useNavigate } from "../lib/router";
 import { getCompanyPathSegments } from "../lib/shell-navigation";
 import { Button } from "../components/ui/button";
 
+type PendingSupportRequest = { key: string; kind: "create" | "reply" | "close"; caseId?: string };
+function pendingSupportRequest(value: unknown, companyId: string, principal: string): PendingSupportRequest | null {
+  const state = value as { companyId?: unknown; expectedUserId?: unknown; supportRequest?: Partial<PendingSupportRequest> } | null;
+  if (state?.companyId !== companyId || state.expectedUserId !== principal) return null;
+  const pending = state.supportRequest;
+  const key = supportCaseDetailSchema.shape.id.safeParse(pending?.key);
+  if (!pending || !key.success || !["create", "reply", "close"].includes(pending.kind ?? "")) return null;
+  if (pending.kind === "create") return { key: key.data, kind: "create" };
+  const target = supportCaseDetailSchema.shape.id.safeParse(pending.caseId);
+  return target.success ? { key: key.data, kind: pending.kind as "reply" | "close", caseId: target.data } : null;
+}
+
 type SupportCaseDelivery = SupportCaseDetail["delivery"];
 
 function errorCode(error: unknown) {
@@ -92,11 +104,12 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
   const selectedCaseId = selected.success ? selected.data : null;
   const activeCase = useRef(selectedCaseId);
   activeCase.current = selectedCaseId;
-  function setSelectedCaseId(id: string | null) {
+  function setSelectedCaseId(id: string | null, completed = false) {
     activeCase.current = id;
     const params = new URLSearchParams(location.search);
     if (id) params.set("case", id); else params.delete("case");
-    navigate({ pathname: location.pathname, search: params.toString() ? "?" + params.toString() : "" }, { state: location.state, replace: !!onReturn });
+    navigate({ pathname: location.pathname, search: params.toString() ? "?" + params.toString() : "" }, { state: completed ? requestNavigation() : location.state, replace: completed || !!onReturn });
+    if (completed) setRestoredRequest(null);
     setTimelineCursor(null);
   }
   const [listCursor, setListCursor] = useState<{ createdAt: string; id: string } | null>(null);
@@ -118,6 +131,22 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
     const parsed = supportCaseSafeContextSchema.safeParse(carried.safeContext);
     return parsed.success ? parsed.data : undefined;
   });
+  const [restoredRequest, setRestoredRequest] = useState(() => pendingSupportRequest(location.state, companyId, principal));
+  function requestNavigation(request?: PendingSupportRequest) {
+    return { companyId, expectedUserId: principal, returnPathname,
+      ...(carried?.companyId === companyId && carried.expectedUserId === principal && typeof (location.state as { backgroundKey?: unknown }).backgroundKey === "string"
+        ? { backgroundKey: (location.state as { backgroundKey: string }).backgroundKey } : {}),
+      ...(safeContext ? { safeContext } : {}), ...(request ? { supportRequest: request } : {}) };
+  }
+  function rememberRequest(request: PendingSupportRequest) {
+    // Native history survives a reload. Keep only opaque command identity and
+    // removable navigation context; no description, reply, subject or file.
+    navigate({ pathname: location.pathname, search: location.search, hash: location.hash }, { replace: true, state: requestNavigation(request) });
+  }
+  function forgetRequest() {
+    setRestoredRequest(null);
+    navigate({ pathname: location.pathname, search: location.search, hash: location.hash }, { replace: true, state: null });
+  }
   const [submission, setSubmission] = useState<{ key: string; payload: CreateSupportCase } | null>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const reply = selectedCaseId ? replyDrafts[selectedCaseId] ?? "" : "";
@@ -189,6 +218,21 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
     staleTime: 0, gcTime: 0, retry: false, refetchOnWindowFocus: true,
   });
 
+  const recoveryQuery = useQuery({
+    queryKey: [...readKey, "request", restoredRequest?.key],
+    enabled: ready && !!restoredRequest && !submission && !replySubmission,
+    queryFn: async ({ signal }) => {
+      const pending = restoredRequest!;
+      const found = await recoverRequest(pending.key, signal);
+      if (found && pending.kind !== "create" && found.id !== pending.caseId && found.followUpOfId !== pending.caseId)
+        throw new Error("Support request source changed");
+      if (found && pending.kind === "close" && found.status !== "CLOSED") throw new Error("Support closure is not confirmed");
+      return found;
+    },
+    staleTime: 0, gcTime: 0, retry: false, refetchOnWindowFocus: true,
+  });
+  const recoveryBlocked = !!restoredRequest && (recoveryQuery.isFetching || !!recoveryQuery.data);
+
   useCompanyLiveEvent((event) => {
     if (event.companyId !== companyId) return;
     const action = typeof event.payload.action === "string" ? event.payload.action : "";
@@ -211,13 +255,13 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
     activeScope.current = "access-lost";
     setAccessLost(true);
     setDescription(""); setSubject(""); setReplyDrafts({}); setSafeContext(undefined);
-    setSubmission(null); setReplySubmission(null); setSubmitMessage(null); setReplyMessage(null);
+    setSubmission(null); setReplySubmission(null); setSubmitMessage(null); setReplyMessage(null); forgetRequest();
     void client.cancelQueries({ queryKey: baseKey });
     client.removeQueries({ queryKey: baseKey });
   }
   function erasedRequest() {
     setSubmission(null); setReplySubmission(null); setDescription(""); setSubject(""); setReplyDrafts({});
-    setSafeContext(undefined); setSelectedCaseId(null); setCaseUnavailable(true);
+    setSafeContext(undefined); setSelectedCaseId(null, true); setCaseUnavailable(true);
     activeScope.current = "erased";
     client.removeQueries({ queryKey: baseKey });
     setAccessEpoch(value => value + 1);
@@ -225,7 +269,7 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
   useEffect(() => {
     if (accessLost) return;
     if ((policyQuery.error && hasSessionError(policyQuery.error)) || (listQuery.error && hasSessionError(listQuery.error)) ||
-      hasAccountError(detailQuery.error)) {
+      hasAccountError(detailQuery.error) || hasAccountError(recoveryQuery.error)) {
       loseAccess();
     } else if (detailQuery.error instanceof ApiError && detailQuery.error.status === 404) {
       activeScope.current = "case-unavailable";
@@ -236,7 +280,7 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
       client.removeQueries({ queryKey: [...readKey, "detail"] });
       void client.invalidateQueries({ queryKey: baseKey });
     }
-  }, [policyQuery.error, listQuery.error, detailQuery.error, client, baseKey, accessLost]);
+  }, [policyQuery.error, listQuery.error, detailQuery.error, recoveryQuery.error, client, baseKey, accessLost]);
   useEffect(() => { if (detailQuery.data?.id) detailHeading.current?.focus(); }, [detailQuery.data?.id]);
 
   const isDanish = (i18n.resolvedLanguage ?? i18n.language).startsWith("da");
@@ -259,24 +303,24 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
     client.setQueryData([...readKey, "detail", detail.id, null], detail);
     void client.invalidateQueries({ queryKey: baseKey });
     if (!current()) return false;
-    setSelectedCaseId(detail.id);
+    setSelectedCaseId(detail.id, true);
     if (caseId && detail.id !== caseId) setReplyMessage(t("supportCases.followUpCreated"));
     return true;
   }
 
-  async function recoverRequest(key: string) {
+  async function recoverRequest(key: string, signal?: AbortSignal) {
     if (!current()) return null;
     const found = await api.get<unknown>(
       `${supportPath(companyId, `/cases/requests/${encodeURIComponent(key)}`)}?expectedUserId=${encodeURIComponent(principal)}`,
-      { cache: "no-store" },
+      { cache: "no-store", signal },
     );
     return current() ? safeDetail(found, companyId) : null;
   }
 
   async function submitCase() {
-    if (createInFlight.current || !ready || !hasCurrentV9Session(client, principal, identity.sessionId) || !description.trim()) return;
+    if (recoveryBlocked || (restoredRequest && restoredRequest.kind !== "create") || createInFlight.current || !ready || !hasCurrentV9Session(client, principal, identity.sessionId) || !description.trim()) return;
     const attempt = submission ?? {
-      key: crypto.randomUUID(),
+      key: restoredRequest?.key ?? crypto.randomUUID(),
       payload: {
         expectedUserId: principal,
         idempotencyKey: "",
@@ -293,6 +337,7 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
     setSubmitting(true);
     setSubmitMessage(null);
     try {
+      rememberRequest({ key: attempt.key, kind: "create" });
       const result = await api.post<unknown>(supportPath(companyId, "/cases"), attempt.payload);
       if (!current() || selectedCompanyId !== companyId) return;
       const detail = safeDetail(result, companyId);
@@ -323,11 +368,11 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
 
   async function submitReply(kind: "reply" | "close" = "reply") {
     const detail = detailQuery.data;
-    if (replyInFlight.current || !ready || !detail || (kind === "reply" && !reply.trim()) || (replySubmission && replySubmission.caseId !== detail.id) || !hasCurrentV9Session(client, principal, identity.sessionId)) return;
+    if (recoveryBlocked || (restoredRequest && (restoredRequest.kind !== kind || restoredRequest.caseId !== detail?.id)) || replyInFlight.current || !ready || !detail || (kind === "reply" && !reply.trim()) || (replySubmission && replySubmission.caseId !== detail.id) || !hasCurrentV9Session(client, principal, identity.sessionId)) return;
     const attempt = replySubmission ?? {
       caseId: detail.id,
       kind,
-      key: crypto.randomUUID(),
+      key: restoredRequest?.key ?? crypto.randomUUID(),
       payload: kind === "close" ? { expectedUserId: principal, idempotencyKey: "" }
         : { expectedUserId: principal, idempotencyKey: "", body: reply, ...(safeContext ? { safeContext } : {}) },
     };
@@ -337,6 +382,7 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
     setReplying(true);
     setReplyMessage(null);
     try {
+      rememberRequest({ key: attempt.key, kind: attempt.kind, caseId: attempt.caseId });
       const result = await api.post<unknown>(
         supportPath(companyId, `/cases/${encodeURIComponent(attempt.caseId)}/${attempt.kind === "close" ? "close" : "replies"}`),
         attempt.payload,
@@ -406,6 +452,19 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
       </div>
     </header>
 
+    {restoredRequest && ready && <section className="space-y-3 rounded-md border border-border p-3" aria-busy={recoveryQuery.isFetching}>
+      <p role="status">{t(recoveryQuery.isFetching ? "supportCases.recoveringRequest" : recoveryQuery.data ? "supportCases.recoveredRequest" : "supportCases.resumeRequest")}</p>
+      <div className="flex flex-wrap items-center gap-3">
+        {recoveryQuery.data ? <Button className="min-h-11" onClick={() => {
+          if (!current()) return;
+          setSelectedCaseId(recoveryQuery.data!.id, true);
+        }}>{t("supportCases.openCase")} · {recoveryQuery.data.reference}</Button> : <>
+          <Button variant="outline" className="min-h-11" disabled={recoveryQuery.isFetching} onClick={() => void recoveryQuery.refetch()}>{t("supportCases.checkReceipt")}</Button>
+          {restoredRequest.caseId && restoredRequest.caseId !== selectedCaseId && <Button variant="outline" className="min-h-11" onClick={() => setSelectedCaseId(restoredRequest.caseId!)}>{t("supportCases.returnToRequest")}</Button>}
+        </>}
+      </div>
+    </section>}
+
     {accessLost ? <p role="alert">{t("supportCases.accessChanged")}</p> : null}
     {caseUnavailable && <p role="status">{t("supportCases.caseUnavailable")}</p>}
     {(policyQuery.isPending || listQuery.isPending) && <p role="status">{t("loading")}</p>}
@@ -443,11 +502,11 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
         <textarea aria-label={t("supportCases.replyLabel")} maxLength={SUPPORT_CASE_LIMITS.reply} className="min-h-24 w-full rounded-md border border-input bg-background p-3 text-foreground" value={reply} disabled={!!replySubmission} onChange={(event) => setReply(event.target.value)} />
       </label>
       {draftContext()}
-      <Button className="min-h-11" disabled={!reply.trim() || !ready || busy || replySubmission?.kind === "close"} onClick={() => void submitReply()}>
-        {replying && replySubmission?.kind === "reply" ? t("supportCases.sendingReply") : replySubmission?.kind === "reply" ? t("supportCases.retryReply") : t("supportCases.sendReply")}
+      <Button className="min-h-11" disabled={!reply.trim() || !ready || busy || replySubmission?.kind === "close" || recoveryBlocked || (!!restoredRequest && (restoredRequest.kind !== "reply" || restoredRequest.caseId !== selectedCaseId))} onClick={() => void submitReply()}>
+        {replying && replySubmission?.kind === "reply" ? t("supportCases.sendingReply") : (replySubmission?.kind === "reply" || (restoredRequest?.kind === "reply" && restoredRequest.caseId === selectedCaseId)) ? t("supportCases.retryReply") : t("supportCases.sendReply")}
       </Button>
-      {(detailQuery.data.status !== "CLOSED" || replySubmission?.kind === "close") && <Button variant="outline" className="min-h-11" disabled={!ready || busy || replySubmission?.kind === "reply"} onClick={() => void submitReply("close")}>
-        {replying && replySubmission?.kind === "close" ? t("supportCases.closing") : replySubmission?.kind === "close" ? t("supportCases.retryClose") : t("supportCases.closeCase")}
+      {(detailQuery.data.status !== "CLOSED" || replySubmission?.kind === "close" || (restoredRequest?.kind === "close" && restoredRequest.caseId === selectedCaseId)) && <Button variant="outline" className="min-h-11" disabled={!ready || busy || replySubmission?.kind === "reply" || recoveryBlocked || (!!restoredRequest && (restoredRequest.kind !== "close" || restoredRequest.caseId !== selectedCaseId))} onClick={() => void submitReply("close")}>
+        {replying && replySubmission?.kind === "close" ? t("supportCases.closing") : (replySubmission?.kind === "close" || (restoredRequest?.kind === "close" && restoredRequest.caseId === selectedCaseId)) ? t("supportCases.retryClose") : t("supportCases.closeCase")}
       </Button>}
       {replyMessage && <p role="status">{replyMessage}</p>}
       </>}
@@ -496,8 +555,8 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
       {draftContext()}
       <div className="flex items-center justify-between gap-3">
       <Button variant="outline" className="min-h-11" type="button" disabled={busy} onClick={() => setComposing(false)}>{t("supportCases.cancel")}</Button>
-      <Button className="min-h-11" type="submit" disabled={!description.trim() || busy || !ready}>
-        {submitting ? t("supportCases.sending") : submission ? t("supportCases.retrySubmit") : t("supportCases.submit")}
+      <Button className="min-h-11" type="submit" disabled={!description.trim() || busy || !ready || recoveryBlocked || (!!restoredRequest && restoredRequest.kind !== "create")}>
+        {submitting ? t("supportCases.sending") : (submission || restoredRequest?.kind === "create") ? t("supportCases.retrySubmit") : t("supportCases.submit")}
       </Button>
       </div>
       {submitMessage && <p role="status">{submitMessage}</p>}

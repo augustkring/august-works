@@ -226,7 +226,7 @@ describe("App Cases routing (PAP-13002)", () => {
     await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
     expect(container.querySelector('textarea[aria-label="Unsent work"]')).toBe(draft);
     expect(draft.value).toBe("Private unsent work");
-    expect(document.activeElement).toBe(container.querySelector('a[data-support-help-entry]'));
+    await vi.waitFor(() => expect(document.activeElement).toBe(container.querySelector('a[data-support-help-entry]')));
     unmountApp(root);
   });
 

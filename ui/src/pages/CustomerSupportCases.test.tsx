@@ -2,7 +2,7 @@
 import { act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter } from "react-router-dom";
+import { MemoryRouter, useLocation, type Location } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import { ApiError, api } from "../api/client";
 import { queryKeys } from "../lib/queryKeys";
@@ -77,6 +77,8 @@ const receipt = {
   nextCursor: null,
 };
 
+let lastLocation: Location | null = null;
+function ObserveSupportLocation() { lastLocation = useLocation(); return null; }
 let container: HTMLDivElement;
 let root: Root;
 let client: QueryClient;
@@ -100,11 +102,11 @@ async function mount(initialEntry: string | { pathname: string; state?: unknown;
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
-  await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[initialEntry]}><CustomerSupportCases /></MemoryRouter></QueryClientProvider>));
+  await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[initialEntry]}><ObserveSupportLocation /><CustomerSupportCases /></MemoryRouter></QueryClientProvider>));
   await flush();
 }
 async function rerender() {
-  await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter initialEntries={["/company/support"]}><CustomerSupportCases /></MemoryRouter></QueryClientProvider>));
+  await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter initialEntries={["/company/support"]}><ObserveSupportLocation /><CustomerSupportCases /></MemoryRouter></QueryClientProvider>));
   await flush();
 }
 async function clickSubmit() {
@@ -318,4 +320,126 @@ it("retries a closure with the same command key and preserves an unsent reply", 
   expect(post.mock.calls[0]![0]).toContain(`/cases/${waitingCase.id}/close`);
   expect(Object.keys(post.mock.calls[0]![1] as object).sort()).toEqual(["expectedUserId", "idempotencyKey"]);
   expect(container.querySelector<HTMLTextAreaElement>("article textarea")?.value).toBe("Keep my unsent reply");
+});
+
+
+it("recovers a receipt after remount without saving text in history or resending", async () => {
+  const privateText = "A private description that must stay out of browser history state.";
+  const saved = { ...receipt, subject: privateText, description: privateText,
+    timeline: [{ ...receipt.timeline[0], body: privateText }] };
+  let committed = false, finish: ((value: unknown) => void) | undefined;
+  vi.spyOn(api, "get").mockImplementation(async path => {
+    if (path.includes("/policy?")) return policy as never;
+    if (path.includes("/cases/requests/")) {
+      if (committed) return saved as never;
+      throw new ApiError("Not found", 404, null);
+    }
+    if (path.includes(`/cases/${saved.id}?`)) return saved as never;
+    if (path.includes("/cases?")) return list as never;
+    throw new Error("Unexpected support request");
+  });
+  const post = vi.spyOn(api, "post").mockImplementationOnce(() => new Promise(resolve => { finish = resolve; }));
+  await mount({ pathname: "/company/support", state: { companyId: state.companyId, expectedUserId: state.userId,
+    returnPathname: "/BLT/work", unrelatedDraft: "Unrelated secret text" } });
+  await vi.waitFor(() => expect(container.querySelector("form")).toBeTruthy());
+  await act(async () => setField("form textarea", privateText));
+  await clickSubmit();
+  await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+  const restoredState = JSON.parse(JSON.stringify(lastLocation!.state));
+  expect(restoredState.supportRequest).toEqual({ kind: "create", key: (post.mock.calls[0]![1] as { idempotencyKey: string }).idempotencyKey });
+  expect(JSON.stringify(restoredState)).not.toContain(privateText);
+  expect(JSON.stringify(restoredState)).not.toContain("Unrelated secret text");
+  expect(restoredState.supportRequest).not.toHaveProperty("payload");
+  await act(async () => root.unmount());
+  client.clear(); container.remove();
+  committed = true;
+  await mount({ pathname: "/company/support", state: restoredState });
+  await vi.waitFor(() => expect(container.textContent).toContain("Your previous submission has a saved receipt."));
+  expect(post).toHaveBeenCalledTimes(1);
+  await act(async () => finish?.(saved));
+  expect(post).toHaveBeenCalledTimes(1);
+  const view = [...container.querySelectorAll("button")].find(button => button.textContent?.includes(saved.reference));
+  expect(view).toBeTruthy();
+  await act(async () => view!.click());
+  await vi.waitFor(() => expect(container.querySelector("article")?.textContent).toContain(privateText));
+  expect(lastLocation!.state).not.toHaveProperty("supportRequest");
+});
+
+it("reuses the recovered key when an unconfirmed create must be entered again", async () => {
+  const key = "00000000-0000-4000-8000-000000000009";
+  vi.spyOn(api, "get").mockImplementation(async path => {
+    if (path.includes("/policy?")) return policy as never;
+    if (path.includes("/cases/requests/")) throw new ApiError("Not found", 404, null);
+    if (path.includes(`/cases/${receipt.id}?`)) return receipt as never;
+    if (path.includes("/cases?")) return list as never;
+    throw new Error("Unexpected support request");
+  });
+  const post = vi.spyOn(api, "post").mockResolvedValue(receipt as never);
+  await mount({ pathname: "/company/support", state: { companyId: state.companyId, expectedUserId: state.userId,
+    supportRequest: { key, kind: "create" } } });
+  await vi.waitFor(() => expect(container.textContent).toContain("The previous result is not confirmed."));
+  expect(post).not.toHaveBeenCalled();
+  await act(async () => setField("form textarea", "Help with a task"));
+  await clickSubmit();
+  await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+  expect(post.mock.calls[0]![1]).toMatchObject({ idempotencyKey: key, expectedUserId: state.userId });
+  await vi.waitFor(() => expect(lastLocation!.state).not.toHaveProperty("supportRequest"));
+});
+
+it.each(["principal", "company"])("ignores a recovered command for another %s", async scope => {
+  const key = "00000000-0000-4000-8000-000000000009";
+  const get = vi.spyOn(api, "get").mockImplementation(async path => {
+    if (path.includes("/policy?")) return policy as never;
+    if (path.includes(`/cases/${receipt.id}?`)) return receipt as never;
+    if (path.includes("/cases?")) return list as never;
+    throw new Error("Unexpected support request");
+  });
+  const post = vi.spyOn(api, "post").mockResolvedValue(receipt as never);
+  await mount({ pathname: "/company/support", state: {
+    companyId: scope === "company" ? "00000000-0000-4000-8000-000000000099" : state.companyId,
+    expectedUserId: scope === "principal" ? "another-support-user" : state.userId, supportRequest: { key, kind: "create" },
+  } });
+  await vi.waitFor(() => expect(container.querySelector("form")).toBeTruthy());
+  expect(get.mock.calls.some(([path]) => path.includes("/cases/requests/"))).toBe(false);
+  expect(post).not.toHaveBeenCalled();
+  await act(async () => setField("form textarea", "Help with a task"));
+  await clickSubmit();
+  await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+  expect((post.mock.calls[0]![1] as { idempotencyKey: string }).idempotencyKey).not.toBe(key);
+});
+
+it.each(["reply", "close"] as const)("recovers a %s only against its original case, including an already closed case", async kind => {
+  const key = "00000000-0000-4000-8000-000000000009";
+  const original = kind === "close" ? { ...waitingDetail, status: "CLOSED", requestedResponse: null, closedAt: "2026-10-23T11:00:00Z" } : waitingDetail;
+  const get = vi.spyOn(api, "get").mockImplementation(async path => {
+    if (path.includes("/policy?")) return policy as never;
+    if (path.includes("/cases/requests/")) throw new ApiError("Not found", 404, null);
+    if (path.includes(`/cases/${receipt.id}?`)) return receipt as never;
+    if (path.includes(`/cases/${original.id}?`)) return original as never;
+    if (path.includes("/cases?")) return { ...list, entries: [receipt, original] } as never;
+    throw new Error("Unexpected support request");
+  });
+  const post = vi.spyOn(api, "post").mockResolvedValue(original as never);
+  await mount({ pathname: "/company/support", search: `?case=${receipt.id}`, state: {
+    companyId: state.companyId, expectedUserId: state.userId, supportRequest: { key, kind, caseId: original.id },
+  } });
+  await vi.waitFor(() => expect(container.querySelector("article")?.textContent).toContain(receipt.description));
+  await vi.waitFor(() => expect(container.textContent).toContain("The previous result is not confirmed."));
+  await act(async () => setField('textarea[aria-label="Add a reply"]', "Other case reply must not be sent"));
+  const button = (text: string) => [...container.querySelectorAll("button")].find(entry => entry.textContent?.trim() === text);
+  expect(button("Send reply")?.disabled).toBe(true);
+  expect(button("Close case")?.disabled).toBe(true);
+  expect(post).not.toHaveBeenCalled();
+  await act(async () => button("Return to the previous request")!.click());
+  await vi.waitFor(() => expect(container.querySelector("article")?.textContent).toContain(original.description));
+  if (kind === "reply") await act(async () => setField('textarea[aria-label="Add a reply"]', "Recovered original reply"));
+  const label = kind === "close" ? "Retry closing case" : "Retry the same reply";
+  await vi.waitFor(() => expect(button(label)?.disabled).toBe(false));
+  await act(async () => button(label)!.click());
+  await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+  expect(post.mock.calls[0]![0]).toContain(`/cases/${original.id}/${kind === "close" ? "close" : "replies"}`);
+  expect(post.mock.calls[0]![1]).toEqual({ expectedUserId: state.userId, idempotencyKey: key,
+    ...(kind === "reply" ? { body: "Recovered original reply" } : {}) });
+  await vi.waitFor(() => expect(lastLocation!.state).not.toHaveProperty("supportRequest"));
+  expect(get.mock.calls.some(([path]) => path.includes(`/cases/requests/${key}`))).toBe(true);
 });

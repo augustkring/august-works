@@ -3110,6 +3110,11 @@
     "firstAgentDefault": "Chief of staff"
   },
   "supportCases": {
+    "recoveringRequest": "Checking your previous submission…",
+    "recoveredRequest": "Your previous submission has a saved receipt. Open the case to continue.",
+    "resumeRequest": "The previous result is not confirmed. This page cannot restore its text. Re-enter the text to retry the same request, or check its receipt again.",
+    "checkReceipt": "Check receipt",
+    "returnToRequest": "Return to the previous request",
     "sending": "Sending to support…",
     "sendingReply": "Sending reply…",
     "closing": "Closing case…",
