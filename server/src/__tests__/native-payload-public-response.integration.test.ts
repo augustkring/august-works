@@ -50,6 +50,7 @@ describe("Native payload proofs stay on the server at public response boundaries
     expect(row.id).toBe(id);
     expect.soft(row).not.toHaveProperty("payloadSourceProtocolVersion");
     expect.soft(row).not.toHaveProperty("payloadSourceSnapshot");
+    expect.soft(row).not.toHaveProperty("payloadSourceSnapshotInvalidated");
   }
 
   it("keeps Task list and detail payloads public while retaining their actual DB proof", async () => {
@@ -82,7 +83,8 @@ describe("Native payload proofs stay on the server at public response boundaries
   it("omits Memory proofs from detail, list and export and preserves arbitrary user metadata", async () => {
     const s = await seed();
     const [binding] = await db.insert(memoryBindings).values({ companyId: s.companyId, key: randomUUID(), name: "Actual binding", providerKey: "local" }).returning();
-    const metadata = { payloadSourceSnapshot: "User-authored metadata", nested: { payloadSourceProtocolVersion: "User-authored metadata" } };
+    const metadata = { payloadSourceSnapshot: "User-authored metadata", payloadSourceSnapshotInvalidated: "User-authored metadata",
+      nested: { payloadSourceProtocolVersion: "User-authored metadata" } };
     const [record] = await db.insert(memoryRecords).values({ companyId: s.companyId, bindingId: binding!.id, providerKey: "local", memoryType: "lesson",
       scopeType: "company", content: "Visible Memory", observedAt: new Date(), createdByActorType: "user", createdByActorId: s.userId,
       sourceProvenanceQualified: true, payloadSourceProtocolVersion: 1, metadata }).returning();

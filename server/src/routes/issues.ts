@@ -5340,7 +5340,7 @@ export function issueRoutes(
     id: string; blockedBy?: IssueRelationIssueSummary[]; blocks?: IssueRelationIssueSummary[];
     blockedByIssueIds?: string[]; blockerAttention?: CompactIssue["blockerAttention"];
     blockedInboxAttention?: CompactIssue["blockedInboxAttention"]; activeRecoveryAction?: CompactIssue["activeRecoveryAction"];
-  }>(req: Request, companyId: string, rows: T[]): Promise<Array<Omit<T, "payloadSourceProtocolVersion" | "payloadSourceSnapshot">>> {
+  }>(req: Request, companyId: string, rows: T[]): Promise<Array<Omit<T, "payloadSourceProtocolVersion" | "payloadSourceSnapshot" | "payloadSourceSnapshotInvalidated">>> {
     const ids = new Set(rows.map(row => row.id));
     const pending = rows.flatMap(row => [...(row.blockedBy ?? []), ...(row.blocks ?? [])]);
     for (const row of rows) {

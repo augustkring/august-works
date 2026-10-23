@@ -342,3 +342,12 @@ Initial combined case1PASS60.26s. Broader procedure suite exposed five existing 
 ### 2026-10-23 — Shared identity in canonical Runner selection and permission explanations
 
 Original adapter display registry and browser-safe Runner permission catalogue now reuse PRODUCT_IDENTITY for the customer product name. Actual identifiers, mode values, provider names and enforcement remain intact. Existing isolation/provider profile wording is retained, not new physical-host qualification. Existing2 suites17PASS11.93s, UI and adapter-utils typechecks and token gates actual/durable0, final2 pins match. No added copy-mirroring tests. See `brand-runner-display-checkpoint.json`. Transcript fallback names, complete brand inventory and broad V10 gates remain open.
+
+
+### 2026-10-23 — Preserve unknown payload history after invalidation
+
+Actual valid snapshot clear→NULL→empty-root rebind baseline fails1case21.03s because SQL accepted it. Generated0513 adds one monotonic private bit on six original owners and extends their existing shared binding trigger: only the trigger can latch it; invalidated histories cannot rebind. Existing protocol1NULL is conservatively latched, nonnull proof retained, protocol0 not upgraded. Original containment/body/tenant/digest guards remain. Existing response owner strips only the top-level bit; nested user metadata stays intact. No protocol/receipt/producer activation.
+
+Final actual PG2files11PASS92.55s includes all6 direct/reset/forgedinsert/rebind checks and real Memory evidence/asset invalidation. Root actual historical pre0513 upgrade4PASS23.62s; native snapshot drift1PASS23.10s; DB types/migration checks0. Initial server compiler exposed two unsynchronized original Task list types/selection. Root selects the real DB bit and omits it from generic public return, without invented defaults/casts/relaxed row types. Reviewed actual public API5PASS66.28s and final server compiler actual/durable0; all15 pins match. Initial pnpm wrong-environment refusal and actual compiler failure retained. Root reviewed/corrected bounded gpt-6-luna implementation. See `up04-native-payload-invalidation-checkpoint.json`.
+
+This closes the reproduced known→unknown→fakeknown integrity loophole only. No recovery/restamping API or producer source completeness is implied; all6 binding coverage is distinct from the Task historical upgrade fixture. Complete native inputs/dispatches/tools, current permission/SQL, original private Memory/temporal regressions and broad V10/release gates remain open.

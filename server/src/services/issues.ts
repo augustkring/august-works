@@ -5067,6 +5067,7 @@ async function listIssueReviewAttentionMap(
 const issueListSelect = {
   payloadSourceProtocolVersion: issues.payloadSourceProtocolVersion,
   payloadSourceSnapshot: issues.payloadSourceSnapshot,
+  payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated,
   visibility: issues.visibility,
   privacyRootIssueId: issues.privacyRootIssueId,
   privacyParentIssueId: issues.privacyParentIssueId,

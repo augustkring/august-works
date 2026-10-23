@@ -120,3 +120,10 @@ The subsequent bounded public-projection checkpoint passes16 cases and current s
 ## Actual dispatch distinction — 2026-10-23
 
 The original Native constructor persists a full bootstrap, while `buildNativeModelEnvelope` may send `continuationPrompt` on a warm session. A base input receipt protects the stored bootstrap bytes; it does not prove every bootstrap portion was dispatched. Derivative effects must capture the actual dispatched/returned input sets, including retained prior history, rather than automatically unioning unsent bootstrap content into their payload. Full run-payload inspection separately protects its stored bootstrap. Context/Task policy anchors remain current without traversing a source Task's future body. No receipt/constructor activation follows from these structural checkpoints.
+
+
+## Invalidation history — 2026-10-23
+
+Generated migration0513 adds an internal monotonic payloadSourceSnapshotInvalidated bit to the six original payload owners. The existing shared binding trigger sets it on known snapshot → NULL, rejects caller-supplied changes and forged true inserts, and refuses any later snapshot after invalidation. Existing protocol1 NULL rows are conservatively latched during upgrade because their lost history cannot be distinguished from an initially unbound row. Existing nonnull proof is unchanged; protocol0 remains unknown and cannot upgrade. Fresh protocol1 structural initial binding remains possible and still proves no source completeness or permission.
+
+This prevents the reproduced clear-then-rebind loophole. It deliberately offers no recovery/restamping API for a row whose history was lost, and does not qualify producers, complete receipts, mixed writers or restore/recreation. The existing public-row owner removes the new internal field only at the top level; nested user data is preserved. Complete source-preserving writes and the private Memory/temporal read regressions remain mandatory before UP03 admission. Verification is recorded in the dated recovery ledger and evidence checkpoint after process closure.

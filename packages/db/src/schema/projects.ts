@@ -14,6 +14,7 @@ export const projects = pgTable(
     // or an empty source set cannot reconstruct their lost input history.
     payloadSourceProtocolVersion: integer("payload_source_protocol_version").notNull().default(0),
     payloadSourceSnapshot: jsonb("payload_source_snapshot").$type<NativePayloadSourceSnapshot | null>(),
+    payloadSourceSnapshotInvalidated: boolean("payload_source_snapshot_invalidated").notNull().default(false),
     companyId: uuid("company_id").notNull().references(() => companies.id),
     goalId: uuid("goal_id").references(() => goals.id),
     name: text("name").notNull(),
