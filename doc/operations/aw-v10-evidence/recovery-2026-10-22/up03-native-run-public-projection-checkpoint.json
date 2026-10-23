@@ -50,7 +50,14 @@
   "limits": [
     "Actual PG detail + mock-backed wakeup/invoke/cancel API serialization, not credential/transport/full source privacy qualification.",
     "Initial actual exposure failures and existing 30s cold dynamic-import timeouts retained. Fixture transformation warmup moved into bounded existing beforeAll budget, HTTP case deadlines/assertions/guards unchanged.",
-    "Full two-file 91-case run is in progress separately, not claimed by this checkpoint.",
     "Original private Memory copy/temporal regressions, complete Run input closure, current source authorization and all V10 release gates remain open."
-  ]
+  ],
+  "fullBothFiles": {
+    "actualExit": 0,
+    "passed": 91,
+    "durationSeconds": 232.25,
+    "log": "up03-run-public-dto-full.log",
+    "all3PinsUnchanged": true,
+    "exitObservation": "Original command captured actual exit in durable file, complete verdict/cleanup and process closure observed. Original agent tool session unavailable after model-capacity error; no fabricated tool-closure result."
+  }
 }
