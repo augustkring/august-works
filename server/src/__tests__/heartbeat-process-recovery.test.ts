@@ -2,10 +2,11 @@ import * as executionContinuation from "../services/execution-continuation.js";
 import { legacyDispositionFingerprint, LEGACY_DISPOSITION_REPAIR_INSTRUCTION } from "../services/recovery/legacy-continuation.js";
 import * as controllerLeases from "../services/legacy-controller-lease.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { mockedCodexAdapterConfig } from "./helpers/mocked-codex-config.js";
 import { terminalizeLegacyExecution } from "../services/legacy-execution-recovery.js";
 import { issueService } from "../services/issues.js";
+import { documentService } from "../services/documents.js";
 import { getExecutionBlocker } from "../services/execution-blocker.js";
 import { adapterExecutionControls, createAdapterExecutionControl } from "../services/adapter-execution-control.js";
 import { spawn, type ChildProcess } from "node:child_process";
@@ -2696,6 +2697,50 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       expect(coordinator).toMatchObject({ attempt: 0, leaseOwner: null });
       const [task] = await db.select().from(issues).where(eq(issues.id, issueId));
       expect(task.executionRunId).toBeNull();
+    });
+  });
+
+  it("persists the selected Task and plan source captures with the first native bootstrap before dispatch", async () => {
+    await withTempPaperclipHome(async () => {
+      const { agentId, issueId, runId } = await seedQueuedIssueRunFixture();
+      await db.update(agents).set({ adapterType: "paperclip_runner",
+        adapterConfig: { ...mockedCodexAdapterConfig, provider: "codex", model: "gpt-5.6-luna" },
+      }).where(eq(agents.id, agentId));
+      await db.update(heartbeatRuns).set({ invocationSource: "automation" }).where(eq(heartbeatRuns.id, runId));
+      const plan = await documentService(db).upsertIssueDocument({ issueId, key: "plan", format: "markdown", body: "Original native bootstrap plan" });
+      const factory = vi.fn(() => { throw new Error("provider must not start"); });
+      let reachedDispatch = false;
+      const heartbeat = heartbeatService(db, {
+        nativeSessionBackendFactory: factory,
+        beforeChatControlRecoveryCheck: async ({ stage, runId: id }) => {
+          if (stage !== "dispatch") return;
+          reachedDispatch = true;
+          const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, id));
+          const [task] = await db.select().from(issues).where(eq(issues.id, issueId));
+          const [version] = await db.execute<{ version: string }>(sql`select extract(epoch from updated_at)::text as version from issues where id=${issueId}::uuid`);
+          const profile = run!.runnerProfileJson!;
+          expect(profile.nativeBootstrapTaskSource).toEqual({ input: { kind: "task", issueId, sourceVersion: version!.version,
+            contentHash: createHash("sha256").update(JSON.stringify({ id: task!.id, identifier: task!.identifier,
+              title: task!.title, description: task!.description, workMode: task!.workMode })).digest("hex") }, payloadSourceSnapshot: null });
+          expect(profile.nativeBootstrapTaskPlanSources).toEqual([{ input: { kind: "document_revision", documentId: plan.document.id,
+            revisionId: plan.document.latestRevisionId, issueId,
+            contentHash: createHash("sha256").update("Original native bootstrap plan").digest("hex") }, payloadSourceSnapshot: null }]);
+          expect(profile.nativeBootstrapPlanningSources).toEqual([]);
+          expect(JSON.stringify(profile.nativeExecutionInput)).toContain("Original native bootstrap plan");
+          const retained = structuredClone(profile);
+          await db.update(issues).set({ title: "Later Task title", updatedAt: new Date() }).where(eq(issues.id, issueId));
+          await documentService(db).upsertIssueDocument({ issueId, key: "plan", format: "markdown", body: "Later plan revision",
+            baseRevisionId: plan.document.latestRevisionId });
+          const [after] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, id));
+          expect(after!.runnerProfileJson).toEqual(retained);
+          await heartbeat.cancelRun(id);
+        },
+      });
+      await heartbeat.resumeQueuedRuns();
+      await heartbeat.drainActiveRunExecutions();
+      expect(reachedDispatch).toBe(true);
+      expect(factory).not.toHaveBeenCalled();
+      expect(await heartbeat.getRun(runId)).toMatchObject({ status: "cancelled", runtimeMode: "native" });
     });
   });
 

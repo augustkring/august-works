@@ -398,7 +398,7 @@ import {
   readManagedWorktreeInstanceOwnership,
   WORKTREE_INSTANCE_ROOT_METADATA_KEY,
 } from "./workspace-instance-cleanup.js";
-import { issueService } from "./issues.js";
+import { issueService, type NativeTaskSourceCapture } from "./issues.js";
 import {
   blockRunnerGoalRecovery,
   failRunnerGoalAction,
@@ -8523,6 +8523,73 @@ function buildRunEventRuntimeProgress(input: {
   };
 }
 
+export async function getIssueExecutionContext(db: Db, companyId: string, issueId: string,
+  onSourceCapture?: (capture: NativeTaskSourceCapture | null) => void) {
+  const row = await db
+    .select({
+      chatCommunicationGuidance: chatConversations.communicationGuidance,
+      chatAssignedAgentId: chatEndpoints.assignedAgentId,
+      externalConversationState: externalConversationStateSql(),
+      conversationAgentId: issues.conversationAgentId,
+      conversationUserId: issues.conversationUserId,
+      conversationState: issues.conversationState,
+      conversationSessionGeneration: issues.conversationSessionGeneration,
+      conversationBoundaryCommentId: issues.conversationBoundaryCommentId,
+      id: issues.id,
+      identifier: issues.identifier,
+      title: issues.title,
+      description: issues.description,
+      status: issues.status,
+      workMode: issues.workMode,
+      reviewPolicy: issues.reviewPolicy,
+      priority: issues.priority,
+      projectId: issues.projectId,
+      projectWorkspaceId: issues.projectWorkspaceId,
+      executionWorkspaceId: issues.executionWorkspaceId,
+      executionWorkspacePreference: issues.executionWorkspacePreference,
+      assigneeAgentId: issues.assigneeAgentId,
+      assigneeAdapterOverrides: issues.assigneeAdapterOverrides,
+      executionPolicy: issues.executionPolicy,
+      executionState: issues.executionState,
+      executionWorkspaceSettings: issues.executionWorkspaceSettings,
+      parentId: issues.parentId,
+      createdByUserId: issues.createdByUserId,
+      responsibleUserId: issues.responsibleUserId,
+      originKind: issues.originKind,
+      originId: issues.originId,
+      originRunId: issues.originRunId,
+      originIdentityContextId: issues.originIdentityContextId,
+      continuationIdentityContextId: issues.continuationIdentityContextId,
+      updatedAt: issues.updatedAt,
+      payloadSourceSnapshot: issues.payloadSourceSnapshot,
+      sourceVersion: sql<string>`extract(epoch from ${issues.updatedAt})::text`,
+    })
+    .from(issues)
+    .leftJoin(chatConversations, and(
+      eq(chatConversations.companyId, issues.companyId),
+      eq(chatConversations.issueId, issues.id),
+    ))
+    .leftJoin(chatEndpoints, and(
+      eq(chatEndpoints.companyId, chatConversations.companyId),
+      eq(chatEndpoints.id, chatConversations.endpointId),
+      eq(chatEndpoints.provider, "slack"),
+    ))
+    .where(and(eq(issues.id, issueId), eq(issues.companyId, companyId)))
+    .then((rows) => rows[0] ?? null);
+  if (!row) {
+    onSourceCapture?.(null);
+    return null;
+  }
+  const { payloadSourceSnapshot, sourceVersion, ...context } = row;
+  onSourceCapture?.({ input: { kind: "task", issueId: context.id, sourceVersion,
+    // Selected Task rendition; final transformed provider bytes are bound
+    // separately. This source capture is not completeness or permission.
+    contentHash: createHash("sha256").update(JSON.stringify({ id: context.id, identifier: context.identifier,
+      title: context.title, description: context.description, workMode: context.workMode }), "utf8").digest("hex") },
+    payloadSourceSnapshot });
+  return context;
+}
+
 export function buildPaperclipTaskMarkdown(input: {
   issue: {
     id: string;
@@ -10642,57 +10709,6 @@ export function heartbeatService(
       .then((rows) => rows[0] ?? null);
   }
 
-  async function getIssueExecutionContext(companyId: string, issueId: string) {
-    return db
-      .select({
-        chatCommunicationGuidance: chatConversations.communicationGuidance,
-        chatAssignedAgentId: chatEndpoints.assignedAgentId,
-        externalConversationState: externalConversationStateSql(),
-        conversationAgentId: issues.conversationAgentId,
-        conversationUserId: issues.conversationUserId,
-        conversationState: issues.conversationState,
-        conversationSessionGeneration: issues.conversationSessionGeneration,
-        conversationBoundaryCommentId: issues.conversationBoundaryCommentId,
-        id: issues.id,
-        identifier: issues.identifier,
-        title: issues.title,
-        description: issues.description,
-        status: issues.status,
-        workMode: issues.workMode,
-        reviewPolicy: issues.reviewPolicy,
-        priority: issues.priority,
-        projectId: issues.projectId,
-        projectWorkspaceId: issues.projectWorkspaceId,
-        executionWorkspaceId: issues.executionWorkspaceId,
-        executionWorkspacePreference: issues.executionWorkspacePreference,
-        assigneeAgentId: issues.assigneeAgentId,
-        assigneeAdapterOverrides: issues.assigneeAdapterOverrides,
-        executionPolicy: issues.executionPolicy,
-        executionState: issues.executionState,
-        executionWorkspaceSettings: issues.executionWorkspaceSettings,
-        parentId: issues.parentId,
-        createdByUserId: issues.createdByUserId,
-        responsibleUserId: issues.responsibleUserId,
-        originKind: issues.originKind,
-        originId: issues.originId,
-        originRunId: issues.originRunId,
-        originIdentityContextId: issues.originIdentityContextId,
-        continuationIdentityContextId: issues.continuationIdentityContextId,
-        updatedAt: issues.updatedAt,
-      })
-      .from(issues)
-      .leftJoin(chatConversations, and(
-        eq(chatConversations.companyId, issues.companyId),
-        eq(chatConversations.issueId, issues.id),
-      ))
-      .leftJoin(chatEndpoints, and(
-        eq(chatEndpoints.companyId, chatConversations.companyId),
-        eq(chatEndpoints.id, chatConversations.endpointId),
-        eq(chatEndpoints.provider, "slack"),
-      ))
-      .where(and(eq(issues.id, issueId), eq(issues.companyId, companyId)))
-      .then((rows) => rows[0] ?? null);
-  }
 
   async function getPinnedSkillTestContext(companyId: string, issueId: string) {
     const row = await db
@@ -11033,7 +11049,7 @@ export function heartbeatService(
       readNonEmptyString(contextSnapshot.issueId) ??
       readNonEmptyString(contextSnapshot.taskId);
     const issueContext = issueId
-      ? await getIssueExecutionContext(run.companyId, issueId)
+      ? await getIssueExecutionContext(db, run.companyId, issueId)
       : null;
     return resolveResponsibleUserIdForRun({
       run,
@@ -13108,7 +13124,7 @@ export function heartbeatService(
 
     const issueId = readNonEmptyString(context.issueId);
     if (!issueId) return;
-    const waitingContext = await getIssueExecutionContext(run.companyId, issueId);
+    const waitingContext = await getIssueExecutionContext(db, run.companyId, issueId);
     if (isWaitingConversation(waitingContext) || waitingContext?.externalConversationState === "waiting") return;
 
     const [issue, agent] = await Promise.all([
@@ -13310,7 +13326,7 @@ export function heartbeatService(
     const issueId =
       readNonEmptyString(context.issueId) ?? readNonEmptyString(context.taskId);
     if (!issueId) return;
-    const waitingContext = await getIssueExecutionContext(run.companyId, issueId);
+    const waitingContext = await getIssueExecutionContext(db, run.companyId, issueId);
     if (isWaitingConversation(waitingContext) || waitingContext?.externalConversationState === "waiting") return;
     if (
       readNonEmptyString(context.goalControlRequestId) ||
@@ -13629,7 +13645,7 @@ export function heartbeatService(
       readNonEmptyString(contextSnapshot.issueId) ??
       readNonEmptyString(contextSnapshot.taskId);
     if (!issueId) return;
-    const waitingContext = await getIssueExecutionContext(run.companyId, issueId);
+    const waitingContext = await getIssueExecutionContext(db, run.companyId, issueId);
     if (isWaitingConversation(waitingContext) || waitingContext?.externalConversationState === "waiting") return;
 
     const issue = await db
@@ -17344,7 +17360,7 @@ export function heartbeatService(
       run,
       contextSnapshot: context,
       issueContext: issueId
-        ? await getIssueExecutionContext(run.companyId, issueId)
+        ? await getIssueExecutionContext(db, run.companyId, issueId)
         : null,
       routineEnvContext: {
         routineId: null,
@@ -20239,7 +20255,7 @@ export function heartbeatService(
       const dispatchIssueId = readNonEmptyString(parseObject(run.contextSnapshot).issueId);
       const resumingAdmittedConversationTurn = !!runOptions.nativeLeaseOwner
         && typeof run.contextSnapshot?.conversationSessionGeneration === "number";
-      if (dispatchIssueId && isConversation(await getIssueExecutionContext(run.companyId, dispatchIssueId))
+      if (dispatchIssueId && isConversation(await getIssueExecutionContext(db, run.companyId, dispatchIssueId))
         && !resumingAdmittedConversationTurn && !(await instanceSettings.getExperimental()).enableAgentChat) {
         await setRunStatus(run.id, "cancelled", { finishedAt: new Date(), error: "Agent Chat is disabled", errorCode: "agent_chat_disabled" });
         await setWakeupStatus(run.wakeupRequestId, "cancelled", { finishedAt: new Date() });
@@ -20328,8 +20344,10 @@ export function heartbeatService(
       const taskKey = deriveTaskKeyWithHeartbeatFallback(context, null);
       const sessionCodec = getAdapterSessionCodec(agent.adapterType);
       const issueId = readNonEmptyString(context.issueId);
+      let taskSourceCapture: NativeTaskSourceCapture | null = null;
+      const captureTaskSource = (capture: NativeTaskSourceCapture | null) => { taskSourceCapture = capture; };
       let issueContext = issueId
-        ? await getIssueExecutionContext(agent.companyId, issueId)
+        ? await getIssueExecutionContext(db, agent.companyId, issueId, captureTaskSource)
         : null;
       const issueDependencyReadiness = issueId
         ? await issuesSvc
@@ -20366,7 +20384,7 @@ export function heartbeatService(
           }
           throw error;
         }
-        issueContext = await getIssueExecutionContext(agent.companyId, issueId);
+        issueContext = await getIssueExecutionContext(db, agent.companyId, issueId, captureTaskSource);
       }
       if (
         issueId &&
@@ -20394,7 +20412,7 @@ export function heartbeatService(
           if (!isCheckoutConflictError(error)) throw error;
           context[PAPERCLIP_HARNESS_CHECKOUT_KEY] = false;
         }
-        issueContext = await getIssueExecutionContext(agent.companyId, issueId);
+        issueContext = await getIssueExecutionContext(db, agent.companyId, issueId, captureTaskSource);
       }
       if (
         issueId &&
@@ -20739,8 +20757,9 @@ export function heartbeatService(
         wakeCommentContext && !exposeLowTrustRaw
           ? sanitizeQuarantinedCommentForHigherTrust(wakeCommentContext)
           : wakeCommentContext;
+      const ancestorSourceCaptures: NativeTaskSourceCapture[] = [];
       const issueAncestors = issueRef
-        ? await issuesSvc.getAncestors(issueRef.id)
+        ? await issuesSvc.getAncestors(issueRef.id, { onSourceCapture: capture => ancestorSourceCaptures.push(capture) })
         : [];
       if (continuationSummary) {
         context.paperclipContinuationSummary = {
@@ -23148,6 +23167,7 @@ export function heartbeatService(
         let nativeBootstrapConversationReplaySources: typeof conversationReplaySourceCaptures | null = null;
         let nativeBootstrapTaskPlanSources: DocumentRevisionSourceCapture[] | null = null;
         let nativeBootstrapPlanningSources: DocumentRevisionSourceCapture[] | null = null;
+        let nativeBootstrapAncestorSources: NativeTaskSourceCapture[] | null = null;
         let nativeRunnerInstanceId: string | null = null;
         if (nativeRuntimeResolution.kind === "native") {
           if (!issueRef) {
@@ -23172,6 +23192,7 @@ export function heartbeatService(
           // collector references; the unified receipt must bind final redacted
           // input bytes separately before qualifying any derivative effect.
           nativeBootstrapConversationReplaySources = nativeReviewRequest ? [] : conversationReplaySourceCaptures;
+          nativeBootstrapAncestorSources = nativeReviewRequest || directAgentPrompt ? [] : ancestorSourceCaptures;
           nativeBootstrapTaskPlanSources = nativeReviewRequest || directAgentPrompt || !taskPlan ? []
             : taskPlanSourceCaptures.length ? taskPlanSourceCaptures : null;
           const persistedContract = run.completionContractId
@@ -23810,6 +23831,7 @@ export function heartbeatService(
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapContextManifests }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapConversationReplaySources }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapTaskPlanSources, nativeBootstrapPlanningSources }),
+                  ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapTaskSource: taskSourceCapture, nativeBootstrapAncestorSources }),
                   nativeExecutionInput:
                     lockedProfile.nativeExecutionInput ?? nativeExecution,
                   nativeToolContractFingerprint:
@@ -26362,7 +26384,7 @@ export function heartbeatService(
     if (!agent) throw notFound("Agent not found");
     await assertSaasExecutionAdmission(db,agent);
     if (issueId) {
-      const conversation = await getIssueExecutionContext(agent.companyId, issueId);
+      const conversation = await getIssueExecutionContext(db, agent.companyId, issueId);
       if (isConversation(conversation)) {
         if (opts.manualUserWake && conversation!.conversationUserId !== opts.requestedByActorId) {
           throw new HttpError(403, "Only the conversation owner can start a chat run");
@@ -26706,7 +26728,7 @@ export function heartbeatService(
       if (operatorResponsibleUserId) return Promise.resolve(operatorResponsibleUserId);
       queuedResponsibleUserIdPromise ??= (async () => {
         const queuedIssueContext = issueId
-          ? await getIssueExecutionContext(agent.companyId, issueId)
+          ? await getIssueExecutionContext(db, agent.companyId, issueId)
           : null;
         const queuedRoutineEnvContext = await getRoutineEnvForExecutionIssue(
           agent.companyId,

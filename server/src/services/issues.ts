@@ -99,6 +99,8 @@ import type {
   IssueRelationIssueSummary,
   IssueWatchdogSummary,
   LowTrustBoundary,
+  NativePayloadSourceInput,
+  NativePayloadSourceSnapshot,
   SuccessfulRunHandoffState,
 } from "@paperclipai/shared";
 import {
@@ -1971,6 +1973,11 @@ type IssueUserContextInput = {
 };
 type ProjectGoalReader = Pick<Db, "select">;
 type DbReader = Pick<Db, "select">;
+/** Selected Task rendition, not source completeness, permission or final wire bytes. */
+export interface NativeTaskSourceCapture {
+  readonly input: Extract<NativePayloadSourceInput, { kind: "task" }>;
+  readonly payloadSourceSnapshot: NativePayloadSourceSnapshot | null;
+}
 /** Conversation containers cannot acquire new child edges, even with the experiment disabled. */
 async function assertExecutionTaskParent(db: Db, companyId: string, parentId?: string | null) {
   if (!parentId) return;
@@ -13628,7 +13635,10 @@ export function issueService(db: Db) {
       return [...mentionedIds].filter((projectId) => valid.has(projectId));
     },
 
-    getAncestors: async (issueId: string) => {
+    getAncestors: async (issueId: string, options?: {
+      onSourceCapture?: (capture: NativeTaskSourceCapture) => void;
+    }) => {
+      const onSourceCapture = options?.onSourceCapture;
       const raw: Array<{
         id: string;
         identifier: string | null;
@@ -13649,6 +13659,9 @@ export function issueService(db: Db) {
       let currentId = start?.parentId ?? null;
       while (currentId && !visited.has(currentId) && raw.length < 50) {
         visited.add(currentId);
+        // The native Task Markdown renders only the first six ancestors.
+        // Default public reads neither select nor return capture metadata.
+        const captureSource = Boolean(onSourceCapture) && raw.length < 6;
         const parent = await db
           .select({
             id: issues.id,
@@ -13661,6 +13674,10 @@ export function issueService(db: Db) {
             projectId: issues.projectId,
             goalId: issues.goalId,
             parentId: issues.parentId,
+            ...(captureSource ? {
+              sourceVersion: sql<string>`extract(epoch from ${issues.updatedAt})::text`,
+              payloadSourceSnapshot: issues.payloadSourceSnapshot,
+            } : {}),
           })
           .from(issues)
           .where(eq(issues.id, currentId))
@@ -13677,6 +13694,17 @@ export function issueService(db: Db) {
           projectId: parent.projectId ?? null,
           goalId: parent.goalId ?? null,
         });
+        if (captureSource) {
+          const sourceVersion = parent.sourceVersion;
+          if (typeof sourceVersion !== "string") throw new Error("Selected ancestor source version is unavailable");
+          onSourceCapture?.({
+            input: { kind: "task", issueId: parent.id, sourceVersion,
+              contentHash: createHash("sha256").update(JSON.stringify({ id: parent.id, identifier: parent.identifier ?? null,
+                title: parent.title, status: parent.status, priority: parent.priority }), "utf8").digest("hex") },
+            // An absent historical closure remains unknown, never source-free.
+            payloadSourceSnapshot: parent.payloadSourceSnapshot ?? null,
+          });
+        }
         currentId = parent.parentId ?? null;
       }
 

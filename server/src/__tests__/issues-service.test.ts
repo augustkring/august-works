@@ -1,5 +1,5 @@
 import { projectService } from "../services/projects.js";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { and, asc, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
@@ -46,6 +46,7 @@ import {
   deriveIssueCommentRunLogAttribution,
   ISSUE_LIST_MAX_LIMIT,
   issueService,
+  type NativeTaskSourceCapture,
 } from "../services/issues.ts";
 import {
   WORKSPACE_WORKTREE_REQUIRES_PROJECT_CODE,
@@ -54,6 +55,7 @@ import {
 } from "../services/execution-workspace-policy.ts";
 import { buildAgentMentionHref, buildProjectMentionHref, MAX_ISSUE_REQUEST_DEPTH, type IssueWorkMode } from "@paperclipai/shared";
 import { canActorReadIssuePrivacy } from "../services/authorization.js";
+import { getIssueExecutionContext } from "../services/heartbeat.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -73,6 +75,98 @@ describe("issue list limit helpers", () => {
     expect(clampIssueListLimit(0)).toBe(1);
     expect(clampIssueListLimit(25.9)).toBe(25);
     expect(clampIssueListLimit(ISSUE_LIST_MAX_LIMIT + 10)).toBe(ISSUE_LIST_MAX_LIMIT);
+  });
+});
+
+describeEmbeddedPostgres("issueService native ancestor source capture",()=>{
+  let database:Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>,db:ReturnType<typeof createDb>;
+  beforeAll(async()=>{database=await startEmbeddedPostgresTestDatabase("native-ancestor-source-capture-");db=createDb(database.connectionString);},EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
+  afterAll(async()=>{await database?.cleanup();},30000);
+  async function chain(){
+    const companyId=randomUUID();
+    await db.insert(companies).values({id:companyId,name:"Native ancestor fixture",issuePrefix:randomUUID()});
+    const rows:Array<typeof issues.$inferSelect>=[];
+    for(let i=0;i<9;i++){
+      const [row]=await db.insert(issues).values({companyId,title:`Ancestor source ${i}`,identifier:`ANC-${companyId}-${i}`,
+        description:`Unused ancestor description ${i}`,parentId:rows.at(-1)?.id??null,
+        status:"todo",priority:"medium",payloadSourceProtocolVersion:i===7?1:0}).returning();
+      rows.push(row!);
+    }
+    // Canonical source-free structural envelope, not producer qualification.
+    const id=rows[7]!.id;
+    const [sealed]=await db.execute<{snapshot:Record<string,unknown>}>(sql`with content as (select jsonb_build_object('version',1,
+      'owner',jsonb_build_object('kind','issue','companyId',company_id::text,'id',id::text,
+        'contentHash',public.aw_native_payload_body_hash('issue',to_jsonb(i))),
+      'policy',jsonb_build_object('issueIds','[]'::jsonb,'projectIds','[]'::jsonb,'runIds','[]'::jsonb,'memoryIds','[]'::jsonb,
+        'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as value from issues i where id=${id}::uuid)
+      update issues set payload_source_snapshot=value || jsonb_build_object('digest',encode(sha256(convert_to(value::text,'UTF8')),'hex')),
+        updated_at='2026-10-23T01:02:03.123456Z'::timestamptz from content where id=${id}::uuid
+      returning payload_source_snapshot as snapshot`);
+    return {rows,selected:rows[7]!,target:rows[8]!,snapshot:sealed!.snapshot};
+  }
+  function scalarHash(row:Pick<typeof issues.$inferSelect,"id"|"identifier"|"title"|"status"|"priority">){
+    return createHash("sha256").update(JSON.stringify({id:row.id,identifier:row.identifier,title:row.title,status:row.status,priority:row.priority}),"utf8").digest("hex");
+  }
+  it("captures only the six rendered ancestors with selected snapshots and exact microsecond versions without public metadata",async()=>{
+    const seeded=await chain(),svc=issueService(db),captures:NativeTaskSourceCapture[]=[];
+    const original=await svc.getAncestors(seeded.target.id);
+    const result=await svc.getAncestors(seeded.target.id,{onSourceCapture:capture=>captures.push(capture)});
+    expect(result).toEqual(original);
+    expect(result).toHaveLength(8);
+    const versions=await db.execute<{id:string;version:string}>(sql`select id,extract(epoch from updated_at)::text as version
+      from issues where company_id=${seeded.target.companyId}::uuid`);
+    const versionMap=new Map(versions.map(row=>[row.id,row.version]));
+    expect(captures).toEqual(result.slice(0,6).map((row,index)=>({input:{kind:"task",issueId:row.id,
+      sourceVersion:versionMap.get(row.id),contentHash:scalarHash(row)},payloadSourceSnapshot:index===0?seeded.snapshot:null})));
+    expect(captures[0]!.input.sourceVersion).toMatch(/123456$/);
+    expect(captures.map(capture=>capture.input.issueId)).toEqual(seeded.rows.slice(2,8).reverse().map(row=>row.id));
+    for(const row of result){
+      expect(row).not.toHaveProperty("payloadSourceSnapshot");
+      expect(row).not.toHaveProperty("sourceVersion");
+      expect(row).not.toHaveProperty("sourceCapture");
+    }
+  });
+  it("retains the original captured row after mutation and hashes only the selected Markdown scalar projection",async()=>{
+    const seeded=await chain(),svc=issueService(db),captured:NativeTaskSourceCapture[]=[];
+    const original=await svc.getAncestors(seeded.target.id,{onSourceCapture:capture=>captured.push(capture)});
+    expect(captured[0]?.payloadSourceSnapshot).toEqual(seeded.snapshot);
+    await db.update(issues).set({description:"Later unrelated private description",payloadSourceSnapshot:null,updatedAt:new Date()})
+      .where(eq(issues.id,seeded.selected.id));
+    const later:NativeTaskSourceCapture[]=[];
+    await svc.getAncestors(seeded.target.id,{onSourceCapture:capture=>later.push(capture)});
+    expect(later[0]!.input.contentHash).toBe(captured[0]!.input.contentHash);
+    expect(later[0]!.input.sourceVersion).not.toBe(captured[0]!.input.sourceVersion);
+    expect(later[0]!.payloadSourceSnapshot).toBeNull();
+    expect(captured[0]!.payloadSourceSnapshot).toEqual(seeded.snapshot);
+    expect(captured[0]!.input.contentHash).toBe(scalarHash(original[0]!));
+    const empty:NativeTaskSourceCapture[]=[];
+    expect(await svc.getAncestors(seeded.rows[0]!.id,{onSourceCapture:capture=>empty.push(capture)})).toEqual([]);
+    expect(empty).toEqual([]);
+  });
+  it("captures the original selected Task context without adding source metadata to its DTO",async()=>{
+    const seeded=await chain(),captures:Array<NativeTaskSourceCapture|null>=[];
+    const context=await getIssueExecutionContext(db,seeded.target.companyId,seeded.selected.id,capture=>captures.push(capture));
+    expect(context!.id).toBe(seeded.selected.id);
+    const [version]=await db.execute<{version:string}>(sql`select extract(epoch from updated_at)::text as version from issues
+      where id=${seeded.selected.id}::uuid`);
+    expect(version!.version).toMatch(/123456$/);
+    expect(captures[0]).toEqual({input:{kind:"task",issueId:context!.id,sourceVersion:version!.version,
+      contentHash:createHash("sha256").update(JSON.stringify({id:context!.id,identifier:context!.identifier,title:context!.title,
+        description:context!.description,workMode:context!.workMode}),"utf8").digest("hex")},payloadSourceSnapshot:seeded.snapshot});
+    expect(context).not.toHaveProperty("sourceVersion");
+    expect(context).not.toHaveProperty("payloadSourceSnapshot");
+    const unknown:Array<NativeTaskSourceCapture|null>=[];
+    await getIssueExecutionContext(db,seeded.target.companyId,seeded.target.id,capture=>unknown.push(capture));
+    expect(unknown[0]?.payloadSourceSnapshot).toBeNull();
+    for(const [company,id] of [[randomUUID(),seeded.selected.id],[seeded.target.companyId,randomUUID()]]){
+      const absent:Array<NativeTaskSourceCapture|null>=[];
+      expect(await getIssueExecutionContext(db,company!,id!,capture=>absent.push(capture))).toBeNull();
+      expect(absent).toEqual([null]);
+    }
+    await db.update(issues).set({description:"Later Task body",payloadSourceSnapshot:null,updatedAt:new Date()})
+      .where(eq(issues.id,seeded.selected.id));
+    expect(context!.description).toBe(seeded.selected.description);
+    expect(captures[0]!.payloadSourceSnapshot).toEqual(seeded.snapshot);
   });
 });
 
