@@ -1,4 +1,5 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   companies,
@@ -13,7 +14,9 @@ import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
+import type { DocumentRevisionSourceCapture } from "../services/documents.js";
 import { documentService } from "../services/documents.js";
+import { getIssueContinuationSummaryDocument } from "../services/issue-continuation-summary.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -111,6 +114,65 @@ describeEmbeddedPostgres("documentService system issue documents", () => {
       key: ISSUE_CONTINUATION_SUMMARY_DOCUMENT_KEY,
       body: "# Handoff",
     }));
+  });
+
+  it("retains the summary revision through the original document owner without adding DTO fields", async () => {
+    const { issueId } = await createIssueWithDocuments();
+    const normal = await getIssueContinuationSummaryDocument(db, issueId);
+    const captures: Array<DocumentRevisionSourceCapture | null> = [];
+    const selected = await getIssueContinuationSummaryDocument(db, issueId, { onSourceCapture: capture => captures.push(capture) });
+    expect(selected).toEqual(normal);
+    expect(captures).toEqual([{ input: { kind: "document_revision", documentId: expect.any(String),
+      revisionId: selected!.latestRevisionId, issueId, contentHash: createHash("sha256").update(selected!.body).digest("hex") },
+      payloadSourceSnapshot: null }]);
+    expect(Object.keys(selected!)).toEqual(["key", "title", "body", "latestRevisionId", "latestRevisionNumber", "sourceTrust", "updatedAt"]);
+  });
+
+  it("captures the selected revision separately and keeps unknown or mismatched history unknown", async () => {
+    const { issueId } = await createIssueWithDocuments();
+    const captures: Array<DocumentRevisionSourceCapture | null> = [];
+    const read = () => svc.getIssueDocumentByKey(issueId, "plan", { onSourceCapture: capture => captures.push(capture) });
+    const first = (await read())!;
+    expect(captures).toEqual([{ input: { kind: "document_revision", documentId: first.id,
+      revisionId: first.latestRevisionId, issueId,
+      contentHash: createHash("sha256").update(first.body!).digest("hex") }, payloadSourceSnapshot: null }]);
+    expect(first).not.toHaveProperty("sourceRevision");
+    expect(first).not.toHaveProperty("payloadSourceSnapshot");
+    const saved = await svc.upsertIssueDocument({ issueId, key: "plan", format: "markdown", body: "# New plan", baseRevisionId: first.latestRevisionId });
+    expect((await read())!.body).toBe("# New plan");
+    expect(captures[1]!.input.revisionId).toBe(saved.document.latestRevisionId);
+    expect(captures[0]!.input.revisionId).toBe(first.latestRevisionId);
+    await db.update(documents).set({ latestBody: "Unbound mutable body" }).where(eq(documents.id, first.id));
+    expect((await read())!.body).toBe("Unbound mutable body");
+    expect(captures[2]).toBeNull();
+    expect(await svc.getIssueDocumentByKey(randomUUID(), "plan", { onSourceCapture: capture => captures.push(capture) })).toBeNull();
+    expect(captures[3]).toBeNull();
+  });
+
+  it("retains a known selected revision snapshot after its original body changes", async () => {
+    const { issueId } = await createIssueWithDocuments();
+    const current = (await svc.getIssueDocumentByKey(issueId, "plan"))!;
+    const [prior] = await db.select().from(documentRevisions).where(eq(documentRevisions.id, current.latestRevisionId!));
+    const [revision] = await db.insert(documentRevisions).values({ ...prior!, id: randomUUID(), revisionNumber: 2,
+      payloadSourceProtocolVersion: 1, payloadSourceSnapshot: null }).returning();
+    // Structural owner-bound fixture only, not complete native producer proof.
+    await db.execute(sql`update document_revisions target set payload_source_snapshot=(
+      select body || jsonb_build_object('digest',encode(sha256(convert_to(body::text,'UTF8')),'hex')) from (
+        select jsonb_build_object('version',1,'owner',jsonb_build_object('kind','document_revision','companyId',target.company_id,
+          'id',target.id,'contentHash',public.aw_native_payload_body_hash('document_revision',to_jsonb(target))),
+          'policy',jsonb_build_object('issueIds','[]'::jsonb,'projectIds','[]'::jsonb,'runIds','[]'::jsonb,
+            'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as body
+      ) original_body) where target.id=${revision!.id}::uuid`);
+    await db.update(documents).set({ latestRevisionId: revision!.id, latestRevisionNumber: 2 }).where(eq(documents.id, current.id));
+    const captures: Array<DocumentRevisionSourceCapture | null> = [];
+    await svc.getIssueDocumentByKey(issueId, "plan", { onSourceCapture: capture => captures.push(capture) });
+    expect(captures[0]!.payloadSourceSnapshot!.owner.id).toBe(revision!.id);
+    const retained = structuredClone(captures[0]);
+    await db.update(documentRevisions).set({ body: "Changed original revision", payloadSourceSnapshot: null }).where(eq(documentRevisions.id, revision!.id));
+    expect(captures[0]).toEqual(retained);
+    expect((await db.select().from(documentRevisions).where(eq(documentRevisions.id, revision!.id)))[0]!.payloadSourceSnapshot).toBeNull();
+    await svc.getIssueDocumentByKey(issueId, "plan", { onSourceCapture: capture => captures.push(capture) });
+    expect(captures[1]).toBeNull();
   });
 
   it("explains the revision guard and rejects missing or stale update revisions without changing the document", async () => {

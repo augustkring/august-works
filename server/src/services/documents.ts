@@ -1,8 +1,8 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { and, asc, desc, eq } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { documentRevisions, documents, issueDocuments, issues } from "@paperclipai/db";
-import { isSystemIssueDocumentKey, issueDocumentKeySchema } from "@paperclipai/shared";
+import { isSystemIssueDocumentKey, issueDocumentKeySchema, type NativePayloadSourceInput, type NativePayloadSourceSnapshot } from "@paperclipai/shared";
 import { conflict, notFound, unprocessable } from "../errors.js";
 import { isUniqueViolation } from "../db-errors.js";
 import { insertRowsInChunks } from "./batch-insert.js";
@@ -10,6 +10,13 @@ import type { ImportIssueDocumentRow } from "./import-write-types.js";
 
 import { lockAnalyticalCompany, suppressAnalyticalSource } from "./analytical-privacy.js";
 import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
+
+/** Selected native revision data, separate from every public document DTO.
+ * A matching rendition and hash identify input bytes, never current access. */
+export interface DocumentRevisionSourceCapture {
+  readonly input: Extract<NativePayloadSourceInput, { kind: "document_revision" }>;
+  readonly payloadSourceSnapshot: NativePayloadSourceSnapshot | null;
+}
 
 function normalizeDocumentKey(key: string) {
   const normalized = key.trim().toLowerCase();
@@ -163,14 +170,27 @@ export function documentService(db: Db) {
       return filterSystemDocuments(rows, options.includeSystem ?? false).map((row) => mapIssueDocumentRow(row, true));
     },
 
-    getIssueDocumentByKey: async (issueId: string, rawKey: string) => {
+    getIssueDocumentByKey: async (issueId: string, rawKey: string, options: {
+      onSourceCapture?: (capture: DocumentRevisionSourceCapture | null) => void;
+    } = {}) => {
       const key = normalizeDocumentKey(rawKey);
       const row = await db
-        .select(issueDocumentSelect)
+        .select({ ...issueDocumentSelect, sourceRevision: { id: documentRevisions.id, body: documentRevisions.body,
+          title: documentRevisions.title, format: documentRevisions.format, revisionNumber: documentRevisions.revisionNumber,
+          payloadSourceSnapshot: documentRevisions.payloadSourceSnapshot } })
         .from(issueDocuments)
         .innerJoin(documents, eq(issueDocuments.documentId, documents.id))
+        .leftJoin(documentRevisions, and(eq(documentRevisions.id, documents.latestRevisionId),
+          eq(documentRevisions.documentId, documents.id), eq(documentRevisions.companyId, documents.companyId)))
         .where(and(eq(issueDocuments.issueId, issueId), eq(issueDocuments.key, key)))
         .then((rows) => rows[0] ?? null);
+      const revision = row?.sourceRevision;
+      options.onSourceCapture?.(row && revision && revision.body === row.latestBody && revision.title === row.title &&
+        revision.format === row.format && revision.revisionNumber === row.latestRevisionNumber
+        ? { input: { kind: "document_revision", documentId: row.id, revisionId: revision.id, issueId: row.issueId,
+            contentHash: createHash("sha256").update(row.latestBody, "utf8").digest("hex") },
+            payloadSourceSnapshot: revision.payloadSourceSnapshot }
+        : null);
       return row ? mapIssueDocumentRow(row, true) : null;
     },
 

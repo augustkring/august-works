@@ -1,0 +1,60 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/documents-service.test.ts (7 tests | 2 failed | 5 skipped) 15839ms
+     × captures the selected revision separately and keeps unknown or mismatched history unknown 515ms
+     × retains a known selected revision snapshot after its original body changes 508ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/documents-service.test.ts > documentService system issue documents > captures the selected revision separately and keeps unknown or mismatched history unknown
+AssertionError: expected [] to deeply equal [ { input: { …(5) }, …(1) } ]
+
+- Expected
++ Received
+
+- [
+-   {
+-     "input": {
+-       "contentHash": "1ee55b7ae632bd99dfea4f2d791ff06b1119975e96d4f822050923e7499f44cb",
+-       "documentId": "a6ef5ccd-c306-4144-8c7b-51a83696d866",
+-       "issueId": "bc7d094d-6d69-4be2-9fbc-4412bdd64334",
+-       "kind": "document_revision",
+-       "revisionId": "ec6d6f2e-253e-458b-a21f-26b273b15d1b",
+-     },
+-     "payloadSourceSnapshot": null,
+-   },
+- ]
++ []
+
+ ❯ src/__tests__/documents-service.test.ts:123:22
+    121|     const read = () => svc.getIssueDocumentByKey(issueId, "plan", { on…
+    122|     const first = (await read())!;
+    123|     expect(captures).toEqual([{ input: { kind: "document_revision", do…
+       |                      ^
+    124|       revisionId: first.latestRevisionId, issueId,
+    125|       contentHash: createHash("sha256").update(first.body!).digest("he…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/documents-service.test.ts > documentService system issue documents > retains a known selected revision snapshot after its original body changes
+TypeError: Cannot read properties of undefined (reading 'payloadSourceSnapshot')
+ ❯ src/__tests__/documents-service.test.ts:156:25
+    154|     const captures: Array<DocumentRevisionSourceCapture | null> = [];
+    155|     await svc.getIssueDocumentByKey(issueId, "plan", { onSourceCapture…
+    156|     expect(captures[0]!.payloadSourceSnapshot!.owner.id).toBe(revision…
+       |                         ^
+    157|     const retained = structuredClone(captures[0]);
+    158|     await db.update(documentRevisions).set({ body: "Changed original r…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 5 skipped (7)
+   Start at  07:57:01
+   Duration  35.37s (transform 8.27s, setup 254ms, import 17.73s, tests 15.84s, environment 1ms)
+

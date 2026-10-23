@@ -205,7 +205,7 @@ import {
   withQueuedCommentIdsInWakePayload,
   withQueuedCommentIdsInRunContext,
 } from "./issue-queued-comment-queue.js";
-import { documentService } from "./documents.js";
+import { documentService, type DocumentRevisionSourceCapture } from "./documents.js";
 import { getTaskPlanContext } from "./task-plan-context.js";
 import { selectNativeHeartbeatBackend } from "./orchestration/native-draft-runtime.js";
 import { managedAgentProfileService } from "./managed-agent-profiles.js";
@@ -20907,6 +20907,7 @@ export function heartbeatService(
           };
         })(),
       };
+      const taskPlanSourceCaptures: DocumentRevisionSourceCapture[] = [];
       const taskPlan = issueRef && !isConversation(issueContext)
         ? await getTaskPlanContext({
             db,
@@ -20914,6 +20915,7 @@ export function heartbeatService(
             issueId: issueRef.id,
             approvedRevisionId: taskMarkdownInput.acceptedPlan?.revisionId,
             exposeLowTrustRaw,
+            onSourceCapture: capture => { if (capture) taskPlanSourceCaptures.push(capture); },
           })
         : null;
       let taskMarkdown = buildPaperclipTaskMarkdown({ ...taskMarkdownInput, taskPlan });
@@ -23144,6 +23146,8 @@ export function heartbeatService(
         // a complete source-free input receipt; later tool reads are separate.
         let nativeBootstrapContextManifests: Array<{ companyId: string; contextManifestId: string }> | null = null;
         let nativeBootstrapConversationReplaySources: typeof conversationReplaySourceCaptures | null = null;
+        let nativeBootstrapTaskPlanSources: DocumentRevisionSourceCapture[] | null = null;
+        let nativeBootstrapPlanningSources: DocumentRevisionSourceCapture[] | null = null;
         let nativeRunnerInstanceId: string | null = null;
         if (nativeRuntimeResolution.kind === "native") {
           if (!issueRef) {
@@ -23168,6 +23172,8 @@ export function heartbeatService(
           // collector references; the unified receipt must bind final redacted
           // input bytes separately before qualifying any derivative effect.
           nativeBootstrapConversationReplaySources = nativeReviewRequest ? [] : conversationReplaySourceCaptures;
+          nativeBootstrapTaskPlanSources = nativeReviewRequest || directAgentPrompt || !taskPlan ? []
+            : taskPlanSourceCaptures.length ? taskPlanSourceCaptures : null;
           const persistedContract = run.completionContractId
             ? await db
                 .select()
@@ -23539,13 +23545,17 @@ export function heartbeatService(
               issueRef.workMode === "planning" && !isConversation(issueContext) && !acceptedPlanContinuationWake
                 ? ("plan" as const)
                 : ("default" as const);
+            const planningSourceCaptures: DocumentRevisionSourceCapture[] = [];
             const pinnedPlan =
               executionMode === "plan"
                 ? await documentService(db).getIssueDocumentByKey(
                     issueRef.id,
                     "plan",
+                    { onSourceCapture: capture => { if (capture) planningSourceCaptures.push(capture); } },
                   )
                 : null;
+            nativeBootstrapPlanningSources = !pinnedPlan ? []
+              : planningSourceCaptures.length ? planningSourceCaptures : null;
             const pinnedReviewContext =
               executionMode === "plan"
                 ? await buildPlanReviewContext({
@@ -23799,6 +23809,7 @@ export function heartbeatService(
                   // historical sources. Never substitute a later live Context.
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapContextManifests }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapConversationReplaySources }),
+                  ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapTaskPlanSources, nativeBootstrapPlanningSources }),
                   nativeExecutionInput:
                     lockedProfile.nativeExecutionInput ?? nativeExecution,
                   nativeToolContractFingerprint:

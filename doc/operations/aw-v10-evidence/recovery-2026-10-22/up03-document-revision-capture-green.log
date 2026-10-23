@@ -1,0 +1,38 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/documents-service.test.ts (7 tests | 1 failed) 16100ms
+     × retains a known selected revision snapshot after its original body changes 276ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/documents-service.test.ts > documentService system issue documents > retains a known selected revision snapshot after its original body changes
+Error: Failed query: update "document_revisions" set "body" = $1 where "document_revisions"."id" = $2
+params: Changed original revision,45a55aa6-a18a-4481-b272-1a2740b59b07
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ src/__tests__/documents-service.test.ts:158:5
+    156|     expect(captures[0]!.payloadSourceSnapshot!.owner.id).toBe(revision…
+    157|     const retained = structuredClone(captures[0]);
+    158|     await db.update(documentRevisions).set({ body: "Changed original r…
+       |     ^
+    159|     expect(captures[0]).toEqual(retained);
+    160|     expect((await db.select().from(documentRevisions).where(eq(documen…
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 22 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "document_revisions" set "body" = $1 where "document_revisions"."id" = $2', parameters: [ 'Changed original revision', '45a55aa6-a18a-4481-b272-1a2740b59b07' ], args: [ 'Changed original revision', '45a55aa6-a18a-4481-b272-1a2740b59b07' ], types: [ 25, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 6 passed (7)
+   Start at  07:58:31
+   Duration  36.69s (transform 10.16s, setup 338ms, import 19.51s, tests 16.10s, environment 0ms)
+

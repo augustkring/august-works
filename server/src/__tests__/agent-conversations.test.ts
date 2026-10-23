@@ -21,6 +21,8 @@ import {
   companyMemberships,
   companies,
   createDb,
+  documentRevisions,
+  documents,
   heartbeatRuns,
   issueComments,
   issueTreeHolds,
@@ -33,7 +35,7 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import { issueService } from "../services/issues.js";
-import { documentService } from "../services/documents.js";
+import { documentService, type DocumentRevisionSourceCapture } from "../services/documents.js";
 import { getTaskPlanContext } from "../services/task-plan-context.js";
 import { terminalizeLegacyExecution, LEGACY_RECOVERY_CAUSE } from "../services/legacy-execution-recovery.js";
 import { settleUnrecoverableExecutions } from "../services/execution-recovery-resolution.js";
@@ -586,6 +588,64 @@ const support = await getEmbeddedPostgresTestSupport();
       expect((await getTaskPlanContext({
         db, companyId, issueId: task.id, exposeLowTrustRaw: true,
       }))?.body).toBe("QUARANTINED_PLAN_BODY");
+    });
+    it("captures selected task plan source rendition after redaction while preserving unknown history and public shape", async () => {
+      const task=await issueService(db).create(companyId,{title:"Plan source capture",initialPlan:"Original selected plan"});
+      const captures:Array<DocumentRevisionSourceCapture|null>=[];
+      const read=()=>getTaskPlanContext({db,companyId,issueId:task.id,onSourceCapture:capture=>captures.push(capture)});
+      const initial=await read();
+      expect(initial!.body).toBe("Original selected plan");
+      expect(captures[0]).toEqual({input:{kind:"document_revision",documentId:initial!.documentId,
+        revisionId:initial!.revisionId,issueId:task.id,contentHash:createHash("sha256").update(initial!.body,"utf8").digest("hex")},
+        payloadSourceSnapshot:null});
+      expect(initial).not.toHaveProperty("payloadSourceSnapshot");
+      expect(initial).not.toHaveProperty("sourceCapture");
+      await documentService(db).upsertIssueDocument({issueId:task.id,key:"plan",format:"markdown",body:"PRIVATE_QUARANTINED_PLAN_SOURCE",
+        baseRevisionId:initial!.revisionId,sourceTrust:buildLowTrustSourceTrust({issueId:task.id,agentId})});
+      const safe=await read();
+      expect(safe!.body).toBe(LOW_TRUST_QUARANTINED_BODY);
+      expect(captures[1]!.input.contentHash).toBe(createHash("sha256").update(safe!.body,"utf8").digest("hex"));
+      const rawCaptures:Array<DocumentRevisionSourceCapture|null>=[];
+      const raw=await getTaskPlanContext({db,companyId,issueId:task.id,exposeLowTrustRaw:true,onSourceCapture:capture=>rawCaptures.push(capture)});
+      expect(raw!.body).toBe("PRIVATE_QUARANTINED_PLAN_SOURCE");
+      expect(rawCaptures[0]!.input.contentHash).toBe(createHash("sha256").update(raw!.body,"utf8").digest("hex"));
+      expect(rawCaptures[0]!.input.contentHash).not.toBe(captures[1]!.input.contentHash);
+      for(const selection of [{companyId:randomUUID(),issueId:task.id},{companyId,issueId:task.id,approvedRevisionId:randomUUID()},
+        {companyId,issueId:(await create()).id}]){
+        const absent:Array<DocumentRevisionSourceCapture|null>=[];
+        expect(await getTaskPlanContext({db,...selection,onSourceCapture:capture=>absent.push(capture)})).toBeNull();
+        expect(absent).toEqual([null]);
+      }
+    });
+    it("captures exact approved task plan snapshot from the selected revision and retains it after later changes", async () => {
+      const task=await issueService(db).create(companyId,{title:"Pinned plan capture",initialPlan:"Earlier historical plan"});
+      const initial=await getTaskPlanContext({db,companyId,issueId:task.id});
+      const [revision]=await db.insert(documentRevisions).values({companyId,documentId:initial!.documentId,
+        revisionNumber:2,body:"Exact selected plan bytes",format:"markdown",payloadSourceProtocolVersion:1}).returning();
+      // Source-free canonical structural fixture, not native producer qualification.
+      const [sealed]=await db.execute<{snapshot:Record<string,unknown>}>(sql`with content as (
+        select jsonb_build_object('version',1,'owner',jsonb_build_object('kind','document_revision','companyId',company_id::text,
+          'id',id::text,'contentHash',public.aw_native_payload_body_hash('document_revision',to_jsonb(r))),
+          'policy',jsonb_build_object('issueIds','[]'::jsonb,'projectIds','[]'::jsonb,'runIds','[]'::jsonb,
+            'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as value
+          from document_revisions r where id=${revision!.id}::uuid)
+        update document_revisions set payload_source_snapshot=value || jsonb_build_object('digest',encode(sha256(convert_to(value::text,'UTF8')),'hex'))
+          from content where id=${revision!.id}::uuid returning payload_source_snapshot as snapshot`);
+      await db.update(documents).set({latestRevisionId:revision!.id,latestRevisionNumber:2,latestBody:revision!.body})
+        .where(eq(documents.id,initial!.documentId));
+      const captures:Array<DocumentRevisionSourceCapture|null>=[];
+      const selected=await getTaskPlanContext({db,companyId,issueId:task.id,onSourceCapture:capture=>captures.push(capture)});
+      expect(selected!.revisionId).toBe(revision!.id);
+      expect(captures[0]).toEqual({input:{kind:"document_revision",documentId:initial!.documentId,revisionId:revision!.id,
+        issueId:task.id,contentHash:createHash("sha256").update(revision!.body,"utf8").digest("hex")},payloadSourceSnapshot:sealed!.snapshot});
+      await documentService(db).upsertIssueDocument({issueId:task.id,key:"plan",format:"markdown",body:"Later unapproved replacement",baseRevisionId:revision!.id});
+      const approvedCaptures:Array<DocumentRevisionSourceCapture|null>=[];
+      expect((await getTaskPlanContext({db,companyId,issueId:task.id,approvedRevisionId:revision!.id,
+        onSourceCapture:capture=>approvedCaptures.push(capture)}))!.body).toBe(revision!.body);
+      expect(approvedCaptures[0]).toEqual(captures[0]);
+      await db.update(documentRevisions).set({body:"Later erased/unknown selected body",payloadSourceSnapshot:null}).where(eq(documentRevisions.id,revision!.id));
+      expect(selected!.body).toBe("Exact selected plan bytes");
+      expect(captures[0]!.payloadSourceSnapshot).toEqual(sealed!.snapshot);
     });
     it("keeps concurrent delivery and multiple resets in separate ordered queue entries", async () => {
       const issue = await create();
