@@ -476,3 +476,10 @@ Add the customer-case contract alongside original V6 support-access history. Sha
 
 
 Correction to the shared support checkpoint: Root accidentally replaced the existing test path when adding new coverage. Restore all seven original V6 approval assertions from dba57adfc, merge imports and append the five new cases. Final combined12PASS13.06s and shared compiler actual/durable0; original source bodies/assertions unchanged. Initial five-case evidence remains explicitly limited. See `support-case-shared-restored-checkpoint.json`.
+
+
+### 2026-10-23 — Durable local support storage and erasure fences
+
+Native generated migration0515 adds tenant-bound cases/events, immutable original input, explicit operator policy, content-free erasure markers, hold/unknown-provider fences and mixed-reader company completion guards. Original company purge, current backup ledger and quarantine replay reuse these owners. Missing V10 ledger section fails closed; current markers override stale restored holds. No customer intake or provider transport admitted.
+
+Final actual PostgreSQL14 storage cases plus original Docker dump/encryption/restore1PASS310.28s; prior storage/feedback29PASS156.75s overlaps and skipped the dump then run in final. Shared policy14PASS2.70s, native ledger5PASS5.017s. Shared/DB/server compilers actual/durable0, final pins match, all sessions closed. Initial FK generation error, startup timeout and negative-fixture correction retained with exact source/logs in support-case-storage-checkpoint.json. Generator prunes0510 snapshot only, historical SQL unchanged. Account erasure linkage and full support lifecycle are next; provider/host, source privacy, full workspace and complete V10/PR/release gates remain open.

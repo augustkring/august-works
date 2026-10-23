@@ -2,6 +2,7 @@ import { describe, expect, it } from "vitest";
 import {
   createSupportCaseSchema, replySupportCaseSchema, deriveSupportCaseSubject,
   SUPPORT_CASE_COPY, SUPPORT_CASE_LIMITS,
+  supportCaseDataPolicySchema,
   customerSupportHistorySchema,
   nativeSupportReviewSchema,
 } from "./customer-support.js";
@@ -194,11 +195,34 @@ describe("customer support intake policy", () => {
     expect(replySupportCaseSchema.safeParse({ ...command, body: "  " }).success).toBe(false);
     expect(replySupportCaseSchema.safeParse({ ...command, body: "x".repeat(SUPPORT_CASE_LIMITS.reply + 1) }).success).toBe(false);
     expect(deriveSupportCaseSubject("x".repeat(250))).toHaveLength(SUPPORT_CASE_LIMITS.subject);
+    expect(deriveSupportCaseSubject("x".repeat(199) + "🚀")).toBe("x".repeat(199));
   });
   it("uses the prescribed bilingual support wording", () => {
     expect(SUPPORT_CASE_COPY.da.statuses.WAITING_FOR_YOU).toBe("Afventer dit svar");
     expect(SUPPORT_CASE_COPY.da.statuses.CLOSED).toBe("Afsluttet");
     expect(SUPPORT_CASE_COPY.da.impacts.limited).toBe("Jeg kan fortsætte med begrænsninger");
     expect(SUPPORT_CASE_COPY.en.deliveryPending).toBe("Received; delivery pending");
+  });
+});
+
+describe("operator-owned support data policy", () => {
+  const policy = {
+    schemaVersion: 1, policyVersion: "test.support.v1", recipientName: "Test support operator",
+    privacyNoticeUrl: "https://example.test/privacy", processingRegion: "test region",
+    retentionTrigger: "after_last_customer_or_support_message", retentionDays: 30,
+    backupMaxDays: 7, restoreLagDays: 2, deletionMarkerDays: 10, legalHoldPolicyId: "test.support.hold.v1",
+  };
+  it("requires explicit support configuration without borrowing feedback defaults", () => {
+    expect(supportCaseDataPolicySchema.parse(policy)).toEqual(policy);
+    expect(supportCaseDataPolicySchema.safeParse({}).success).toBe(false);
+    const { retentionDays: _retention, ...missingRetention } = policy;
+    expect(supportCaseDataPolicySchema.safeParse(missingRetention).success).toBe(false);
+    expect(supportCaseDataPolicySchema.safeParse({ ...policy, certified: true }).success).toBe(false);
+  });
+  it("rejects an insufficient restore horizon and unsafe notice destinations", () => {
+    expect(supportCaseDataPolicySchema.safeParse({ ...policy, deletionMarkerDays: 8 }).success).toBe(false);
+    for (const privacyNoticeUrl of ["not a URL", "javascript:alert(1)", "http://example.test/privacy", "https://user:secret@example.test/privacy"]) {
+      expect(supportCaseDataPolicySchema.safeParse({ ...policy, privacyNoticeUrl }).success).toBe(false);
+    }
   });
 });

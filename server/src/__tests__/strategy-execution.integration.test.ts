@@ -288,7 +288,7 @@ suite("native strategy links on migrated PostgreSQL", () => {
       await restored.insert(strategyExecutionSourceBindings).values(backup.bindings);
       for (const row of backup.roots) await restored.update(strategyExecutionLinks).set({ status: row.status, approvedVersionId: row.approvedVersionId }).where(eq(strategyExecutionLinks.id, row.id));
       const marker = { company_id: companyId, input_type: "goal" as const, input_ref: goalId, suppressed_at: guard.suppressedAt.toISOString() };
-      await prepareRestoredQuarantine(restored, target.toString(), { companies: [], memory: [], businessEvents: [], feedback: [], analyticalSources: [marker,marker,{ ...marker, company_id: randomUUID() }] });
+      await prepareRestoredQuarantine(restored, target.toString(), { companies: [], memory: [], businessEvents: [], feedback: [], supportCases: [], analyticalSources: [marker,marker,{ ...marker, company_id: randomUUID() }] });
       await expect(assertDatabaseRestoreAdmission(restored)).rejects.toThrow("remains quarantined");
       expect((await instanceSettingsService(restored).getExperimental()).strategy_execution_v8).toBe(false);
       expect((await restored.select().from(strategyExecutionLinks)).map(r => r.id)).toEqual([retained.link.id]);

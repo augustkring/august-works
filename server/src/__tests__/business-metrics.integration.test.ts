@@ -401,7 +401,7 @@ suite("governed native metric owner on migrated PostgreSQL", () => {
       await restored.insert(analyticalLineageEdges).values(backup.edges);
       await restored.insert(businessMetricObservations).values(backup.observations);
       const marker = { company_id: guard.companyId, input_type: guard.inputType, input_ref: guard.inputRef, suppressed_at: guard.suppressedAt.toISOString() };
-      await prepareRestoredQuarantine(restored, target.toString(), { companies: [], memory: [], businessEvents: [], feedback: [], analyticalSources: [marker, marker,
+      await prepareRestoredQuarantine(restored, target.toString(), { companies: [], memory: [], businessEvents: [], feedback: [], supportCases: [], analyticalSources: [marker, marker,
         { ...marker, company_id: otherCompanyId }, { ...marker, company_id: randomUUID() }] });
       await expect(assertDatabaseRestoreAdmission(restored)).rejects.toThrow("remains quarantined");
       expect((await instanceSettingsService(restored).getExperimental()).business_metrics_v8).toBe(false);

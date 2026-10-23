@@ -4,6 +4,7 @@ import {
   authUsers,
   companySecrets,
   customerFeedbackDeletionMarkers,
+  supportCaseDeletionMarkers,
   applyPendingMigrations,
   type Db,
 } from "@paperclipai/db";
@@ -21,6 +22,7 @@ export interface RestoreDeletionLedger {
   analyticalSources: { company_id: string; input_type: "issue" | "project" | "goal" | "document" | "document_revision"; input_ref: string; suppressed_at: string }[];
   businessEvents: { company_id: string; source_ref: string; suppressed_at: string }[];
   feedback: { subject_id: string; company_id: string; feedback_id: string; target_kind: "case" | "image"; erased_at: string }[];
+  supportCases: { subject_id: string; company_id: string; case_id: string; target_kind: "case" | "event"; erased_at: string; retain_until: string }[];
   identityHomes?: { id: string; home_company_id: string }[];
   users?: { id: string; user_id: string; created_at: string }[];
   memory: {
@@ -43,6 +45,17 @@ export async function prepareRestoredQuarantine(
     throw Error("V8-aware event and analytical-source deletion ledger required");
   if (!Array.isArray(ledger.feedback))
     throw Error("V9-aware feedback deletion ledger required");
+  if (!Array.isArray(ledger.supportCases))
+    throw Error("V10-aware support case deletion ledger required");
+  const supportMarkers = z.array(z.strictObject({
+    subject_id: z.uuid().toLowerCase(), company_id: z.uuid().toLowerCase(), case_id: z.uuid().toLowerCase(),
+    target_kind: z.enum(["case", "event"]), erased_at: z.iso.datetime({ offset: true }), retain_until: z.iso.datetime({ offset: true }),
+  }).superRefine((row, context) => {
+    if ((row.target_kind === "case") !== (row.subject_id === row.case_id))
+      context.addIssue({ code: "custom", message: "Support erasure identity is invalid" });
+    if (Date.parse(row.retain_until) <= Date.parse(row.erased_at))
+      context.addIssue({ code: "custom", message: "Support restore horizon is invalid" });
+  })).max(100000).parse(ledger.supportCases);
   const feedbackMarkers = z.array(z.strictObject({ subject_id: z.uuid().toLowerCase(), company_id: z.uuid().toLowerCase(),
     feedback_id: z.uuid().toLowerCase(), target_kind: z.enum(["case", "image"]), erased_at: z.iso.datetime({ offset: true }) })
     .refine(row => row.target_kind !== "case" || row.subject_id === row.feedback_id, "Feedback case erasure identity is invalid"))
@@ -95,6 +108,31 @@ export async function prepareRestoredQuarantine(
   // not the archive being restored. Import before removing old private bodies.
   // The database remains quarantined through both phases and after completion.
   await db.transaction(async tx => {
+    for (const marker of supportMarkers) {
+      const [collision] = await tx.execute<{ present: boolean }>(sql`select
+        exists(select 1 from support_cases c where c.id=${marker.subject_id}::uuid
+          and (${marker.target_kind}<>'case' or c.company_id<>${marker.company_id}::uuid))
+        or exists(select 1 from support_case_events e where e.id=${marker.subject_id}::uuid
+          and (${marker.target_kind}<>'event' or e.company_id<>${marker.company_id}::uuid or e.case_id<>${marker.case_id}::uuid)) as present`);
+      if (collision?.present) throw Error("Conflicting restored support content identity");
+      await tx.insert(supportCaseDeletionMarkers).values({ subjectId: marker.subject_id, companyId: marker.company_id,
+        caseId: marker.case_id, targetKind: marker.target_kind, erasedAt: new Date(marker.erased_at), retainUntil: new Date(marker.retain_until) })
+        .onConflictDoNothing();
+      const [retained] = await tx.select().from(supportCaseDeletionMarkers)
+        .where(eq(supportCaseDeletionMarkers.subjectId, marker.subject_id));
+      if (!retained || retained.companyId !== marker.company_id || retained.caseId !== marker.case_id
+        || retained.targetKind !== marker.target_kind || retained.erasedAt.getTime() !== Date.parse(marker.erased_at))
+        throw Error("Conflicting support erasure identity in restore ledger");
+      if (retained.retainUntil.getTime() < Date.parse(marker.retain_until))
+        await tx.update(supportCaseDeletionMarkers).set({ retainUntil: new Date(marker.retain_until) })
+          .where(eq(supportCaseDeletionMarkers.subjectId, marker.subject_id));
+    }
+    // Current independently authenticated erasure facts precede old bodies.
+    // A stale hold in the archive cannot resurrect already-erased content.
+    await tx.execute(sql`delete from support_case_events e using support_case_deletion_markers m
+      where m.target_kind='event' and e.id=m.subject_id and e.company_id=m.company_id and e.case_id=m.case_id`);
+    await tx.execute(sql`delete from support_cases c using support_case_deletion_markers m
+      where m.target_kind='case' and c.id=m.subject_id and c.company_id=m.company_id`);
     for (const marker of feedbackMarkers) {
       await tx.insert(customerFeedbackDeletionMarkers).values({ subjectId: marker.subject_id, companyId: marker.company_id,
         feedbackId: marker.feedback_id, targetKind: marker.target_kind, erasedAt: new Date(marker.erased_at) })

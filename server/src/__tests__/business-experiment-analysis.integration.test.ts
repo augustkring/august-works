@@ -308,7 +308,7 @@ suite("Native experiment final capture and human interpretation on migrated Post
       try {
         await runDatabaseRestore({connectionString:target.toString(),backupFile:backup.backupFile});
         expect(await restored.select().from(businessExperimentOutcomes).where(eq(businessExperimentOutcomes.analysisId,result.analysis.id))).toEqual(outcomes);
-        await prepareRestoredQuarantine(restored,target.toString(),{companies:[],memory:[],businessEvents:[],feedback:[],analyticalSources:[{company_id:companyId,input_type:"project",input_ref:project.id,suppressed_at:suppression.suppressedAt.toISOString()}]});
+        await prepareRestoredQuarantine(restored,target.toString(),{companies:[],memory:[],businessEvents:[],feedback:[],supportCases:[],analyticalSources:[{company_id:companyId,input_type:"project",input_ref:project.id,suppressed_at:suppression.suppressedAt.toISOString()}]});
         await expect(assertDatabaseRestoreAdmission(restored)).rejects.toThrow("remains quarantined");
         expect((await instanceSettingsService(restored,{runtimeEnv:{}}).getExperimental()).business_experiments_v8).toBe(false);
         expect(await restored.select().from(businessExperimentAnalyses).where(eq(businessExperimentAnalyses.id,result.analysis.id))).toEqual([]);

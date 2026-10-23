@@ -367,7 +367,7 @@ suite("Native human-published process analysis on migrated PostgreSQL", () => {
       await restored.insert(analyticalLineageEdges).values(await db.select().from(analyticalLineageEdges).where(eq(analyticalLineageEdges.manifestId,run.lineageManifestId)));
       await restored.insert(processAnalysisRuns).values({...runRow,from:sql`${period.from}::timestamptz`,until:sql`${period.until}::timestamptz`});
       const [source]=await db.select({id:activityLog.id}).from(activityLog).where(and(eq(activityLog.companyId,companyId),eq(activityLog.action,"issue.created")));
-      await prepareRestoredQuarantine(restored,target.toString(),{companies:[],memory:[],analyticalSources:[],feedback:[],businessEvents:[{company_id:companyId,source_ref:source.id,suppressed_at:new Date().toISOString()}]});
+      await prepareRestoredQuarantine(restored,target.toString(),{companies:[],memory:[],analyticalSources:[],feedback:[],supportCases:[],businessEvents:[{company_id:companyId,source_ref:source.id,suppressed_at:new Date().toISOString()}]});
       await expect(assertDatabaseRestoreAdmission(restored)).rejects.toThrow("remains quarantined");
       expect((await instanceSettingsService(restored).getExperimental()).process_intelligence_v8).toBe(false);
       expect(await restored.select().from(processAnalysisRuns).where(eq(processAnalysisRuns.id,run.id))).toHaveLength(0);

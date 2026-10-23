@@ -3,7 +3,7 @@ import { enqueueSkillVersionFileErasure } from "../learning/skill-file-erasure.j
 import { eq, is, sql, type SQL } from "drizzle-orm";
 import { PgTable, getTableConfig } from "drizzle-orm/pg-core";
 import * as schema from "@paperclipai/db";
-import { customerFeedback, projectRoadmapProposals, causalClaims, businessScenarios, forecastSpecs, businessMetrics, businessMetricTargets, strategyExecutionLinks, processAnalysisDefinitions, decisionContexts, companies, issues, memoryRecords, type Db } from "@paperclipai/db";
+import { customerFeedback, supportCases, projectRoadmapProposals, causalClaims, businessScenarios, forecastSpecs, businessMetrics, businessMetricTargets, strategyExecutionLinks, processAnalysisDefinitions, decisionContexts, companies, issues, memoryRecords, type Db } from "@paperclipai/db";
 import { conflict } from "../../errors.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
@@ -14,6 +14,7 @@ const retained = new Set([
   "feedback_image_deletions",
   "feedback_retention_erasures",
   "customer_feedback_deletion_markers",
+  "support_case_deletion_markers",
   "company_deletion_operations",
   "billing_account_companies",
   "billing_subscriptions",
@@ -72,6 +73,10 @@ export async function purgeCompanyContent(
       await tx.execute(sql`delete from ${table} where company_id=${companyId}::uuid`);
       deleted.push(config.name);
     }
+    // Support erasure runs through its root before generic child-first cleanup.
+    // Active legal holds refuse completion; content-free markers survive.
+    const supportRows = await tx.delete(supportCases).where(eq(supportCases.companyId, companyId)).returning({ id: supportCases.id });
+    if (supportRows.length) deleted.push("support_cases");
     // Original feedback roots must run their hold and allocation-erasure
     // triggers before the generic child-first FK planner. Private descendants
     // cascade; minimal physical-erasure receipts remain in their native owner.

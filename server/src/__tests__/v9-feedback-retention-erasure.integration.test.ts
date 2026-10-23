@@ -227,7 +227,7 @@ describe("native explicit feedback retention erasure", () => {
       try { await restored.insert(customerFeedbackImages).values(images); }
       finally { await restored.execute(sql`alter table customer_feedback_images enable trigger user`); }
       expect(await restored.select().from(feedbackRetentionErasures)).toEqual([]);
-      const ledger = { companies: [], memory: [], businessEvents: [], analyticalSources: [], feedback };
+      const ledger = { companies: [], memory: [], businessEvents: [], analyticalSources: [], feedback, supportCases: [] };
       await prepareRestoredQuarantine(restored, target.toString(), ledger);
       await prepareRestoredQuarantine(restored, target.toString(), ledger);
       await expect(assertDatabaseRestoreAdmission(restored)).rejects.toThrow("remains quarantined");

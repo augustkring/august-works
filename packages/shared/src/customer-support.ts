@@ -162,5 +162,32 @@ export type ReplySupportCase = z.infer<typeof replySupportCaseSchema>;
 
 /** The server derives a subject when the customer did not edit the preview. */
 export function deriveSupportCaseSubject(description: string): string {
-  return description.trim().split(/\r?\n/, 1)[0]!.slice(0, SUPPORT_CASE_LIMITS.subject).trimEnd();
+  return description.trim().split(/[\r\n]/, 1)[0]!.slice(0, SUPPORT_CASE_LIMITS.subject).replace(/[\uD800-\uDBFF]$/u, "").trimEnd();
 }
+
+/** Operator configuration, never customer-selected retention or delivery proof.
+ * No duration defaults: intake requires a complete configured support policy. */
+const supportPolicyKey = z.string().regex(/^[a-z][a-z0-9_.-]{0,127}$/);
+export const supportCaseDataPolicySchema = z.strictObject({
+  schemaVersion: z.literal(1),
+  policyVersion: supportPolicyKey,
+  recipientName: z.string().trim().min(1).max(255).regex(/^[^\u0000-\u001f\u007f]+$/),
+  privacyNoticeUrl: z.url().max(2048).refine(value => {
+    try {
+      const url = new URL(value);
+      return url.protocol === "https:" && !url.username && !url.password;
+    } catch { return false; }
+  }),
+  processingRegion: z.string().trim().min(1).max(100).regex(/^[^\u0000-\u001f\u007f]+$/),
+  retentionTrigger: z.literal("after_last_customer_or_support_message"),
+  retentionDays: z.number().int().min(1).max(36500),
+  backupMaxDays: z.number().int().min(1).max(36500),
+  restoreLagDays: z.number().int().min(0).max(36500),
+  deletionMarkerDays: z.number().int().min(1).max(109500),
+  legalHoldPolicyId: supportPolicyKey,
+}).superRefine((policy, context) => {
+  if (policy.deletionMarkerDays < policy.backupMaxDays + policy.restoreLagDays) {
+    context.addIssue({ code: "custom", path: ["deletionMarkerDays"], message: "Support erasure ledger must cover the backup and restore horizon" });
+  }
+});
+export type SupportCaseDataPolicy = z.infer<typeof supportCaseDataPolicySchema>;
