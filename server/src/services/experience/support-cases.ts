@@ -111,7 +111,8 @@ export function customerSupportCaseService(db: Db, options: { dataPolicy: Readon
       nextCursor: events.length > SUPPORT_CASE_LIMITS.timelinePage && last ? { createdAt: last.createdAt.toISOString(), id: last.id } : null });
   }
   async function budget(companyId: string, userId: string) {
-    const now = Date.now(), cutoff = now - 600000, key = "support-case:" + digest(userId) + ":" + digest(companyId);
+    const now = sql`floor(extract(epoch from statement_timestamp()) * 1000)::bigint`;
+    const cutoff = sql`${now} - 600000`, key = "support-case:" + digest(userId) + ":" + digest(companyId);
     const [row] = await db.insert(authRateLimits).values({ id: randomUUID(), key, count: 1, lastRequest: now })
       .onConflictDoUpdate({ target: authRateLimits.key, set: {
         count: sql`case when ${authRateLimits.lastRequest}<${cutoff} then 1 else ${authRateLimits.count}+1 end`,

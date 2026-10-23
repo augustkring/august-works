@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import express from "express";
 import request from "supertest";
 import { and, eq, sql } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   accountDeletionOperations, authRateLimits, authUsers, boardApiKeys, companies, companyMemberships, agents, agentApiKeys, supportCaseDeletionMarkers,
   supportCaseEvents, supportCases, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
@@ -337,6 +337,19 @@ const policy = {
     await db.update(authRateLimits).set({ lastRequest: Date.now() - 600001 });
     expect((await retry()).status).toBe(201);
     expect(await db.select().from(supportCaseEvents).where(eq(supportCaseEvents.requestKey, key))).toHaveLength(1);
+  });
+
+  it("retains one quota window when another application clock is an hour ahead", async () => {
+    const key = randomUUID(), body = "The original request keeps its database quota window";
+    expect((await create(companyA, "opener", body, key)).status).toBe(201);
+    const at = Date.now(), clock = vi.spyOn(Date, "now").mockReturnValue(at + 3600000);
+    try {
+      expect((await create(companyA, "opener", body, key)).status).toBe(201);
+    } finally { clock.mockRestore(); }
+    const rows = await db.select().from(authRateLimits);
+    expect(rows).toHaveLength(1);
+    expect(rows[0]!.count).toBe(2);
+    expect(rows[0]!.lastRequest).toBeLessThan(at + 60000);
   });
 
   it("starts a reply-derived follow-up from CLOSED and makes repeated replies idempotent", async () => {

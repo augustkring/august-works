@@ -31,16 +31,17 @@ export function accountDeletionService(
   async function request(userId: string, raw: unknown, now = new Date()) {
     const input = accountDeletionRequestSchema.parse(raw);
     const key = "account-delete:" + sha256(userId),
-      cutoff = now.getTime() - 600000;
+      budgetNow = sql`floor(extract(epoch from statement_timestamp()) * 1000)::bigint`,
+      cutoff = sql`${budgetNow} - 600000`;
     // Commit the attempt budget independently so a wrong password cannot roll it back.
     const [budget] = await db
       .insert(authRateLimits)
-      .values({ id: randomUUID(), key, count: 1, lastRequest: now.getTime() })
+      .values({ id: randomUUID(), key, count: 1, lastRequest: budgetNow })
       .onConflictDoUpdate({
         target: authRateLimits.key,
         set: {
           count: sql`case when ${authRateLimits.lastRequest}<${cutoff} then 1 else ${authRateLimits.count}+1 end`,
-          lastRequest: sql`case when ${authRateLimits.lastRequest}<${cutoff} then ${now.getTime()} else ${authRateLimits.lastRequest} end`,
+          lastRequest: sql`case when ${authRateLimits.lastRequest}<${cutoff} then ${budgetNow} else ${authRateLimits.lastRequest} end`,
         },
       })
       .returning();

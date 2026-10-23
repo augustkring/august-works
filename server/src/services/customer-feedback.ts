@@ -95,8 +95,8 @@ export function customerFeedbackService(
   async function budget(companyId: string, principal: string) {
     const key =
       "customer-feedback:" + digest(principal) + ":" + digest(companyId);
-    const now = Date.now(),
-      cutoff = now - 600000;
+    const now = sql`floor(extract(epoch from statement_timestamp()) * 1000)::bigint`,
+      cutoff = sql`${now} - 600000`;
     const [row] = await db
       .insert(authRateLimits)
       .values({ id: randomUUID(), key, count: 1, lastRequest: now })
@@ -270,8 +270,7 @@ export function customerFeedbackService(
      * replays return before this call and never run the scanner again. */
     async chargeImageAttempt(reader: Db, companyId: string, principal: string) {
       const key = "customer-feedback:" + digest(principal) + ":" + digest(companyId);
-      const [clock] = await reader.execute<{ now: string }>(sql`select floor(extract(epoch from clock_timestamp()) * 1000)::bigint::text as now`);
-      const now = Number(clock!.now), cutoff = now - 600000;
+      const now = sql`floor(extract(epoch from statement_timestamp()) * 1000)::bigint`, cutoff = sql`${now} - 600000`;
       const [row] = await reader.insert(authRateLimits).values({ id: randomUUID(), key, count: 1, lastRequest: now })
         .onConflictDoUpdate({ target: authRateLimits.key, set: {
           count: sql`case when ${authRateLimits.lastRequest}<${cutoff} then 1 else ${authRateLimits.count}+1 end`,
