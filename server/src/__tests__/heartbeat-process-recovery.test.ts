@@ -2713,13 +2713,24 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       const registeredSecret = "fixture-inline-secret-value";
       const body = `Original native inline wake comment${redactSecret ? ` ${registeredSecret}` : ""}`;
       const deliveredBody = redactSecret ? body.replace(registeredSecret, REDACTED_EVENT_VALUE) : body;
+      const answerText = `Continue with the current request${redactSecret ? ` ${registeredSecret}` : ""}`;
+      const deliveredAnswer = redactSecret ? answerText.replace(registeredSecret, REDACTED_EVENT_VALUE) : answerText;
+      const [question] = await db.insert(issueThreadInteractions).values({ companyId: plan.document.companyId, issueId,
+        kind: "ask_user_questions", status: "answered", continuationPolicy: "wake_assignee",
+        createdByAgentId: agentId, resolvedByUserId: "responsible-user", resolvedAt: new Date(),
+        payload: { version: 1, questions: [{ id: "direction", prompt: "Which direction?", selectionMode: "single",
+          options: [{ id: "continue", label: "Continue", freeText: true }] }] },
+        result: { version: 1, answers: [{ questionId: "direction", optionIds: ["continue"], otherText: answerText }] },
+      }).returning();
       const deletedBody = "Deleted continuation body must stay absent";
       await db.insert(issueComments).values({ companyId: plan.document.companyId, issueId,
         body: deletedBody, authorUserId: "responsible-user", deletedAt: new Date() });
       const [comment] = await db.insert(issueComments).values({ companyId: plan.document.companyId, issueId,
         body, authorUserId: "responsible-user" }).returning();
       await db.update(heartbeatRuns).set({ contextSnapshot: { issueId, taskId: issueId, wakeReason: "issue_commented",
-        wakeCommentId: comment!.id, wakeCommentIds: [comment!.id] } }).where(eq(heartbeatRuns.id, runId));
+        wakeCommentId: comment!.id, wakeCommentIds: [comment!.id],
+        interactionId: question!.id, interactionKind: "ask_user_questions", interactionStatus: "answered",
+      } }).where(eq(heartbeatRuns.id, runId));
       if (redactSecret) await createRunSecretRedactionRegistry(db).register(plan.document.companyId, runId, registeredSecret);
       const factory = vi.fn(() => { throw new Error("provider must not start"); });
       let reachedDispatch = false;
@@ -2759,6 +2770,11 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
                 deleted: false, sourceTrust: null,
               })).digest("hex") },
           }]);
+          expect(profile.nativeExecutionInput).toMatchObject({ interactionResponses: [{
+            interactionId: question!.id, kind: "ask_user_questions", response: { status: "answered", result: {
+              answers: [{ questionId: "direction", optionIds: ["continue"], otherText: deliveredAnswer }],
+            } },
+          }] });
           expect(JSON.stringify(profile.nativeExecutionInput)).not.toContain(deletedBody);
           expect(JSON.stringify(profile.nativeExecutionInput)).toContain(deliveredBody);
           if (redactSecret) expect(JSON.stringify(profile.nativeExecutionInput)).not.toContain(registeredSecret);

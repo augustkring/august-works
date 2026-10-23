@@ -19,6 +19,7 @@ import { commitNativeStatusDecision } from "./status-decision-committer.js";
 import { nativeSha256 } from "./canonical.js";
 import { recordNativeAttentionAssessment } from "./work-assessments.js";
 import { formatDurableQuestionResponseSummary } from "../question-response-delivery.js";
+import { createRunSecretRedactionRegistry } from "../run-secret-redaction.js";
 import {
   NATIVE_STATUS_ARBITER_POLICY_VERSION,
   type NativeAuthoritativeIssueStatus,
@@ -402,7 +403,13 @@ export async function materializeNativeInteractionResponses(input: {
       `Native interaction response not found: ${missing.join(", ")}`,
     );
   }
-  return responses.sort((left, right) => left.interactionId.localeCompare(right.interactionId));
+  // Redact before constructing native input, including formatted answers and
+  // the legacy question projection, without changing stored resolution proof.
+  return createRunSecretRedactionRegistry(input.db).redactForIssue(
+    input.companyId,
+    input.issueId,
+    responses.sort((left, right) => left.interactionId.localeCompare(right.interactionId)),
+  );
 }
 
 export type LegacyQuestionResponseWakeProjection = {

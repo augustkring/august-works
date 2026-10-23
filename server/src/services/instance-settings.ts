@@ -605,26 +605,34 @@ export function instanceSettingsService(db: Db, options: InstanceSettingsService
     },
 
     updateGeneral: async (patch: PatchInstanceGeneralSettings): Promise<InstanceSettings> => {
-      const current = await getOrCreateRow();
-      const storedGeneral = normalizeGeneralSettings(current.general);
-      // A full-GET echo carries the overlaid operator value for a field the
-      // user never chose; stripping it keeps the overlay strictly read-time,
-      // so changing or unsetting the variable later still takes effect.
-      const nextGeneral = stripOperatorGeneralEchoes(
-        storedGeneral,
-        normalizeGeneralSettings({ ...storedGeneral, ...patch }),
-        operatorDefaults,
-      );
-      const now = new Date();
-      const [updated] = await db
-        .update(instanceSettings)
-        .set({
-          general: { ...internalGeneralState(current.general), ...nextGeneral },
-          updatedAt: now,
-        })
-        .where(eq(instanceSettings.id, current.id))
-        .returning();
-      return toInstanceSettings(updated ?? current);
+      return db.transaction(async (tx) => {
+        const row = await getOrCreateRow(tx);
+        // A feedback admission can set the irreversible privacy latch while
+        // this ordinary settings write is in flight. Lock and reread before
+        // merging so a stale full-JSON update cannot erase that admission.
+        const [current] = await tx.select().from(instanceSettings)
+          .where(eq(instanceSettings.id, row.id)).for("update");
+        if (!current) throw new Error("Instance settings disappeared during update");
+        const storedGeneral = normalizeGeneralSettings(current.general);
+        // A full-GET echo carries the overlaid operator value for a field the
+        // user never chose; stripping it keeps the overlay strictly read-time,
+        // so changing or unsetting the variable later still takes effect.
+        const nextGeneral = stripOperatorGeneralEchoes(
+          storedGeneral,
+          normalizeGeneralSettings({ ...storedGeneral, ...patch }),
+          operatorDefaults,
+        );
+        const now = new Date();
+        const [updated] = await tx
+          .update(instanceSettings)
+          .set({
+            general: { ...internalGeneralState(current.general), ...nextGeneral },
+            updatedAt: now,
+          })
+          .where(eq(instanceSettings.id, current.id))
+          .returning();
+        return toInstanceSettings(updated ?? current);
+      });
     },
 
     updateExperimental: async (

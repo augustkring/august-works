@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import express from "express";
 import request from "supertest";
 import { and, eq, sql } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   activityLog,
   authUsers,
@@ -16,6 +16,7 @@ import {
   customerFeedback,
   customerFeedbackAccess,
   customerFeedbackEvents,
+  instanceSettings,
   saasNotifications,
 } from "@paperclipai/db";
 import { customerFeedbackRoutes } from "../routes/customer-feedback.js";
@@ -679,6 +680,61 @@ const support = await getEmbeddedPostgresTestSupport();
         expect((await saasSettings.getGeneral()).outputFeedbackPolicyVersion).toBe("aw-v9-local-v1");
       } finally {
         await localSettings.updateExperimental({ customer_feedback_v9: true });
+      }
+    });
+    it("preserves the feedback privacy latch when a general settings write overlaps flag enablement", async () => {
+      const settings = instanceSettingsService(db, { runtimeEnv: {} });
+      await settings.updateExperimental({ customer_feedback_v9: false });
+      await db.execute(sql`update instance_settings set general = general - 'outputFeedbackPolicyVersion' where singleton_key = 'default'`);
+
+      let unlock!: () => void;
+      const holdLock = new Promise<void>((resolve) => { unlock = resolve; });
+      let locked!: () => void;
+      let lockFailed!: (error: unknown) => void;
+      const holderReady = new Promise<void>((resolve, reject) => { locked = resolve; lockFailed = reject; });
+      const holder = db.transaction(async (tx) => {
+        try {
+          await tx.select({ id: instanceSettings.id }).from(instanceSettings)
+            .where(eq(instanceSettings.singletonKey, "default")).for("update");
+          locked();
+          await holdLock;
+        } catch (error) {
+          lockFailed(error);
+          throw error;
+        }
+      });
+
+      let enableFeedback: Promise<unknown> | undefined;
+      let updateGeneral: Promise<unknown> | undefined;
+      try {
+        await holderReady;
+        enableFeedback = settings.updateExperimental({ customer_feedback_v9: true });
+
+        const waitForSettingsBlockers = async (minimum: number) => {
+          await vi.waitFor(async () => {
+            const [row] = await db.execute<{ count: number }>(sql`
+              select count(*)::int as count from pg_stat_activity
+              where datname = current_database()
+                and pid <> pg_backend_pid()
+                and wait_event_type = 'Lock'
+                and query ilike '%instance_settings%'`);
+            expect(row!.count).toBeGreaterThanOrEqual(minimum);
+          }, { timeout: 10_000, interval: 25 });
+        };
+
+        await waitForSettingsBlockers(1);
+        updateGeneral = settings.updateGeneral({ censorUsernameInLogs: true });
+        await waitForSettingsBlockers(2);
+
+        unlock();
+        await holder;
+        await Promise.all([enableFeedback, updateGeneral]);
+        expect((await settings.getGeneral()).outputFeedbackPolicyVersion).toBe("aw-v9-local-v1");
+        expect((await settings.getGeneral()).censorUsernameInLogs).toBe(true);
+      } finally {
+        unlock();
+        await Promise.allSettled([holder, ...(enableFeedback ? [enableFeedback] : []), ...(updateGeneral ? [updateGeneral] : [])]);
+        await settings.updateExperimental({ customer_feedback_v9: true });
       }
     });
     it("fails closed when the rollout flag is disabled", async () => {
