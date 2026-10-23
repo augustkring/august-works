@@ -28,6 +28,7 @@ import {
   getAgentWorkEligibility,
   isUuidLike,
   normalizeAgentApiKeyScope,
+  agentApiKeyScopeSchema,
   normalizeAgentUrlKey,
   type AgentEligibilityAgent,
   type AgentApiKeyScope,
@@ -1271,6 +1272,9 @@ export function agentService(db: Db) {
       scope: AgentApiKeyScope = { kind: "standard" },
       options?: { responsibleUserId?: string | null },
     ) => {
+      const parsedScope = agentApiKeyScopeSchema.safeParse(scope);
+      if (!parsedScope.success) throw unprocessable("Invalid Agent key scope", parsedScope.error.issues);
+      scope = parsedScope.data;
       const existing = await getById(id);
       if (!existing) throw notFound("Agent not found");
       if (existing.status === "pending_approval") {
@@ -1298,7 +1302,7 @@ export function agentService(db: Db) {
       return {
         id: created.id,
         name: created.name,
-        scope: normalizeAgentApiKeyScope(created.scopeConfig),
+        scope,
         responsibleUserId: created.responsibleUserId,
         token,
         createdAt: created.createdAt,

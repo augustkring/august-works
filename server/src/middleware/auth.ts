@@ -1,5 +1,6 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { Request, RequestHandler } from "express";
+import { isDeepStrictEqual } from "node:util";
 import { and, eq, isNull } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
@@ -354,7 +355,7 @@ export function actorMiddleware(db: Db, opts: ActorMiddlewareOptions): RequestHa
     }
 
     const tokenHash = hashToken(token);
-    const key = await db
+    let key = await db
       .select()
       .from(agentApiKeys)
       .where(and(eq(agentApiKeys.keyHash, tokenHash), isNull(agentApiKeys.revokedAt)))
@@ -438,12 +439,17 @@ export function actorMiddleware(db: Db, opts: ActorMiddlewareOptions): RequestHa
         userId: onBehalfOfUserId,
       });
 
+      const keyScope = normalizeAgentApiKeyScope(claims.key_scope);
+      if (!keyScope) {
+        next(unauthorized("Agent credential scope is unavailable; obtain fresh credentials and retry"));
+        return;
+      }
       req.actor = {
         type: "agent",
         agentId: claims.sub,
         companyId: claims.company_id,
         keyId: undefined,
-        keyScope: normalizeAgentApiKeyScope(claims.key_scope),
+        keyScope,
         runId: claims.run_id,
         onBehalfOfUserId,
         identityContextId: identityRun?.activeIdentityContextId ?? null,
@@ -454,10 +460,25 @@ export function actorMiddleware(db: Db, opts: ActorMiddlewareOptions): RequestHa
       return;
     }
 
-    await db
+    const originalScope = normalizeAgentApiKeyScope(key.scopeConfig);
+    if (!originalScope) {
+      next(unauthorized("Agent credential scope is unavailable; obtain fresh credentials and retry"));
+      return;
+    }
+    const [currentKey] = await db
       .update(agentApiKeys)
       .set({ lastUsedAt: new Date() })
-      .where(eq(agentApiKeys.id, key.id));
+      .where(and(eq(agentApiKeys.id, key.id), eq(agentApiKeys.companyId, key.companyId),
+        eq(agentApiKeys.keyHash, tokenHash), isNull(agentApiKeys.revokedAt)))
+      .returning();
+    const keyScope = currentKey ? normalizeAgentApiKeyScope(currentKey.scopeConfig) : null;
+    if (!currentKey || !keyScope || !isDeepStrictEqual(originalScope, keyScope)) {
+      next(unauthorized("Agent credential changed; obtain fresh credentials and retry"));
+      return;
+    }
+    // The last-used write can wait behind revocation or identity changes.
+    // All subsequent identity fields belong to the actual returned row.
+    key = currentKey;
 
     const agentRecord = await db
       .select()
@@ -498,7 +519,7 @@ export function actorMiddleware(db: Db, opts: ActorMiddlewareOptions): RequestHa
       agentId: key.agentId,
       companyId: key.companyId,
       keyId: key.id,
-      keyScope: normalizeAgentApiKeyScope(key.scopeConfig),
+      keyScope,
       onBehalfOfUserId: responsibleUserId,
       onBehalfOfMemberships: await loadResponsibleUserMemberships(db, {
         companyId: key.companyId,

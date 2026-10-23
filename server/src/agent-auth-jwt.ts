@@ -216,13 +216,14 @@ export function verifyLocalAgentJwt(token: string): LocalAgentJwtClaims | null {
   const keyScopeClaim = Object.hasOwn(claims, "key_scope")
     ? normalizeAgentApiKeyScope(claims.key_scope)
     : undefined;
+  if (keyScopeClaim === null) return null;
   const iat = typeof claims.iat === "number" ? claims.iat : null;
   const exp = typeof claims.exp === "number" ? claims.exp : null;
   if (!sub || !adapterType || !runId || !iat || !exp) return null;
   const companyId = claimedCompanyId;
 
   const now = Math.floor(Date.now() / 1000);
-  if (exp < now) return null;
+  if (exp <= now) return null;
 
   const issuer = typeof claims.iss === "string" ? claims.iss : undefined;
   const audience = typeof claims.aud === "string" ? claims.aud : undefined;

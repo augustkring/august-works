@@ -111,6 +111,16 @@ describe("agent local JWT", () => {
     expect(verifyLocalAgentJwt(token!)).toBeNull();
   });
 
+  it("rejects at the exact expiry instant after a valid pre-expiry read", () => {
+    process.env[ttlEnv] = "1";
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    const token = createLocalAgentJwt("agent-1", "company-1", "claude_local", "run-1");
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.999Z"));
+    expect(verifyLocalAgentJwt(token!)).not.toBeNull();
+    vi.setSystemTime(new Date("2026-01-01T00:00:01.000Z"));
+    expect(verifyLocalAgentJwt(token!)).toBeNull();
+  });
+
   it("rejects issuer/audience mismatch", () => {
     process.env[issuerEnv] = "custom-issuer";
     process.env[audienceEnv] = "custom-audience";
@@ -266,12 +276,24 @@ describe("agent local JWT", () => {
     expect(claims!.exp - claims!.iat).toBe(60 * 60 * 48);
   });
 
+  it.each([{}, { kind: "unknown" }, { kind: "skill_test", issueId: "invalid" },
+    { kind: "task_bridge", parentIssueIds: [] }])("rejects a valid signature with malformed key scope %j", scope => {
+    const token = craftLegacyMasterSecretToken("test-secret", "company-1", scope);
+    expect(verifyLocalAgentJwt(token)).toBeNull();
+  });
+
+  it("preserves documented legacy absent and null standard scope", () => {
+    expect(verifyLocalAgentJwt(craftLegacyMasterSecretToken("test-secret", "company-1"))).not.toBeNull();
+    expect(verifyLocalAgentJwt(craftLegacyMasterSecretToken("test-secret", "company-1", null))?.key_scope).toEqual({ kind: "standard" });
+  });
+
   // Helper: hand-craft a token signed with the raw master secret (legacy path).
-  function craftLegacyMasterSecretToken(masterSecret: string, companyId: string) {
+  function craftLegacyMasterSecretToken(masterSecret: string, companyId: string, scope?: unknown) {
     const now = Math.floor(Date.now() / 1000);
     const header = { alg: "HS256", typ: "JWT" };
     const claims = {
       sub: "agent-legacy",
+      ...(scope === undefined ? {} : { key_scope: scope }),
       company_id: companyId,
       adapter_type: "claude_local",
       run_id: "run-legacy",

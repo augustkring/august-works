@@ -1,0 +1,76 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/live-events-agent-key-authority.integration.test.ts (10 tests | 1 failed | 8 skipped) 21596ms
+     × preserves the original scoped credential across an actual socket key-row wait 239ms
+ ❯ |@paperclipai/server| src/__tests__/native-payload-temporal-sources.integration.test.ts (2 tests | 2 failed) 12737ms
+     × keeps earlier shared Memory readable after its producer later reads a private Task, while narrowing new Memory 411ms
+     × keeps an earlier derived Task readable while a new Task retains a later private input 883ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/live-events-agent-key-authority.integration.test.ts > Native Agent-key live admission follows current company authority > preserves the original scoped credential across an actual socket key-row wait
+AssertionError: expected { status: 101 } to deeply equal { status: 403 }
+
+- Expected
++ Received
+
+  {
+-   "status": 403,
++   "status": 101,
+  }
+
+ ❯ src/__tests__/live-events-agent-key-authority.integration.test.ts:178:29
+    176|       expect(waiter?.query).toMatch(/update "agent_api_keys"/i);
+    177|       release(); await holder;
+    178|       expect(await outcome).toEqual({ status: transport === "http" ? 4…
+       |                             ^
+    179|       // A genuinely new request may use the now-current standard key.
+    180|       const fresh = await readerServer(fixture);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-temporal-sources.integration.test.ts > Native payload inputs retain their creation-time source closure > keeps earlier shared Memory readable after its producer later reads a private Task, while narrowing new Memory
+Error: Invalid memory candidate
+ ❯ unprocessable src/errors.ts:41:10
+     39|
+     40| export function unprocessable(message: string, details?: unknown) {
+     41|   return new HttpError(422, message, details);
+       |          ^
+     42| }
+     43|
+ ❯ runCandidate src/services/memory/memory-service.ts:658:15
+ ❯ Object.createCandidate src/services/memory/memory-service.ts:1628:27
+ ❯ create src/__tests__/native-payload-temporal-sources.integration.test.ts:57:38
+ ❯ src/__tests__/native-payload-temporal-sources.integration.test.ts:64:27
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-temporal-sources.integration.test.ts > Native payload inputs retain their creation-time source closure > keeps an earlier derived Task readable while a new Task retains a later private input
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/__tests__/native-payload-temporal-sources.integration.test.ts:86:64
+     84|     expect(await canActorReadIssuePrivacy(db, s.alice, later)).toBe(tr…
+     85|     expect(await canActorReadIssuePrivacy(db, s.bob, later)).toBe(fals…
+     86|     expect(await canActorReadIssuePrivacy(db, s.bob, earlier)).toBe(tr…
+       |                                                                ^
+     87|   });
+     88| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  3 failed | 1 passed | 8 skipped (12)
+   Start at  01:02:29
+   Duration  95.81s (transform 35.82s, setup 318ms, import 59.63s, tests 34.33s, environment 0ms)
+

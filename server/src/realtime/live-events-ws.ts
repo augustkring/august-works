@@ -5,13 +5,13 @@ import { isDeepStrictEqual } from "node:util";
 import type { Duplex } from "node:stream";
 import { and, eq, isNull, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
-import { agentApiKeys, authSessions, authUsers, companyMemberships, instanceUserRoles } from "@paperclipai/db";
-import type { AwDeploymentProfile, DeploymentMode } from "@paperclipai/shared";
+import { agentApiKeys, agents, authSessions, authUsers, companyMemberships, instanceUserRoles } from "@paperclipai/db";
+import { normalizeAgentApiKeyScope, type AwDeploymentProfile, type DeploymentMode } from "@paperclipai/shared";
 import type { BetterAuthSessionResult } from "../auth/better-auth.js";
 import { logger } from "../middleware/logger.js";
 import { subscribeCompanyLiveEvents } from "../services/live-events.js";
 import { analyticalLiveEventForReader } from "../services/analytical-live-events.js";
-import type { AuthorizationActor } from "../services/authorization.js";
+import { authorizationService, type AuthorizationActor } from "../services/authorization.js";
 
 interface WsSocket {
   readyState: number;
@@ -212,6 +212,8 @@ async function authorizeUpgrade(
   if (!key || key.companyId !== companyId) {
     return null;
   }
+  const originalScope = normalizeAgentApiKeyScope(key.scopeConfig);
+  if (!originalScope) return null;
 
   const [currentKey] = await db
     .update(agentApiKeys)
@@ -221,12 +223,24 @@ async function authorizeUpgrade(
     .returning();
   if (!currentKey) return null;
 
-  return {
-    companyId,
-    actorType: "agent",
-    actorId: currentKey.agentId,
-    actor: { type: "agent", source: "agent_key", agentId: currentKey.agentId, companyId: currentKey.companyId, keyId: currentKey.id, keyScope: currentKey.scopeConfig, onBehalfOfUserId: currentKey.responsibleUserId },
-  };
+  // Match the original HTTP key-auth identity contract. Paused Agents retain
+  // read access; terminated or unapproved presences cannot authenticate.
+  const [agent] = await db.select({ id: agents.id, status: agents.status }).from(agents).where(and(
+    eq(agents.id, currentKey.agentId), eq(agents.companyId, companyId),
+  ));
+  const responsibleUserId = currentKey.responsibleUserId?.trim();
+  if (!agent || ["terminated", "pending_approval"].includes(agent.status) || !responsibleUserId) return null;
+  const keyScope = normalizeAgentApiKeyScope(currentKey.scopeConfig);
+  if (!keyScope || !isDeepStrictEqual(originalScope, keyScope)) return null;
+  const actor: AuthorizationActor = { type: "agent", source: "agent_key", agentId: agent.id,
+    companyId: currentKey.companyId, keyId: currentKey.id,
+    keyScope, onBehalfOfUserId: responsibleUserId };
+  // Company-stream admission uses the same key/trust policy and current Human
+  // intersection as native HTTP actions, including after source-lock waits.
+  const decision = await authorizationService(db).decide({ actor, action: "company_scope:read",
+    resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true });
+  if (!decision.allowed) return null;
+  return { companyId, actorType: "agent", actorId: agent.id, actor };
 }
 
 export function setupLiveEventsWebSocketServer(

@@ -1,0 +1,101 @@
+{
+  "status": "bounded source checkpoint; current verification retry pending after environment reset; NOT PR-ready",
+  "production_changes": [
+    "Canonical Agent key company-stream admission uses actual Agent/current responsible Human and original company_scope:read; preserves original paused-read semantics.",
+    "Malformed nonnull key restrictions no longer default to standard in shared normalizer, HTTP, signed JWT or WS; original null/absent standard storage remains valid.",
+    "HTTP last-used UPDATE rechecks actual key identity/hash/active state and uses RETURNING current row. HTTP and WS preserve original parsed scope through key-row waits.",
+    "Valid key creation uses original scope schema; malformed metadata stays visible/revocable as scope:null. JWT expiry is denied at exp, not one second later."
+  ],
+  "red": {
+    "initial_company_channel": {
+      "session": 83985,
+      "exit_code": 1,
+      "failed": 4,
+      "seconds": 28.25,
+      "source": "Original B actual PostgreSQL/socket result, raw evidence retained."
+    },
+    "malformed_scope": {
+      "session": 77093,
+      "rendered_passed": 4,
+      "rendered_failed": 1,
+      "seconds": 32.13,
+      "exit_code": null,
+      "reason": "B tool session exit unavailable; rendered verdict retained separately."
+    },
+    "http_jwt_original": {
+      "session": 87125,
+      "exit_code": 1,
+      "passed": 22,
+      "failed": 8,
+      "seconds": 55.69,
+      "all_nine_pins_unchanged": true
+    },
+    "ws_scope_wait": {
+      "session": 73500,
+      "exit_code": 1,
+      "native_scope_passed": 1,
+      "native_scope_failed": 1,
+      "other_results": "One genuine Task temporal failure and one unrelated Memory fixture validation error; not three security regressions.",
+      "all_ten_pins_unchanged": true
+    },
+    "jwt_expiry": {
+      "session": 89594,
+      "exit_code": 1,
+      "failed": 1,
+      "skipped": 22,
+      "seconds": 8.37
+    }
+  },
+  "checks": {
+    "before_last_two_fixes": {
+      "session": 19430,
+      "exit_code": 0,
+      "passed": 61,
+      "seconds": 88.35,
+      "all_ten_pins_unchanged": true
+    },
+    "final_rendered": {
+      "session": 25484,
+      "passed": 64,
+      "seconds": 62.88,
+      "exit_code": null,
+      "all_eleven_source_pins_unchanged_after_reset": true,
+      "reason": "Final PASS summary exists; environment starting/running reset cleared native process/session registry before parent exit observation. Retry required."
+    },
+    "normal_server_typecheck": {
+      "session": 77699,
+      "exit_code": 0,
+      "scope": "Foundation, native executor and original ingress fixes before final WS scope-ceiling / JWT expiry one-line fixes. Exact pins retained."
+    },
+    "final_server_compiler": {
+      "session": 43368,
+      "exit_code": null,
+      "verdict": "Environment-interrupted; empty log. No PASS assertion."
+    },
+    "token_gates": {
+      "session": 69433,
+      "exit_code": 0
+    }
+  },
+  "final_source_sha256": {
+    "server/src/realtime/live-events-ws.ts": "17530292cab22cdbe8870ce69e91b7573c4bbe55aa566588904b00b9c4ef9489",
+    "server/src/services/authorization.ts": "ee7a4e4055e0bed062c8bbc35f60cd27a4175b77437c8b2c4d52e3d709b2c442",
+    "packages/shared/src/validators/agent.ts": "fab346e2b4a5f8d047145bfd560db410cd31a02c34f9e36f1985a7640ee8c707",
+    "server/src/middleware/auth.ts": "303e2622414fd03e10b708caa392cdc547c994f09ba912e489668bd2c6495946",
+    "server/src/agent-auth-jwt.ts": "743f6b63a896419ce9bf4d23f31c19bfc8c48aeacabf9c72492e0a1c6c5ed292",
+    "server/src/services/agents.ts": "cb3b5f7c500e3531215ef20358a3be7321a3fa61a36396aa4d48eb4b490efc60",
+    "ui/src/api/agents.ts": "28dcbcd47f31d2c39e4df935ac28c931fe87e937a48e92bd3b3b369c61debec3",
+    "server/src/__tests__/live-events-agent-key-authority.integration.test.ts": "d024ad6ace3280bda5e003322eed1c8ce11c14b1bd5665d10a393d8297617138",
+    "server/src/__tests__/agent-auth-jwt.test.ts": "9b051c42ac1028ba95a75c43c1c73d61d3eb07fb2f9137c580fba279ab035473",
+    "server/src/__tests__/agent-auth-middleware.test.ts": "14b33b14768236851b3eb2e15b966317089cf843d04a32adb88b6d90e99d3eb4",
+    "server/src/services/native-runtime/native-session-executor.ts": "38f17cac3ae18b94ca70d484c2e113aa6d4dc0e689b86666c11e769921c56357"
+  },
+  "limits": [
+    "Canonical paused reads preserved; no new undocumented SaaS Agent-membership exception added.",
+    "No full atomic credential/source-policy lifetime through every subsequent side effect, provider await or socket send proved.",
+    "Native Task/private Memory copied-body leak and frozen actual input/source closure still OPEN.",
+    "New temporal fixture first failed schema validation, next used wrong get-denial assertion; both exact failures retained. Third corrected fixture was environment-interrupted before test verdict; no Memory temporal RED claim yet.",
+    "Current UI typecheck and final compiler/64-case actual exit retry remain pending; full pnpm test:run/build and whole current workspace checks remain OPEN.",
+    "No merge/deploy/paid provider or PR-ready claim."
+  ]
+}

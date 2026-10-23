@@ -80,11 +80,13 @@ function createDbState(input: {
         }
         return [];
       }),
-    update: () => ({
+    update: (table: unknown) => ({
       set() {
         return {
           where() {
-            return Promise.resolve([]);
+            return Object.assign(Promise.resolve([]), {
+              returning: async () => table === agentApiKeys && keyRow ? [keyRow] : [],
+            });
           },
         };
       },

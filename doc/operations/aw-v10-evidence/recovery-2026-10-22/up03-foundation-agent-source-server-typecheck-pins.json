@@ -1,0 +1,14 @@
+{
+  "session": 77699,
+  "exit_code": 0,
+  "status": "normal server typecheck PASS before final WS scope-ceiling / JWT expiry corrections",
+  "source_sha256": {
+    "server/src/realtime/live-events-ws.ts": "4b52048eede5a100c00a3d5515eb45fe6699a337905b26006b6e28f0645b2c97",
+    "server/src/services/authorization.ts": "ee7a4e4055e0bed062c8bbc35f60cd27a4175b77437c8b2c4d52e3d709b2c442",
+    "packages/shared/src/validators/agent.ts": "fab346e2b4a5f8d047145bfd560db410cd31a02c34f9e36f1985a7640ee8c707",
+    "server/src/middleware/auth.ts": "303e2622414fd03e10b708caa392cdc547c994f09ba912e489668bd2c6495946",
+    "server/src/agent-auth-jwt.ts": "3d14feb43468a59fdd612ea6240463d3b422a5787ec59f50616efe3dba5d78f8",
+    "server/src/services/agents.ts": "cb3b5f7c500e3531215ef20358a3be7321a3fa61a36396aa4d48eb4b490efc60",
+    "ui/src/api/agents.ts": "28dcbcd47f31d2c39e4df935ac28c931fe87e937a48e92bd3b3b369c61debec3"
+  }
+}
