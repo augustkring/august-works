@@ -279,3 +279,12 @@ Actual PostgreSQL focused admission1PASS129.83s; final four affected DOM suites1
 ### 2026-10-23 — Share-title and optimizer product identity
 
 Two remaining actual software labels now reuse the existing PRODUCT_IDENTITY: standalone browser sharing fallback and optimizer’s incomplete-correction explanation. No upstream asset is relabeled: unused PaperclipLockup contains a literal upstream wordmark and remains unchanged with its truthful provenance title. Both modified source pins match before/final captures; token gate and UI compiler have durable0 and process closure. An attempted agent interruption occurred at completion, so no separate direct tool-closure result is invented. See `brand-copy-shared-identity-checkpoint.json`. No tests added for scalar copy; full brand/visual/V10 qualification remains open.
+
+
+### 2026-10-23 — Preserve actual continuation comment selections
+
+Original continuation owner selects the PostgreSQL microsecond comment version beside each existing full row/snapshot, then reports separate captures of the final secret/quarantine-redacted message rendition. Deleted bodies are omitted. Default envelope DTO remains unchanged. Initial native input persistence retains these captures separately from independently selected wake/replay versions; existing recovery preserves the original input/captures. No later query reconstructs selection history.
+
+Actual baseline2FAIL71.18s; final real bootstrap cases2PASS93.63s, complete original continuation suites48PASS53.04s, and server compiler actual/durable0, all recorded source pins match. The fixtures include a deleted historical comment and actual registered secret; both remain absent from full native input. Real source edits leave the entire original profile/input equal, and provider factory stays uncalled. Read-only gpt-6-luna review found no concrete scoped defect. See `up03-native-continuation-comment-checkpoint.json`.
+
+Partial source handoff only: interactions/prior results and other input families, complete receipt/current permissions/transport/effects and original private Memory/temporal/full V10 gates remain open. The next independent audit identifies registered-secret exposure through native answered-question envelopes; that separate path is not claimed fixed here.

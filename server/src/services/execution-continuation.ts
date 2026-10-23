@@ -1,4 +1,5 @@
-import { and, asc, desc, eq, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
+import { createHash } from "node:crypto";
+import { and, asc, desc, eq, getTableColumns, inArray, isNotNull, isNull, or, sql } from "drizzle-orm";
 import { z } from "zod";
 import {
   agentWakeupRequests,
@@ -15,6 +16,7 @@ import { hasConversationContinuationPolicy } from "./conversation-continuation.j
 import { queuedCommentIdsFromWakePayload } from "./issue-queued-comment-queue.js";
 import { childReviewOutcomes } from "./native-runtime/child-review-outcomes.js";
 import { createRunSecretRedactionRegistry } from "./run-secret-redaction.js";
+import type { NativeCommentSourceCapture } from "./agent-conversations.js";
 
 export class StaleExecutionContinuationError extends Error {
   constructor(readonly code: "continuation_task_ownership_changed") {
@@ -124,6 +126,8 @@ export async function buildExecutionContinuation(input: {
   runId?: string;
   summary: string | null;
   exposeLowTrustRaw: boolean;
+  /** Selected message sources only; interactions and prior results are separate. */
+  onCommentSourceCapture?: (capture: NativeCommentSourceCapture) => void;
 }): Promise<ExecutionContinuationEnvelope> {
   const { db, companyId, issueId } = input;
   const [issue] = await db
@@ -137,7 +141,12 @@ export async function buildExecutionContinuation(input: {
   )
     throw new StaleExecutionContinuationError("continuation_task_ownership_changed");
   const rows = await db
-    .select()
+    .select({
+      ...getTableColumns(issueComments),
+      ...(input.onCommentSourceCapture ? {
+        sourceVersion: sql<string>`extract(epoch from ${issueComments.updatedAt})::text`,
+      } : {}),
+    })
     .from(issueComments)
     .where(
       and(
@@ -375,7 +384,7 @@ export async function buildExecutionContinuation(input: {
     ? lastTerminal.id : undefined);
   // Every consumer, including completion contracts and safe replacement,
   // receives the same secret-redacted evidence after authority validation.
-  return createRunSecretRedactionRegistry(db).redactForIssue<ExecutionContinuationEnvelope>(companyId, issueId, {
+  const envelope = await createRunSecretRedactionRegistry(db).redactForIssue<ExecutionContinuationEnvelope>(companyId, issueId, {
     ...(interruptedRunId ? { interruptedRunId } : {}),
     ...(resumeDelta ? { resumeDelta } : {}),
     recoveryOutcomes: reconciliations
@@ -423,4 +432,23 @@ export async function buildExecutionContinuation(input: {
       summaryThroughCommentId: null,
     },
   });
+  if (input.onCommentSourceCapture) {
+    // Match final redacted renditions to their own selected rows, never a new
+    // live lookup or the independently selected wake/replay comment version.
+    const selectedById = new Map(rows.map(row => [row.id, row]));
+    for (const message of envelope.messages) {
+      if (message.deleted) continue;
+      const selected = selectedById.get(message.id);
+      if (!selected || typeof selected.sourceVersion !== "string") {
+        throw new Error("Selected continuation comment source is unavailable");
+      }
+      input.onCommentSourceCapture({
+        input: { kind: "comment", issueId, commentId: selected.id,
+          sourceVersion: selected.sourceVersion,
+          contentHash: createHash("sha256").update(JSON.stringify(message), "utf8").digest("hex") },
+        payloadSourceSnapshot: selected.payloadSourceSnapshot,
+      });
+    }
+  }
+  return envelope;
 }

@@ -20842,6 +20842,7 @@ export function heartbeatService(
       } else {
         delete context.paperclipSkillTest;
       }
+      const continuationCommentSources: NativeCommentSourceCapture[] = [];
       const executionContinuation =
         issueRef && !isConversation(issueContext) && issueContext?.assigneeAgentId === agent.id
           ? await buildExecutionContinuation({
@@ -20854,6 +20855,8 @@ export function heartbeatService(
               previousContextRunId: taskSession?.lastRunId,
               summary: safeContinuationSummary?.body ?? null,
               exposeLowTrustRaw,
+              onCommentSourceCapture: agent.adapterType === "paperclip_runner"
+                ? capture => continuationCommentSources.push(capture) : undefined,
             })
           : null;
       context.executionContinuation = executionContinuation;
@@ -23900,6 +23903,7 @@ export function heartbeatService(
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapTaskSource: taskSourceCapture, nativeBootstrapAncestorSources }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapInlineWakeCommentSources: inlineWakeCommentSourceCaptures }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapWakeCommentSources }),
+                  ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapContinuationCommentSources: continuationCommentSources }),
                   nativeExecutionInput:
                     lockedProfile.nativeExecutionInput ?? nativeExecution,
                   nativeToolContractFingerprint:

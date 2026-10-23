@@ -2713,6 +2713,9 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       const registeredSecret = "fixture-inline-secret-value";
       const body = `Original native inline wake comment${redactSecret ? ` ${registeredSecret}` : ""}`;
       const deliveredBody = redactSecret ? body.replace(registeredSecret, REDACTED_EVENT_VALUE) : body;
+      const deletedBody = "Deleted continuation body must stay absent";
+      await db.insert(issueComments).values({ companyId: plan.document.companyId, issueId,
+        body: deletedBody, authorUserId: "responsible-user", deletedAt: new Date() });
       const [comment] = await db.insert(issueComments).values({ companyId: plan.document.companyId, issueId,
         body, authorUserId: "responsible-user" }).returning();
       await db.update(heartbeatRuns).set({ contextSnapshot: { issueId, taskId: issueId, wakeReason: "issue_commented",
@@ -2747,6 +2750,16 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
             request: expectedCommentSource,
             context: expectedCommentSource,
           });
+          expect(profile.nativeBootstrapContinuationCommentSources).toEqual([{
+            ...expectedCommentSource,
+            input: { ...expectedCommentSource.input,
+              contentHash: createHash("sha256").update(JSON.stringify({
+                id: comment!.id, authorType: "user", authorId: "responsible-user", createdByRunId: null,
+                body: deliveredBody, createdAt: comment!.createdAt.toISOString(), updatedAt: comment!.updatedAt.toISOString(),
+                deleted: false, sourceTrust: null,
+              })).digest("hex") },
+          }]);
+          expect(JSON.stringify(profile.nativeExecutionInput)).not.toContain(deletedBody);
           expect(JSON.stringify(profile.nativeExecutionInput)).toContain(deliveredBody);
           if (redactSecret) expect(JSON.stringify(profile.nativeExecutionInput)).not.toContain(registeredSecret);
           expect(JSON.stringify(profile.nativeExecutionInput)).toContain("Original native bootstrap plan");
