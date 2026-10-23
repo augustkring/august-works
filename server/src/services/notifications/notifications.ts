@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { notificationChannelPolicy } from "./channel-policy.js";
 import { notificationChannelDelivery } from "./channel-delivery.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
@@ -153,9 +154,9 @@ export function notificationService(
             userId: recipient.userId,
             purpose: category,
             recipient: recipient.email,
-            subject: delivery.groupKey ? "Your August Works updates" : title,
+            subject: delivery.groupKey ? `Your ${PRODUCT_IDENTITY.productName} updates` : title,
             message:
-              "There is an account update in August Works. Sign in to review it.",
+              `There is an account update in ${PRODUCT_IDENTITY.productName}. Sign in to review it.`,
             actionPath: relativePath,
             dedupeKey: delivery.groupKey ? `notification:${companyId}:${recipient.userId}:${category}:${delivery.groupKey}` : "notification:" + created.id,
             notBefore:delivery.notBefore,

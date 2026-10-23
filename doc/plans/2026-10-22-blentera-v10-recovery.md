@@ -421,3 +421,8 @@ Existing three UI suites134PASS59.79s; UI typecheck/token gates actual/durable0,
 Original callback now reuses canonical NOWAIT authority loaders for Task/Project reads, refuses uncaptured rows and rebinds actual HTTP credential markers. Credential-free internal actors keep existing canonical policy; outside-TX ordinary reads remain per-call. Actual key/JWT/cookie and unlisted-row regressions6FAIL before fix; final original Source/authz/middleware140PASS180.19s.
 
 Actual original metric/strategy consumers initially21FAIL/24PASS, exactly reproduced against committed5d49d9b9a authorization. Replace raw positive Project fixture with actual canonical Board POST; preserve all negative unknown rows/assertions. Reached strategy harness then exposes missing real reviewer and actual40P01 from reverse company/Memory locking; fix these harness facts. Final45PASS201.65s. Server compiler actual/durable0, exact pins match and processes closed. See `up03-native-source-lifetimes-checkpoint.json` for distinct runs/failed sources. General SQL, full input/source graph, private Memory/temporal failures and complete V10/PR/release gates remain open.
+
+
+### 2026-10-23 — Canonical identity in new account correspondence
+
+Original auth/invitation subjects and account notification subject/message reuse PRODUCT_IDENTITY. Original encrypted outbox, URL, expiry, recipient, dedupe and queued historical payload semantics remain. Existing actual account/invitation/notification three suites30PASS176.38s; final server compiler0 and exact pins match, processes closed. See `brand-account-notification-checkpoint.json`. This is product wording only; CE03 shared EN/DA mail/landing flow and actual sender/provider/hosted qualification remain open.

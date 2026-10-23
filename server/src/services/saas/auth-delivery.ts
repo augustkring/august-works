@@ -1,3 +1,4 @@
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { authSecurityEvents, type Db } from "@paperclipai/db";
 import { sql } from "drizzle-orm";
 import {
@@ -73,8 +74,8 @@ export function saasAuthDelivery(
       userId: input.user.id,
       subject:
         purpose === "verification"
-          ? "Verify your August Works email"
-          : "Reset your August Works password",
+          ? `Verify your ${PRODUCT_IDENTITY.productName} email`
+          : `Reset your ${PRODUCT_IDENTITY.productName} password`,
       actionPath: url.pathname + url.search,
       message:
         purpose === "verification"
