@@ -123,6 +123,28 @@ describe("Native payload source snapshot binds its original payload owner", () =
     expect(changed!.payloadSourceSnapshotInvalidated).toBe(true);
   });
 
+  it("invalidates only the selected company's captured workspace settings when an environment is removed", async () => {
+    const environmentId = randomUUID(), otherCompanyId = randomUUID();
+    await db.insert(companies).values({ id: otherCompanyId, name: "Other environment owner", issuePrefix: randomUUID() });
+    const rows = await db.insert(issues).values([
+      { companyId, title: "Selected environment", executionWorkspaceSettings: { mode: "shared_workspace", environmentId } },
+      { companyId, title: "Different environment", executionWorkspaceSettings: { mode: "shared_workspace", environmentId: randomUUID() } },
+      { companyId: otherCompanyId, title: "Other company's environment", executionWorkspaceSettings: { mode: "shared_workspace", environmentId } },
+    ].map(row => ({ ...row, payloadSourceProtocolVersion: 1 }))).returning();
+    for (const row of rows) await bindOwner("issues", "issue", row.id);
+    expect(await issueService(db).clearExecutionWorkspaceEnvironmentSelection(companyId, environmentId)).toBe(1);
+    const [cleared] = await db.select().from(issues).where(eq(issues.id, rows[0]!.id));
+    expect(cleared!.executionWorkspaceSettings).toEqual({ mode: "shared_workspace", environmentId: null });
+    expect(cleared!.payloadSourceSnapshot).toBeNull();
+    expect(cleared!.payloadSourceSnapshotInvalidated).toBe(true);
+    for (const original of rows.slice(1)) {
+      const [untouched] = await db.select().from(issues).where(eq(issues.id, original.id));
+      expect(untouched!.executionWorkspaceSettings).toEqual(original.executionWorkspaceSettings);
+      expect(untouched!.payloadSourceSnapshot).not.toBeNull();
+      expect(untouched!.payloadSourceSnapshotInvalidated).toBe(false);
+    }
+  });
+
   it("rejects rebinding after an existing snapshot was explicitly invalidated to unknown", async () => {
     const row = await insert(), source = await insert(0);
     const sourceBody = await snapshot(source);

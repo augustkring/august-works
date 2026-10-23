@@ -11784,9 +11784,10 @@ export function issueService(db: Db) {
               ...settings,
               environmentId: null,
             },
+            payloadSourceSnapshot: null,
             updatedAt: new Date(),
           })
-          .where(eq(issues.id, row.id));
+          .where(and(eq(issues.companyId, companyId), eq(issues.id, row.id)));
         cleared += 1;
       }
 

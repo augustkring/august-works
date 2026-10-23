@@ -253,7 +253,7 @@ describe("company portability", () => {
   }
 
   async function seedNativeBoardTask(input: { id: string; number: number; title: string; projectId?: string | null; description?: string }) {
-    await nativeDb.insert(issues).values({
+    const [row] = await nativeDb.insert(issues).values({
       id: input.id,
       companyId: nativeCompanyId,
       projectId: input.projectId ?? null,
@@ -267,7 +267,8 @@ describe("company portability", () => {
       privacyParentIssueId: null,
       createdByUserId: nativeUserId,
       responsibleUserId: nativeUserId,
-    });
+    }).returning();
+    return row!;
   }
 
   beforeEach(() => {
@@ -1663,8 +1664,13 @@ describe("company portability", () => {
     }));
   });
 
-  it("infers portable git metadata from a local checkout without task warning fan-out", async () => {
-    const portability = companyPortabilityService({} as any);
+  itNative("infers portable git metadata from a local checkout without task warning fan-out", async () => {
+    const portability = companyPortabilityService(nativeDb);
+    useNativeExportCompany();
+    const projectId = "b7071652-fd3a-4a30-b755-7c3b56513730";
+    const taskId = "b7071652-fd3a-4a30-b755-7c3b56513731";
+    const project = await seedNativeBoardProject({ id: projectId, name: "Paperclip App", description: "Ship it" });
+    const task = await seedNativeBoardTask({ id: taskId, number: 901, title: "Task one", description: "Task body", projectId });
     const repoDir = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-portability-git-"));
     execFileSync("git", ["init"], { cwd: repoDir, stdio: "ignore" });
     execFileSync("git", ["checkout", "-b", "main"], { cwd: repoDir, stdio: "ignore" });
@@ -1675,7 +1681,8 @@ describe("company portability", () => {
 
     projectSvc.list.mockResolvedValue([
       {
-        id: "project-1",
+        ...project,
+        id: projectId,
         name: "Paperclip App",
         urlKey: "paperclip-app",
         description: "Ship it",
@@ -1716,11 +1723,12 @@ describe("company portability", () => {
     ]);
     issueSvc.list.mockResolvedValue([
       {
-        id: "issue-1",
-        identifier: "PAP-1",
+        ...task,
+        id: taskId,
+        identifier: "PAP-901",
         title: "Task one",
         description: "Task body",
-        projectId: "project-1",
+        projectId,
         projectWorkspaceId: "workspace-1",
         assigneeAgentId: null,
         status: "todo",
@@ -1732,14 +1740,14 @@ describe("company portability", () => {
       },
     ]);
 
-    const exported = await portability.exportBundle("company-1", {
+    const exported = await portability.exportBundle(nativeCompanyId, {
       include: {
         company: false,
         agents: false,
         projects: true,
         issues: true,
       },
-    });
+    }, { actor: nativeActor });
 
     const extension = asTextFile(exported.files[".paperclip.yaml"]);
     expect(extension).toContain('repoUrl: "https://github.com/paperclipai/paperclip.git"');
@@ -2410,12 +2418,16 @@ describe("company portability", () => {
     expect(agentSvc.update).toHaveBeenCalledWith("qa-created", { reportsTo: "cto-created" });
   });
 
-  it("exports project env as portable inputs without concrete values", async () => {
-    const portability = companyPortabilityService({} as any);
+  itNative("exports project env as portable inputs without concrete values", async () => {
+    const portability = companyPortabilityService(nativeDb);
+    useNativeExportCompany();
+    const projectId = "b7071652-fd3a-4a30-b755-7c3b56513732";
+    const project = await seedNativeBoardProject({ id: projectId, name: "Launch", description: "Ship it" });
 
     projectSvc.list.mockResolvedValue([
       {
-        id: "project-1",
+        ...project,
+        id: projectId,
         name: "Launch",
         urlKey: "launch",
         description: "Ship it",
@@ -2444,14 +2456,14 @@ describe("company portability", () => {
       },
     ]);
 
-    const exported = await portability.exportBundle("company-1", {
+    const exported = await portability.exportBundle(nativeCompanyId, {
       include: {
         company: false,
         agents: false,
         projects: true,
         issues: false,
       },
-    });
+    }, { actor: nativeActor });
 
     const extension = asTextFile(exported.files[".paperclip.yaml"]);
     expect(extension).toContain("OPENAI_API_KEY:");
