@@ -400,3 +400,10 @@ Initial two-case unit baseline has one genuine missing-write failure and one inv
 Source tracing also found original prepare-native-run replaced its entire profile. Actual PG all3 existing admission-marker modes reproduce newer history/ID loss (3FAIL99.89s). Original locked owner now merges actual current profile, derives3 IDs there, and returns those actual retained/new IDs. Redundant special-case marker retention deleted; all required/historical/invalid semantics remain. Fresh prestarted actual PG final3PASS69.24s, protocol0 unchanged and partial/unknown NULL history preserved. One failed dependency-location cleanup/aborted143 invocation gets no credit; replaced with a fresh database. Original deadlines unchanged.
 
 Final server compiler actual/durable0, all5 pins match; all test/compiler processes and owned PG helpers closed/cleaned. Bounded gpt-6-luna fixture/design/read review assistance; Root corrected, reviewed and verified. See `up03-native-stage-history-checkpoint.json`. Complete input/dispatch/tool/history receipts, copy effects, canonical SQL, original private Memory/temporal failures and broad V10/PR/release gates remain open.
+
+
+### 2026-10-23 — Shared identity in first-admin and invitation entry flows
+
+Original bootstrap pending and invite/account owners use PRODUCT_IDENTITY for product/user/first-admin/error/fallback labels. Actual CLI compatibility command, adapter ID, invite storage key and auth/gating behavior remain. Bounded gpt-6-luna UI assistance; Root reviewed and traced CloudAccessGate's additional original App test coverage, updating only directly stale displayed expectations.
+
+Existing invite18PASS14.01s and App/access gate14PASS26.84s; UI typecheck/token gates actual/durable0, all4 pins match, processes closed. No new copy-mirroring tests. See `brand-bootstrap-invite-checkpoint.json`. This is UI copy coverage, not live authentication/provider/host qualification or complete brand/localization inventory; broad V10/PR/release gates remain open.
