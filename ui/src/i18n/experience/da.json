@@ -1600,10 +1600,10 @@
     "memory_policy_mismatch": "Fjern de valgte præferencer, før du vælger en anden Memory-indstilling."
   },
   "authFlow": {
-    "signInTitle": "Log ind på August Works",
-    "legacySignInTitle": "Log ind på Paperclip",
+    "signInTitle": "Log ind på Blentera",
+    "legacySignInTitle": "Log ind på Blentera",
     "createTitle": "Opret din konto",
-    "legacyCreateTitle": "Opret din Paperclip-konto",
+    "legacyCreateTitle": "Opret din Blentera-konto",
     "signInHelp": "Brug din e-mail og adgangskode til at logge ind.",
     "verifyHelp": "Bekræft din e-mail for at begynde opsætningen af din virksomhed.",
     "legacyCreateHelp": "Opret en konto til denne installation. E-mailbekræftelse kræves ikke i v1.",

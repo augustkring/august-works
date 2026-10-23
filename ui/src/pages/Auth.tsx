@@ -10,7 +10,6 @@ import { Button } from "@/components/ui/button";
 import { AsciiArtAnimation } from "@/components/AsciiArtAnimation";
 import { PaperclipLoading } from "@/components/AnimatedPaperclipIcon";
 import { ThemeToggle } from "@/components/ThemeToggle";
-import { PaperclipLockup } from "../components/PaperclipLockup";
 import { useSaasCapabilities } from "@/hooks/useSaasCapabilities";
 import { Link } from "@/lib/router";
 
@@ -106,7 +105,7 @@ export function AuthPage() {
       <div className="w-full md:w-1/2 flex flex-col overflow-y-auto">
         <div className="w-full max-w-md mx-auto my-auto px-8 py-12">
           <div className="mb-8">
-            {saas.data ? <p className="text-xl font-semibold">August Works</p> : <PaperclipLockup className="h-5 w-auto" />}
+            <p className="text-xl font-semibold">Blentera</p>
           </div>
 
           <h1 className="text-xl font-semibold">

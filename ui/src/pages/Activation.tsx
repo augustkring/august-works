@@ -320,7 +320,7 @@ function ActivationScope({
       {companyId && current && <ObservationScope key={`${companyId}:${principal}:${epoch}`} company={companyId} principal={principal}
         surface="activation" navigation={String(screen)} step={ACTIVATION_STEPS[screen - 3] ?? null} />}
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
-        <span className="font-semibold">August Works</span>
+        <span className="font-semibold">Blentera</span>
         <ExperienceLanguageSelect />
         <CustomerFeedbackDialog />
         <a

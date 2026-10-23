@@ -237,3 +237,10 @@ Genuine exposure assertions first fail. Current actual PG detail plus three mock
 ### 2026-10-23 — Full affected Run response suites
 
 The complete two affected response files now pass all91 cases in232.25s with captured command exit0 and3unchanged source pins, including all86 existing/new mocked route cases and5 native PostgreSQL response cases. Full verdict/cleanup and process closure are observed; the original agent tool-session handle became unavailable after an agent model-capacity error, so no direct Root tool-closure result is invented. This closes the broader fixture-startup regression check for the projection change; it does not qualify full workspace/V10 or the still-open source graph. Raw `up03-run-public-dto-full.log` and updated `up03-native-run-public-projection-checkpoint.json` retained.
+
+
+### 2026-10-23 — Initial customer product identity at entry pages
+
+Login and activation headers, the managed-runtime label and billing copy now use Blentera. Both English/Danish login/create account title values are aligned while preserving all locale keys, styles/tokens and auth/billing behavior. Root independently reviewed the six-file diff and verified that only the expected three authFlow values per locale changed. Existing UI token gates pass0 across1423files. Low-cost gpt-6-luna assisted this bounded edit; no additional agent was spawned by it.
+
+Evidence `brand-entry-copy-checkpoint.json` and raw token log. This is a partial§6 identity migration, not product-wide brand/locale/visual/a11y qualification. Feedback-sharing text remains tied to its actual upstream data behavior for separate migration; attribution, namespaces and compatibility are preserved. No new tests were added for the reversible text change. Full V10/release gates remain open.

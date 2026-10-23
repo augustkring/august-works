@@ -392,7 +392,7 @@ export function SaasWelcomePage() {
                       <option value="byo">Bring your own Gateway</option>
                       {capabilities.data.runtime && (
                         <option value="hosted">
-                          August Works managed runtime
+                          Blentera managed runtime
                         </option>
                       )}
                       <option value="skip">Decide later</option>

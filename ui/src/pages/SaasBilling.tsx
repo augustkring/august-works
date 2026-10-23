@@ -106,7 +106,7 @@ export function SaasBillingPage() {
     <main className="saas-page">
       <h1 className="saas-title">Billing and usage</h1>
       <p className="saas-muted">
-        Your model provider bills your API usage separately. August Works
+        Your model provider bills your API usage separately. Blentera
         charges cover capacity and managed infrastructure.
       </p>
       {error && (
