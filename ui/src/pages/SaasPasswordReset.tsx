@@ -3,6 +3,7 @@ import { useMutation } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { saasAuthAction } from "@/api/saas";
 import { Button } from "@/components/ui/button";
+import { ExperienceLanguageSelect } from "@/components/ExperienceLanguageSelect";
 import { Link, useSearchParams } from "@/lib/router";
 import { hasValidNewLocalPasswordLength, LOCAL_PASSWORD_MAX_UTF16_LENGTH, LOCAL_PASSWORD_MIN_LENGTH } from "@paperclipai/shared/local-password-policy";
 
@@ -40,7 +41,10 @@ function PasswordResetForm({ token }: { token: string | null }) {
     : errorCode === "PASSWORD_TOO_SHORT" ? "passwordTooShort"
       : errorCode === "PASSWORD_TOO_LONG" ? "passwordTooLong" : null;
   return <main className="saas-page">
-    <h1 ref={heading} tabIndex={-1} className="saas-title outline-none">{t(token ? "passwordReset.setTitle" : "passwordReset.requestTitle")}</h1>
+    <header className="flex flex-wrap items-center justify-between gap-3">
+      <h1 ref={heading} tabIndex={-1} className="saas-title outline-none">{t(token ? "passwordReset.setTitle" : "passwordReset.requestTitle")}</h1>
+      <ExperienceLanguageSelect />
+    </header>
     {mutation.isError && <p ref={error} tabIndex={-1} role="alert" className="saas-error outline-none">
       {token && passwordErrorKey
         ? t(`passwordReset.${passwordErrorKey}`)

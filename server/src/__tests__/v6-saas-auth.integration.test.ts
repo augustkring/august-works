@@ -89,11 +89,13 @@ const ORIGIN = "https://app.example.test",
       if (previousSecret === undefined) delete process.env.BETTER_AUTH_SECRET;
       else process.env.BETTER_AUTH_SECRET = previousSecret;
     }, 30000);
-    const post = (path: string, body: unknown) =>
-      request(app)
+    const post = (path: string, body: unknown, locale?: string) => {
+      const call = request(app)
         .post("/api/auth/" + path)
-        .set("Origin", ORIGIN)
-        .send(body);
+        .set("Origin", ORIGIN);
+      if (locale) call.set("X-Blentera-Locale", locale);
+      return call.send(body);
+    };
     async function action(purpose: string) {
       const [row] = await db
         .select()
@@ -109,12 +111,26 @@ const ORIGIN = "https://app.example.test",
       );
       return new URL(payload.actionPath, ORIGIN);
     }
+    async function mail(purpose: string) {
+      const [row] = await db
+        .select()
+        .from(emailDeliveries)
+        .where(eq(emailDeliveries.purpose, purpose))
+        .orderBy(emailDeliveries.createdAt)
+        .limit(1);
+      expect(row?.payloadCiphertext).toBeTruthy();
+      return open<{ subject: string; message: string; actionPath: string }>(
+        row!.payloadCiphertext!,
+        KEY,
+        "email:" + row!.id,
+      );
+    }
     it("registers without a login session and blocks unverified sign in", async () => {
       const signup = await post("sign-up/email", {
         name: "Founder",
         email: EMAIL,
         password: PASSWORD,
-      });
+      }, "da");
       expect(signup.status).toBe(200);
       expect(JSON.stringify(signup.body)).not.toContain("session_token");
       const [user] = await db
@@ -135,10 +151,13 @@ const ORIGIN = "https://app.example.test",
       });
       expect(denied.status).toBe(403);
       const verify = await action("verification");
+      const verificationMail = await mail("verification");
+      expect(verificationMail.subject).toContain("Bekræft din e-mailadresse til");
+      expect(verificationMail.message).toContain("Bekræft din e-mail");
       expect(verify.origin).toBe(ORIGIN);
       expect(verify.pathname).toBe("/api/auth/verify-email");
       expect(verify.searchParams.get("callbackURL")).toBe(
-        ORIGIN + "/saas/welcome",
+        ORIGIN + "/saas/welcome?locale=da",
       );
     });
     it("verifies email without automatic sign in and uses secure host-only session cookies", async () => {
@@ -178,11 +197,17 @@ const ORIGIN = "https://app.example.test",
       const requested = await post("request-password-reset", {
         email: EMAIL,
         redirectTo: ORIGIN + "/saas/reset-password",
-      });
+      }, "da");
       expect(requested.status).toBe(200);
       const reset = await action("password_reset"),
         token = reset.pathname.split("/").at(-1)!;
+      const resetMail = await mail("password_reset");
+      expect(resetMail.subject).toContain("Nulstil din adgangskode til");
+      expect(resetMail.message).toContain("Brug dette link til at nulstille din adgangskode");
       expect(reset.pathname).toMatch(/^\/api\/auth\/reset-password\//);
+      expect(reset.searchParams.get("callbackURL")).toBe(
+        ORIGIN + "/saas/reset-password?locale=da",
+      );
       const verification = await action("verification");
       const wrongPurpose = await post("reset-password", {
         token: verification.searchParams.get("token"),

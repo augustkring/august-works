@@ -1245,7 +1245,8 @@
       "requiredOutcome": "Every offered login method has a secure usable lifecycle and EN/DA delivery",
       "reconciliation": "in_progress",
       "evidence": [
-        "local-password-policy-checkpoint.json"
+        "local-password-policy-checkpoint.json",
+        "auth-mail-locale-checkpoint.json"
       ]
     },
     {
@@ -1254,8 +1255,10 @@
       "work": "Complete paired copy and rendered state acceptance",
       "nativeOwnerOrContract": "§35 / UX-01; C–H",
       "requiredOutcome": "Both locales preserve action, actor, cost, data and status meaning across all critical states",
-      "reconciliation": "not_reconciled",
-      "evidence": []
+      "reconciliation": "in_progress",
+      "evidence": [
+        "auth-mail-locale-checkpoint.json"
+      ]
     },
     {
       "id": "V10-168",

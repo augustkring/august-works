@@ -256,8 +256,14 @@ export function resolveWorkspaceHandoffIdentity(
 export type SaasAuthDelivery = {
   signupEnabled: boolean;
   verificationRequired: boolean;
-  sendVerification(input: { user: { id: string; email: string }; url: string; token: string }): Promise<void>;
-  sendPasswordReset(input: { user: { id: string; email: string }; url: string; token: string }): Promise<void>;
+  sendVerification(
+    input: { user: { id: string; email: string; locale?: unknown }; url: string; token: string },
+    request?: globalThis.Request,
+  ): Promise<void>;
+  sendPasswordReset(
+    input: { user: { id: string; email: string; locale?: unknown }; url: string; token: string },
+    request?: globalThis.Request,
+  ): Promise<void>;
   recordSecurityEvent(userId: string, action: "email_verified" | "password_reset_completed"): Promise<void>;
 };
 

@@ -4,6 +4,7 @@ import {
   tenantSessionRecovery,
 } from "@/lib/tenant-session-recovery";
 import { authApi } from "./auth";
+import { i18n } from "@/i18n";
 
 afterEach(() => {
   vi.restoreAllMocks();
@@ -65,8 +66,27 @@ describe("authApi.signOut", () => {
     expect(fetchMock).toHaveBeenCalledWith("/api/auth/sign-out", {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json" },
+      headers: { "Content-Type": "application/json", "X-Blentera-Locale": "en" },
       body: "{}",
     });
+  });
+
+  it("sends the currently selected Danish locale with native auth requests", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({}), {
+        status: 200,
+        headers: { "Content-Type": "application/json" },
+      }),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await i18n.changeLanguage("da");
+    try {
+      await authApi.signUpEmail({ name: "Test", email: "test@example.test", password: "long-enough-password" });
+      expect(fetchMock).toHaveBeenCalledWith("/api/auth/sign-up/email", expect.objectContaining({
+        headers: { "Content-Type": "application/json", "X-Blentera-Locale": "da" },
+      }));
+    } finally {
+      await i18n.changeLanguage("en");
+    }
   });
 });

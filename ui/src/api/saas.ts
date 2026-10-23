@@ -26,6 +26,7 @@ import type {
 } from "@paperclipai/shared";
 import { api, ApiError } from "./client";
 import { AuthApiError } from "./auth";
+import { i18n } from "@/i18n";
 const companyPath = (id: string) => "/companies/" + encodeURIComponent(id);
 const scoped = (path: string, userId: string) =>
   path +
@@ -624,7 +625,10 @@ export async function saasAuthAction(
   const response = await fetch("/api/auth/" + path, {
     method: "POST",
     credentials: "include",
-    headers: { "Content-Type": "application/json" },
+    headers: {
+      "Content-Type": "application/json",
+      "X-Blentera-Locale": i18n.resolvedLanguage === "da" ? "da" : "en",
+    },
     body: JSON.stringify(input),
   });
   if (!response.ok) {

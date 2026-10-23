@@ -12,6 +12,15 @@ export function readExperienceLocale(): ExperienceLocale {
     return "en";
   }
 }
+/** Mail links carry the language of their message, without changing a saved choice. */
+export function readInitialExperienceLocale(): ExperienceLocale {
+  if (typeof window !== "undefined" &&
+      ["/saas/welcome", "/saas/reset-password"].includes(window.location.pathname)) {
+    const locale = new URLSearchParams(window.location.search).get("locale");
+    if (isExperienceLocale(locale)) return locale;
+  }
+  return readExperienceLocale();
+}
 export function persistExperienceLocale(locale: ExperienceLocale): boolean {
   if (!isExperienceLocale(locale)) return false;
   try {

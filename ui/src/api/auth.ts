@@ -10,6 +10,7 @@ import {
 } from "@paperclipai/shared";
 import { redactUrlSecrets } from "@/lib/redact-url-secrets";
 import { tenantSessionRecovery } from "@/lib/tenant-session-recovery";
+import { i18n } from "@/i18n";
 
 type AuthErrorBody =
   | {
@@ -120,7 +121,10 @@ async function authPost(path: string, body: Record<string, unknown>): Promise<un
     res = await fetch(`/api/auth${path}`, {
       method: "POST",
       credentials: "include",
-      headers: { "Content-Type": "application/json" },
+      headers: {
+        "Content-Type": "application/json",
+        "X-Blentera-Locale": i18n.resolvedLanguage === "da" ? "da" : "en",
+      },
       body: JSON.stringify(body),
     });
   } catch (networkError) {

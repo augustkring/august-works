@@ -1,16 +1,17 @@
 import i18n, { type InitOptions, type TOptions } from "i18next";
 import { initReactI18next, useTranslation as useReactI18nextTranslation } from "react-i18next";
 import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
+import { authMailCopy } from "@paperclipai/shared/auth-mail-copy";
 
 import { DEFAULT_LOCALE, i18nextResources, supportedLocales } from "./locales";
-import { readExperienceLocale } from "./experience-locale-preference";
+import { readInitialExperienceLocale } from "./experience-locale-preference";
 import experienceEn from "./experience/en.json";
 import experienceDa from "./experience/da.json";
 import { assertValidLocaleMessages } from "./locale-validation";
 
 const i18nextOptions: InitOptions = {
   resources: i18nextResources,
-  lng: readExperienceLocale(),
+  lng: readInitialExperienceLocale(),
   fallbackLng: DEFAULT_LOCALE,
   supportedLngs: supportedLocales,
   defaultNS: "translation",
@@ -29,8 +30,11 @@ void i18n.use(initReactI18next).init(i18nextOptions).catch((error: unknown) => {
 // V9 launches with explicit English/Danish coverage; other registered locales
 // use i18next's English fallback rather than claiming unreviewed translations.
 assertValidLocaleMessages(experienceDa, experienceEn);
+assertValidLocaleMessages(authMailCopy.da, authMailCopy.en);
 i18n.addResourceBundle("en", "experience", experienceEn);
 i18n.addResourceBundle("da", "experience", experienceDa);
+i18n.addResourceBundle("en", "authMail", authMailCopy.en);
+i18n.addResourceBundle("da", "authMail", authMailCopy.da);
 
 function updateDocumentLanguage() {
   if (typeof document === "undefined") return;

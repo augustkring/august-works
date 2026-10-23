@@ -38,11 +38,12 @@ import { SaasWelcomePage } from "./SaasWelcome";
 import { hasCurrentV9Session } from "../hooks/useV9CurrentAccount";
 
 export function SaasWelcomeEntry() {
+  const { t } = useTranslation("experience");
   const flags = useSaasCapabilities(),
     [params] = useSearchParams();
-  if (flags.isPending) return <p role="status">Loading…</p>;
+  if (flags.isPending) return <p role="status">{t("activation.loading")}</p>;
   if (flags.isError)
-    return <p role="alert">Getting started could not be loaded.</p>;
+    return <p role="alert">{t("activation.loadFailed")}</p>;
   return flags.data?.activationV9 && params.get("legacy") !== "1" ? (
     <ActivationPage />
   ) : (

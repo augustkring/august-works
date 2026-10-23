@@ -1,9 +1,21 @@
 // @vitest-environment jsdom
 import { afterEach, expect, it, vi } from "vitest";
-import { EXPERIENCE_LOCALE_KEY, readExperienceLocale, persistExperienceLocale } from "./experience-locale-preference";
+import { EXPERIENCE_LOCALE_KEY, readExperienceLocale, readInitialExperienceLocale, persistExperienceLocale } from "./experience-locale-preference";
 afterEach(() => {
   vi.restoreAllMocks();
   localStorage.removeItem(EXPERIENCE_LOCALE_KEY);
+  window.history.replaceState(null, "", "/");
+});
+it.each(["/saas/welcome?legacy=1&locale=da", "/saas/reset-password?token=opaque&locale=da"])("opens the mail landing in its message language without overwriting a saved choice: %s", path => {
+  persistExperienceLocale("en");
+  window.history.replaceState(null, "", path);
+  expect(readInitialExperienceLocale()).toBe("da");
+  expect(readExperienceLocale()).toBe("en");
+});
+it.each(["/dashboard?locale=en", "/saas/reset-password?locale=fr", "/saas/welcome?locale=DA"])("retains the saved choice for unsupported or unrelated locale parameters: %s", path => {
+  persistExperienceLocale("da");
+  window.history.replaceState(null, "", path);
+  expect(readInitialExperienceLocale()).toBe("da");
 });
 it("uses the existing English default until a person selects a supported language", () => {
   expect(readExperienceLocale()).toBe("en");
