@@ -15,7 +15,7 @@ function deferredPage(load: () => Promise<{ default: ComponentType }>) {
   };
 }
 
-export const CustomerSupportCases = deferredPage(() =>
+export const CustomerSupportCases = lazy(() =>
   import("./CustomerSupportCases").then(page => ({ default: page.CustomerSupportCases })),
 );
 export const CustomerSupport = deferredPage(() =>

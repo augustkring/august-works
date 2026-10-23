@@ -47,7 +47,7 @@ function supportPath(companyId: string, suffix = "") {
   return `/companies/${encodeURIComponent(companyId)}/support${suffix}`;
 }
 
-export function CustomerSupportCases() {
+export function CustomerSupportCases({ onReturn }: { onReturn?: () => void } = {}) {
   const { t } = useTranslation("experience");
   const { selectedCompanyId } = useCompany();
   const identity = useV9CurrentAccount();
@@ -60,6 +60,7 @@ export function CustomerSupportCases() {
           key={`${selectedCompanyId}:${principal}`}
           companyId={selectedCompanyId}
           principal={principal}
+          onReturn={onReturn}
         />
       ) : (
         <p role="status">{t(selectedCompanyId ? "supportCases.signInRequired" : "selectCompany")}</p>
@@ -71,7 +72,7 @@ export function CustomerSupportCases() {
   );
 }
 
-function CustomerSupportCasesForAccount({ companyId, principal }: { companyId: string; principal: string }) {
+function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { companyId: string; principal: string; onReturn?: () => void }) {
   const { t, i18n } = useTranslation("experience");
   const client = useQueryClient();
   const identity = useV9CurrentAccount();
@@ -95,7 +96,7 @@ function CustomerSupportCasesForAccount({ companyId, principal }: { companyId: s
     activeCase.current = id;
     const params = new URLSearchParams(location.search);
     if (id) params.set("case", id); else params.delete("case");
-    navigate({ pathname: location.pathname, search: params.toString() ? "?" + params.toString() : "" }, { state: location.state });
+    navigate({ pathname: location.pathname, search: params.toString() ? "?" + params.toString() : "" }, { state: location.state, replace: !!onReturn });
     setTimelineCursor(null);
   }
   const [listCursor, setListCursor] = useState<{ createdAt: string; id: string } | null>(null);
@@ -400,7 +401,7 @@ function CustomerSupportCasesForAccount({ companyId, principal }: { companyId: s
       <h1 className="text-2xl font-semibold">{t("supportCases.title")}</h1>
       <p className="text-sm text-muted-foreground">{t("supportCases.intro")}</p>
       <div className="flex flex-wrap items-center gap-3">
-        <Link className="inline-flex min-h-11 items-center underline" to={returnPathname}>{t("supportCases.backToWork")}</Link>
+        <Link className="inline-flex min-h-11 items-center underline" to={returnPathname} onClick={onReturn ? event => { event.preventDefault(); onReturn(); } : undefined}>{t("supportCases.backToWork")}</Link>
         <Link className="inline-flex min-h-11 items-center underline" to="/company/support-access">{t("supportCases.accessHistory")}</Link>
       </div>
     </header>

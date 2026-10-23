@@ -51,9 +51,10 @@ export function ExperienceUtilities({ safetyRecovery = false }: { safetyRecovery
       <Link
         className="inline-flex min-h-11 items-center rounded-md px-3 text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         to="/company/support"
-        state={account.settled && !account.localImplicit && account.userId && selectedCompanyId
+        data-support-help-entry
+        state={!account.localImplicit && account.userId && selectedCompanyId
           ? { companyId: selectedCompanyId, expectedUserId: account.userId,
-              returnPathname: location.pathname,
+              returnPathname: location.pathname, backgroundKey: location.key,
               safeContext: { surface: feedbackPageContext(location.pathname).surfaceKey } }
           : undefined}
         onClick={() => setSidebarOpen(false)}

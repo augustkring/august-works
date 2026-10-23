@@ -17,10 +17,14 @@ import {
 import { OrgUnits, CompanyRelationships } from "./pages/OrganizationV5";
 import { V5Gate } from "./components/V5Gate";
 import { ProjectRoadmap } from "./pages/ProjectRoadmap";
-import { lazy, Suspense, type ReactNode } from "react";
+import { lazy, Suspense, useRef, type ReactNode } from "react";
 import type { ToolConnectionCredentialSource } from "@paperclipai/shared";
-import { Navigate, Outlet, Route, Routes, useActiveCompanyPrefix, useLocation, useParams } from "@/lib/router";
+import { Navigate, Outlet, Route, Routes, useActiveCompanyPrefix, useLocation, useNavigate, useParams, type Location } from "@/lib/router";
 import { Button } from "@/components/ui/button";
+import { AccountExperienceLanguageSelect } from "./components/AccountExperienceLanguageSelect";
+import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/components/ui/dialog";
+import { useV9CurrentAccount } from "./hooks/useV9CurrentAccount";
+import { getCompanyPathSegments } from "./lib/shell-navigation";
 import { useTranslation } from "@/i18n";
 import { Layout } from "./components/Layout";
 import { Layout as ProductionLayout } from "./components/Layout.production";
@@ -253,7 +257,7 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       <Route path="company/settings/billing" element={<SaasBillingPage />} />
       <Route path="company/settings/runtime" element={<SaasRuntimesPage />} />
       <Route path="company/settings/support" element={<SaasSupportPage />} />
-      <Route path="company/support" element={<CustomerSupportCases />} />
+      <Route path="company/support" element={<DeferredRouteSurface><CustomerSupportCases /></DeferredRouteSurface>} />
       <Route path="company/support-access" element={<CustomerSupport />} />
       <Route path="company/settings/deletion" element={<SaasDeletionPage />} />
       <Route path="company/settings/security" element={<SaasAccountPage />} />
@@ -935,10 +939,29 @@ function NoCompaniesStartPage() {
 
 export function App() {
   const { enabled: streamlinedUiEnabled, loaded: streamlinedUiLoaded } = useStreamlinedUiEnabled();
+  const location = useLocation(), navigate = useNavigate();
+  const account = useV9CurrentAccount();
+  const { selectedCompanyId, selectedCompany } = useCompany();
+  const { t } = useTranslation("experience");
+  // Retain the actual mounted route, never a caller-supplied location/state or
+  // a copy of its draft. This reference grants no access to the underlying work.
+  const origin = useRef<{ location: Location; companyId: string; userId: string; sessionId: string | null } | null>(null);
+  const companySegments = getCompanyPathSegments(location.pathname, selectedCompany?.issuePrefix);
+  const isSupport = companySegments.join("/").toLowerCase() === "company/support";
+  if (origin.current && (origin.current.companyId !== selectedCompanyId || origin.current.userId !== account.userId || origin.current.sessionId !== account.sessionId)) origin.current = null;
+  if (!isSupport) origin.current = companySegments.length > 0 && selectedCompanyId && account.userId && !account.localImplicit
+    ? { location, companyId: selectedCompanyId, userId: account.userId, sessionId: account.sessionId } : null;
+  const carried = location.state as { companyId?: unknown; expectedUserId?: unknown; returnPathname?: unknown; backgroundKey?: unknown } | null;
+  const background = isSupport && origin.current && !account.localImplicit &&
+    carried?.companyId === selectedCompanyId && carried.expectedUserId === account.userId &&
+    carried.backgroundKey === origin.current.location.key && carried.returnPathname === origin.current.location.pathname
+    ? origin.current.location : null;
+  function returnToWork() { navigate(-1); }
 
   return (
     <>
-      <Routes>
+      <div className={background && !account.settled ? "hidden" : "contents"}>
+      <Routes location={background ?? location}>
         <Route path="oauth-handoff" element={<PaperclipCloudOAuthHandoffPage />} />
         <Route path="auth" element={<AuthPage />} />
         <Route path="saas/operations" element={<SaasOperationsPage />} />
@@ -1073,6 +1096,18 @@ export function App() {
           <Route path="*" element={<NotFoundPage scope="global" />} />
         </Route>
       </Routes>
+      </div>
+      {background && <Dialog open onOpenChange={open => { if (!open) returnToWork(); }}>
+        <DialogContent className="max-h-(--sz-calc-18) overflow-y-auto sm:max-w-3xl" closeButtonLabel={t("supportCases.backToWork")}
+          onCloseAutoFocus={event => { event.preventDefault(); document.querySelector<HTMLAnchorElement>("[data-support-help-entry]")?.focus(); }}>
+          <div className="flex justify-end pr-8"><AccountExperienceLanguageSelect /></div>
+          <DialogTitle className="sr-only">{t("help")}</DialogTitle>
+          <DialogDescription className="sr-only">{t("supportCases.intro")}</DialogDescription>
+          <DeferredRouteSurface>
+            <CustomerSupportCases onReturn={returnToWork} />
+          </DeferredRouteSurface>
+        </DialogContent>
+      </Dialog>}
       <OnboardingWizardVariant />
     </>
   );
