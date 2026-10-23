@@ -1888,9 +1888,7 @@ export interface IssueFilters {
   updatedSince?: string;
 }
 
-// Native input proofs belong to their source owner, not the public list row.
-type IssueRow = Omit<typeof issues.$inferSelect, "payloadSourceProtocolVersion" | "payloadSourceSnapshot">
-  & { externalConversationState?: "active" | "waiting" | null };
+type IssueRow = typeof issues.$inferSelect & { externalConversationState?: "active" | "waiting" | null };
 type IssueLabelRow = typeof labels.$inferSelect;
 type IssuePlanDecompositionRow = typeof issuePlanDecompositions.$inferSelect;
 type IssueActiveRunRow = {
@@ -5060,6 +5058,8 @@ async function listIssueReviewAttentionMap(
 }
 
 const issueListSelect = {
+  payloadSourceProtocolVersion: issues.payloadSourceProtocolVersion,
+  payloadSourceSnapshot: issues.payloadSourceSnapshot,
   visibility: issues.visibility,
   privacyRootIssueId: issues.privacyRootIssueId,
   privacyParentIssueId: issues.privacyParentIssueId,

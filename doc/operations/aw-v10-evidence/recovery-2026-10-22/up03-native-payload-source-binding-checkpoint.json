@@ -63,11 +63,24 @@
       "note": "Completed on initial binding revision; final source migration/compile checks pending."
     },
     "server_typecheck": {
-      "initial_session": 11865,
-      "initial_exit": 1,
-      "initial_error": "Explicit native list projection intentionally omits server-only proof columns, but IssueRow required the new full DB columns. IssueRow now explicitly omits those two columns; no fake proof values selected.",
-      "retry_session": 48677,
-      "status": "running; no retry verdict claimed"
+      "attempts": [
+        {
+          "session": 11865,
+          "exit": 1,
+          "reason": "Native list SQL projection omitted new full DB columns."
+        },
+        {
+          "session": 48677,
+          "exit": 1,
+          "reason": "Omitting columns from IssueRow exposed existing full DB-row contracts in20+callers. No runtime source qualification."
+        }
+      ],
+      "current_session": 7467,
+      "status": "PASS direct current server compiler; actual native list source columns selected; source pin unchanged",
+      "note": "No fake protocol0/null values added. Public DTO handling remains a separate open gate.",
+      "observed_exit": 0,
+      "durable_exit": 0,
+      "command": "GOMEMLIMIT=6GiB GOMAXPROCS=2 NODE_OPTIONS=--max-old-space-size=6144 pnpm --filter @paperclipai/server exec tsc --noEmit --singleThreaded"
     },
     "final_migration_checks": {
       "session": 96046,
