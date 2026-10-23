@@ -1,4 +1,5 @@
-import { pgTable, text, timestamp, boolean, uniqueIndex } from "drizzle-orm/pg-core";
+import { sql } from "drizzle-orm";
+import { pgTable, text, timestamp, boolean, uniqueIndex, check } from "drizzle-orm/pg-core";
 
 export const authUsers = pgTable("user", {
   id: text("id").primaryKey(),
@@ -6,10 +7,13 @@ export const authUsers = pgTable("user", {
   email: text("email").notNull(),
   emailVerified: boolean("email_verified").notNull().default(false),
   image: text("image"),
+  locale: text("locale"),
   keyboardShortcuts: boolean("keyboard_shortcuts").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
-});
+}, (table) => ({
+  localeCheck: check("user_locale_check", sql`${table.locale} is null or ${table.locale} in ('en', 'da')`),
+}));
 
 export const authSessions = pgTable("session", {
   id: text("id").primaryKey(),

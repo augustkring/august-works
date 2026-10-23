@@ -4,6 +4,11 @@ import { afterEach, describe, expect, it, vi } from "vitest";
 import { errorHandler } from "../middleware/index.js";
 import { authRoutes } from "../routes/auth.js";
 
+vi.mock("../services/activity-log.js", () => ({
+  logActivity: vi.fn(async () => undefined),
+  publishActivity: vi.fn(),
+}));
+
 function createSelectChain(rows: unknown[]) {
   return {
     from() {
@@ -33,10 +38,12 @@ function createUpdateChain(row: unknown) {
 }
 
 function createDb(row: Record<string, unknown>) {
-  return {
+  const db: any = {
     select: () => createSelectChain([row]),
     update: () => createUpdateChain(row),
-  } as any;
+  };
+  db.transaction = (callback: (tx: unknown) => unknown) => callback(db);
+  return db;
 }
 
 function createApp(actor: Express.Request["actor"], row: Record<string, unknown>) {
@@ -332,5 +339,54 @@ describe.sequential("auth routes", () => {
       .send({ name: "Jane Example", image: "not-a-url" });
 
     expect(res.status).toBe(400);
+  });
+
+  it("reads nullable account locale through preferences", async () => {
+    const app = createApp(
+      { type: "board", userId: "user-1", source: "session" },
+      { ...baseUser, keyboardShortcuts: false, locale: null },
+    );
+    const res = await request(app)
+      .get("/api/auth/preferences")
+      .query({ expectedUserId: "user-1" });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ keyboardShortcuts: false, locale: null });
+  });
+
+  it("saves account locale before company membership without changing keyboard preference", async () => {
+    const app = createApp(
+      { type: "board", userId: "user-1", source: "session", companyIds: [] },
+      { ...baseUser, keyboardShortcuts: true, locale: null },
+    );
+    const res = await request(app)
+      .patch("/api/auth/preferences")
+      .send({ expectedUserId: "user-1", locale: "da" });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ keyboardShortcuts: true, locale: "da" });
+  });
+
+  it.each([
+    [{ expectedUserId: "user-2", locale: "da" }, 401],
+    [{ expectedUserId: "user-1", locale: "fr" }, 400],
+  ])("rejects swapped-account or invalid locale preference updates", async (body, status) => {
+    const app = createApp(
+      { type: "board", userId: "user-1", source: "session", companyIds: [] },
+      { ...baseUser, keyboardShortcuts: false, locale: null },
+    );
+    const res = await request(app).patch("/api/auth/preferences").send(body);
+    expect(res.status).toBe(status);
+  });
+
+  it("preserves locale when updating keyboard shortcuts with company audit context", async () => {
+    const companyId = "11111111-1111-4111-8111-111111111111";
+    const app = createApp(
+      { type: "board", userId: "user-1", source: "session", companyIds: [companyId] },
+      { ...baseUser, keyboardShortcuts: false, locale: "da" },
+    );
+    const res = await request(app)
+      .patch("/api/auth/preferences")
+      .send({ expectedUserId: "user-1", companyId, keyboardShortcuts: true });
+    expect(res.status).toBe(200);
+    expect(res.body).toEqual({ keyboardShortcuts: true, locale: "da" });
   });
 });

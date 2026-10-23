@@ -1228,7 +1228,8 @@
   "language": {
     "label": "Sprog",
     "notSaved": "Sproget er ændret for denne session. Valget kunne ikke gemmes.",
-    "failed": "Sproget kunne ikke ændres. Prøv igen."
+    "failed": "Sproget kunne ikke ændres. Prøv igen.",
+    "accountNotSaved": "Sproget er ændret, men kontoens sprogvalg kunne ikke gemmes."
   },
   "account": {
     "deletionRecovery": "En tidligere sletteanmodning er ikke afklaret. Indtast din adgangskode, og bekræft igen for at gentage den oprindelige anmodning. Kun dens konto og anmodningsnøgle er bevaret for denne browserfane.",

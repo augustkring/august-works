@@ -37,3 +37,13 @@ it("withholds invalid writes and handles unavailable browser storage", () => {
   expect(readExperienceLocale()).toBe("en");
   expect(persistExperienceLocale("da")).toBe(false);
 });
+it.each([
+  [["fr-FR", "da-DK", "en-US"], "da"],
+  [["en-GB", "da-DK"], "en"],
+  [["fr-FR", "de-DE"], "en"],
+])("uses the first supported browser language on a first visit: %j", (languages, expected) => {
+  vi.spyOn(navigator, "languages", "get").mockReturnValue(languages);
+  expect(readExperienceLocale()).toBe(expected);
+  persistExperienceLocale("da");
+  expect(readExperienceLocale()).toBe("da");
+});

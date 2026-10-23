@@ -3585,6 +3585,13 @@
       "when": 1792753285383,
       "tag": "0513_soft_risque",
       "breakpoints": true
+    },
+    {
+      "idx": 514,
+      "version": "7",
+      "when": 1792764630335,
+      "tag": "0514_abandoned_hex",
+      "breakpoints": true
     }
   ]
 }

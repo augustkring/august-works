@@ -1228,7 +1228,8 @@
   "language": {
     "label": "Language",
     "notSaved": "Your language changed for this session. The preference could not be saved.",
-    "failed": "The language could not be changed. Try again."
+    "failed": "The language could not be changed. Try again.",
+    "accountNotSaved": "Your language changed, but your account preference could not be saved."
   },
   "account": {
     "deletionRecovery": "An earlier deletion request is unresolved. Re-enter your password and confirm again to retry the original request. Only its account and request key were retained for this browser tab.",

@@ -7,7 +7,7 @@ import { useCompany } from "@/context/CompanyContext";
 import { useSaasCapabilities } from "@/hooks/useSaasCapabilities";
 import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { Button } from "@/components/ui/button";
-import { ExperienceLanguageSelect } from "@/components/ExperienceLanguageSelect";
+import { AccountExperienceLanguageSelect } from "@/components/AccountExperienceLanguageSelect";
 import { useTranslation } from "@/i18n";
 import { Link, useNavigate } from "@/lib/router";
 import { queryKeys } from "@/lib/queryKeys";
@@ -32,7 +32,10 @@ const LABEL_KEYS = [
 ];
 export function SaasWelcomePage() {
   const { t, i18n } = useTranslation("experience");
-  const getDefaultAgentName = () => i18n.t("saasWelcome.firstAgentDefault", { ns: "experience" });
+  const defaultAgentName = useRef(t("saasWelcome.firstAgentDefault"));
+  useEffect(() => {
+    defaultAgentName.current = t("saasWelcome.firstAgentDefault");
+  }, [i18n.language, t]);
   const {
     selectedCompanyId,
     reloadCompanies,
@@ -45,7 +48,7 @@ export function SaasWelcomePage() {
   const [mission, setMission] = useState("");
   const [runtimeChoice, setRuntimeChoice] = useState("byo");
   const [agentId, setAgentId] = useState("");
-  const [firstAgentName, setFirstAgentName] = useState(getDefaultAgentName);
+  const [firstAgentName, setFirstAgentName] = useState(() => defaultAgentName.current);
   const [firstTaskId, setFirstTaskId] = useState("");
   const [providerSecretId, setProviderSecretId] = useState(""),
     [rolePackId, setRolePackId] = useState("");
@@ -68,7 +71,7 @@ export function SaasWelcomePage() {
     setName("");
     setMission("");
     setAgentId("");
-    setFirstAgentName(getDefaultAgentName());
+    setFirstAgentName(defaultAgentName.current);
     setFirstTaskId("");
     setProviderSecretId("");
     setRolePackId("");
@@ -300,7 +303,7 @@ export function SaasWelcomePage() {
     <main className="saas-page">
       <header className="flex flex-wrap items-center justify-between gap-3">
         <h1 className="saas-title">{t("saasWelcome.title")}</h1>
-        <ExperienceLanguageSelect />
+        <AccountExperienceLanguageSelect userId={session.data?.user.id ?? null} key={session.data?.user.id ?? "signed-out"} />
       </header>
       <p className="saas-muted">{t("saasWelcome.intro")}</p>
       {error && <p role="alert" className="saas-error">{t("saasWelcome.requestUnconfirmed")}</p>}

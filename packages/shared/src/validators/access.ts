@@ -226,12 +226,24 @@ export type UpdateCurrentUserProfile = z.infer<typeof updateCurrentUserProfileSc
 
 // Personal preferences are shared across companies, but only the signed-in
 // user can read or change them. companyId supplies the mutation audit context.
+export const accountLocaleSchema = z.enum(["en", "da"]);
 export const currentUserPreferencesSchema = z.object({
   keyboardShortcuts: z.boolean(),
+  // Optional only for compatibility with older clients and test fixtures.
+  locale: accountLocaleSchema.nullable().optional(),
 });
-export const updateCurrentUserPreferencesSchema = currentUserPreferencesSchema.extend({
+export const updateCurrentUserPreferencesSchema = z.object({
   expectedUserId: z.string().min(1),
-  companyId: z.string().uuid(),
-}).strict();
+  keyboardShortcuts: z.boolean().optional(),
+  locale: accountLocaleSchema.nullable().optional(),
+  companyId: z.string().uuid().optional(),
+}).strict()
+  .refine((value) => value.keyboardShortcuts !== undefined || value.locale !== undefined, {
+    message: "At least one preference must be supplied",
+  })
+  .refine((value) => value.keyboardShortcuts === undefined || value.companyId !== undefined, {
+    message: "companyId is required when updating keyboard shortcuts",
+    path: ["companyId"],
+  });
 export type CurrentUserPreferences = z.infer<typeof currentUserPreferencesSchema>;
 export type UpdateCurrentUserPreferences = z.infer<typeof updateCurrentUserPreferencesSchema>;

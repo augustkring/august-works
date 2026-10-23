@@ -1,6 +1,6 @@
 import express from "express";
 import request from "supertest";
-import { and, eq } from "drizzle-orm";
+import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   authSessions,
@@ -13,7 +13,11 @@ import { v6FeatureFlagsSchema, V6_FEATURE_KEYS } from "@paperclipai/shared";
 import {
   createBetterAuthHandler,
   createBetterAuthInstance,
+  resolveBetterAuthSession,
 } from "../auth/better-auth.js";
+import { actorMiddleware } from "../middleware/auth.js";
+import { errorHandler } from "../middleware/error-handler.js";
+import { authRoutes } from "../routes/auth.js";
 import type { Config } from "../config.js";
 import type { SaasPlatformConfig } from "../saas-platform-config.js";
 import { saasAuthDelivery } from "../services/saas/auth-delivery.js";
@@ -82,7 +86,15 @@ const ORIGIN = "https://app.example.test",
         saasAuthDelivery(db, email, origins, flags),
       );
       app = express();
+      app.use(actorMiddleware(db, {
+        deploymentMode: "authenticated",
+        resolveSession: req => resolveBetterAuthSession(auth, req),
+      }));
+      // Parse only the original preferences route; native auth owns its raw body.
+      app.patch("/api/auth/preferences", express.json());
+      app.use("/api/auth", authRoutes(db));
       app.all("/api/auth/{*authPath}", createBetterAuthHandler(auth));
+      app.use(errorHandler);
     }, 60000);
     afterAll(async () => {
       await database?.cleanup();
@@ -192,6 +204,27 @@ const ORIGIN = "https://app.example.test",
         ),
       ).toBe(true);
       expect(cookies.some((cookie) => /Domain=/i.test(cookie))).toBe(false);
+      const cookie = cookies.filter(value => value.includes("session_token="))
+        .map(value => value.split(";")[0]!).join("; ");
+      const preferences = await request(app).get(`/api/auth/preferences?expectedUserId=${encodeURIComponent(userId)}`)
+        .set("Cookie", cookie);
+      expect(preferences.status).toBe(200);
+      expect(preferences.body).toEqual({ keyboardShortcuts: false, locale: null });
+      const saved = await request(app).patch("/api/auth/preferences").set("Cookie", cookie)
+        .send({ expectedUserId: userId, locale: "en" });
+      expect(saved.status).toBe(200);
+      expect(saved.body).toEqual({ keyboardShortcuts: false, locale: "en" });
+      const switched = await request(app).patch("/api/auth/preferences").set("Cookie", cookie)
+        .send({ expectedUserId: "different-account", locale: "da" });
+      expect(switched.status).toBe(401);
+      const nativeWrite = await request(app).post("/api/auth/update-user").set("Origin", ORIGIN)
+        .set("Cookie", cookie).send({ locale: "da" });
+      expect(nativeWrite.status).toBe(400);
+      await expect(db.execute(sql`update ${authUsers} set locale = 'fr' where id = ${userId}`))
+        .rejects.toMatchObject({ cause: { code: "23514" } });
+      const [persisted] = await db.select({ locale: authUsers.locale, keyboardShortcuts: authUsers.keyboardShortcuts })
+        .from(authUsers).where(eq(authUsers.id, userId));
+      expect(persisted).toEqual({ locale: "en", keyboardShortcuts: false });
     });
     it("uses a single-use reset token and revokes every existing session after a successful reset", async () => {
       const requested = await post("request-password-reset", {
@@ -202,11 +235,12 @@ const ORIGIN = "https://app.example.test",
       const reset = await action("password_reset"),
         token = reset.pathname.split("/").at(-1)!;
       const resetMail = await mail("password_reset");
-      expect(resetMail.subject).toContain("Nulstil din adgangskode til");
-      expect(resetMail.message).toContain("Brug dette link til at nulstille din adgangskode");
+      // The persisted account choice takes precedence over the Danish request.
+      expect(resetMail.subject).toContain("Reset your");
+      expect(resetMail.message).toContain("Use this link to reset your password");
       expect(reset.pathname).toMatch(/^\/api\/auth\/reset-password\//);
       expect(reset.searchParams.get("callbackURL")).toBe(
-        ORIGIN + "/saas/reset-password?locale=da",
+        ORIGIN + "/saas/reset-password?locale=en",
       );
       const verification = await action("verification");
       const wrongPurpose = await post("reset-password", {

@@ -8,6 +8,7 @@ import { betterAuth, type Auth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { toNodeHandler } from "better-auth/node";
 import type { Db } from "@paperclipai/db";
+import { accountLocaleSchema } from "@paperclipai/shared/validators/access";
 import {
   authAccounts,
   authSessions,
@@ -292,6 +293,17 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
     baseURL: baseUrl,
     secret,
     trustedOrigins,
+    user: {
+      additionalFields: {
+        locale: {
+          type: "string" as const,
+          required: false,
+          input: false,
+          returned: false,
+          validator: { output: accountLocaleSchema.nullable() },
+        },
+      },
+    },
     database: drizzleAdapter(db, {
       provider: "pg",
       transaction: enterprisePlugins.length > 0,

@@ -43,6 +43,8 @@ afterEach(async () => {
 it("keeps the organization draft through locale change and shows safe create failure", async () => {
   localStorage.removeItem(EXPERIENCE_LOCALE_KEY);
   await i18n.changeLanguage("da");
+  vi.spyOn(authApi, "getPreferences").mockResolvedValue({ keyboardShortcuts: false, locale: null });
+  vi.spyOn(authApi, "updatePreferences").mockImplementation(async (input) => ({ keyboardShortcuts: false, locale: input.locale ?? null }));
   vi.spyOn(authApi, "getSession").mockResolvedValue({
     user: { id: "welcome-owner", email: "owner@example.test", name: "Owner", image: null },
     session: { id: "welcome-session", userId: "welcome-owner" },

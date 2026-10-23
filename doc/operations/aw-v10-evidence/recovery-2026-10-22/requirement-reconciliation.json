@@ -1246,7 +1246,8 @@
       "reconciliation": "in_progress",
       "evidence": [
         "local-password-policy-checkpoint.json",
-        "auth-mail-locale-checkpoint.json"
+        "auth-mail-locale-checkpoint.json",
+        "account-locale-checkpoint.json"
       ]
     },
     {
@@ -1257,7 +1258,8 @@
       "requiredOutcome": "Both locales preserve action, actor, cost, data and status meaning across all critical states",
       "reconciliation": "in_progress",
       "evidence": [
-        "auth-mail-locale-checkpoint.json"
+        "auth-mail-locale-checkpoint.json",
+        "account-locale-checkpoint.json"
       ]
     },
     {

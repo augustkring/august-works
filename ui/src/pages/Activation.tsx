@@ -28,7 +28,7 @@ import { Link } from "../lib/router";
 import { Button } from "../components/ui/button";
 import { Input } from "../components/ui/input";
 import { Textarea } from "../components/ui/textarea";
-import { ExperienceLanguageSelect } from "../components/ExperienceLanguageSelect";
+import { AccountExperienceLanguageSelect } from "../components/AccountExperienceLanguageSelect";
 import { CustomerFeedbackDialog } from "../components/CustomerFeedbackDialog";
 import { ActivationMeasuresLink } from "../components/ActivationMeasuresLink";
 import { ActivationFirstValue } from "../components/ActivationFirstValue";
@@ -323,7 +323,7 @@ function ActivationScope({
         surface="activation" navigation={String(screen)} step={ACTIVATION_STEPS[screen - 3] ?? null} />}
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
         <span className="font-semibold">{PRODUCT_IDENTITY.productName}</span>
-        <ExperienceLanguageSelect />
+        <AccountExperienceLanguageSelect userId={principal} key={principal} />
         <CustomerFeedbackDialog />
         <a
           href={FEEDBACK_CONTACTS.support}
