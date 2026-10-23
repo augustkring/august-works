@@ -1,8 +1,9 @@
 import express from "express";
 import request from "supertest";
 import { type SQL } from "drizzle-orm";
+import { EMBEDDED_POSTGRES_TEST_TIMEOUT_MS } from "@paperclipai/db";
 import { PgDialect } from "drizzle-orm/pg-core";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockAgentService = vi.hoisted(() => ({
   getById: vi.fn(),
@@ -11,6 +12,7 @@ const mockAgentService = vi.hoisted(() => ({
 
 const mockHeartbeatService = vi.hoisted(() => ({
   cancelActiveForAgent: vi.fn(),
+  cancelRun: vi.fn(),
   buildRunOutputSilence: vi.fn(),
   decorateActiveRunStatus: vi.fn(),
   getRunIssueSummary: vi.fn(),
@@ -281,6 +283,13 @@ async function requestApp(
 }
 
 describe("agent live run routes", () => {
+  // Pay the cold dependency transform cost during fixture setup, outside the
+  // unchanged 30-second HTTP case deadline. Each case still resets its mocks.
+  beforeAll(async () => {
+    registerModuleMocks();
+    await vi.importActual("../routes/agents.js");
+  }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
+
   it.each(["drain", "cancel"] as const)("pauses before applying the explicit %s policy and retains its decision", async pendingWork => {
     mockAgentService.getById.mockResolvedValue({ id: routeAgentId, companyId: "company-1", name: "Builder" });
     mockAgentService.pause.mockResolvedValue({ id: routeAgentId, companyId: "company-1", status: "paused" });
@@ -1028,6 +1037,23 @@ describe("agent live run routes", () => {
     expect(res.status, JSON.stringify(res.body)).toBe(202);
     expect(mockAccessService.decide).toHaveBeenCalledWith(expect.objectContaining({ action: "agent:wake" }));
     expect(mockHeartbeatService.wakeup).toHaveBeenCalledWith(routeAgentId, expect.objectContaining({ manualUserWake: true }));
+  });
+
+  it.each(["wakeup", "heartbeat/invoke", "cancel"])("omits internal Run proofs from %s without changing user result metadata", async endpoint => {
+    const resultJson = { runnerProfileJson: "User result field", nested: { nativeInputSourceProtocolVersion: "User result field" } };
+    const run = { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", companyId: "company-1", agentId: routeAgentId,
+      status: "queued", runnerProfileJson: { internalCanary: "Server-only input profile" }, nativeInputSourceProtocolVersion: 1, resultJson };
+    mockHeartbeatService.wakeup.mockResolvedValue(run);
+    mockHeartbeatService.getRun.mockResolvedValue(run);
+    mockHeartbeatService.cancelRun.mockResolvedValue({ ...run, status: "cancelled" });
+    const response = await requestApp(await createApp(), url => request(url).post(endpoint === "cancel"
+      ? `/api/heartbeat-runs/${run.id}/cancel` : `/api/agents/${routeAgentId}/${endpoint}`).send({}));
+    expect(response.status, JSON.stringify(response.body)).toBe(endpoint === "cancel" ? 200 : 202);
+    expect(response.body.id).toBe(run.id);
+    expect(response.body.resultJson).toEqual(resultJson);
+    expect.soft(response.body).not.toHaveProperty("runnerProfileJson");
+    expect.soft(response.body).not.toHaveProperty("nativeInputSourceProtocolVersion");
+    expect(run.runnerProfileJson.internalCanary).toBe("Server-only input profile");
   });
 
   describe("exact failed chat run retry", () => {

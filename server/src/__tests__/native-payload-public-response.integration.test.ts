@@ -4,7 +4,8 @@ import request from "supertest";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { authUsers, companies, companyMemberships, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
-  issueComments, issues, memoryBindings, memoryRecords, projects } from "@paperclipai/db";
+  agents, heartbeatRuns, issueComments, issues, memoryBindings, memoryRecords, projects } from "@paperclipai/db";
+import { agentRoutes } from "../routes/agents.js";
 import { issueRoutes } from "../routes/issues.js";
 import { memoryRoutes } from "../routes/memory.js";
 import { projectRoutes } from "../routes/projects.js";
@@ -29,7 +30,8 @@ describe("Native payload proofs stay on the server at public response boundaries
     const app = express(); app.use(express.json());
     // API serialization proof only, not credential middleware qualification.
     app.use((req, _res, next) => { req.actor = { type: "board", source: "session", userId, companyIds: [companyId] }; next(); });
-    app.use("/api", issueRoutes(db, {} as never)); app.use("/api", projectRoutes(db)); app.use("/api", memoryRoutes(db)); app.use(errorHandler);
+    app.use("/api", issueRoutes(db, {} as never)); app.use("/api", projectRoutes(db)); app.use("/api", memoryRoutes(db));
+    app.use("/run-api", agentRoutes(db)); app.use(errorHandler);
     return { companyId, userId, http: request(app) };
   }
   // Structural source-free DB fixture. Neither its digest nor protocol bit
@@ -108,6 +110,27 @@ describe("Native payload proofs stay on the server at public response boundaries
     const heartbeatContext = await s.http.get(`/api/issues/${task!.id}/heartbeat-context?wakeCommentId=${comment!.id}`).expect(200);
     publicRow(heartbeatContext.body.wakeComment, comment!.id); expect(heartbeatContext.body.wakeComment.body).toBe("Visible comment body");
     expect((await db.select().from(issueComments).where(eq(issueComments.id, comment!.id)))[0]!.payloadSourceSnapshot).not.toBeNull();
+  });
+
+  it("keeps internal Run input proofs out of the actual HTTP detail and preserves user result keys", async () => {
+    const s = await seed();
+    const [agent] = await db.insert(agents).values({ companyId: s.companyId, name: "Public Run worker", adapterType: "paperclip_runner", status: "running" }).returning();
+    const resultJson = { summary: "Visible result", runnerProfileJson: "User result field",
+      nested: { nativeInputSourceProtocolVersion: "User result field" } };
+    // Structural internal profile only: this is not a native input receipt or
+    // qualification of any producer, provider, or source permission.
+    const runnerProfileJson = { internalCanary: "Server-only input profile" };
+    const [run] = await db.insert(heartbeatRuns).values({ companyId: s.companyId, agentId: agent!.id,
+      responsibleUserId: s.userId, status: "succeeded", runtimeMode: "native", nativeInputSourceProtocolVersion: 1,
+      runnerProfileJson, resultJson }).returning();
+    const detail = await s.http.get(`/run-api/heartbeat-runs/${run!.id}`).expect(200);
+    expect(detail.body.id).toBe(run!.id);
+    expect(detail.body.resultJson).toEqual(resultJson);
+    expect.soft(detail.body).not.toHaveProperty("runnerProfileJson");
+    expect.soft(detail.body).not.toHaveProperty("nativeInputSourceProtocolVersion");
+    const [persisted] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, run!.id));
+    expect(persisted!.runnerProfileJson).toEqual(runnerProfileJson);
+    expect(persisted!.nativeInputSourceProtocolVersion).toBe(1);
   });
 
 });

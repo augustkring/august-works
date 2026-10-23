@@ -1,0 +1,30 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/agent-live-run-routes.test.ts (86 tests | 1 failed | 85 skipped) 30111ms
+     × omits internal Run proofs from wakeup without changing user result metadata 30106ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/agent-live-run-routes.test.ts > agent live run routes > omits internal Run proofs from wakeup without changing user result metadata
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/__tests__/agent-live-run-routes.test.ts:1034:52
+    1032|   });
+    1033|
+    1034|   it.each(["wakeup", "heartbeat/invoke", "cancel"])("omits internal Ru…
+       |                                                    ^
+    1035|     const resultJson = { runnerProfileJson: "User result field", neste…
+    1036|     const run = { id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa", companyI…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 85 skipped (86)
+   Start at  08:23:22
+   Duration  35.11s (transform 20.16s, setup 202ms, import 4.37s, tests 30.11s, environment 0ms)
+

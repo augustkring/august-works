@@ -714,6 +714,12 @@ export function agentRoutes(
 
   options.onSetupTokenLoginService?.(setupTokenLoginService);
 
+  function publicRun<T extends { id: string; runnerProfileJson?: unknown; nativeInputSourceProtocolVersion?: number }>(run: T | null) {
+    if (run === null) return null;
+    const { runnerProfileJson: _runnerProfileJson, nativeInputSourceProtocolVersion: _nativeInputSourceProtocolVersion, ...fields } = run;
+    return fields;
+  }
+
   const runRedactions = createRunSecretRedactionRegistry(db);
   async function redactRunResponse<T>(req:Request,companyId:string,runId:string,value:T) {
     await assertAnalyticalContextPayloadAccess(db,companyId,req.actor,{runId});
@@ -6013,7 +6019,7 @@ export function agentRoutes(
       });
     }
 
-    res.status(202).json(run);
+    res.status(202).json(publicRun(run));
   };
 
   router.post("/agents/:id/wakeup", validate(wakeAgentSchema), async (req, res) => {
@@ -6138,7 +6144,7 @@ export function agentRoutes(
       });
     }
 
-    res.status(202).json(run);
+    res.status(202).json(publicRun(run));
   });
 
   router.post("/agents/:id/claude-login", async (req, res) => {
@@ -6819,7 +6825,7 @@ export function agentRoutes(
       req, run.companyId,
       run.id,
       redactCurrentUserValue(
-        { ...decoratedRun, execution: await executionProjectionForRun(db, run.companyId, run.id), identityHistory: await listRunIdentityContexts(db, run.companyId, run.id), retryExhaustedReason, outputSilence: await heartbeat.buildRunOutputSilence(run) },
+        { ...publicRun(decoratedRun), execution: await executionProjectionForRun(db, run.companyId, run.id), identityHistory: await listRunIdentityContexts(db, run.companyId, run.id), retryExhaustedReason, outputSilence: await heartbeat.buildRunOutputSilence(run) },
         await getCurrentUserRedactionOptions(),
       ),
     ));
@@ -6852,7 +6858,7 @@ export function agentRoutes(
       });
     }
 
-    res.json(run);
+    res.json(publicRun(run));
   });
 
   router.post(
