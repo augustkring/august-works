@@ -9,6 +9,7 @@ import {
   Field,
   ToggleField,
 } from "../../components/agent-config-primitives";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 
 const inputClass =
   "w-full rounded-md border border-border px-2.5 py-1.5 bg-transparent outline-none text-sm font-mono placeholder:text-muted-foreground/40";
@@ -144,7 +145,7 @@ export function HermesGatewayConfigFields({
     <>
       <Field
         label="API base URL"
-        hint="Hermes API server base URL that Paperclip can reach, such as http://127.0.0.1:8642 or a private HTTPS URL. Default dashboard root/chat URLs such as http://127.0.0.1:9119/chat are accepted and map to /api."
+        hint={`Hermes API server base URL that ${PRODUCT_IDENTITY.productName} can reach, such as http://127.0.0.1:8642 or a private HTTPS URL. Default dashboard root/chat URLs such as http://127.0.0.1:9119/chat are accepted and map to /api.`}
       >
         <DraftInput
           value={apiBaseUrl}
@@ -164,8 +165,8 @@ export function HermesGatewayConfigFields({
       />
 
       <Field
-        label="Paperclip API URL"
-        hint="Optional Paperclip API URL reachable by the Hermes host. This is not a credential."
+        label={`${PRODUCT_IDENTITY.productName} API URL`}
+        hint={`Optional ${PRODUCT_IDENTITY.productName} API URL reachable by the Hermes host. This is not a credential.`}
       >
         <DraftInput
           value={paperclipApiUrl}

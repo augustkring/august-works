@@ -15,6 +15,7 @@ import { OnboardingHeading } from "./OnboardingPrimitives";
 import { PillGuy } from "./PillGuy";
 import { SleepingZs } from "./SleepingZs";
 import { Stepper } from "./Stepper";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 
 /**
  * A prototype of the connect step, from the PCLP-Onboarding file (nodes
@@ -107,7 +108,7 @@ export function ConnectModelPreview({
           <OnboardingHeading
             center
             title="Connect a model"
-            lede="Paperclip works with your existing subscription or API keys."
+            lede={`${PRODUCT_IDENTITY.productName} works with your existing subscription or API keys.`}
           />
         </div>
 

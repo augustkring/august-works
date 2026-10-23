@@ -11,6 +11,7 @@ import {
   PayloadTemplateJsonField,
   RuntimeServicesJsonField,
 } from "../runtime-json-fields";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 
 const inputClass =
   "w-full rounded-md border border-border px-2.5 py-1.5 bg-transparent outline-none text-sm font-mono placeholder:text-muted-foreground/40";
@@ -309,7 +310,7 @@ export function OpenClawGatewayConfigFields({
         mark={mark}
       />
 
-      <Field label="Paperclip API URL override">
+      <Field label={`${PRODUCT_IDENTITY.productName} API URL override`}>
         <DraftInput
           value={
             isCreate
@@ -323,7 +324,7 @@ export function OpenClawGatewayConfigFields({
           }
           immediate
           className={inputClass}
-          placeholder="https://paperclip.example"
+          placeholder={PRODUCT_IDENTITY.appOrigin}
         />
       </Field>
 
@@ -450,7 +451,7 @@ export function OpenClawGatewayConfigFields({
 
       <Field label="Device auth">
         <div className="text-xs text-muted-foreground leading-relaxed">
-          When enabled, Paperclip persists a device key during onboarding so pairing approvals
+          When enabled, {PRODUCT_IDENTITY.productName} persists a device key during onboarding so pairing approvals
           remain stable across runs.
         </div>
       </Field>
