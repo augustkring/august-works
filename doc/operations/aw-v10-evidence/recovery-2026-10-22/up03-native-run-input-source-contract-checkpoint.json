@@ -1,0 +1,28 @@
+{
+  "scope": "Closed original run input receipt representation only",
+  "sources": {
+    "packages/shared/src/validators/native-payload-source-snapshot.ts": "04d4145dd77c6e9d788d8f6e5b067dafe67dfa095632a944218f558d54b8b38c",
+    "packages/shared/src/validators/native-payload-source-snapshot.test.ts": "461b40f71fd178efaea4d43af6ed3895e99806246b813a5a1e3e758c14e51c8c"
+  },
+  "focusedTests": {
+    "actualExit": 0,
+    "passed": 9,
+    "durationSeconds": 2.55,
+    "pinsUnchanged": true,
+    "log": "up03-run-receipt-shared.log"
+  },
+  "serverCompiler": {
+    "actualExit": 0,
+    "log": "up03-run-receipt-replay-server-types.log",
+    "pins": "up03-run-receipt-replay-server-types-pins.txt"
+  },
+  "limits": [
+    "Parser validates structure and bounds, not canonical digest, actual producer completeness or current permission.",
+    "Missing/NULL is unknown. No dispatch still parses structurally and never implies Ready.",
+    "Original bootstrap identity is distinct from later per-dispatch/input accountable Human identities.",
+    "All five policy vectors and inputs remain explicit; no arbitrary sourceRef, authority flag or metadata bag.",
+    "Maximum256distinct source references globally, per-capture256combined references,64dispatches,256additionalcaptures,2MiBcompactJSON. Native DB may impose stricter canonical serialized-byte bounds.",
+    "No production receipt writer, constructor capability activation, complete pipeline, transport or derivative admission qualified.",
+    "Migration0511 and native DB enforcement are separate work in progress."
+  ]
+}

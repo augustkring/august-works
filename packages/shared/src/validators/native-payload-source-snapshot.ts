@@ -60,16 +60,13 @@ export const nativePayloadSourceInputSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("tool_result"), runId: id, callId: text, toolName: text, invocationId: id.nullable(), contentHash: sha256 }).strict(),
 ]);
 
-/** Structural contract only. It neither computes/verifies the digest nor proves
- * producer truth, completeness or access. NULL belongs to the containing owner
- * and means unknown; this parser never turns it into an empty snapshot. */
-export const nativePayloadSourceSnapshotSchema = z.object({
-  version: z.literal(1),
-  owner: nativePayloadSourceOwnerSchema,
+const sourceFields = {
   policy: nativePayloadSourcePolicySchema,
   inputs: z.array(nativePayloadSourceInputSchema).max(NATIVE_PAYLOAD_SOURCE_REFERENCE_LIMIT),
-  digest: sha256,
-}).strict().superRefine((snapshot, ctx) => {
+};
+
+function checkSources(snapshot: { policy: z.infer<typeof nativePayloadSourcePolicySchema>;
+  inputs: z.infer<typeof nativePayloadSourceInputSchema>[] }, ctx: z.RefinementCtx) {
   let references = snapshot.inputs.length;
   for (const key of ["issueIds", "projectIds", "runIds", "memoryIds", "foundationRevisionIds"] as const) {
     const values = snapshot.policy[key];
@@ -88,9 +85,49 @@ export const nativePayloadSourceSnapshotSchema = z.object({
   if (new Set(captures).size !== captures.length) {
     ctx.addIssue({ code: "custom", path: ["inputs"], message: "Duplicate captured input." });
   }
+}
+const sourceSetSchema = z.object(sourceFields).strict().superRefine(checkSources);
+
+/** Structural contract only. It neither computes/verifies the digest nor proves
+ * producer truth, completeness or access. NULL belongs to the containing owner
+ * and means unknown; this parser never turns it into an empty snapshot. */
+export const nativePayloadSourceSnapshotSchema = z.object({
+  version: z.literal(1),
+  owner: nativePayloadSourceOwnerSchema,
+  ...sourceFields,
+  digest: sha256,
+}).strict().superRefine(checkSources);
+
+/** Original run input representation, never an admission or permission claim.
+ * The base binds the persisted execution input. Each actual dispatch or later
+ * input keeps its own then-current accountable Human; steering cannot rewrite
+ * the original capture identity or release earlier source restrictions. */
+export const nativeRunInputSourceReceiptSchema = z.object({
+  version: z.literal(1),
+  binding: z.object({ companyId: id, runId: id, agentId: id, responsibleUserId: text, issueId: id.nullable() }).strict(),
+  bootstrap: z.object({ executionInputDigest: sha256, ...sourceFields }).strict().superRefine(checkSources),
+  dispatches: z.array(z.object({ executionInputDigest: sha256, responsibleUserId: text, ...sourceFields })
+    .strict().superRefine(checkSources)).max(64),
+  additionalInputs: z.array(sourceSetSchema.safeExtend({ responsibleUserId: text })).max(256),
+  digest: sha256,
+}).strict().superRefine((receipt, ctx) => {
+  const references = new Set<string>();
+  for (const sources of [receipt.bootstrap, ...receipt.dispatches, ...receipt.additionalInputs]) {
+    for (const key of ["issueIds", "projectIds", "runIds", "memoryIds", "foundationRevisionIds"] as const) {
+      for (const sourceId of sources.policy[key]) references.add(`${key}:${sourceId}`);
+    }
+    for (const input of sources.inputs) references.add(`input:${JSON.stringify(input)}`);
+  }
+  if (references.size > NATIVE_PAYLOAD_SOURCE_REFERENCE_LIMIT) {
+    ctx.addIssue({ code: "custom", message: "Native run input sources exceed their combined reference bound." });
+  }
+  if (new TextEncoder().encode(JSON.stringify(receipt)).byteLength > 2 * 1024 * 1024) {
+    ctx.addIssue({ code: "custom", message: "Native run input source receipt exceeds its byte bound." });
+  }
 });
 
 export type NativePayloadSourceOwner = z.infer<typeof nativePayloadSourceOwnerSchema>;
 export type NativePayloadSourcePolicy = z.infer<typeof nativePayloadSourcePolicySchema>;
 export type NativePayloadSourceInput = z.infer<typeof nativePayloadSourceInputSchema>;
 export type NativePayloadSourceSnapshot = z.infer<typeof nativePayloadSourceSnapshotSchema>;
+export type NativeRunInputSourceReceipt = z.infer<typeof nativeRunInputSourceReceiptSchema>;

@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { describe, expect, it } from "vitest";
 import { z } from "zod";
-import { nativePayloadSourceSnapshotSchema, type NativePayloadSourceInput } from "./native-payload-source-snapshot.js";
+import { nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema, type NativePayloadSourceInput } from "./native-payload-source-snapshot.js";
 
 const hash = "a".repeat(64);
 function snapshot(inputs: NativePayloadSourceInput[] = []) {
@@ -78,5 +78,64 @@ describe("Native payload source snapshot structural boundary", () => {
       { ...base, disposition: "attachment_binding_unavailable" as const, assetId: randomUUID(), sha256: hash, byteSize: 12 },
       { ...base, disposition: "delivered" as const, assetId: randomUUID(), sha256: hash, byteSize: Number.MAX_SAFE_INTEGER + 1 },
     ]) expect(nativePayloadSourceSnapshotSchema.safeParse(snapshot([capture])).success).toBe(false);
+  });
+});
+
+describe("Native run input source receipt structural boundary", () => {
+  function receipt() {
+    const { policy, inputs } = snapshot();
+    return { version: 1 as const,
+      binding: { companyId: randomUUID(), runId: randomUUID(), agentId: randomUUID(), responsibleUserId: "original-human", issueId: null },
+      bootstrap: { executionInputDigest: hash, policy, inputs }, dispatches: [], additionalInputs: [], digest: hash };
+  }
+
+  it("keeps bootstrap, actual dispatch and later input identities distinct without a readiness default", () => {
+    const value = receipt();
+    const later = { ...value, dispatches: [{ ...value.bootstrap, responsibleUserId: "steered-human" }],
+      additionalInputs: [{ policy: value.bootstrap.policy, inputs: value.bootstrap.inputs, responsibleUserId: "steered-human" }] };
+    expect(nativeRunInputSourceReceiptSchema.parse(value)).toEqual(value); // No dispatch; structure never implies Ready.
+    expect(nativeRunInputSourceReceiptSchema.parse(later)).toEqual(later);
+    expect(nativeRunInputSourceReceiptSchema.safeParse(null).success).toBe(false);
+    for (const key of ["bootstrap", "binding", "dispatches", "additionalInputs", "digest"] as const) {
+      const incomplete = { ...value };
+      delete (incomplete as Record<string, unknown>)[key];
+      expect(nativeRunInputSourceReceiptSchema.safeParse(incomplete).success).toBe(false);
+    }
+  });
+
+  it("rejects authority claims, arbitrary inputs and incomplete source populations at every capture", () => {
+    const value = receipt();
+    for (const invalid of [
+      { ...value, qualified: true }, { ...value, version: 2 },
+      { ...value, binding: { ...value.binding, grant: "company_admin" } },
+      { ...value, bootstrap: { ...value.bootstrap, policy: {} } },
+      { ...value, dispatches: [{ ...value.bootstrap }] },
+      { ...value, additionalInputs: [{ policy: value.bootstrap.policy, responsibleUserId: "human" }] },
+      { ...value, additionalInputs: [{ ...value.bootstrap, responsibleUserId: "human" }] },
+      { ...value, bootstrap: { ...value.bootstrap, inputs: [{ kind: "external", sourceRef: "claim://body" }] } },
+    ]) expect(nativeRunInputSourceReceiptSchema.safeParse(invalid).success).toBe(false);
+  });
+
+  it("bounds the complete distinct source population across captures without losing repeated reads", () => {
+    const value = receipt();
+    const policy = { ...value.bootstrap.policy, issueIds: Array.from({ length: 128 }, () => randomUUID()) };
+    const extra = { ...value.bootstrap.policy, issueIds: Array.from({ length: 129 }, () => randomUUID()) };
+    expect(nativeRunInputSourceReceiptSchema.safeParse({ ...value, bootstrap: { ...value.bootstrap, policy },
+      additionalInputs: [{ policy: extra, inputs: [], responsibleUserId: "human" }] }).success).toBe(false);
+    const repeated = { policy, inputs: [], responsibleUserId: "human" };
+    expect(nativeRunInputSourceReceiptSchema.parse({ ...value, additionalInputs: Array(256).fill(repeated) }).additionalInputs).toHaveLength(256);
+    expect(nativeRunInputSourceReceiptSchema.safeParse({ ...value, additionalInputs: Array(257).fill(repeated) }).success).toBe(false);
+    expect(nativeRunInputSourceReceiptSchema.safeParse({ ...value, dispatches: Array(65).fill({ ...value.bootstrap, responsibleUserId: "human" }) }).success).toBe(false);
+    expect(nativeRunInputSourceReceiptSchema.safeParse({ ...value, additionalInputs: [{ ...repeated,
+      policy: { ...policy, issueIds: [policy.issueIds[0], policy.issueIds[0]] } }] }).success).toBe(false);
+  });
+
+  it("bounds encoded receipts even when repeated source identities stay within the distinct limit", () => {
+    const value = receipt();
+    const inputs = Array.from({ length: 50 }, (_, index): NativePayloadSourceInput => ({ kind: "tool_result", runId: value.binding.runId,
+      callId: `${index}:${"x".repeat(500)}`, toolName: "read", invocationId: null, contentHash: hash }));
+    const sources = { policy: value.bootstrap.policy, inputs, responsibleUserId: "human" };
+    expect(nativeRunInputSourceReceiptSchema.safeParse({ ...value, additionalInputs: [sources] }).success).toBe(true);
+    expect(nativeRunInputSourceReceiptSchema.safeParse({ ...value, additionalInputs: Array(80).fill(sources) }).success).toBe(false);
   });
 });
