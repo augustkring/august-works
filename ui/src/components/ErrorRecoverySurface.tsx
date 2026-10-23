@@ -11,11 +11,14 @@ export function ErrorRecoverySurface({ scope, onBack }: {
 }) {
   const heading = useRef<HTMLHeadingElement>(null);
   const copy = (document.documentElement.lang.toLowerCase().split("-")[0] === "da" ? da : en).errorRecovery;
+  const title = scope === "app"
+    ? copy.app.replace("{{productName}}", PRODUCT_IDENTITY.productName)
+    : copy.page;
   const Region = scope === "app" ? "main" : "section";
   useLayoutEffect(() => { heading.current?.focus(); }, []);
   return (
     <Region className="mx-auto w-full max-w-2xl space-y-4 px-4 py-10" aria-labelledby="error-recovery-heading">
-      <h1 id="error-recovery-heading" ref={heading} tabIndex={-1} className="text-lg font-semibold">{copy[scope]}</h1>
+      <h1 id="error-recovery-heading" ref={heading} tabIndex={-1} className="text-lg font-semibold">{title}</h1>
       <p className="text-sm text-muted-foreground">{copy.explanation}</p>
       <p className="text-sm text-muted-foreground">{copy.unknownOutcome}</p>
       <div className="flex flex-wrap items-center justify-between gap-3">

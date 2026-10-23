@@ -276,7 +276,7 @@ describe("AuthPage", () => {
       await i18n.changeLanguage("da");
     });
     await flushReact();
-    expect(container.querySelector("h1")?.textContent).toBe("Log ind på August Works");
+    expect(container.querySelector("h1")?.textContent).toBe("Log ind på Blentera");
     expect(container.querySelector('label[for="email"]')?.textContent).toBe("E-mail");
     expect(email.value).toBe("person@example.test");expect(password.value).toBe("private-software-fixture");
     expect(password.getAttribute("autocomplete")).toBe("current-password");

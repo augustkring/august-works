@@ -295,3 +295,10 @@ Partial source handoff only: interactions/prior results and other input families
 The existing i18next initializer now supplies PRODUCT_IDENTITY.productName through its native defaultVariables mechanism. Eleven values per EN/DA experience catalogue use it for feedback, onboarding, provider-authority boundaries, native runtime/calculations, recovery and delivery explanations. Compatibility keys remain unchanged. The former Danish-only branded baseline label now has matching English interpolation while preserving its calculation meaning. Root verifies all keys and unrelated values, with exactly the expected eleven substitutions per locale; no other locale file uses this placeholder.
 
 Existing locale suite8PASS1.59s includes real default interpolation for every changed key in both languages, no unresolved productName placeholder and French-to-English fallback. UI typecheck and token gates exit0; final source pins match. See `brand-experience-shared-identity-checkpoint.json`. No legal/operator identity inferred; full brand/locale/visual and V10 release qualification remain open.
+
+
+### 2026-10-23 — Render shared identity during app error recovery
+
+The existing provider-independent error surface selects raw locale JSON, so the new catalogue productName placeholder was displayed literally. Its original owner now replaces only that known app-title placeholder using PRODUCT_IDENTITY, preserving recovery when localization fails. Existing auth/error fixtures expect Blentera; the permission fixture uses native i18next rather than a manual translator that dropped default variables. Raw catalogue import audit found no other actual consumer outside initialization.
+
+Four existing UI files initially38PASS/3FAIL on actual error headings; after the owner fix41PASS22.87s. Final UI typecheck and token gates exit0 with directly observed process closure. Root reviewed final source; bounded gpt-6-luna assistance. See `brand-ui-recovery-identity-checkpoint.json` and retained raw failure/source. Full customer brand/locale/visual and V10 release gates remain open.
