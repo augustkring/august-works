@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from "react";
+import { useCallback, useEffect, useState, type ReactNode } from "react";
 import type {
   FeedbackDataSharingPreference,
   FeedbackVoteValue,
@@ -25,6 +25,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import { Check, Copy, MoreHorizontal, ThumbsDown, ThumbsUp, X } from "lucide-react";
+import { useFeedbackPolicy } from "./OutputFeedbackButtons";
 
 const WEEK_MS = 7 * 24 * 60 * 60 * 1000;
 
@@ -183,6 +184,7 @@ export function IssueChatFeedbackButtons({
   termsUrl: string | null;
   onVote: (vote: FeedbackVoteValue, options?: { allowSharing?: boolean; reason?: string }) => Promise<void>;
 }) {
+  const { localOnly: awLocalOnly } = useFeedbackPolicy();
   const [isSaving, setIsSaving] = useState(false);
   const [optimisticVote, setOptimisticVote] = useState<FeedbackVoteValue | null>(null);
   const [reasonOpen, setReasonOpen] = useState(false);
@@ -197,10 +199,10 @@ export function IssueChatFeedbackButtons({
     if (optimisticVote && activeVote === optimisticVote) setOptimisticVote(null);
   }, [activeVote, optimisticVote]);
 
-  async function doVote(
+  const doVote = useCallback(async (
     vote: FeedbackVoteValue,
     options?: { allowSharing?: boolean; reason?: string },
-  ) {
+  ) => {
     setIsSaving(true);
     try {
       await onVote(vote, options);
@@ -209,10 +211,17 @@ export function IssueChatFeedbackButtons({
     } finally {
       setIsSaving(false);
     }
-  }
+  }, [onVote]);
 
   function handleVote(vote: FeedbackVoteValue, reason?: string) {
     setOptimisticVote(vote);
+    if (awLocalOnly) {
+      void doVote(vote, {
+        allowSharing: false,
+        ...(reason ? { reason } : {}),
+      });
+      return;
+    }
     if (sharingPreference === "prompt") {
       setPendingSharingDialog({ vote, ...(reason ? { reason } : {}) });
       return;
@@ -238,7 +247,9 @@ export function IssueChatFeedbackButtons({
   function handleSubmitReason() {
     if (!downvoteReason.trim()) return;
     // Re-submit with reason attached
-    if (sharingPreference === "prompt") {
+    if (awLocalOnly) {
+      void doVote("down", { allowSharing: false, reason: downvoteReason });
+    } else if (sharingPreference === "prompt") {
       setPendingSharingDialog({ vote: "down", reason: downvoteReason });
     } else {
       const allowSharing = sharingPreference === "allowed";
@@ -250,6 +261,16 @@ export function IssueChatFeedbackButtons({
     setReasonOpen(false);
     setDownvoteReason("");
   }
+
+  useEffect(() => {
+    if (!awLocalOnly || !pendingSharingDialog) return;
+    const vote = pendingSharingDialog;
+    setPendingSharingDialog(null);
+    void doVote(vote.vote, {
+      allowSharing: false,
+      ...(vote.reason ? { reason: vote.reason } : {}),
+    });
+  }, [awLocalOnly, pendingSharingDialog, doVote]);
 
   return (
     <>
@@ -321,7 +342,7 @@ export function IssueChatFeedbackButtons({
       </Popover>
 
       <Dialog
-        open={Boolean(pendingSharingDialog)}
+        open={!awLocalOnly && Boolean(pendingSharingDialog)}
         onOpenChange={(open) => {
           if (!open && !isSaving) {
             setPendingSharingDialog(null);

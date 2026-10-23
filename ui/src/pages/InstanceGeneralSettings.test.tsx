@@ -261,6 +261,21 @@ describe("InstanceGeneralSettings operator-hidden sections", () => {
     expect(container.textContent).toContain("Sign out");
   });
 
+  it("omits legacy external-sharing controls after the server latches local feedback", async () => {
+    mockInstanceSettingsApi.getGeneral.mockResolvedValue({
+      censorUsernameInLogs: false,
+      keyboardShortcuts: false,
+      feedbackDataSharingPreference: "allowed",
+      outputFeedbackPolicyVersion: "aw-v9-local-v1",
+      backupRetention: { dailyDays: 7, weeklyWeeks: 4, monthlyMonths: 1 },
+    });
+    await renderPage(SELF_HOSTED_HEALTH);
+    expect(container.textContent).not.toContain("AI feedback sharing");
+    expect(container.textContent).not.toContain("Paperclip Labs");
+    expect(container.textContent).toContain("Backup retention");
+    expect(container.textContent).toContain("Sign out");
+  });
+
   it("shows every section when nothing is hidden", async () => {
     await renderPage(SELF_HOSTED_HEALTH);
 

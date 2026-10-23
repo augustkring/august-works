@@ -82,7 +82,8 @@ export function InstanceGeneralSettings({ embedded = false }: { embedded?: boole
   const showDeploymentStatus = !hiddenSettings.has("instance.general.deploymentStatus");
   const showCensorUsernameInLogs = !hiddenSettings.has("instance.general.censorUsernameInLogs");
   const showBackupRetention = !hiddenSettings.has("instance.general.backupRetention");
-  const showFeedbackDataSharing = !hiddenSettings.has("instance.general.feedbackDataSharingPreference");
+  const showFeedbackDataSharing = generalQuery.data?.outputFeedbackPolicyVersion !== "aw-v9-local-v1"
+    && !hiddenSettings.has("instance.general.feedbackDataSharingPreference");
   const showSignOut = !hiddenSettings.has("instance.general.signOut");
   const visibleTopics = [
     ...(showCensorUsernameInLogs ? ["log display"] : []),

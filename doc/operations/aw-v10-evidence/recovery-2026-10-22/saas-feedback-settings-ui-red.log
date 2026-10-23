@@ -1,0 +1,69 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+stderr | src/pages/InstanceGeneralSettings.test.tsx > InstanceGeneralSettings operator-hidden sections > omits legacy external-sharing controls after the server latches local feedback
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/pages/InstanceGeneralSettings.test.tsx > InstanceGeneralSettings operator-hidden sections > omits legacy external-sharing controls after the server latches local feedback
+An update to InstanceGeneralSettings inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+stderr | src/pages/InstanceGeneralSettings.test.tsx > InstanceGeneralSettings operator-hidden sections > omits legacy external-sharing controls after the server latches local feedback
+An update to Root inside a test was not wrapped in act(...).
+
+When testing, code that causes React state updates should be wrapped into act(...):
+
+act(() => {
+  /* fire events that update state */
+});
+/* assert on the output */
+
+This ensures that you're testing the behavior the user would see in the browser. Learn more at https://react.dev/link/wrap-tests-with-act
+
+ ❯ |@paperclipai/ui| src/pages/InstanceGeneralSettings.test.tsx (9 tests | 1 failed) 1794ms
+     × omits legacy external-sharing controls after the server latches local feedback 167ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/ui| src/pages/InstanceGeneralSettings.test.tsx > InstanceGeneralSettings operator-hidden sections > omits legacy external-sharing controls after the server latches local feedback
+AssertionError: expected 'GeneralConfigure instance-wide prefer…' not to contain 'AI feedback sharing'
+
+Expected: "AI feedback sharing"
+Received: "GeneralConfigure instance-wide preferences including log display, backup retention, and data sharing.Deployment and authAuthenticated privateAuthenticated private mode requires sign-in and is intended for LAN, VPN, or other private-network deployments.Auth readinessReadyBootstrap statusReadyBootstrap inviteNoneCensor username in logsHide the username segment in home-directory paths and similar operator-visible log output. Standalone username mentions outside of paths are not yet masked in the live transcript view. This is off by default.Backup retentionConfigure how long automatic database backups are retained. Backups run roughly every hour and are compressed with gzip. Within the daily window all backups are kept; beyond that, one backup per week and one per month are preserved.Daily3 days7 days14 daysWeekly1 week2 weeks4 weeksMonthly1 month3 months6 monthsAI feedback sharingControl whether thumbs up and thumbs down votes can send the voted AI output to Paperclip Labs. Votes are always saved locally.Read our terms of serviceAlways allowShare voted AI outputs automatically.Don't allowKeep voted AI outputs local only.To retest the first-use prompt in local dev, remove the feedbackDataSharingPreference key from the instance_settings.general JSON row for this instance, or set it back to "prompt". Unset and "prompt" both mean no default has been chosen yet.Sign outSign out of this Paperclip instance. You will be redirected to the login page.Sign out"
+
+ ❯ src/pages/InstanceGeneralSettings.test.tsx:273:39
+    271|     });
+    272|     await renderPage(SELF_HOSTED_HEALTH);
+    273|     expect(container.textContent).not.toContain("AI feedback sharing");
+       |                                       ^
+    274|     expect(container.textContent).not.toContain("Paperclip Labs");
+    275|     expect(container.textContent).toContain("Backup retention");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 8 passed (9)
+   Start at  09:07:46
+   Duration  62.86s (transform 9.48s, setup 427ms, import 17.63s, tests 1.79s, environment 40.02s)
+

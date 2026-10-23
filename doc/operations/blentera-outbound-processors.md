@@ -7,6 +7,15 @@ processor, region, retention policy, DPA or complete outbound-path inventory.
 
 ## Feedback trace export
 
+The explicit `saas` deployment profile admits the existing local-only feedback
+policy before returning instance settings, for both existing and new rows.
+Feedback votes and notes remain local even if an old preference allows sharing,
+an export destination is configured, or `customer_feedback_v9` is disabled.
+The stored policy survives a later profile or feature rollback. Customer vote
+controls and settings use this policy to omit legacy external-sharing consent.
+Local and legacy deployments that have never admitted the policy retain the
+operator-controlled compatibility path described below.
+
 The original feedback owner still requires explicit sharing and tracks each
 export outcome. Set `PAPERCLIP_FEEDBACK_EXPORT_BACKEND_URL` only after approving
 that receiver for the private trace bundle. Its upload path is `/feedback-traces`.

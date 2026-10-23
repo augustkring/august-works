@@ -621,6 +621,66 @@ const support = await getEmbeddedPostgresTestSupport();
       });
       expect(uploads).toBe(0);
     });
+    it("latches feedback local at SaaS settings admission when the feedback flag is disabled", async () => {
+      const localSettings = instanceSettingsService(db, {
+        runtimeEnv: { AW_DEPLOYMENT_PROFILE: "local" },
+      });
+      try {
+        await localSettings.updateExperimental({ customer_feedback_v9: false });
+        await db.execute(sql`update instance_settings set general = general - 'outputFeedbackPolicyVersion' where singleton_key = 'default'`);
+        await localSettings.updateGeneral({ feedbackDataSharingPreference: "allowed" });
+        expect((await localSettings.getGeneral()).outputFeedbackPolicyVersion).toBeUndefined();
+
+        const deploymentEnv = { AW_DEPLOYMENT_PROFILE: "saas" };
+        const saasSettings = instanceSettingsService(db, { runtimeEnv: deploymentEnv });
+        const admittedGeneral = await saasSettings.getGeneral();
+        expect(admittedGeneral.outputFeedbackPolicyVersion).toBe("aw-v9-local-v1");
+        expect(admittedGeneral.feedbackDataSharingPreference).toBe("allowed");
+        expect((await saasSettings.getExperimental()).customer_feedback_v9).toBe(false);
+
+        deploymentEnv.AW_DEPLOYMENT_PROFILE = "local";
+        expect((await saasSettings.getGeneral()).outputFeedbackPolicyVersion).toBe("aw-v9-local-v1");
+
+        const [agent] = await db
+          .insert(agents)
+          .values({ companyId, name: "Helper", role: "engineer", status: "active", adapterType: "codex_local" })
+          .returning();
+        const [issue] = await db.insert(issues).values({ companyId, title: "Review report" }).returning();
+        const [comment] = await db
+          .insert(issueComments)
+          .values({ companyId, issueId: issue!.id, authorAgentId: agent!.id, body: "Confidential generated report" })
+          .returning();
+        const vote = await feedbackService(db).saveIssueVote({
+          issueId: issue!.id,
+          targetType: "issue_comment",
+          targetId: comment!.id,
+          vote: "up",
+          authorUserId: userId,
+          allowSharing: true,
+        });
+        expect(vote.sharingEnabled).toBe(false);
+        expect(vote.traceId).toBeNull();
+        expect(await db.select().from(feedbackExports).where(eq(feedbackExports.feedbackVoteId, vote.vote.id))).toHaveLength(0);
+
+        let uploads = 0;
+        const exporter = feedbackService(db, {
+          shareClient: {
+            uploadTraceBundle: async () => {
+              uploads++;
+              return { objectKey: "unexpected" };
+            },
+          },
+        });
+        expect(await exporter.flushPendingFeedbackTraces()).toEqual({ attempted: 0, sent: 0, failed: 0 });
+        expect(uploads).toBe(0);
+
+        deploymentEnv.AW_DEPLOYMENT_PROFILE = "saas";
+        await db.execute(sql`delete from instance_settings where singleton_key = 'default'`);
+        expect((await saasSettings.getGeneral()).outputFeedbackPolicyVersion).toBe("aw-v9-local-v1");
+      } finally {
+        await localSettings.updateExperimental({ customer_feedback_v9: true });
+      }
+    });
     it("fails closed when the rollout flag is disabled", async () => {
       await instanceSettingsService(db).updateExperimental({
         customer_feedback_v9: false,

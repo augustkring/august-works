@@ -37,6 +37,7 @@ import {
   stripOperatorGeneralEchoes,
 } from "@paperclipai/shared";
 import { eq, sql } from "drizzle-orm";
+import { isSaasDeployment } from "../deployment-profile.js";
 import { getManagedInstanceConfig, type ManagedInstanceConfig } from "./managed-config.js";
 import { getOperatorSettingDefaults } from "./setting-defaults.js";
 
@@ -519,36 +520,49 @@ export function instanceSettingsService(db: Db, options: InstanceSettingsService
       .from(instanceSettings)
       .where(eq(instanceSettings.singletonKey, DEFAULT_SINGLETON_KEY))
       .then((rows) => rows[0] ?? null);
-    if (existing) return existing;
-
-    const now = new Date();
-    const [created] = await runner
-      .insert(instanceSettings)
-      .values({
-        singletonKey: DEFAULT_SINGLETON_KEY,
-        general: {},
-        experimental: {},
-        createdAt: now,
-        updatedAt: now,
-      })
-      .onConflictDoUpdate({
-        target: [instanceSettings.singletonKey],
-        set: {
+    let row = existing;
+    if (!row) {
+      const now = new Date();
+      const [created] = await runner
+        .insert(instanceSettings)
+        .values({
+          singletonKey: DEFAULT_SINGLETON_KEY,
+          general: {},
+          experimental: {},
+          createdAt: now,
           updatedAt: now,
-        },
+        })
+        .onConflictDoUpdate({
+          target: [instanceSettings.singletonKey],
+          set: {
+            updatedAt: now,
+          },
+        })
+        .returning();
+
+      row = created ?? await runner
+        .select()
+        .from(instanceSettings)
+        .where(eq(instanceSettings.singletonKey, DEFAULT_SINGLETON_KEY))
+        .then((rows) => rows[0] ?? null);
+    }
+    if (!row) throw new Error("Failed to initialize instance settings row");
+
+    if (!isSaasDeployment(options.runtimeEnv ?? process.env) ||
+      normalizeGeneralSettings(row.general).outputFeedbackPolicyVersion === "aw-v9-local-v1") {
+      return row;
+    }
+
+    const [admitted] = await runner
+      .update(instanceSettings)
+      .set({
+        general: sql`coalesce(${instanceSettings.general}, '{}'::jsonb) || '{"outputFeedbackPolicyVersion":"aw-v9-local-v1"}'::jsonb`,
+        updatedAt: new Date(),
       })
+      .where(eq(instanceSettings.id, row.id))
       .returning();
-
-    if (created) return created;
-
-    const raced = await runner
-      .select()
-      .from(instanceSettings)
-      .where(eq(instanceSettings.singletonKey, DEFAULT_SINGLETON_KEY))
-      .then((rows) => rows[0] ?? null);
-    if (raced) return raced;
-
-    throw new Error("Failed to initialize instance settings row");
+    if (!admitted) throw new Error("Failed to admit SaaS feedback privacy policy");
+    return admitted;
   }
 
   return {
