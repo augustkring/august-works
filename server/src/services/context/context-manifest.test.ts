@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { eq, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   agents,
@@ -9,8 +10,9 @@ import {
   contextManifests,
   createDb,
   heartbeatRuns,
+  issues, memoryBindings, memoryRecords, contextManifestMemoryRoots,
 } from "@paperclipai/db";
-import type { ContextAuthorityDecision, EvidenceItem } from "@paperclipai/shared";
+import type { ContextAuthorityDecision, EvidenceItem, NativePayloadSourceSnapshot } from "@paperclipai/shared";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -37,6 +39,9 @@ describeEmbeddedPostgres("Context Manifest service", () => {
     await db.delete(contextManifestItems);
     await db.delete(contextManifests);
     await db.delete(heartbeatRuns);
+    await db.delete(memoryRecords);
+    await db.delete(memoryBindings);
+    await db.delete(issues);
     await db.delete(agents);
     await db.delete(companyMemberships);
     await db.delete(companies);
@@ -143,6 +148,58 @@ describeEmbeddedPostgres("Context Manifest service", () => {
     expect(persisted).not.toContain(rawQuery);
     expect(persisted).not.toContain(rawExcerpt);
     expect(persisted).not.toContain("raw-metadata");
+  });
+
+  it.each([false, true])("retains exact selected Task and Memory body snapshots without inventing unknown history (known=%s)", async known => {
+    const seeded = await seedCompanyAndAgent("Captured sources");
+    const [task] = await db.insert(issues).values({ companyId: seeded.companyId, title: "Selected Task body",
+      description: "Original selected Task rendition", payloadSourceProtocolVersion: known ? 1 : 0 }).returning();
+    const [binding] = await db.insert(memoryBindings).values({ companyId: seeded.companyId, key: randomUUID(),
+      name: "Selected native Memory", providerKey: "local" }).returning();
+    const [memory] = await db.insert(memoryRecords).values({ companyId: seeded.companyId, bindingId: binding!.id,
+      providerKey: "local", memoryType: "lesson", scopeType: "company", content: "Original selected Memory rendition",
+      observedAt: new Date(), createdByActorType: "user", createdByActorId: seeded.userId,
+      sourceProvenanceQualified: true, payloadSourceProtocolVersion: known ? 1 : 0 }).returning();
+    // Canonically bound structural fixtures, never complete producer history or
+    // provider dispatch qualification. Unknown originals deliberately stay NULL.
+    async function seal(kind: "issue" | "memory_record", table: "issues" | "memory_records", id: string) {
+      const [hash] = await db.execute<{ hash: string }>(sql`select public.aw_native_payload_body_hash(${kind},to_jsonb(r)) as hash
+        from ${sql.identifier(table)} r where r.company_id=${seeded.companyId}::uuid and r.id=${id}::uuid`);
+      const content = { version: 1, owner: { kind, companyId: seeded.companyId, id, contentHash: hash!.hash },
+        policy: { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] }, inputs: [] };
+      const [sealed] = await db.execute<{ snapshot: NativePayloadSourceSnapshot }>(sql`select ${JSON.stringify(content)}::jsonb ||
+        jsonb_build_object('digest',encode(sha256(convert_to((${JSON.stringify(content)}::jsonb)::text,'UTF8')),'hex')) as snapshot`);
+      return sealed!.snapshot;
+    }
+    const taskSnapshot = known ? await seal("issue", "issues", task!.id) : null;
+    const memorySnapshot = known ? await seal("memory_record", "memory_records", memory!.id) : null;
+    if (known) {
+      await db.update(issues).set({ payloadSourceSnapshot: taskSnapshot }).where(eq(issues.id, task!.id));
+      await db.update(memoryRecords).set({ payloadSourceSnapshot: memorySnapshot }).where(eq(memoryRecords.id, memory!.id));
+    }
+    const [run] = await db.insert(heartbeatRuns).values({ companyId: seeded.companyId, agentId: seeded.agent.id,
+      responsibleUserId: seeded.userId, status: "running" }).returning();
+    const selectedTask: EvidenceItem = { ...evidence(seeded.companyId, task!.description!), id: `task:${task!.id}`,
+      sourceClass: "task", sourceProvider: "august_works_tasks", sourceType: "issue", sourceRef: `issue://${task!.id}`,
+      title: task!.title, sourceVersion: task!.updatedAt.toISOString() };
+    const selectedMemory: EvidenceItem = { ...evidence(seeded.companyId, memory!.content), id: `memory:${memory!.id}`,
+      sourceClass: "accepted_memory", sourceProvider: "august_works_memory", sourceType: "memory_record", sourceRef: `memory://record/${memory!.id}`,
+      sourceVersion: memory!.updatedAt.toISOString() };
+    const result = await contextManifestService(db).create({ companyId: seeded.companyId, runId: run!.id,
+      agentId: seeded.agent.id, query: "Actual selected native source bodies", policySnapshot: {},
+      selected: [{ decision: decision(selectedTask) }, { decision: decision(selectedMemory) }] });
+    expect(result.items.map(item => item.payloadSourceSnapshot)).toEqual([taskSnapshot, memorySnapshot]);
+    const [root] = await db.select().from(contextManifestMemoryRoots).where(eq(contextManifestMemoryRoots.manifestId,result.manifest.id));
+    expect(root!.payloadSourceSnapshot).toEqual(memorySnapshot);
+    await db.update(issues).set({ description: "Later Task body", payloadSourceSnapshot: null }).where(eq(issues.id, task!.id));
+    await db.update(memoryRecords).set({ content: "Later Memory body", payloadSourceSnapshot: null }).where(eq(memoryRecords.id, memory!.id));
+    const items = await db.select().from(contextManifestItems).where(eq(contextManifestItems.manifestId, result.manifest.id));
+    items.sort((a, b) => a.rank - b.rank);
+    expect(items.map(item => item.payloadSourceSnapshot)).toEqual([taskSnapshot, memorySnapshot]);
+    const [retained] = await db.select().from(contextManifestMemoryRoots).where(eq(contextManifestMemoryRoots.manifestId,result.manifest.id));
+    expect(retained!.payloadSourceSnapshot).toEqual(memorySnapshot);
+    expect(items.map(item => item.sourceVersion)).toEqual([selectedTask.sourceVersion, selectedMemory.sourceVersion]);
+    expect(items.map(item => item.contentHash)).toEqual([hashEvidenceContent(selectedTask), hashEvidenceContent(selectedMemory)]);
   });
 
   it("hashes policy snapshots deterministically across object-key order", () => {

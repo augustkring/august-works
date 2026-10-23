@@ -211,18 +211,21 @@ export function contextManifestService(db: Db) {
         };
         await assertScopePrivacy();
         const selectedTaskIds: string[] = [];
+        const selectedPayloadSnapshots = new Map<string, typeof issues.$inferSelect["payloadSourceSnapshot"]>();
+        const sourceKey = (provider: string, ref: string) => `${provider}:${ref.toLowerCase()}`;
         for (const {decision} of input.selected) {
           const evidence = decision.evidence;
           if (evidence.sourceProvider !== "august_works_tasks") continue;
           const ref = /^issue:\/\/([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})$/i.exec(evidence.sourceRef);
           if (!ref) throw forbidden("Context source access is unavailable");
-          const [current] = await tx.select({updatedAt:issues.updatedAt}).from(issues)
+          const [current] = await tx.select({updatedAt:issues.updatedAt,payloadSourceSnapshot:issues.payloadSourceSnapshot}).from(issues)
             .where(and(eq(issues.companyId,input.companyId),eq(issues.id,ref[1]!))).for("share");
           if (!current || !await canActorReadIssuePrivacy(sourceDb,sourceActor,{companyId:input.companyId,id:ref[1]!}))
             throw forbidden("Context source access is unavailable");
           if (current.updatedAt.toISOString() !== evidence.sourceVersion)
             throw conflict("Context task changed during assembly");
           selectedTaskIds.push(ref[1]!);
+          selectedPayloadSnapshots.set(sourceKey(evidence.sourceProvider,evidence.sourceRef),current.payloadSourceSnapshot);
         }
         // A later selected row may have waited after an earlier source passed.
         await assertScopePrivacy();
@@ -266,10 +269,6 @@ export function contextManifestService(db: Db) {
             retrievalScore: selected.retrievalScore ?? null,
           };
         });
-
-        const items = values.length > 0
-          ? await tx.insert(contextManifestItems).values(values).returning()
-          : [];
 
         const learnedRoots = new Map<string, string>();
         const learnedAssets:{type:string;id:string}[]=[];
@@ -322,7 +321,7 @@ export function contextManifestService(db: Db) {
         const rootIds=[...expectedRoots.keys()];
         if(rootIds.length>256)throw forbidden("Complete Context Memory roots exceed their source budget");
         if (rootIds.length) {
-          const roots = await tx.select({ id: memoryRecords.id, updatedAt: memoryRecords.updatedAt,scopeType:memoryRecords.scopeType,ownerAgentId:memoryRecords.ownerAgentId }).from(memoryRecords).where(and(eq(memoryRecords.companyId, input.companyId), inArray(memoryRecords.id, rootIds), memoryPayloadVisible())).for("share");
+          const roots = await tx.select({ id: memoryRecords.id, updatedAt: memoryRecords.updatedAt,scopeType:memoryRecords.scopeType,ownerAgentId:memoryRecords.ownerAgentId,payloadSourceSnapshot:memoryRecords.payloadSourceSnapshot }).from(memoryRecords).where(and(eq(memoryRecords.companyId, input.companyId), inArray(memoryRecords.id, rootIds), memoryPayloadVisible())).for("share");
           if (roots.length !== rootIds.length) throw forbidden("Context Memory roots cross a company boundary");
           for(const root of roots){
             if(root.scopeType==="agent" && root.ownerAgentId!==input.agentId)
@@ -331,10 +330,22 @@ export function contextManifestService(db: Db) {
           }
           if(roots.some(root=>expectedRoots.get(root.id)!==root.updatedAt.toISOString()))
             throw conflict("Context Memory roots changed during assembly");
-          await tx.insert(contextManifestMemoryRoots).values(roots.map((root) => ({ companyId: input.companyId, manifestId: manifest!.id, memoryRecordId: root.id, sourceVersion: root.updatedAt.toISOString() })));
+          // Freeze the selected body's closure under the same version/share
+          // pin, including learned/derived roots. NULL history stays unknown.
+          for (const root of roots) selectedPayloadSnapshots.set(sourceKey("august_works_memory",`memory://record/${root.id}`),root.payloadSourceSnapshot);
+          await tx.insert(contextManifestMemoryRoots).values(roots.map((root) => ({ companyId: input.companyId, manifestId: manifest!.id,
+            memoryRecordId: root.id, sourceVersion: root.updatedAt.toISOString(), payloadSourceSnapshot: root.payloadSourceSnapshot })));
         }
 
         await retainLearnedAssetsInContext(tx as unknown as Db,input.companyId,sourceActor,manifest!.id,learnedAssets);
+
+        // Insert immutable items after the selected Task and Memory bodies
+        // have been pinned. Caller evidence metadata never supplies snapshots.
+        const items = values.length > 0
+          ? await tx.insert(contextManifestItems).values(values.map(value => ({ ...value,
+              payloadSourceSnapshot: selectedPayloadSnapshots.get(sourceKey(value.sourceProvider,value.sourceRef)) ?? null,
+            }))).returning()
+          : [];
 
         await assertScopePrivacy();
         for (const id of selectedTaskIds)

@@ -30,7 +30,7 @@ describe("Original run input receipt database binding", () => {
     const {digest:ignored,...body}=receipt;
     return {...body,digest:await digest(body)} as Receipt;
   }
-  async function insert(protocol=1, profile:Record<string,unknown>|null=null, mode="native", issueId:string|null=null){
+  async function insert(protocol=1, profile:Parameters<typeof db.json>[0]|null=null, mode="native", issueId:string|null=null){
     const [row]=await db`insert into heartbeat_runs(company_id,agent_id,responsible_user_id,native_input_source_protocol_version,runtime_mode,issue_id,runner_profile_json)
       values(${companyId},${agentId},${alice},${protocol},${mode},${issueId},${profile===null?null:db.json(profile)}) returning *`;
     return row!;
