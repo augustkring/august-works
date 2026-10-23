@@ -135,6 +135,10 @@ describe("Source deletion preserves Context and model restrictions", () => {
     });
     expect(await pending).toBeNull();
     expect(await f.read()).toEqual([{ id: f.sourceId }]);
+    // This fixture also owns an unrelated Task. Its original company FK
+    // correctly blocks deletion until that prerequisite is removed.
+    await db.delete(issues).where(eq(issues.companyId, f.companyId));
+    await db.delete(companyMemberships).where(eq(companyMemberships.companyId, f.companyId));
     await db.delete(companies).where(eq(companies.id, f.companyId));
     expect(await f.read()).toEqual([]);
   });

@@ -55,7 +55,6 @@ export const memoryModelEvidence = pgTable("memory_model_evidence", {
   memoryRecordId: uuid("memory_record_id").notNull(), observationId: uuid("observation_id"), observationVersion: integer("observation_version"), sourceVersion: text("source_version").notNull(),
   relationship: text("relationship").notNull(), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(),
 }, (t) => ({ modelVersionFk: foreignKey({ name: "model_evidence_version_fk", columns: [t.companyId, t.modelId, t.modelVersion], foreignColumns: [memoryModelVersions.companyId, memoryModelVersions.modelId, memoryModelVersions.version] }).onDelete("cascade"),
-  observationFk: foreignKey({ name: "model_evidence_observation_fk", columns: [t.companyId, t.observationId], foreignColumns: [memoryObservations.companyId, memoryObservations.id] }).onDelete("cascade"),
   observationCheck: check("model_evidence_observation_check", sql`(${t.observationId} is null) = (${t.observationVersion} is null)`),
   relationCheck: check("model_evidence_relation_check", sql`${t.relationship} in ('supports','contradicts','context','derived_from')`),
 }));

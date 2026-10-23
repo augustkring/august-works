@@ -3543,6 +3543,13 @@
       "when": 1792710624688,
       "tag": "0507_lethal_star_brand",
       "breakpoints": true
+    },
+    {
+      "idx": 508,
+      "version": "7",
+      "when": 1792712560777,
+      "tag": "0508_deep_black_cat",
+      "breakpoints": true
     }
   ]
 }
