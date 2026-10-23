@@ -1,3 +1,4 @@
+import { publicNativePayloadRow } from "./native-payload-public.js";
 import { createHash } from "node:crypto";
 import type { IssueComment, IssueQueuedCommentQueue } from "@paperclipai/shared";
 
@@ -191,7 +192,7 @@ export function buildQueuedCommentQueueSnapshot<TComment extends QueuedCommentQu
     steeringDisposition: facts.steeringDisposition,
     ...(facts.executionWait ? { executionWait: facts.executionWait } : {}),
     entries: facts.comments.map((comment, position) => ({
-      comment: comment as unknown as IssueComment,
+      comment: publicNativePayloadRow(comment) as unknown as IssueComment,
       position,
       canEdit: facts.actorType === "user" && comment.authorUserId === facts.actorId,
       canDiscard: facts.actorType === "user" && comment.authorUserId === facts.actorId,

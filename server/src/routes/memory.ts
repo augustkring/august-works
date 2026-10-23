@@ -1,3 +1,4 @@
+import { publicNativePayloadRow } from "../services/native-payload-public.js";
 import { Router, type Request } from "express";
 import type { Db } from "@paperclipai/db";
 import { listReadableMemoryJobs, memoryJobService } from "../services/memory/memory-jobs.js";
@@ -22,6 +23,10 @@ import {
   type MemoryMutationActor,
 } from "../services/index.js";
 import { assertBoard, assertCompanyAccess } from "./authz.js";
+
+function publicMemoryDetail<T extends { record: object }>(detail: T) {
+  return { ...detail, record: publicNativePayloadRow(detail.record) };
+}
 
 export function memoryRoutes(db: Db) {
   const router = Router();
@@ -109,7 +114,8 @@ export function memoryRoutes(db: Db) {
     assertBoardCompany(req, companyId);
     res.setHeader("Cache-Control", "no-store");
     res.setHeader("Content-Disposition", 'attachment; filename="memory-export.json"');
-    res.json(await svc.export(companyId, boardActor(req)));
+    const exported = await svc.export(companyId, boardActor(req));
+    res.json({ ...exported, records: exported.records.map(publicNativePayloadRow) });
   });
   router.get("/companies/:companyId/memory/deletion-ledger", async (req, res) => {
     const companyId = req.params.companyId as string;
@@ -154,7 +160,7 @@ export function memoryRoutes(db: Db) {
     const companyId = req.params.companyId as string;
     assertBoardCompany(req, companyId);
     const query = memoryRecordListQuerySchema.parse(req.query);
-    res.json(await svc.listReviewable(companyId, query, boardActor(req)));
+    res.json((await svc.listReviewable(companyId, query, boardActor(req))).map(publicNativePayloadRow));
   });
 
   router.get("/companies/:companyId/memory/records/:recordId", async (req, res) => {
@@ -170,7 +176,7 @@ export function memoryRoutes(db: Db) {
       res.status(404).json({ error: "Memory record not found" });
       return;
     }
-    res.json(detail);
+    res.json(publicMemoryDetail(detail));
   });
 
   router.post(
@@ -192,7 +198,7 @@ export function memoryRoutes(db: Db) {
         (created.resolution.kind === "contradiction" &&
           created.resolution.targetRecordId === created.record.id);
       const status = reusedExistingRecord ? 200 : 201;
-      res.status(status).json(created);
+      res.status(status).json(publicMemoryDetail(created));
     },
   );
 
@@ -207,12 +213,12 @@ export function memoryRoutes(db: Db) {
       const recordId = req.params.recordId as string;
       await assertSharedRecord(companyId, recordId, actor);
       res.json(
-        await svc.reviewCandidate(
+        publicMemoryDetail(await svc.reviewCandidate(
           companyId,
           recordId,
           { decision: "accept", reason: req.body.reason ?? null },
           actor,
-        ),
+        )),
       );
     },
   );
@@ -233,12 +239,12 @@ export function memoryRoutes(db: Db) {
       const recordId = req.params.recordId as string;
       await assertSharedRecord(companyId, recordId, actor);
       res.json(
-        await svc.reviewCandidate(
+        publicMemoryDetail(await svc.reviewCandidate(
           companyId,
           recordId,
           { decision: "reject", reason: req.body.reason },
           actor,
-        ),
+        )),
       );
     },
   );
@@ -259,7 +265,7 @@ export function memoryRoutes(db: Db) {
         req.body,
         actor,
       );
-      res.status(201).json(created);
+      res.status(201).json(publicMemoryDetail(created));
     },
   );
 
@@ -274,12 +280,12 @@ export function memoryRoutes(db: Db) {
       const recordId = req.params.recordId as string;
       await assertSharedRecord(companyId, recordId, actor);
       res.json(
-        await svc.revoke(
+        publicMemoryDetail(await svc.revoke(
           companyId,
           recordId,
           req.body,
           actor,
-        ),
+        )),
       );
     },
   );

@@ -1,3 +1,4 @@
+import { publicNativePayloadRow } from "../services/native-payload-public.js";
 import { experienceTaskReceiptSchema, v9FeatureEnabled } from "@paperclipai/shared";
 import { queuedInteractionId, readQueuedInteractionResponse, hasQueuedInteractionResponse } from "../services/queued-interaction-response.js";
 import {assertAnalyticalContextPayloadAccess} from "../services/analytical-context-authority.js";
@@ -5339,7 +5340,7 @@ export function issueRoutes(
     id: string; blockedBy?: IssueRelationIssueSummary[]; blocks?: IssueRelationIssueSummary[];
     blockedByIssueIds?: string[]; blockerAttention?: CompactIssue["blockerAttention"];
     blockedInboxAttention?: CompactIssue["blockedInboxAttention"]; activeRecoveryAction?: CompactIssue["activeRecoveryAction"];
-  }>(req: Request, companyId: string, rows: T[]): Promise<T[]> {
+  }>(req: Request, companyId: string, rows: T[]): Promise<Array<Omit<T, "payloadSourceProtocolVersion" | "payloadSourceSnapshot">>> {
     const ids = new Set(rows.map(row => row.id));
     const pending = rows.flatMap(row => [...(row.blockedBy ?? []), ...(row.blocks ?? [])]);
     for (const row of rows) {
@@ -5383,7 +5384,7 @@ export function issueRoutes(
       if (recovery && (!readable.has(recovery.sourceIssueId) || (recovery.recoveryIssueId && !readable.has(recovery.recoveryIssueId)))) {
         projected.activeRecoveryAction = null;
       }
-      return projected;
+      return publicNativePayloadRow(projected);
     });
   }
 
@@ -8876,7 +8877,7 @@ export function issueRoutes(
           }
         : null,
       commentCursor,
-      wakeComment: safeWakeComment,
+      wakeComment: safeWakeComment ? publicNativePayloadRow(safeWakeComment) : null,
       attachments: attachments.map((a) => ({
         id: a.id,
         filename: a.originalFilename,
@@ -9308,7 +9309,7 @@ export function issueRoutes(
       ...documentPayload,
       project: compactIssueProject(project),
       goal: goal ?? null,
-      mentionedProjects,
+      mentionedProjects: mentionedProjects.map(publicNativePayloadRow),
       currentExecutionWorkspace: compactIssueExecutionWorkspace(
         currentExecutionWorkspace,
       ),
@@ -10449,7 +10450,7 @@ export function issueRoutes(
         },
       });
 
-      res.status(201).json(comment);
+      res.status(201).json(publicNativePayloadRow(comment));
     },
   );
 
@@ -12695,7 +12696,7 @@ export function issueRoutes(
       });
       await queueTaskWatchdogEvaluation(issue, actor.runId);
 
-      res.status(201).json(issue);
+      res.status(201).json(publicNativePayloadRow(issue));
     },
   );
 
@@ -15440,7 +15441,7 @@ export function issueRoutes(
     });
 
     await queueTaskWatchdogEvaluation(existing, actor.runId);
-    res.json(issue);
+    res.json(publicNativePayloadRow(issue));
   });
 
   router.post(
@@ -15593,7 +15594,7 @@ export function issueRoutes(
           );
       }
 
-      res.json(updated);
+      res.json(publicNativePayloadRow(updated));
     },
   );
 
@@ -15681,7 +15682,7 @@ export function issueRoutes(
       },
     });
 
-    res.json(result);
+    res.json({ ...result, issue: publicNativePayloadRow(result.issue) });
   });
 
   router.get("/issues/:id/comments", async (req, res) => {
@@ -15720,7 +15721,7 @@ export function issueRoutes(
       limit,
     });
     res.json(
-      await redactIssueResponse(req, issue.companyId, issue.id, comments),
+      await redactIssueResponse(req, issue.companyId, issue.id, comments.map(publicNativePayloadRow)),
     );
   });
 
@@ -17303,7 +17304,7 @@ export function issueRoutes(
       return;
     }
     res.json(
-      await redactIssueResponse(req, issue.companyId, issue.id, comment),
+      await redactIssueResponse(req, issue.companyId, issue.id, publicNativePayloadRow(comment)),
     );
   });
 
@@ -17441,7 +17442,7 @@ export function issueRoutes(
     }
 
     if (comment.deletedAt) {
-      res.json(comment);
+      res.json(publicNativePayloadRow(comment));
       return;
     }
 
@@ -17667,7 +17668,7 @@ export function issueRoutes(
       await logActivity(db, { companyId, actorType: "user", actorId: req.actor.userId,
         action: "issue.conversation_opened", entityType: "issue", entityId: issue.id,
         details: { agentId: agent.id } });
-      res.json(issue);
+      res.json(publicNativePayloadRow(issue));
     });
   }
 
@@ -17714,7 +17715,7 @@ export function issueRoutes(
         for (const publication of publications) publishActivity(publication);
         await issueReferencesSvc.syncComment(comment.id);
         await deliverConversationComments(db, issue, heartbeat.wakeup);
-        res.status(201).json(comment);
+        res.status(201).json(publicNativePayloadRow(comment));
         return;
       }
       if (req.actor.type === "agent" && req.body.onBehalfOfUserId != null) {
@@ -18746,7 +18747,7 @@ export function issueRoutes(
       })();
 
       await queueTaskWatchdogEvaluation(currentIssue, actor.runId);
-      res.status(201).json(comment);
+      res.status(201).json(publicNativePayloadRow(comment));
     },
   );
 

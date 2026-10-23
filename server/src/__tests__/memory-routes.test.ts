@@ -5,6 +5,8 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
   agents,
+  authUsers,
+  heartbeatRuns,
   companies,
   companyMemberships,
   createDb,
@@ -20,6 +22,7 @@ import {
 } from "./helpers/embedded-postgres.js";
 import { errorHandler } from "../middleware/error-handler.js";
 import { memoryRoutes } from "../routes/memory.js";
+import { initializeRunIdentity } from "../services/run-identity.js";
 import { memoryService } from "../services/memory/memory-service.js";
 
 const support = await getEmbeddedPostgresTestSupport();
@@ -57,8 +60,10 @@ describePg("Memory routes", () => {
     await db.delete(memoryBindingTargets);
     await db.delete(memoryBindings);
     await db.delete(companyMemberships);
+    await db.delete(heartbeatRuns);
     await db.delete(agents);
     await db.delete(companies);
+    await db.delete(authUsers);
     await db.delete(instanceSettings);
   });
 
@@ -81,6 +86,8 @@ describePg("Memory routes", () => {
   async function seed() {
     const companyId = randomUUID();
     const userId = `user-${companyId}`;
+    await db.insert(authUsers).values({ id: userId, name: "Actual Memory Human", email: `${userId}@example.test`,
+      createdAt: new Date(), updatedAt: new Date() });
     await db.insert(companies).values({
       id: companyId,
       name: "Memory Route Co",
@@ -313,6 +320,9 @@ describePg("Memory routes", () => {
       { targetType: "agent", targetId: seeded.agent.id },
       systemActor,
     );
+    const [run] = await db.insert(heartbeatRuns).values({ companyId: seeded.companyId, agentId: seeded.agent.id,
+      responsibleUserId: seeded.userId, runtimeMode: "native", scopeKind: "company", status: "running" }).returning();
+    await initializeRunIdentity(db, { companyId: seeded.companyId, runId: run!.id, responsibleUserId: seeded.userId, cause: "dispatch" });
     const privateCandidate = await svc.createCandidate(
       seeded.companyId,
       {
@@ -336,7 +346,7 @@ describePg("Memory routes", () => {
         metadata: {},
         evidence: supportingEvidence("Prefer concise status updates."),
       },
-      { principal: { type: "agent", agentId: seeded.agent.id } },
+      { principal: { type: "agent", agentId: seeded.agent.id, responsibleUserId: seeded.userId }, runId: run!.id },
     );
 
     const http = request(app(board(seeded.userId, seeded.companyId)));

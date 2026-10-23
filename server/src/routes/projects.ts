@@ -1,3 +1,4 @@
+import { publicNativePayloadRow } from "../services/native-payload-public.js";
 import { createHash } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { activityLog, agents, authUsers, companyMemberships, projectAccessMembers, projects } from "@paperclipai/db";
@@ -259,7 +260,7 @@ export function projectRoutes(db: Db) {
       action: "project.repositories_updated", entityType: "project", entityId: project.id,
       details: { repositoryIds: repositories.map((repo) => repo.id) },
     });
-    res.json(updated);
+    res.json(updated ? publicNativePayloadRow(updated) : updated);
   });
 
   router.get("/companies/:companyId/projects", async (req, res) => {
@@ -271,14 +272,14 @@ export function projectRoutes(db: Db) {
       readCondition: await projectReadSqlCondition(db, req.actor),
       issueReadCondition: await issueReadSqlCondition(db, req.actor),
     });
-    res.json(await filterProjectsForActor(req, result));
+    res.json((await filterProjectsForActor(req, result)).map(publicNativePayloadRow));
   });
 
   router.get("/projects/:id", async (req, res) => {
     const id = req.params.id as string;
     const project = await getReadableProject(req, res, id);
     if (!project) return;
-    res.json(project);
+    res.json(publicNativePayloadRow(project));
   });
 
   router.get("/projects/:id/external-object-summary", async (req, res) => {
@@ -421,12 +422,12 @@ export function projectRoutes(db: Db) {
     if (result.publication) publishActivity(result.publication);
     if (result.project.env) await secretsSvc.syncEnvBindingsForTarget?.(companyId, { targetType: "project", targetId: result.project.id }, result.project.env);
     if (!(await assertProjectReadAllowed(req, res, result.project))) return;
-    if (result.duplicate) { res.status(200).json(result.project); return; }
+    if (result.duplicate) { res.status(200).json(publicNativePayloadRow(result.project)); return; }
     const telemetryClient = getTelemetryClient();
     if (telemetryClient) {
       trackProjectCreated(telemetryClient);
     }
-    res.status(result.duplicate ? 200 : 201).json(result.project);
+    res.status(result.duplicate ? 200 : 201).json(publicNativePayloadRow(result.project));
   });
 
   router.patch("/projects/:id", validate(updateProjectSchema), async (req, res) => {
@@ -484,7 +485,7 @@ export function projectRoutes(db: Db) {
       },
     });
 
-    res.json(project);
+    res.json(publicNativePayloadRow(project));
   });
 
   router.get("/projects/:id/workspaces", async (req, res) => {
@@ -982,7 +983,7 @@ export function projectRoutes(db: Db) {
       entityId: project.id,
     });
 
-    res.json(project);
+    res.json(publicNativePayloadRow(project));
   });
 
   return router;

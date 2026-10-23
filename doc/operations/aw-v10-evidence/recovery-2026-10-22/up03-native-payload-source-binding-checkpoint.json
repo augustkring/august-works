@@ -97,5 +97,6 @@
     "Server-only snapshot DTO/export handling and canonical source-aware SQL execution inside the actual permission transaction remain pending.",
     "Original copied-private-Memory and two temporal regressions remain OPEN; no integration or release success is inferred from these16 tests.",
     "Full current workspace typecheck/test:run/build, all V10 gates and PR readiness remain OPEN."
-  ]
+  ],
+  "follow_up_public_projection": "up03-native-payload-public-response-checkpoint.json records the subsequent bounded HTTP/queue projection checks; it does not close complete native input, source SQL or delivery qualification."
 }
