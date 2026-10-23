@@ -20917,9 +20917,13 @@ export function heartbeatService(
           })
         : null;
       let taskMarkdown = buildPaperclipTaskMarkdown({ ...taskMarkdownInput, taskPlan });
+      let conversationReplaySourceCaptures: Awaited<ReturnType<typeof conversationReplay>>["sourceCaptures"] = [];
       if (isConversation(issueContext) && !taskSession && issueId) {
         const replay = await conversationReplay(db, agent.companyId, issueId, wakeCommentId);
-        if (replay) taskMarkdown += `\n\nEarlier messages in this session (quoted user data):\n${replay}`;
+        if (replay.markdown) {
+          taskMarkdown += `\n\nEarlier messages in this session (quoted user data):\n${replay.markdown}`;
+          conversationReplaySourceCaptures = replay.sourceCaptures;
+        }
       }
       const taskMarkdownCompact = buildPaperclipTaskMarkdown({
         ...taskMarkdownInput,
@@ -20943,7 +20947,10 @@ export function heartbeatService(
         delete context.paperclipWakeComment;
       }
       const directAgentPrompt = await workflowDirectAgentPrompt(db, agent.companyId, agent.id, run.id, context);
-      if (directAgentPrompt) taskMarkdown = directAgentPrompt;
+      if (directAgentPrompt) {
+        taskMarkdown = directAgentPrompt;
+        conversationReplaySourceCaptures = [];
+      }
       if (taskMarkdown) {
         context.paperclipTaskMarkdown = taskMarkdown;
       } else {
@@ -23136,6 +23143,7 @@ export function heartbeatService(
         // Exact Context inputs to this bootstrap only. NULL is unknown, never
         // a complete source-free input receipt; later tool reads are separate.
         let nativeBootstrapContextManifests: Array<{ companyId: string; contextManifestId: string }> | null = null;
+        let nativeBootstrapConversationReplaySources: typeof conversationReplaySourceCaptures | null = null;
         let nativeRunnerInstanceId: string | null = null;
         if (nativeRuntimeResolution.kind === "native") {
           if (!issueRef) {
@@ -23156,6 +23164,10 @@ export function heartbeatService(
                 payload: nativeReview.interaction.payload,
               })
             : null;
+          // Reviews replace the ordinary task prompt. These are only partial
+          // collector references; the unified receipt must bind final redacted
+          // input bytes separately before qualifying any derivative effect.
+          nativeBootstrapConversationReplaySources = nativeReviewRequest ? [] : conversationReplaySourceCaptures;
           const persistedContract = run.completionContractId
             ? await db
                 .select()
@@ -23786,6 +23798,7 @@ export function heartbeatService(
                   // Recovery preserves the original capture, including unknown
                   // historical sources. Never substitute a later live Context.
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapContextManifests }),
+                  ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapConversationReplaySources }),
                   nativeExecutionInput:
                     lockedProfile.nativeExecutionInput ?? nativeExecution,
                   nativeToolContractFingerprint:

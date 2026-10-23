@@ -9,8 +9,8 @@ import request from "supertest";
 import { issueRoutes } from "../routes/issues.js";
 import { errorHandler } from "../middleware/index.js";
 import { actorMiddleware } from "../middleware/auth.js";
-import { randomUUID } from "node:crypto";
-import { and, eq } from "drizzle-orm";
+import { createHash, randomUUID } from "node:crypto";
+import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
@@ -52,6 +52,7 @@ import {
 } from "../services/agent-conversations.js";
 import { classifyIssueGraphLiveness } from "../services/recovery/issue-graph-liveness.js";
 import { runningProcesses } from "../adapters/index.js";
+import { buildLowTrustSourceTrust, LOW_TRUST_QUARANTINED_BODY } from "../services/source-trust.js";
 import {
   buildPaperclipTaskMarkdown,
   buildPaperclipWakePayload,
@@ -407,7 +408,7 @@ const support = await getEmbeddedPostgresTestSupport();
         { userId: "local-board" },
       );
       expect(
-        await conversationReplay(db, companyId, issue.id, next.id),
+        (await conversationReplay(db, companyId, issue.id, next.id)).markdown,
       ).not.toContain("Old session");
       const payload = await buildPaperclipWakePayload({
         db, companyId,
@@ -424,11 +425,71 @@ const support = await getEmbeddedPostgresTestSupport();
         { userId: "local-board" },
       );
       expect(
-        await conversationReplay(db, companyId, issue.id, later.id),
+        (await conversationReplay(db, companyId, issue.id, later.id)).markdown,
       ).toContain("Fresh context");
       expect(
-        await conversationReplay(db, companyId, issue.id, next.id),
+        (await conversationReplay(db, companyId, issue.id, next.id)).markdown,
       ).not.toContain("Following turn");
+    });
+    it("captures replay renditions, exact selected versions and unknown source history without rereading", async () => {
+      const issue = await create();
+      const [captured] = await db.insert(issueComments).values({ companyId, issueId: issue.id,
+        authorUserId: "local-board", body: "Long replay ".repeat(900), payloadSourceProtocolVersion: 1,
+        createdAt: new Date("2026-10-01T00:00:01Z") }).returning();
+      const [quarantined] = await db.insert(issueComments).values({ companyId, issueId: issue.id,
+        authorAgentId: agentId, body: "PRIVATE_QUARANTINED_REPLAY",
+        sourceTrust: buildLowTrustSourceTrust({ issueId: issue.id, agentId }),
+        createdAt: new Date("2026-10-01T00:00:02Z") }).returning();
+      // A structural binding fixture, not production source qualification.
+      // The actual PostgreSQL envelope hash differs from the rendered line.
+      const [sealed] = await db.execute<{ snapshot: Record<string, unknown> }>(sql`
+        with body as (select public.aw_native_payload_body_hash('comment',to_jsonb(c)) as hash
+          from issue_comments c where c.id=${captured!.id}::uuid), content as (
+          select jsonb_build_object('version',1,'owner',jsonb_build_object('kind','comment','companyId',${companyId}::text,
+            'id',${captured!.id}::text,'contentHash',hash),'policy',jsonb_build_object('issueIds','[]'::jsonb,
+            'projectIds','[]'::jsonb,'runIds','[]'::jsonb,'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),
+            'inputs','[]'::jsonb) as value from body)
+        update issue_comments set payload_source_snapshot=value || jsonb_build_object('digest',encode(sha256(convert_to(value::text,'UTF8')),'hex')),
+          updated_at='2026-10-01T01:02:03.123456Z'::timestamptz from content where id=${captured!.id}::uuid
+        returning payload_source_snapshot as snapshot`);
+      const replay = await conversationReplay(db, companyId, issue.id, null);
+      const lines = [JSON.stringify({ author: "user", body: captured!.body.slice(0,8000) }),
+        JSON.stringify({ author: "agent", body: LOW_TRUST_QUARANTINED_BODY })];
+      expect(replay.markdown).toBe(lines.join("\n"));
+      expect(replay.markdown).not.toContain("PRIVATE_QUARANTINED_REPLAY");
+      const [version] = await db.execute<{ version: string }>(sql`select extract(epoch from updated_at)::text as version
+        from issue_comments where id=${captured!.id}::uuid`);
+      expect(version!.version).toMatch(/123456$/);
+      expect(replay.sourceCaptures).toEqual([
+        { input: { kind: "comment", issueId: issue.id, commentId: captured!.id, sourceVersion: version!.version,
+          contentHash: createHash("sha256").update(lines[0]!,"utf8").digest("hex") }, payloadSourceSnapshot: sealed!.snapshot },
+        { input: { kind: "comment", issueId: issue.id, commentId: quarantined!.id,
+          sourceVersion: expect.any(String), contentHash: createHash("sha256").update(lines[1]!,"utf8").digest("hex") },
+          payloadSourceSnapshot: null },
+      ]);
+      await db.update(issueComments).set({ body: "Later replacement", payloadSourceSnapshot: null }).where(eq(issueComments.id,captured!.id));
+      expect(replay.sourceCaptures[0]!.payloadSourceSnapshot).toEqual(sealed!.snapshot);
+      expect(replay.markdown).toBe(lines.join("\n"));
+      const ordinary = await issueService(db).create(companyId,{ title: "Ordinary task" });
+      expect(await conversationReplay(db,companyId,ordinary.id,null)).toEqual({ markdown: "",sourceCaptures: [] });
+    });
+    it("captures replay only for the newest forty live comments between boundary and wake in delivery order", async () => {
+      const issue = await create();
+      const base = Date.parse("2026-10-02T00:00:00Z");
+      const [boundary] = await db.insert(issueComments).values({companyId,issueId:issue.id,body:"/new",authorUserId:"local-board",createdAt:new Date(base)}).returning();
+      await db.update(issues).set({conversationBoundaryCommentId:boundary!.id}).where(eq(issues.id,issue.id));
+      const rows = await db.insert(issueComments).values(Array.from({length:45},(_,i)=>({companyId,issueId:issue.id,
+        body:`Replay ${i}`,authorUserId:"local-board",createdAt:new Date(base+(i+1)*1000)}))).returning();
+      const [wake] = await db.insert(issueComments).values({companyId,issueId:issue.id,body:"Wake",authorUserId:"local-board",createdAt:new Date(base+50000)}).returning();
+      await db.insert(issueComments).values([
+        {companyId,issueId:issue.id,body:"Deleted",createdAt:new Date(base+49000),deletedAt:new Date()},
+        {companyId,issueId:issue.id,body:"Future",createdAt:new Date(base+51000)},
+        {companyId,issueId:issue.id,body:"Prior",createdAt:new Date(base-1000)},
+      ]);
+      const replay = await conversationReplay(db,companyId,issue.id,wake!.id);
+      expect(replay.sourceCaptures.map(capture=>capture.input.commentId)).toEqual(rows.slice(5).map(row=>row.id));
+      expect(replay.sourceCaptures.every(capture=>capture.payloadSourceSnapshot===null)).toBe(true);
+      expect(replay.markdown.split("\n").map(line=>JSON.parse(line).body)).toEqual(rows.slice(5).map(row=>row.body));
     });
     it("projects the resolved chat plan review into fresh and resumed prompts without replaying old reviews", async () => {
       const issue = await create();

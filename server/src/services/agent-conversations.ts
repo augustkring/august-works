@@ -4,7 +4,9 @@ import {
   type ActivityPublication,
 } from "./activity-log.js";
 import type { NativeStatusDecision } from "./native-runtime/status-arbiter.js";
-import { and, desc, eq, isNull, sql } from "drizzle-orm";
+import { createHash } from "node:crypto";
+import type { NativePayloadSourceInput, NativePayloadSourceSnapshot } from "@paperclipai/shared";
+import { and, desc, eq, getTableColumns, isNull, sql } from "drizzle-orm";
 import {
   agentTaskSessions,
   agentWakeupRequests,
@@ -353,6 +355,12 @@ export async function settleConversationTurn(
 }
 
 /** Fresh provider context uses only messages in this session, up to this turn. */
+export interface ConversationReplaySourceCapture {
+  readonly input: Extract<NativePayloadSourceInput, { kind: "comment" }>;
+  // Preserve unknown history. A rendition hash is not a completeness proof.
+  readonly payloadSourceSnapshot: NativePayloadSourceSnapshot | null;
+}
+
 export async function conversationReplay(
   db: Db,
   companyId: string,
@@ -363,7 +371,7 @@ export async function conversationReplay(
     .select()
     .from(issues)
     .where(and(eq(issues.id, issueId), eq(issues.companyId, companyId)));
-  if (!isConversation(issue)) return "";
+  if (!isConversation(issue)) return { markdown: "", sourceCaptures: [] as ConversationReplaySourceCapture[] };
   const [boundary] = issue.conversationBoundaryCommentId
     ? await db
         .select()
@@ -382,7 +390,12 @@ export async function conversationReplay(
         )
     : [];
   const rows = await db
-    .select()
+    .select({
+      ...getTableColumns(issueComments),
+      // Preserve PostgreSQL microseconds from the same selected rendition;
+      // JavaScript Date would silently truncate this source version.
+      sourceVersion: sql<string>`extract(epoch from ${issueComments.updatedAt})::text`,
+    })
     .from(issueComments)
     .where(
       and(
@@ -399,15 +412,22 @@ export async function conversationReplay(
     )
     .orderBy(desc(issueComments.createdAt), desc(issueComments.id))
     .limit(40);
-  return rows
-    .reverse()
-    .map((row) =>
-      JSON.stringify({
-        author: row.authorAgentId ? "agent" : "user",
-        body: sanitizeQuarantinedCommentForHigherTrust(row).body.slice(0, 8000),
-      }),
-    )
-    .join("\n");
+  const lines: string[] = [];
+  const sourceCaptures: ConversationReplaySourceCapture[] = [];
+  for (const row of rows.reverse()) {
+    const line = JSON.stringify({
+      author: row.authorAgentId ? "agent" : "user",
+      body: sanitizeQuarantinedCommentForHigherTrust(row).body.slice(0, 8000),
+    });
+    lines.push(line);
+    sourceCaptures.push({
+      input: { kind: "comment", issueId: row.issueId, commentId: row.id, sourceVersion: row.sourceVersion,
+        // Exact collector rendition, not the PostgreSQL owner-envelope hash.
+        contentHash: createHash("sha256").update(line, "utf8").digest("hex") },
+      payloadSourceSnapshot: row.payloadSourceSnapshot,
+    });
+  }
+  return { markdown: lines.join("\n"), sourceCaptures };
 }
 
 /** Comment rows form a durable outbox for the narrow commit-to-enqueue crash window. */
