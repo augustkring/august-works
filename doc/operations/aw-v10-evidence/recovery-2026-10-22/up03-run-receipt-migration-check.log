@@ -1,0 +1,5 @@
+
+> @paperclipai/db@0.3.1 check:migrations /workspace/blentera-v10/packages/db
+> tsx src/check-migration-numbering.ts && tsx src/check-migration-safety.ts
+
+Migration safety check passed: 20 historical finding(s) covered by baseline (1 stale baseline id(s) ignored).
