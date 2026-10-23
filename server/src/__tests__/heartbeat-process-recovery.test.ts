@@ -12639,6 +12639,31 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
         prepared?.runnerProfileJson?.[CHAT_CONTROL_RECOVERY_ADMISSION_KEY],
       ).toEqual(retained);
       expect(readChatControlRecoveryAdmission(prepared!)).toBe(mode);
+
+      // A stale caller snapshot must not erase newer DB-owned input history.
+      // This fixture preserves partial/unknown bytes; it qualifies no receipt.
+      const latestProfile = {
+        ...prepared!.runnerProfileJson,
+        turnId: randomUUID(), itemId: randomUUID(), environmentLeaseId: randomUUID(),
+        nativeExecutionInput: null,
+        nativeBootstrapTaskSource: null,
+        sessionCheckpoint: null,
+        nativeAttachmentStageSources: [{ eventSeq: 7, attempt: 1,
+          responsibleUserId: prepared!.responsibleUserId,
+          sourceCaptures: [{ input: { kind: "attachment", issueId: issue!.id,
+            attachmentId: randomUUID(), commentId: null, assetId: null, sha256: null, byteSize: null,
+            disposition: "attachment_binding_unavailable" }, payloadSourceSnapshot: null }],
+        }],
+      };
+      await db.update(heartbeatRuns).set({ runnerProfileJson: latestProfile })
+        .where(eq(heartbeatRuns.id, child.runId));
+      const repeated = await prepareNativeHeartbeatRun({ db, run: prepared!, issue: issue!, environmentLeaseId: randomUUID() });
+      const [after] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, child.runId));
+      expect(after!.runnerProfileJson).toEqual(latestProfile);
+      expect(after!.nativeInputSourceProtocolVersion).toBe(0);
+      expect(repeated).toMatchObject({ turnId: latestProfile.turnId, itemId: latestProfile.itemId,
+        environmentLeaseId: latestProfile.environmentLeaseId });
+      expect(readChatControlRecoveryAdmission(after!)).toBe(mode);
     },
   );
 

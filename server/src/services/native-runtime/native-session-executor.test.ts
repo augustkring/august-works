@@ -172,9 +172,11 @@ const state = vi.hoisted(() => ({
   stageNativeRunnerWakeAttachments: vi.fn(
     async (): Promise<{
       attachments: Array<Record<string, unknown>>;
+      sourceCaptures?: Array<Record<string, unknown>>;
       cleanup: () => Promise<void>;
     }> => ({
       attachments: [],
+      sourceCaptures: [],
       cleanup: vi.fn(async () => undefined),
     }),
   ),
@@ -4625,6 +4627,7 @@ function leaseDb(
   updates: Array<{ table: unknown; values: Record<string, unknown> }> = [],
   runnerProfileJson: Record<string, unknown> = {},
   runStatus = "running",
+  failAttachmentCaptureWrite = false,
 ): Db {
   const coordinator: LeaseCoordinator = {
     runId: boundExecution.binding.runId,
@@ -4641,7 +4644,23 @@ function leaseDb(
     set: (values: Record<string, unknown>) => {
       return {
         where: () => {
+          if (
+            failAttachmentCaptureWrite &&
+            table === heartbeatRuns &&
+            values.runnerProfileJson &&
+            typeof values.runnerProfileJson === "object" &&
+            "nativeAttachmentStageSources" in values.runnerProfileJson
+          ) {
+            throw new Error("native_attachment_stage_capture_write_failed");
+          }
           updates.push({ table, values });
+          if (
+            table === heartbeatRuns &&
+            values.runnerProfileJson &&
+            typeof values.runnerProfileJson === "object"
+          ) {
+            runnerProfileJson = structuredClone(values.runnerProfileJson) as Record<string, unknown>;
+          }
           const result = Promise.resolve([]) as unknown as Promise<
             unknown[]
           > & {
@@ -7835,6 +7854,30 @@ describe("runnerd provider runtime wiring", () => {
 
   it("stages from the authenticated run snapshot and cleans up after the provider turn", async () => {
     const cleanup = vi.fn(async () => undefined);
+    const attachmentCapture = {
+      input: {
+        kind: "attachment",
+        issueId: execution.binding.issueId,
+        attachmentId: "00000000-0000-4000-8000-000000009201",
+        commentId: null,
+        assetId: "00000000-0000-4000-8000-000000009204",
+        sha256: "a".repeat(64),
+        byteSize: 12,
+        disposition: "delivered",
+      },
+      // NULL deliberately retains unknown source history.
+      payloadSourceSnapshot: null,
+    };
+    const priorAttempt = {
+      eventSeq: 0,
+      attempt: 1,
+      sourceCaptures: [{ ...attachmentCapture, input: { ...attachmentCapture.input, attachmentId: "00000000-0000-4000-8000-000000009205" } }],
+    };
+    const runnerProfileJson = {
+      nativeAttachmentStageSources: [priorAttempt],
+      retainedProfileValue: "preserved",
+    };
+    const updates: Array<{ table: unknown; values: Record<string, unknown> }> = [];
     state.stageNativeRunnerWakeAttachments.mockResolvedValueOnce({
       attachments: [
         {
@@ -7847,23 +7890,13 @@ describe("runnerd provider runtime wiring", () => {
           unavailableReason: null,
         },
       ],
+      sourceCaptures: [attachmentCapture],
       cleanup,
     });
     state.renderNativeRunnerStagedAttachmentPrompt.mockReturnValueOnce(
       "Paperclip native attachment access: staged.",
     );
-    state.execute.mockReset().mockResolvedValueOnce({
-      result: { summary: "completed" },
-      terminal: { runTerminalState: "succeeded" },
-      turnId: "turn-attachment-cleanup",
-      normalizedSessionId: "session-attachment-cleanup",
-      providerSessionId: null,
-      driverKind: "test",
-      driverVersion: "1",
-      nativeEventCount: 1,
-      highestContiguousSourceSeq: 1,
-      usage: null,
-    });
+    let providerAdmissionReached = false;
     const stagedExecution = {
       ...execution,
       binding: {
@@ -7876,14 +7909,56 @@ describe("runnerd provider runtime wiring", () => {
       },
     } as NativeExecutionInputV1;
 
+    state.execute.mockReset().mockImplementationOnce(async (options) => {
+      await options.onSessionAdmission();
+      const startEvent = updates.find(({ table, values }) =>
+        table === heartbeatRunEvents && values.eventType === "native.process_start_requested",
+      );
+      expect(startEvent).toBeDefined();
+      expect(startEvent!.values.runId).toBe(stagedExecution.binding.runId);
+      const profileWrite = updates.find(({ table, values }) =>
+        table === heartbeatRuns && values.runnerProfileJson &&
+        typeof values.runnerProfileJson === "object" &&
+        "nativeAttachmentStageSources" in values.runnerProfileJson,
+      );
+      expect(profileWrite).toBeDefined();
+      const savedProfile = profileWrite!.values.runnerProfileJson as Record<string, unknown>;
+      const attempts = savedProfile.nativeAttachmentStageSources as Array<Record<string, unknown>>;
+      expect(attempts).toHaveLength(2);
+      expect(attempts[0]).toEqual(priorAttempt);
+      expect(attempts[1]).toMatchObject({
+        eventSeq: startEvent!.values.seq,
+        attempt: expect.any(Number),
+        responsibleUserId: null,
+        sourceCaptures: [attachmentCapture],
+      });
+      expect(JSON.stringify(attempts[1])).not.toContain(".paperclip-inbound");
+      expect(JSON.stringify(attempts[1])).not.toContain(stagedExecution.workspace.cwd);
+      expect(savedProfile.retainedProfileValue).toBe("preserved");
+      providerAdmissionReached = true;
+      return {
+        result: { summary: "completed" },
+        terminal: { runTerminalState: "succeeded" },
+        turnId: "turn-attachment-cleanup",
+        normalizedSessionId: "session-attachment-cleanup",
+        providerSessionId: null,
+        driverKind: "test",
+        driverVersion: "1",
+        nativeEventCount: 1,
+        highestContiguousSourceSeq: 1,
+        usage: null,
+      };
+    });
+
     await expect(
       executePaperclipNativeSession({
-        db: leaseDb(stagedExecution),
+        db: leaseDb(stagedExecution, {}, {}, updates, runnerProfileJson),
         execution: stagedExecution,
         runnerInstanceId: "runner-attachment-cleanup",
         useRunnerd: true,
       }),
     ).resolves.toBeDefined();
+    expect(providerAdmissionReached).toBe(true);
 
     expect(state.stageNativeRunnerWakeAttachments).toHaveBeenCalledWith(
       expect.objectContaining({
@@ -7910,6 +7985,62 @@ describe("runnerd provider runtime wiring", () => {
         attachmentId: "unused",
       }),
     ).toThrow("scope_closed");
+  });
+
+  it("does not admit the provider when staged attachment capture persistence fails", async () => {
+    const cleanup = vi.fn(async () => undefined);
+    const attachmentCapture = {
+      input: {
+        kind: "attachment",
+        issueId: execution.binding.issueId,
+        attachmentId: "00000000-0000-4000-8000-000000009201",
+        commentId: null,
+        assetId: "00000000-0000-4000-8000-000000009204",
+        sha256: "a".repeat(64),
+        byteSize: 12,
+        disposition: "delivered",
+      },
+      payloadSourceSnapshot: null,
+    };
+    state.stageNativeRunnerWakeAttachments.mockResolvedValueOnce({
+      attachments: [{
+        id: attachmentCapture.input.attachmentId,
+        filename: "inbound.txt",
+        contentType: "text/plain",
+        byteSize: 12,
+        workspaceRelativePath: ".paperclip-inbound/run/00000000-0000-4000-8000-000000009202",
+        unavailableReason: null,
+      }],
+      sourceCaptures: [attachmentCapture],
+      cleanup,
+    });
+    let providerAdmissionReached = false;
+    state.createTransport.mockClear();
+    state.execute.mockReset().mockImplementationOnce(async (options) => {
+      await options.onSessionAdmission();
+      providerAdmissionReached = true;
+      return {
+        result: { summary: "must not be dispatched" },
+        terminal: { runTerminalState: "succeeded" },
+        turnId: "turn-capture-write-failure", normalizedSessionId: "session-capture-write-failure",
+        providerSessionId: null, driverKind: "test", driverVersion: "1",
+        nativeEventCount: 1, highestContiguousSourceSeq: 1, usage: null,
+      };
+    });
+    const stagedExecution = {
+      ...execution,
+      binding: { ...execution.binding, runId: "run-runnerd-attachment-capture-failure" },
+    } as NativeExecutionInputV1;
+
+    await expect(executePaperclipNativeSession({
+      db: leaseDb(stagedExecution, {}, {}, [], {}, "running", true),
+      execution: stagedExecution,
+      runnerInstanceId: "runner-attachment-capture-failure",
+      useRunnerd: true,
+    })).rejects.toThrow("native_attachment_stage_capture_write_failed");
+    expect(providerAdmissionReached).toBe(false);
+    expect(state.createTransport).not.toHaveBeenCalled();
+    expect(cleanup).toHaveBeenCalledTimes(1);
   });
 
   it("passes the run checkpoint active turn into restart recovery", async () => {

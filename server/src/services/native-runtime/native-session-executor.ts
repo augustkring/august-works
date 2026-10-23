@@ -133,6 +133,7 @@ import {
 import {
   renderNativeRunnerStagedAttachmentPrompt,
   stageNativeRunnerWakeAttachments,
+  type NativeRunnerAttachmentSourceCapture,
 } from "./native-runner-file-handoff.js";
 import { nativeToolContractFingerprintForTarget } from "./native-session-resume.js";
 import { verifyRetainedMaintenanceNoLaunch } from "./native-maintenance-no-launch.js";
@@ -7242,7 +7243,7 @@ export async function executePaperclipNativeSession(input: {
         }),
       };
     }
-    return await executePaperclipNativeSessionWithinScope(preparedInput);
+    return await executePaperclipNativeSessionWithinScope(preparedInput, attachmentStage.sourceCaptures);
   } catch (error) {
     executionFailure = error;
     throw error;
@@ -7284,7 +7285,9 @@ export async function executePaperclipNativeSession(input: {
 
 async function executePaperclipNativeSessionWithinScope(
   input: Parameters<typeof executePaperclipNativeSession>[0],
+  stagedAttachmentSources?: readonly NativeRunnerAttachmentSourceCapture[],
 ): Promise<AdapterExecutionResult> {
+  const runId = input.execution.binding.runId;
   if (
     input.execution.provider.kind !== "codex" &&
     input.execution.provider.kind !== "opencode" &&
@@ -8187,7 +8190,7 @@ async function executePaperclipNativeSessionWithinScope(
           executeNativeSession({
             onSessionAdmission: async () => {
               // Invalidate prior stop evidence before a backend can spawn.
-              await appendHeartbeatRunEvent(input.db, {
+              const launchIntent = await appendHeartbeatRunEvent(input.db, {
                 companyId: input.execution.binding.companyId,
                 runId: input.execution.binding.runId,
                 agentId: input.execution.binding.agentId,
@@ -8199,6 +8202,35 @@ async function executePaperclipNativeSessionWithinScope(
               // The launch-intent transaction can wait on the run row too.
               // A committed intent never substitutes for current source access.
               await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, input.execution.binding.runId);
+              if (stagedAttachmentSources?.length) {
+                await input.db.transaction(async (tx) => {
+                  // Reuse the exact coordinator lease fence, then the original
+                  // run lock order. This partial capture grants no source access.
+                  await renewNativeSessionExecutionLease({ db: tx as unknown as Db,
+                    runId, companyId: input.execution.binding.companyId, issueId: input.execution.binding.issueId,
+                    leaseOwner, attempt, controller });
+                  const [run] = await tx.select().from(heartbeatRuns).where(and(
+                    eq(heartbeatRuns.id, runId), eq(heartbeatRuns.companyId, input.execution.binding.companyId),
+                    eq(heartbeatRuns.agentId, input.execution.binding.agentId),
+                    eq(heartbeatRuns.nativeIssueId, input.execution.binding.issueId),
+                    eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.status, "running"),
+                  )).for("update");
+                  if (!run) throw new Error("native_attachment_stage_capture_binding_changed");
+                  const profile = record(run.runnerProfileJson);
+                  const previous = profile.nativeAttachmentStageSources ?? [];
+                  if (!Array.isArray(previous) || previous.length >= 64)
+                    throw new Error("native_attachment_stage_capture_budget_exceeded");
+                  const captures = [...previous, { eventSeq: launchIntent.row.seq, attempt,
+                    responsibleUserId: run.responsibleUserId ?? null, sourceCaptures: stagedAttachmentSources }];
+                  if (Buffer.byteLength(JSON.stringify(captures)) > 2 * 1024 * 1024)
+                    throw new Error("native_attachment_stage_capture_budget_exceeded");
+                  await tx.update(heartbeatRuns).set({
+                    runnerProfileJson: { ...profile, nativeAttachmentStageSources: captures }, updatedAt: new Date(),
+                  }).where(eq(heartbeatRuns.id, runId));
+                });
+                // Capture persistence may itself wait; it is never a grant.
+                await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
+              }
             },
             input: runnerExecution,
             remoteCleanupScope: remoteCleanupLease ? remoteLeaseCleanupScope(remoteCleanupLease) : undefined,

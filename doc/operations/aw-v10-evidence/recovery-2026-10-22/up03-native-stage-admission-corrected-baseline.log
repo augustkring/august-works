@@ -1,0 +1,97 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/services/native-runtime/native-session-executor.test.ts (469 tests | 2 failed | 467 skipped) 525ms
+     × stages from the authenticated run snapshot and cleans up after the provider turn 463ms
+     × does not admit the provider when staged attachment capture persistence fails 52ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/services/native-runtime/native-session-executor.test.ts > runnerd provider runtime wiring > stages from the authenticated run snapshot and cleans up after the provider turn
+AssertionError: promise rejected "AssertionError: expected undefined to be … { …(4) }" instead of resolving
+ ❯ src/services/native-runtime/native-session-executor.test.ts:7959:6
+    7957|         useRunnerd: true,
+    7958|       }),
+    7959|     ).resolves.toBeDefined();
+       |      ^
+    7960|     expect(providerAdmissionReached).toBe(true);
+    7961|
+
+Caused by: AssertionError: expected undefined to be defined
+ ❯ src/services/native-runtime/native-session-executor.test.ts:7924:28
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/services/native-runtime/native-session-executor.test.ts > runnerd provider runtime wiring > does not admit the provider when staged attachment capture persistence fails
+AssertionError: promise resolved "{ exitCode: +0, signal: null, …(12) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "costUsd": undefined,
++   "errorMessage": null,
++   "exitCode": 0,
++   "model": null,
++   "nativeFinalization": {
++     "companyId": "company",
++     "driverKind": "test",
++     "driverVersion": "1",
++     "highestContiguousSourceSeq": 1,
++     "issueId": "issue",
++     "nativeEventCount": 1,
++     "normalizedSessionId": "session-capture-write-failure",
++     "providerSessionId": null,
++     "result": {
++       "summary": "must not be dispatched",
++     },
++     "runId": "run-runnerd-attachment-capture-failure",
++     "runtimeMode": "native",
++     "schema": "paperclip.native-finalization.v1",
++     "sourceInstanceId": "runner-attachment-capture-failure",
++     "terminal": {
++       "runTerminalState": "succeeded",
++     },
++     "turnId": "turn-capture-write-failure",
++     "workspaceFinalizeStatus": "pending",
++   },
++   "provider": "openai",
++   "resultJson": {
++     "nativeResult": {
++       "summary": "must not be dispatched",
++     },
++     "nativeTerminal": {
++       "runTerminalState": "succeeded",
++     },
++     "planSynchronizations": [],
++   },
++   "sessionDisplayId": "session-capture-write-failure",
++   "sessionId": "session-capture-write-failure",
++   "signal": null,
++   "summary": "must not be dispatched",
++   "timedOut": false,
++   "usage": undefined,
++   "usageBasis": "per_run",
+  }
+
+ ❯ src/services/native-runtime/native-session-executor.test.ts:8039:8
+    8037|       runnerInstanceId: "runner-attachment-capture-failure",
+    8038|       useRunnerd: true,
+    8039|     })).rejects.toThrow("native_attachment_stage_capture_write_failed"…
+       |        ^
+    8040|     expect(providerAdmissionReached).toBe(false);
+    8041|     expect(state.createTransport).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 467 skipped (469)
+   Start at  12:09:57
+   Duration  54.23s (transform 35.10s, setup 259ms, import 52.66s, tests 525ms, environment 0ms)
+
