@@ -122,13 +122,16 @@ vi.mock("./pages/ExperienceWork", async () => {
   };
 });
 
-vi.mock("./pages/CustomerSupportCases", () => ({
-  CustomerSupportCases: ({ onReturn }: { onReturn?: () => void }) => (
-    <div data-testid="support-page"><p>Support overlay content</p>
+vi.mock("./pages/CustomerSupportCases", async () => {
+  const React = await import("react");
+  return { CustomerSupportCases: ({ onReturn }: { onReturn?: () => void }) => {
+    const [draft, setDraft] = React.useState("");
+    return <div data-testid="support-page"><p>Support overlay content</p>
+      <label>Unsent support<textarea aria-label="Unsent support" value={draft} onChange={event => setDraft(event.target.value)} /></label>
       {onReturn && <button type="button" onClick={onReturn}>Return from support</button>}
-    </div>
-  ),
-}));
+    </div>;
+  } };
+});
 
 async function renderAppAt(container: HTMLElement, path: string) {
   const root = createRoot(container);
@@ -223,10 +226,61 @@ describe("App Cases routing (PAP-13002)", () => {
     expect(draft.value).toBe("Private unsent work");
     expect(container.querySelector('[data-testid="work-location"]')?.textContent).toBe("/PAP/work?view=assigned#today");
     flushSync(() => [...document.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === "Return from support")?.click());
-    await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+    await vi.waitFor(() => expect(document.querySelector<HTMLElement>('[role="dialog"]')?.style.display).toBe("none"));
     expect(container.querySelector('textarea[aria-label="Unsent work"]')).toBe(draft);
     expect(draft.value).toBe("Private unsent work");
     await vi.waitFor(() => expect(document.activeElement).toBe(container.querySelector('a[data-support-help-entry]')));
+    unmountApp(root);
+  });
+
+  it.each(["return", "close", "escape"])("retains support state after %s while releasing the modal's work-surface effects", async dismissal => {
+    const root = await renderAppAt(container, "/PAP/work");
+    await vi.waitFor(() => expect(container.querySelector('textarea[aria-label="Unsent work"]')).toBeTruthy());
+    const work = container.querySelector<HTMLTextAreaElement>('textarea[aria-label="Unsent work"]')!;
+    const openHelp = () => flushSync(() => container.querySelector<HTMLAnchorElement>('a[data-support-help-entry]')!.click());
+    openHelp();
+    await waitForPortal("Support overlay content");
+    const support = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Unsent support"]')!;
+    flushSync(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(support, "Private unsent support");
+      support.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+    if (dismissal === "escape") flushSync(() => document.dispatchEvent(new KeyboardEvent("keydown", { key: "Escape", bubbles: true })));
+    else flushSync(() => document.querySelector<HTMLButtonElement>(dismissal === "close" ? '[data-slot="dialog-close"]' : '[data-testid="support-page"] button')!.click());
+    await vi.waitFor(() => expect(document.querySelector<HTMLElement>('[role="dialog"]')?.style.display).toBe("none"));
+    expect(document.body.style.pointerEvents).not.toBe("none");
+    expect(document.body.hasAttribute("data-scroll-locked")).toBe(false);
+    expect(work.closest('[aria-hidden="true"]')).toBeNull();
+    flushSync(() => { work.focus(); work.click(); });
+    expect(document.activeElement).toBe(work);
+    openHelp();
+    await vi.waitFor(() => expect(document.querySelector<HTMLElement>('[role="dialog"]')?.style.display).not.toBe("none"));
+    expect(document.querySelector('textarea[aria-label="Unsent support"]')).toBe(support);
+    expect(support.value).toBe("Private unsent support");
+    unmountApp(root);
+  });
+
+  it.each(["account", "session", "company"])("discards a hidden support draft after its %s changes", async change => {
+    const root = await renderAppAt(container, "/PAP/work");
+    await vi.waitFor(() => expect(container.querySelector('a[data-support-help-entry]')).toBeTruthy());
+    flushSync(() => container.querySelector<HTMLAnchorElement>('a[data-support-help-entry]')!.click());
+    await waitForPortal("Support overlay content");
+    const support = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Unsent support"]')!;
+    flushSync(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(support, "Old private support draft");
+      support.dispatchEvent(new Event("input", { bubbles: true }));
+      document.querySelector<HTMLButtonElement>('[data-slot="dialog-close"]')!.click();
+    });
+    await vi.waitFor(() => expect(document.querySelector<HTMLElement>('[role="dialog"]')?.style.display).toBe("none"));
+    if (change === "account") routingIdentity.account.userId = "replacement-user";
+    else if (change === "session") routingIdentity.account.sessionId = "replacement-session";
+    else {
+      routingIdentity.company = { id: "company-2", name: "Other", issuePrefix: "OTH", status: "active" };
+      routingIdentity.companies = [routingIdentity.company];
+    }
+    flushSync(() => root.render(<MemoryRouter initialEntries={["/PAP/work"]}><App /></MemoryRouter>));
+    expect(support.isConnected).toBe(false);
+    expect(document.body.textContent).not.toContain("Old private support draft");
     unmountApp(root);
   });
 

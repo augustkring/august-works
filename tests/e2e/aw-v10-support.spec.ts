@@ -31,18 +31,29 @@ test("Help retains its originating view and reload recovers requests before and 
   await page.goto(`/${company.issuePrefix}/work`);
   const heading = await page.getByRole("heading", { level: 1, name: "Work", exact: true }).elementHandle();
   expect(heading).not.toBeNull();
+  const unsent = "Private unsent support draft retained only in this account's memory.";
+  for (const dismissal of ["close", "escape", "return"] as const) {
+    await page.locator("a[data-support-help-entry]").click();
+    await expect(page.getByRole("dialog")).toBeVisible();
+    expect(await heading!.evaluate(node => node.isConnected)).toBe(true);
+    const description = page.getByLabel("What do you need help with?", { exact: true });
+    if (dismissal !== "close") await expect(description).toHaveValue(unsent);
+    await description.fill(unsent);
+    if (dismissal === "escape") await page.keyboard.press("Escape");
+    else await page.getByRole(dismissal === "close" ? "button" : "link", { name: "Back to work", exact: true }).click();
+    await expect(page.getByRole("dialog")).toHaveCount(0);
+    expect(await heading!.evaluate(node => node.isConnected)).toBe(true);
+    await expect(page.locator("a[data-support-help-entry]")).toBeFocused();
+    expect(await page.evaluate(() => document.body.style.pointerEvents)).not.toBe("none");
+  }
   await page.locator("a[data-support-help-entry]").click();
-  await expect(page.getByRole("dialog")).toBeVisible();
-  expect(await heading!.evaluate(node => node.isConnected)).toBe(true);
-  await page.getByRole("button", { name: "Back to work", exact: true }).click();
-  await expect(page.getByRole("dialog")).toHaveCount(0);
-  expect(await heading!.evaluate(node => node.isConnected)).toBe(true);
-  await expect(page.locator("a[data-support-help-entry]")).toBeFocused();
-  await page.locator("a[data-support-help-entry]").click();
+  await expect(page.getByLabel("What do you need help with?", { exact: true })).toHaveValue(unsent);
+  expect(await page.evaluate(text => JSON.stringify(history.state).includes(text), unsent)).toBe(false);
+  expect(await page.evaluate(text => [...Object.values(sessionStorage), ...Object.values(localStorage)].some(value => value.includes(text)), unsent)).toBe(false);
 
   let posts = 0, committed: { id: string; reference: string } | undefined, permitRecovery = false;
   let phase: "after_acceptance" | "before_acceptance" | "retry" = "after_acceptance";
-  let beforeKey: string | undefined, retriedId: string | undefined;
+  let beforeKey: string | undefined, acceptedKey: string | undefined, retriedId: string | undefined;
   await page.route(`**${support}/cases`, async route => {
     if (route.request().method() !== "POST") return route.continue();
     posts++;
@@ -59,6 +70,7 @@ test("Help retains its originating view and reload recovers requests before and 
       return route.fulfill({ response });
     }
     expect(posts).toBe(1);
+    acceptedKey = route.request().postDataJSON().idempotencyKey;
     committed = await json(await route.fetch());
     await route.abort("failed");
   });
@@ -70,6 +82,13 @@ test("Help retains its originating view and reload recovers requests before and 
   expect(committed?.id).toBeTruthy();
   expect(await page.evaluate(text => JSON.stringify(history.state).includes(text), privateText)).toBe(false);
   expect(await page.evaluate(text => [...Object.values(sessionStorage), ...Object.values(localStorage)].some(value => value.includes(text)), privateText)).toBe(false);
+  await page.getByRole("button", { name: "Back to work", exact: true }).click();
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await page.locator("a[data-support-help-entry]").click();
+  await expect(page.getByLabel("What do you need help with?", { exact: true })).toHaveValue(privateText);
+  await expect(page.getByRole("button", { name: "Retry the same request", exact: true })).toBeEnabled();
+  expect(posts).toBe(1);
+  expect(await page.evaluate(() => history.state?.usr?.supportRequest?.key)).toBe(acceptedKey);
   permitRecovery = true;
   await page.reload();
   await expect(page.getByText("Your previous submission has a saved receipt. Open the case to continue.", { exact: true })).toBeVisible();

@@ -1,8 +1,8 @@
 // @vitest-environment jsdom
-import { act } from "react";
+import { Activity, act } from "react";
 import { createRoot, type Root } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, useLocation, type Location } from "react-router-dom";
+import { MemoryRouter, useLocation, useNavigate, type Location } from "react-router-dom";
 import { afterEach, expect, it, vi } from "vitest";
 import { ApiError, api } from "../api/client";
 import { queryKeys } from "../lib/queryKeys";
@@ -78,7 +78,8 @@ const receipt = {
 };
 
 let lastLocation: Location | null = null;
-function ObserveSupportLocation() { lastLocation = useLocation(); return null; }
+let navigateSupport: ReturnType<typeof useNavigate>;
+function ObserveSupportLocation() { lastLocation = useLocation(); navigateSupport = useNavigate(); return null; }
 let container: HTMLDivElement;
 let root: Root;
 let client: QueryClient;
@@ -102,11 +103,11 @@ async function mount(initialEntry: string | { pathname: string; state?: unknown;
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
-  await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[initialEntry]}><ObserveSupportLocation /><CustomerSupportCases /></MemoryRouter></QueryClientProvider>));
+  await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter initialEntries={[initialEntry]}><ObserveSupportLocation /><Activity mode="visible"><CustomerSupportCases /></Activity></MemoryRouter></QueryClientProvider>));
   await flush();
 }
-async function rerender() {
-  await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter initialEntries={["/company/support"]}><ObserveSupportLocation /><CustomerSupportCases /></MemoryRouter></QueryClientProvider>));
+async function rerender(visibility: "visible" | "hidden" = "visible") {
+  await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter initialEntries={["/company/support"]}><ObserveSupportLocation /><Activity mode={visibility}><CustomerSupportCases /></Activity></MemoryRouter></QueryClientProvider>));
   await flush();
 }
 
@@ -273,6 +274,68 @@ it.each(["account", "session"])("ignores a late create acknowledgement after the
   expect(container.textContent).not.toContain(receipt.reference);
   expect(container.querySelector<HTMLTextAreaElement>("form textarea")?.value).toBe("");
   expect(client.getQueryCache().findAll({ predicate: (query) => query.queryKey.includes(receipt.id) })).toHaveLength(0);
+});
+
+it.each(["accepted", "uncertain"])("keeps the original command retryable after a hidden %s response", async outcome => {
+  let finish!: () => void;
+  vi.spyOn(api, "get").mockImplementation(async path => {
+    if (path.includes("/policy?")) return policy as never;
+    if (path.includes("/cases?")) return list as never;
+    if (path.includes(`/cases/${receipt.id}?`)) return receipt as never;
+    throw new Error("Unexpected support read");
+  });
+  const post = vi.spyOn(api, "post").mockImplementationOnce(() => new Promise((resolve, reject) => {
+    finish = () => outcome === "accepted" ? resolve(receipt as never) : reject(new Error("Unknown transport outcome"));
+  })).mockResolvedValue(receipt as never);
+  await mount();
+  await vi.waitFor(() => expect(container.querySelector("form")).not.toBeNull());
+  await act(async () => setField("form textarea", "Private retained support draft"));
+  await clickSubmit();
+  const firstPayload = structuredClone(post.mock.calls[0]![1]);
+  await rerender("hidden");
+  await act(async () => navigateSupport("/work", { state: null }));
+  await act(async () => finish());
+  await flush();
+  await act(async () => navigateSupport("/company/support", { state: { companyId: state.companyId, expectedUserId: state.userId } }));
+  await rerender("visible");
+  await vi.waitFor(() => expect(container.querySelector<HTMLButtonElement>('form button[type="submit"]')?.disabled).toBe(false));
+  expect(container.querySelector<HTMLTextAreaElement>("form textarea")?.value).toBe("Private retained support draft");
+  expect(post).toHaveBeenCalledTimes(1);
+  expect(lastLocation!.state).toHaveProperty("supportRequest", { key: (firstPayload as { idempotencyKey: string }).idempotencyKey, kind: "create" });
+  expect(JSON.stringify(lastLocation!.state)).not.toContain("Private retained support draft");
+  expect(container.querySelector('form button[type="submit"]')?.textContent).toBe("Retry the same request");
+  await clickSubmit();
+  expect(post).toHaveBeenCalledTimes(2);
+  expect(post.mock.calls[1]![1]).toEqual(firstPayload);
+});
+
+it("keeps an uncertain reply bound to its original case and payload after hiding", async () => {
+  let finish!: () => void;
+  vi.spyOn(api, "get").mockImplementation(async path => {
+    if (path.includes("/policy?")) return policy as never;
+    if (path.includes("/cases?")) return { ...list, entries: [waitingCase] } as never;
+    if (path.includes(`/cases/${waitingCase.id}?`)) return waitingDetail as never;
+    throw new Error("Unexpected support read");
+  });
+  const post = vi.spyOn(api, "post").mockImplementationOnce(() => new Promise((_resolve, reject) => {
+    finish = () => reject(new Error("Unknown reply outcome"));
+  })).mockResolvedValue(waitingDetail as never);
+  await mount(`/company/support?case=${waitingCase.id}`);
+  await vi.waitFor(() => expect(container.querySelector('textarea[aria-label="Add a reply"]')).not.toBeNull());
+  await act(async () => setField('textarea[aria-label="Add a reply"]', "Private retained reply"));
+  await act(async () => [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Send reply")!.click());
+  await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
+  const original = structuredClone(post.mock.calls[0]);
+  await rerender("hidden");
+  await act(async () => finish());
+  await flush();
+  await rerender("visible");
+  await vi.waitFor(() => expect([...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Retry the same reply")?.disabled).toBe(false));
+  expect(container.querySelector<HTMLTextAreaElement>('textarea[aria-label="Add a reply"]')?.value).toBe("Private retained reply");
+  expect(post).toHaveBeenCalledTimes(1);
+  await act(async () => [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Retry the same reply")!.click());
+  await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(2));
+  expect(post.mock.calls[1]).toEqual(original);
 });
 
 

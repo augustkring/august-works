@@ -17,7 +17,7 @@ import {
 import { OrgUnits, CompanyRelationships } from "./pages/OrganizationV5";
 import { V5Gate } from "./components/V5Gate";
 import { ProjectRoadmap } from "./pages/ProjectRoadmap";
-import { lazy, Suspense, useRef, type ReactNode } from "react";
+import { Activity, lazy, Suspense, useRef, type ReactNode } from "react";
 import type { ToolConnectionCredentialSource } from "@paperclipai/shared";
 import { Navigate, Outlet, Route, Routes, useActiveCompanyPrefix, useLocation, useNavigate, useParams, type Location } from "@/lib/router";
 import { Button } from "@/components/ui/button";
@@ -956,6 +956,11 @@ export function App() {
     carried?.companyId === selectedCompanyId && carried.expectedUserId === account.userId &&
     carried.backgroundKey === origin.current.location.key && carried.returnPathname === origin.current.location.pathname
     ? origin.current.location : null;
+  const supportScope = selectedCompanyId && account.userId && account.sessionId && !account.localImplicit
+    ? `${selectedCompanyId}:${account.userId}:${account.sessionId}` : null;
+  const retainedSupportScope = useRef<string | null>(null);
+  if (retainedSupportScope.current !== supportScope || (isSupport && !background)) retainedSupportScope.current = null;
+  if (background) retainedSupportScope.current = supportScope;
   function returnToWork() { navigate(-1); }
 
   return (
@@ -1097,7 +1102,8 @@ export function App() {
         </Route>
       </Routes>
       </div>
-      {background && <Dialog open onOpenChange={open => { if (!open) returnToWork(); }}>
+      {supportScope && retainedSupportScope.current === supportScope && <Activity mode={background ? "visible" : "hidden"}>
+      <Dialog open onOpenChange={open => { if (!open) returnToWork(); }}>
         <DialogContent className="max-h-(--sz-calc-18) overflow-y-auto sm:max-w-3xl" closeButtonLabel={t("supportCases.backToWork")}
           onCloseAutoFocus={event => { event.preventDefault(); document.querySelector<HTMLAnchorElement>("[data-support-help-entry]")?.focus(); }}>
           <div className="flex justify-end pr-8"><AccountExperienceLanguageSelect /></div>
@@ -1107,7 +1113,8 @@ export function App() {
             <CustomerSupportCases onReturn={returnToWork} />
           </DeferredRouteSurface>
         </DialogContent>
-      </Dialog>}
+      </Dialog>
+      </Activity>}
       <OnboardingWizardVariant />
     </>
   );

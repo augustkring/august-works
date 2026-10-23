@@ -167,6 +167,8 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
   const baseKey = useMemo(() => ["customer-support-cases", companyId, principal, identity.sessionId] as const, [companyId, principal, identity.sessionId]);
   useEffect(() => {
     mounted.current = true;
+    setSubmitting(createInFlight.current);
+    setReplying(replyInFlight.current);
     return () => {
       mounted.current = false;
       void client.cancelQueries({ queryKey: baseKey });
@@ -177,6 +179,16 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
   activeScope.current = scope;
   const readKey = [...baseKey, identity.authorityEpoch, accessEpoch] as const;
   function current() { return mounted.current && activeScope.current === scope && hasCurrentV9Session(client, principal, identity.sessionId); }
+  useEffect(() => {
+    if (!ready || !current()) return;
+    const pending: PendingSupportRequest | null = submission ? { key: submission.key, kind: "create" }
+      : replySubmission ? { key: replySubmission.key, kind: replySubmission.kind, caseId: replySubmission.caseId } : restoredRequest;
+    const carriedRequest = pendingSupportRequest(location.state, companyId, principal);
+    // Reopening Help creates a new history entry. Restore only the original
+    // opaque intent, so a later reload can still look up its durable receipt.
+    if (pending && (carriedRequest?.key !== pending.key || carriedRequest.kind !== pending.kind || carriedRequest.caseId !== pending.caseId))
+      rememberRequest(pending);
+  }, [ready, submission, replySubmission, restoredRequest, location.state]);
   function queryString(cursor: { createdAt: string; id: string } | null = null) {
     const params = new URLSearchParams({ expectedUserId: principal });
     if (cursor) { params.set("beforeCreatedAt", cursor.createdAt); params.set("beforeId", cursor.id); }
