@@ -1,8 +1,6 @@
 import { Router, type Request } from "express";
 import type { Db } from "@paperclipai/db";
-import { desc, eq } from "drizzle-orm";
-import { memoryJobs } from "@paperclipai/db";
-import { memoryJobService } from "../services/memory/memory-jobs.js";
+import { listReadableMemoryJobs, memoryJobService } from "../services/memory/memory-jobs.js";
 import { memoryMaintenanceInputSchema } from "../services/memory/memory-maintenance.js";
 import {
   memoryBindingInputSchema,
@@ -90,7 +88,7 @@ export function memoryRoutes(db: Db) {
     const companyId = req.params.companyId as string;
     assertBoardCompany(req, companyId);
     if (!(await svc.getRetentionPolicy(companyId, boardActor(req))).canManage) throw forbidden("Memory jobs require an owner or administrator");
-    const rows = await db.select().from(memoryJobs).where(eq(memoryJobs.companyId, companyId)).orderBy(desc(memoryJobs.createdAt)).limit(50);
+    const rows = await listReadableMemoryJobs(db, companyId, req.actor);
     res.json(rows.map((row) => ({ id: row.id, operationType: row.operationType, status: row.status, attemptNumber: row.attemptNumber,
       submittedAt: row.submittedAt, finishedAt: row.finishedAt, errorCode: row.errorCode,
       result: row.operationType === "dedupe" || row.operationType === "compaction" || row.operationType === "reflection" || row.operationType === "index_refresh" ? row.resultJson : null })));

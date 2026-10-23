@@ -1,6 +1,12 @@
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { assertSaasDomainAdmission } from "../saas/domain-admission.js";
 import { createHash, randomUUID } from "node:crypto";
+import { z } from "zod";
+import type { AuthorizationActor } from "../authorization.js";
+import { assertV5Authorization, v5HumanActorId } from "../v5-authorization.js";
+import { cognitiveMemoryActor } from "./cognitive-memory.js";
+import { assertAnalyticalContextPayloadAccess } from "../analytical-context-authority.js";
+import { nativeSha256 } from "../native-runtime/canonical.js";
 import { providerTraceStore } from "../provider-trace-store.js";
 import { getRunLogStore, type RunLogStore } from "../run-log-store.js";
 import { isDeepStrictEqual } from "node:util";
@@ -12,6 +18,7 @@ import { publishActivity, type ActivityPublication } from "../activity-log.js";
 import {
   and,
   asc,
+  desc,
   eq,
   isNotNull,
   isNull,
@@ -22,17 +29,21 @@ import {
 import type { Db } from "@paperclipai/db";
 import {
   heartbeatRuns,
+  activityLog,
+  memoryModels,
+  memoryObservations,
   memoryJobs,
   memoryRecords,
   memoryRetentionPolicies,
   memoryDeletionMarkers,
 } from "@paperclipai/db";
 import type { MemoryJobOperationType } from "@paperclipai/shared";
+import { executionPrincipalSchema, type MemoryScope } from "@paperclipai/shared";
 import { isUniqueViolation } from "../../db-errors.js";
 import { logger } from "../../middleware/logger.js";
 import { instanceSettingsService } from "../instance-settings.js";
 import { memoryPostRunExtractionService } from "./memory-post-run-extraction.js";
-import { expireMemoryPayloads, lockMemoryPrivacy, reapplyMemoryDeletionMarkers, type NativeMemoryCaptureReceipt } from "./memory-privacy.js";
+import { canActorReadMemorySources, expireMemoryPayloads, lockMemoryPrivacy, reapplyMemoryDeletionMarkers, type NativeMemoryCaptureReceipt } from "./memory-privacy.js";
 
 const MEMORY_JOB_VERSION = "v1";
 const DEFAULT_LEASE_MS = 5 * 60_000;
@@ -43,6 +54,203 @@ const RETENTION_COMPANY_LIMIT = 50;
 
 type MemoryJob = typeof memoryJobs.$inferSelect;
 type HeartbeatRun = typeof heartbeatRuns.$inferSelect;
+
+const jobRecordIds = z.array(z.uuid()).min(1).max(64).refine(ids => new Set(ids).size === ids.length);
+const jobOptionalIds = z.array(z.uuid()).max(64).refine(ids => new Set(ids).size === ids.length);
+const jobRequester = executionPrincipalSchema.refine(value => value.type === "user" || value.type === "system" && value.service === "local-board");
+const maintenanceReadSource = z.strictObject({ recordIds: jobRecordIds, requester: jobRequester,
+  proposedLesson: memoryMaintenanceInputSchema.shape.proposedLesson, recordVersions: z.record(z.string(), z.iso.datetime()) });
+const indexReadResult = z.strictObject({ indexedRecordCount: z.number().int().min(1).max(64), provider: z.literal("native_postgres"), nativeIndexCurrent: z.literal(true) });
+const modelReadSource = z.strictObject({ modelId: z.uuid(), expectedVersion: z.number().int().positive(),
+  memoryRecordIds: jobOptionalIds, observationIds: jobOptionalIds,
+  recordIds: jobRecordIds, sourceWatermark: z.string().regex(/^[a-f0-9]{64}$/), requester: jobRequester });
+
+async function assertMemoryJobReader(db: Db, companyId: string, actor: AuthorizationActor | undefined, deadline: number) {
+  assertMemoryJobReadBudget(deadline);
+  if (!actor) throw new HttpError(403, "A current Memory operator is required");
+  v5HumanActorId(actor);
+  await assertV5Authorization(db, { ...actor, isInstanceAdmin: false, ignoreInstanceAdmin: true }, companyId, "company_scope:read");
+  assertMemoryJobReadBudget(deadline);
+  if (!(await memoryService(db).getRetentionPolicy(companyId, cognitiveMemoryActor(actor))).canManage)
+    throw new HttpError(403, "A current Memory administrator is required");
+  assertMemoryJobReadBudget(deadline);
+}
+
+function assertMemoryJobReadBudget(deadline: number) {
+  if (performance.now() > deadline) throw conflict("Memory job source review exceeded its budget");
+}
+
+async function memoryJobSourcesReadable(db: Db, companyId: string, actor: AuthorizationActor, job: MemoryJob, deadline: number): Promise<boolean> {
+  assertMemoryJobReadBudget(deadline);
+  if (job.sourceMemoryRecordId && !await canActorReadMemorySources(db, companyId, actor, job.sourceMemoryRecordId)) return false;
+  assertMemoryJobReadBudget(deadline);
+  if (job.sourceHeartbeatRunId) await assertAnalyticalContextPayloadAccess(db, companyId, actor, { runId: job.sourceHeartbeatRunId });
+  assertMemoryJobReadBudget(deadline);
+  if (job.operationType === "capture") {
+    const source = z.strictObject({ kind: z.literal("heartbeat_run"), runId: z.uuid(), extractionEnabledAtAdmission: z.boolean() }).safeParse(job.sourceRefJson);
+    if (!source.success || source.data.runId !== job.sourceHeartbeatRunId || job.sourceMemoryRecordId || job.jobKey !== captureJobKey(source.data.runId)) return false;
+    const [run] = await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, companyId), eq(heartbeatRuns.id, source.data.runId), eq(heartbeatRuns.status, "succeeded")));
+    assertMemoryJobReadBudget(deadline);
+    if (!run) return false;
+    if (job.status !== "succeeded") return job.resultJson === null;
+    const count = z.number().int().min(0).max(10000);
+    const result = z.strictObject({ runId: z.uuid(), proposed: count, persisted: count, duplicates: count,
+      corroborations: count, updates: count, contradictions: count, skipped: count,
+      skipReasons: z.record(z.string().max(100), count).refine(value => Object.keys(value).length <= 32) }).safeParse(job.resultJson);
+    return result.success && result.data.runId === run.id;
+  }
+  if (job.sourceHeartbeatRunId || job.sourceMemoryRecordId) return false;
+  if (job.operationType === "model_rebuild") {
+    const parsed = modelReadSource.safeParse(job.sourceRefJson); if (!parsed.success) return false;
+    const source = parsed.data;
+    if (job.jobKey !== `model-rebuild:${source.modelId}:${source.expectedVersion}:${source.sourceWatermark}`) return false;
+    const [model] = await db.select().from(memoryModels).where(and(eq(memoryModels.companyId, companyId), eq(memoryModels.id, source.modelId)));
+    assertMemoryJobReadBudget(deadline);
+    if (!model || model.erasedAt || model.status === "revoked") return false;
+    const { derivedRoots, observationLineage, modelLineage } = await import("./derived-memory.js");
+    assertMemoryJobReadBudget(deadline);
+    const roots = await derivedRoots(db, actor, companyId, { type: model.scopeType as MemoryScope["type"], id: model.scopeId }, model.purpose, source.recordIds, undefined, () => assertMemoryJobReadBudget(deadline));
+    assertMemoryJobReadBudget(deadline);
+    const observations = [];
+    const complete = new Set(source.memoryRecordIds);
+    for (const id of source.observationIds) {
+      assertMemoryJobReadBudget(deadline);
+      const [row] = await db.select().from(memoryObservations).where(and(eq(memoryObservations.companyId, companyId), eq(memoryObservations.id, id)));
+      assertMemoryJobReadBudget(deadline);
+      if (!row || row.status !== "accepted" || row.erasedAt || row.scopeType !== model.scopeType || row.scopeId !== model.scopeId || row.purpose !== model.purpose) return false;
+      const lineage = await observationLineage(db, actor, row, () => assertMemoryJobReadBudget(deadline));
+      assertMemoryJobReadBudget(deadline);
+      lineage.roots.forEach(root => complete.add(root.id)); observations.push(row);
+    }
+    if (JSON.stringify([...complete].sort()) !== JSON.stringify([...source.recordIds].sort())) return false;
+    const watermark = nativeSha256({ roots: roots.map(root => ({ id: root.id, version: root.updatedAt.toISOString() })),
+      observations: observations.map(row => ({ id: row.id, version: row.version })).sort((a, b) => a.id.localeCompare(b.id)) });
+    if (watermark !== source.sourceWatermark) return false;
+    if (job.status === "succeeded") {
+      const result = z.strictObject({ modelId: z.uuid(), version: z.number().int().positive(), status: z.literal("candidate"), sourceWatermark: z.string() }).safeParse(job.resultJson);
+      if (!result.success || result.data.modelId !== model.id || result.data.version !== source.expectedVersion + 1 || model.version !== result.data.version || result.data.sourceWatermark !== watermark) return false;
+      await modelLineage(db, actor, model, () => assertMemoryJobReadBudget(deadline));
+      assertMemoryJobReadBudget(deadline);
+    } else if (model.version !== source.expectedVersion || job.resultJson !== null) return false;
+    return true;
+  }
+  if (!["dedupe", "compaction", "reflection", "index_refresh"].includes(job.operationType) || !job.jobKey.startsWith("maintenance:v1:")) return false;
+  const parsed = maintenanceReadSource.safeParse(job.sourceRefJson); if (!parsed.success) return false;
+  const source = parsed.data;
+  if ((job.operationType === "reflection") !== !!source.proposedLesson || Object.keys(source.recordVersions).length !== source.recordIds.length) return false;
+  for (const id of source.recordIds) {
+    assertMemoryJobReadBudget(deadline);
+    const [row] = await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, companyId), eq(memoryRecords.id, id)));
+    assertMemoryJobReadBudget(deadline);
+    if (!row || source.recordVersions[id] !== row.updatedAt.toISOString() || !await canActorReadMemorySources(db, companyId, actor, id)) return false;
+    assertMemoryJobReadBudget(deadline);
+  }
+  if (job.status !== "succeeded") return job.resultJson === null;
+  if (job.operationType === "index_refresh") {
+    const result = indexReadResult.safeParse(job.resultJson);
+    return result.success && result.data.indexedRecordCount === source.recordIds.length;
+  }
+  if (job.operationType === "dedupe") {
+    // Dedupe can itself change source versions. Do not fabricate a post-effect
+    // receipt by ignoring the original exact versions checked above.
+    const result = z.strictObject({ scannedRecordCount: z.number().int().min(1).max(64), supersededCount: z.number().int().min(0).max(64), canonicalRecordCount: z.number().int().min(1).max(64) }).safeParse(job.resultJson);
+    return result.success && result.data.scannedRecordCount === source.recordIds.length && result.data.supersededCount + result.data.canonicalRecordCount === result.data.scannedRecordCount;
+  }
+  const result = z.strictObject({ proposedRecordId: z.uuid(), reviewState: z.enum(["pending", "accepted", "rejected"]), sourceRecordCount: z.number().int().min(1).max(64) }).safeParse(job.resultJson);
+  return result.success && result.data.sourceRecordCount === source.recordIds.length && await canActorReadMemorySources(db, companyId, actor, result.data.proposedRecordId);
+}
+
+/** Actual persisted job sources, never event details or a historical requester grant. */
+export async function canActorReadMemoryJob(db: Db, companyId: string, actor: AuthorizationActor | undefined, jobId: string): Promise<boolean> {
+  return readMemoryJobBeforeDeadline(db, companyId, actor, jobId, performance.now() + 5000);
+}
+async function readMemoryJobBeforeDeadline(db: Db, companyId: string, actor: AuthorizationActor | undefined, jobId: string, deadline: number): Promise<boolean> {
+  if (!z.uuid().safeParse(jobId).success || !z.uuid().safeParse(companyId).success) return false;
+  try {
+    return await db.transaction(async tx => {
+      assertMemoryJobReadBudget(deadline);
+      await tx.execute(sql`set local statement_timeout='5s'`);
+      assertMemoryJobReadBudget(deadline);
+      await lockAnalyticalCompany(tx, companyId);
+      assertMemoryJobReadBudget(deadline);
+      await lockMemoryPrivacy(tx, companyId);
+      assertMemoryJobReadBudget(deadline);
+      await assertMemoryJobReader(tx, companyId, actor, deadline);
+      assertMemoryJobReadBudget(deadline);
+      const [job] = await tx.select().from(memoryJobs).where(and(eq(memoryJobs.companyId, companyId), eq(memoryJobs.id, jobId))).for("share");
+      assertMemoryJobReadBudget(deadline);
+      if (!job || !await memoryJobSourcesReadable(tx, companyId, actor!, job, deadline)) return false;
+      assertMemoryJobReadBudget(deadline);
+      await assertMemoryJobReader(tx, companyId, actor, deadline);
+      assertMemoryJobReadBudget(deadline);
+      return true;
+    });
+  } catch (error) {
+    if (error instanceof HttpError && [403, 404, 409, 422].includes(error.status)) return false;
+    throw error;
+  }
+}
+
+async function ownIndexTombstoneReadable(db: Db, actor: AuthorizationActor | undefined, job: MemoryJob) {
+  if (actor?.type !== "board" || actor.source !== "session" || !actor.userId || job.operationType !== "index_refresh"
+    || !job.jobKey.startsWith("maintenance:v1:") || Object.keys(job.sourceRefJson).length || job.resultJson !== null
+    || job.status !== "succeeded" || !job.startedAt || !job.finishedAt || job.leaseExpiresAt) return false;
+  const receipts = await db.select().from(activityLog).where(and(eq(activityLog.companyId, job.companyId), eq(activityLog.entityType, "memory_job"),
+    eq(activityLog.entityId, job.id), eq(activityLog.action, "memory.index_refresh_completed"))).limit(2).for("share");
+  const receipt = receipts[0];
+  // The original executor checked the requesting Human and every source before
+  // atomically recording this exact postcondition. An actorId alone is not proof.
+  return receipts.length === 1 && receipt!.actorType === "user" && receipt!.actorId === actor.userId
+    && receipt!.createdAt >= job.startedAt && receipt!.createdAt <= job.finishedAt && indexReadResult.safeParse(receipt!.details).success;
+}
+
+/** Filtering precedes the output limit. The fixed scan/time ceilings can omit
+ * older history; they never promote hidden sources or disclose hidden counts. */
+export async function listReadableMemoryJobs(db: Db, companyId: string, actor: AuthorizationActor | undefined,
+  options: { indexHistory?: boolean; jobId?: string; limit?: number } = {}): Promise<MemoryJob[]> {
+  const limit = Math.max(1, Math.min(options.limit ?? 50, 50)), deadline = performance.now() + 5000;
+  return db.transaction(async tx => {
+    await tx.execute(sql`set local statement_timeout='5s'`);
+    await lockAnalyticalCompany(tx, companyId);
+    assertMemoryJobReadBudget(deadline);
+    await lockMemoryPrivacy(tx, companyId);
+    assertMemoryJobReadBudget(deadline);
+    await assertMemoryJobReader(tx, companyId, actor, deadline);
+    const rows: MemoryJob[] = []; let cursor: MemoryJob | undefined;
+    for (let scanned = 0; scanned < 256 && rows.length < limit;) {
+      assertMemoryJobReadBudget(deadline);
+      const candidates = await tx.select().from(memoryJobs).where(and(eq(memoryJobs.companyId, companyId),
+        options.indexHistory ? and(eq(memoryJobs.operationType, "index_refresh"), sql`${memoryJobs.jobKey} like 'maintenance:v1:%'`) : undefined,
+        options.jobId ? eq(memoryJobs.id, options.jobId) : undefined,
+        cursor ? sql`(${memoryJobs.submittedAt},${memoryJobs.id}) < (select submitted_at,id from memory_jobs job_cursor
+          where job_cursor.company_id=${companyId}::uuid and job_cursor.id=${cursor.id}::uuid)` : undefined,
+      )).orderBy(desc(memoryJobs.submittedAt), desc(memoryJobs.id)).limit(Math.min(50, 256 - scanned)).for("share");
+      assertMemoryJobReadBudget(deadline);
+      if (!candidates.length) break;
+      for (const job of candidates) {
+        assertMemoryJobReadBudget(deadline);
+        scanned++; cursor = job;
+        let readable = await readMemoryJobBeforeDeadline(tx, companyId, actor, job.id, deadline);
+        assertMemoryJobReadBudget(deadline);
+        if (!readable && options.indexHistory) readable = await ownIndexTombstoneReadable(tx, actor, job);
+        assertMemoryJobReadBudget(deadline);
+        if (readable) rows.push(job);
+        if (rows.length >= limit) break;
+      }
+    }
+    for (const job of rows) {
+      assertMemoryJobReadBudget(deadline);
+      let readable = await readMemoryJobBeforeDeadline(tx, companyId, actor, job.id, deadline);
+      assertMemoryJobReadBudget(deadline);
+      if (!readable && options.indexHistory) readable = await ownIndexTombstoneReadable(tx, actor, job);
+      assertMemoryJobReadBudget(deadline);
+      if (!readable) throw conflict("Memory job sources changed");
+    }
+    await assertMemoryJobReader(tx, companyId, actor, deadline);
+    assertMemoryJobReadBudget(deadline);
+    return rows;
+  });
+}
 
 function record(value: unknown): Record<string, unknown> {
   return typeof value === "object" && value !== null && !Array.isArray(value)

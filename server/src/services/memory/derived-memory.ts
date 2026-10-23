@@ -38,12 +38,19 @@ export async function assertDerivedWorker(tx: Db, actor: AuthorizationActor, com
   const [task] = await tx.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, issueId))).for("share");
   if (!task || task.status !== "in_progress" || task.assigneeAgentId !== actor.agentId || task.checkoutRunId !== actor.runId || task.executionRunId !== actor.runId) throw forbidden("Worker no longer owns this Task");
 }
-export async function derivedRoots(db: Db, actor: AuthorizationActor, companyId: string, scope: MemoryScope, purpose: string, ids: string[], expected?: Map<string, string>) {
+export async function derivedRoots(db: Db, actor: AuthorizationActor, companyId: string, scope: MemoryScope, purpose: string, ids: string[], expected?: Map<string, string>, checkBudget = () => {}) {
+  checkBudget();
   await assertScope(db, actor, companyId, scope);
+  checkBudget();
   const uniqueIds = [...new Set(ids)]; if (!uniqueIds.length || uniqueIds.length > 64) throw conflict("Derived intelligence requires bounded surviving Memory roots");
   const roots = await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, companyId), inArray(memoryRecords.id, uniqueIds), memoryPayloadVisible()));
+  checkBudget();
   if (roots.length !== uniqueIds.length) throw notFound("Derived source Memory not found");
-  for(const root of roots)if(!await canActorReadMemorySources(db,companyId,actor,root.id))throw forbidden("Derived source access is unavailable");
+  for(const root of roots){
+    checkBudget();
+    if(!await canActorReadMemorySources(db,companyId,actor,root.id))throw forbidden("Derived source access is unavailable");
+    checkBudget();
+  }
   const now = Date.now();
   if (roots.some((root) => root.scopeType !== scope.type || root.scopeId !== scope.id || root.ownerAgentId !== null || root.deletedAt || root.revokedAt
     || root.reviewState !== "accepted" || root.retentionState !== "active" || root.supersededByRecordId || (root.validFrom && root.validFrom.getTime() > now)
@@ -54,20 +61,29 @@ export async function derivedRoots(db: Db, actor: AuthorizationActor, companyId:
 }
 function sensitivity(roots: Root[]): EvidenceSensitivity { return EVIDENCE_SENSITIVITIES[Math.max(...roots.map((root) => EVIDENCE_SENSITIVITIES.indexOf(root.sensitivityLabel)))]!; }
 function watermark(roots: Root[], observations: Observation[] = []) { return nativeSha256({ roots: roots.map((root) => ({ id: root.id, version: root.updatedAt.toISOString() })), observations: observations.map((row) => ({ id: row.id, version: row.version })).sort((a, b) => a.id.localeCompare(b.id)) }); }
-export async function observationLineage(db: Db, actor: AuthorizationActor, row: Observation) {
+export async function observationLineage(db: Db, actor: AuthorizationActor, row: Observation, checkBudget = () => {}) {
+  checkBudget();
   await assertScope(db, actor, row.companyId, { type: row.scopeType as MemoryScope["type"], id: row.scopeId });
+  checkBudget();
   const evidence = await db.select().from(memoryObservationEvidence).where(and(eq(memoryObservationEvidence.companyId, row.companyId), eq(memoryObservationEvidence.observationId, row.id)));
-  const roots = await derivedRoots(db, actor, row.companyId, { type: row.scopeType as MemoryScope["type"], id: row.scopeId }, row.purpose, evidence.map((item) => item.memoryRecordId), new Map(evidence.map((item) => [item.memoryRecordId, item.sourceVersion])));
+  checkBudget();
+  const roots = await derivedRoots(db, actor, row.companyId, { type: row.scopeType as MemoryScope["type"], id: row.scopeId }, row.purpose, evidence.map((item) => item.memoryRecordId), new Map(evidence.map((item) => [item.memoryRecordId, item.sourceVersion])), checkBudget);
+  checkBudget();
   return { evidence, roots };
 }
-export async function modelLineage(db: Db, actor: AuthorizationActor, row: Model) {
+export async function modelLineage(db: Db, actor: AuthorizationActor, row: Model, checkBudget = () => {}) {
+  checkBudget();
   await assertScope(db, actor, row.companyId, { type: row.scopeType as MemoryScope["type"], id: row.scopeId });
+  checkBudget();
   const evidence = await db.select().from(memoryModelEvidence).where(and(eq(memoryModelEvidence.companyId, row.companyId), eq(memoryModelEvidence.modelId, row.id), eq(memoryModelEvidence.modelVersion, row.version)));
-  const roots = await derivedRoots(db, actor, row.companyId, { type: row.scopeType as MemoryScope["type"], id: row.scopeId }, row.purpose, evidence.map((item) => item.memoryRecordId), new Map(evidence.map((item) => [item.memoryRecordId, item.sourceVersion])));
+  checkBudget();
+  const roots = await derivedRoots(db, actor, row.companyId, { type: row.scopeType as MemoryScope["type"], id: row.scopeId }, row.purpose, evidence.map((item) => item.memoryRecordId), new Map(evidence.map((item) => [item.memoryRecordId, item.sourceVersion])), checkBudget);
+  checkBudget();
   const observationIds = [...new Set(evidence.flatMap((item) => item.observationId ? [item.observationId] : []))];
   const observations = observationIds.length ? await db.select().from(memoryObservations).where(and(eq(memoryObservations.companyId, row.companyId), inArray(memoryObservations.id, observationIds))) : [];
+  checkBudget();
   if (observations.length !== observationIds.length || observations.some((observation) => observation.status !== "accepted" || observation.erasedAt || evidence.some((item) => item.observationId === observation.id && item.observationVersion !== observation.version))) throw conflict("Model observation evidence requires current review");
-  for (const observation of observations) await observationLineage(db, actor, observation);
+  for (const observation of observations) { checkBudget(); await observationLineage(db, actor, observation, checkBudget); checkBudget(); }
   return { evidence, roots, observations };
 }
 async function modelSources(db: Db, actor: AuthorizationActor, companyId: string, input: z.infer<typeof createMemoryModelSchema>) {

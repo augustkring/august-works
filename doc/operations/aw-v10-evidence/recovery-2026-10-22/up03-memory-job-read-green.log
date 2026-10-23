@@ -1,0 +1,105 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/memory-job-read-authority.integration.test.ts (4 tests | 4 failed) 32097ms
+     × hides a native private-source job from another current admin on API and maintenance history 2191ms
+     × filters before output limits so newer hidden jobs cannot displace an older readable job 10673ms
+     × withholds a source-version-stale job without trusting retained version metadata 1374ms
+     × keeps only an own original source-free index tombstone after actual source erasure 812ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 4 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-job-read-authority.integration.test.ts > Original Memory jobs retain current source read authority > hides a native private-source job from another current admin on API and maintenance history
+Error: expected 200 "OK", got 500 "Internal Server Error"
+ ❯ src/__tests__/memory-job-read-authority.integration.test.ts:87:85
+     85|     const s = await seed(), row = await source(s, true), job = await e…
+     86|     expect(await s.service.getShared(s.companyId, row.id, { principal:…
+     87|     expect((await http(s, s.alice).get(`/api/companies/${s.companyId}/…
+       |                                                                                     ^
+     88|     const response = await http(s).get(`/api/companies/${s.companyId}/…
+     89|     expect.soft(response.body).toEqual([]);
+ ❯ Test._assertStatus ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:309:14
+ ❯ ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:365:13
+ ❯ Test._assertFunction ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:342:13
+ ❯ Test.assert ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:195:23
+ ❯ localAssert ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:138:14
+ ❯ Server.<anonymous> ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:152:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-job-read-authority.integration.test.ts > Original Memory jobs retain current source read authority > filters before output limits so newer hidden jobs cannot displace an older readable job
+Error: expected 200 "OK", got 500 "Internal Server Error"
+ ❯ src/__tests__/memory-job-read-authority.integration.test.ts:99:85
+     97|     await db.update(memoryJobs).set({ createdAt: new Date(Date.now() -…
+     98|     for (let i = 0; i < 51; i++) await enqueue(s, privateRow.id);
+     99|     const response = await http(s).get(`/api/companies/${s.companyId}/…
+       |                                                                                     ^
+    100|     expect.soft(response.body.map((item: { id: string }) => item.id)).…
+    101|     expect((await readMemoryMaintenanceHistory(db, s.bob, s.companyId)…
+ ❯ Test._assertStatus ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:309:14
+ ❯ ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:365:13
+ ❯ Test._assertFunction ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:342:13
+ ❯ Test.assert ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:195:23
+ ❯ localAssert ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:138:14
+ ❯ Server.<anonymous> ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:152:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-job-read-authority.integration.test.ts > Original Memory jobs retain current source read authority > withholds a source-version-stale job without trusting retained version metadata
+Error: expected 200 "OK", got 500 "Internal Server Error"
+ ❯ src/__tests__/memory-job-read-authority.integration.test.ts:108:81
+    106|     await db.update(memoryRecords).set({ content: "A later changed pay…
+    107|       .where(and(eq(memoryRecords.companyId, s.companyId), eq(memoryRe…
+    108|     expect.soft((await http(s).get(`/api/companies/${s.companyId}/memo…
+       |                                                                                 ^
+    109|     expect((await readMemoryMaintenanceHistory(db, s.bob, s.companyId)…
+    110|     expect(job.sourceRefJson.recordVersions).toEqual({ [row.id]: row.u…
+ ❯ Test._assertStatus ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:309:14
+ ❯ ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:365:13
+ ❯ Test._assertFunction ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:342:13
+ ❯ Test.assert ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:195:23
+ ❯ localAssert ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:138:14
+ ❯ Server.<anonymous> ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:152:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/4]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/memory-job-read-authority.integration.test.ts > Original Memory jobs retain current source read authority > keeps only an own original source-free index tombstone after actual source erasure
+Error: Failed query: select "id", "company_id", "operation_type", "status", "job_key", "attempt_number", "retry_of_job_id", "source_heartbeat_run_id", "source_memory_record_id", "source_ref_json", "execution_owner_id", "lease_expires_at", "submitted_at", "started_at", "finished_at", "result_summary", "result_json", "error_code", "error", "created_at", "updated_at" from "memory_jobs" where ("memory_jobs"."company_id" = $1 and ("memory_jobs"."operation_type" = $2 and "memory_jobs"."job_key" like 'maintenance:v1:%') and ("memory_jobs"."submitted_at","memory_jobs"."id") < ($3,$4::uuid)) order by "memory_jobs"."submitted_at" desc, "memory_jobs"."id" desc limit $5 for share
+params: 2c2307ae-d4a0-4c15-8acb-a519be80534f,index_refresh,Thu Oct 22 2026 23:44:48 GMT+0000 (Coordinated Universal Time),0f7b0f11-056d-4e28-aaae-203b874d8a81,50
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/postgres-js/session.ts:58:16
+ ❯ src/services/memory/memory-jobs.ts:186:26
+    184|     for (let scanned = 0; scanned < 256 && rows.length < limit;) {
+    185|       if (performance.now() > deadline) throw conflict("Memory job sou…
+    186|       const candidates = await tx.select().from(memoryJobs).where(and(…
+       |                          ^
+    187|         options.indexHistory ? and(eq(memoryJobs.operationType, "index…
+    188|         options.jobId ? eq(memoryJobs.id, options.jobId) : undefined,
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ src/services/experience/memory-maintenance-history.ts:55:18
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ src/__tests__/memory-job-read-authority.integration.test.ts:116:13
+
+Caused by: TypeError: The "string" argument must be of type string or an instance of Buffer or ArrayBuffer. Received an instance of Date
+ ❯ reset.str ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/bytes.js:22:27
+ ❯ ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:968:16
+ ❯ Bind ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:958:16
+ ❯ prepared ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:209:7
+ ❯ ParameterDescription ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:637:58
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { code: 'ERR_INVALID_ARG_TYPE', query: 'select "id", "company_id", "operation_type", "status", "job_key", "attempt_number", "retry_of_job_id", "source_heartbeat_run_id", "source_memory_record_id", "source_ref_json", "execution_owner_id", "lease_expires_at", "submitted_at", "started_at", "finished_at", "result_summary", "result_json", "error_code", "error", "created_at", "updated_at" from "memory_jobs" where ("memory_jobs"."company_id" = $1 and ("memory_jobs"."operation_type" = $2 and "memory_jobs"."job_key" like \'maintenance:v1:%\') and ("memory_jobs"."submitted_at","memory_jobs"."id") < ($3,$4::uuid)) order by "memory_jobs"."submitted_at" desc, "memory_jobs"."id" desc limit $5 for share', parameters: [ '2c2307ae-d4a0-4c15-8acb-a519be80534f', 'index_refresh', '2026-10-22T23:44:48.085Z', '0f7b0f11-056d-4e28-aaae-203b874d8a81', 50 ], args: [ '2c2307ae-d4a0-4c15-8acb-a519be80534f', 'index_refresh', '2026-10-22T23:44:48.085Z', '0f7b0f11-056d-4e28-aaae-203b874d8a81', 50 ], types: [ 2950, 25, 1184, 2950, 20 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/4]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  4 failed (4)
+   Start at  23:43:22
+   Duration  86.02s (transform 38.41s, setup 220ms, import 53.20s, tests 32.10s, environment 0ms)
+
