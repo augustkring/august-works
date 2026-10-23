@@ -85,4 +85,41 @@ describe("Native payload inputs retain their creation-time source closure", () =
     expect(await canActorReadIssuePrivacy(db, s.bob, later)).toBe(false);
     expect(await canActorReadIssuePrivacy(db, s.bob, earlier)).toBe(true);
   });
+
+  it("does not release an earlier private body source when a later producer Task is assigned to another Human", async () => {
+    const s = await seed(), tasks = issueService(db), memory = memoryService(db);
+    await s.selectPrivateInput();
+    // The original Task owner creates Bob's assignment grant. That grant does
+    // not publish the private input retained from the preceding producer run.
+    const derivative = await tasks.create(s.companyId, {
+      title: "Retained private result assigned to Bob", createdByAgentId: s.agentId,
+      actorRunId: s.runId, actorResponsibleUserId: s.aliceId, assigneeUserId: s.bob.userId,
+    });
+    expect(await canActorReadIssuePrivacy(db, s.alice, derivative)).toBe(true);
+    expect(await canActorReadIssuePrivacy(db, s.bob, derivative)).toBe(false);
+    const nextRunId = randomUUID();
+    await db.insert(heartbeatRuns).values({ id: nextRunId, companyId: s.companyId,
+      agentId: s.agentId, responsibleUserId: s.aliceId, nativeIssueId: derivative.id,
+      contextSnapshot: { issueId: derivative.id }, runtimeMode: "native", status: "running" });
+    await initializeRunIdentity(db, { companyId: s.companyId, runId: nextRunId,
+      issueId: derivative.id, responsibleUserId: s.aliceId, cause: "dispatch" });
+    const human = { principal: { type: "user" as const, userId: s.aliceId } };
+    const binding = await memory.createCompanyBinding(s.companyId,
+      { key: randomUUID(), name: "Inherited body restriction", providerKey: "local" }, human);
+    await memory.addBindingTarget(s.companyId, binding.id, { targetType: "agent", targetId: s.agentId }, human);
+    const content = "Private result inherited through the actual earlier Task";
+    const candidate = await memory.createCandidate(s.companyId, {
+      bindingId: binding.id, memoryType: "lesson", scope: { type: "company", id: null }, ownerAgentId: null,
+      title: content, content, summary: null, createdByOperationId: null, sensitivity: "internal",
+      observedAt: new Date().toISOString(), validFrom: null, validUntil: null, expiresAt: null,
+      evidence: [{ sourceClass: "task", sourceProvider: "native_temporal_fixture", sourceType: "actual_source",
+        sourceRef: `issue://${derivative.id}`, sourceVersion: derivative.updatedAt.toISOString(), sourceUpdatedAt: null,
+        observedAt: new Date().toISOString(), excerptHash: createHash("sha256").update(content).digest("hex"),
+        citation: { label: "Retained prior body" }, trustLevel: "low", relation: "supports" }],
+    }, { principal: { type: "agent", agentId: s.agentId, responsibleUserId: s.aliceId }, runId: nextRunId });
+    const retained = await memory.reviewCandidate(s.companyId, candidate.record.id, { decision: "accept" }, human);
+    expect((await memory.get(s.companyId, retained.record.id, human))?.record.content).toBe(content);
+    expect(await memory.get(s.companyId, retained.record.id,
+      { principal: { type: "user", userId: s.bob.userId } })).toBeNull();
+  });
 });

@@ -1,0 +1,121 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/native-payload-temporal-sources.integration.test.ts (3 tests | 1 failed | 1 skipped) 32105ms
+     × does not release an earlier private body source when a later producer Task is assigned to another Human 2029ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-temporal-sources.integration.test.ts > Native payload inputs retain their creation-time source closure > does not release an earlier private body source when a later producer Task is assigned to another Human
+AssertionError: expected { record: { …(47) }, …(1) } to be null
+
+- Expected:
+null
+
++ Received:
+{
+  "evidence": [
+    {
+      "citationJson": {
+        "label": "Retained prior body",
+      },
+      "companyId": "11a5ee88-ce9f-412c-9d4e-8ad8ea20d5f1",
+      "createdAt": 2026-10-23T15:20:45.719Z,
+      "excerptHash": "e758a365b5e5157d7aa13791e78048f63851f383006eabeb82d2e9de766bf68d",
+      "id": "42b7d715-ff1b-48d2-8fb6-f3f267e5b0be",
+      "memoryRecordId": "0a7480ad-c193-4ed0-8f0d-b77e48547960",
+      "observedAt": 2026-10-23T15:20:45.718Z,
+      "sourceClass": "task",
+      "sourceProvider": "native_temporal_fixture",
+      "sourceRef": "issue://41d22dda-6d93-4f99-bf3d-68f422a307b0",
+      "sourceType": "actual_source",
+      "sourceUpdatedAt": null,
+      "sourceVersion": "2026-10-23T15:20:45.333Z",
+      "supportsOrContradicts": "supports",
+      "trustLevel": "low",
+    },
+  ],
+  "record": {
+    "bindingId": "6445762f-751b-499a-9079-0d4ad9e36aaa",
+    "companyId": "11a5ee88-ce9f-412c-9d4e-8ad8ea20d5f1",
+    "confidenceScore": 0.5,
+    "content": "Private result inherited through the actual earlier Task",
+    "createdAt": 2026-10-23T15:20:45.751Z,
+    "createdByActorId": "44d9b10f-73c0-4696-b50f-0d9c48bcbcb5",
+    "createdByActorType": "agent",
+    "createdByOperationId": null,
+    "deletedAt": null,
+    "expiresAt": null,
+    "id": "0a7480ad-c193-4ed0-8f0d-b77e48547960",
+    "importance": 50,
+    "memoryType": "lesson",
+    "metadata": {
+      "memoryResolution": {
+        "kind": "new",
+        "novelEvidenceCount": 0,
+        "reasonCode": "no_comparable_active_record",
+        "relatedRecordIds": [],
+        "resolvedAt": "2026-10-23T15:20:45.738Z",
+        "targetRecordId": null,
+        "version": "v1",
+      },
+    },
+    "observedAt": 2026-10-23T15:20:45.718Z,
+    "ownerAgentId": null,
+    "payloadSourceProtocolVersion": 0,
+    "payloadSourceSnapshot": null,
+    "payloadSourceSnapshotInvalidated": false,
+    "privateOwnerUserId": null,
+    "providerKey": "local",
+    "retentionPolicy": "standard",
+    "retentionState": "active",
+    "reviewState": "accepted",
+    "revocationReason": null,
+    "revokedAt": null,
+    "revokedByActorId": null,
+    "revokedByActorType": null,
+    "scopeId": null,
+    "scopeType": "company",
+    "sensitivityLabel": "internal",
+    "sourceFoundationRevisionIds": [],
+    "sourceIssueIds": [
+      "41d22dda-6d93-4f99-bf3d-68f422a307b0",
+    ],
+    "sourceMemoryIds": [],
+    "sourceProjectIds": [],
+    "sourceProvenanceQualified": true,
+    "sourceRunIds": [
+      "8857a7f0-d9fd-48d0-8676-4a6ffab8bdeb",
+    ],
+    "subjectId": null,
+    "subjectType": null,
+    "summary": null,
+    "supersededByRecordId": null,
+    "supersedesRecordId": null,
+    "title": "Private result inherited through the actual earlier Task",
+    "updatedAt": 2026-10-23T15:20:46.066Z,
+    "validFrom": null,
+    "validUntil": null,
+    "verificationState": "human_verified",
+  },
+}
+
+ ❯ src/__tests__/native-payload-temporal-sources.integration.test.ts:123:63
+    121|     expect((await memory.get(s.companyId, retained.record.id, human))?…
+    122|     expect(await memory.get(s.companyId, retained.record.id,
+    123|       { principal: { type: "user", userId: s.bob.userId } })).toBeNull…
+       |                                                               ^
+    124|   });
+    125| });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed | 1 skipped (3)
+   Start at  15:19:06
+   Duration  99.73s (transform 45.57s, setup 329ms, import 66.48s, tests 32.11s, environment 1ms)
+

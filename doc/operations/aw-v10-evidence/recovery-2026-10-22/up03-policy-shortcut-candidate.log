@@ -1,0 +1,36 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/native-payload-temporal-sources.integration.test.ts (3 tests | 1 failed | 1 skipped) 27964ms
+     × keeps earlier shared Memory readable after its producer later reads a private Task, while narrowing new Memory 4142ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-temporal-sources.integration.test.ts > Native payload inputs retain their creation-time source closure > keeps earlier shared Memory readable after its producer later reads a private Task, while narrowing new Memory
+AssertionError: expected undefined to be '0ede5421-2a89-429d-94c7-b08d9d73bfa8' // Object.is equality
+
+- Expected:
+"0ede5421-2a89-429d-94c7-b08d9d73bfa8"
+
++ Received:
+undefined
+
+ ❯ src/__tests__/native-payload-temporal-sources.integration.test.ts:74:85
+     72|     // Current private policy still narrows later copies. A future inp…
+     73|     // become an input to an already committed earlier Memory body.
+     74|     expect((await memory.get(s.companyId, earlier.record.id, bobActor)…
+       |                                                                                     ^
+     75|   });
+     76|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 1 passed | 1 skipped (3)
+   Start at  15:15:13
+   Duration  114.19s (transform 55.03s, setup 697ms, import 84.34s, tests 27.96s, environment 3ms)
+
