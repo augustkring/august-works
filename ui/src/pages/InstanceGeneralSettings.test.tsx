@@ -271,7 +271,7 @@ describe("InstanceGeneralSettings operator-hidden sections", () => {
     });
     await renderPage(SELF_HOSTED_HEALTH);
     expect(container.textContent).not.toContain("AI feedback sharing");
-    expect(container.textContent).not.toContain("Paperclip Labs");
+    expect(container.textContent).not.toContain("feedback service chosen by your server operator");
     expect(container.textContent).toContain("Backup retention");
     expect(container.textContent).toContain("Sign out");
   });

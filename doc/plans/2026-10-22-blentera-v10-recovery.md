@@ -407,3 +407,10 @@ Final server compiler actual/durable0, all5 pins match; all test/compiler proces
 Original bootstrap pending and invite/account owners use PRODUCT_IDENTITY for product/user/first-admin/error/fallback labels. Actual CLI compatibility command, adapter ID, invite storage key and auth/gating behavior remain. Bounded gpt-6-luna UI assistance; Root reviewed and traced CloudAccessGate's additional original App test coverage, updating only directly stale displayed expectations.
 
 Existing invite18PASS14.01s and App/access gate14PASS26.84s; UI typecheck/token gates actual/durable0, all4 pins match, processes closed. No new copy-mirroring tests. See `brand-bootstrap-invite-checkpoint.json`. This is UI copy coverage, not live authentication/provider/host qualification or complete brand/localization inventory; broad V10/PR/release gates remain open.
+
+
+### 2026-10-23 — Factual feedback recipient and explicit terms
+
+Original consent dialogs and General Settings now describe the operator-selected feedback service, matching the original explicit export destination; no upstream or invented legal recipient is asserted. General Settings and Issue Detail show terms only when the operator configures their URL. Original local policy/save/export behavior and consent choices remain. Sign-out reuses PRODUCT_IDENTITY.
+
+Existing three UI suites134PASS59.79s; UI typecheck/token gates actual/durable0, all5 pins match and checks closed. Bounded gpt-6-luna copy reading/assistance; Root reviewed actual export owner, removed implicit upstream terms default and verified. See `feedback-recipient-copy-checkpoint.json`. Complete consent/destination-change/legal/hosted qualification and broad V10/PR/release gates remain open.
