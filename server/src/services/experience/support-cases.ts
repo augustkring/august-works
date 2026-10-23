@@ -123,6 +123,15 @@ export function customerSupportCaseService(db: Db, options: { dataPolicy: Readon
     if (!configuredPolicy) throw unprocessable("Support intake is unavailable; contact support directly", { code: "SUPPORT_INTAKE_UNAVAILABLE" });
     return configuredPolicy;
   }
+  function observedPolicy(revision: string) {
+    const current = policy();
+    // This is an optimistic disclosure revision, never access or delivery proof.
+    // Hash the parsed full policy so reusing a configured version cannot silently
+    // change recipient, region or retention under an already displayed form.
+    if (revision !== digest(current))
+      throw conflict("Support processing changed; review the current disclosure before sending", { code: "SUPPORT_POLICY_CHANGED" });
+    return current;
+  }
   async function existing(tx: Db, companyId: string, userId: string, key: string) {
     const [event] = await tx.select().from(supportCaseEvents).where(and(eq(supportCaseEvents.companyId, companyId),
       eq(supportCaseEvents.authorUserId, userId), eq(supportCaseEvents.requestKey, key))).limit(1);
@@ -200,7 +209,7 @@ export function customerSupportCaseService(db: Db, options: { dataPolicy: Readon
     },
     async intakePolicy(actor: AuthorizationActor, companyId: string, expectedUserId: string) {
       return within(actor, companyId, expectedUserId, false, async () => supportCaseIntakePolicySchema.parse(configuredPolicy
-        ? { available: true, recipientName: configuredPolicy.recipientName, privacyNoticeUrl: configuredPolicy.privacyNoticeUrl,
+        ? { available: true, revision: digest(configuredPolicy), recipientName: configuredPolicy.recipientName, privacyNoticeUrl: configuredPolicy.privacyNoticeUrl,
             retentionDays: configuredPolicy.retentionDays, retentionTrigger: configuredPolicy.retentionTrigger }
         : { available: false }));
     },
@@ -241,7 +250,7 @@ export function customerSupportCaseService(db: Db, options: { dataPolicy: Readon
           return detail(tx, await currentCase(tx, companyId, userId, administrator, prior.caseId), userId, administrator);
         }
         const eventId = await requestIdentity(tx, companyId, userId, input.idempotencyKey);
-        const dataPolicy = policy(), at = await now(tx);
+        const dataPolicy = observedPolicy(input.expectedPolicyRevision), at = await now(tx);
         const [row] = await tx.insert(supportCases).values({ companyId, openedByUserId: userId, category: input.category,
           subject: input.subject ?? deriveSupportCaseSubject(input.description), description: input.description,
           impact: input.impact, safeContext: input.safeContext ?? null, dataPolicy,
@@ -264,9 +273,9 @@ export function customerSupportCaseService(db: Db, options: { dataPolicy: Readon
           return detail(tx, await currentCase(tx, companyId, userId, administrator, prior.caseId), userId, administrator);
         }
         const eventId = await requestIdentity(tx, companyId, userId, input.idempotencyKey);
-        const original = await currentCase(tx, companyId, userId, administrator, id, true), dataPolicy = policy();
+        const original = await currentCase(tx, companyId, userId, administrator, id, true), dataPolicy = observedPolicy(input.expectedPolicyRevision);
         if (!isDeepStrictEqual(original.dataPolicy, dataPolicy))
-          throw conflict("Support processing changed; contact support directly before adding information", { code: "SUPPORT_POLICY_CHANGED" });
+          throw conflict("Support processing changed; contact support directly before adding information", { code: "SUPPORT_CASE_POLICY_CHANGED" });
         const at = await now(tx), expiresAt = new Date(at.getTime() + dataPolicy.retentionDays * 86400000);
         let row: Case;
         if (original.customerStatus === "CLOSED") {

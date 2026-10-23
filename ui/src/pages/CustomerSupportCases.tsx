@@ -147,6 +147,10 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
     setRestoredRequest(null);
     navigate({ pathname: location.pathname, search: location.search, hash: location.hash }, { replace: true, state: null });
   }
+  function forgetRejectedRequest() {
+    setRestoredRequest(null);
+    navigate({ pathname: location.pathname, search: location.search, hash: location.hash }, { replace: true, state: requestNavigation() });
+  }
   const [submission, setSubmission] = useState<{ key: string; payload: CreateSupportCase } | null>(null);
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const reply = selectedCaseId ? replyDrafts[selectedCaseId] ?? "" : "";
@@ -318,11 +322,12 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
   }
 
   async function submitCase() {
-    if (recoveryBlocked || (restoredRequest && restoredRequest.kind !== "create") || createInFlight.current || !ready || !hasCurrentV9Session(client, principal, identity.sessionId) || !description.trim()) return;
+    if ((!submission && !policyReady) || recoveryBlocked || (restoredRequest && restoredRequest.kind !== "create") || createInFlight.current || !ready || !hasCurrentV9Session(client, principal, identity.sessionId) || !description.trim()) return;
     const attempt = submission ?? {
       key: restoredRequest?.key ?? crypto.randomUUID(),
       payload: {
         expectedUserId: principal,
+        expectedPolicyRevision: privacy!.revision,
         idempotencyKey: "",
         description,
         category: supportCaseCategorySchema.parse(category),
@@ -349,6 +354,12 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
       if (!current()) return;
       if (hasAccountError(error)) { loseAccess(); return; }
       if (errorCode(error) === "SUPPORT_REQUEST_ERASED") { erasedRequest(); return; }
+      if (errorCode(error) === "SUPPORT_POLICY_CHANGED") {
+        setSubmission(null); forgetRejectedRequest();
+        setSubmitMessage(t("supportCases.policyChanged"));
+        void policyQuery.refetch();
+        return;
+      }
       try {
         const recovered = await recoverRequest(attempt.key);
         if (recovered) {
@@ -368,13 +379,13 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
 
   async function submitReply(kind: "reply" | "close" = "reply") {
     const detail = detailQuery.data;
-    if (recoveryBlocked || (restoredRequest && (restoredRequest.kind !== kind || restoredRequest.caseId !== detail?.id)) || replyInFlight.current || !ready || !detail || (kind === "reply" && !reply.trim()) || (replySubmission && replySubmission.caseId !== detail.id) || !hasCurrentV9Session(client, principal, identity.sessionId)) return;
+    if ((kind === "reply" && !replySubmission && !policyReady) || recoveryBlocked || (restoredRequest && (restoredRequest.kind !== kind || restoredRequest.caseId !== detail?.id)) || replyInFlight.current || !ready || !detail || (kind === "reply" && !reply.trim()) || (replySubmission && replySubmission.caseId !== detail.id) || !hasCurrentV9Session(client, principal, identity.sessionId)) return;
     const attempt = replySubmission ?? {
       caseId: detail.id,
       kind,
       key: restoredRequest?.key ?? crypto.randomUUID(),
       payload: kind === "close" ? { expectedUserId: principal, idempotencyKey: "" }
-        : { expectedUserId: principal, idempotencyKey: "", body: reply, ...(safeContext ? { safeContext } : {}) },
+        : { expectedUserId: principal, expectedPolicyRevision: privacy!.revision, idempotencyKey: "", body: reply, ...(safeContext ? { safeContext } : {}) },
     };
     if (!attempt.payload.idempotencyKey) attempt.payload.idempotencyKey = attempt.key;
     setReplySubmission(attempt);
@@ -399,6 +410,12 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
       if (!current()) return;
       if (hasAccountError(error)) { loseAccess(); return; }
       if (errorCode(error) === "SUPPORT_REQUEST_ERASED") { erasedRequest(); return; }
+      if (errorCode(error) === "SUPPORT_POLICY_CHANGED" || errorCode(error) === "SUPPORT_CASE_POLICY_CHANGED") {
+        setReplySubmission(null); forgetRejectedRequest();
+        setReplyMessage(t(errorCode(error) === "SUPPORT_CASE_POLICY_CHANGED" ? "supportCases.casePolicyChanged" : "supportCases.policyChanged"));
+        void policyQuery.refetch();
+        return;
+      }
       try {
         const recovered = await recoverRequest(attempt.key);
         if (recovered) {
@@ -421,6 +438,7 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
   const categories = supportCaseCategorySchema.options;
   const impacts = supportCaseImpactSchema.options;
   const privacy = policyQuery.data?.available ? policyQuery.data : null;
+  const policyReady = !!privacy && !policyQuery.isFetching && !policyQuery.isError;
   function contextPreview(context: NonNullable<SupportCaseDetail["safeContext"]>) {
     return <dl className="space-y-1 text-sm">
       {context.surface && <div><dt className="font-medium">{t("supportCases.contextPage")}</dt><dd>{t(`supportCases.surfaces.${context.surface}`)}</dd></div>}
@@ -502,7 +520,7 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
         <textarea aria-label={t("supportCases.replyLabel")} maxLength={SUPPORT_CASE_LIMITS.reply} className="min-h-24 w-full rounded-md border border-input bg-background p-3 text-foreground" value={reply} disabled={!!replySubmission} onChange={(event) => setReply(event.target.value)} />
       </label>
       {draftContext()}
-      <Button className="min-h-11" disabled={!reply.trim() || !ready || busy || replySubmission?.kind === "close" || recoveryBlocked || (!!restoredRequest && (restoredRequest.kind !== "reply" || restoredRequest.caseId !== selectedCaseId))} onClick={() => void submitReply()}>
+      <Button className="min-h-11" disabled={(!replySubmission && !policyReady) || !reply.trim() || !ready || busy || replySubmission?.kind === "close" || recoveryBlocked || (!!restoredRequest && (restoredRequest.kind !== "reply" || restoredRequest.caseId !== selectedCaseId))} onClick={() => void submitReply()}>
         {replying && replySubmission?.kind === "reply" ? t("supportCases.sendingReply") : (replySubmission?.kind === "reply" || (restoredRequest?.kind === "reply" && restoredRequest.caseId === selectedCaseId)) ? t("supportCases.retryReply") : t("supportCases.sendReply")}
       </Button>
       {(detailQuery.data.status !== "CLOSED" || replySubmission?.kind === "close" || (restoredRequest?.kind === "close" && restoredRequest.caseId === selectedCaseId)) && <Button variant="outline" className="min-h-11" disabled={!ready || busy || replySubmission?.kind === "reply" || recoveryBlocked || (!!restoredRequest && (restoredRequest.kind !== "close" || restoredRequest.caseId !== selectedCaseId))} onClick={() => void submitReply("close")}>
@@ -555,7 +573,7 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
       {draftContext()}
       <div className="flex items-center justify-between gap-3">
       <Button variant="outline" className="min-h-11" type="button" disabled={busy} onClick={() => setComposing(false)}>{t("supportCases.cancel")}</Button>
-      <Button className="min-h-11" type="submit" disabled={!description.trim() || busy || !ready || recoveryBlocked || (!!restoredRequest && restoredRequest.kind !== "create")}>
+      <Button className="min-h-11" type="submit" disabled={(!submission && !policyReady) || !description.trim() || busy || !ready || recoveryBlocked || (!!restoredRequest && restoredRequest.kind !== "create")}>
         {submitting ? t("supportCases.sending") : (submission || restoredRequest?.kind === "create") ? t("supportCases.retrySubmit") : t("supportCases.submit")}
       </Button>
       </div>

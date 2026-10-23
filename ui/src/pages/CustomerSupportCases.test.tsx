@@ -23,7 +23,7 @@ vi.mock("../hooks/useV9CurrentAccount", () => ({
 }));
 Object.assign(globalThis, { IS_REACT_ACT_ENVIRONMENT: true });
 
-const policy = { available: true, recipientName: "Configured support", privacyNoticeUrl: "https://example.test/privacy", retentionDays: 30, retentionTrigger: "after_last_customer_or_support_message" };
+const policy = { available: true, revision: "a".repeat(64), recipientName: "Configured support", privacyNoticeUrl: "https://example.test/privacy", retentionDays: 30, retentionTrigger: "after_last_customer_or_support_message" };
 const list = { companyId: state.companyId, entries: [], nextCursor: null };
 const waitingCase = {
   id: "00000000-0000-4000-8000-000000000005",
@@ -109,6 +109,60 @@ async function rerender() {
   await act(async () => root.render(<QueryClientProvider client={client}><MemoryRouter initialEntries={["/company/support"]}><ObserveSupportLocation /><CustomerSupportCases /></MemoryRouter></QueryClientProvider>));
   await flush();
 }
+
+it("retains a rejected draft and waits for the new disclosure and an explicit send", async () => {
+  let policyReads = 0, releasePolicy!: (value: unknown) => void;
+  const get = vi.spyOn(api, "get").mockImplementation(async (path) => {
+    if (path.includes("/policy?")) return ++policyReads === 1 ? policy as never
+      : new Promise(resolve => { releasePolicy = resolve; });
+    if (path.includes("/cases?")) return list as never;
+    throw new Error("A rejected policy command has no uncertain receipt to recover");
+  });
+  const post = vi.spyOn(api, "post").mockRejectedValueOnce(new ApiError("Policy changed", 409, { details: { code: "SUPPORT_POLICY_CHANGED" } }))
+    .mockResolvedValueOnce(receipt as never);
+  await mount({ pathname: "/company/support", state: {
+    companyId: state.companyId, expectedUserId: state.userId, backgroundKey: "actual-work-route",
+  } });
+  await vi.waitFor(() => expect(container.querySelector("form")).not.toBeNull());
+  await act(async () => setField("form textarea", "Keep this support draft"));
+  await clickSubmit();
+  await vi.waitFor(() => expect(policyReads).toBe(2));
+  expect(container.textContent).toContain("Your message was not sent.");
+  expect(container.querySelector<HTMLTextAreaElement>("form textarea")?.value).toBe("Keep this support draft");
+  expect(container.querySelector<HTMLButtonElement>('form button[type="submit"]')?.disabled).toBe(true);
+  expect(lastLocation!.state).toMatchObject({ backgroundKey: "actual-work-route" });
+  expect(lastLocation!.state).not.toHaveProperty("supportRequest");
+  const changedPolicy = { ...policy, revision: "b".repeat(64), recipientName: "New disclosed support" };
+  await act(async () => releasePolicy(changedPolicy));
+  await vi.waitFor(() => expect(container.textContent).toContain("New disclosed support"));
+  expect(post).toHaveBeenCalledTimes(1);
+  expect(get.mock.calls.some(([path]) => path.includes("/cases/requests/"))).toBe(false);
+  await clickSubmit();
+  expect(post.mock.calls[0]![1]).toMatchObject({ expectedPolicyRevision: policy.revision });
+  expect(post.mock.calls[1]![1]).toMatchObject({ expectedPolicyRevision: changedPolicy.revision, description: "Keep this support draft" });
+  expect((post.mock.calls[1]![1] as { idempotencyKey: string }).idempotencyKey)
+    .not.toBe((post.mock.calls[0]![1] as { idempotencyKey: string }).idempotencyKey);
+});
+
+it("keeps an unsent reply when the existing case policy can no longer accept it", async () => {
+  vi.spyOn(api, "get").mockImplementation(async (path) => {
+    if (path.includes("/policy?")) return policy as never;
+    if (path.includes(`/cases/${waitingCase.id}?`)) return waitingDetail as never;
+    if (path.includes("/cases?")) return list as never;
+    throw new Error("A rejected policy command has no uncertain receipt to recover");
+  });
+  const post = vi.spyOn(api, "post").mockRejectedValue(new ApiError("Case policy changed", 409, { details: { code: "SUPPORT_CASE_POLICY_CHANGED" } }));
+  await mount(`/company/support?case=${waitingCase.id}`);
+  await vi.waitFor(() => expect(container.querySelector("article")).not.toBeNull());
+  await act(async () => setField('textarea[aria-label="Add a reply"]', "Unsent case reply"));
+  const send = [...container.querySelectorAll<HTMLButtonElement>("button")].find(button => button.textContent === "Send reply")!;
+  await vi.waitFor(() => expect(send.disabled).toBe(false));
+  await act(async () => send.click());
+  await vi.waitFor(() => expect(container.textContent).toContain("Contact support directly before adding information."));
+  expect(container.querySelector<HTMLTextAreaElement>('textarea[aria-label="Add a reply"]')?.value).toBe("Unsent case reply");
+  expect(post).toHaveBeenCalledTimes(1);
+  expect(lastLocation!.state).not.toHaveProperty("supportRequest");
+});
 async function clickSubmit() {
   const button = container.querySelector<HTMLButtonElement>('form button[type="submit"]');
   expect(button).not.toBeNull();
@@ -439,7 +493,7 @@ it.each(["reply", "close"] as const)("recovers a %s only against its original ca
   await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
   expect(post.mock.calls[0]![0]).toContain(`/cases/${original.id}/${kind === "close" ? "close" : "replies"}`);
   expect(post.mock.calls[0]![1]).toEqual({ expectedUserId: state.userId, idempotencyKey: key,
-    ...(kind === "reply" ? { body: "Recovered original reply" } : {}) });
+    ...(kind === "reply" ? { body: "Recovered original reply", expectedPolicyRevision: policy.revision } : {}) });
   await vi.waitFor(() => expect(lastLocation!.state).not.toHaveProperty("supportRequest"));
   expect(get.mock.calls.some(([path]) => path.includes(`/cases/requests/${key}`))).toBe(true);
 });

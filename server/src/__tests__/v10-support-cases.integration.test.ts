@@ -32,11 +32,12 @@ const policy = {
   const users = Object.fromEntries(["opener", "member", "owner", "admin", "foreign"].map(name => [name, randomUUID()])) as Record<string, string>;
   const tokens = Object.fromEntries(Object.keys(users).map(name => [name, `support-${randomUUID()}`])) as Record<string, string>;
   let app: express.Express;
+  let policyRevision: string;
   const failureCodes: string[][] = [];
   const path = (companyId: string) => `/api/companies/${companyId}/support`;
   const auth = (name: string) => ({ Authorization: `Bearer ${tokens[name]}` });
   const create = (companyId: string, name: string, description: string, key = randomUUID()) => request(app)
-    .post(`${path(companyId)}/cases`).set(auth(name)).send({ idempotencyKey: key, expectedUserId: users[name], description });
+    .post(`${path(companyId)}/cases`).set(auth(name)).send({ expectedPolicyRevision: policyRevision, idempotencyKey: key, expectedUserId: users[name], description });
   const list = (companyId: string, name: string) => request(app).get(`${path(companyId)}/cases`)
     .set(auth(name)).query({ expectedUserId: users[name] });
   const detail = (companyId: string, name: string, id: string) => request(app).get(`${path(companyId)}/cases/${id}`)
@@ -81,6 +82,10 @@ const policy = {
       next(error);
     });
     app.use(errorHandler);
+    const disclosure = await request(app).get(`${path(companyA)}/policy`).set(auth("opener"))
+      .query({ expectedUserId: users.opener }).expect(200);
+    policyRevision = disclosure.body.revision;
+    expect(policyRevision).toMatch(/^[a-f0-9]{64}$/);
   }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
   beforeEach(async () => { failureCodes.length = 0; await db.delete(authRateLimits); });
   afterAll(async () => { await fixture?.cleanup(); }, 30000);
@@ -100,6 +105,48 @@ const policy = {
       status: "RECEIVED", delivery: "pending", timeline: [{ kind: "request", body: "Sign-in fails after I changed my email.\nMore detail.", delivery: "pending" }] });
     for (const privateField of ["dataPolicy", "legalHold", "holdReason", "providerCaseRef", "requestHash", "deliveryAttemptId", "deliveryProviderKey", "deliveryLeaseUntil"])
       expect(JSON.stringify(response.body)).not.toContain(privateField);
+  });
+
+  it.each([
+    { recipientName: "A different support recipient" },
+    { privacyNoticeUrl: "https://example.test/new-privacy" },
+    { retentionDays: 60 },
+    { processingRegion: "another-region" },
+  ])("requires a fresh disclosure after processing changes, even with the same version: %j", async (change) => {
+    const changedApp = express(); changedApp.use(express.json());
+    changedApp.use(actorMiddleware(db, { deploymentMode: "authenticated" }));
+    changedApp.use("/api", customerSupportRoutes(db, { runtimeEnv: {
+      AW_SUPPORT_CASE_DATA_POLICY_JSON: JSON.stringify({ ...policy, ...change }),
+    } }));
+    changedApp.use(errorHandler);
+    const key = randomUUID(), command = { expectedUserId: users.opener, expectedPolicyRevision: policyRevision,
+      idempotencyKey: key, description: "Do not silently change my support processing" };
+    const original = await request(app).post(`${path(companyA)}/cases`).set(auth("opener")).send(command).expect(201);
+    // A durable receipt remains recoverable; configuration changes do not
+    // reinterpret the immutable original request or send it to another recipient.
+    const repeated = await request(changedApp).post(`${path(companyA)}/cases`).set(auth("opener")).send(command).expect(201);
+    expect(repeated.body.id).toBe(original.body.id);
+    const newKey = randomUUID();
+    const stale = await request(changedApp).post(`${path(companyA)}/cases`).set(auth("opener"))
+      .send({ ...command, idempotencyKey: newKey }).expect(409);
+    expect(stale.body.details.code).toBe("SUPPORT_POLICY_CHANGED");
+    expect(await db.select().from(supportCaseEvents).where(eq(supportCaseEvents.requestKey, newKey))).toEqual([]);
+    const disclosed = await request(changedApp).get(`${path(companyA)}/policy`).set(auth("opener"))
+      .query({ expectedUserId: users.opener }).expect(200);
+    expect(disclosed.body.revision).not.toBe(policyRevision);
+    const accepted = await request(changedApp).post(`${path(companyA)}/cases`).set(auth("opener"))
+      .send({ ...command, idempotencyKey: newKey, expectedPolicyRevision: disclosed.body.revision }).expect(201);
+    const [stored] = await db.select().from(supportCases).where(eq(supportCases.id, accepted.body.id));
+    expect(stored!.dataPolicy).toEqual({ ...policy, ...change });
+    const replyKey = randomUUID(), reply = { expectedUserId: users.opener, idempotencyKey: replyKey, body: "Keep this reply under its disclosed policy" };
+    const staleReply = await request(changedApp).post(`${path(companyA)}/cases/${original.body.id}/replies`).set(auth("opener"))
+      .send({ ...reply, expectedPolicyRevision: policyRevision }).expect(409);
+    expect(staleReply.body.details.code).toBe("SUPPORT_POLICY_CHANGED");
+    const changedCase = await request(changedApp).post(`${path(companyA)}/cases/${original.body.id}/replies`).set(auth("opener"))
+      .send({ ...reply, expectedPolicyRevision: disclosed.body.revision }).expect(409);
+    expect(changedCase.body.details.code).toBe("SUPPORT_CASE_POLICY_CHANGED");
+    expect(await db.select().from(supportCaseEvents).where(eq(supportCaseEvents.requestKey, replyKey))).toEqual([]);
+    expect((await detail(companyA, "opener", original.body.id)).body.timeline).toHaveLength(1);
   });
 
   it("exports only current visible cases with every timeline page and no private operation facts", async () => {
@@ -205,7 +252,7 @@ const policy = {
     await db.update(supportCases).set({ customerStatus: "RESOLVED", resolvedAt: new Date(), version: 1 }).where(eq(supportCases.id, created.body.id));
     const key = randomUUID();
     const reply = await request(app).post(`${path(companyA)}/cases/${created.body.id}/replies`).set(auth("opener"))
-      .send({ idempotencyKey: key, expectedUserId: users.opener, body: "The issue is still happening." });
+      .send({ expectedPolicyRevision: policyRevision, idempotencyKey: key, expectedUserId: users.opener, body: "The issue is still happening." });
     expect(reply.status).toBe(201);
     expect(reply.body.id).toBe(created.body.id);
     expect(reply.body.status).toBe("INVESTIGATING");
@@ -248,7 +295,7 @@ const policy = {
     expect(closed.status).toBe(200);
     const replyKey = randomUUID(), body = "This is a new problem after closure.";
     const response = await request(app).post(`${path(companyA)}/cases/${created.body.id}/replies`).set(auth("opener"))
-      .send({ idempotencyKey: replyKey, expectedUserId: users.opener, body });
+      .send({ expectedPolicyRevision: policyRevision, idempotencyKey: replyKey, expectedUserId: users.opener, body });
     expect(response.status).toBe(201);
     expect(response.body).toMatchObject({ followUpOfId: created.body.id, subject: body, description: body, status: "RECEIVED" });
     const original = await detail(companyA, "opener", created.body.id);
@@ -284,7 +331,7 @@ const policy = {
     restarted.use("/api", customerSupportRoutes(db, { runtimeEnv: { AW_SUPPORT_CASE_DATA_POLICY_JSON: JSON.stringify(policy) } }));
     restarted.use(errorHandler);
     const retry = () => request(restarted).post(`${path(companyA)}/cases`).set(auth("opener"))
-      .send({ expectedUserId: users.opener, idempotencyKey: key, description });
+      .send({ expectedPolicyRevision: policyRevision, expectedUserId: users.opener, idempotencyKey: key, description });
     expect((await retry()).status).toBe(429);
     expect((await detail(companyA, "opener", created.body.id)).status).toBe(200);
     await db.update(authRateLimits).set({ lastRequest: Date.now() - 600001 });
@@ -297,7 +344,7 @@ const policy = {
     await db.update(supportCases).set({ customerStatus: "CLOSED", closedAt: new Date(), version: 1 }).where(eq(supportCases.id, created.body.id));
     const key = randomUUID(), body = "A new issue started after the previous case closed.";
     const send = () => request(app).post(`${path(companyA)}/cases/${created.body.id}/replies`).set(auth("opener"))
-      .send({ idempotencyKey: key, expectedUserId: users.opener, body });
+      .send({ expectedPolicyRevision: policyRevision, idempotencyKey: key, expectedUserId: users.opener, body });
     const first = await send(), repeated = await send();
     expect(first.status).toBe(201); expect(repeated.status).toBe(201);
     expect(first.body.id).not.toBe(created.body.id);
@@ -318,7 +365,7 @@ const policy = {
     const policyResponse = await request(noPolicy).get(`${path(companyA)}/policy`).set(auth("opener")).query({ expectedUserId: users.opener });
     expect(policyResponse.body).toEqual({ available: false });
     const denied = await request(noPolicy).post(`${path(companyA)}/cases`).set(auth("opener"))
-      .send({ idempotencyKey: randomUUID(), expectedUserId: users.opener, description: "I need help" });
+      .send({ expectedPolicyRevision: policyRevision, idempotencyKey: randomUUID(), expectedUserId: users.opener, description: "I need help" });
     expect(denied.status).toBe(422);
     expect(denied.body.details).toMatchObject({ code: "SUPPORT_INTAKE_UNAVAILABLE" });
     const key = randomUUID(), receipt = await create(companyA, "opener", "Recover my already committed request", key);
@@ -416,7 +463,7 @@ const policy = {
     const valid = await create(companyA, "opener", "Valid Unicode 😀");
     expect(valid.status).toBe(201);
     const invalidReply = await request(app).post(`${path(companyA)}/cases/${valid.body.id}/replies`).set(auth("opener"))
-      .send({ idempotencyKey: randomUUID(), expectedUserId: users.opener, body: "private-canary-reply\u0000tail" });
+      .send({ expectedPolicyRevision: policyRevision, idempotencyKey: randomUUID(), expectedUserId: users.opener, body: "private-canary-reply\u0000tail" });
     expect(invalidReply.status).toBe(400);
     expect(JSON.stringify(invalidReply.body)).not.toContain("private-canary");
     expect(await db.select().from(supportCaseEvents).where(eq(supportCaseEvents.caseId, valid.body.id))).toHaveLength(1);

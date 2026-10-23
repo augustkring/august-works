@@ -163,8 +163,15 @@ it("keeps pending review metadata strict and excludes private content and access
     ).toBe(false);
 });
 
-const command = { idempotencyKey: "c18e87f2-90f2-4cde-8e17-24b6ab5b3545", expectedUserId: "actual-human" };
+const command = { idempotencyKey: "c18e87f2-90f2-4cde-8e17-24b6ab5b3545", expectedUserId: "actual-human", expectedPolicyRevision: "a".repeat(64) };
 describe("customer support intake policy", () => {
+  it("requires an exact processing disclosure revision for new text commands", () => {
+    const { expectedPolicyRevision: _, ...withoutRevision } = command;
+    for (const expectedPolicyRevision of [undefined, "", "old", "a".repeat(63), "g".repeat(64)]) {
+      expect(createSupportCaseSchema.safeParse({ ...withoutRevision, description: "Help", expectedPolicyRevision }).success).toBe(false);
+      expect(replySupportCaseSchema.safeParse({ ...withoutRevision, body: "More information", expectedPolicyRevision }).success).toBe(false);
+    }
+  });
   it("accepts a description alone and preserves unanswered impact", () => {
     const result = createSupportCaseSchema.parse({ ...command, description: "I cannot open my work" });
     expect(result.category).toBe("other");

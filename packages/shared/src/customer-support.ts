@@ -148,8 +148,10 @@ const supportCommandFields = {
   idempotencyKey: z.uuid().toLowerCase(),
   expectedUserId: z.string().min(1).max(300),
 };
+const supportPolicyRevision = z.string().regex(/^[a-f0-9]{64}$/);
 export const createSupportCaseSchema = z.strictObject({
   ...supportCommandFields,
+  expectedPolicyRevision: supportPolicyRevision,
   description: supportText(SUPPORT_CASE_LIMITS.description),
   category: supportCaseCategorySchema.default("other"),
   subject: supportText(SUPPORT_CASE_LIMITS.subject).optional(),
@@ -160,6 +162,7 @@ export const closeSupportCaseSchema = z.strictObject(supportCommandFields);
 export type CloseSupportCase = z.infer<typeof closeSupportCaseSchema>;
 export const replySupportCaseSchema = z.strictObject({
   ...supportCommandFields,
+  expectedPolicyRevision: supportPolicyRevision,
   body: supportText(SUPPORT_CASE_LIMITS.reply),
   safeContext: supportCaseSafeContextSchema.optional(),
 });
@@ -237,6 +240,7 @@ export type SupportCaseList = z.infer<typeof supportCaseListSchema>;
 export const supportCaseIntakePolicySchema = z.discriminatedUnion("available", [
   z.strictObject({ available: z.literal(false) }),
   z.strictObject({ available: z.literal(true),
+    revision: supportPolicyRevision,
     recipientName: supportCaseDataPolicySchema.shape.recipientName,
     privacyNoticeUrl: supportCaseDataPolicySchema.shape.privacyNoticeUrl,
     retentionDays: supportCaseDataPolicySchema.shape.retentionDays,

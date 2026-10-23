@@ -3139,6 +3139,8 @@
     "recipient": "Supportkontakt: {{recipientName}}.",
     "retention": "Lokale sager er konfigureret til opbevaring i op til {{count}} dage efter den seneste besked. Se privatlivsoplysningerne for undtagelser.",
     "privacyNotice": "Læs privatlivsmeddelelsen for support",
+    "policyChanged": "Behandlingen af supportoplysninger er ændret. Din besked blev ikke sendt. Gennemgå supportkontakten og privatlivsoplysningerne, før du sender igen.",
+    "casePolicyChanged": "Behandlingen af denne sag er ændret. Dit svar blev ikke sendt. Kontakt support direkte, før du tilføjer oplysninger.",
     "recentCases": "Seneste supportsager",
     "noCases": "Du har ingen supportsager endnu.",
     "newCase": "Opret en supportsag",

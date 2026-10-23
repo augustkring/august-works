@@ -3139,6 +3139,8 @@
     "recipient": "Support contact: {{recipientName}}.",
     "retention": "Local cases are configured for retention of up to {{count}} days after the last message. See the privacy notice for exceptions.",
     "privacyNotice": "Read the support privacy notice",
+    "policyChanged": "Support processing changed. Your message was not sent. Review the support contact and privacy information before sending again.",
+    "casePolicyChanged": "Processing for this case changed. Your reply was not sent. Contact support directly before adding information.",
     "recentCases": "Recent support cases",
     "noCases": "You have no support cases yet.",
     "newCase": "Start a support case",
