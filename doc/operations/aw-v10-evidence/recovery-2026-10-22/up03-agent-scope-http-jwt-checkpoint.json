@@ -1,5 +1,5 @@
 {
-  "status": "bounded current ingress software checkpoint: actual64PASS; final compiler/UI checks pending; NOT PR-ready",
+  "status": "bounded current ingress software checkpoint: actual64PASS, current server compiler/UI types/token gates PASS; full UP03/V10 NOT qualified",
   "production_changes": [
     "Canonical Agent key company-stream admission uses actual Agent/current responsible Human and original company_scope:read; preserves original paused-read semantics.",
     "Malformed nonnull key restrictions no longer default to standard in shared normalizer, HTTP, signed JWT or WS; original null/absent standard storage remains valid.",
@@ -84,6 +84,19 @@
       "seconds": 67.78,
       "all_eleven_source_pins_unchanged": true,
       "pg_http_socket_cleanup": "closed"
+    },
+    "final_server_compiler_retry": {
+      "session": 41149,
+      "exit_code": 0,
+      "durable_exit_file": "up03-agent-source-server-compiler-retry.exit",
+      "command": "GOMEMLIMIT=6GiB GOMAXPROCS=2 NODE_OPTIONS=--max-old-space-size=6144 pnpm --filter @paperclipai/server exec tsc --noEmit --singleThreaded",
+      "prerequisites": "Original normal server typecheck77699 passed; only WS scope ceiling and JWT expiry condition changed afterward; normal prerequisite source owners unchanged. No full workspace typecheck claimed."
+    },
+    "ui_typecheck": {
+      "session": 74544,
+      "exit_code": 0,
+      "durable_exit_file": "up03-agent-key-scope-ui-typecheck.exit",
+      "command": "pnpm --filter @paperclipai/ui typecheck"
     }
   },
   "final_source_sha256": {
@@ -104,7 +117,7 @@
     "No full atomic credential/source-policy lifetime through every subsequent side effect, provider await or socket send proved.",
     "Native Task/private Memory copied-body leak and frozen actual input/source closure still OPEN.",
     "Earlier temporal fixture schema/denial-shape failures and interrupted attempt remain retained; corrected actual two-case temporal regression now fails genuine availability assertions (see separate temporal checkpoint).",
-    "Current UI typecheck and final compiler/64-case actual exit retry remain pending; full pnpm test:run/build and whole current workspace checks remain OPEN.",
+    "Current server compiler, UI typecheck and actual64-case exit retry now pass; full pnpm test:run/build and whole current workspace checks remain OPEN.",
     "No merge/deploy/paid provider or PR-ready claim."
   ]
 }

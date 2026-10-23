@@ -129,3 +129,8 @@ The next input-snapshot regression also proves a later private Task selection re
 ### UP03 reset retry and genuine temporal regressions (2026-10-23)
 
 The unchanged final ingress fixture now passes64 cases with observed exit0, durable exit capture and11 unchanged source pins; the earlier rendered-only PASS remains distinguished. Two corrected native temporal cases genuinely fail after all positive/negative preconditions pass: later private Task selection hides an earlier shared Memory and an earlier derived Task, although their bodies did not change. Both native queries/cleanup and actual exit1 are captured. Earlier fixture mistakes and environment interruption remain separate; see `up03-native-payload-temporal-open.json`. The correction must replace read-time Task taint and future-Context traversal with actual creation-time body-source snapshots while preserving current source ACL/erasure. This remains an open implementation gate, alongside copied private Memory and all full V10/release checks.
+
+
+### UP03 final scoped compiler checks (2026-10-23)
+
+The current native server compiler and UI typecheck both close with actual exit0 and durable exit capture. The original normal server prerequisite chain passed before the final WS/JWT condition fixes; those unchanged prerequisite owners were retained. Token gates and the actual64-case ingress retry pass. This is scoped qualification of the current ingress/Foundation/native-executor changes; it does not qualify the new deliberately failing temporal tests, copied private Memory/source closure, the whole current workspace/full test/build or PR readiness.
