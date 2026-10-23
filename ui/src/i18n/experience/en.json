@@ -126,7 +126,7 @@
   "feedback": {
     "action": "Feedback",
     "title": "Share feedback",
-    "description": "Tell us what went wrong or what would make August Works better. This isn't monitored for urgent support.",
+    "description": "Tell us what went wrong or what would make {{productName}} better. This isn't monitored for urgent support.",
     "support": "Need help now? Contact support",
     "security": "Security concern? Contact security",
     "privacy": "Privacy concern? Contact privacy",
@@ -140,7 +140,7 @@
     "questions": {
       "BUG": "What happened?",
       "IMPROVEMENT": "What could be easier or better?",
-      "IDEA": "What would you like August Works to help you do?",
+      "IDEA": "What would you like {{productName}} to help you do?",
       "OTHER": "What would you like us to know?"
     },
     "goals": {
@@ -313,7 +313,7 @@
     "loadFailed": "Setup could not be loaded. Your saved work is preserved.",
     "stages": "Getting started: Company → First task → Access → Result",
     "screen2": "Tell us about your company",
-    "screen3": "What would you like August Works to help with first?",
+    "screen3": "What would you like {{productName}} to help with first?",
     "screen4": "Let us understand your company",
     "screen5": "Understanding {{company}}",
     "screen6": "Does this look right?",
@@ -484,9 +484,9 @@
         "unmappedScope": "Provider scope requiring its own detailed review: {{scope}}",
         "writeTools": "The provider profile includes these write tools: {{tools}}. This decision does not authorize an Agent to use them.",
         "noWriteTools": "The selected provider profile has no write tools.",
-        "noBusinessChanges": "August Works authorizes no business changes or Agent actions in this setup decision. Provider scopes may be broader than those actions.",
+        "noBusinessChanges": "{{productName}} authorizes no business changes or Agent actions in this setup decision. Provider scopes may be broader than those actions.",
         "noOrganization": "No organization identity, company installation or Agent access.",
-        "noConsequentialAuthority": "No August Works permission to send messages, delete data, spend money or broaden access.",
+        "noConsequentialAuthority": "No {{productName}} permission to send messages, delete data, spend money or broaden access.",
         "noExecution": "No Agent execution. Sign-in and connection validation use the original connection owner; later use needs a separate current purpose and Safe Test.",
         "separateDecision": "Agent access and automatic business actions need a separate reviewed decision.",
         "consequentialDecision": "External communication, changes, deletion, spending and broader permissions require their own approval.",
@@ -1164,7 +1164,7 @@
     },
     "runtime": "Declared supported runtimes",
     "provider": {
-      "paperclip_native": "August Works Native",
+      "paperclip_native": "{{productName}} Native",
       "hermes": "Hermes",
       "openclaw": "OpenClaw"
     },
@@ -1885,7 +1885,7 @@
     "confirmActivation": "I confirm replacing the active version for future work under the existing budget and access.",
     "publish": "Publish and activate",
     "packageVersion": "Package version {{version}}",
-    "scope": "Works in August Works. It may prepare internal drafts from the current task. Other actions, connected sources, persistent memory and delegation remain unavailable.",
+    "scope": "Works in {{productName}}. It may prepare internal drafts from the current task. Other actions, connected sources, persistent memory and delegation remain unavailable.",
     "openAgent": "Open agent",
     "manageAgent": "Monitor or pause agent",
     "reviewPackage": "Review package setup"
@@ -2667,7 +2667,7 @@
     "moreMetrics": "More metrics may exist beyond this bounded page.",
     "inspect": "Inspect definitions and observations",
     "authority": {
-      "aw_native": "Calculated by August Works",
+      "aw_native": "Calculated by {{productName}}",
       "external_authoritative": "Externally authoritative measurement",
       "external_projection": "Projection of an external measurement"
     },
@@ -2834,7 +2834,7 @@
     "cutoff": "Input cutoff: {{time}} (UTC)",
     "recorded": "Calculation recorded at {{time}} (UTC)",
     "pastPeriods": "Some estimated periods had already begun when this calculation was recorded. Do not treat this as a forecast made before those periods.",
-    "nativeModel": "Native baseline calculation. No prediction interval is available.",
+    "nativeModel": "{{productName}} native baseline calculation. No prediction interval is available.",
     "statisticalModel": "Statistical model. Its software provenance does not establish calibration for your company.",
     "period": "Estimated period: {{from}} to {{until}} (UTC; end excluded)",
     "value": "Estimate: {{value}} ({{unit}})",
@@ -2977,7 +2977,7 @@
     "loading": "Checking your current delivery preference…",
     "unavailable": "Your delivery preference is unavailable. Check your account and try again.",
     "boundary": "Only a verified private chat linked to your account is offered. It receives an account-update notice and sign-in link, without task content, prompts, documents or credentials. Timing and quiet hours still apply. Security notices keep their required delivery.",
-    "destinationUnavailable": "The saved private destination is unavailable. Updates stay in August Works; they are not redirected to email.",
+    "destinationUnavailable": "The saved private destination is unavailable. Updates stay in {{productName}}; they are not redirected to email.",
     "changed": "Your preference or destination changed. Review the current setting before saving.",
     "reviewCurrent": "Review current setting",
     "destination": "Where future updates arrive",
@@ -2992,7 +2992,7 @@
     "save": "Save delivery preference"
   },
   "errorRecovery": {
-    "app": "August Works hit an error",
+    "app": "{{productName}} hit an error",
     "page": "This page hit an error",
     "explanation": "You can reload the page to try again. Unsaved changes on this page may be lost.",
     "unknownOutcome": "If you submitted a change before this error, check its original status after returning. This error does not confirm whether the change was saved.",

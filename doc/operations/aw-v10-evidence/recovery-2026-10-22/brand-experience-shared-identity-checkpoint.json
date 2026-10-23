@@ -1,0 +1,47 @@
+{
+  "scope": "Shared product identity in eleven experience values per English/Danish locale",
+  "sources": {
+    "ui/src/i18n/index.ts": "f420f310b810dbd48d0c5bf4e1a33460e215d363eea6ef182d29fa822e8e4c14",
+    "ui/src/i18n/experience/en.json": "4389dca0c3ed5d7c58882d0c45f88a08c8a9e8d58d71cbbe6bd4b853303eb0f6",
+    "ui/src/i18n/experience/da.json": "eb5a32a944dba9861a35b89388dc11eed9bdb378a1af39ae0286d7d39f42318f",
+    "ui/src/i18n/locale-validation.test.ts": "36a4f6f73cce5961823b76d682ed81680fb521560b4bcff2d3f03ed10fe203f2"
+  },
+  "changedKeys": {
+    "en": [
+      "feedback.description",
+      "feedback.questions.IDEA",
+      "activation.screen3",
+      "activation.connectionConsent.explanation.noBusinessChanges",
+      "activation.connectionConsent.explanation.noConsequentialAuthority",
+      "hireDeclared.provider.paperclip_native",
+      "agentPublication.scope",
+      "insightObservations.authority.aw_native",
+      "insightForecasts.nativeModel",
+      "notificationChannels.destinationUnavailable",
+      "errorRecovery.app"
+    ],
+    "da": [
+      "feedback.description",
+      "feedback.questions.IDEA",
+      "activation.screen3",
+      "activation.connectionConsent.explanation.noBusinessChanges",
+      "activation.connectionConsent.explanation.noConsequentialAuthority",
+      "hireDeclared.provider.paperclip_native",
+      "agentPublication.scope",
+      "insightObservations.authority.aw_native",
+      "insightForecasts.nativeModel",
+      "notificationChannels.destinationUnavailable",
+      "errorRecovery.app"
+    ]
+  },
+  "localeTests": {
+    "exit": 0,
+    "passed": 8,
+    "durationSeconds": 1.59,
+    "log": "brand-experience-copy-locale-test.log"
+  },
+  "uiTypecheckExit": 0,
+  "uiTokenGatesExit": 0,
+  "rootVerification": "All locale keys preserved; ten product substitutions and matching English/Danish native baseline wording. Existing native i18next defaultVariables supplies productName; callers may still explicitly override. No other locale files use this placeholder. Real EN/DA rendering and French-to-English experience fallback checked.",
+  "limits": "Software identity copy only; no inferred legal/operator identity, permissions or delivery. Compatibility keys remain unchanged; full customer brand/locale/visual/V10 qualification open."
+}

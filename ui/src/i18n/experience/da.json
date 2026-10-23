@@ -126,7 +126,7 @@
   "feedback": {
     "action": "Feedback",
     "title": "Del feedback",
-    "description": "Fortæl os, hvad der gik galt, eller hvad der kunne gøre August Works bedre. Her behandles ikke akut support.",
+    "description": "Fortæl os, hvad der gik galt, eller hvad der kunne gøre {{productName}} bedre. Her behandles ikke akut support.",
     "support": "Brug for hjælp nu? Kontakt support",
     "security": "Sikkerhedsproblem? Kontakt sikkerhed",
     "privacy": "Privatlivsproblem? Kontakt privatliv",
@@ -140,7 +140,7 @@
     "questions": {
       "BUG": "Hvad skete der?",
       "IMPROVEMENT": "Hvad kunne være lettere eller bedre?",
-      "IDEA": "Hvad vil du gerne have August Works til at hjælpe dig med?",
+      "IDEA": "Hvad vil du gerne have {{productName}} til at hjælpe dig med?",
       "OTHER": "Hvad vil du gerne fortælle os?"
     },
     "goals": {
@@ -313,7 +313,7 @@
     "loadFailed": "Opsætningen kunne ikke indlæses. Dit gemte arbejde er bevaret.",
     "stages": "Kom i gang: Virksomhed → Første opgave → Adgang → Resultat",
     "screen2": "Fortæl os om din virksomhed",
-    "screen3": "Hvad vil du først have August Works til at hjælpe med?",
+    "screen3": "Hvad vil du først have {{productName}} til at hjælpe med?",
     "screen4": "Lad os forstå din virksomhed",
     "screen5": "Vi lærer {{company}} at kende",
     "screen6": "Ser det rigtigt ud?",
@@ -484,9 +484,9 @@
         "unmappedScope": "Scope hos udbyderen, der kræver sin egen detaljerede gennemgang: {{scope}}",
         "writeTools": "Udbyderprofilen indeholder disse skriveværktøjer: {{tools}}. Denne beslutning giver ikke en agent tilladelse til at bruge dem.",
         "noWriteTools": "Den valgte udbyderprofil har ingen skriveværktøjer.",
-        "noBusinessChanges": "August Works giver ikke tilladelse til forretningsændringer eller agenthandlinger med denne opsætningsbeslutning. Udbyderens scopes kan være bredere end disse handlinger.",
+        "noBusinessChanges": "{{productName}} giver ikke tilladelse til forretningsændringer eller agenthandlinger med denne opsætningsbeslutning. Udbyderens scopes kan være bredere end disse handlinger.",
         "noOrganization": "Ingen organisationsidentitet, virksomhedsinstallation eller agentadgang.",
-        "noConsequentialAuthority": "Ingen August Works-tilladelse til at sende beskeder, slette data, bruge penge eller udvide adgang.",
+        "noConsequentialAuthority": "Ingen {{productName}}-tilladelse til at sende beskeder, slette data, bruge penge eller udvide adgang.",
         "noExecution": "Ingen agentkørsel. Login og validering af forbindelsen bruger den oprindelige forbindelsesejer; senere brug kræver en særskilt gennemgang af det aktuelle formål og en sikker test.",
         "separateDecision": "Agentadgang og automatiske forretningshandlinger kræver en særskilt gennemgået beslutning.",
         "consequentialDecision": "Ekstern kommunikation, ændringer, sletning, forbrug og bredere tilladelser kræver hver sin godkendelse.",
@@ -1164,7 +1164,7 @@
     },
     "runtime": "Deklarerede understøttede kørselsmiljøer",
     "provider": {
-      "paperclip_native": "August Works Native",
+      "paperclip_native": "{{productName}} Native",
       "hermes": "Hermes",
       "openclaw": "OpenClaw"
     },
@@ -1885,7 +1885,7 @@
     "confirmActivation": "Jeg bekræfter at erstatte den aktive version til fremtidigt arbejde med det eksisterende budget og den eksisterende adgang.",
     "publish": "Publicér og aktivér",
     "packageVersion": "Pakkeversion {{version}}",
-    "scope": "Arbejder i August Works. Den må forberede interne kladder ud fra den aktuelle opgave. Andre handlinger, tilsluttede kilder, vedvarende hukommelse og delegering er fortsat utilgængelige.",
+    "scope": "Arbejder i {{productName}}. Den må forberede interne kladder ud fra den aktuelle opgave. Andre handlinger, tilsluttede kilder, vedvarende hukommelse og delegering er fortsat utilgængelige.",
     "openAgent": "Åbn agent",
     "manageAgent": "Overvåg eller pausér agent",
     "reviewPackage": "Gennemgå pakkeopsætning"
@@ -2667,7 +2667,7 @@
     "moreMetrics": "Der kan være flere målinger uden for denne afgrænsede side.",
     "inspect": "Gennemgå definitioner og observationer",
     "authority": {
-      "aw_native": "Beregnet af August Works",
+      "aw_native": "Beregnet af {{productName}}",
       "external_authoritative": "Ekstern, autoritativ måling",
       "external_projection": "Projektion af en ekstern måling"
     },
@@ -2834,7 +2834,7 @@
     "cutoff": "Skæringstidspunkt for input: {{time}} (UTC)",
     "recorded": "Beregning gemt {{time}} (UTC)",
     "pastPeriods": "Nogle estimerede perioder var allerede begyndt, da denne beregning blev gemt. Betragt ikke dette som en prognose lavet før disse perioder.",
-    "nativeModel": "August Works-baselineberegning. Intet prognoseinterval er tilgængeligt.",
+    "nativeModel": "{{productName}}-baselineberegning. Intet prognoseinterval er tilgængeligt.",
     "statisticalModel": "Statistisk model. Dens softwareoprindelse fastslår ikke kalibrering for din virksomhed.",
     "period": "Estimeret periode: {{from}} til {{until}} (UTC; slutpunktet er ikke medregnet)",
     "value": "Estimat: {{value}} ({{unit}})",
@@ -2977,7 +2977,7 @@
     "loading": "Tjekker dit aktuelle leveringsvalg…",
     "unavailable": "Dit leveringsvalg er ikke tilgængeligt. Tjek din konto, og prøv igen.",
     "boundary": "Du kan kun vælge en bekræftet privat chat, der er tilknyttet din konto. Den modtager en besked om en kontoopdatering og et loginlink uden opgaveindhold, prompts, dokumenter eller legitimationsoplysninger. Tidspunkter og stilleperioder gælder stadig. Sikkerhedsbeskeder beholder deres påkrævede levering.",
-    "destinationUnavailable": "Den gemte private modtager er ikke tilgængelig. Opdateringer bliver i August Works og omdirigeres ikke til e-mail.",
+    "destinationUnavailable": "Den gemte private modtager er ikke tilgængelig. Opdateringer bliver i {{productName}} og omdirigeres ikke til e-mail.",
     "changed": "Dit valg eller din modtager er ændret. Gennemgå den aktuelle indstilling, før du gemmer.",
     "reviewCurrent": "Gennemgå aktuel indstilling",
     "destination": "Hvor fremtidige opdateringer kommer frem",
@@ -2992,7 +2992,7 @@
     "save": "Gem leveringsvalg"
   },
   "errorRecovery": {
-    "app": "Der opstod en fejl i August Works",
+    "app": "Der opstod en fejl i {{productName}}",
     "page": "Der opstod en fejl på siden",
     "explanation": "Du kan genindlæse siden og prøve igen. Ændringer på siden, som ikke er gemt, kan gå tabt.",
     "unknownOutcome": "Hvis du sendte en ændring før fejlen, skal du kontrollere dens oprindelige status, når du vender tilbage. Fejlen bekræfter ikke, om ændringen blev gemt.",

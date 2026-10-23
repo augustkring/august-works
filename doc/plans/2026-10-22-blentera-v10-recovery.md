@@ -288,3 +288,10 @@ Original continuation owner selects the PostgreSQL microsecond comment version b
 Actual baseline2FAIL71.18s; final real bootstrap cases2PASS93.63s, complete original continuation suites48PASS53.04s, and server compiler actual/durable0, all recorded source pins match. The fixtures include a deleted historical comment and actual registered secret; both remain absent from full native input. Real source edits leave the entire original profile/input equal, and provider factory stays uncalled. Read-only gpt-6-luna review found no concrete scoped defect. See `up03-native-continuation-comment-checkpoint.json`.
 
 Partial source handoff only: interactions/prior results and other input families, complete receipt/current permissions/transport/effects and original private Memory/temporal/full V10 gates remain open. The next independent audit identifies registered-secret exposure through native answered-question envelopes; that separate path is not claimed fixed here.
+
+
+### 2026-10-23 — Shared identity in English/Danish experience copy
+
+The existing i18next initializer now supplies PRODUCT_IDENTITY.productName through its native defaultVariables mechanism. Eleven values per EN/DA experience catalogue use it for feedback, onboarding, provider-authority boundaries, native runtime/calculations, recovery and delivery explanations. Compatibility keys remain unchanged. The former Danish-only branded baseline label now has matching English interpolation while preserving its calculation meaning. Root verifies all keys and unrelated values, with exactly the expected eleven substitutions per locale; no other locale file uses this placeholder.
+
+Existing locale suite8PASS1.59s includes real default interpolation for every changed key in both languages, no unresolved productName placeholder and French-to-English fallback. UI typecheck and token gates exit0; final source pins match. See `brand-experience-shared-identity-checkpoint.json`. No legal/operator identity inferred; full brand/locale/visual and V10 release qualification remain open.

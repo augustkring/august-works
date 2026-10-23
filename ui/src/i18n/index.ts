@@ -1,5 +1,6 @@
 import i18n, { type InitOptions, type TOptions } from "i18next";
 import { initReactI18next, useTranslation as useReactI18nextTranslation } from "react-i18next";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 
 import { DEFAULT_LOCALE, i18nextResources, supportedLocales } from "./locales";
 import { readExperienceLocale } from "./experience-locale-preference";
@@ -13,7 +14,10 @@ const i18nextOptions: InitOptions = {
   fallbackLng: DEFAULT_LOCALE,
   supportedLngs: supportedLocales,
   defaultNS: "translation",
-  interpolation: { escapeValue: false },
+  interpolation: {
+    escapeValue: false,
+    defaultVariables: { productName: PRODUCT_IDENTITY.productName },
+  },
   returnObjects: false,
   initAsync: false,
 };
