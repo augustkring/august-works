@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { agents, companyMemberships, agentExecutionManifests, heartbeatRuns, instanceSettings, issues, projects, toolApplications, toolConnections, connectionGrants, toolCatalogEntries, toolProfiles, toolProfileBindings, toolInvocations, principalPermissionGrants, createDb } from "@paperclipai/db";
+import { agents, companyMemberships, agentExecutionManifests, heartbeatRuns, instanceSettings, issues, projects, toolApplications, toolConnections, connectionGrants, contextManifests, toolCatalogEntries, toolProfiles, toolProfileBindings, toolInvocations, principalPermissionGrants, createDb } from "@paperclipai/db";
 import { PROVIDER_CAPABILITY_FEATURES } from "@paperclipai/shared";
 import { startEmbeddedPostgresTestDatabase, getEmbeddedPostgresTestSupport } from "./helpers/embedded-postgres.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
@@ -88,7 +88,13 @@ describe.skipIf(!support.supported)("V5 execution authority", () => {
     const input = { companyId: f.home, agentId: f.presence.id, runId: run!.id, responsibleUserId: f.userId, issueId: null, query: "Review the approved company context" };
     const first = await svc.prepare(input); expect(first?.manifest.agentIdentityId).toBe(f.identity.id);
     expect(first?.manifest.executionScope.delegatedScopes).toEqual([]);
+    expect(first?.inputContextManifests).toEqual(first?.manifest.contextManifests);
     const resumed = await svc.prepare(input); expect(resumed?.record.id).toBe(first?.record.id);
+    expect(resumed?.manifest.contextManifests).toEqual(first?.manifest.contextManifests);
+    expect(resumed?.inputContextManifests).toHaveLength(1);
+    expect(resumed?.inputContextManifests).not.toEqual(first?.inputContextManifests);
+    const [actualContext] = await db.select().from(contextManifests).where(eq(contextManifests.id, resumed!.inputContextManifests[0]!.contextManifestId));
+    expect(actualContext).toMatchObject({ companyId: f.home, runId: run!.id, agentId: f.presence.id });
     await expect(db.update(agentExecutionManifests).set({ hash: "rewrite" }).where(eq(agentExecutionManifests.id, first!.record.id))).rejects.toThrow();
     await db.delete(companyMemberships).where(and(eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalId, f.userId)));
     await expect(svc.prepare(input)).rejects.toMatchObject({ status: 403 });

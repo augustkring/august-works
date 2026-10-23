@@ -66,7 +66,7 @@ describe("fresh native governed context", () => {
       { assemble },
     );
 
-    expect(markdown).toContain("Approved truth");
+    expect(markdown?.markdown).toContain("Approved truth");
     expect(assemble).toHaveBeenCalledWith(expect.objectContaining({
       companyId: baseInput.companyId,
       agentId: baseInput.agentId,
@@ -109,4 +109,12 @@ describe("fresh native governed context", () => {
     expect(call.query).toHaveLength(500);
     expect(call.query).not.toContain("title-after-limit");
   });
+  it("retains the exact created manifest with its delivered markdown", async () => {
+    const assembled = result("  Exact current input  ");
+    const manifest = { id: "66666666-6666-4666-8666-666666666666", queryHash: "a".repeat(64), policySnapshotHash: "b".repeat(64) };
+    const assemble = vi.fn<ContextAssemble>().mockResolvedValue({ ...assembled, packet: { ...assembled.packet, manifest } });
+    const value = await assembleFreshNativeGovernedContext({} as Db, baseInput, { assemble });
+    expect(value).toEqual({ markdown: "Exact current input", manifest });
+  });
+
 });

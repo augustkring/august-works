@@ -23133,6 +23133,9 @@ export function heartbeatService(
           workspaceId: persistedExecutionWorkspace?.id ?? null,
         });
         let nativeExecution: NativeExecutionInput | null = null;
+        // Exact Context inputs to this bootstrap only. NULL is unknown, never
+        // a complete source-free input receipt; later tool reads are separate.
+        let nativeBootstrapContextManifests: Array<{ companyId: string; contextManifestId: string }> | null = null;
         let nativeRunnerInstanceId: string | null = null;
         if (nativeRuntimeResolution.kind === "native") {
           if (!issueRef) {
@@ -23542,7 +23545,7 @@ export function heartbeatService(
                   })
                 : null;
             const pinnedPlanMarkdown = pinnedPlan?.body ?? "";
-            const governedContextMarkdown = v5Fabric?.contextMarkdown ??
+            const freshGovernedContext = v5Fabric?.contextMarkdown != null ? null :
               await assembleFreshNativeGovernedContext(db, {
                 enabled:
                   experimentalInstanceSettings.enableContextEngineV1 === true,
@@ -23562,6 +23565,16 @@ export function heartbeatService(
                   safeWakeCommentContext?.body ??
                   null,
               });
+            const governedContextMarkdown = v5Fabric?.contextMarkdown ?? freshGovernedContext?.markdown ?? null;
+            // A reused V5 inventory can name an older Context. Retain the fresh
+            // references that actually produced this bootstrap's markdown.
+            nativeBootstrapContextManifests = v5Fabric?.contextMarkdown != null
+              ? v5Fabric.inputContextManifests ?? null
+              : freshGovernedContext
+                ? freshGovernedContext.manifest
+                  ? [{ companyId: agent.companyId, contextManifestId: freshGovernedContext.manifest.id }]
+                  : null
+                : [];
             const nativeRuntimeContext = await buildRetainedNativeRuntimeContext({
               db,
               agent,
@@ -23770,6 +23783,9 @@ export function heartbeatService(
                         },
                       }
                     : {}),
+                  // Recovery preserves the original capture, including unknown
+                  // historical sources. Never substitute a later live Context.
+                  ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapContextManifests }),
                   nativeExecutionInput:
                     lockedProfile.nativeExecutionInput ?? nativeExecution,
                   nativeToolContractFingerprint:

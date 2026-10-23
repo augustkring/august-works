@@ -45,7 +45,7 @@ export async function assembleFreshNativeGovernedContext(
   db: Db,
   input: FreshNativeGovernedContextInput,
   options: { assemble?: ContextAssemble } = {},
-): Promise<string | null> {
+): Promise<{ markdown: string; manifest: ContextAssemblyResult["packet"]["manifest"] } | null> {
   if (!input.enabled) return null;
 
   const query = buildNativeContextQuery(input);
@@ -68,5 +68,5 @@ export async function assembleFreshNativeGovernedContext(
   });
 
   const markdown = result.markdown.trim();
-  return markdown.length > 0 ? markdown : null;
+  return markdown.length > 0 ? { markdown, manifest: result.packet.manifest } : null;
 }

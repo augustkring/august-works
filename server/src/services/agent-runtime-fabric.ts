@@ -240,7 +240,7 @@ export function agentRuntimeFabricService(db: Db) {
         return row!;
       });
 
-      return { record, manifest, contextMarkdown: `${inventory}\n\n${context.markdown}`, testSelected: Boolean(test && manifest.skills.some((p) => p.skillId === test.skillId)), providerRuntime: { providerType: provider.provider.providerType, providerBindingId: provider.provider.id, providerAgentRef: provider.provider.providerAgentRef, providerProfileRef: provider.runtime.providerProfileRef, sessionNamespace: provider.runtime.providerSessionNamespace, isolationMode: provider.provider.isolationMode as "isolated_per_presence" | "shared_trusted_runtime", capabilitySnapshotHash: provider.provider.capabilitySnapshot!.hash } };
+      return { record, manifest, inputContextManifests: context.refs, contextMarkdown: `${inventory}\n\n${context.markdown}`, testSelected: Boolean(test && manifest.skills.some((p) => p.skillId === test.skillId)), providerRuntime: { providerType: provider.provider.providerType, providerBindingId: provider.provider.id, providerAgentRef: provider.provider.providerAgentRef, providerProfileRef: provider.runtime.providerProfileRef, sessionNamespace: provider.runtime.providerSessionNamespace, isolationMode: provider.provider.isolationMode as "isolated_per_presence" | "shared_trusted_runtime", capabilitySnapshotHash: provider.provider.capabilitySnapshot!.hash } };
     },
   };
 }
