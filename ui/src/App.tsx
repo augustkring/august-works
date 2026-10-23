@@ -1,5 +1,6 @@
 import {
   CustomerSupport,
+  CustomerSupportCases,
   MaintenanceHistoryEntry,
   MemoryMaintenanceHistoryEntry,
   ExperienceMeasuresEntry,
@@ -252,6 +253,7 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       <Route path="company/settings/billing" element={<SaasBillingPage />} />
       <Route path="company/settings/runtime" element={<SaasRuntimesPage />} />
       <Route path="company/settings/support" element={<SaasSupportPage />} />
+      <Route path="company/support" element={<CustomerSupportCases />} />
       <Route path="company/support-access" element={<CustomerSupport />} />
       <Route path="company/settings/deletion" element={<SaasDeletionPage />} />
       <Route path="company/settings/security" element={<SaasAccountPage />} />

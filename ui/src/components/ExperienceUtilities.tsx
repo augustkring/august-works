@@ -3,24 +3,26 @@ import { useTranslation } from "react-i18next";
 import { Menu, UserRound } from "lucide-react";
 import { FEEDBACK_CONTACTS } from "@paperclipai/shared";
 import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
-import { Link } from "../lib/router";
+import { Link, useLocation } from "../lib/router";
+import { useCompany } from "../context/CompanyContext";
+import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
+import { feedbackPageContext } from "../lib/feedback-safe-context";
 import { Button } from "./ui/button";
 import { CustomerFeedbackDialog } from "./CustomerFeedbackDialog";
 import { useSidebar } from "../context/SidebarContext";
 export function ExperienceUtilities({ safetyRecovery = false }: { safetyRecovery?: boolean }) {
   const { sidebarOpen, setSidebarOpen } = useSidebar();
+  const { selectedCompanyId } = useCompany(), account = useV9CurrentAccount(), location = useLocation();
   const { t } = useTranslation("experience"),
-    shell = useV9FeatureEnabled("progressive_shell_v9"),
-    feedback = useV9FeatureEnabled("customer_feedback_v9");
-  const showNavigationAndLanguage = shell.enabled || safetyRecovery;
-  if (!showNavigationAndLanguage && !feedback.enabled) return null;
+    shell = useV9FeatureEnabled("progressive_shell_v9");
+  const showNavigation = shell.enabled || safetyRecovery;
   return (
     <div
       role="region"
       aria-label={t("utilities")}
       className="flex shrink-0 flex-wrap items-center justify-end gap-2 border-b border-border bg-background px-3"
     >
-      {showNavigationAndLanguage && (
+      {showNavigation && (
         <Button
           variant="ghost"
           className="min-h-11 min-w-11 md:hidden"
@@ -44,14 +46,22 @@ export function ExperienceUtilities({ safetyRecovery = false }: { safetyRecovery
           {t("ask")}
         </Button>
       )}
-      {showNavigationAndLanguage && <AccountExperienceLanguageSelect />}
+      <AccountExperienceLanguageSelect />
       <CustomerFeedbackDialog />
+      <Link
+        className="inline-flex min-h-11 items-center rounded-md px-3 text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
+        to="/company/support"
+        state={account.settled && !account.localImplicit && account.userId && selectedCompanyId
+          ? { companyId: selectedCompanyId, expectedUserId: account.userId,
+              returnPathname: location.pathname,
+              safeContext: { surface: feedbackPageContext(location.pathname).surfaceKey } }
+          : undefined}
+        onClick={() => setSidebarOpen(false)}
+      >{t("help")}</Link>
       <a
         className="inline-flex min-h-11 items-center rounded-md px-3 text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
         href={FEEDBACK_CONTACTS.support}
-      >
-        {t("help")}
-      </a>
+      >{t("supportCases.contactSupport")}</a>
       <Link
         to="/company/settings/instance/profile"
         aria-label={t("user")}

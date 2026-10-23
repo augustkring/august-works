@@ -15,6 +15,9 @@ function deferredPage(load: () => Promise<{ default: ComponentType }>) {
   };
 }
 
+export const CustomerSupportCases = deferredPage(() =>
+  import("./CustomerSupportCases").then(page => ({ default: page.CustomerSupportCases })),
+);
 export const CustomerSupport = deferredPage(() =>
   import("./CustomerSupport").then((page) => ({
     default: page.CustomerSupport,

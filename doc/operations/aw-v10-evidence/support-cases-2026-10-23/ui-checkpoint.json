@@ -1,0 +1,92 @@
+{
+  "checkpoint": "V10 customer support UI evidence",
+  "recordedAt": "2026-10-23T18:09:00Z",
+  "scope": "Bounded UI implementation evidence only. This does not qualify browser journeys, accessibility review, live support delivery, operator configuration, external provider behavior, or complete SUP-01/SUP-02 acceptance.",
+  "sourcePins": {
+    "file": "support-cases-ui-qualified-pins.txt",
+    "result": "All 8 recorded SHA-256 source pins match the current files."
+  },
+  "completedRuns": [
+    {
+      "name": "Customer support cases page regression",
+      "result": "10 passed, 1 file passed",
+      "log": "support-cases-ui-return-final.log",
+      "exit": "support-cases-ui-return-final.exit",
+      "exitCode": 0,
+      "pins": "support-cases-ui-qualified-pins.txt"
+    },
+    {
+      "name": "Existing support access history regression",
+      "result": "8 passed, 1 file passed",
+      "log": "support-cases-original-history-final.log",
+      "exit": "support-cases-original-history-final.exit",
+      "exitCode": 0
+    },
+    {
+      "name": "Token gates",
+      "result": "clean",
+      "log": "support-cases-ui-final-token-gates.log",
+      "exit": "support-cases-ui-final-token-gates.exit",
+      "exitCode": 0
+    },
+    {
+      "name": "Original App routing and cloud-access regressions",
+      "result": "16 passed, 2 files passed",
+      "log": "support-cases-ui-native-routing.log",
+      "exit": "support-cases-ui-native-routing.exit",
+      "exitCode": 0
+    },
+    {
+      "name": "Final UI typecheck",
+      "result": "passed",
+      "log": "support-cases-ui-final-types.log",
+      "exit": "support-cases-ui-final-types.exit",
+      "exitCode": 0
+    }
+  ],
+  "retainedFailedRuns": [
+    {
+      "name": "Initial composed layout run",
+      "result": "45 passed, 1 failed; old generic select query chose the now-visible language selector instead of the company settings Page section selector.",
+      "log": "support-cases-ui-composed.log",
+      "exit": "support-cases-ui-composed.exit",
+      "exitCode": 1,
+      "sourceCapture": "support-cases-ui-failed-layout.txt.gz"
+    },
+    {
+      "name": "Initial return-state assertions",
+      "result": "47 passed, 3 failed; fallback path expectations assumed /work while company-aware routing emitted /BLT/work",
+      "log": "support-cases-ui-return.log",
+      "exit": "support-cases-ui-return.exit",
+      "exitCode": 1,
+      "sourceCaptures": [
+        "support-cases-ui-first-return-CustomerSupportCases.tsx.txt.gz",
+        "support-cases-ui-first-return-CustomerSupportCases.test.tsx.txt.gz"
+      ]
+    }
+  ],
+  "pendingEvidence": [],
+  "otherPreservedAttempts": [
+    "support-cases-ui-initial.log",
+    "support-cases-ui-reviewed.log",
+    "support-cases-ui-return-final.log",
+    "support-cases-ui-return-types.log",
+    "support-cases-ui-return-token-gates.log",
+    "support-cases-ui-native-routing.log",
+    "support-cases-ui-final-types.log",
+    "support-cases-ui-before-return-CustomerSupportCases.tsx.txt.gz",
+    "support-cases-ui-before-return-ExperienceUtilities.tsx.txt.gz",
+    "support-cases-ui-initial-review-CustomerSupportCases.tsx.txt.gz",
+    "support-cases-ui-initial-review-CustomerSupportCases.test.tsx.txt.gz"
+  ],
+  "interpretation": [
+    "The 10-test support page and 8-test support-access history runs are separate suites, not one cumulative coverage claim.",
+    "The return-state test coverage is unit/component coverage using router state; no end-to-end browser journey was run.",
+    "The UI token gate and final UI typecheck passed; their logs and matching exit files are archived.",
+    "The native local support API test evidence remains in checkpoint.json and is separate from this UI evidence.",
+    "The reviewed rerun selected a nonexistent CustomerSupportAccess filename and therefore ran only the actual case page and Layout suites: 38PASS30.77s. The actual original CustomerSupport history was then run separately: 8PASS26.09s.",
+    "The initial return run retains 41 passing existing Layout/history tests; the final focused 10-test case page includes the added malformed return address guard.",
+    "Cancel preserves the draft only while this account/company view remains mounted. Full crash recovery, original-work draft preservation and full SUP acceptance remain open."
+  ],
+  "archivedScratch": "The adjacent support-cases-ui-* and support-cases-original-history-final.* artifacts were copied byte-for-byte from /workspace/v10-preparation."
+}

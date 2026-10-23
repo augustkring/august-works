@@ -720,7 +720,7 @@ describe("Layout", () => {
     await flushReact();
     await flushReact();
 
-    const selector = container.querySelector("select");
+    const selector = container.querySelector<HTMLSelectElement>('select[aria-label="Page section"]');
     expect(selector).not.toBeNull();
     expect(selector?.value).toBe("secrets");
     const selectorText = selector?.textContent?.toLowerCase() ?? "";

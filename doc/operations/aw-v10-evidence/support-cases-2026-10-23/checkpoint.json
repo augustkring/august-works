@@ -91,5 +91,9 @@
     "No configured external SupportCaseGateway or delivery acknowledgement is qualified; customer receipts remain local and delivery-pending.",
     "Provider-side deletion, real legal-hold process, marker expiry, backup restoration horizon, and hosted customer/operator acceptance remain open."
   ],
+  "uiEvidenceCheckpoint": {
+    "file": "ui-checkpoint.json",
+    "note": "Separate bounded UI evidence with its own source pins, logs, exit files, and explicit coverage limits."
+  },
   "archivedScratch": "This directory contains byte-preserved support-case-api scratch logs, exit files, source pins, and compressed failed/intermediate source captures from /workspace/v10-preparation."
 }
