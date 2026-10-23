@@ -1,3 +1,4 @@
+import type { NativePayloadSourceSnapshot } from "@paperclipai/shared";
 import { sql } from "drizzle-orm";
 import {
   boolean,
@@ -112,6 +113,10 @@ export const memoryRecords = pgTable(
   "memory_records",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    // Insert-only writer protocol. Historical payloads remain unknown; a hash
+    // or an empty source set cannot reconstruct their lost input history.
+    payloadSourceProtocolVersion: integer("payload_source_protocol_version").notNull().default(0),
+    payloadSourceSnapshot: jsonb("payload_source_snapshot").$type<NativePayloadSourceSnapshot | null>(),
     companyId: uuid("company_id")
       .notNull()
       .references(() => companies.id, { onDelete: "cascade" }),

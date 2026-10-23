@@ -134,3 +134,9 @@ The unchanged final ingress fixture now passes64 cases with observed exit0, dura
 ### UP03 final scoped compiler checks (2026-10-23)
 
 The current native server compiler and UI typecheck both close with actual exit0 and durable exit capture. The original normal server prerequisite chain passed before the final WS/JWT condition fixes; those unchanged prerequisite owners were retained. Token gates and the actual64-case ingress retry pass. This is scoped qualification of the current ingress/Foundation/native-executor changes; it does not qualify the new deliberately failing temporal tests, copied private Memory/source closure, the whole current workspace/full test/build or PR readiness.
+
+### UP03 closed payload representation and DB integrity (2026-10-23)
+
+The shared closed snapshot contract is implemented and pushed in `9596e88b2`. Generated0509 binds nullable original-owner snapshots to exact native payload bytes, owner/company and canonical digest; prior nonnull source sets cannot shrink, child Memory/asset changes invalidate their parent snapshot, and selected Context records cannot be rewritten. The focused current checkpoint passes16 tests across three files with actual/durable exit0 and14 unchanged pins. It follows genuine native regressions for protocol upgrade, wrong-owner/body seals, omitted Task text, retained-source removal, Memory evidence, attachment bytes/metadata and historical Context rewrites. See `up03-native-payload-source-binding-checkpoint.json` for exact scope, earlier failures and limits.
+
+This layer supplies no source grant or completeness assertion. No producer stamps it yet; canonical writers must preserve old known snapshots or keep invalidated history unknown, and private DTO/export handling remains pending. The original7-assertion private Memory copy regression and two temporal regressions remain open, as do complete run input receipts, actual same-transaction source SQL and all V10/release checks.

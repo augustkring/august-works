@@ -1,0 +1,88 @@
+{
+  "status": "Bounded structural and native DB binding checkpoint; UP03 and V10 remain OPEN",
+  "shared_contract_commit": "9596e88b2b29cdc6014fd544979ecb24bddaaeab",
+  "current": {
+    "session": 30986,
+    "observed_exit": 0,
+    "durable_exit": 0,
+    "test_files": 3,
+    "passed": 16,
+    "duration_seconds": 46.98,
+    "source_pins_unchanged": 14,
+    "pg_cleanup": "closed"
+  },
+  "regressions": [
+    {
+      "session": 86650,
+      "exit": 1,
+      "failed": 3,
+      "seconds": 24.53,
+      "scope": "Actual pre-trigger PG accepts historical protocol upgrade, wrong-owner valid digest and stale body replacement."
+    },
+    {
+      "session": 51595,
+      "exit": 0,
+      "passed": 3,
+      "seconds": 23.83,
+      "scope": "Initial owner/body integrity only; later review exposed omitted payload fields and child mutation gaps."
+    },
+    {
+      "session": 28377,
+      "exit": 1,
+      "failed": 1,
+      "passed": 2,
+      "seconds": 23.74,
+      "scope": "Actual monitorNotes write retains stale initial body hash; two upfront pins unchanged."
+    },
+    {
+      "session": 54953,
+      "exit": 1,
+      "failed": 1,
+      "skipped": 3,
+      "seconds": 22.97,
+      "scope": "Actual previously retained policy/input drop accepted; two upfront pins unchanged."
+    },
+    {
+      "session": 92149,
+      "exit": 1,
+      "failed": 7,
+      "failed_assertions": 12,
+      "seconds": 22.57,
+      "scope": "Actual Memory evidence/source-array, asset bytes/metadata and immutable Context selection gaps; two upfront pins unchanged."
+    }
+  ],
+  "checks": {
+    "schema_generation": {
+      "session": 81892,
+      "exit": 0,
+      "migration": "0509_nebulous_wong"
+    },
+    "db_typecheck": {
+      "session": 74143,
+      "exit": 0,
+      "note": "Completed on initial binding revision; final source migration/compile checks pending."
+    },
+    "server_typecheck": {
+      "initial_session": 11865,
+      "initial_exit": 1,
+      "initial_error": "Explicit native list projection intentionally omits server-only proof columns, but IssueRow required the new full DB columns. IssueRow now explicitly omits those two columns; no fake proof values selected.",
+      "retry_session": 48677,
+      "status": "running; no retry verdict claimed"
+    },
+    "final_migration_checks": {
+      "session": 96046,
+      "observed_exit": 0,
+      "durable_exit": 0
+    }
+  },
+  "limits": [
+    "Structural parser and SQL binding do not prove actual producer truth, complete inputs, source existence or current permission.",
+    "No production writer stamps protocol1 or these snapshots yet. Historical protocol0 remains immutable and unknown.",
+    "Original mutation writers must preserve the previous complete snapshot, or keep an invalidated NULL snapshot unknown. A later hash/current run cannot reconstruct lost history; DB binding alone does not prevent NULL resurrection.",
+    "Memory evidence and attachment asset changes invalidate snapshots; canonical source readers/producers must honor unknown. No mixed old-reader deployment or rollback compatibility qualification.",
+    "Actual native bootstrap, staged assets, later tool input receipts, retained sessions and creation-time output captures remain unimplemented.",
+    "Server-only snapshot DTO/export handling and canonical source-aware SQL execution inside the actual permission transaction remain pending.",
+    "Original copied-private-Memory and two temporal regressions remain OPEN; no integration or release success is inferred from these16 tests.",
+    "Full current workspace typecheck/test:run/build, all V10 gates and PR readiness remain OPEN."
+  ]
+}

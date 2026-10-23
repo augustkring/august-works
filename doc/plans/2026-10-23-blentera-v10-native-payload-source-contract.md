@@ -1,6 +1,6 @@
 # Blentera V10 native payload source contract
 
-Source-only implementation proposal. Existing native Task/private Memory regression remains open; this document supplies no implementation or release qualification.
+Implementation contract. The closed shared representation and original-owner DB binding now have a bounded16-test checkpoint, recorded below. Actual input capture, source-aware reads and the original native Task/private Memory and temporal regressions remain open. The source-only sections retain the design history; their no-implementation statements describe that earlier checkpoint.
 
 Native captured-input / dispatch source contract refinement — 2026-10-23
 STATUS: READ-ONLY DESIGN. No production/schema/test changes, migration or check launched. Extends up03-native-payload-receipt-design.txt. Existing Task/private-Memory RED remains open; source tracing is not GREEN qualification.
@@ -107,3 +107,9 @@ E. Foundation permission proof: extend original withReadSources whitelist only s
 F. Dynamic tools/continuation/history: choose the exact supported first-wave input families before setting protocol capability for any constructor. Unsupported tool response/source family refuses source-qualified derivative effects; it is not silently treated as source-free. Ordinary native worker functionality and terminal claimed Memory capture semantics must remain explicitly supported, not disabled through a new opaque flag.
 
 Finalized source-only on2026-10-23. All repository files remain untouched by this design task; no production/schema/check/session action performed. Existing actual RED and existing qualified checkpoints remain bounded to their recorded source bytes.
+
+## Representation checkpoint — 2026-10-23
+
+The shared closed snapshot parser and exports are implemented (`9596e88b2`). Generated migration0509 adds nullable snapshots to the original six payload owners and selected Context items, with an immutable insert-time writer protocol. Native triggers bind nonnull snapshots to company, owner, actual payload hash and PostgreSQL-canonical digest, retain prior nonnull source sets, invalidate Memory/attachment snapshots after child payload changes, and reject Context selection rewrites. Unknown historical rows remain protocol0; no producer is qualified by an empty set or hash.
+
+The current three focused files pass16 tests with observed/durable exit0 and14 unchanged source pins. Earlier actual regressions, exact initial SQL/test source and raw captures are in `up03-native-payload-source-binding-checkpoint.json`. This proves representation and binding only. Original producer stamps, immutable complete run inputs, preservation of unknown history after invalidation, private server DTO handling and canonical same-transaction SQL remain mandatory next work. The copied private Memory and both temporal regressions remain open.

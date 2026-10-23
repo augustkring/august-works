@@ -1,5 +1,6 @@
+import type { NativePayloadSourceSnapshot } from "@paperclipai/shared";
 import { sql } from "drizzle-orm";
-import { pgTable, uuid, text, timestamp, date, index, jsonb, unique, check, uniqueIndex, boolean } from "drizzle-orm/pg-core";
+import { pgTable, uuid, text, timestamp, date, index, jsonb, unique, check, uniqueIndex, boolean, integer } from "drizzle-orm/pg-core";
 import type { AgentEnvConfig, RoadmapPolicy } from "@paperclipai/shared";
 import { companies } from "./companies.js";
 import { goals } from "./goals.js";
@@ -9,6 +10,10 @@ export const projects = pgTable(
   "projects",
   {
     id: uuid("id").primaryKey().defaultRandom(),
+    // Insert-only writer protocol. Historical payloads remain unknown; a hash
+    // or an empty source set cannot reconstruct their lost input history.
+    payloadSourceProtocolVersion: integer("payload_source_protocol_version").notNull().default(0),
+    payloadSourceSnapshot: jsonb("payload_source_snapshot").$type<NativePayloadSourceSnapshot | null>(),
     companyId: uuid("company_id").notNull().references(() => companies.id),
     goalId: uuid("goal_id").references(() => goals.id),
     name: text("name").notNull(),

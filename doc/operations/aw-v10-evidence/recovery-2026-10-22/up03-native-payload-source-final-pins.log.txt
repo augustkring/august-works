@@ -1,0 +1,14 @@
+packages/db/src/schema/issues.ts: OK
+packages/db/src/schema/projects.ts: OK
+packages/db/src/schema/memory.ts: OK
+packages/db/src/schema/issue_comments.ts: OK
+packages/db/src/schema/issue_attachments.ts: OK
+packages/db/src/schema/document_revisions.ts: OK
+packages/db/src/schema/context_manifests.ts: OK
+packages/db/src/migrations/0509_nebulous_wong.sql: OK
+server/src/__tests__/native-payload-source-binding.integration.test.ts: OK
+server/src/__tests__/native-payload-source-mutation-binding.integration.test.ts: OK
+packages/shared/src/validators/native-payload-source-snapshot.ts: OK
+packages/shared/src/validators/native-payload-source-snapshot.test.ts: OK
+packages/shared/src/index.ts: OK
+packages/shared/src/validators/index.ts: OK

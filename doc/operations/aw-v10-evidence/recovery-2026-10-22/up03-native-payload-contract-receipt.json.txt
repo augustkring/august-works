@@ -1,0 +1,14 @@
+{
+  "commit": "9596e88b2b29cdc6014fd544979ecb24bddaaeab",
+  "scope": "Structural parser only. No producer truth, completeness, digest integrity or permission qualification.",
+  "testSession": 48043,
+  "observedProcessExit": 0,
+  "durableExitFile": "/workspace/v10-preparation/up03-native-payload-contract-current.exit",
+  "passed": 5,
+  "durationSeconds": 1.05,
+  "command": "GOMEMLIMIT=1GiB GOMAXPROCS=2 node --max-old-space-size=2048 node_modules/vitest/vitest.mjs run packages/shared/src/validators/native-payload-source-snapshot.test.ts --maxWorkers=1",
+  "log": "/workspace/v10-preparation/up03-native-payload-contract-current.log",
+  "upfrontPins": "/workspace/v10-preparation/up03-native-payload-contract-before.sha256",
+  "allFourPinsVerifiedAfterExit": true,
+  "typecheck": "Not run/claimed for this contract checkpoint."
+}
