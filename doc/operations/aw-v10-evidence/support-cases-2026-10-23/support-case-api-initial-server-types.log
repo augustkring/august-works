@@ -1,0 +1,5 @@
+src/services/experience/support-cases.ts(132,23): error TS2739: Type '{ activity: { id: string; }; publication: { companyId: string; payload: { actorType: "agent" | "plugin" | "system" | "user"; actorId: string; action: string; entityType: string; entityId: string; agentId: string | null; runId: string | null; responsibleUserId: string | null; details: Record<...> | null; }; pluginEve...' is missing the following properties from type 'ActivityPublication': companyId, payload, pluginEvent
+src/services/experience/support-cases.ts(259,25): error TS2739: Type '{ activity: { id: string; }; publication: { companyId: string; payload: { actorType: "agent" | "plugin" | "system" | "user"; actorId: string; action: string; entityType: string; entityId: string; agentId: string | null; runId: string | null; responsibleUserId: string | null; details: Record<...> | null; }; pluginEve...' is missing the following properties from type 'ActivityPublication': companyId, payload, pluginEvent
+undefined
+/workspace/blentera-v10/server:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: tsc --noEmit --singleThreaded

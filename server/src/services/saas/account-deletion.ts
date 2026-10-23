@@ -298,6 +298,7 @@ export async function eraseAccountAccess(
     and not exists(select 1 from customer_feedback_retention r where r.company_id=f.company_id and r.feedback_id=f.id
       and r.legal_hold and (r.hold_release_at is null or r.hold_release_at>clock_timestamp()))`);
   await tx.execute(sql`delete from ${authRateLimits} where key like ${"customer-feedback:" + sha256(JSON.stringify(userId)) + ":%"}`);
+  await tx.execute(sql`delete from ${authRateLimits} where key like ${"support-case:" + sha256(JSON.stringify(userId)) + ":%"}`);
   await tx.execute(sql`delete from "session" where user_id=${userId}`);
   await tx.execute(sql`delete from "account" where user_id=${userId}`);
   await tx.execute(sql`delete from board_api_keys where user_id=${userId}`);

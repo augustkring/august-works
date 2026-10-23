@@ -789,6 +789,34 @@ const issueReadColumns = {
 };
 const projectReadColumns = { id: projects.id, companyId: projects.companyId, executionWorkspacePolicy: projects.executionWorkspacePolicy, visibility: projects.visibility };
 
+/** Pins the native Board principal and verified credential on the caller's
+ * physical transaction. This is no company grant; callers retain their own
+ * canonical resource policy and check the deadline before returning data. */
+export async function pinCurrentBoardActor(db: Db | DbTransaction, actor: AuthorizationActor) {
+  if (!is(db, PgTransaction)) throw new Error("Current Board authority requires a native transaction");
+  if (actor.type !== "board" || !actor.userId || actor.source === "local_implicit") return null;
+  let credentialExpiresAt = actor.authenticatedCredentialExpiresAt ?? null;
+  if (credentialExpiresAt !== null && (!Number.isFinite(credentialExpiresAt) || credentialExpiresAt <= Date.now())) return null;
+  const [user] = await db.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, actor.userId)).for("share", { noWait: true });
+  if (!user) return null;
+  if (actor.source === "session" && actor.sessionId != null) {
+    const [session] = await db.select({ userId: authSessions.userId, expiresAt: authSessions.expiresAt })
+      .from(authSessions).where(eq(authSessions.id, actor.sessionId)).for("share", { noWait: true });
+    if (!session || session.userId !== actor.userId || session.expiresAt.getTime() <= Date.now()) return null;
+    credentialExpiresAt = Math.min(credentialExpiresAt ?? Infinity, session.expiresAt.getTime());
+  }
+  if (actor.source === "board_key") {
+    if (!actor.keyId) return null;
+    const [key] = await db.select().from(boardApiKeys).where(eq(boardApiKeys.id, actor.keyId)).for("share", { noWait: true });
+    if (!key || key.keyHash !== actor.authenticatedKeyHash || key.userId !== actor.userId || key.revokedAt || (key.expiresAt && key.expiresAt.getTime() <= Date.now())) return null;
+    if (key.expiresAt) credentialExpiresAt = Math.min(credentialExpiresAt ?? Infinity, key.expiresAt.getTime());
+  }
+  // Native instance roles are read by isInstanceAdmin below. A DTO bit is
+  // never a pinned role, including cloud tenant actors.
+  if (credentialExpiresAt !== null && credentialExpiresAt <= Date.now()) return null;
+  return { actor: { ...actor, isInstanceAdmin: false }, credentialExpiresAt };
+}
+
 // Only this native owner can construct the private row context. Caller DTOs
 // cannot supply row facts, policies, authorization results or a read capability.
 function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSourceRows, sourceAuthorityPins = false) {
@@ -2736,24 +2764,11 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     }
     if (actor.type === "board" && actor.source === "local_implicit") return actor;
     if (actor.type === "board") {
-      if (!actor.userId) return null;
-      const [user] = await db.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, actor.userId)).for("share", { noWait: true });
-      if (!user) return null;
-      if (actor.source === "session" && actor.sessionId != null) {
-        const [session] = await db.select({ userId: authSessions.userId, expiresAt: authSessions.expiresAt })
-          .from(authSessions).where(eq(authSessions.id, actor.sessionId)).for("share", { noWait: true });
-        if (!session || session.userId !== actor.userId || session.expiresAt.getTime() <= Date.now()) return null;
-        if (readSources) readSources.credentialExpiresAt = Math.min(readSources.credentialExpiresAt ?? Infinity, session.expiresAt.getTime());
-      }
-      if (actor.source === "board_key") {
-        if (!actor.keyId) return null;
-        const [key] = await db.select().from(boardApiKeys).where(eq(boardApiKeys.id, actor.keyId)).for("share", { noWait: true });
-        if (!key || key.keyHash !== actor.authenticatedKeyHash || key.userId !== actor.userId || key.revokedAt || (key.expiresAt && key.expiresAt.getTime() <= Date.now())) return null;
-        if (key.expiresAt && readSources) readSources.credentialExpiresAt = Math.min(readSources.credentialExpiresAt ?? Infinity, key.expiresAt.getTime());
-      }
-      // Native instance roles are read by isInstanceAdmin below. A DTO bit is
-      // never a pinned role, including cloud tenant actors.
-      return { ...actor, isInstanceAdmin: false };
+      const current = await pinCurrentBoardActor(db, actor);
+      if (!current) return null;
+      if (current.credentialExpiresAt !== null && readSources)
+        readSources.credentialExpiresAt = Math.min(readSources.credentialExpiresAt ?? Infinity, current.credentialExpiresAt);
+      return current.actor;
     }
     if (actor.type !== "agent" || !actor.agentId || actor.companyId !== companyId || !actor.onBehalfOfUserId?.trim()) return null;
     const agent = await loadAgent(actor.agentId);

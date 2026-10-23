@@ -121,6 +121,7 @@ import {
   reconcileAdapterAvailability,
 } from "./services/adapter-registry-bootstrap.js";
 import { createFeedbackTraceShareClientFromConfig } from "./services/feedback-share-client.js";
+import { eraseExpiredSupportCases } from "./services/experience/support-cases.js";
 import { buildRuntimeApiCandidateUrls, choosePrimaryRuntimeApiUrl } from "./runtime-api.js";
 import { isLoopbackHost, rewriteLoopbackUrlPort } from "./url-utils.js";
 import { createPluginWorkerManager } from "./services/plugin-worker-manager.js";
@@ -1252,6 +1253,7 @@ async function startServerWithDatabaseTeardown(
       if (result.erasedDefinitions > 0) logger.info(result, "Process retention sweep removed expired definitions and runs");
     }],
     ["auth_event_retention", () => pruneExpiredAuthSecurityEvents(db)],
+    ["support_case_retention", () => eraseExpiredSupportCases(db)],
     ["analytical_retention", async () => {
       const result = await eraseExpiredAnalyticalLineage(db);
       if (result.erasedManifests > 0) logger.info(result, "Analytical retention sweep removed expired manifests and dependent payloads");

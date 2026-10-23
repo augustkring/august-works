@@ -12,7 +12,7 @@ export const customerSupportHistorySchema = z
             .string()
             .min(1)
             .max(200)
-            .regex(/^[^\u0000-\u001f\u007f]+$/),
+            .regex(/^[^\u0000-\u001f\u007f\uD800-\uDFFF]+$/u),
           approvedAt: z.iso.datetime(),
           expiresAt: z.iso.datetime(),
           revokedAt: z.iso.datetime().nullable(),
@@ -140,21 +140,25 @@ export const supportCaseSafeContextSchema = z.strictObject({
   errorCode: z.enum(["NETWORK_UNAVAILABLE", "REQUEST_TIMEOUT", "ACCESS_CHANGED", "DEPENDENCY_UNAVAILABLE"]).optional(),
 });
 export type SupportCaseSafeContext = z.infer<typeof supportCaseSafeContextSchema>;
+// PostgreSQL text cannot store zero characters or malformed UTF-16. Refuse
+// these at the command boundary before a driver error can quote private text.
+const supportText = (max: number) => z.string().trim().min(1).max(max)
+  .refine(value => !/[\u0000\uD800-\uDFFF]/u.test(value), "Enter valid text without zero characters");
 const supportCommandFields = {
-  idempotencyKey: z.uuid(),
+  idempotencyKey: z.uuid().toLowerCase(),
   expectedUserId: z.string().min(1).max(300),
 };
 export const createSupportCaseSchema = z.strictObject({
   ...supportCommandFields,
-  description: z.string().trim().min(1).max(SUPPORT_CASE_LIMITS.description),
+  description: supportText(SUPPORT_CASE_LIMITS.description),
   category: supportCaseCategorySchema.default("other"),
-  subject: z.string().trim().min(1).max(SUPPORT_CASE_LIMITS.subject).optional(),
+  subject: supportText(SUPPORT_CASE_LIMITS.subject).optional(),
   impact: supportCaseImpactSchema.nullable().default(null),
   safeContext: supportCaseSafeContextSchema.optional(),
 });
 export const replySupportCaseSchema = z.strictObject({
   ...supportCommandFields,
-  body: z.string().trim().min(1).max(SUPPORT_CASE_LIMITS.reply),
+  body: supportText(SUPPORT_CASE_LIMITS.reply),
   safeContext: supportCaseSafeContextSchema.optional(),
 });
 export type CreateSupportCase = z.infer<typeof createSupportCaseSchema>;
@@ -171,14 +175,14 @@ const supportPolicyKey = z.string().regex(/^[a-z][a-z0-9_.-]{0,127}$/);
 export const supportCaseDataPolicySchema = z.strictObject({
   schemaVersion: z.literal(1),
   policyVersion: supportPolicyKey,
-  recipientName: z.string().trim().min(1).max(255).regex(/^[^\u0000-\u001f\u007f]+$/),
+  recipientName: z.string().trim().min(1).max(255).regex(/^[^\u0000-\u001f\u007f\uD800-\uDFFF]+$/u),
   privacyNoticeUrl: z.url().max(2048).refine(value => {
     try {
       const url = new URL(value);
-      return url.protocol === "https:" && !url.username && !url.password;
+      return url.protocol === "https:" && !url.username && !url.password && !/[\s\u0000-\u001f\u007f\uD800-\uDFFF]/u.test(value);
     } catch { return false; }
   }),
-  processingRegion: z.string().trim().min(1).max(100).regex(/^[^\u0000-\u001f\u007f]+$/),
+  processingRegion: z.string().trim().min(1).max(100).regex(/^[^\u0000-\u001f\u007f\uD800-\uDFFF]+$/u),
   retentionTrigger: z.literal("after_last_customer_or_support_message"),
   retentionDays: z.number().int().min(1).max(36500),
   backupMaxDays: z.number().int().min(1).max(36500),
@@ -191,3 +195,49 @@ export const supportCaseDataPolicySchema = z.strictObject({
   }
 });
 export type SupportCaseDataPolicy = z.infer<typeof supportCaseDataPolicySchema>;
+
+/** Customer projections are explicit allow-lists, never database row spreads. */
+export const supportCaseDeliverySchema = z.enum(["pending", "unknown", "delivered", "not_required"]);
+const supportCaseCursorSchema = z.strictObject({ createdAt: z.iso.datetime(), id: z.uuid() });
+export const supportCaseSummarySchema = z.strictObject({
+  id: z.uuid(), companyId: z.uuid(), reference: z.string().regex(/^BLS-[A-F0-9]{32}$/),
+  openedByUserId: z.string().min(1).max(300), category: supportCaseCategorySchema,
+  subject: z.string().min(1).max(SUPPORT_CASE_LIMITS.subject), impact: supportCaseImpactSchema.nullable(),
+  status: supportCaseStatusSchema, requestedResponse: z.string().min(1).max(SUPPORT_CASE_LIMITS.reply).nullable(),
+  createdAt: z.iso.datetime(), updatedAt: z.iso.datetime(), resolvedAt: z.iso.datetime().nullable(),
+  closedAt: z.iso.datetime().nullable(), delivery: supportCaseDeliverySchema,
+});
+export const supportCaseTimelineEntrySchema = z.strictObject({
+  id: z.uuid(), kind: z.enum(["request", "customer_reply", "support_message", "status_change", "resolution"]),
+  body: z.string().min(1).max(SUPPORT_CASE_LIMITS.reply), status: supportCaseStatusSchema,
+  author: z.enum(["customer", "support"]), safeContext: supportCaseSafeContextSchema.nullable(),
+  delivery: supportCaseDeliverySchema, createdAt: z.iso.datetime(),
+});
+export const supportCaseDetailSchema = z.strictObject({
+  ...supportCaseSummarySchema.shape,
+  description: z.string().min(1).max(SUPPORT_CASE_LIMITS.description), safeContext: supportCaseSafeContextSchema.nullable(),
+  followUpOfId: z.uuid().nullable(), timeline: z.array(supportCaseTimelineEntrySchema).max(SUPPORT_CASE_LIMITS.timelinePage),
+  nextCursor: supportCaseCursorSchema.nullable(),
+});
+export const supportCaseListSchema = z.strictObject({
+  companyId: z.uuid(), entries: z.array(supportCaseSummarySchema).max(SUPPORT_CASE_LIMITS.timelinePage),
+  nextCursor: supportCaseCursorSchema.nullable(),
+});
+export const supportCaseReadQuerySchema = z.strictObject({
+  expectedUserId: z.string().min(1).max(300),
+  beforeCreatedAt: z.iso.datetime().optional(), beforeId: z.uuid().toLowerCase().optional(),
+}).refine(value => !!value.beforeCreatedAt === !!value.beforeId, "Both cursor fields are required");
+export type SupportCaseSummary = z.infer<typeof supportCaseSummarySchema>;
+export type SupportCaseDetail = z.infer<typeof supportCaseDetailSchema>;
+export type SupportCaseList = z.infer<typeof supportCaseListSchema>;
+
+/** Only the policy disclosure intended for the customer; no hold/provider keys. */
+export const supportCaseIntakePolicySchema = z.discriminatedUnion("available", [
+  z.strictObject({ available: z.literal(false) }),
+  z.strictObject({ available: z.literal(true),
+    recipientName: supportCaseDataPolicySchema.shape.recipientName,
+    privacyNoticeUrl: supportCaseDataPolicySchema.shape.privacyNoticeUrl,
+    retentionDays: supportCaseDataPolicySchema.shape.retentionDays,
+    retentionTrigger: supportCaseDataPolicySchema.shape.retentionTrigger,
+  }),
+]);
