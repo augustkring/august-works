@@ -15,6 +15,7 @@ import path from "node:path";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { Db } from "@paperclipai/db";
+import type { NativePayloadSourceInput, NativePayloadSourceSnapshot } from "@paperclipai/shared";
 import {
   agents,
   assets,
@@ -87,7 +88,15 @@ export interface NativeRunnerStagedAttachment {
   readonly unavailableReason: string | null;
 }
 
+export interface NativeRunnerAttachmentSourceCapture {
+  readonly input: Extract<NativePayloadSourceInput, { kind: "attachment" }>;
+  // NULL preserves unknown input history. A captured descriptor or hash alone
+  // never makes this source, the run or its derivative effects qualified.
+  readonly payloadSourceSnapshot: NativePayloadSourceSnapshot | null;
+}
+
 export interface NativeRunnerAttachmentStage {
+  readonly sourceCaptures: readonly NativeRunnerAttachmentSourceCapture[];
   readonly attachments: readonly NativeRunnerStagedAttachment[];
   cleanup(): Promise<void>;
 }
@@ -921,13 +930,15 @@ export async function stageNativeRunnerWakeAttachments(input: {
     });
   }
   if (selections.length === 0) {
-    return { attachments: [], cleanup: async () => undefined };
+    return { attachments: [], sourceCaptures: [], cleanup: async () => undefined };
   }
 
   const rows = await input.db
     .select({
       id: issueAttachments.id,
       issueCommentId: issueAttachments.issueCommentId,
+      assetId: issueAttachments.assetId,
+      payloadSourceSnapshot: issueAttachments.payloadSourceSnapshot,
       objectKey: assets.objectKey,
       filename: assets.originalFilename,
       contentType: assets.contentType,
@@ -962,8 +973,20 @@ export async function stageNativeRunnerWakeAttachments(input: {
       )
       .map((row) => [row.id, row] as const),
   );
+  const capture = (
+    selection: (typeof selections)[number],
+    row: (typeof rows)[number] | undefined,
+    disposition: NativeRunnerAttachmentSourceCapture["input"]["disposition"],
+  ): NativeRunnerAttachmentSourceCapture => ({
+    input: { kind: "attachment", issueId: input.binding.issueId, attachmentId: selection.id,
+      commentId: selection.commentId, assetId: row?.assetId ?? null, sha256: row?.sha256.toLowerCase() ?? null,
+      byteSize: row?.byteSize ?? null, disposition },
+    payloadSourceSnapshot: row?.payloadSourceSnapshot ?? null,
+  });
   if (input.binding.executionTargetKind === "remote") {
     return {
+      sourceCaptures: selections.map(selection => capture(selection, rowById.get(selection.id),
+        rowById.has(selection.id) ? "remote_workspace_staging_unsupported" : "attachment_binding_unavailable")),
       attachments: selections.map((selection) => {
         const row = rowById.get(selection.id);
         return {
@@ -972,7 +995,7 @@ export async function stageNativeRunnerWakeAttachments(input: {
           contentType: row?.contentType ?? "application/octet-stream",
           byteSize: row?.byteSize ?? 0,
           workspaceRelativePath: null,
-          unavailableReason: "remote_workspace_staging_unsupported",
+          unavailableReason: row ? "remote_workspace_staging_unsupported" : "attachment_binding_unavailable",
         };
       }),
       cleanup: async () => undefined,
@@ -985,10 +1008,12 @@ export async function stageNativeRunnerWakeAttachments(input: {
   try {
     const storage = input.storage ?? getStorageService();
     const staged: NativeRunnerStagedAttachment[] = [];
+    const sourceCaptures: NativeRunnerAttachmentSourceCapture[] = [];
     const cleanups: Array<() => Promise<void>> = [];
     for (const [selectionIndex, selection] of selections.entries()) {
       const row = rowById.get(selection.id);
       if (!row) {
+        sourceCaptures.push(capture(selection, undefined, "attachment_binding_unavailable"));
         staged.push({
           id: selection.id,
           filename: "attachment",
@@ -1013,6 +1038,7 @@ export async function stageNativeRunnerWakeAttachments(input: {
           body,
         });
         cleanups.push(written.cleanup);
+        sourceCaptures.push(capture(selection, row, "delivered"));
         staged.push({
           id: row.id,
           filename: row.filename?.trim() || "attachment",
@@ -1022,6 +1048,7 @@ export async function stageNativeRunnerWakeAttachments(input: {
           unavailableReason: null,
         });
       } catch {
+        sourceCaptures.push(capture(selection, row, "attachment_staging_failed"));
         staged.push({
           id: row.id,
           filename: row.filename?.trim() || "attachment",
@@ -1034,6 +1061,7 @@ export async function stageNativeRunnerWakeAttachments(input: {
     }
     return {
       attachments: staged,
+      sourceCaptures,
       cleanup: async () => {
         try {
           const results = await Promise.allSettled(
