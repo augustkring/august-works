@@ -995,3 +995,5 @@ export * from "./chat-channels.js";
 export * from "./chat-github.js";
 
 export * from "./email.js";
+
+export * from "./native-payload-source-snapshot.js";

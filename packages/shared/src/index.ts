@@ -3415,3 +3415,5 @@ export * from "./experience-forecast-results.js";
 export * from "./experience-management-review-summaries.js";
 
 export * from "./notification-channel-policy.js";
+
+export * from "./validators/native-payload-source-snapshot.js";
