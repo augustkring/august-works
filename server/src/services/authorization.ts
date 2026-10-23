@@ -1,3 +1,4 @@
+import { isDeepStrictEqual } from "node:util";
 import { isSaasDeployment } from "../deployment-profile.js";
 import { and, eq, inArray, is, isNull, sql, type SQL } from "drizzle-orm";
 import { PgTransaction } from "drizzle-orm/pg-core";
@@ -7,6 +8,7 @@ import {
   agentApiKeys,
   agentExecutionManifests,
   authUsers,
+  boardApiKeys,
   companyMemberships,
   heartbeatRuns,
   instanceUserRoles,
@@ -27,13 +29,14 @@ import type {
   SkillTestAgentKeyScope,
   TaskBridgeAgentKeyScope,
 } from "@paperclipai/shared";
-import { LOW_TRUST_REVIEW_PRESET, extractAgentMentionIds, type LowTrustBoundary } from "@paperclipai/shared";
+import { agentApiKeyScopeSchema, LOW_TRUST_REVIEW_PRESET, extractAgentMentionIds, type LowTrustBoundary } from "@paperclipai/shared";
 import {
   LOW_TRUST_ISSUE_ANCESTRY_MAX_DEPTH,
   isIssueWithinLowTrustBoundary,
   resolveCoreTrustPreset,
   type TrustPresetResolution,
 } from "./trust-preset-resolver.js";
+import { conflict, forbidden } from "../errors.js";
 import { logger } from "../middleware/logger.js";
 import { normalizeAgentPermissions } from "./agent-permissions.js";
 import { grantsForHumanRole, normalizeHumanRole } from "./company-member-roles.js";
@@ -755,6 +758,7 @@ type ReadSourceRows = {
   issues: Map<string, IssueAuthorizationRow | null>;
   projects: Map<string, ProjectAuthorizationRow | null>;
   active: boolean;
+  credentialExpiresAt: number | null;
 };
 const issueReadColumns = {
   id: issues.id, companyId: issues.companyId, projectId: issues.projectId, parentId: issues.parentId,
@@ -767,7 +771,7 @@ const projectReadColumns = { id: projects.id, companyId: projects.companyId, exe
 
 // Only this native owner can construct the private row context. Caller DTOs
 // cannot supply row facts, policies, authorization results or a read capability.
-function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSourceRows) {
+function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSourceRows, foundationPins = false) {
   async function withReadSources<T>(companyId: string, issueIds: string[], projectIds: string[], read: (owner: ReadSourceOwner) => Promise<T>): Promise<T> {
     const locked = is(db, PgTransaction);
     const requestedIssues = [...new Set(issueIds)], requestedProjects = [...new Set(projectIds)];
@@ -779,7 +783,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     const projectRows = locked && projectRefs.length ? await db.select(projectReadColumns).from(projects)
       .where(and(eq(projects.companyId, companyId), inArray(projects.id, projectRefs))).for("share") : [];
     const context: ReadSourceRows = {
-      companyId, active: true,
+      companyId, active: true, credentialExpiresAt: null,
       // Outside a real transaction, keep the original per-call reads. An
       // autocommit FOR SHARE cannot qualify reusable current Source facts.
       issues: new Map((locked ? requestedIssues : []).map(id => [id, null])),
@@ -788,7 +792,13 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     for (const row of issueRows) context.issues.set(row.id, row);
     for (const row of projectRows) context.projects.set(row.id, row);
     const owner = createAuthorizationService(db, context);
-    try { return await read({ decide: owner.decide }); }
+    try {
+      const result = await read({ decide: owner.decide });
+      if (context.credentialExpiresAt !== null && context.credentialExpiresAt <= Date.now()) {
+        throw forbidden("Native Source credential is no longer available.");
+      }
+      return result;
+    }
     finally { context.active = false; }
   }
   function prepareSourceInstanceAdminRead() {
@@ -799,6 +809,12 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
   }
   let sourceInstanceAdminRead: ReturnType<typeof prepareSourceInstanceAdminRead> | undefined;
   async function isInstanceAdmin(userId: string | null | undefined): Promise<boolean> {
+    if (foundationPins && userId) {
+      const rows = await db.select({ id: instanceUserRoles.id }).from(instanceUserRoles).where(and(
+        eq(instanceUserRoles.userId, userId), eq(instanceUserRoles.role, "instance_admin"),
+      )).for("share", { noWait: true });
+      return rows.length > 0;
+    }
     if (readSources && userId) {
       sourceInstanceAdminRead ??= prepareSourceInstanceAdminRead();
       return (await sourceInstanceAdminRead.execute({ userId })).length > 0;
@@ -821,6 +837,13 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     principalType: PrincipalType,
     principalId: string,
   ) {
+    if (foundationPins) {
+      const [row] = await db.select().from(companyMemberships).where(and(
+        eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, principalType),
+        eq(companyMemberships.principalId, principalId), eq(companyMemberships.status, "active"),
+      )).for("share", { noWait: true });
+      return row ?? null;
+    }
     if (readSources) {
       sourceMembershipRead ??= prepareSourceMembershipRead();
       const rows = await sourceMembershipRead.execute({ companyId, principalType, principalId });
@@ -841,6 +864,11 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
   }
 
   async function loadResponsibleUserSnapshot(companyId: string, userId: string): Promise<ResponsibleUserSnapshot> {
+    if (foundationPins) {
+      const [user] = await db.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, userId)).for("share", { noWait: true });
+      const membership = user ? await getActiveMembership(companyId, "user", userId) : null;
+      return { userId, companyId, userExists: Boolean(user), activeMembership: membership };
+    }
     const [user, membership] = await Promise.all([
       db
         .select({ id: authUsers.id })
@@ -878,7 +906,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     principalId: string,
     permissionKey: PermissionKey,
   ) {
-    return db
+    const query = db
       .select()
       .from(principalPermissionGrants)
       .where(
@@ -888,8 +916,9 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
           eq(principalPermissionGrants.principalId, principalId),
           eq(principalPermissionGrants.permissionKey, permissionKey),
         ),
-      )
-      .then((rows) => rows[0] ?? null);
+      );
+    const rows = await (foundationPins ? query.for("share", { noWait: true }) : query);
+    return rows[0] ?? null;
   }
 
   async function decidePrincipalGrant(input: {
@@ -963,7 +992,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
   }
 
   async function loadAgent(agentId: string): Promise<AgentAuthorizationRow | null> {
-    return db
+    const query = db
       .select({
         id: agents.id,
         companyId: agents.companyId,
@@ -973,8 +1002,9 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
         permissions: agents.permissions,
       })
       .from(agents)
-      .where(eq(agents.id, agentId))
-      .then((rows) => rows[0] ?? null);
+      .where(eq(agents.id, agentId));
+    const rows = await (foundationPins ? query.for("share", { noWait: true }) : query);
+    return rows[0] ?? null;
   }
 
   // Reuse compiled SQL only. Every Source executes fresh current reads; no
@@ -994,6 +1024,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
   }
   let readActorQuery: ReturnType<typeof prepareReadActorEvidence> | undefined;
   async function loadReadActorEvidence(actor: AuthorizationActor, companyId: string) {
+    if (foundationPins) return { agent: await loadAgent(actor.agentId!), run: await loadRunPolicy(actor.runId, companyId, actor.agentId!) };
     readActorQuery ??= prepareReadActorEvidence();
     const [row] = await readActorQuery.execute({ runId: actor.runId!, companyId, agentId: actor.agentId! });
     const context = isPlainRecord(row?.run?.contextSnapshot) ? row.run.contextSnapshot : null;
@@ -1047,7 +1078,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
 
   async function loadRunPolicy(runId: string | null | undefined, companyId: string, agentId: string) {
     if (!runId) return null;
-    const row = await db
+    const query = db
       .select({
         id: heartbeatRuns.id,
         companyId: heartbeatRuns.companyId,
@@ -1055,8 +1086,8 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
         contextSnapshot: heartbeatRuns.contextSnapshot,
       })
       .from(heartbeatRuns)
-      .where(eq(heartbeatRuns.id, runId))
-      .then((rows) => rows[0] ?? null);
+      .where(eq(heartbeatRuns.id, runId));
+    const [row] = await (foundationPins ? query.for("share", { noWait: true }) : query);
     if (!row || row.companyId !== companyId || row.agentId !== agentId) return null;
     const context = isPlainRecord(row.contextSnapshot) ? row.contextSnapshot : null;
     return isPlainRecord(context?.executionPolicy)
@@ -2674,6 +2705,52 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     return !input.enforceResponsibleUserIntersection && responsibleUserAuthzShadowMode() ? agentDecision : denied;
   }
 
+  // This path is created only by the same-company native Foundation callback.
+  // Row locks qualify the original canonical loaders; they do not grant access.
+  // NOWAIT avoids reversing account erasure / Agent lifecycle lock ordering.
+  async function pinFoundationActor(actor: AuthorizationActor, companyId: string): Promise<AuthorizationActor | null> {
+    if (actor.type === "board" && actor.source === "local_implicit") return actor;
+    if (actor.type === "board") {
+      if (!actor.userId) return null;
+      const [user] = await db.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, actor.userId)).for("share", { noWait: true });
+      if (!user) return null;
+      if (actor.source === "board_key") {
+        if (!actor.keyId) return null;
+        const [key] = await db.select().from(boardApiKeys).where(eq(boardApiKeys.id, actor.keyId)).for("share", { noWait: true });
+        if (!key || key.userId !== actor.userId || key.revokedAt || (key.expiresAt && key.expiresAt.getTime() <= Date.now())) return null;
+        if (key.expiresAt && readSources) readSources.credentialExpiresAt = Math.min(readSources.credentialExpiresAt ?? Infinity, key.expiresAt.getTime());
+      }
+      // Native instance roles are read by isInstanceAdmin below. A DTO bit is
+      // never a pinned role, including cloud tenant actors.
+      return { ...actor, isInstanceAdmin: false };
+    }
+    if (actor.type !== "agent" || !actor.agentId || actor.companyId !== companyId || !actor.onBehalfOfUserId?.trim()) return null;
+    const agent = await loadAgent(actor.agentId);
+    if (!agent || agent.companyId !== companyId) return null;
+    if (actor.runId) {
+      const [run] = await db.select({ companyId: heartbeatRuns.companyId, agentId: heartbeatRuns.agentId, responsibleUserId: heartbeatRuns.responsibleUserId })
+        .from(heartbeatRuns).where(eq(heartbeatRuns.id, actor.runId)).for("share", { noWait: true });
+      if (!run || run.companyId !== companyId || run.agentId !== actor.agentId || run.responsibleUserId !== actor.onBehalfOfUserId) return null;
+    }
+    let keyScope = actor.keyScope;
+    if (actor.keyId) {
+      const [key] = await db.select().from(agentApiKeys).where(eq(agentApiKeys.id, actor.keyId)).for("share", { noWait: true });
+      if (!key || key.companyId !== companyId || key.agentId !== actor.agentId || key.revokedAt || key.responsibleUserId !== actor.onBehalfOfUserId) return null;
+      const parsed = agentApiKeyScopeSchema.safeParse(key.scopeConfig ?? { kind: "standard" });
+      if (!parsed.success) return null;
+      // Keep the original authenticated request ceiling after Source row waits;
+      // a newly broader persisted credential cannot widen this request.
+      if (keyScope != null && !isDeepStrictEqual(agentApiKeyScopeSchema.parse(keyScope), parsed.data)) return null;
+      keyScope = parsed.data;
+    } else if (actor.source === "agent_key" || !actor.runId) return null;
+    if (keyScope != null) {
+      const parsed = agentApiKeyScopeSchema.safeParse(keyScope);
+      if (!parsed.success) return null;
+      keyScope = parsed.data;
+    }
+    return { ...actor, keyScope };
+  }
+
   async function decide(input: {
     actor: AuthorizationActor;
     action: AuthorizationAction;
@@ -2683,9 +2760,29 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
   }): Promise<AuthorizationDecision> {
     if (readSources) {
       if (!readSources.active) throw new Error("Native Source read scope has ended");
-      if (companyIdForResource(input.resource) !== readSources.companyId || !["issue:read", "project:read"].includes(input.action)) {
+      const foundationRead = input.action === "foundation:read" && input.resource.type === "company" && is(db, PgTransaction)
+        && (!input.scope || Object.keys(input.scope).length === 0);
+      if (companyIdForResource(input.resource) !== readSources.companyId || (!["issue:read", "project:read"].includes(input.action) && !foundationRead)) {
         return deny({ action: input.action, reason: "deny_scope", explanation: "This native Source row scope admits same-company reads only." });
       }
+    }
+    if (input.actor.type === "agent" && input.actor.keyScope != null && !agentApiKeyScopeSchema.safeParse(input.actor.keyScope).success) {
+      return deny({ action: input.action, reason: "deny_scope", explanation: "Agent credential scope is unavailable." });
+    }
+    if (readSources && input.action === "foundation:read") {
+      if (!foundationPins) {
+        try { return await createAuthorizationService(db, readSources, true).decide(input); }
+        catch (error) {
+          let cause: unknown = error;
+          for (let depth = 0; cause && typeof cause === "object" && depth < 8; depth++, cause = (cause as { cause?: unknown }).cause) {
+            if ((cause as { code?: unknown }).code === "55P03") throw conflict("Native Source authority is busy.", { code: "native_source_authority_busy" });
+          }
+          throw error;
+        }
+      }
+      const actor = await pinFoundationActor(input.actor, readSources.companyId);
+      if (!actor) return deny({ action: input.action, reason: "deny_unauthenticated", explanation: "Current native Source principal is unavailable." });
+      input = { ...input, actor, enforceResponsibleUserIntersection: true };
     }
     // A V5 run remains subject to strict human intersection even during a
     // rollout rollback or while legacy authorization runs in shadow mode.
