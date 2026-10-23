@@ -90,3 +90,36 @@ describe("authApi.signOut", () => {
     }
   });
 });
+
+describe("authentication diagnostics", () => {
+  it("keeps network diagnostics without logging invitation paths or arbitrary error content", async () => {
+    const diagnostic = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubGlobal("window", { location: new URL("https://app.example.test/invite/invitation-path-secret-canary?token=query-secret-canary") });
+    const failure = Object.assign(new TypeError("network-error-secret-canary"), { context: { token: "error-object-secret-canary" } });
+    vi.stubGlobal("fetch", vi.fn().mockRejectedValue(failure));
+
+    await expect(authApi.signInEmail({ email: "account-secret-canary@example.test", password: "password-secret-canary" })).rejects.toBe(failure);
+    expect(diagnostic).toHaveBeenCalledTimes(1);
+    expect(diagnostic.mock.calls[0]![1]).toMatchObject({ method: "POST", requestUrl: new URL("/api/auth/sign-in/email", window.location.origin).href,
+      pageOrigin: window.location.origin, credentials: "include" });
+    const logged = JSON.stringify(diagnostic.mock.calls);
+    for (const secret of ["network-error-secret-canary", "error-object-secret-canary", "invitation-path-secret-canary", "query-secret-canary", "account-secret-canary", "password-secret-canary"])
+      expect(logged).not.toContain(secret);
+
+  });
+
+  it("retains the native auth error contract without logging response bodies or status text", async () => {
+    const diagnostic = vi.spyOn(console, "error").mockImplementation(() => {});
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: "INVALID_EMAIL_OR_PASSWORD",
+      message: "response-message-secret-canary", token: "response-token-secret-canary", otp: "response-otp-secret-canary" }), {
+      status: 401, statusText: "status-text-secret-canary", headers: { "Content-Type": "application/json" },
+    })));
+    await expect(authApi.signInEmail({ email: "account@example.test", password: "password-secret-canary" }))
+      .rejects.toMatchObject({ status: 401, code: "INVALID_EMAIL_OR_PASSWORD" });
+    expect(diagnostic).toHaveBeenCalledTimes(1);
+    expect(diagnostic.mock.calls[0]![1]).toMatchObject({ method: "POST", status: 401 });
+    const logged = JSON.stringify(diagnostic.mock.calls);
+    for (const secret of ["response-message-secret-canary", "response-token-secret-canary", "response-otp-secret-canary", "status-text-secret-canary", "password-secret-canary"])
+      expect(logged).not.toContain(secret);
+  });
+});

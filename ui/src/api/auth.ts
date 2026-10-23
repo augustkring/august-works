@@ -8,7 +8,6 @@ import {
   type CurrentUserProfile,
   type UpdateCurrentUserProfile,
 } from "@paperclipai/shared";
-import { redactUrlSecrets } from "@/lib/redact-url-secrets";
 import { tenantSessionRecovery } from "@/lib/tenant-session-recovery";
 import { i18n } from "@/i18n";
 
@@ -84,18 +83,14 @@ function resolveAuthUrl(path: string) {
   }
 }
 
-function logAuthNetworkFailure(method: string, path: string, error: unknown) {
+function logAuthNetworkFailure(method: string, path: string) {
   // eslint-disable-next-line no-console
   console.error("[auth] request failed at the network layer (no HTTP response)", {
     method,
     requestUrl: resolveAuthUrl(path),
     pageOrigin: typeof window !== "undefined" ? window.location.origin : "(no window)",
-    pageHref: typeof window !== "undefined" ? redactUrlSecrets(window.location.href) : "(no window)",
     credentials: "include",
     online: typeof navigator !== "undefined" ? navigator.onLine : "(no navigator)",
-    errorName: error instanceof Error ? error.name : typeof error,
-    errorMessage: error instanceof Error ? error.message : String(error),
-    error,
     hint:
       "This means the browser never got a response from the server. Common causes: " +
       "the page origin differs from the API host (mixed http/https, wrong hostname/port, " +
@@ -104,14 +99,12 @@ function logAuthNetworkFailure(method: string, path: string, error: unknown) {
   });
 }
 
-function logAuthHttpError(method: string, path: string, status: number, statusText: string, body: unknown) {
+function logAuthHttpError(method: string, path: string, status: number) {
   // eslint-disable-next-line no-console
   console.error("[auth] request returned an error status", {
     method,
     requestUrl: resolveAuthUrl(path),
     status,
-    statusText,
-    body,
   });
 }
 
@@ -128,14 +121,14 @@ async function authPost(path: string, body: Record<string, unknown>): Promise<un
       body: JSON.stringify(body),
     });
   } catch (networkError) {
-    logAuthNetworkFailure("POST", path, networkError);
+    logAuthNetworkFailure("POST", path);
     throw networkError;
   }
   const payload = await res.json().catch(() => null);
   if (!res.ok) {
     const recovery = tenantSessionRecovery.recoverIfNeeded(res.status, payload);
     if (recovery) return recovery;
-    logAuthHttpError("POST", path, res.status, res.statusText, payload);
+    logAuthHttpError("POST", path, res.status);
     throw extractAuthError(payload as AuthErrorBody, res.status);
   }
   return payload;
