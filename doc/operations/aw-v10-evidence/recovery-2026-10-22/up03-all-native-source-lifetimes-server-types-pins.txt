@@ -1,0 +1,4 @@
+8fa11fec98051da60fbb80dc46451c3a181e1740e2c15e65dd3e262b4de3a10a  server/src/services/authorization.ts
+84f9b7bac0254a347944cc940feb0345145ffeef421e5c14c01e131364af6b42  server/src/__tests__/foundation-read-source-authority.integration.test.ts
+7ecf07623106b48776b4c630e82fbc4a1716929aea61fb5d0c8c20033125daa1  server/src/__tests__/authorization-service.test.ts
+14b33b14768236851b3eb2e15b966317089cf843d04a32adb88b6d90e99d3eb4  server/src/__tests__/agent-auth-middleware.test.ts

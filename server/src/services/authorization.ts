@@ -775,7 +775,7 @@ const projectReadColumns = { id: projects.id, companyId: projects.companyId, exe
 
 // Only this native owner can construct the private row context. Caller DTOs
 // cannot supply row facts, policies, authorization results or a read capability.
-function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSourceRows, foundationPins = false) {
+function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSourceRows, sourceAuthorityPins = false) {
   async function withReadSources<T>(companyId: string, issueIds: string[], projectIds: string[], read: (owner: ReadSourceOwner) => Promise<T>): Promise<T> {
     const locked = is(db, PgTransaction);
     const requestedIssues = [...new Set(issueIds)], requestedProjects = [...new Set(projectIds)];
@@ -813,7 +813,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
   }
   let sourceInstanceAdminRead: ReturnType<typeof prepareSourceInstanceAdminRead> | undefined;
   async function isInstanceAdmin(userId: string | null | undefined): Promise<boolean> {
-    if (foundationPins && userId) {
+    if (sourceAuthorityPins && userId) {
       const rows = await db.select({ id: instanceUserRoles.id }).from(instanceUserRoles).where(and(
         eq(instanceUserRoles.userId, userId), eq(instanceUserRoles.role, "instance_admin"),
       )).for("share", { noWait: true });
@@ -841,7 +841,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     principalType: PrincipalType,
     principalId: string,
   ) {
-    if (foundationPins) {
+    if (sourceAuthorityPins) {
       const [row] = await db.select().from(companyMemberships).where(and(
         eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, principalType),
         eq(companyMemberships.principalId, principalId), eq(companyMemberships.status, "active"),
@@ -868,7 +868,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
   }
 
   async function loadResponsibleUserSnapshot(companyId: string, userId: string): Promise<ResponsibleUserSnapshot> {
-    if (foundationPins) {
+    if (sourceAuthorityPins) {
       const [user] = await db.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, userId)).for("share", { noWait: true });
       const membership = user ? await getActiveMembership(companyId, "user", userId) : null;
       return { userId, companyId, userExists: Boolean(user), activeMembership: membership };
@@ -921,7 +921,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
           eq(principalPermissionGrants.permissionKey, permissionKey),
         ),
       );
-    const rows = await (foundationPins ? query.for("share", { noWait: true }) : query);
+    const rows = await (sourceAuthorityPins ? query.for("share", { noWait: true }) : query);
     return rows[0] ?? null;
   }
 
@@ -1007,7 +1007,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       })
       .from(agents)
       .where(eq(agents.id, agentId));
-    const rows = await (foundationPins ? query.for("share", { noWait: true }) : query);
+    const rows = await (sourceAuthorityPins ? query.for("share", { noWait: true }) : query);
     return rows[0] ?? null;
   }
 
@@ -1028,7 +1028,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
   }
   let readActorQuery: ReturnType<typeof prepareReadActorEvidence> | undefined;
   async function loadReadActorEvidence(actor: AuthorizationActor, companyId: string) {
-    if (foundationPins) return { agent: await loadAgent(actor.agentId!), run: await loadRunPolicy(actor.runId, companyId, actor.agentId!) };
+    if (sourceAuthorityPins) return { agent: await loadAgent(actor.agentId!), run: await loadRunPolicy(actor.runId, companyId, actor.agentId!) };
     readActorQuery ??= prepareReadActorEvidence();
     const [row] = await readActorQuery.execute({ runId: actor.runId!, companyId, agentId: actor.agentId! });
     const context = isPlainRecord(row?.run?.contextSnapshot) ? row.run.contextSnapshot : null;
@@ -1091,7 +1091,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       })
       .from(heartbeatRuns)
       .where(eq(heartbeatRuns.id, runId));
-    const [row] = await (foundationPins ? query.for("share", { noWait: true }) : query);
+    const [row] = await (sourceAuthorityPins ? query.for("share", { noWait: true }) : query);
     if (!row || row.companyId !== companyId || row.agentId !== agentId) return null;
     const context = isPlainRecord(row.contextSnapshot) ? row.contextSnapshot : null;
     return isPlainRecord(context?.executionPolicy)
@@ -2709,10 +2709,10 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     return !input.enforceResponsibleUserIntersection && responsibleUserAuthzShadowMode() ? agentDecision : denied;
   }
 
-  // This path is created only by the same-company native Foundation callback.
+  // This path is created only by the same-company native Source callback.
   // Row locks qualify the original canonical loaders; they do not grant access.
   // NOWAIT avoids reversing account erasure / Agent lifecycle lock ordering.
-  async function pinFoundationActor(actor: AuthorizationActor, companyId: string): Promise<AuthorizationActor | null> {
+  async function pinReadSourceActor(actor: AuthorizationActor, companyId: string): Promise<AuthorizationActor | null> {
     const expiresAt = actor.authenticatedCredentialExpiresAt;
     if (expiresAt != null) {
       if (!Number.isFinite(expiresAt) || expiresAt <= Date.now()) return null;
@@ -2723,7 +2723,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       if (!actor.userId) return null;
       const [user] = await db.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, actor.userId)).for("share", { noWait: true });
       if (!user) return null;
-      if (actor.source === "session" && actor.sessionId) {
+      if (actor.source === "session" && actor.sessionId != null) {
         const [session] = await db.select({ userId: authSessions.userId, expiresAt: authSessions.expiresAt })
           .from(authSessions).where(eq(authSessions.id, actor.sessionId)).for("share", { noWait: true });
         if (!session || session.userId !== actor.userId || session.expiresAt.getTime() <= Date.now()) return null;
@@ -2784,8 +2784,17 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     if (input.actor.type === "agent" && input.actor.keyScope != null && !agentApiKeyScopeSchema.safeParse(input.actor.keyScope).success) {
       return deny({ action: input.action, reason: "deny_scope", explanation: "Agent credential scope is unavailable." });
     }
-    if (readSources && input.action === "foundation:read") {
-      if (!foundationPins) {
+    if (readSources && is(db, PgTransaction)) {
+      if (input.action === "issue:read") {
+        const row = input.resource.type === "issue" && input.resource.issueId
+          ? readSources.issues.get(input.resource.issueId) : null;
+        if (!row || (row.projectId && !readSources.projects.get(row.projectId)))
+          return deny({ action: input.action, reason: "deny_scope", explanation: "Task is outside the captured native Source rows." });
+      }
+      if (input.action === "project:read" && (input.resource.type !== "project" || !input.resource.projectId
+        || !readSources.projects.get(input.resource.projectId)))
+        return deny({ action: input.action, reason: "deny_scope", explanation: "Project is outside the captured native Source rows." });
+      if (!sourceAuthorityPins) {
         try { return await createAuthorizationService(db, readSources, true).decide(input); }
         catch (error) {
           let cause: unknown = error;
@@ -2795,9 +2804,15 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
           throw error;
         }
       }
-      const actor = await pinFoundationActor(input.actor, readSources.companyId);
-      if (!actor) return deny({ action: input.action, reason: "deny_unauthenticated", explanation: "Current native Source principal is unavailable." });
-      input = { ...input, actor, enforceResponsibleUserIntersection: true };
+      // Credential-free server actors keep their original canonical policy.
+      // A source label alone does not prove an HTTP credential was verified.
+      const credential = input.actor.keyId != null || input.actor.authenticatedKeyHash != null
+        || input.actor.authenticatedCredentialExpiresAt != null || input.actor.sessionId != null || input.actor.source === "board_key";
+      if (input.action === "foundation:read" || credential) {
+        const actor = await pinReadSourceActor(input.actor, readSources.companyId);
+        if (!actor) return deny({ action: input.action, reason: "deny_unauthenticated", explanation: "Current native Source principal is unavailable." });
+        input = { ...input, actor, enforceResponsibleUserIntersection: true };
+      }
     }
     // A V5 run remains subject to strict human intersection even during a
     // rollout rollback or while legacy authorization runs in shadow mode.

@@ -414,3 +414,10 @@ Existing invite18PASS14.01s and App/access gate14PASS26.84s; UI typecheck/token 
 Original consent dialogs and General Settings now describe the operator-selected feedback service, matching the original explicit export destination; no upstream or invented legal recipient is asserted. General Settings and Issue Detail show terms only when the operator configures their URL. Original local policy/save/export behavior and consent choices remain. Sign-out reuses PRODUCT_IDENTITY.
 
 Existing three UI suites134PASS59.79s; UI typecheck/token gates actual/durable0, all5 pins match and checks closed. Bounded gpt-6-luna copy reading/assistance; Root reviewed actual export owner, removed implicit upstream terms default and verified. See `feedback-recipient-copy-checkpoint.json`. Complete consent/destination-change/legal/hosted qualification and broad V10/PR/release gates remain open.
+
+
+### 2026-10-23 — Current native Source lifetime for Task and Project reads
+
+Original callback now reuses canonical NOWAIT authority loaders for Task/Project reads, refuses uncaptured rows and rebinds actual HTTP credential markers. Credential-free internal actors keep existing canonical policy; outside-TX ordinary reads remain per-call. Actual key/JWT/cookie and unlisted-row regressions6FAIL before fix; final original Source/authz/middleware140PASS180.19s.
+
+Actual original metric/strategy consumers initially21FAIL/24PASS, exactly reproduced against committed5d49d9b9a authorization. Replace raw positive Project fixture with actual canonical Board POST; preserve all negative unknown rows/assertions. Reached strategy harness then exposes missing real reviewer and actual40P01 from reverse company/Memory locking; fix these harness facts. Final45PASS201.65s. Server compiler actual/durable0, exact pins match and processes closed. See `up03-native-source-lifetimes-checkpoint.json` for distinct runs/failed sources. General SQL, full input/source graph, private Memory/temporal failures and complete V10/PR/release gates remain open.

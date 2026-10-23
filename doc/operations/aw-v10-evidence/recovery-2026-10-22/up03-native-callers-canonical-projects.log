@@ -1,0 +1,98 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[13:00:10] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"issue:read","resourceType":"issue","companyId":"8eba45a2-e4de-4f5d-956e-89ed6073e9c0","actorAgentId":"b0fd4187-6808-4931-b685-08b8adeb66bf","responsibleUserId":"local-board"}[39m
+(node:106523) PromiseRejectionHandledWarning: Promise rejection was handled asynchronously (rejection id: 27)
+(Use `node --trace-warnings ...` to show where the warning was created)
+ ❯ |@paperclipai/server| src/__tests__/strategy-execution.integration.test.ts (16 tests | 2 failed) 38981ms
+     × preserves Decision target erasure ancestry after its native target join disappears 295ms
+     × takes Memory before deleting a Project row that a concurrent native owner updates 1795ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/strategy-execution.integration.test.ts > native strategy links on migrated PostgreSQL > preserves Decision target erasure ancestry after its native target join disappears
+Error: Decision target is outside the origin visibility boundary
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ snapshots src/services/decisions.ts:171:34
+ ❯ createInStore src/services/decisions.ts:225:10
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ src/__tests__/strategy-execution.integration.test.ts:233:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/strategy-execution.integration.test.ts > native strategy links on migrated PostgreSQL > takes Memory before deleting a Project row that a concurrent native owner updates
+Error: Failed query: select pg_advisory_xact_lock(hashtextextended($1, 0))
+params: memory:privacy:766e73b6-e409-4563-bd64-fc790a12f33b
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ lockMemoryPrivacy src/services/memory/memory-privacy.ts:22:3
+     20|
+     21| export async function lockMemoryPrivacy(db: Db, companyId: string) {
+     22|   await db.execute(sql`select pg_advisory_xact_lock(hashtextextended($…
+       |   ^
+     23| }
+     24|
+ ❯ src/services/projects.ts:1047:11
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+
+Caused by: PostgresError: deadlock detected
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '40P01', detail: 'Process 106754 waits for ExclusiveLock on advisory lock [16384,3672593230,2576366446,1]; blocked by process 106778.\nProcess 106778 waits for ExclusiveLock on advisory lock [16384,3849561138,3317380742,1]; blocked by process 106754.', hint: 'See server log for query details.', file: 'deadlock.c', routine: 'DeadLockReport', query: 'select pg_advisory_xact_lock(hashtextextended($1, 0))', parameters: [ 'memory:privacy:766e73b6-e409-4563-bd64-fc790a12f33b' ], args: [ 'memory:privacy:766e73b6-e409-4563-bd64-fc790a12f33b' ], types: [ 25 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+⎯⎯⎯⎯⎯⎯ Unhandled Errors ⎯⎯⎯⎯⎯⎯
+
+Vitest caught 1 unhandled error during the test run.
+This might cause false positive tests. Resolve unhandled errors to make sure your tests are not affected.
+
+⎯⎯⎯⎯ Unhandled Rejection ⎯⎯⎯⎯⎯
+Error: Failed query: select pg_advisory_xact_lock(hashtextextended($1, 0))
+params: memory:privacy:766e73b6-e409-4563-bd64-fc790a12f33b
+ ❯ PostgresJsPreparedQuery.queryWithCache node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/drizzle-orm/pg-core/session.js:41:15
+ ❯ processTicksAndRejections node:internal/process/task_queues:104:5
+ ❯ lockMemoryPrivacy server/src/services/memory/memory-privacy.ts:22:3
+ ❯ server/src/services/projects.ts:1047:11
+ ❯ scope node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { query: 'select pg_advisory_xact_lock(hashtextextended($1, 0))', params: [ 'memory:privacy:766e73b6-e409-4563-bd64-fc790a12f33b' ] }
+This error originated in "server/src/__tests__/strategy-execution.integration.test.ts" test file. It doesn't mean the error was thrown inside the file itself, but while it was running.
+The latest test that might've caused the error is "takes Memory before deleting a Project row that a concurrent native owner updates". It might mean one of the following:
+- The error was thrown, while Vitest was running this test.
+- If the error occurred after the test had been completed, this was the last documented test before it was thrown.
+Caused by: PostgresError: deadlock detected
+ ❯ ErrorResponse node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+ ❯ Socket.emit node:events:514:28
+ ❯ addChunk node:internal/streams/readable:568:12
+ ❯ readableAddChunkPushByteMode node:internal/streams/readable:519:3
+ ❯ Socket.Readable.push node:internal/streams/readable:399:5
+ ❯ TCP.onStreamRead node:internal/stream_base_commons:189:23
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '40P01', detail: 'Process 106754 waits for ExclusiveLock on advisory lock [16384,3672593230,2576366446,1]; blocked by process 106778.\nProcess 106778 waits for ExclusiveLock on advisory lock [16384,3849561138,3317380742,1]; blocked by process 106754.', hint: 'See server log for query details.', file: 'deadlock.c', routine: 'DeadLockReport', query: 'select pg_advisory_xact_lock(hashtextextended($1, 0))', parameters: [ 'memory:privacy:766e73b6-e409-4563-bd64-fc790a12f33b' ], args: [ 'memory:privacy:766e73b6-e409-4563-bd64-fc790a12f33b' ], types: [ 25 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  2 failed | 43 passed (45)
+     Errors  1 error
+   Start at  12:58:23
+   Duration  194.19s (transform 48.19s, setup 700ms, import 97.45s, tests 93.85s, environment 0ms)
+

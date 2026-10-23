@@ -243,7 +243,10 @@ describe("Foundation native Source authority lifetime", () => {
     expect((await db.transaction(tx => authorizationService(tx).withReadSources(s.companyId, [], [], owner => owner.decide(request)))).allowed).toBe(false);
   });
 
-  it.each(["agent", "board"] as const)("rechecks the authenticated %s token hash after a real Source row wait", async credentialKind => {
+  it.each([
+    ["agent", "foundation:read"], ["board", "foundation:read"],
+    ["agent", "issue:read"], ["board", "issue:read"],
+  ] as const)("rechecks the authenticated %s token hash for %s after a real Source row wait", async (credentialKind, action) => {
     const s = await seed(), issueId = randomUUID();
     const token = `fixture-${credentialKind}-${randomUUID()}`;
     const keyHash = createHash("sha256").update(token).digest("hex");
@@ -261,7 +264,10 @@ describe("Foundation native Source authority lifetime", () => {
         expect(req.actor.source).toBe(credentialKind === "agent" ? "agent_key" : "board_key");
         expect(req.actor.keyId).toBe(credentialId);
         const decision = await db.transaction(tx => authorizationService(tx).withReadSources(s.companyId, [issueId], [],
-          owner => owner.decide(input(s, req.actor))));
+          owner => owner.decide(action === "foundation:read" ? input(s, req.actor) : {
+            actor: req.actor, action, resource: { type: "issue", companyId: s.companyId, issueId },
+            enforceResponsibleUserIntersection: true,
+          })));
         res.status(decision.allowed ? 200 : 403).json({ allowed: decision.allowed });
       } catch (error) { next(error); }
     });
@@ -302,7 +308,10 @@ describe("Foundation native Source authority lifetime", () => {
     expect((await probe()).status).toBe(401);
   });
 
-  it.each(["source_wait", "callback_return"] as const)("does not outlive an actual JWT across %s", async phase => {
+  it.each([
+    ["foundation:read", "source_wait"], ["foundation:read", "callback_return"],
+    ["issue:read", "source_wait"], ["issue:read", "callback_return"],
+  ] as const)("does not outlive an actual JWT for %s across %s", async (action, phase) => {
     const s = await seed(), issueId = randomUUID();
     await db.insert(issues).values({ id: issueId, companyId: s.companyId, title: "Actual JWT lifetime wait", createdByUserId: s.userId });
     vi.stubEnv("PAPERCLIP_AGENT_JWT_SECRET", `fixture-${randomUUID()}`);
@@ -315,7 +324,10 @@ describe("Foundation native Source authority lifetime", () => {
       try {
         expect(req.actor.source).toBe("agent_jwt");
         const decision = await db.transaction(tx => authorizationService(tx).withReadSources(s.companyId, [issueId], [], async owner => {
-          const result = await owner.decide(input(s, req.actor));
+          const result = await owner.decide(action === "foundation:read" ? input(s, req.actor) : {
+            actor: req.actor, action, resource: { type: "issue", companyId: s.companyId, issueId },
+            enforceResponsibleUserIntersection: true,
+          });
           if (holdCallback) {
             entered.resolve();
             expect(result.allowed).toBe(true);
@@ -372,7 +384,7 @@ describe("Foundation native Source authority lifetime", () => {
     }
   });
 
-it("denies a Foundation Source read whose cookie session is signed out while a Source row is locked", async () => {
+it.each(["foundation:read", "issue:read"] as const)("denies a %s Source read whose cookie session is signed out while a Source row is locked", async action => {
   const s = await seed();
   const issueId = randomUUID();
   await db.insert(issues).values({ id: issueId, companyId: s.companyId, title: "Cookie session Source wait" });
@@ -416,7 +428,10 @@ it("denies a Foundation Source read whose cookie session is signed out while a S
           s.companyId,
           [issueId],
           [],
-          owner => owner.decide(input(s, req.actor)),
+          owner => owner.decide(action === "foundation:read" ? input(s, req.actor) : {
+            actor: req.actor, action, resource: { type: "issue", companyId: s.companyId, issueId },
+            enforceResponsibleUserIntersection: true,
+          }),
         ));
         res.status(decision.allowed ? 200 : 403).json({ allowed: decision.allowed, sessionId: req.actor.sessionId });
       } catch (error) { next(error); }
@@ -493,5 +508,21 @@ it("denies a Foundation Source read whose cookie session is signed out while a S
     }
   }
 });
+
+  it("refuses an unlisted same-company Task as pinned native Source authority", async () => {
+    const s = await seed(), capturedId = randomUUID(), unlistedId = randomUUID();
+    await db.insert(issues).values([capturedId, unlistedId].map(id => ({ id, companyId: s.companyId,
+      title: "Actual Source scope", createdByUserId: s.userId })));
+    const read = { actor: s.actor, action: "issue:read" as const,
+      resource: { type: "issue" as const, companyId: s.companyId, issueId: unlistedId }, enforceResponsibleUserIntersection: true };
+    expect((await authorizationService(db).decide(read)).allowed).toBe(true);
+    expect((await db.transaction(tx => authorizationService(tx).withReadSources(s.companyId, [capturedId], [],
+      owner => owner.decide(read)))).allowed).toBe(false);
+    expect((await db.transaction(tx => authorizationService(tx).withReadSources(s.companyId, [unlistedId], [],
+      owner => owner.decide(read)))).allowed).toBe(true);
+    // Preserve the original outside-transaction per-call behavior. It supplies
+    // no locked Source facts or reusable authority proof.
+    expect((await authorizationService(db).withReadSources(s.companyId, [], [], owner => owner.decide(read))).allowed).toBe(true);
+  });
 
 });

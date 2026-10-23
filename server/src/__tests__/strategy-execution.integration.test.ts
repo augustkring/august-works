@@ -1,3 +1,8 @@
+import express from "express";
+import request from "supertest";
+import { actorMiddleware } from "../middleware/auth.js";
+import { errorHandler } from "../middleware/index.js";
+import { projectRoutes } from "../routes/projects.js";
 import { authorizationService } from "../services/authorization.js";
 import { inspectAnalyticalEvidenceAuthority } from "../services/analytical-evidence.js";
 import { authorizeStrategyNativePopulation, authorizeStrategyReference } from "../services/strategy-execution/references.js";
@@ -5,7 +10,7 @@ import {lockAnalyticalCompany} from "../services/analytical-privacy.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
-import { agents, analyticalSourceSuppressions, applyPendingMigrations, companies, companyMemberships, createDb, decisionTargetIssues, documentRevisions, foundationSections, goals, heartbeatRuns, issues, projectGoals, projects, strategyExecutionLinks, strategyExecutionLinkVersions, strategyExecutionLinkApprovals, strategyExecutionSourceBindings } from "@paperclipai/db";
+import { agents, authUsers, analyticalSourceSuppressions, applyPendingMigrations, companies, companyMemberships, createDb, decisionTargetIssues, documentRevisions, foundationSections, goals, heartbeatRuns, issues, projectGoals, projects, strategyExecutionLinks, strategyExecutionLinkVersions, strategyExecutionLinkApprovals, strategyExecutionSourceBindings } from "@paperclipai/db";
 import { strategyExecutionLinkDefinitionSchema, type StrategyExecutionLinkDefinition } from "@paperclipai/shared";
 import { strategyExecutionService } from "../services/strategy-execution/service.js";
 import { eraseStrategySource } from "../services/strategy-execution/privacy.js";
@@ -30,15 +35,27 @@ suite("native strategy links on migrated PostgreSQL", () => {
   let db: ReturnType<typeof createDb>, companyId: string, otherCompanyId: string, goalId: string, projectId: string, policyId: string;
   let foundation: Awaited<ReturnType<ReturnType<typeof foundationService>["approve"]>>;
   let reference: StrategyExecutionLinkDefinition["from"];
-  beforeAll(async () => { database = await startEmbeddedPostgresTestDatabase("aw-v8-strategy-"); db = createDb(database.connectionString); });
+  beforeAll(async () => {
+    database = await startEmbeddedPostgresTestDatabase("aw-v8-strategy-"); db = createDb(database.connectionString);
+    await db.insert(authUsers).values({ id: "local-board", name: "Current strategy reviewer",
+      email: "strategy-reviewer@example.test", emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
+  });
   afterAll(async () => { await database?.cleanup(); });
   beforeEach(async () => {
     await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental(flags);
-    companyId = randomUUID(); otherCompanyId = randomUUID(); goalId = randomUUID(); projectId = randomUUID();
+    companyId = randomUUID(); otherCompanyId = randomUUID(); goalId = randomUUID();
     await db.insert(companies).values([{ id: companyId, name: "Strategy", issuePrefix: randomUUID() }, { id: otherCompanyId, name: "Foreign", issuePrefix: randomUUID() }]);
     await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: "local-board", status: "active", membershipRole: "owner" });
     await db.insert(goals).values({ companyId, id: goalId, title: "Native objective" });
-    await db.insert(projects).values({ companyId, id: projectId, name: "Native initiative" });
+    // The canonical Board route owns qualification; a raw historical row is unknown.
+    const app = express();
+    app.use(express.json());
+    app.use(actorMiddleware(db, { deploymentMode: "local_trusted" }));
+    app.use("/api", projectRoutes(db));
+    app.use(errorHandler);
+    const createdProject = await request(app).post(`/api/companies/${companyId}/projects`)
+      .send({ name: "Native initiative" }).expect(201);
+    projectId = createdProject.body.id;
     const purpose = analyticalPurpose(); purpose.citation = "strategy-purpose"; purpose.analyticalPurpose!.capabilities = ["strategy"]; purpose.analyticalPurpose!.maxRetentionDays = 90;
     policyId = (await aiGovernanceService(db).obligation(actor, companyId, purpose)).id;
     const svc = foundationService(db);
@@ -284,7 +301,7 @@ suite("native strategy links on migrated PostgreSQL", () => {
     let releaseMemory!: () => void, signalHeld!: () => void;
     const held = new Promise<void>(resolve => { signalHeld = resolve; }), release = new Promise<void>(resolve => { releaseMemory = resolve; });
     const mutation = db.transaction(async rawTx => {
-      const tx = rawTx as unknown as typeof db; await lockMemoryPrivacy(tx, companyId); signalHeld(); await release;
+      const tx = rawTx as unknown as typeof db; await lockAnalyticalCompany(tx, companyId); await lockMemoryPrivacy(tx, companyId); signalHeld(); await release;
       await tx.execute(sql`set local lock_timeout='1s'`);
       await projectService(tx).update(projectId, { name: "Privacy-reconciled native project" });
     });

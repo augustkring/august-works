@@ -1,0 +1,279 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/business-metrics.integration.test.ts (29 tests | 13 failed) 35459ms
+     × resolves a saved observed zero through the Native chat reader and withdraws a superseded metric version 535ms
+     × erases expired native metric snapshots and edges with rollout off while retaining current snapshots and canonical sources 552ms
+     × uses a complete half-open native population, current status and exact definition/source lineage without copying prose 465ms
+     × rejects partial populations and undeclared breakdowns without retaining an observation 360ms
+     × erases dependent analytical observations through the native issue owner even while feature flags are disabled 166ms
+     × tracks a selected project even when its metric population is empty so native erasure invalidates the result 169ms
+     × retains a content-free source guard and rejects late or restored analytical input after native erasure without an activity source 135ms
+     × rejects a mixed native Source batch atomically when its later row is unavailable in the tenant 184ms
+     × rejects altered evidence snapshots and an observation associated with an inconsistent lineage manifest 204ms
+     × rechecks stored observations against current authority, lineage completeness and native erasure 152ms
+     × reapplies post-backup analytical deletion in isolated native quarantine with flags off and preserves unrelated observations 389ms
+     × waits for Memory source erasure before publishing a metric observation 307ms
+     × lists retained observations only under current native source authority 181ms
+[12:49:41] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAVAILABLE","reason":"deny_missing_membership","action":"issue:read","resourceType":"issue","companyId":"c5027f42-6f23-421e-b50f-6b188a363041","actorAgentId":"a9846b28-d422-41e9-9d58-a5c224210f94","responsibleUserId":"local-board"}[39m
+ ❯ |@paperclipai/server| src/__tests__/strategy-execution.integration.test.ts (16 tests | 8 failed) 15691ms
+     × batches native row transport while preserving each actual task and project authorization and legacy snapshot 439ms
+     × refuses the whole population when an individual task or its project is outside real token authority 330ms
+     × rechecks real human membership on every new native population rather than retaining a prior grant 150ms
+     × serializes CAS, requires explicit native execution ownership and rejects dependency cycles 192ms
+     × sweeps an expired historical version with flags off and its company paused, retaining unrelated current histories 262ms
+     × preserves Decision target erasure ancestry after its native target join disappears 300ms
+     × replays post-backup Goal erasure in an isolated migrated database and preserves unrelated links 179ms
+     × takes Memory before deleting a Project row that a concurrent native owner updates 134ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 21 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/business-metrics.integration.test.ts > governed native metric owner on migrated PostgreSQL > resolves a saved observed zero through the Native chat reader and withdraws a superseded metric version
+Error: Metric population is outside the current authorization boundary
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ inputs src/services/business-metrics/service.ts:88:145
+ ❯ observe src/services/business-metrics/service.ts:272:46
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ withV7ActivityTransaction src/services/v7-mutations.ts:7:17
+ ❯ src/__tests__/business-metrics.integration.test.ts:60:25
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/21]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/business-metrics.integration.test.ts > governed native metric owner on migrated PostgreSQL > erases expired native metric snapshots and edges with rollout off while retaining current snapshots and canonical sources
+ FAIL  |@paperclipai/server| src/__tests__/business-metrics.integration.test.ts > governed native metric owner on migrated PostgreSQL > uses a complete half-open native population, current status and exact definition/source lineage without copying prose
+ FAIL  |@paperclipai/server| src/__tests__/business-metrics.integration.test.ts > governed native metric owner on migrated PostgreSQL > erases dependent analytical observations through the native issue owner even while feature flags are disabled
+ FAIL  |@paperclipai/server| src/__tests__/business-metrics.integration.test.ts > governed native metric owner on migrated PostgreSQL > retains a content-free source guard and rejects late or restored analytical input after native erasure without an activity source
+ FAIL  |@paperclipai/server| src/__tests__/business-metrics.integration.test.ts > governed native metric owner on migrated PostgreSQL > rejects a mixed native Source batch atomically when its later row is unavailable in the tenant
+ FAIL  |@paperclipai/server| src/__tests__/business-metrics.integration.test.ts > governed native metric owner on migrated PostgreSQL > rejects altered evidence snapshots and an observation associated with an inconsistent lineage manifest
+ FAIL  |@paperclipai/server| src/__tests__/business-metrics.integration.test.ts > governed native metric owner on migrated PostgreSQL > rechecks stored observations against current authority, lineage completeness and native erasure
+ FAIL  |@paperclipai/server| src/__tests__/business-metrics.integration.test.ts > governed native metric owner on migrated PostgreSQL > reapplies post-backup analytical deletion in isolated native quarantine with flags off and preserves unrelated observations
+ FAIL  |@paperclipai/server| src/__tests__/business-metrics.integration.test.ts > governed native metric owner on migrated PostgreSQL > lists retained observations only under current native source authority
+Error: Metric population is outside the current authorization boundary
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ src/services/business-metrics/service.ts:115:132
+ ❯ src/services/business-metrics/service.ts:33:9
+ ❯ inspectSourcePopulation src/services/business-metrics/service.ts:31:23
+ ❯ src/services/business-metrics/service.ts:113:9
+ ❯ Object.withReadSources src/services/authorization.ts:800:22
+ ❯ inputs src/services/business-metrics/service.ts:111:5
+ ❯ observe src/services/business-metrics/service.ts:272:46
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/21]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/business-metrics.integration.test.ts > governed native metric owner on migrated PostgreSQL > rejects partial populations and undeclared breakdowns without retaining an observation
+AssertionError: expected Error: Metric population is outside the c… { …(2) } to match object { status: 422, …(1) }
+
+- Expected
++ Received
+
+- {
+-   "details": {
+-     "code": "metric_population_budget_exceeded",
+-   },
+-   "status": 422,
++ HttpError {
++   "details": undefined,
++   "status": 403,
+  }
+
+ ❯ src/__tests__/business-metrics.integration.test.ts:180:120
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/21]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/business-metrics.integration.test.ts > governed native metric owner on migrated PostgreSQL > tracks a selected project even when its metric population is empty so native erasure invalidates the result
+Error: Metric population is outside the current authorization boundary
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ inputs src/services/business-metrics/service.ts:88:145
+ ❯ observe src/services/business-metrics/service.ts:272:46
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ withV7ActivityTransaction src/services/v7-mutations.ts:7:17
+ ❯ src/__tests__/business-metrics.integration.test.ts:208:5
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/21]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/business-metrics.integration.test.ts > governed native metric owner on migrated PostgreSQL > waits for Memory source erasure before publishing a metric observation
+AssertionError: expected { …(1) } to match object { error: { status: 409 } }
+(1 matching property omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "error": {
+-     "status": 409,
++   "error": HttpError {
++     "status": 403,
+    },
+  }
+
+ ❯ src/__tests__/business-metrics.integration.test.ts:432:29
+    430|       }
+    431|       expect(blocked).toBe(true); releaseMemory(); await erasure;
+    432|       expect(await outcome).toMatchObject({ error: { status: 409 } });
+       |                             ^
+    433|       expect(await observations()).toHaveLength(0);
+    434|     } finally { releaseMemory(); await Promise.allSettled([erasure,out…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/21]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/strategy-execution.integration.test.ts > native strategy links on migrated PostgreSQL > batches native row transport while preserving each actual task and project authorization and legacy snapshot
+Error: Task source access is unavailable.
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ assertV5Authorization src/services/v5-authorization.ts:15:32
+ ❯ issue src/services/strategy-execution/references.ts:50:5
+ ❯ authorizeReference src/services/strategy-execution/references.ts:84:17
+ ❯ src/__tests__/strategy-execution.integration.test.ts:71:74
+ ❯ src/__tests__/strategy-execution.integration.test.ts:71:22
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/21]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/strategy-execution.integration.test.ts > native strategy links on migrated PostgreSQL > refuses the whole population when an individual task or its project is outside real token authority
+AssertionError: expected { action: 'issue:read', …(3) } to match object { allowed: true }
+(3 matching properties omitted from actual)
+
+- Expected
++ Received
+
+  {
+-   "allowed": true,
++   "allowed": false,
+  }
+
+ ❯ src/__tests__/strategy-execution.integration.test.ts:94:190
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/21]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/strategy-execution.integration.test.ts > native strategy links on migrated PostgreSQL > rechecks real human membership on every new native population rather than retaining a prior grant
+Error: Task source access is unavailable.
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ authorizeSource src/services/strategy-execution/references.ts:37:34
+ ❯ issue src/services/strategy-execution/references.ts:50:5
+ ❯ authorizeReference src/services/strategy-execution/references.ts:84:17
+ ❯ src/services/strategy-execution/references.ts:158:22
+ ❯ src/services/strategy-execution/references.ts:157:21
+ ❯ Object.withReadSources src/services/authorization.ts:800:22
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/21]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/strategy-execution.integration.test.ts > native strategy links on migrated PostgreSQL > serializes CAS, requires explicit native execution ownership and rejects dependency cycles
+AssertionError: expected Error: Project source access is unavailab… { …(2) } to match object { status: 409 }
+(3 matching properties omitted from actual)
+
+- Expected
++ Received
+
+- {
+-   "status": 409,
++ HttpError {
++   "status": 403,
+  }
+
+ ❯ src/__tests__/strategy-execution.integration.test.ts:161:195
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/21]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/strategy-execution.integration.test.ts > native strategy links on migrated PostgreSQL > sweeps an expired historical version with flags off and its company paused, retaining unrelated current histories
+ FAIL  |@paperclipai/server| src/__tests__/strategy-execution.integration.test.ts > native strategy links on migrated PostgreSQL > replays post-backup Goal erasure in an isolated migrated database and preserves unrelated links
+Error: Project source access is unavailable.
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ assertV5Authorization src/services/v5-authorization.ts:15:32
+ ❯ project src/services/strategy-execution/references.ts:42:5
+ ❯ authorizeReference src/services/strategy-execution/references.ts:79:17
+ ❯ authority src/services/strategy-execution/service.ts:52:16
+ ❯ src/services/strategy-execution/service.ts:149:53
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ withV7ActivityTransaction src/services/v7-mutations.ts:7:17
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/21]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/strategy-execution.integration.test.ts > native strategy links on migrated PostgreSQL > preserves Decision target erasure ancestry after its native target join disappears
+Error: Decision target is outside the origin visibility boundary
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ snapshots src/services/decisions.ts:171:34
+ ❯ createInStore src/services/decisions.ts:225:10
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ src/__tests__/strategy-execution.integration.test.ts:220:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/21]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/strategy-execution.integration.test.ts > native strategy links on migrated PostgreSQL > takes Memory before deleting a Project row that a concurrent native owner updates
+Error: Project source access is unavailable.
+ ❯ forbidden src/errors.ts:21:10
+     19|
+     20| export function forbidden(message = "Forbidden", details?: unknown) {
+     21|   return new HttpError(403, message, details);
+       |          ^
+     22| }
+     23|
+ ❯ assertV5Authorization src/services/v5-authorization.ts:15:32
+ ❯ project src/services/strategy-execution/references.ts:42:5
+ ❯ authorizeReference src/services/strategy-execution/references.ts:79:17
+ ❯ authority src/services/strategy-execution/service.ts:51:18
+ ❯ src/services/strategy-execution/service.ts:149:53
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ withV7ActivityTransaction src/services/v7-mutations.ts:7:17
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/21]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  21 failed | 24 passed (45)
+   Start at  12:47:44
+   Duration  117.77s (transform 34.58s, setup 499ms, import 64.96s, tests 51.15s, environment 0ms)
+
