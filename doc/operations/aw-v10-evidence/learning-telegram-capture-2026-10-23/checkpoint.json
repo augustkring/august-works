@@ -1,0 +1,82 @@
+{
+  "baseCommit": "8b19a4220",
+  "sources": {
+    "server/src/services/chat-channels.ts": "070cb1134b841041bb0a21ccf5c06a220a6b67f0614b2b1d1eb89a6135d9c9d0",
+    "server/src/services/learning/learning-service.ts": "852e27a5d0e051258ab6a809d55f37f9d756b2a705fe32340f8d0092bb685215",
+    "server/src/__tests__/chat-channels.integration.test.ts": "dfc01283dda8f1ab2b233d49d4924fe8d1c92337a8eefc281c99bcd3ddc29536",
+    "server/src/__tests__/v7-learning.integration.test.ts": "f95c1b200813487ed12770f1946cae8cdb62e92aa2ee0bb5980bb2576ec5468c",
+    "server/src/__tests__/memory-revocation-source-binding.integration.test.ts": "f1f1884f6ae50178f252a0363d753dd426043dfc554d9ed88fa332544d3c2acb"
+  },
+  "checks": {
+    "policy-telegram-baseline": {
+      "exit": 1,
+      "tests": "1 failed | 1090 skipped; Telegram beforeAll hook timeout"
+    },
+    "telegram-baseline": {
+      "exit": 1,
+      "limits": "Initial new Telegram fixture failure; see raw log."
+    },
+    "telegram-corrected-baseline": {
+      "exit": 1,
+      "tests": "1 failed | 1 passed | 1047 skipped",
+      "reproduction": "Bound Comment body rewrite rejected with SQLSTATE23514."
+    },
+    "final-broader": {
+      "exit": 1,
+      "tests": "64 passed | 19 failed | 1047 skipped",
+      "durationSeconds": 470.21,
+      "scope": "Four original binding/Memory/private-lineage/budget-queue files pass, both selected Telegram cases pass, new Learning policy regression passes. The 19 original V7 failures remain failures at this stage."
+    },
+    "final-projects": {
+      "exit": 0,
+      "tests": "4 passed | 38 skipped",
+      "durationSeconds": 70.57
+    },
+    "final-actor-fixtures": {
+      "exit": 1,
+      "tests": "4 passed | 4 failed | 34 skipped",
+      "durationSeconds": 73.98
+    },
+    "final-fixture-followup": {
+      "exit": 1,
+      "tests": "2 passed | 2 failed | 38 skipped",
+      "durationSeconds": 71.9,
+      "remaining": "Both original no-wait Workflow cases fail with workflow_task_create_failed / Task privacy source is unavailable."
+    },
+    "skill-candidate-timing": {
+      "exit": 1,
+      "tests": "1 failed | 41 skipped",
+      "durationSeconds": 80.89,
+      "limits": "30-second test limit. Stage trace and live PG sample show ongoing queries with no blocking PIDs; no deadlock qualification."
+    },
+    "skill-candidate-timing-extended": {
+      "exit": 1,
+      "tests": "1 failed | 41 skipped",
+      "durationSeconds": 73.3,
+      "limits": "Diagnostic 120-second test budget reaches Mandatory Context provider failed: task. Native provider deadline remains unchanged."
+    },
+    "skill-context-timing-extended": {
+      "exit": 0,
+      "tests": "4 passed | 38 skipped",
+      "durationSeconds": 140.44,
+      "testSeconds": 102.06,
+      "scope": "Both ordinary accountable preparation/native Context cases plus both candidate/active Skill lifecycle cases; diagnostic timing prints remain only in archived test source."
+    },
+    "server-types-followup": {
+      "exit": 0,
+      "limits": "Native tests are excluded from server tsconfig. Compiler completed before the separate in-progress auth schema work; these two product-owner pins have not changed."
+    }
+  },
+  "interpretation": [
+    "Original Learning policy acceptance and Telegram attachment-only failure settlement compare the actual stored JSONB/body in the same company-scoped UPDATE. Unchanged payloads preserve captures; changed bodies clear captures and use the existing irreversible invalidation latch.",
+    "Fresh Learning fixture roots retain actual native Task IDs/versions and INSERT-only source qualification; two fresh Board-created Project targets receive their original source stamp at INSERT. No historical payload is upgraded.",
+    "Positive source-linked reads now carry the admitted owner. Native worker/Context fixtures have stored current Humans, membership/grants and actual run responsibility. Actorless/wrong-ref/self-review/Stop/late-erasure denials remain. The Context task/run mismatch assertion now checks the original native 403 message rather than an obsolete 409 expectation.",
+    "Final Skill test budget is120seconds for the complete multi-operation native lifecycle fixture. Production provider/authority deadlines are unchanged; isolated cold provider timeout is preserved and is not a performance pass.",
+    "The baseline test sources were not all captured at their execution stages; raw results establish the observed failures. Final source hashes are exact, and stage pins are retained separately. No full original V7 suite pass is claimed."
+  ],
+  "limits": [
+    "Confirmed production Workflow Task originRunId references workflow_runs, while mutation and generic privacy traversal interpret it as heartbeat_runs. Both no-wait originals and four Optimizer original cases require a truthful typed source-owner repair, not fixture flags or dropped source checks.",
+    "Complete source constructors/run-input receipts, original3 private-Memory/temporal regressions, portability31 and latest whole-workspace/V10/PR gates remain open.",
+    "Structural body-capture fixtures and fake chat SDK/ingestion only; no real Telegram/provider/credential/complete source admission qualification."
+  ]
+}

@@ -102,9 +102,9 @@ describe("Memory revocation preserves only a still-valid body snapshot", () => {
       scopeType: "company", title: "Separate selected source", content: "A different selected Memory source", summary: "Source summary",
       reviewState: "accepted", verificationState: "human_verified", sensitivityLabel: "internal", observedAt,
       sourceProvenanceQualified: true, createdByActorType: "user", createdByActorId: userId }).returning();
-    const evidence = { sourceClass: "task", sourceProvider: "native_memory_binding_fixture", sourceType: "reviewed_outcome",
+    const evidence = { sourceClass: "task" as const, sourceProvider: "native_memory_binding_fixture", sourceType: "reviewed_outcome",
       sourceRef: `outcome://${target!.id}`, sourceVersion: "1", observedAt, excerptHash: "a".repeat(64),
-      citationJson: { label: "Existing reviewed support" }, trustLevel: "low", supportsOrContradicts: "supports" as const };
+      citationJson: { label: "Existing reviewed support" }, trustLevel: "low" as const, supportsOrContradicts: "supports" as const };
     await db.insert(memoryEvidence).values({ companyId, memoryRecordId: target!.id, ...evidence });
     const actor = { principal: { type: "agent" as const, agentId, responsibleUserId: userId }, runId };
     const manifestDecision: ContextAuthorityDecision = { authorityRank: 0, primaryForDomain: true, reason: "preferred_authority",
@@ -141,9 +141,9 @@ describe("Memory revocation preserves only a still-valid body snapshot", () => {
       scopeType: "company", title: "Unchanged duplicate", content: "Same claim and roots", summary: "Same summary",
       reviewState: "accepted", verificationState: "human_verified", sensitivityLabel: "internal", observedAt,
       sourceProvenanceQualified: true, createdByActorType: "user", createdByActorId: userId, payloadSourceProtocolVersion: 1 }).returning();
-    const evidence = { sourceClass: "task", sourceProvider: "native_memory_binding_fixture", sourceType: "reviewed_outcome",
+    const evidence = { sourceClass: "task" as const, sourceProvider: "native_memory_binding_fixture", sourceType: "reviewed_outcome",
       sourceRef: `outcome://${target!.id}`, sourceVersion: "1", observedAt, excerptHash: "b".repeat(64),
-      citationJson: { label: "Existing reviewed support" }, trustLevel: "low", supportsOrContradicts: "supports" as const };
+      citationJson: { label: "Existing reviewed support" }, trustLevel: "low" as const, supportsOrContradicts: "supports" as const };
     await db.insert(memoryEvidence).values({ companyId, memoryRecordId: target!.id, ...evidence });
     await bindMemory(companyId, target!.id);
     const [before] = await db.select().from(memoryRecords).where(eq(memoryRecords.id, target!.id));

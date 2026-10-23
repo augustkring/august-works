@@ -11279,7 +11279,9 @@ export function chatChannelService(db: Db, options: ChatChannelServiceOptions) {
       // empty turn that contains no usable bytes.
       await tx
         .update(issueComments)
-        .set({ body: visibleFailure, updatedAt: new Date() })
+        .set({ body: visibleFailure, updatedAt: new Date(),
+          payloadSourceSnapshot: sql`case when ${issueComments.body} is distinct from ${visibleFailure} then null else ${issueComments.payloadSourceSnapshot} end`,
+        })
         .where(
           and(
             eq(issueComments.id, input.commentId),

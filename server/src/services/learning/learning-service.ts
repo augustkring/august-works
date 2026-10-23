@@ -1,5 +1,5 @@
 import { agentPackageService } from "../agent-packages/package-service.js";
-import { and, desc, eq, inArray, isNull } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, sql } from "drizzle-orm";
 import { companyAgentPackageInstallations, agentPackageUpdateProposals, learningCycles, learningEvidence, learningHypotheses, learningEvaluations, learningDomainCandidates, learningRetainedAssets, workflowOptimizerEvaluations, rolePacks, rolePackItems, workflows, policyChangeProposals, memoryEvidence, issues, projects, companySkills, foundationDocuments, documents, playbookDocuments, readinessRequirements, type Db } from "@paperclipai/db";
 import { finishLearningCycleSchema, learningCycleSchema, learningHypothesisSchema, learningEvaluationSchema, proposeLearningChangeSchema, reviewLearningPolicySchema, EVIDENCE_SENSITIVITIES, roadmapPolicySchema, type MemoryScope, type LearningPolicyPayload, type ReadinessAction } from "@paperclipai/shared";
 import type { z } from "zod";
@@ -306,7 +306,10 @@ export function learningService(db: Db) {
             await assertV7Authorization(tx, actor, companyId, "tasks:assign", { type: "project", companyId, projectId: row.targetId });
             const [project] = await tx.select().from(projects).where(and(eq(projects.companyId, companyId), eq(projects.id, row.targetId))).for("update");
             if (!project || project.updatedAt.toISOString() !== row.proposal.expectedProjectUpdatedAt) throw conflict("Project policy baseline changed");
-            await tx.update(projects).set({ roadmapPolicy: roadmapPolicySchema.parse(row.proposal.policy), updatedAt: new Date() }).where(eq(projects.id, project.id));
+            const policy = roadmapPolicySchema.parse(row.proposal.policy);
+            await tx.update(projects).set({ roadmapPolicy: policy,
+              payloadSourceSnapshot: sql`case when ${projects.roadmapPolicy} is distinct from ${JSON.stringify(policy)}::jsonb then null else ${projects.payloadSourceSnapshot} end`,
+              updatedAt: new Date() }).where(and(eq(projects.companyId, companyId), eq(projects.id, project.id)));
           } else {
             if (row.targetId !== companyId || parent.scopeType !== "company") throw forbidden("Readiness policy requires a company evidence scope");
             await assertV7Enabled(tx, "readiness_engine_v7"); await assertV7Authorization(tx, actor, companyId, "foundation:approve");

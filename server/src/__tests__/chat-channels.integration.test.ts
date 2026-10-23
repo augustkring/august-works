@@ -1,6 +1,6 @@
 import { notificationChannelDelivery } from "../services/notifications/channel-delivery.js";
 import { notificationChannelPolicy } from "../services/notifications/channel-policy.js";
-import { toolActionRequests, toolInvocations } from "@paperclipai/db";
+import { toolActionRequests, toolInvocations, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS } from "@paperclipai/db";
 import { GitHubPublicationLeaseLost, withGitHubPublicationLease } from "../services/chat-github-publication-lease.js";
 import { githubChatManagementService } from "../services/chat-github-management.js";
 import { githubChatReviewService } from "../services/chat-github-reviews.js";
@@ -1035,7 +1035,7 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       );
       db = createDb(tempDb.connectionString);
     }
-  }, 30_000);
+  }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
 
   afterAll(async () => {
     await tempDb?.cleanup();
@@ -63528,11 +63528,15 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
     expect(wakeup).toHaveBeenCalledTimes(1);
   });
 
-  it("surfaces an attachment-only Telegram ingestion failure without waking the agent", async () => {
+  it.each([false, true])("surfaces an attachment-only Telegram ingestion failure without waking the agent (bound snapshot: %s)", async (bindComment) => {
     const fixture = await seedCompany();
     const storage = createStorageService();
     const { callbacks, endpoint, service, wakeup } =
       await configuredTelegramEndpoint(fixture, { storage: storage.storage });
+    const triggerSuffix = randomUUID().replaceAll("-", "").slice(0, 16);
+    const captureFunction = `aw_test_capture_comment_${triggerSuffix}`;
+    const captureTrigger = `issue_comments_aa_capture_${triggerSuffix}`;
+    let capturedCommentId: string | null = null;
     const dm = makeThread({
       channelId: "77115567",
       id: "telegram:77115567",
@@ -63540,9 +63544,38 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
       name: "Telegram failed media DM",
     });
     const failedDownload = vi.fn(async () => {
+      if (bindComment) {
+        const comments = await db.select({ id: issueComments.id, snapshot: issueComments.payloadSourceSnapshot })
+          .from(issueComments).where(eq(issueComments.companyId, fixture.companyId));
+        expect(comments).toHaveLength(1);
+        expect(comments[0]!.snapshot).not.toBeNull();
+        capturedCommentId = comments[0]!.id;
+      }
       throw new Error("injected Telegram attachment outage");
     });
     try {
+      if (bindComment) {
+        // Controlled INSERT-only structural fixture; this does not qualify a real source admission.
+        await db.execute(sql`create function ${sql.identifier(captureFunction)}() returns trigger
+          language plpgsql as $capture$
+          declare content jsonb;
+          begin
+            if new.company_id = tg_argv[0]::uuid then
+              new.payload_source_protocol_version := 1;
+              content := jsonb_build_object('version',1,'owner',jsonb_build_object('kind','comment',
+                'companyId',new.company_id,'id',new.id,
+                'contentHash',public.aw_native_payload_body_hash('comment',to_jsonb(new))),
+                'policy',jsonb_build_object('issueIds','[]'::jsonb,'projectIds','[]'::jsonb,'runIds','[]'::jsonb,
+                  'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb);
+              new.payload_source_snapshot := content || jsonb_build_object('digest',
+                encode(sha256(convert_to(content::text,'UTF8')),'hex'));
+            end if;
+            return new;
+          end;
+          $capture$`);
+        await db.execute(sql`create trigger ${sql.identifier(captureTrigger)} before insert on issue_comments
+          for each row execute function ${sql.identifier(captureFunction)}(${sql.raw(`'${fixture.companyId}'`)})`);
+      }
       await deliverMessage({
         callbacks,
         endpointId: endpoint.id,
@@ -63579,6 +63612,11 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
           .from(issueComments)
           .where(eq(issueComments.issueId, conversation.issueId)),
       ).resolves.toEqual([{ body: visibleFailure }]);
+      if (bindComment) {
+        expect(capturedCommentId).not.toBeNull();
+        const [settledComment] = await db.select().from(issueComments).where(eq(issueComments.id, capturedCommentId!));
+        expect(settledComment).toMatchObject({ body: visibleFailure, payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: true });
+      }
       const [delivery] = await db
         .select()
         .from(chatDeliveries)
@@ -63604,7 +63642,14 @@ describeEmbeddedPostgres("chat channel control-plane integration", () => {
         ]),
       );
     } finally {
-      await retirePublicationFixture(service, endpoint.id);
+      try {
+        if (bindComment) {
+          await db.execute(sql`drop trigger if exists ${sql.identifier(captureTrigger)} on issue_comments`);
+          await db.execute(sql`drop function if exists ${sql.identifier(captureFunction)}()`);
+        }
+      } finally {
+        await retirePublicationFixture(service, endpoint.id);
+      }
     }
   });
 

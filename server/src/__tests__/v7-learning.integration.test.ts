@@ -36,7 +36,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { companies, agents, agentIdentities, heartbeatRuns, contextManifestMemoryRoots, principalPermissionGrants, companyMemberships, issues, projects, goals, strategyExecutionLinks, strategyExecutionLinkVersions, automationArtifacts, automationArtifactVersions, workflowOptimizerEvaluations, workflowOptimizerObservations, workflowOptimizerSuggestions, workflows, workflowRevisions, workflowRuns, workflowStepRuns, workflowWaits, providerTraceRecords, rolePacks, rolePackVersions, rolePackItems, companySkills, companySkillVersions, playbookChangeProposals, projectRoadmapProposals, memoryBindings, memoryRecords, memoryEvidence, learningCycles, learningHypotheses, learningEvaluations, learningDomainCandidates, foundationChangeProposals, documentRevisions, foundationSections, createDb } from "@paperclipai/db";
-import { learningChangeSchema, createGovernedSkillSchema, createPlaybookSchema, type LearningChange } from "@paperclipai/shared";
+import { learningChangeSchema, createGovernedSkillSchema, createPlaybookSchema, roadmapPolicySchema, type LearningChange } from "@paperclipai/shared";
 import { learningService } from "../services/learning/learning-service.js";
 import {assertAnalyticalContextPayloadAccess} from "../services/analytical-context-authority.js";
 import {businessMetricService} from "../services/business-metrics/service.js";
@@ -77,13 +77,20 @@ const support = await getEmbeddedPostgresTestSupport();
   afterAll(async () => { await database?.cleanup(); });
   beforeEach(async () => {
     await instanceSettingsService(db).updateExperimental({learning_engine_v7:true,cognitive_memory_v7:true,memory_observations_v7:true,management_reviews_v8:false,enableCollectiveMemoryV1:true});
+    const now = new Date();
+    await db.insert(authUsers).values({ id: "local-board", name: "Local Learning reviewer", email: "learning-local-board@example.test",
+      emailVerified: true, createdAt: now, updatedAt: now }).onConflictDoNothing();
     companyId = randomUUID(); roots = [randomUUID(), randomUUID()]; tasks = Array.from({ length: 4 }, () => randomUUID());
     await db.insert(companies).values({ id: companyId, name: "Learning fixture", issuePrefix: `L${companyId.slice(0, 7)}` });
-    for (const id of tasks) await db.insert(issues).values({ id, companyId, title: `Reviewed outcome ${id}`, status: "done", completedAt: new Date() });
+    const sourceTasks = await Promise.all(tasks.map(async (id) => {
+      const [task] = await db.insert(issues).values({ id, companyId, title: `Reviewed outcome ${id}`, status: "done", completedAt: new Date() }).returning();
+      return task!;
+    }));
     const [binding] = await db.insert(memoryBindings).values({ companyId, key: "learning", name: "Verified outcomes", providerKey: "local" }).returning();
     for (const [index, id] of roots.entries()) {
-      await db.insert(memoryRecords).values({ id, companyId, bindingId: binding!.id, providerKey: "local", memoryType: "outcome", scopeType: "company", content: `Actual customer outcome ${index}`, reviewState: "accepted", verificationState: "human_verified", observedAt: new Date(), createdByActorType: "system", createdByActorId: "fixture" });
-      await db.insert(memoryEvidence).values({ companyId, memoryRecordId: id, sourceClass: "task", sourceProvider: "august_works_tasks", sourceType: "issue", sourceRef: `issue://${tasks[index]}`, sourceVersion: "1", observedAt: new Date(), excerptHash: String(index).repeat(64), citationJson: { label: "Reviewed Task" }, trustLevel: "high", supportsOrContradicts: "supports" });
+      const task = sourceTasks[index]!;
+      await db.insert(memoryRecords).values({ id, companyId, bindingId: binding!.id, providerKey: "local", memoryType: "outcome", scopeType: "company", content: `Actual customer outcome ${index}`, reviewState: "accepted", verificationState: "human_verified", observedAt: new Date(), sourceProvenanceQualified: true, sourceIssueIds: [task.id], createdByActorType: "system", createdByActorId: "fixture" });
+      await db.insert(memoryEvidence).values({ companyId, memoryRecordId: id, sourceClass: "task", sourceProvider: "august_works_tasks", sourceType: "issue", sourceRef: `issue://${task.id}`, sourceVersion: task.updatedAt.toISOString(), observedAt: new Date(), excerptHash: String(index).repeat(64), citationJson: { label: "Reviewed Task" }, trustLevel: "high", supportsOrContradicts: "supports" });
     }
     const document = await foundationService(db).createDraft(companyId, { foundationKey: "company_profile", title: "Company profile", body: "Original governed baseline", category: "company", documentType: "profile", sensitivity: "internal", reviewFrequencyDays: 30 }, principal);
     targetId = document.id; revisionId = document.latestRevisionId!;
@@ -545,7 +552,7 @@ const support = await getEmbeddedPostgresTestSupport();
     const link=await domainProposal(created.id,`workflow://${created.id}/${created.draftRevisionId}`,{targetDomain:"workflow",draft:{expectedRevisionId:created.draftRevisionId!,graph,changeSummary:"Verified outcomes inform the native no-wait procedure"}},signal?[signal.pin]:undefined);
     await service.publish(companyId,created.id,{expectedDraftRevisionId:link.candidateId,expectedPublishedRevisionId:null,approvalId:null},human);
     const executor=workflowExecutorService(db),run=await executor.startManualRun(companyId,created.id,{input:{}},human,null);
-    expect(run.run.status).toBe("succeeded");expect(run.waits).toHaveLength(0);
+    expect(run.run, JSON.stringify({ failureCode: run.run.failureCode, failureMessage: run.run.failureMessage })).toMatchObject({ status: "succeeded" });expect(run.waits).toHaveLength(0);
     expect(run.steps.every(step=>step.automationArtifactVersionId===null)).toBe(true);
     const [task]=await db.select().from(issues).where(and(eq(issues.companyId,companyId),eq(issues.originKind,"workflow_task"),eq(issues.originRunId,run.run.id)));
     expect(task).toMatchObject({originId:created.id,description:"Copied retained workflow facts"});
@@ -578,7 +585,7 @@ const support = await getEmbeddedPostgresTestSupport();
     const service = workflowService(db), created = await service.create(companyId, { name: "Learning workflow", description: null, projectId: null }, principal);
     const graph = { version: 1 as const, nodes: [{ id: "start", type: "core.manual_trigger", name: "Review evidence first", position: { x: 0, y: 0 }, config: {} }], edges: [], variables: [], settings: {} };
     const link = await domainProposal(created.id, `workflow://${created.id}/${created.draftRevisionId}`, { targetDomain: "workflow", draft: { expectedRevisionId: created.draftRevisionId!, graph, changeSummary: "Apply learned early evidence review" } });
-    expect((await service.getDetail(companyId, created.id))!.publishedRevisionId).toBeNull();
+    expect((await service.getDetail(companyId, created.id, owner))!.publishedRevisionId).toBeNull();
     const published = await service.publish(companyId, created.id, { expectedDraftRevisionId: link.candidateId, expectedPublishedRevisionId: null, approvalId: null }, principal);
     const [run] = await db.insert(workflowRuns).values({ companyId, workflowId: created.id, workflowRevisionId: link.candidateId, triggerPayload: { copiedLearningDetail: "Outcome evidence" } }).returning();
     expect(run!.memoryRecordIds.sort()).toEqual([...roots].sort());
@@ -586,7 +593,7 @@ const support = await getEmbeddedPostgresTestSupport();
     expect(step!.memoryRecordIds.sort()).toEqual([...roots].sort());
     const descendant = await service.updateDraft(companyId, created.id, { expectedRevisionId: published.draftRevisionId!, graph: { ...graph, nodes: [{ ...graph.nodes[0]!, name: "Refined evidence review" }] } }, principal);
     await db.transaction(async tx => purgeMemoryRecords(tx as unknown as typeof db, companyId, [roots[0]!]));
-    const after = (await service.getDetail(companyId, created.id))!;
+    const after = (await service.getDetail(companyId, created.id, owner))!;
     expect(after).toMatchObject({ status: "paused", draftRevisionId: null, publishedRevisionId: null });
     for (const id of [link.candidateId, descendant.draftRevisionId!]) expect((await db.select().from(workflowRevisions).where(eq(workflowRevisions.id, id)))[0]!.graph.nodes).toEqual([]);
     expect((await db.select().from(workflowRuns).where(eq(workflowRuns.id, run!.id)))[0]).toMatchObject({ status: "cancelled", triggerPayload: {} });
@@ -663,7 +670,7 @@ const support = await getEmbeddedPostgresTestSupport();
     await expect(service.finish(owner, companyId, cycle.id, input)).rejects.toMatchObject({ status: 409 });
     await foundationService(db).acceptProposal(companyId, targetId, link.candidateId, principal);
     await expect(service.finish(owner, companyId, cycle.id, input)).rejects.toMatchObject({ status: 409 });
-    const accepted = (await foundationService(db).get(companyId, targetId))!;
+    const accepted = (await foundationService(db).get(companyId, targetId, owner))!;
     await foundationService(db).submitForReview(companyId, targetId, accepted.latestRevisionId!, principal);
     await foundationService(db).approve(companyId, targetId, accepted.latestRevisionId!, principal);
     expect((await service.get(owner, companyId, cycle.id)).candidates[0]!.promotionReceipt?.versionId).toBe(accepted.latestRevisionId);
@@ -675,16 +682,22 @@ const support = await getEmbeddedPostgresTestSupport();
     const link = await service.proposeChange(owner, companyId, hypothesis.id, { expectedHypothesisVersion: 2, evaluationId: evaluation.id, change: change() });
     const foundation = foundationService(db);
     await foundation.acceptProposal(companyId, targetId, link.candidateId, principal);
-    const accepted = (await foundation.get(companyId, targetId))!;
+    const accepted = (await foundation.get(companyId, targetId, owner))!;
     await foundation.submitForReview(companyId, targetId, accepted.latestRevisionId!, principal);
     await foundation.approve(companyId, targetId, accepted.latestRevisionId!, principal);
+    const userId = randomUUID(), now = new Date();
+    await db.insert(authUsers).values({ id: userId, name: "Current learned Context owner", email: `${userId}@example.test`, createdAt: now, updatedAt: now });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId, status: "active", membershipRole: "admin" });
     const [identity] = await db.insert(agentIdentities).values({ name: "Learned Context reader", homeCompanyId: companyId }).returning();
     const [agent] = await db.insert(agents).values({ companyId, agentIdentityId: identity!.id, name: "Learned Context reader" }).returning();
     await db.insert(companyMemberships).values({ companyId, principalType: "agent", principalId: agent!.id, status: "active" });
-    await db.insert(principalPermissionGrants).values([{ companyId, principalType: "agent", principalId: agent!.id, permissionKey: "company_scope:read" }, { companyId, principalType: "agent", principalId: agent!.id, permissionKey: "foundation:read" }]);
-    const [task] = await db.insert(issues).values({ companyId, title: "Apply learned evidence review", description: "Retained learned procedure", assigneeAgentId: agent!.id }).returning();
-    const [run] = await db.insert(heartbeatRuns).values({ companyId, agentId: agent!.id, status: "running", contextSnapshot: { issueId: task!.id, learnedBody: "Evidence review procedure" }, resultJson: { body: "Copied learned evidence" } }).returning();
-    const assembled = await contextEngineService(db).assemble({ companyId, agentId: agent!.id, runId: run!.id, issueId: task!.id, query: "evidence review", intent: "native_task_execution" });
+    await db.insert(principalPermissionGrants).values(["company_scope:read", "foundation:read", "issue:read"].flatMap(permissionKey => [
+      { companyId, principalType: "agent", principalId: agent!.id, permissionKey },
+      { companyId, principalType: "user", principalId: userId, permissionKey },
+    ]));
+    const [task] = await db.insert(issues).values({ companyId, title: "Apply learned evidence review", description: "Retained learned procedure", assigneeAgentId: agent!.id, responsibleUserId: userId }).returning();
+    const [run] = await db.insert(heartbeatRuns).values({ companyId, agentId: agent!.id, status: "running", responsibleUserId: userId, contextSnapshot: { issueId: task!.id, learnedBody: "Evidence review procedure" }, resultJson: { body: "Copied learned evidence" } }).returning();
+    const assembled = await contextEngineService(db).assemble({ companyId, agentId: agent!.id, runId: run!.id, issueId: task!.id, responsibleUserId: userId, query: "evidence review", intent: "native_task_execution" });
     expect(assembled.packet.foundation).toHaveLength(1);
     expect((await db.select().from(contextManifestMemoryRoots).where(eq(contextManifestMemoryRoots.manifestId, assembled.packet.manifest!.id))).map(root => root.memoryRecordId).sort()).toEqual([...roots].sort());
     await instanceSettingsService(db).updateExperimental({ analytical_lineage_v8: true, business_metrics_v8: true, strategy_execution_v8: true, ai_use_cases_v7: true, governance_evidence_v7: true });
@@ -743,7 +756,7 @@ const support = await getEmbeddedPostgresTestSupport();
     await expect(fabric.getManifest(actualActor,companyId,run!.id)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
     await db.insert(principalPermissionGrants).values({companyId,principalType:"user",principalId:userId,permissionKey:"foundation:read"});
     const [otherTask]=await db.insert(issues).values({companyId,title:"Unrelated Task"}).returning(),contexts=await db.select().from(contextManifests).where(eq(contextManifests.companyId,companyId));
-    await expect(contextManifestService(db).create({...input,issueId:otherTask!.id,policySnapshot:{intent:input.intent},selected:assembled.decisions.map(decision=>({decision}))})).rejects.toMatchObject({status:409});
+    await expect(contextManifestService(db).create({...input,issueId:otherTask!.id,policySnapshot:{intent:input.intent},selected:assembled.decisions.map(decision=>({decision}))})).rejects.toMatchObject({status:403,message:"Context task does not match its actual run"});
     expect(await db.select().from(contextManifests).where(eq(contextManifests.companyId,companyId))).toHaveLength(contexts.length);expect(await db.select().from(analyticalContextRoots).where(eq(analyticalContextRoots.companyId,companyId))).toHaveLength(1);
     await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,signal.sourceId));await expect(assertNativeAnalyticalRunPayloadAccess(db,companyId,run!.id)).rejects.toMatchObject({details:{code:"analytical_source_access_lost"}});
     const before=await db.select().from(contextManifests).where(eq(contextManifests.companyId,companyId));await expect(contextEngineService(db).assemble(input)).rejects.toMatchObject({status:403});expect(await db.select().from(contextManifests).where(eq(contextManifests.companyId,companyId))).toHaveLength(before.length);
@@ -875,14 +888,20 @@ const support = await getEmbeddedPostgresTestSupport();
     }finally{await instanceSettingsService(db).updateExperimental(previous);}
   },60000);
   it("lets an owned live worker propose a hypothesis but cannot self-review or write after Stop", async () => {
+    const userId = randomUUID(), now = new Date();
+    await db.insert(authUsers).values({ id: userId, name: "Current Learning worker owner", email: `${userId}@example.test`, createdAt: now, updatedAt: now });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId, status: "active", membershipRole: "admin" });
     const [identity] = await db.insert(agentIdentities).values({ name: "Learning worker", homeCompanyId: companyId }).returning();
     const [agent] = await db.insert(agents).values({ companyId, agentIdentityId: identity!.id, name: "Learning worker" }).returning();
     await db.insert(companyMemberships).values({ companyId, principalType: "agent", principalId: agent!.id, status: "active" });
-    await db.insert(principalPermissionGrants).values([{ companyId, principalType: "agent", principalId: agent!.id, permissionKey: "company_scope:read" }, { companyId, principalType: "agent", principalId: agent!.id, permissionKey: "foundation:read" }]);
-    const [task] = await db.insert(issues).values({ companyId, title: "Inspect repeated learning outcomes", status: "in_progress", assigneeAgentId: agent!.id }).returning();
-    const [run] = await db.insert(heartbeatRuns).values({ companyId, agentId: agent!.id, status: "running", contextSnapshot: { issueId: task!.id } }).returning();
+    await db.insert(principalPermissionGrants).values(["company_scope:read", "foundation:read", "issue:read"].flatMap(permissionKey => [
+      { companyId, principalType: "agent", principalId: agent!.id, permissionKey },
+      { companyId, principalType: "user", principalId: userId, permissionKey },
+    ]));
+    const [task] = await db.insert(issues).values({ companyId, title: "Inspect repeated learning outcomes", status: "in_progress", assigneeAgentId: agent!.id, responsibleUserId: userId }).returning();
+    const [run] = await db.insert(heartbeatRuns).values({ companyId, agentId: agent!.id, status: "running", responsibleUserId: userId, contextSnapshot: { issueId: task!.id } }).returning();
     await db.update(issues).set({ checkoutRunId: run!.id, executionRunId: run!.id }).where(eq(issues.id, task!.id));
-    const actor = { type: "agent" as const, source: "agent_key" as const, companyId, agentId: agent!.id, runId: run!.id }, service = learningService(db);
+    const actor = { type: "agent" as const, source: "agent_key" as const, companyId, agentId: agent!.id, runId: run!.id, onBehalfOfUserId: userId }, service = learningService(db);
     const cycle = await service.create(actor, companyId, cycleInput()), hypothesis = await service.addHypothesis(actor, companyId, cycle.id, hypothesisInput(1));
     expect(cycle.createdBy).toBe(`agent:${agent!.id}`);
     await expect(service.evaluate(actor, companyId, hypothesis.id, evaluationInput(1))).rejects.toMatchObject({ status: 403 });
@@ -910,7 +929,7 @@ const support = await getEmbeddedPostgresTestSupport();
       const link = await domainProposal(created.skillId, `skill://${created.skillId}/none`, { targetDomain: "skill", candidate: { baseActiveVersionId: null, markdown: "Review evidence before drafting; keep human approval", summary: "Earlier review", dependencies: [], sharing: "company_proposed" } });
       const original = companySkillService(db), skill = (await original.getById(companyId, created.skillId))!;
       // Candidate test preparation exercises native snapshot publication; it does not promote a Skill.
-      const options = { selectedSkillKeys: new Set([skill.key]), versionSelections: new Map([[skill.key, link.candidateId]]), allowCandidateVersionsForTest: true };
+      const options = { actor: owner, selectedSkillKeys: new Set([skill.key]), versionSelections: new Map([[skill.key, link.candidateId]]), allowCandidateVersionsForTest: true };
       const [entry] = await original.listRuntimeSkillEntries(companyId, options);
       expect(entry).toMatchObject({ sourceStatus: "available", versionId: link.candidateId });
       expect(await fs.readFile(path.join(entry!.source, "SKILL.md"), "utf8")).toContain("Review evidence");
@@ -1104,7 +1123,8 @@ const support = await getEmbeddedPostgresTestSupport();
       if(priorInstance===undefined)delete process.env.PAPERCLIP_INSTANCE_ID;else process.env.PAPERCLIP_INSTANCE_ID=priorInstance;
       await fs.rm(home,{recursive:true,force:true});
     }
-  });
+  }, 120_000);
+
   it("checks analytical source admission before native Skill payload reads and promotion",async()=>{
     const signal=await analyticalSignal(),skills=skillLifecycleService(db),created=await skills.createDraft(owner,companyId,createGovernedSkillSchema.parse({slug:"analytical-learning-procedure",name:"Procedure",markdown:"Keep human approval before changing systems"}));
     const link=await domainProposal(created.skillId,`skill://${created.skillId}/none`,{targetDomain:"skill",candidate:{baseActiveVersionId:null,markdown:"Review evidence before drafting; keep human approval",summary:"Supplemental analytical signal informs the procedure",dependencies:[],sharing:"company_proposed"}},[signal.pin]);
@@ -1118,7 +1138,7 @@ const support = await getEmbeddedPostgresTestSupport();
     expect((await original.getVersion(companyId,created.skillId,link.candidateId,owner))?.fileInventory[0]?.content).toContain("Review evidence");
   });
   it("keeps roadmap dates unchanged and policy proposals behind explicit human acknowledgement", async () => {
-    const [project] = await db.insert(projects).values({ companyId, name: "Evidence project" }).returning();
+    const [project] = await db.insert(projects).values({ companyId, name: "Evidence project", sourceProvenanceQualified: true }).returning();
     const [task] = await db.insert(issues).values({ companyId, projectId: project!.id, title: "Plan evidence checkpoint" }).returning();
     const link = await domainProposal(project!.id, `project://${project!.id}/${project!.updatedAt.toISOString()}`, { targetDomain: "project", proposal: { expectedProjectUpdatedAt: project!.updatedAt.toISOString(), changes: [{ issueId: task!.id, expectedUpdatedAt: task!.updatedAt.toISOString(), patch: { estimatedEffortMinutes: 60 } }], reason: "Allow enough time for early evidence review", evidence: [] } });
     expect((await db.select().from(projectRoadmapProposals).where(eq(projectRoadmapProposals.id, link.candidateId)))[0]!.status).toBe("pending");
@@ -1128,8 +1148,53 @@ const support = await getEmbeddedPostgresTestSupport();
     await learningService(db).reviewPolicy(owner, companyId, policy.candidateId, { expectedVersion: 1, decision: "accept", rationale: "Reviewed the effects on approvals and scheduling rules", acknowledgeApprovalOrSecurityChange: true });
     expect((await db.select().from(projects).where(eq(projects.id, project!.id)))[0]!.roadmapPolicy?.allowLowRiskAgentScheduleUpdates).toBe(false);
   });
+  it("preserves a bound Project capture for an unchanged roadmap policy and invalidates it when the policy changes", async () => {
+    const normalizedPolicy = roadmapPolicySchema.parse({});
+    async function bindProject(projectId: string) {
+      await db.execute(sql`update projects target set payload_source_snapshot=(
+        select content || jsonb_build_object('digest',encode(sha256(convert_to(content::text,'UTF8')),'hex')) from (
+          select jsonb_build_object('version',1,'owner',jsonb_build_object('kind','project','companyId',target.company_id,
+            'id',target.id,'contentHash',public.aw_native_payload_body_hash('project',to_jsonb(target))),
+            'policy',jsonb_build_object('issueIds','[]'::jsonb,'projectIds','[]'::jsonb,'runIds','[]'::jsonb,
+              'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as content
+        ) structural_body
+      ) where target.company_id=${companyId}::uuid and target.id=${projectId}::uuid`);
+    }
+
+    const [unchangedProject] = await db.insert(projects).values({ companyId, name: "Unchanged policy capture",
+      roadmapPolicy: normalizedPolicy, sourceProvenanceQualified: true, payloadSourceProtocolVersion: 1 }).returning();
+    await bindProject(unchangedProject!.id);
+    const [unchangedBefore] = await db.select().from(projects).where(eq(projects.id, unchangedProject!.id));
+    expect(unchangedBefore!.payloadSourceSnapshot).not.toBeNull();
+    const unchangedProposal = await domainProposal(unchangedProject!.id,
+      `policy://project/${unchangedProject!.id}/${unchangedBefore!.updatedAt.toISOString()}`,
+      learningChangeSchema.parse({ targetDomain: "policy", reason: "Retain the reviewed roadmap policy",
+        proposal: { policyType: "project_roadmap", expectedProjectUpdatedAt: unchangedBefore!.updatedAt.toISOString(), policy: normalizedPolicy } }));
+    await learningService(db).reviewPolicy(owner, companyId, unchangedProposal.candidateId, { expectedVersion: 1, decision: "accept",
+      rationale: "The existing normalized roadmap policy remains appropriate", acknowledgeApprovalOrSecurityChange: true });
+    const [unchangedAfter] = await db.select().from(projects).where(eq(projects.id, unchangedProject!.id));
+    expect(unchangedAfter!.payloadSourceSnapshot).not.toBeNull();
+    expect(unchangedAfter!.payloadSourceSnapshot).toEqual(unchangedBefore!.payloadSourceSnapshot);
+    expect(unchangedAfter!.payloadSourceSnapshotInvalidated).toBe(false);
+
+    const [changedProject] = await db.insert(projects).values({ companyId, name: "Changed policy capture",
+      roadmapPolicy: normalizedPolicy, sourceProvenanceQualified: true, payloadSourceProtocolVersion: 1 }).returning();
+    await bindProject(changedProject!.id);
+    const [changedBefore] = await db.select().from(projects).where(eq(projects.id, changedProject!.id));
+    expect(changedBefore!.payloadSourceSnapshot).not.toBeNull();
+    const changedPolicy = { ...normalizedPolicy, allowAgentForecast: false };
+    const changedProposal = await domainProposal(changedProject!.id,
+      `policy://project/${changedProject!.id}/${changedBefore!.updatedAt.toISOString()}`,
+      learningChangeSchema.parse({ targetDomain: "policy", reason: "Disable agent forecast control",
+        proposal: { policyType: "project_roadmap", expectedProjectUpdatedAt: changedBefore!.updatedAt.toISOString(), policy: changedPolicy } }));
+    await learningService(db).reviewPolicy(owner, companyId, changedProposal.candidateId, { expectedVersion: 1, decision: "accept",
+      rationale: "A human reviewed the forecast governance change", acknowledgeApprovalOrSecurityChange: true });
+    const [changedAfter] = await db.select().from(projects).where(eq(projects.id, changedProject!.id));
+    expect(changedAfter).toMatchObject({ roadmapPolicy: changedPolicy, payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: true });
+  });
+
   it.each(["project","policy"] as const)("rechecks actual analytical signals at native %s review and erases only derived prose after Human acceptance",async(domain)=>{
-    const [project]=await db.insert(projects).values({companyId,name:"Independent native learned planning target"}).returning(),[task]=await db.insert(issues).values({companyId,projectId:project!.id,title:"Independent canonical target Task",status:"todo"}).returning();
+    const [project]=await db.insert(projects).values({companyId,name:"Independent native learned planning target",sourceProvenanceQualified:true}).returning(),[task]=await db.insert(issues).values({companyId,projectId:project!.id,title:"Independent canonical target Task",status:"todo"}).returning();
     const signal=await analyticalSignal(),control=projectControlService(db),learning=learningService(db),change=learningChangeSchema.parse(domain==="project"?{targetDomain:"project",proposal:{expectedProjectUpdatedAt:project!.updatedAt.toISOString(),changes:[{issueId:task!.id,expectedUpdatedAt:task!.updatedAt.toISOString(),patch:{estimatedEffortMinutes:60}}],reason:"Current supplemental Source supports this separately reviewed effort declaration",evidence:[]}}:{targetDomain:"policy",reason:"Current supplemental Source supports this separately reviewed governance declaration",proposal:{policyType:"project_roadmap",expectedProjectUpdatedAt:project!.updatedAt.toISOString(),policy:{}}});
     const link=await domainProposal(project!.id,domain==="project"?`project://${project!.id}/${project!.updatedAt.toISOString()}`:`policy://project/${project!.id}/${project!.updatedAt.toISOString()}`,change,[signal.pin]);
     const read=()=>domain==="project"?control.get(owner,companyId,project!.id):learning.policies(owner,companyId);
@@ -1226,7 +1291,7 @@ const support = await getEmbeddedPostgresTestSupport();
     const { service, hypothesis, evaluation, cycle } = await supported();
     const link = await service.proposeChange(owner, companyId, hypothesis.id, { expectedHypothesisVersion: 2, evaluationId: evaluation.id, change: change() });
     await foundationService(db).acceptProposal(companyId, targetId, link.candidateId, principal);
-    const accepted = (await foundationService(db).get(companyId, targetId))!;
+    const accepted = (await foundationService(db).get(companyId, targetId, owner))!;
     const descendant = await foundationService(db).updateDraft(companyId, targetId, { baseRevisionId: accepted.latestRevisionId!, body: "Later draft retains the learned procedure", changeSummary: "Refine the learned procedure without changing its provenance" }, principal);
     await db.transaction(async (tx) => { await purgeMemoryRecords(tx as unknown as typeof db, companyId, [roots[0]!]); });
     expect((await db.select().from(documentRevisions).where(eq(documentRevisions.id, accepted.latestRevisionId!)))[0]!.body).toBe("");
