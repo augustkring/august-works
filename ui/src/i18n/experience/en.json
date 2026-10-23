@@ -1600,10 +1600,10 @@
     "memory_policy_mismatch": "Clear the selected preferences before choosing a different Memory policy."
   },
   "authFlow": {
-    "signInTitle": "Sign in to Blentera",
-    "legacySignInTitle": "Sign in to Blentera",
+    "signInTitle": "Sign in to {{productName}}",
+    "legacySignInTitle": "Sign in to {{productName}}",
     "createTitle": "Create your account",
-    "legacyCreateTitle": "Create your Blentera account",
+    "legacyCreateTitle": "Create your {{productName}} account",
     "signInHelp": "Use your email and password to access this instance.",
     "verifyHelp": "Verify your email to start setting up your organization.",
     "legacyCreateHelp": "Create an account for this instance. Email confirmation is not required in v1.",

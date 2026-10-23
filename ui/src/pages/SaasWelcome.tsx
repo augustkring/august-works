@@ -5,6 +5,7 @@ import { api } from "@/api/client";
 import { saasApi, saasAuthAction } from "@/api/saas";
 import { useCompany } from "@/context/CompanyContext";
 import { useSaasCapabilities } from "@/hooks/useSaasCapabilities";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { Button } from "@/components/ui/button";
 import { Link, useNavigate } from "@/lib/router";
 import { queryKeys } from "@/lib/queryKeys";
@@ -392,7 +393,7 @@ export function SaasWelcomePage() {
                       <option value="byo">Bring your own Gateway</option>
                       {capabilities.data.runtime && (
                         <option value="hosted">
-                          Blentera managed runtime
+                          {PRODUCT_IDENTITY.productName} managed runtime
                         </option>
                       )}
                       <option value="skip">Decide later</option>

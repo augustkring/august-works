@@ -1600,10 +1600,10 @@
     "memory_policy_mismatch": "Fjern de valgte præferencer, før du vælger en anden Memory-indstilling."
   },
   "authFlow": {
-    "signInTitle": "Log ind på Blentera",
-    "legacySignInTitle": "Log ind på Blentera",
+    "signInTitle": "Log ind på {{productName}}",
+    "legacySignInTitle": "Log ind på {{productName}}",
     "createTitle": "Opret din konto",
-    "legacyCreateTitle": "Opret din Blentera-konto",
+    "legacyCreateTitle": "Opret din {{productName}}-konto",
     "signInHelp": "Brug din e-mail og adgangskode til at logge ind.",
     "verifyHelp": "Bekræft din e-mail for at begynde opsætningen af din virksomhed.",
     "legacyCreateHelp": "Opret en konto til denne installation. E-mailbekræftelse kræves ikke i v1.",

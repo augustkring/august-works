@@ -16,6 +16,7 @@ import {
   type ActivationCommand,
   type ActivationView,
 } from "@paperclipai/shared";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 import { authApi } from "../api/auth";
 import { ApiError } from "../api/client";
 import { saasApi } from "../api/saas";
@@ -320,7 +321,7 @@ function ActivationScope({
       {companyId && current && <ObservationScope key={`${companyId}:${principal}:${epoch}`} company={companyId} principal={principal}
         surface="activation" navigation={String(screen)} step={ACTIVATION_STEPS[screen - 3] ?? null} />}
       <header className="flex flex-wrap items-center justify-between gap-3 border-b border-border pb-4">
-        <span className="font-semibold">Blentera</span>
+        <span className="font-semibold">{PRODUCT_IDENTITY.productName}</span>
         <ExperienceLanguageSelect />
         <CustomerFeedbackDialog />
         <a

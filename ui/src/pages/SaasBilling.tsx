@@ -10,6 +10,7 @@ import { useCompany } from "@/context/CompanyContext";
 import { useSaasCapabilities } from "@/hooks/useSaasCapabilities";
 import { Button } from "@/components/ui/button";
 import { Link } from "@/lib/router";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 
 export function SaasBillingPage() {
   const { selectedCompanyId } = useCompany();
@@ -106,8 +107,7 @@ export function SaasBillingPage() {
     <main className="saas-page">
       <h1 className="saas-title">Billing and usage</h1>
       <p className="saas-muted">
-        Your model provider bills your API usage separately. Blentera
-        charges cover capacity and managed infrastructure.
+        Your model provider bills your API usage separately. {PRODUCT_IDENTITY.productName} charges cover capacity and managed infrastructure.
       </p>
       {error && (
         <p role="alert" className="saas-error">
