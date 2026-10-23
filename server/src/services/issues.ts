@@ -12850,6 +12850,10 @@ export function issueService(db: Db) {
               currentUserRedactionOptions.enabled,
             );
           }
+          const upgradedMetadata = {
+            ...(existing.metadata ?? {}),
+            ...(metadata ?? {}),
+          };
           comment =
             shouldUpgradeExternalAuthorization ||
             shouldUpgradeAttachmentAuthorization
@@ -12859,10 +12863,8 @@ export function issueService(db: Db) {
                     // Preserve any structured provenance the provisional comment
                     // carried; the presentation pass only elevates its narrowly
                     // resolved external-publication authorization.
-                    metadata: {
-                      ...(existing.metadata ?? {}),
-                      ...(metadata ?? {}),
-                    },
+                    metadata: upgradedMetadata,
+                    payloadSourceSnapshot: sql`case when ${issueComments.metadata} is distinct from ${JSON.stringify(upgradedMetadata)}::jsonb then null else ${issueComments.payloadSourceSnapshot} end`,
                     updatedAt: new Date(),
                   })
                   .where(

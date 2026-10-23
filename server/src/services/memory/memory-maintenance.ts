@@ -90,7 +90,7 @@ export async function executeMemoryMaintenance(db: Db, job: typeof memoryJobs.$i
         if (evidence.length) await db.insert(memoryEvidence).values(evidence.map(({ id: _id, memoryRecordId: _recordId, ...item }) => ({ ...item, memoryRecordId: canonical.id })));
         // Actual selected source identity, independent of its copied citations.
         const sourceMemoryIds=[...new Set([...canonical.sourceMemoryIds,duplicate.id])];
-        await db.update(memoryRecords).set({sourceMemoryIds,updatedAt:now}).where(and(eq(memoryRecords.companyId,job.companyId),eq(memoryRecords.id,canonical.id)));
+        await db.update(memoryRecords).set({sourceMemoryIds,payloadSourceSnapshot:null,updatedAt:now}).where(and(eq(memoryRecords.companyId,job.companyId),eq(memoryRecords.id,canonical.id)));
         canonical.sourceMemoryIds=sourceMemoryIds;
         await db.update(memoryRecords).set({ supersededByRecordId: canonical.id, retentionState: "superseded", updatedAt: now })
           .where(and(eq(memoryRecords.companyId, job.companyId), eq(memoryRecords.id, duplicate.id), isNull(memoryRecords.supersededByRecordId)));

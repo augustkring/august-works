@@ -15,16 +15,32 @@ describe("Native maintenance publishes only committed Memory effects",()=>{
     db=createDb(database.connectionString,{maxConnections:3});
   },EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
   afterAll(async()=>{await database?.cleanup();},30000);
-  async function seed(){
+  async function seed(options:{dedupe?:boolean;bindBodySnapshot?:boolean}={}){
     const companyId=randomUUID(),userId=randomUUID();
     await db.insert(companies).values({id:companyId,name:"Maintenance publication",issuePrefix:randomUUID()});
     await db.insert(authUsers).values({id:userId,name:"Actual maintenance owner",email:`${userId}@example.test`,createdAt:new Date(),updatedAt:new Date()});
     await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:userId,status:"active",membershipRole:"owner"});
     const [binding]=await db.insert(memoryBindings).values({companyId,key:randomUUID(),name:"Native shared binding",providerKey:"local"}).returning();
     await db.insert(memoryBindingTargets).values({companyId,bindingId:binding!.id,targetType:"company",targetId:companyId});
-    const sources=await db.insert(memoryRecords).values([0,1].map(index=>({companyId,bindingId:binding!.id,providerKey:"local",memoryType:"observation",scopeType:"company",
-      title:`Reviewed source ${index}`,content:`Reviewed source ${index}. ${"Full native outcome detail. ".repeat(30)}`,summary:`Reviewed summary ${index}`,
-      sourceProvenanceQualified:true,observedAt:new Date(),reviewState:"accepted",verificationState:"human_verified",createdByActorType:"user",createdByActorId:userId}))).returning();
+    let sources=await db.insert(memoryRecords).values([0,1].map(index=>({companyId,bindingId:binding!.id,providerKey:"local",memoryType:"observation",scopeType:"company",
+      title:options.dedupe ? "Reviewed duplicate claim" : `Reviewed source ${index}`,
+      content:options.dedupe ? `Reviewed duplicate claim. ${"Full native outcome detail. ".repeat(30)}` : `Reviewed source ${index}. ${"Full native outcome detail. ".repeat(30)}`,
+      summary:options.dedupe ? "Reviewed duplicate summary" : `Reviewed summary ${index}`,
+      sourceProvenanceQualified:true,observedAt:new Date(),reviewState:"accepted",verificationState:"human_verified",createdByActorType:"user",createdByActorId:userId,
+      ...(options.bindBodySnapshot ? {payloadSourceProtocolVersion:1} : {})}))).returning();
+    if(options.bindBodySnapshot) for(const row of sources){
+      // Structural snapshot for the DB body-mutation guard only; this worker
+      // fixture makes no claim about authenticated source capture.
+      await db.execute(sql`update memory_records target set payload_source_snapshot=(
+        select content || jsonb_build_object('digest',encode(sha256(convert_to(content::text,'UTF8')),'hex')) from (
+          select jsonb_build_object('version',1,'owner',jsonb_build_object('kind','memory_record','companyId',target.company_id,
+            'id',target.id,'contentHash',public.aw_native_payload_body_hash('memory_record',to_jsonb(target))),
+            'policy',jsonb_build_object('issueIds','[]'::jsonb,'projectIds','[]'::jsonb,'runIds','[]'::jsonb,
+              'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as content
+        ) body
+      ) where target.company_id=${companyId}::uuid and target.id=${row.id}::uuid`);
+    }
+    if(options.bindBodySnapshot) sources=await db.select().from(memoryRecords).where(eq(memoryRecords.companyId,companyId));
     await instanceSettingsService(db).updateExperimental({enableCollectiveMemoryV1:true});
     return {companyId,userId,sources};
   }
@@ -84,6 +100,28 @@ describe("Native maintenance publishes only committed Memory effects",()=>{
       expect(receipt!.records).toHaveLength(1);
       expect(receipt!.jobs).toEqual([{status:"succeeded"}]);
     } finally {unsubscribe();}
+  });
+
+  it("invalidates only the dedupe canonical capture while retaining the superseded duplicate body",async()=>{
+    const {companyId,userId,sources}=await seed({dedupe:true,bindBodySnapshot:true});
+    const service=memoryJobService(db,{ownerId:"memory-dedupe-worker"});
+    const job=await service.enqueueMaintenance(companyId,{operationType:"dedupe",recordIds:sources.map(row=>row.id)},
+      {principal:{type:"user",userId}},randomUUID());
+    const claimed=await service.claimNext();expect(claimed?.id).toBe(job.id);
+    await service.executeClaimed(claimed!);
+
+    const [settled]=await db.select().from(memoryJobs).where(eq(memoryJobs.id,job.id));
+    expect(settled).toMatchObject({status:"succeeded",resultJson:{scannedRecordCount:2,supersededCount:1,canonicalRecordCount:1}});
+    const rows=await db.select().from(memoryRecords).where(eq(memoryRecords.companyId,companyId));
+    const canonical=rows.find(row=>row.id===sources.slice().sort((left,right)=>left.createdAt.getTime()-right.createdAt.getTime()||left.id.localeCompare(right.id))[0]!.id)!;
+    const duplicate=rows.find(row=>row.id!==canonical.id)!;
+    expect(canonical.sourceMemoryIds).toContain(duplicate.id);
+    expect(canonical.payloadSourceSnapshot).toBeNull();
+    expect(canonical.payloadSourceSnapshotInvalidated).toBe(true);
+    expect(sources.find(row=>row.id===duplicate.id)!.payloadSourceSnapshot).not.toBeNull();
+    expect(duplicate).toMatchObject({content:sources.find(row=>row.id===duplicate.id)!.content,
+      retentionState:"superseded",supersededByRecordId:canonical.id,payloadSourceSnapshot:sources.find(row=>row.id===duplicate.id)!.payloadSourceSnapshot,
+      payloadSourceSnapshotInvalidated:false});
   });
 
 });

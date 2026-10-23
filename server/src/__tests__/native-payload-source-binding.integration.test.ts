@@ -8,6 +8,7 @@ import { roadmapPolicySchema, type NativePayloadSourceSnapshot } from "@papercli
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { issueService } from "../services/issues.js";
 import { projectService } from "../services/projects.js";
+import { CHAT_RUN_PRESENTATION_AUTHORIZATION_REASON } from "../services/heartbeat-run-summary.js";
 import { projectControlService } from "../services/project-control.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { enableV5ForTest, seedV5Companies } from "./helpers/v5-fixtures.js";
@@ -406,6 +407,25 @@ describe("Native payload source snapshot binds its original payload owner", () =
     expect(reset.project!.name).toBe("Changed plugin project");
     const [stored] = await db.select().from(projects).where(eq(projects.id, project!.id));
     expect(stored!.payloadSourceSnapshot).toBeNull(); expect(stored!.payloadSourceSnapshotInvalidated).toBe(true);
+  });
+
+
+  it("invalidates the same Comment capture when native presentation metadata is upgraded", async () => {
+    const task = await insert(0), body = "Stable native reply body";
+    const [agent] = await db.insert(agents).values({ companyId, name: "Comment capture fixture", role: "engineer", adapterType: "process" }).returning();
+    const [run] = await db.insert(heartbeatRuns).values({ companyId, agentId: agent!.id, nativeIssueId: task.id, runtimeMode: "native", status: "running", resultJson: {} }).returning();
+    const [comment] = await db.insert(issueComments).values({ companyId, issueId: task.id, authorAgentId: agent!.id, authorType: "agent",
+      createdByRunId: run!.id, body, metadata: { authorizationReason: "allow_self" }, payloadSourceProtocolVersion: 1 }).returning();
+    await bindOwner("issue_comments", "comment", comment!.id);
+    const service = issueService(db), actor = { agentId: agent!.id, runId: run!.id };
+    const options = { authorType: "agent" as const, authorizationReason: CHAT_RUN_PRESENTATION_AUTHORIZATION_REASON };
+    const upgraded = await service.addComment(task.id, body, actor, options);
+    expect(upgraded.id).toBe(comment!.id); expect(upgraded.body).toBe(body);
+    const [stored] = await db.select().from(issueComments).where(eq(issueComments.id, comment!.id));
+    expect(stored!.metadata?.authorizationReason).toBe(CHAT_RUN_PRESENTATION_AUTHORIZATION_REASON);
+    expect(stored!.payloadSourceSnapshot).toBeNull(); expect(stored!.payloadSourceSnapshotInvalidated).toBe(true);
+    expect((await service.addComment(task.id, body, actor, options)).id).toBe(comment!.id);
+    expect(await db.select().from(issueComments).where(eq(issueComments.issueId, task.id))).toHaveLength(1);
   });
 
   it("latches invalidation and rejects marker edits and rebinding for every payload owner", async () => {
