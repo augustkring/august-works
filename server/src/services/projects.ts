@@ -779,6 +779,9 @@ export function projectService(db: Db) {
                 description: declaration.description ?? null,
                 status: declaration.status ?? "in_progress",
                 color: declaration.color ?? null,
+                payloadSourceSnapshot: sql`case when (${projects.name},${projects.description},${projects.color}) is distinct from
+                  (${declaration.displayName},${declaration.description ?? null},${declaration.color ?? null})
+                  then null else ${projects.payloadSourceSnapshot} end`,
                 updatedAt: new Date(),
               })
               .where(and(eq(projects.companyId, input.companyId), eq(projects.id, existingBinding.resourceId)));

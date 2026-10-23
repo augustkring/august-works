@@ -1,0 +1,35 @@
+{
+  "baseCommit": "23e2d735c5ad4c05f7bbea790df28c48006797e3",
+  "sources": {
+    "server/src/services/projects.ts": "bea13d6ac73f51fd8fcec48f818a66e37cbf62defda7b5d8c4e22ee47c163aec",
+    "server/src/services/project-control.ts": "aa6e1660f6229c2d6f6b893845e3d43563375ddad14d0da7a9151f9b4a9e30fe",
+    "server/src/__tests__/native-payload-source-binding.integration.test.ts": "e2cc05e37ded6dfe989d19c199146609ded63e12d356afaaa12d28d748606889"
+  },
+  "checks": {
+    "baseline": {
+      "exit": 1,
+      "tests": "Tests  2 failed | 21 skipped (23)",
+      "duration": "Duration  41.62s (transform 22.45s, setup 294ms, import 33.47s, tests 7.38s, environment 0ms)"
+    },
+    "final": {
+      "exit": 0,
+      "tests": "Tests  37 passed (37)",
+      "duration": "Duration  63.82s (transform 22.90s, setup 266ms, import 39.50s, tests 23.32s, environment 0ms)"
+    },
+    "server-types": {
+      "exit": 0,
+      "tests": null,
+      "duration": null
+    }
+  },
+  "interpretation": [
+    "Actual2-case baseline reaches native policy and managed reset writers after unchanged-body controls, then rejects changed bodies with SQLSTATE23514. No fixture or assertion correction between baseline and final.",
+    "Original roadmap policy UPDATE compares actual JSONB and retains company scope. Managed reset compares its three actual hashed fields (name,description,color); operational status changes alone preserve the capture.",
+    "Final37 pass comprises binding23 and original roadmap/playbook14. New protocol1 fixtures are INSERT-only, with structural snapshots bound after initial fields. Native stored Human/owner membership/grants cover the policy service; reset uses the original internal managed-project owner, not plugin host credential qualification.",
+    "Server compiler0, product pins unchanged, test files excluded from compiler. Sessions closed; no external plugin/provider worker started."
+  ],
+  "limits": [
+    "Structural body capture only; no authenticated producer completeness, source-free admission, complete immutable run inputs, read-path grant, protocol upgrade, rebind or constructor activation.",
+    "Comment metadata, Memory and other Document erasure paths remain open. Original3 privacy/temporal regressions,31 substantive portability failures and latest full workspace/V10/PR gates remain open."
+  ]
+}

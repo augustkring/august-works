@@ -3,11 +3,14 @@ import { readFile } from "node:fs/promises";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { agents, assets, companies, createDb, documentRevisions, documents, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, heartbeatRuns, issueDocuments, memoryDeletionMarkers,
-  issueAttachments, issueComments, issues, memoryBindings, memoryEvidence, memoryRecords, projects } from "@paperclipai/db";
-import type { NativePayloadSourceSnapshot } from "@paperclipai/shared";
+  issueAttachments, issueComments, issues, memoryBindings, memoryEvidence, memoryRecords, pluginManagedResources, plugins, projects } from "@paperclipai/db";
+import { roadmapPolicySchema, type NativePayloadSourceSnapshot } from "@paperclipai/shared";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { issueService } from "../services/issues.js";
 import { projectService } from "../services/projects.js";
+import { projectControlService } from "../services/project-control.js";
+import { instanceSettingsService } from "../services/instance-settings.js";
+import { enableV5ForTest, seedV5Companies } from "./helpers/v5-fixtures.js";
 import { lockMemoryPrivacy, purgeDerivedWorkflowMemory, purgeMemoryRecords } from "../services/memory/memory-privacy.js";
 
 describe("Native payload source snapshot binds its original payload owner", () => {
@@ -362,6 +365,47 @@ describe("Native payload source snapshot binds its original payload owner", () =
     expect(await clearing).toBe(0);
     const [stored] = await db.execute<{ settings: unknown }>(sql`select ${sql.identifier(column)} as settings from ${sql.identifier(table)} where id=${row!.id}::uuid`);
     expect(stored!.settings).toEqual(replacement);
+  });
+
+
+  it("preserves unchanged Project roadmap policy captures and invalidates a changed policy", async () => {
+    await instanceSettingsService(db).getExperimental(); await enableV5ForTest(db);
+    const f = await seedV5Companies(db), policy = roadmapPolicySchema.parse({});
+    const [project] = await db.insert(projects).values({ companyId: f.home, name: "Captured roadmap policy",
+      sourceProvenanceQualified: true, roadmapPolicy: policy, payloadSourceProtocolVersion: 1 }).returning();
+    await bindOwner("projects", "project", project!.id);
+    const [before] = await db.select().from(projects).where(eq(projects.id, project!.id));
+    const service = projectControlService(db);
+    await service.policy(f.actor, f.home, project!.id, policy);
+    expect((await db.select().from(projects).where(eq(projects.id, project!.id)))[0]!.payloadSourceSnapshot).toEqual(before!.payloadSourceSnapshot);
+    const changed = { ...policy, scheduleToleranceDays: policy.scheduleToleranceDays + 1 };
+    await service.policy(f.actor, f.home, project!.id, changed);
+    const [stored] = await db.select().from(projects).where(eq(projects.id, project!.id));
+    expect(stored!.roadmapPolicy).toEqual(changed);
+    expect(stored!.payloadSourceSnapshot).toBeNull(); expect(stored!.payloadSourceSnapshotInvalidated).toBe(true);
+  });
+
+  it("invalidates a changed plugin Project reset while preserving an unchanged reset", async () => {
+    const pluginKey = `capture-fixture.${randomUUID()}`;
+    const declaration = { projectKey: "operations", displayName: "Captured plugin project", description: "Declared project body", status: "in_progress" as const };
+    const manifest = { id: pluginKey, apiVersion: 1 as const, version: "0.1.0", displayName: "Capture fixture", description: "Structural fixture",
+      author: "Fixture", categories: ["automation" as const], capabilities: ["projects.managed" as const],
+      entrypoints: { worker: "./worker.js" }, projects: [declaration] };
+    const [plugin] = await db.insert(plugins).values({ pluginKey, packageName: pluginKey, version: "0.1.0", apiVersion: 1,
+      categories: ["automation"], status: "ready", manifestJson: manifest }).returning();
+    const [project] = await db.insert(projects).values({ companyId, name: declaration.displayName, description: declaration.description,
+      status: declaration.status, payloadSourceProtocolVersion: 1 }).returning();
+    await db.insert(pluginManagedResources).values({ companyId, pluginId: plugin!.id, pluginKey, resourceKind: "project", resourceKey: declaration.projectKey, resourceId: project!.id });
+    await bindOwner("projects", "project", project!.id);
+    const [before] = await db.select().from(projects).where(eq(projects.id, project!.id));
+    const service = projectService(db), input = { companyId, pluginId: plugin!.id, pluginKey, projectKey: declaration.projectKey, reset: true };
+    expect((await service.resolveManagedProject(input)).status).toBe("reset");
+    expect((await db.select().from(projects).where(eq(projects.id, project!.id)))[0]!.payloadSourceSnapshot).toEqual(before!.payloadSourceSnapshot);
+    await db.update(plugins).set({ manifestJson: { ...manifest, projects: [{ ...declaration, displayName: "Changed plugin project" }] } }).where(eq(plugins.id, plugin!.id));
+    const reset = await service.resolveManagedProject(input);
+    expect(reset.project!.name).toBe("Changed plugin project");
+    const [stored] = await db.select().from(projects).where(eq(projects.id, project!.id));
+    expect(stored!.payloadSourceSnapshot).toBeNull(); expect(stored!.payloadSourceSnapshotInvalidated).toBe(true);
   });
 
   it("latches invalidation and rejects marker edits and rebinding for every payload owner", async () => {
