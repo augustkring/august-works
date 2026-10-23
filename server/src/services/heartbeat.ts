@@ -20466,7 +20466,7 @@ export function heartbeatService(
         context[PAPERCLIP_EXTERNAL_CHAT_EXECUTION_BOUND_KEY] = true;
       }
       const wakeCommentId = deriveCommentId(context, null);
-      const wakeCommentContext =
+      const wakeCommentSelection =
         issueContext && wakeCommentId
           ? await db
               .select({
@@ -20483,6 +20483,10 @@ export function heartbeatService(
                 deletedByUserId: issueComments.deletedByUserId,
                 deletedByRunId: issueComments.deletedByRunId,
                 sourceTrust: issueComments.sourceTrust,
+                ...(agent.adapterType === "paperclip_runner" ? {
+                  sourceVersion: sql<string>`extract(epoch from ${issueComments.updatedAt})::text`,
+                  payloadSourceSnapshot: issueComments.payloadSourceSnapshot,
+                } : {}),
               })
               .from(issueComments)
               .where(
@@ -20494,16 +20498,19 @@ export function heartbeatService(
               )
               .then((rows) => {
                 const row = rows[0] ?? null;
-                return row?.deletedAt
-                  ? {
-                      ...row,
-                      body: "",
-                      presentation: null,
-                      metadata: null,
-                    }
-                  : row;
+                if (!row) return null;
+                const { sourceVersion, payloadSourceSnapshot, ...comment } = row;
+                return {
+                  comment: comment.deletedAt
+                    ? { ...comment, body: "", presentation: null, metadata: null }
+                    : comment,
+                  source: !comment.deletedAt && typeof sourceVersion === "string"
+                    ? { sourceVersion, payloadSourceSnapshot: payloadSourceSnapshot ?? null }
+                    : null,
+                };
               })
           : null;
+      const wakeCommentContext = wakeCommentSelection?.comment ?? null;
       const issueAssigneeOverrides =
         issueContext && issueContext.assigneeAgentId === agent.id
           ? parseIssueAssigneeAdapterOverrides(
@@ -20777,9 +20784,36 @@ export function heartbeatService(
           ? redactQuarantinedBodyForHigherTrust(continuationSummary)
           : continuationSummary;
       const safeWakeCommentContext =
-        wakeCommentContext && !exposeLowTrustRaw
-          ? sanitizeQuarantinedCommentForHigherTrust(wakeCommentContext)
-          : wakeCommentContext;
+        wakeCommentContext && issueRef
+          ? await createRunSecretRedactionRegistry(db).redactForIssue(
+              agent.companyId,
+              issueRef.id,
+              exposeLowTrustRaw
+                ? wakeCommentContext
+                : sanitizeQuarantinedCommentForHigherTrust(wakeCommentContext),
+            )
+          : null;
+      // The separately selected request can be an earlier version of the same
+      // comment later read into the batch. Never reconstruct it by comment ID.
+      const captureWakeCommentRendition = (
+        rendition: { body: unknown; presentation?: unknown; metadata?: unknown } | null,
+      ): NativeCommentSourceCapture | null => {
+        const selected = wakeCommentSelection?.source;
+        if (!selected || !rendition || !wakeCommentContext || !issueRef) return null;
+        return {
+          input: { kind: "comment", issueId: issueRef.id, commentId: wakeCommentContext.id,
+            sourceVersion: selected.sourceVersion,
+            contentHash: createHash("sha256").update(JSON.stringify({ body: rendition.body,
+              presentation: rendition.presentation, metadata: rendition.metadata }), "utf8").digest("hex") },
+          payloadSourceSnapshot: selected.payloadSourceSnapshot,
+        };
+      };
+      const nativeBootstrapWakeCommentSources = {
+        // Query/completion inputs use this quarantine/secret-safe rendition; the
+        // durable context below also undergoes the original secret redaction.
+        request: captureWakeCommentRendition(safeWakeCommentContext),
+        context: null as NativeCommentSourceCapture | null,
+      };
       const ancestorSourceCaptures: NativeTaskSourceCapture[] = [];
       const issueAncestors = issueRef
         ? await issuesSvc.getAncestors(issueRef.id, { onSourceCapture: capture => ancestorSourceCaptures.push(capture) })
@@ -21033,6 +21067,12 @@ export function heartbeatService(
             redactedWakeContext.paperclipTaskMarkdownCompact;
         }
       }
+      const redactedWakeComment = parseObject(context.paperclipWakeComment);
+      nativeBootstrapWakeCommentSources.context = captureWakeCommentRendition(
+        typeof redactedWakeComment.body === "string"
+          ? { body: redactedWakeComment.body, presentation: redactedWakeComment.presentation, metadata: redactedWakeComment.metadata }
+          : null,
+      );
       // A native run's execution input is immutable once persisted. Recovery must therefore
       // restore the workspace bound to that input rather than consulting the issue's current
       // workspace pointer: a newer run may already have moved or cleared the issue binding while
@@ -23859,6 +23899,7 @@ export function heartbeatService(
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapTaskPlanSources, nativeBootstrapPlanningSources }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapTaskSource: taskSourceCapture, nativeBootstrapAncestorSources }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapInlineWakeCommentSources: inlineWakeCommentSourceCaptures }),
+                  ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapWakeCommentSources }),
                   nativeExecutionInput:
                     lockedProfile.nativeExecutionInput ?? nativeExecution,
                   nativeToolContractFingerprint:

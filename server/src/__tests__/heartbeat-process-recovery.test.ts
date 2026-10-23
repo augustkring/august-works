@@ -7,6 +7,8 @@ import { mockedCodexAdapterConfig } from "./helpers/mocked-codex-config.js";
 import { terminalizeLegacyExecution } from "../services/legacy-execution-recovery.js";
 import { issueService } from "../services/issues.js";
 import { documentService } from "../services/documents.js";
+import { createRunSecretRedactionRegistry } from "../services/run-secret-redaction.js";
+import { REDACTED_EVENT_VALUE } from "../redaction.js";
 import { getExecutionBlocker } from "../services/execution-blocker.js";
 import { adapterExecutionControls, createAdapterExecutionControl } from "../services/adapter-execution-control.js";
 import { spawn, type ChildProcess } from "node:child_process";
@@ -2700,7 +2702,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     });
   });
 
-  it("persists the selected Task, plan and inline comment sources with the first native bootstrap before dispatch", async () => {
+  it.each([false, true])("persists the selected Task, plan and inline comment sources with the first native bootstrap before dispatch (redact=%s)", async (redactSecret) => {
     await withTempPaperclipHome(async () => {
       const { agentId, issueId, runId } = await seedQueuedIssueRunFixture();
       await db.update(agents).set({ adapterType: "paperclip_runner",
@@ -2708,10 +2710,14 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       }).where(eq(agents.id, agentId));
       await db.update(heartbeatRuns).set({ invocationSource: "automation" }).where(eq(heartbeatRuns.id, runId));
       const plan = await documentService(db).upsertIssueDocument({ issueId, key: "plan", format: "markdown", body: "Original native bootstrap plan" });
+      const registeredSecret = "fixture-inline-secret-value";
+      const body = `Original native inline wake comment${redactSecret ? ` ${registeredSecret}` : ""}`;
+      const deliveredBody = redactSecret ? body.replace(registeredSecret, REDACTED_EVENT_VALUE) : body;
       const [comment] = await db.insert(issueComments).values({ companyId: plan.document.companyId, issueId,
-        body: "Original native inline wake comment", authorUserId: "responsible-user" }).returning();
+        body, authorUserId: "responsible-user" }).returning();
       await db.update(heartbeatRuns).set({ contextSnapshot: { issueId, taskId: issueId, wakeReason: "issue_commented",
-        wakeCommentIds: [comment!.id] } }).where(eq(heartbeatRuns.id, runId));
+        wakeCommentId: comment!.id, wakeCommentIds: [comment!.id] } }).where(eq(heartbeatRuns.id, runId));
+      if (redactSecret) await createRunSecretRedactionRegistry(db).register(plan.document.companyId, runId, registeredSecret);
       const factory = vi.fn(() => { throw new Error("provider must not start"); });
       let reachedDispatch = false;
       const heartbeat = heartbeatService(db, {
@@ -2732,11 +2738,17 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
           expect(profile.nativeBootstrapPlanningSources).toEqual([]);
           const [commentVersion] = await db.execute<{ version: string }>(sql`select extract(epoch from updated_at)::text as version
             from issue_comments where id=${comment!.id}::uuid`);
-          expect(profile.nativeBootstrapInlineWakeCommentSources).toEqual([{ input: { kind: "comment", issueId,
+          const expectedCommentSource = { input: { kind: "comment", issueId,
             commentId: comment!.id, sourceVersion: commentVersion!.version,
-            contentHash: createHash("sha256").update(JSON.stringify({ body: comment!.body, presentation: null, metadata: null })).digest("hex") },
-            payloadSourceSnapshot: null }]);
-          expect(JSON.stringify(profile.nativeExecutionInput)).toContain(comment!.body);
+            contentHash: createHash("sha256").update(JSON.stringify({ body: deliveredBody, presentation: null, metadata: null })).digest("hex") },
+            payloadSourceSnapshot: null };
+          expect(profile.nativeBootstrapInlineWakeCommentSources).toEqual([expectedCommentSource]);
+          expect(profile.nativeBootstrapWakeCommentSources).toEqual({
+            request: expectedCommentSource,
+            context: expectedCommentSource,
+          });
+          expect(JSON.stringify(profile.nativeExecutionInput)).toContain(deliveredBody);
+          if (redactSecret) expect(JSON.stringify(profile.nativeExecutionInput)).not.toContain(registeredSecret);
           expect(JSON.stringify(profile.nativeExecutionInput)).toContain("Original native bootstrap plan");
           const retained = structuredClone(profile);
           await db.update(issues).set({ title: "Later Task title", updatedAt: new Date() }).where(eq(issues.id, issueId));

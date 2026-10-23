@@ -14,6 +14,7 @@ import { sanitizeQuarantinedCommentForHigherTrust } from "./source-trust.js";
 import { hasConversationContinuationPolicy } from "./conversation-continuation.js";
 import { queuedCommentIdsFromWakePayload } from "./issue-queued-comment-queue.js";
 import { childReviewOutcomes } from "./native-runtime/child-review-outcomes.js";
+import { createRunSecretRedactionRegistry } from "./run-secret-redaction.js";
 
 export class StaleExecutionContinuationError extends Error {
   constructor(readonly code: "continuation_task_ownership_changed") {
@@ -372,7 +373,9 @@ export async function buildExecutionContinuation(input: {
     (hasConversationContinuationPolicy(lastTerminal.result) ||
       lastTerminal.status === "interrupted" || lastTerminal.errorCode === "process_lost")
     ? lastTerminal.id : undefined);
-  return {
+  // Every consumer, including completion contracts and safe replacement,
+  // receives the same secret-redacted evidence after authority validation.
+  return createRunSecretRedactionRegistry(db).redactForIssue<ExecutionContinuationEnvelope>(companyId, issueId, {
     ...(interruptedRunId ? { interruptedRunId } : {}),
     ...(resumeDelta ? { resumeDelta } : {}),
     recoveryOutcomes: reconciliations
@@ -419,5 +422,5 @@ export async function buildExecutionContinuation(input: {
       throughCommentId: messages.at(-1)?.id ?? null,
       summaryThroughCommentId: null,
     },
-  };
+  });
 }

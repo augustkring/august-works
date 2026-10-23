@@ -256,3 +256,12 @@ Corrected baseline2 genuine failures retained separately from the initial invali
 ### 2026-10-23 — Reuse existing product identity on entry pages
 
 The same six-file entry-page change now reads the existing shared PRODUCT_IDENTITY instead of hardcoded Blentera labels. English/Danish auth titles interpolate productName; Root verifies identical rendered copy, all locale keys and unrelated values preserved. Billing explicitly preserves the space after productName. No new identity manifest/configuration introduced. Normal UI typecheck and all token gates exit0 on the final source. See `brand-entry-identity-reuse-checkpoint.json`. This supersedes the initial literal copy source pins, not full brand/locale/a11y or outbound-owner qualification.
+
+
+### 2026-10-23 — Preserve separate wake request sources and redact continuation consumers
+
+The original single-comment read now keeps its own selected microsecond version and nullable snapshot outside its unchanged context DTO. Separate request/context rendition hashes are retained with the first native input; a later batch read of the same UUID cannot replace this older selection. Original quarantine and secret redaction happen before query/completion consumers. A real registered-secret fixture then exposed a second path through continuation messages into the native completion contract; the original continuation owner now applies the existing secret registry after authority validation for every caller, including recovery/safe replacement.
+
+Actual missing-source baseline1FAIL retained. Initial secret fixture1FAIL/1PASS; first fix still1FAIL/2PASS because the full native input contained the fixture secret through continuation. Both exact sources/raw failures retained. Final isolated native bootstrap plus original cancellation cases4PASS72.12s, both complete original continuation suites48PASS58.08s, and server compiler actual/durable0 with matching recorded source pins. The full input assertion excludes the registered fixture secret, real source edits preserve the entire first profile/input, and provider factories remain uncalled. An intervening concurrent PG initialization exceeded the original20-second hook and skipped307 tests; exact unchanged source passed alone, no deadline increase.
+
+See `up03-native-single-wake-secret-checkpoint.json`. Partial source handoff only: remaining input families, complete receipts/current source permission/provider transport/effects, original Memory copy/temporal failures and all broad V10/release gates remain open.
