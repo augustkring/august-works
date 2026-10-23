@@ -1,0 +1,70 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts (8 tests | 2 failed | 6 skipped) 8794ms
+     × invalidates a captured body through the native Task updater while preserving unchanged bodies 241ms
+     × compares native JSON payloads by PostgreSQL content rather than object key order 92ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts > Native payload source snapshot binds its original payload owner > invalidates a captured body through the native Task updater while preserving unchanged bodies
+Error: Failed query: update "issues" set "goal_id" = $1, "description" = $2, "updated_at" = $3 where "issues"."id" = $4 returning "id", "payload_source_protocol_version", "payload_source_snapshot", "payload_source_snapshot_invalidated", "company_id", "conversation_agent_id", "conversation_user_id", "conversation_retired_at", "conversation_state", "conversation_session_generation", "conversation_boundary_comment_id", "project_id", "project_workspace_id", "goal_id", "parent_id", "visibility", "privacy_root_issue_id", "privacy_parent_issue_id", "title", "description", "status", "status_version", "last_status_decision_id", "work_mode", "harness_kind", "priority", "review_policy", "assignee_agent_id", "assignee_user_id", "checkout_run_id", "execution_run_id", "execution_agent_name_key", "execution_locked_at", "created_by_agent_id", "created_by_user_id", "responsible_user_id", "issue_number", "identifier", "origin_kind", "origin_id", "origin_run_id", "origin_identity_context_id", "continuation_identity_context_id", "origin_fingerprint", "request_depth", "billing_code", "assignee_adapter_overrides", "execution_policy", "execution_state", "monitor_next_check_at", "monitor_wake_requested_at", "monitor_last_triggered_at", "monitor_attempt_count", "monitor_notes", "monitor_scheduled_by", "execution_workspace_id", "execution_workspace_preference", "execution_workspace_settings", "source_trust", "unblock_descriptor", "blocked_transition_at", "blocked_owner_notified_at", "planned_start_at", "planned_end_at", "forecast_start_at", "forecast_end_at", "forecast_confidence", "forecast_reason", "milestone_id", "estimated_effort_minutes", "started_at", "completed_at", "cancelled_at", "hidden_at", "created_at", "updated_at"
+params: ,New body without a captured input closure,2026-10-23T20:58:20.934Z,de0e6ad1-aecd-4fd9-85b5-4ef26da3c6e5
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/postgres-js/session.ts:58:16
+ ❯ runUpdate src/services/issues.ts:11419:25
+    11417|         const privacyGraphChanged = privacy && (privacy.visibility !==…
+    11418|           source.sourceId !== id && !retainedKeys.has(`${source.source…
+    11419|         const updated = await tx
+       |                         ^
+    11420|           .update(issues)
+    11421|           .set(patch)
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ Object.update src/services/issues.ts:11729:22
+ ❯ src/__tests__/native-payload-source-binding.integration.test.ts:103:21
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 39 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "issues" set "goal_id" = $1, "description" = $2, "updated_at" = $3 where "issues"."id" = $4 returning "id", "payload_source_protocol_version", "payload_source_snapshot", "payload_source_snapshot_invalidated", "company_id", "conversation_agent_id", "conversation_user_id", "conversation_retired_at", "conversation_state", "conversation_session_generation", "conversation_boundary_comment_id", "project_id", "project_workspace_id", "goal_id", "parent_id", "visibility", "privacy_root_issue_id", "privacy_parent_issue_id", "title", "description", "status", "status_version", "last_status_decision_id", "work_mode", "harness_kind", "priority", "review_policy", "assignee_agent_id", "assignee_user_id", "checkout_run_id", "execution_run_id", "execution_agent_name_key", "execution_locked_at", "created_by_agent_id", "created_by_user_id", "responsible_user_id", "issue_number", "identifier", "origin_kind", "origin_id", "origin_run_id", "origin_identity_context_id", "continuation_identity_context_id", "origin_fingerprint", "request_depth", "billing_code", "assignee_adapter_overrides", "execution_policy", "execution_state", "monitor_next_check_at", "monitor_wake_requested_at", "monitor_last_triggered_at", "monitor_attempt_count", "monitor_notes", "monitor_scheduled_by", "execution_workspace_id", "execution_workspace_preference", "execution_workspace_settings", "source_trust", "unblock_descriptor", "blocked_transition_at", "blocked_owner_notified_at", "planned_start_at", "planned_end_at", "forecast_start_at", "forecast_end_at", "forecast_confidence", "forecast_reason", "milestone_id", "estimated_effort_minutes", "started_at", "completed_at", "cancelled_at", "hidden_at", "created_at", "updated_at"', parameters: [ null, 'New body without a captured input closure', '2026-10-23T20:58:20.934Z', 'de0e6ad1-aecd-4fd9-85b5-4ef26da3c6e5' ], args: [ null, 'New body without a captured input closure', '2026-10-23T20:58:20.934Z', 'de0e6ad1-aecd-4fd9-85b5-4ef26da3c6e5' ], types: [ 2950, 25, 1184, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/native-payload-source-binding.integration.test.ts > Native payload source snapshot binds its original payload owner > compares native JSON payloads by PostgreSQL content rather than object key order
+Error: Failed query: update "issues" set "goal_id" = $1, "assignee_adapter_overrides" = $2, "updated_at" = $3 where "issues"."id" = $4 returning "id", "payload_source_protocol_version", "payload_source_snapshot", "payload_source_snapshot_invalidated", "company_id", "conversation_agent_id", "conversation_user_id", "conversation_retired_at", "conversation_state", "conversation_session_generation", "conversation_boundary_comment_id", "project_id", "project_workspace_id", "goal_id", "parent_id", "visibility", "privacy_root_issue_id", "privacy_parent_issue_id", "title", "description", "status", "status_version", "last_status_decision_id", "work_mode", "harness_kind", "priority", "review_policy", "assignee_agent_id", "assignee_user_id", "checkout_run_id", "execution_run_id", "execution_agent_name_key", "execution_locked_at", "created_by_agent_id", "created_by_user_id", "responsible_user_id", "issue_number", "identifier", "origin_kind", "origin_id", "origin_run_id", "origin_identity_context_id", "continuation_identity_context_id", "origin_fingerprint", "request_depth", "billing_code", "assignee_adapter_overrides", "execution_policy", "execution_state", "monitor_next_check_at", "monitor_wake_requested_at", "monitor_last_triggered_at", "monitor_attempt_count", "monitor_notes", "monitor_scheduled_by", "execution_workspace_id", "execution_workspace_preference", "execution_workspace_settings", "source_trust", "unblock_descriptor", "blocked_transition_at", "blocked_owner_notified_at", "planned_start_at", "planned_end_at", "forecast_start_at", "forecast_end_at", "forecast_confidence", "forecast_reason", "milestone_id", "estimated_effort_minutes", "started_at", "completed_at", "cancelled_at", "hidden_at", "created_at", "updated_at"
+params: ,{"model":"replacement","config":{"a":1,"b":2}},2026-10-23T20:58:21.092Z,5726ec95-0df8-450d-a008-7a4709fae8e5
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/postgres-js/session.ts:58:16
+ ❯ runUpdate src/services/issues.ts:11419:25
+    11417|         const privacyGraphChanged = privacy && (privacy.visibility !==…
+    11418|           source.sourceId !== id && !retainedKeys.has(`${source.source…
+    11419|         const updated = await tx
+       |                         ^
+    11420|           .update(issues)
+    11421|           .set(patch)
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ Object.update src/services/issues.ts:11729:22
+ ❯ src/__tests__/native-payload-source-binding.integration.test.ts:120:21
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 39 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "issues" set "goal_id" = $1, "assignee_adapter_overrides" = $2, "updated_at" = $3 where "issues"."id" = $4 returning "id", "payload_source_protocol_version", "payload_source_snapshot", "payload_source_snapshot_invalidated", "company_id", "conversation_agent_id", "conversation_user_id", "conversation_retired_at", "conversation_state", "conversation_session_generation", "conversation_boundary_comment_id", "project_id", "project_workspace_id", "goal_id", "parent_id", "visibility", "privacy_root_issue_id", "privacy_parent_issue_id", "title", "description", "status", "status_version", "last_status_decision_id", "work_mode", "harness_kind", "priority", "review_policy", "assignee_agent_id", "assignee_user_id", "checkout_run_id", "execution_run_id", "execution_agent_name_key", "execution_locked_at", "created_by_agent_id", "created_by_user_id", "responsible_user_id", "issue_number", "identifier", "origin_kind", "origin_id", "origin_run_id", "origin_identity_context_id", "continuation_identity_context_id", "origin_fingerprint", "request_depth", "billing_code", "assignee_adapter_overrides", "execution_policy", "execution_state", "monitor_next_check_at", "monitor_wake_requested_at", "monitor_last_triggered_at", "monitor_attempt_count", "monitor_notes", "monitor_scheduled_by", "execution_workspace_id", "execution_workspace_preference", "execution_workspace_settings", "source_trust", "unblock_descriptor", "blocked_transition_at", "blocked_owner_notified_at", "planned_start_at", "planned_end_at", "forecast_start_at", "forecast_end_at", "forecast_confidence", "forecast_reason", "milestone_id", "estimated_effort_minutes", "started_at", "completed_at", "cancelled_at", "hidden_at", "created_at", "updated_at"', parameters: [ null, '{"model":"replacement","config":{"a":1,"b":2}}', '2026-10-23T20:58:21.092Z', '5726ec95-0df8-450d-a008-7a4709fae8e5' ], args: [ null, '{"model":"replacement","config":{"a":1,"b":2}}', '2026-10-23T20:58:21.092Z', '5726ec95-0df8-450d-a008-7a4709fae8e5' ], types: [ 2950, 3802, 1184, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 6 skipped (8)
+   Start at  20:57:39
+   Duration  41.60s (transform 22.23s, setup 199ms, import 32.27s, tests 8.79s, environment 0ms)
+

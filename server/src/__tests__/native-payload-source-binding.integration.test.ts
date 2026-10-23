@@ -5,6 +5,7 @@ import { assets, companies, createDb, documentRevisions, documents, EMBEDDED_POS
   issueAttachments, issueComments, issues, memoryBindings, memoryEvidence, memoryRecords, projects } from "@paperclipai/db";
 import type { NativePayloadSourceSnapshot } from "@paperclipai/shared";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
+import { issueService } from "../services/issues.js";
 
 describe("Native payload source snapshot binds its original payload owner", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>, companyId: string;
@@ -87,6 +88,39 @@ describe("Native payload source snapshot binds its original payload owner", () =
       await expect(db.update(issues).set({ payloadSourceSnapshot: await snapshot(row, {}, retained) }).where(eq(issues.id, row.id)))
         .rejects.toMatchObject({ cause: { code: "23514" } });
     }
+  });
+
+  it("invalidates a captured body through the native Task updater while preserving unchanged bodies", async () => {
+    const row = await insert();
+    const captured = await snapshot(row);
+    await db.update(issues).set({ payloadSourceSnapshot: captured }).where(eq(issues.id, row.id));
+    const service = issueService(db);
+    const operational = await service.update(row.id, { priority: "high", description: row.description,
+      statusVersion: sql`${issues.statusVersion} + 1` as unknown as number });
+    expect(operational!.payloadSourceSnapshot).toEqual(captured);
+    expect(operational!.payloadSourceSnapshotInvalidated).toBe(false);
+    expect(operational!.statusVersion).toBe(row.statusVersion + 1);
+    const changed = await service.update(row.id, { description: "New body without a captured input closure" });
+    expect(changed!.description).toBe("New body without a captured input closure");
+    expect(changed!.payloadSourceSnapshot).toBeNull();
+    expect(changed!.payloadSourceSnapshotInvalidated).toBe(true);
+    await expect(db.update(issues).set({ payloadSourceSnapshot: await snapshot(changed!) }).where(eq(issues.id, row.id)))
+      .rejects.toMatchObject({ cause: { code: "23514" } });
+  });
+
+  it("compares native JSON payloads by PostgreSQL content rather than object key order", async () => {
+    const row = await insert();
+    await db.update(issues).set({ assigneeAdapterOverrides: { model: "original", config: { a: 1, b: 2 } } })
+      .where(eq(issues.id, row.id));
+    const captured = await snapshot(row);
+    await db.update(issues).set({ payloadSourceSnapshot: captured }).where(eq(issues.id, row.id));
+    const service = issueService(db);
+    const unchanged = await service.update(row.id, { assigneeAdapterOverrides: { config: { b: 2, a: 1 }, model: "original" } });
+    expect(unchanged!.payloadSourceSnapshot).toEqual(captured);
+    const changed = await service.update(row.id, { assigneeAdapterOverrides: { model: "replacement", config: { a: 1, b: 2 } } });
+    expect(changed!.assigneeAdapterOverrides).toEqual({ model: "replacement", config: { a: 1, b: 2 } });
+    expect(changed!.payloadSourceSnapshot).toBeNull();
+    expect(changed!.payloadSourceSnapshotInvalidated).toBe(true);
   });
 
   it("rejects rebinding after an existing snapshot was explicitly invalidated to unknown", async () => {

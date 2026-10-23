@@ -23,6 +23,7 @@ import {
   getTableColumns,
   gte,
   inArray,
+  is,
   isNotNull,
   isNull,
   like,
@@ -32,7 +33,7 @@ import {
   notInArray,
   or,
   sql,
-  type SQL,
+  SQL,
 } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
@@ -11416,6 +11417,23 @@ export function issueService(db: Db) {
         const retainedKeys = new Set(retainedBefore.map(source => `${source.sourceKind}:${source.sourceId}`));
         const privacyGraphChanged = privacy && (privacy.visibility !== receiptExisting.visibility || privacy.sources.some(source =>
           source.sourceId !== id && !retainedKeys.has(`${source.sourceKind}:${source.sourceId}`)));
+        if (receiptExisting.payloadSourceSnapshot !== null) {
+          // Compare the effective native row under its write lock. A body edit
+          // makes its old capture unknown; operational edits keep the capture.
+          // Keep the database's direct-write rejection and no-rebinding latch.
+          const columns = getTableColumns(issues);
+          const bodyPatch = sql.join(Object.entries(patch)
+            .filter(([, value]) => value !== undefined)
+            .map(([key, value]) => sql`jsonb_build_object(
+              ${columns[key as keyof typeof columns].name}::text,
+              ${is(value, SQL) ? sql`to_jsonb(${value})` : sql`${JSON.stringify(value)}::jsonb`})`), sql` || `);
+          const [body] = await tx.execute(sql`select
+            public.aw_native_payload_body_hash('issue', to_jsonb(${issues})) is distinct from
+            public.aw_native_payload_body_hash('issue', to_jsonb(jsonb_populate_record(
+              ${issues}, to_jsonb(${issues}) || ${bodyPatch}))) as changed
+            from ${issues} where ${idPredicate}`);
+          if (body?.changed) patch.payloadSourceSnapshot = null;
+        }
         const updated = await tx
           .update(issues)
           .set(patch)
