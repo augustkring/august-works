@@ -1,0 +1,62 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/plugin-access-authorization-host-services.test.ts (7 tests | 2 failed | 5 skipped) 11091ms
+     × invalidates changed issue policy captures while preserving an unchanged body 579ms
+     × invalidates changed project policy captures while preserving an unchanged body 71ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/plugin-access-authorization-host-services.test.ts > plugin access and authorization host services > invalidates changed issue policy captures while preserving an unchanged body
+Error: Failed query: update "issues" set "execution_policy" = $1, "updated_at" = $2 where "issues"."id" = $3
+params: {"authorizationPolicy":{"assignmentPolicy":{"mode":"protected"}}},2026-10-23T21:34:39.806Z,b66cf878-9b6f-4071-a4eb-862f069c6733
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ Object.updatePolicy src/services/plugin-host-services.ts:3135:11
+    3133|           if (policy) executionPolicy.authorizationPolicy = policy;
+    3134|           else delete executionPolicy.authorizationPolicy;
+    3135|           await db
+       |           ^
+    3136|             .update(issuesTable)
+    3137|             .set({ executionPolicy, updatedAt: new Date() })
+ ❯ src/__tests__/plugin-access-authorization-host-services.test.ts:355:7
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 39 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "issues" set "execution_policy" = $1, "updated_at" = $2 where "issues"."id" = $3', parameters: [ '{"authorizationPolicy":{"assignmentPolicy":{"mode":"protected"}}}', '2026-10-23T21:34:39.806Z', 'b66cf878-9b6f-4071-a4eb-862f069c6733' ], args: [ '{"authorizationPolicy":{"assignmentPolicy":{"mode":"protected"}}}', '2026-10-23T21:34:39.806Z', 'b66cf878-9b6f-4071-a4eb-862f069c6733' ], types: [ 3802, 1184, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/plugin-access-authorization-host-services.test.ts > plugin access and authorization host services > invalidates changed project policy captures while preserving an unchanged body
+Error: Failed query: update "projects" set "execution_workspace_policy" = $1, "updated_at" = $2 where "projects"."id" = $3
+params: {"enabled":false,"authorizationPolicy":{"assignmentPolicy":{"mode":"open"}}},2026-10-23T21:34:39.994Z,fb1f80c0-3446-4545-bcb7-edd7e5e26e01
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ Object.updatePolicy src/services/plugin-host-services.ts:3124:11
+    3122|           if (policy) executionWorkspacePolicy.authorizationPolicy = p…
+    3123|           else delete executionWorkspacePolicy.authorizationPolicy;
+    3124|           await db
+       |           ^
+    3125|             .update(projectsTable)
+    3126|             .set({ executionWorkspacePolicy, updatedAt: new Date() })
+ ❯ src/__tests__/plugin-access-authorization-host-services.test.ts:353:7
+
+Caused by: PostgresError: Native payload source snapshot does not bind its owner and body
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23514', where: 'PL/pgSQL function aw_native_payload_source_binding() line 39 at RAISE', file: 'pl_exec.c', routine: 'exec_stmt_raise', query: 'update "projects" set "execution_workspace_policy" = $1, "updated_at" = $2 where "projects"."id" = $3', parameters: [ '{"enabled":false,"authorizationPolicy":{"assignmentPolicy":{"mode":"open"}}}', '2026-10-23T21:34:39.994Z', 'fb1f80c0-3446-4545-bcb7-edd7e5e26e01' ], args: [ '{"enabled":false,"authorizationPolicy":{"assignmentPolicy":{"mode":"open"}}}', '2026-10-23T21:34:39.994Z', 'fb1f80c0-3446-4545-bcb7-edd7e5e26e01' ], types: [ 3802, 1184, 2950 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 5 skipped (7)
+   Start at  21:33:52
+   Duration  47.16s (transform 23.97s, setup 279ms, import 35.21s, tests 11.09s, environment 0ms)
+
