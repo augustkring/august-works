@@ -10,6 +10,7 @@ import type {
   OptimizerSuggestionResponse,
   WorkflowOptimizerSuggestion,
 } from "@paperclipai/shared";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared/product-identity";
 
 import { workflowsApi } from "@/api/workflows";
 import { Button } from "@/components/ui/button";
@@ -87,7 +88,7 @@ function stateMessage(result: OptimizerSuggestionResponse): {
     case "correction_evidence_incomplete":
       return {
         title: "Correction evidence is incomplete",
-        body: `There are ${result.terminalRunCount} completed runs, but only ${result.correctionEvidenceCount} have authoritative human-correction evidence. August Works will not infer a zero correction rate.`,
+        body: `There are ${result.terminalRunCount} completed runs, but only ${result.correctionEvidenceCount} have authoritative human-correction evidence. ${PRODUCT_IDENTITY.productName} will not infer a zero correction rate.`,
       };
     case "no_candidate":
       return {
