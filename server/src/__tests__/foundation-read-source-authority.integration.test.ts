@@ -3,11 +3,14 @@ import express from "express";
 import request from "supertest";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { agents, agentApiKeys, authUsers, companies, companyMemberships, createDb,
+import { agents, agentApiKeys, authUsers, authSessions, companies, companyMemberships, createDb,
   EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, heartbeatRuns, issues, principalPermissionGrants, instanceUserRoles, boardApiKeys } from "@paperclipai/db";
 import { authorizationService, type AuthorizationActor } from "../services/authorization.js";
 import { actorMiddleware } from "../middleware/auth.js";
 import { createLocalAgentJwt, verifyLocalAgentJwt } from "../agent-auth-jwt.js";
+import { createBetterAuthHandler, createBetterAuthInstance, resolveBetterAuthSession } from "../auth/better-auth.js";
+import type { Config } from "../config.js";
+import { assertAuthenticated } from "../routes/authz.js";
 import { errorHandler } from "../middleware/error-handler.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 
@@ -17,6 +20,15 @@ function pgCode(error: unknown): string | undefined {
     if (typeof (error as { code?: unknown }).code === "string") return (error as { code: string }).code;
   }
 }
+function sessionCookieHeader(response: request.Response): string {
+  const raw = response.headers["set-cookie"];
+  const cookies = Array.isArray(raw) ? raw : raw ? [raw] : [];
+  return cookies.filter(cookie => cookie.includes("session_token"))
+    .map(cookie => cookie.split(";", 1)[0]!)
+    .join("; ");
+}
+
+
 describe("Foundation native Source authority lifetime", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>;
   beforeAll(async () => { database = await startEmbeddedPostgresTestDatabase("foundation-source-authority-");
@@ -359,5 +371,127 @@ describe("Foundation native Source authority lifetime", () => {
       vi.unstubAllEnvs();
     }
   });
+
+it("denies a Foundation Source read whose cookie session is signed out while a Source row is locked", async () => {
+  const s = await seed();
+  const issueId = randomUUID();
+  await db.insert(issues).values({ id: issueId, companyId: s.companyId, title: "Cookie session Source wait" });
+
+  vi.stubEnv("BETTER_AUTH_SECRET", `fixture-${randomUUID()}`);
+  vi.stubEnv("PAPERCLIP_AUTH_RATE_LIMIT_ENABLED", "false");
+  const held = deferred();
+  const release = deferred();
+  let holder: Promise<unknown> | undefined;
+  let pending: Promise<request.Response> | undefined;
+  try {
+    const origin = "http://127.0.0.1:41999";
+    const config = {
+      deploymentMode: "authenticated",
+      deploymentExposure: "private",
+      authBaseUrlMode: "explicit",
+      authPublicBaseUrl: origin,
+      authDisableSignUp: false,
+      allowedHostnames: ["127.0.0.1"],
+      port: 41999,
+    } as unknown as Config;
+    const auth = createBetterAuthInstance(db, config, [origin]);
+    const app = express();
+    // Mirror app.ts: resolve the actual cookie actor before mounting Better Auth.
+    app.use(actorMiddleware(db, {
+      deploymentMode: "authenticated",
+      resolveSession: req => resolveBetterAuthSession(auth, req),
+    }));
+    app.all("/api/auth/{*authPath}", createBetterAuthHandler(auth));
+    app.get("/authenticated-probe", (req, res, next) => {
+      try {
+        assertAuthenticated(req);
+        res.json({ userId: req.actor.userId, sessionId: req.actor.sessionId });
+      } catch (error) { next(error); }
+    });
+    app.get("/source-read", async (req, res, next) => {
+      try {
+        assertAuthenticated(req);
+        expect(req.actor.source).toBe("session");
+        const decision = await db.transaction(tx => authorizationService(tx).withReadSources(
+          s.companyId,
+          [issueId],
+          [],
+          owner => owner.decide(input(s, req.actor)),
+        ));
+        res.status(decision.allowed ? 200 : 403).json({ allowed: decision.allowed, sessionId: req.actor.sessionId });
+      } catch (error) { next(error); }
+    });
+    app.use(errorHandler);
+
+    const email = `foundation-${randomUUID()}@example.test`;
+    const password = "correct-horse-battery-staple";
+    const signup = await request(app).post("/api/auth/sign-up/email").set("origin", origin)
+      .send({ email, password, name: "Actual Cookie Human" });
+    expect(signup.status).toBe(200);
+    const userId = signup.body.user.id as string;
+    await db.insert(companyMemberships).values({ companyId: s.companyId, principalType: "user", principalId: userId,
+      status: "active", membershipRole: "member" });
+    await db.insert(principalPermissionGrants).values({ companyId: s.companyId, principalType: "user", principalId: userId,
+      permissionKey: "foundation:read" });
+
+    const signIn = () => request(app).post("/api/auth/sign-in/email").set("origin", origin).send({ email, password });
+    const firstSignin = await signIn();
+    expect(firstSignin.status).toBe(200);
+    const oldCookie = sessionCookieHeader(firstSignin);
+    expect(oldCookie).toContain("session_token");
+    const authenticatedProbe = (cookie: string) => request(app).get("/authenticated-probe").set("cookie", cookie);
+    const sourceProbe = (cookie: string) => request(app).get("/source-read").set("cookie", cookie);
+    const initialSource = await sourceProbe(oldCookie);
+    expect(initialSource.status).toBe(200);
+    const sessionId = initialSource.body.sessionId as string;
+    expect(typeof sessionId).toBe("string");
+
+    let holderPid = 0;
+    holder = db.transaction(async tx => {
+      const [backend] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      holderPid = backend!.pid;
+      await tx.execute(sql`select id from issues where id=${issueId} for update`);
+      held.resolve();
+      await release.promise;
+    });
+    await held.promise;
+    pending = sourceProbe(oldCookie).then(response => response);
+
+    let blocked = false;
+    for (let i = 0; i < 100 && !blocked; i++) {
+      const [activity] = await db.execute<{ blocked: boolean }>(sql`select exists(
+        select 1 from pg_stat_activity
+        where pid <> pg_backend_pid() and state='active' and wait_event_type='Lock'
+          and ${holderPid}=any(pg_blocking_pids(pid)) and query ilike '%issues%'
+      ) as blocked`);
+      blocked = activity!.blocked;
+      if (!blocked) await new Promise(resolve => setTimeout(resolve, 10));
+    }
+    expect(blocked).toBe(true);
+
+    const signedOut = await request(app).post("/api/auth/sign-out").set("origin", origin).set("cookie", oldCookie).send({});
+    expect(signedOut.status).toBe(200);
+    expect(await db.select({ id: authSessions.id }).from(authSessions).where(eq(authSessions.id, sessionId))).toHaveLength(0);
+
+    release.resolve();
+    await holder;
+    expect((await pending).status).toBe(403);
+    const secondSignin = await signIn();
+    expect(secondSignin.status).toBe(200);
+    const freshCookie = sessionCookieHeader(secondSignin);
+    expect(freshCookie).not.toBe(oldCookie);
+    expect((await authenticatedProbe(freshCookie)).body.userId).toBe(userId);
+    expect((await sourceProbe(freshCookie)).status).toBe(200);
+    expect((await authenticatedProbe(oldCookie)).status).toBe(401);
+  } finally {
+    release.resolve();
+    try {
+      await holder;
+      await pending;
+    } finally {
+      vi.unstubAllEnvs();
+    }
+  }
+});
 
 });

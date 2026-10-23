@@ -8,6 +8,7 @@ import {
   agentApiKeys,
   agentExecutionManifests,
   authUsers,
+  authSessions,
   boardApiKeys,
   companyMemberships,
   heartbeatRuns,
@@ -2722,6 +2723,12 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       if (!actor.userId) return null;
       const [user] = await db.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, actor.userId)).for("share", { noWait: true });
       if (!user) return null;
+      if (actor.source === "session" && actor.sessionId) {
+        const [session] = await db.select({ userId: authSessions.userId, expiresAt: authSessions.expiresAt })
+          .from(authSessions).where(eq(authSessions.id, actor.sessionId)).for("share", { noWait: true });
+        if (!session || session.userId !== actor.userId || session.expiresAt.getTime() <= Date.now()) return null;
+        if (readSources) readSources.credentialExpiresAt = Math.min(readSources.credentialExpiresAt ?? Infinity, session.expiresAt.getTime());
+      }
       if (actor.source === "board_key") {
         if (!actor.keyId) return null;
         const [key] = await db.select().from(boardApiKeys).where(eq(boardApiKeys.id, actor.keyId)).for("share", { noWait: true });
