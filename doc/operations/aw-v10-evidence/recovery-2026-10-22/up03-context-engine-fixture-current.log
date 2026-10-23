@@ -1,0 +1,13 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[07:32:04] [33mWARN[39m: [36mresponsible-user authorization intersection denied[39m [90m{"authzMode":"enforce","code":"RESPONSIBLE_USER_UNAUTHORIZED","reason":"deny_missing_grant","action":"foundation:read","resourceType":"company","companyId":"c6f38915-f694-4678-b47a-9770c786a03f","actorAgentId":"07873b77-eea3-4850-a0cc-9c9c824bd531","responsibleUserId":"user-c6f38915-f694-4678-b47a-9770c786a03f"}[39m
+
+ Test Files  1 passed (1)
+      Tests  7 passed (7)
+   Start at  07:30:50
+   Duration  75.41s (transform 34.90s, setup 344ms, import 50.17s, tests 24.22s, environment 0ms)
+

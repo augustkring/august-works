@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
@@ -15,6 +16,7 @@ import {
   foundationChangeProposals,
   foundationDocuments,
   foundationSections,
+  heartbeatRuns,
   externalObjectMentions,
   externalObjects,
   issues,
@@ -23,6 +25,7 @@ import {
   memoryBindingTargets,
   memoryEvidence,
   memoryRecords,
+  memoryJobs,
   principalPermissionGrants,
 } from "@paperclipai/db";
 import {
@@ -30,7 +33,7 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "../../__tests__/helpers/embedded-postgres.js";
 import { memoryService } from "../memory/memory-service.js";
-import { assertMemorySourcesRetained } from "../memory/memory-privacy.js";
+import { assertMemorySourcesRetained, captureMemorySources } from "../memory/memory-privacy.js";
 import { issueService } from "../issues.js";
 import { workflowService } from "../workflows/workflow-service.js";
 import { workflowExecutorService } from "../workflows/workflow-executor.js";
@@ -61,6 +64,9 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     await db.delete(memoryBindingTargets);
     await db.delete(memoryBindings);
     await db.delete(contextManifests);
+    await db.delete(heartbeatRuns);
+    // The original run deletion owner enqueues its runtime-asset erasure job.
+    await db.delete(memoryJobs);
     await db.delete(foundationChangeProposals);
     await db.delete(foundationSections);
     await db.delete(foundationDocuments);
@@ -115,6 +121,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       adapterConfig: {},
       runtimeConfig: {},
       permissions: {},
+      status: "running",
     }).returning();
     await db.insert(companyMemberships).values({
       companyId,
@@ -132,7 +139,9 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       assigneeAgentId: agent!.id,
       responsibleUserId: userId,
     }).returning();
-    return { companyId, userId, agent: agent!, issue: issue! };
+    const [run] = await db.insert(heartbeatRuns).values({companyId,agentId:agent!.id,responsibleUserId:userId,
+      status:"running",runtimeMode:"native",nativeIssueId:issue!.id,issueId:issue!.id}).returning();
+    return { companyId, userId, agent: agent!, issue: issue!, run:run! };
   }
 
   async function seedMemory(input: {
@@ -145,6 +154,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     revokedAt?: Date | null;
     expiresAt?: Date | null;
     verificationState?: "unverified" | "corroborated" | "human_verified" | "system_verified";
+    sourceIssueId?: string;
   }) {
     const scope = input.scope ?? "company";
     const [binding] = await db
@@ -165,6 +175,21 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       targetId: scope === "agent" ? input.agentId : input.companyId,
     });
     const observedAt = new Date("2026-09-30T12:00:00.000Z");
+    const [company] = await db.select().from(companies).where(eq(companies.id,input.companyId));
+    const userId=company!.defaultResponsibleUserId!;
+    // Explicit bounded state fixtures: source authority is captured by the
+    // original owner from an actual accountable run, not inferred from citation
+    // strings. A separate producer Task prevents later retrieval Context from
+    // retroactively becoming an input of this earlier Memory fixture.
+    // This does not qualify the original same-run temporal regressions: both
+    // remain open and are intentionally exercised by their separate fixtures.
+    const sourceIssueId=input.sourceIssueId ?? (await db.insert(issues).values({companyId:input.companyId,
+      title:"Actual Memory producer Task",assigneeAgentId:input.agentId,responsibleUserId:userId}).returning())[0]!.id;
+    const [sourceRun]=await db.insert(heartbeatRuns).values({companyId:input.companyId,agentId:input.agentId,
+      responsibleUserId:userId,status:"running",runtimeMode:"native",nativeIssueId:sourceIssueId,issueId:sourceIssueId}).returning();
+    const provenance=await db.transaction(tx=>captureMemorySources(tx,input.companyId,
+      {type:"agent",source:"agent_jwt",companyId:input.companyId,agentId:input.agentId,runId:sourceRun!.id,onBehalfOfUserId:userId},
+      {type:scope,id:scope==="agent"?input.agentId:null}));
     const [record] = await db
       .insert(memoryRecords)
       .values({
@@ -189,6 +214,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
         createdByActorType: "system",
         createdByActorId: "context-memory-test",
         metadata: {},
+        ...provenance,
       })
       .returning();
     return record!;
@@ -239,12 +265,12 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       documentType: "strategy", title: "Unapproved enterprise strategy", body: "Draft enterprise secret", sensitivity: "internal" },
       { principal: { type: "user", userId: seeded.userId } });
     const accepted = await seedMemory({ companyId: seeded.companyId, agentId: seeded.agent.id,
-      content: "Accepted enterprise memory", reviewState: "accepted" });
+      content: "Accepted enterprise memory", reviewState: "accepted", sourceIssueId:seeded.issue.id });
     await seedMemory({ companyId: seeded.companyId, agentId: seeded.agent.id,
       content: "Pending enterprise memory", reviewState: "pending" });
     await seedMemory({ companyId: seeded.companyId, agentId: seeded.agent.id,
       content: "Private enterprise memory", scope: "agent", reviewState: "accepted" });
-    const sourceRef = `run://${randomUUID()}/issue/${seeded.issue.id}`;
+    const sourceRef = `run://${accepted.sourceRunIds[0]}/issue/${seeded.issue.id}`;
     await db.insert(memoryEvidence).values({ companyId: seeded.companyId, memoryRecordId: accepted.id,
       sourceClass: "task", sourceProvider: "august_works_memory_agent_tool", sourceType: "issue",
       sourceRef, observedAt: new Date(), excerptHash: "a".repeat(64), citationJson: { label: "Source task" }, trustLevel: "medium", supportsOrContradicts: "supports" });
@@ -262,7 +288,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     await svc.publish(seeded.companyId, created.id, { expectedDraftRevisionId: updated.draftRevisionId!, expectedPublishedRevisionId: null, approvalId: null }, actor);
     const executor = workflowExecutorService(db);
     const result = await executor.startManualRun(seeded.companyId, created.id, { input: { query: "enterprise" } }, actor, "native-evidence-run");
-    expect(result.run.status).toBe("succeeded");
+    expect(result.run.status,JSON.stringify({failureCode:result.run.failureCode,steps:result.steps.map(step=>({nodeId:step.nodeId,status:step.status}))})).toBe("succeeded");
     const foundation = result.steps.find((step) => step.nodeId === "foundation")!.outputJson as { sections: Array<{ foundationDocumentId: string; sourceRef: string }> };
     expect(foundation.sections).toMatchObject([{ foundationDocumentId: approved.id, sourceRef: expect.stringContaining(approved.approvedRevisionId!) }]);
     const memory = result.steps.find((step) => step.nodeId === "memory")!.outputJson as { records: Array<{ record: { id: string; content: string }; sourceRef: string }> };
@@ -314,6 +340,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     });
 
     const result = await contextEngineService(db).assemble({
+      runId: seeded.run.id,
       companyId: seeded.companyId,
       agentId: seeded.agent.id,
       responsibleUserId: seeded.userId,
@@ -456,6 +483,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     });
 
     const result = await contextEngineService(db).assemble({
+      runId: seeded.run.id,
       companyId: seeded.companyId,
       agentId: seeded.agent.id,
       responsibleUserId: seeded.userId,
@@ -515,6 +543,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     });
 
     const result = await contextEngineService(db).assemble({
+      runId: seeded.run.id,
       companyId: seeded.companyId,
       agentId: seeded.agent.id,
       responsibleUserId: seeded.userId,
@@ -603,6 +632,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     });
 
     const result = await contextEngineService(db).assemble({
+      runId: seeded.run.id,
       companyId: seeded.companyId,
       agentId: seeded.agent.id,
       responsibleUserId: seeded.userId,
@@ -684,6 +714,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     });
 
     const result = await contextEngineService(db).assemble({
+      runId: seeded.run.id,
       companyId: seeded.companyId,
       agentId: seeded.agent.id,
       responsibleUserId: seeded.userId,
@@ -711,7 +742,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     const priorMode = process.env.PAPERCLIP_RESPONSIBLE_USER_AUTHZ_MODE;
     process.env.PAPERCLIP_RESPONSIBLE_USER_AUTHZ_MODE = "shadow";
     try {
-      const result = await contextEngineService(db).assemble({ companyId: seeded.companyId, agentId: seeded.agent.id, responsibleUserId: seeded.userId, query: "enterprise strategy", enforceResponsibleUserIntersection: true });
+      const result = await contextEngineService(db).assemble({ runId:seeded.run.id, companyId: seeded.companyId, agentId: seeded.agent.id, responsibleUserId: seeded.userId, query: "enterprise strategy", enforceResponsibleUserIntersection: true });
       expect(result.packet.foundation).toEqual([]);
       expect(result.markdown).not.toContain("requires confidential source permission");
     } finally {
