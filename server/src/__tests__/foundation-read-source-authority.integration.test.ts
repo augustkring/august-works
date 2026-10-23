@@ -5,7 +5,7 @@ import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { agents, agentApiKeys, authUsers, authSessions, companies, companyMemberships, createDb,
   EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, heartbeatRuns, issues, principalPermissionGrants, instanceUserRoles, boardApiKeys } from "@paperclipai/db";
-import { authorizationService, type AuthorizationActor } from "../services/authorization.js";
+import { authorizationService, issueReadSqlCondition, type AuthorizationActor } from "../services/authorization.js";
 import { actorMiddleware } from "../middleware/auth.js";
 import { createLocalAgentJwt, verifyLocalAgentJwt } from "../agent-auth-jwt.js";
 import { createBetterAuthHandler, createBetterAuthInstance, resolveBetterAuthSession } from "../auth/better-auth.js";
@@ -308,12 +308,83 @@ describe("Foundation native Source authority lifetime", () => {
     expect((await probe()).status).toBe(401);
   });
 
+  it.each(["agent", "board"] as const)("rechecks an authenticated %s credential for ordinary private Task SQL after a real Task row wait", async credentialKind => {
+    const s = await seed(), taskId = randomUUID();
+    const token = `ordinary-task-${credentialKind}-${randomUUID()}`;
+    const keyHash = createHash("sha256").update(token).digest("hex");
+    const credentialId = credentialKind === "agent" ? s.keyId : randomUUID();
+    if (credentialKind === "agent") {
+      await db.update(agentApiKeys).set({ keyHash }).where(eq(agentApiKeys.id, credentialId));
+    } else {
+      await db.insert(boardApiKeys).values({ id: credentialId, userId: s.userId, name: "Actual ordinary Task Board credential", keyHash });
+    }
+    await db.insert(issues).values({ id: taskId, companyId: s.companyId, title: "Private Task SQL wait",
+      visibility: "private", responsibleUserId: s.userId, createdByUserId: s.userId, assigneeAgentId: s.agentId });
+    const app = express();
+    app.use(actorMiddleware(db, { deploymentMode: "authenticated" }));
+    app.get("/ordinary-task-read", async (req, res, next) => {
+      try {
+        expect(req.actor.source).toBe(credentialKind === "agent" ? "agent_key" : "board_key");
+        expect(req.actor.keyId).toBe(credentialId);
+        // Capture the source-filter SQL from the actually authenticated actor
+        // before waiting; the SELECT below must revalidate its credential row.
+        const readCondition = await issueReadSqlCondition(db, req.actor);
+        await db.execute(sql`select id from issues where id=${taskId} for share`);
+        const rows = await db.select({ id: issues.id }).from(issues)
+          .where(and(eq(issues.id, taskId), eq(issues.companyId, s.companyId), readCondition)).limit(1);
+        res.status(rows.length ? 200 : 403).json({ allowed: rows.length === 1 });
+      } catch (error) { next(error); }
+    });
+    app.use(errorHandler);
+    const probe = (bearer = token) => {
+      const req = request(app).get("/ordinary-task-read").set("Authorization", `Bearer ${bearer}`);
+      return credentialKind === "agent" ? req.set("x-paperclip-run-id", s.runId) : req;
+    };
+    expect((await probe()).status).toBe(200);
+    const held = deferred(), release = deferred();
+    let holderPid = 0;
+    const holder = db.transaction(async tx => {
+      const [backend] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      holderPid = backend!.pid;
+      await tx.execute(sql`select id from issues where id=${taskId} for update`);
+      held.resolve(); await release.promise;
+    });
+    await held.promise;
+    const pending = probe().then(response => response);
+    const replacementToken = `ordinary-task-replacement-${randomUUID()}`;
+    try {
+      let blocked = false;
+      for (let i = 0; i < 100 && !blocked; i++) {
+        const [activity] = await db.execute<{ blocked: boolean }>(sql`select exists(
+          select 1 from pg_stat_activity where pid <> pg_backend_pid() and state='active'
+            and wait_event_type='Lock' and ${holderPid}=any(pg_blocking_pids(pid))
+            and query ilike '%issues%'
+        ) as blocked`);
+        blocked = activity!.blocked;
+        if (!blocked) await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(blocked).toBe(true);
+      const replacementHash = createHash("sha256").update(replacementToken).digest("hex");
+      if (credentialKind === "agent") {
+        await db.update(agentApiKeys).set({ keyHash: replacementHash }).where(eq(agentApiKeys.id, credentialId));
+      } else {
+        await db.update(boardApiKeys).set({ keyHash: replacementHash }).where(eq(boardApiKeys.id, credentialId));
+      }
+    } finally { release.resolve(); await holder; }
+    const response = await pending;
+    expect(response.status).toBe(403);
+    expect(response.body.allowed).toBe(false);
+    expect((await probe(replacementToken)).status).toBe(200);
+    expect((await probe()).status).toBe(401);
+  });
+
   it.each([
     ["foundation:read", "source_wait"], ["foundation:read", "callback_return"],
-    ["issue:read", "source_wait"], ["issue:read", "callback_return"],
+    ["issue:read", "source_wait"], ["issue:read", "callback_return"], ["issue:read", "ordinary_sql"],
   ] as const)("does not outlive an actual JWT for %s across %s", async (action, phase) => {
     const s = await seed(), issueId = randomUUID();
-    await db.insert(issues).values({ id: issueId, companyId: s.companyId, title: "Actual JWT lifetime wait", createdByUserId: s.userId });
+    await db.insert(issues).values({ id: issueId, companyId: s.companyId, title: "Actual JWT lifetime wait", createdByUserId: s.userId,
+      ...(phase === "ordinary_sql" ? { visibility: "private" as const, responsibleUserId: s.userId, assigneeAgentId: s.agentId } : {}) });
     vi.stubEnv("PAPERCLIP_AGENT_JWT_SECRET", `fixture-${randomUUID()}`);
     vi.stubEnv("PAPERCLIP_AGENT_JWT_TTL_SECONDS", "4");
     const entered = deferred(), release = deferred();
@@ -323,6 +394,14 @@ describe("Foundation native Source authority lifetime", () => {
     app.get("/jwt-source-read", async (req, res, next) => {
       try {
         expect(req.actor.source).toBe("agent_jwt");
+        if (phase === "ordinary_sql") {
+          const readCondition = await issueReadSqlCondition(db, req.actor);
+          await db.execute(sql`select id from issues where id=${issueId} for share`);
+          const rows = await db.select({ id: issues.id }).from(issues)
+            .where(and(eq(issues.id, issueId), eq(issues.companyId, s.companyId), readCondition)).limit(1);
+          res.status(rows.length ? 200 : 403).json({ allowed: rows.length === 1 });
+          return;
+        }
         const decision = await db.transaction(tx => authorizationService(tx).withReadSources(s.companyId, [issueId], [], async owner => {
           const result = await owner.decide(action === "foundation:read" ? input(s, req.actor) : {
             actor: req.actor, action, resource: { type: "issue", companyId: s.companyId, issueId },
@@ -348,7 +427,7 @@ describe("Foundation native Source authority lifetime", () => {
       const token = mint(), claims = verifyLocalAgentJwt(token)!;
       expect(claims).not.toBeNull();
       let holderPid = 0;
-      if (phase === "source_wait") {
+      if (phase === "source_wait" || phase === "ordinary_sql") {
         holder = db.transaction(async tx => {
           const [backend] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
           holderPid = backend!.pid;
@@ -358,7 +437,7 @@ describe("Foundation native Source authority lifetime", () => {
         await entered.promise;
       } else { holdCallback = true; }
       pending = probe(token).then(response => response);
-      if (phase === "source_wait") {
+      if (phase === "source_wait" || phase === "ordinary_sql") {
         let blocked = false;
         for (let i = 0; i < 100 && !blocked; i++) {
           const [activity] = await db.execute<{ blocked: boolean }>(sql`select exists(
@@ -384,7 +463,9 @@ describe("Foundation native Source authority lifetime", () => {
     }
   });
 
-it.each(["foundation:read", "issue:read"] as const)("denies a %s Source read whose cookie session is signed out while a Source row is locked", async action => {
+it.each([
+  ["foundation:read", "source"], ["issue:read", "source"], ["issue:read", "ordinary_sql"],
+] as const)("denies a %s %s read whose cookie session is signed out while a Task row is locked", async (action, surface) => {
   const s = await seed();
   const issueId = randomUUID();
   await db.insert(issues).values({ id: issueId, companyId: s.companyId, title: "Cookie session Source wait" });
@@ -424,6 +505,14 @@ it.each(["foundation:read", "issue:read"] as const)("denies a %s Source read who
       try {
         assertAuthenticated(req);
         expect(req.actor.source).toBe("session");
+        if (surface === "ordinary_sql") {
+          const readCondition = await issueReadSqlCondition(db, req.actor);
+          await db.execute(sql`select id from issues where id=${issueId} for share`);
+          const rows = await db.select({ id: issues.id }).from(issues)
+            .where(and(eq(issues.id, issueId), eq(issues.companyId, s.companyId), readCondition)).limit(1);
+          res.status(rows.length ? 200 : 403).json({ allowed: rows.length === 1, sessionId: req.actor.sessionId });
+          return;
+        }
         const decision = await db.transaction(tx => authorizationService(tx).withReadSources(
           s.companyId,
           [issueId],
@@ -448,6 +537,10 @@ it.each(["foundation:read", "issue:read"] as const)("denies a %s Source read who
       status: "active", membershipRole: "member" });
     await db.insert(principalPermissionGrants).values({ companyId: s.companyId, principalType: "user", principalId: userId,
       permissionKey: "foundation:read" });
+    if (surface === "ordinary_sql") {
+      await db.update(issues).set({ visibility: "private", responsibleUserId: userId, createdByUserId: userId,
+        assigneeAgentId: s.agentId }).where(eq(issues.id, issueId));
+    }
 
     const signIn = () => request(app).post("/api/auth/sign-in/email").set("origin", origin).send({ email, password });
     const firstSignin = await signIn();

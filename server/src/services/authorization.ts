@@ -516,10 +516,25 @@ const privacyUuid = /^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i;
 function privatePrincipalCurrent(actor: AuthorizationActor, company: SQL): SQL<boolean> {
   const userId = actor.type === "board" ? actor.userId : actor.onBehalfOfUserId;
   if (!userId || actor.type === "none" || actor.source === "local_implicit") return sql<boolean>`false`;
+  const expiresAt = actor.authenticatedCredentialExpiresAt;
+  if (expiresAt != null && (!Number.isFinite(expiresAt) || expiresAt <= 0)) return sql<boolean>`false`;
+  // Evaluate verified credential lifetime when SQL executes, after earlier waits.
+  // Credential-free internal actors retain their original canonical policy.
+  const lifetime = expiresAt == null ? sql`true` : sql`extract(epoch from clock_timestamp())*1000<${expiresAt}`;
+  const session = actor.type === "board" && actor.source === "session" && actor.sessionId != null
+    ? sql`exists(select 1 from ${authSessions} s where s.id=${actor.sessionId}
+        and s.user_id=${userId} and s.expires_at>clock_timestamp())`
+    : sql`true`;
   const human = sql<boolean>`exists (select 1 from ${authUsers} u join ${companyMemberships} m
     on m.principal_id=u.id and m.principal_type='user' and m.company_id=${company} and m.status='active'
-    where u.id=${userId})`;
-  if (actor.type === "board") return human;
+    where u.id=${userId} and ${lifetime} and ${session})`;
+  if (actor.type === "board") {
+    if (actor.source !== "board_key") return human;
+    if (!actor.keyId || !privacyUuid.test(actor.keyId) || !actor.authenticatedKeyHash) return sql<boolean>`false`;
+    return sql<boolean>`(${human} and exists(select 1 from ${boardApiKeys} k
+      where k.id=${actor.keyId} and k.user_id=${userId} and k.key_hash=${actor.authenticatedKeyHash}
+        and k.revoked_at is null and (k.expires_at is null or k.expires_at>clock_timestamp())))`;
+  }
   if (!actor.agentId || !privacyUuid.test(actor.agentId)) return sql<boolean>`false`;
   const run = actor.runId && privacyUuid.test(actor.runId)
     ? sql`(exists(select 1 from ${heartbeatRuns} r where r.id=${actor.runId} and r.company_id=${company}
@@ -528,7 +543,8 @@ function privatePrincipalCurrent(actor: AuthorizationActor, company: SQL): SQL<b
     : sql`false`;
   const key = actor.keyId && privacyUuid.test(actor.keyId)
     ? sql`exists(select 1 from ${agentApiKeys} k where k.id=${actor.keyId} and k.company_id=${company}
-        and k.agent_id=${actor.agentId} and k.responsible_user_id=${userId} and k.revoked_at is null)`
+        and k.agent_id=${actor.agentId} and k.responsible_user_id=${userId} and k.revoked_at is null
+        and ${actor.authenticatedKeyHash != null ? sql`k.key_hash=${actor.authenticatedKeyHash}` : sql`true`})`
     : sql`false`;
   return sql<boolean>`(${human} and exists(select 1 from ${agents} a where a.id=${actor.agentId}
     and a.company_id=${company} and a.status not in ('paused','terminated','pending_approval','error')) and
