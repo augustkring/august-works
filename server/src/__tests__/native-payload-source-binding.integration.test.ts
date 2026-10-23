@@ -3,9 +3,11 @@ import { readFile } from "node:fs/promises";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { agents, assets, companies, createDb, documentRevisions, documents, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, heartbeatRuns, issueDocuments, memoryDeletionMarkers,
-  issueAttachments, issueComments, issues, memoryBindings, memoryEvidence, memoryRecords, pluginManagedResources, plugins, projects } from "@paperclipai/db";
+  issueAttachments, issueComments, issues, learningCycles, learningHypotheses, learningEvaluations, learningDomainCandidates, learningRetainedAssets, memoryBindings, memoryEvidence, memoryRecords, pluginManagedResources, plugins, projects } from "@paperclipai/db";
 import { roadmapPolicySchema, type NativePayloadSourceSnapshot } from "@paperclipai/shared";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
+import { lockAnalyticalCompany } from "../services/analytical-privacy.js";
+import { invalidateLearningCycles } from "../services/learning/learning-privacy.js";
 import { issueService } from "../services/issues.js";
 import { projectService } from "../services/projects.js";
 import { CHAT_RUN_PRESENTATION_AUTHORIZATION_REASON } from "../services/heartbeat-run-summary.js";
@@ -426,6 +428,78 @@ describe("Native payload source snapshot binds its original payload owner", () =
     expect(stored!.payloadSourceSnapshot).toBeNull(); expect(stored!.payloadSourceSnapshotInvalidated).toBe(true);
     expect((await service.addComment(task.id, body, actor, options)).id).toBe(comment!.id);
     expect(await db.select().from(issueComments).where(eq(issueComments.issueId, task.id))).toHaveLength(1);
+  });
+
+  it("invalidates a captured Attachment when the native Comment owner binds it", async () => {
+    const task = await insert(0);
+    const [agent] = await db.insert(agents).values({ companyId, name: "Attachment capture fixture", role: "engineer", adapterType: "process" }).returning();
+    const [run] = await db.insert(heartbeatRuns).values({ companyId, agentId: agent!.id, nativeIssueId: task.id, runtimeMode: "native", status: "running" }).returning();
+    const [asset] = await db.insert(assets).values({ companyId, provider: "local", objectKey: randomUUID(), contentType: "text/plain", byteSize: 1,
+      sha256: "a".repeat(64), createdByAgentId: agent!.id }).returning();
+    const [attachment] = await db.insert(issueAttachments).values({ companyId, issueId: task.id, assetId: asset!.id,
+      originatingRunId: run!.id, payloadSourceProtocolVersion: 1 }).returning();
+    await bindOwner("issue_attachments", "attachment", attachment!.id);
+    const service = issueService(db), actor = { agentId: agent!.id, runId: run!.id };
+    const options = { attachmentIds: [attachment!.id] };
+    const comment = await service.addComment(task.id, "Bound native attachment", actor, options);
+    const [bound] = await db.select().from(issueAttachments).where(eq(issueAttachments.id, attachment!.id));
+    expect(bound!.issueCommentId).toBe(comment.id); expect(bound!.assetId).toBe(asset!.id);
+    expect(bound!.payloadSourceSnapshot).toBeNull(); expect(bound!.payloadSourceSnapshotInvalidated).toBe(true);
+    expect((await service.addComment(task.id, "Bound native attachment", actor, options)).id).toBe(comment.id);
+    expect((await db.select().from(issueAttachments).where(eq(issueAttachments.id, attachment!.id)))[0]).toEqual(bound);
+  });
+
+  it("erases a captured Document revision through the original Learning privacy owner", async () => {
+    const [document] = await db.insert(documents).values({ companyId, title: "PRIVATE learned document", latestBody: "PRIVATE learned body" }).returning();
+    const [revision] = await db.insert(documentRevisions).values({ companyId, documentId: document!.id, revisionNumber: 1,
+      title: document!.title, body: document!.latestBody, changeSummary: "PRIVATE learning rationale", payloadSourceProtocolVersion: 1 }).returning();
+    await db.update(documents).set({ latestRevisionId: revision!.id }).where(eq(documents.id, document!.id));
+    const [cycle] = await db.insert(learningCycles).values({ companyId, scopeType: "company", purpose: "native_task_execution", trigger: "Native learning source",
+      maxHypotheses: 1, maxEvaluations: 1, outcomeVersions: {}, createdBy: "structural-fixture" }).returning();
+    const [hypothesis] = await db.insert(learningHypotheses).values({ companyId, cycleId: cycle!.id, claim: "PRIVATE learning claim", predictedEffect: "PRIVATE effect",
+      targetDomain: "foundation", targetId: document!.id, riskClass: "low" }).returning();
+    const [evaluation] = await db.insert(learningEvaluations).values({ companyId, hypothesisId: hypothesis!.id, method: "manual_review", result: "passed",
+      cases: [], outcomeVersions: {}, metrics: {}, limitations: [], reviewedBy: "structural-fixture" }).returning();
+    const [link] = await db.insert(learningDomainCandidates).values({ companyId, hypothesisId: hypothesis!.id, evaluationId: evaluation!.id, targetDomain: "foundation",
+      targetId: document!.id, candidateId: randomUUID(), candidateHash: "a".repeat(64) }).returning();
+    await db.insert(learningRetainedAssets).values({ companyId, candidateLinkId: link!.id, assetType: "document_revision", assetId: revision!.id });
+    await bindOwner("document_revisions", "document_revision", revision!.id);
+    const [before] = await db.select().from(documentRevisions).where(eq(documentRevisions.id, revision!.id));
+    // Invalidation without erasure changes policy, not the revision body.
+    await db.transaction(async tx => { await lockAnalyticalCompany(tx as unknown as typeof db, companyId); await lockMemoryPrivacy(tx as unknown as typeof db, companyId);
+      await invalidateLearningCycles(tx as unknown as typeof db, companyId, [cycle!.id]); });
+    expect((await db.select().from(documentRevisions).where(eq(documentRevisions.id, revision!.id)))[0]).toEqual(before);
+    await db.transaction(async tx => { await lockAnalyticalCompany(tx as unknown as typeof db, companyId); await lockMemoryPrivacy(tx as unknown as typeof db, companyId);
+      await invalidateLearningCycles(tx as unknown as typeof db, companyId, [cycle!.id], true); });
+    const [erased] = await db.select().from(documentRevisions).where(eq(documentRevisions.id, revision!.id));
+    expect(erased).toMatchObject({ body: "", title: "Erased learning evidence", changeSummary: null, payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: true });
+    await expect(db.update(documentRevisions).set({ revisionNumber: 2 }).where(eq(documentRevisions.id, revision!.id)))
+      .rejects.toMatchObject({ cause: { code: "23514", constraint_name: "aw_v5_playbook_revision_immutable" } });
+    expect((await db.select().from(documents).where(eq(documents.id, document!.id)))[0]!.latestBody).toBe("");
+    expect((await db.select().from(learningRetainedAssets).where(eq(learningRetainedAssets.candidateLinkId, link!.id)))[0]!.erasedAt).toBeInstanceOf(Date);
+  });
+
+  it("invalidates a retained Attachment before deleting its native Comment binding", async () => {
+    const task = await insert(0);
+    const [comment] = await db.insert(issueComments).values({ companyId, issueId: task.id, authorType: "system", body: "Deleted binding" }).returning();
+    const [asset] = await db.insert(assets).values({ companyId, provider: "local", objectKey: randomUUID(), contentType: "text/plain", byteSize: 1,
+      sha256: "a".repeat(64) }).returning();
+    const [attachment] = await db.insert(issueAttachments).values({ companyId, issueId: task.id, assetId: asset!.id,
+      issueCommentId: comment!.id, payloadSourceProtocolVersion: 1 }).returning();
+    await bindOwner("issue_attachments", "attachment", attachment!.id);
+    const [otherComment] = await db.insert(issueComments).values({ companyId, issueId: task.id, authorType: "system", body: "Retained binding" }).returning();
+    const [otherAsset] = await db.insert(assets).values({ companyId, provider: "local", objectKey: randomUUID(), contentType: "text/plain", byteSize: 1,
+      sha256: "b".repeat(64) }).returning();
+    const [otherAttachment] = await db.insert(issueAttachments).values({ companyId, issueId: task.id, assetId: otherAsset!.id,
+      issueCommentId: otherComment!.id, payloadSourceProtocolVersion: 1 }).returning();
+    await bindOwner("issue_attachments", "attachment", otherAttachment!.id);
+    const [preserved] = await db.select().from(issueAttachments).where(eq(issueAttachments.id, otherAttachment!.id));
+    expect(preserved!.payloadSourceSnapshot).not.toBeNull();
+    expect((await issueService(db).removeComment(comment!.id))!.id).toBe(comment!.id);
+    const [retained] = await db.select().from(issueAttachments).where(eq(issueAttachments.id, attachment!.id));
+    expect(retained).toMatchObject({ assetId: asset!.id, issueCommentId: null, payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: true });
+    expect(await db.select().from(issueComments).where(eq(issueComments.id, comment!.id))).toEqual([]);
+    expect((await db.select().from(issueAttachments).where(eq(issueAttachments.id, otherAttachment!.id)))[0]).toEqual(preserved);
   });
 
   it("latches invalidation and rejects marker edits and rebinding for every payload owner", async () => {

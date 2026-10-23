@@ -3606,6 +3606,13 @@
       "when": 1792789700522,
       "tag": "0516_memory_payload_binding_order",
       "breakpoints": true
+    },
+    {
+      "idx": 517,
+      "version": "7",
+      "when": 1792795604144,
+      "tag": "0517_native_payload_erasure",
+      "breakpoints": true
     }
   ]
 }

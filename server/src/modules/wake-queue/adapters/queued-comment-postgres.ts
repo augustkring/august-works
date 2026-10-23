@@ -1,4 +1,4 @@
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { agentWakeupRequests, agents, heartbeatRuns, issueComments, issues } from "@paperclipai/db";
 import type { IssueComment, IssueQueuedCommentQueue } from "@paperclipai/shared";
@@ -48,7 +48,7 @@ function buildTransaction(tx: Db, companyId: string, deps: QueuedCommentQueuePos
     async updateCommentBody({ issueId, commentId, body, updatedAt }) {
       const updated = await tx
         .update(issueComments)
-        .set({ body, updatedAt })
+        .set({ body, updatedAt, payloadSourceSnapshot: sql`case when ${issueComments.body} is distinct from ${body} then null else ${issueComments.payloadSourceSnapshot} end` })
         .where(and(eq(issueComments.id, commentId), eq(issueComments.issueId, issueId), eq(issueComments.companyId, companyId)))
         .returning({ id: issueComments.id })
         .then((rows) => rows[0] ?? null);

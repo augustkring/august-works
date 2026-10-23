@@ -13023,7 +13023,7 @@ export function issueService(db: Db) {
         const attached = unboundAttachmentIds.length
           ? await dbOrTx
               .update(issueAttachments)
-              .set({ issueCommentId: comment.id, updatedAt: new Date() })
+              .set({ issueCommentId: comment.id, payloadSourceSnapshot: null, updatedAt: new Date() })
               .where(
                 and(
                   eq(issueAttachments.companyId, issue.companyId),

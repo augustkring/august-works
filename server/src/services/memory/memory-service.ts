@@ -765,6 +765,7 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
           const sourceChanges=target.sourceProvenanceQualified!==(target.sourceProvenanceQualified && provenance.sourceProvenanceQualified)
             || sourceKeys.some(key=>provenance[key].some(id=>!target[key].includes(id)));
           if(resolution.metadata.kind!=="duplicate" || sourceChanges)await txDb.update(memoryRecords).set({
+            ...(sourceChanges ? { payloadSourceSnapshot: null } : {}),
             sourceProvenanceQualified:target.sourceProvenanceQualified && provenance.sourceProvenanceQualified,
             sourceRunIds:[...new Set([...target.sourceRunIds,...provenance.sourceRunIds])],
             sourceIssueIds:[...new Set([...target.sourceIssueIds,...provenance.sourceIssueIds])],
@@ -1906,6 +1907,7 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
             revokedByActorType: identity.actorType,
             revokedByActorId: identity.actorId,
             revocationReason: parsed.data.reason,
+            payloadSourceSnapshot: null,
             updatedAt: now,
           })
           .where(
