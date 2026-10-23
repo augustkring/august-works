@@ -1,7 +1,7 @@
 import { assertRoadmapFieldOwnership } from "./roadmap-field-ownership.js";
 import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
 import { lockBusinessEventCompany, suppressBusinessEventsForObject } from "./business-event-privacy.js";
-import { and, asc, desc, eq, inArray, isNull, sql, type SQL } from "drizzle-orm";
+import { and, asc, desc, eq, getTableColumns, inArray, isNull, sql, type SQL } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   projects,
@@ -991,10 +991,23 @@ export function projectService(db: Db) {
           enforceResponsibleUserIntersection: true, resource: { type: "project", companyId: current.companyId, projectId: current.id } });
         if (!decision.allowed || !(await canActorReadProjectPrivacy(executor, actor, current))) throw forbidden("Project not found");
       }
+      // Use the original DB body contract and the locked effective row;
+      // reordered JSON and operational-only edits preserve the capture.
+      const columns = getTableColumns(projects);
+      const candidate = JSON.stringify(Object.fromEntries(Object.entries(updates)
+        .filter(([, value]) => value !== undefined)
+        .map(([key, value]) => [columns[key as keyof typeof columns].name, value])));
+      const capture = current.payloadSourceSnapshot == null ? {} : {
+        payloadSourceSnapshot: sql`case when
+          public.aw_native_payload_body_hash('project',to_jsonb(${projects})) is distinct from
+          public.aw_native_payload_body_hash('project',to_jsonb(jsonb_populate_record(
+            ${projects},to_jsonb(${projects}) || ${candidate}::jsonb)))
+          then null else ${projects.payloadSourceSnapshot} end`,
+      };
       const row = await executor
         .update(projects)
-        .set(updates)
-        .where(eq(projects.id, id))
+        .set({ ...updates, ...capture })
+        .where(and(eq(projects.companyId, current.companyId), eq(projects.id, id)))
         .returning()
         .then((rows) => rows[0] ?? null);
       if (!row) return null;
@@ -1010,33 +1023,13 @@ export function projectService(db: Db) {
     },
 
     clearExecutionWorkspaceEnvironmentSelection: async (companyId: string, environmentId: string) => {
-      const rows = await db
-        .select({
-          id: projects.id,
-          executionWorkspacePolicy: projects.executionWorkspacePolicy,
-        })
-        .from(projects)
-        .where(eq(projects.companyId, companyId));
-
-      let cleared = 0;
-      for (const row of rows) {
-        const policy = parseProjectExecutionWorkspacePolicy(row.executionWorkspacePolicy);
-        if (policy?.environmentId !== environmentId) continue;
-
-        await db
-          .update(projects)
-          .set({
-            executionWorkspacePolicy: {
-              ...policy,
-              environmentId: null,
-            },
-            updatedAt: new Date(),
-          })
-          .where(eq(projects.id, row.id));
-        cleared += 1;
-      }
-
-      return cleared;
+      const cleared = await db.update(projects).set({
+        executionWorkspacePolicy: sql`jsonb_set(${projects.executionWorkspacePolicy}, '{environmentId}', 'null'::jsonb)`,
+        payloadSourceSnapshot: null,
+        updatedAt: new Date(),
+      }).where(and(eq(projects.companyId, companyId),
+        sql`${projects.executionWorkspacePolicy}->>'environmentId' = ${environmentId}`)).returning({ id: projects.id });
+      return cleared.length;
     },
 
     remove: (id: string) =>

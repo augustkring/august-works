@@ -11757,41 +11757,14 @@ export function issueService(db: Db) {
       return result;
     },
 
-    clearExecutionWorkspaceEnvironmentSelection: async (
-      companyId: string,
-      environmentId: string,
-    ) => {
-      const rows = await db
-        .select({
-          id: issues.id,
-          executionWorkspaceSettings: issues.executionWorkspaceSettings,
-        })
-        .from(issues)
-        .where(eq(issues.companyId, companyId));
-
-      let cleared = 0;
-      for (const row of rows) {
-        const settings = parseIssueExecutionWorkspaceSettings(
-          row.executionWorkspaceSettings,
-          { includeEnvironmentId: true },
-        );
-        if (settings?.environmentId !== environmentId) continue;
-
-        await db
-          .update(issues)
-          .set({
-            executionWorkspaceSettings: {
-              ...settings,
-              environmentId: null,
-            },
-            payloadSourceSnapshot: null,
-            updatedAt: new Date(),
-          })
-          .where(and(eq(issues.companyId, companyId), eq(issues.id, row.id)));
-        cleared += 1;
-      }
-
-      return cleared;
+    clearExecutionWorkspaceEnvironmentSelection: async (companyId: string, environmentId: string) => {
+      const cleared = await db.update(issues).set({
+        executionWorkspaceSettings: sql`jsonb_set(${issues.executionWorkspaceSettings}, '{environmentId}', 'null'::jsonb)`,
+        payloadSourceSnapshot: null,
+        updatedAt: new Date(),
+      }).where(and(eq(issues.companyId, companyId),
+        sql`${issues.executionWorkspaceSettings}->>'environmentId' = ${environmentId}`)).returning({ id: issues.id });
+      return cleared.length;
     },
 
     remove: (id: string) =>
@@ -12588,6 +12561,9 @@ export function issueService(db: Db) {
           .update(issueComments)
           .set({
             body: DELETED_ISSUE_COMMENT_BODY,
+            payloadSourceSnapshot: sql`case when ${issueComments.body} is distinct from ${DELETED_ISSUE_COMMENT_BODY}
+              or ${issueComments.presentation} is not null or ${issueComments.metadata} is not null
+              then null else ${issueComments.payloadSourceSnapshot} end`,
             presentation: null,
             metadata: null,
             deletedAt: now,

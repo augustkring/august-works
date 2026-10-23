@@ -7,6 +7,7 @@ import { agents, assets, companies, createDb, documentRevisions, documents, EMBE
 import type { NativePayloadSourceSnapshot } from "@paperclipai/shared";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { issueService } from "../services/issues.js";
+import { projectService } from "../services/projects.js";
 import { lockMemoryPrivacy, purgeDerivedWorkflowMemory, purgeMemoryRecords } from "../services/memory/memory-privacy.js";
 
 describe("Native payload source snapshot binds its original payload owner", () => {
@@ -272,6 +273,95 @@ describe("Native payload source snapshot binds its original payload owner", () =
     expect(erased!.captured).toBeNull(); expect(erased!.invalidated).toBe(true);
     expect((await db.select().from(issues).where(eq(issues.id, unrelated.id)))[0]!.payloadSourceSnapshot).toEqual(unrelatedSnapshot);
     await expect(bindOwner(table, kind, id)).rejects.toMatchObject({ cause: { code: "23514" } });
+  });
+
+
+  it.each(["text", "json"] as const)("invalidates a changed Project %s body through the native updater and preserves unchanged bodies", async kind => {
+    const [project] = await db.insert(projects).values({ companyId, name: "Captured project", description: "Original description",
+      env: { FIRST: "one", SECOND: "two" }, payloadSourceProtocolVersion: 1 }).returning();
+    await bindOwner("projects", "project", project!.id);
+    const [captured] = await db.select().from(projects).where(eq(projects.id, project!.id));
+    const service = projectService(db);
+    await service.update(project!.id, { targetDate: "2026-11-01", description: "Original description", env: { SECOND: "two", FIRST: "one" } });
+    const [unchanged] = await db.select().from(projects).where(eq(projects.id, project!.id));
+    expect(unchanged!.targetDate).toBe("2026-11-01");
+    expect(unchanged!.payloadSourceSnapshot).toEqual(captured!.payloadSourceSnapshot);
+    expect(unchanged!.payloadSourceSnapshotInvalidated).toBe(false);
+    const changed = kind === "text" ? { description: "Changed project body" } : { env: { FIRST: "changed", SECOND: "two" } };
+    await service.update(project!.id, changed);
+    const [stored] = await db.select().from(projects).where(eq(projects.id, project!.id));
+    expect(kind === "text" ? stored!.description : stored!.env).toEqual(kind === "text" ? changed.description : changed.env);
+    expect(stored!.payloadSourceSnapshot).toBeNull(); expect(stored!.payloadSourceSnapshotInvalidated).toBe(true);
+    await expect(bindOwner("projects", "project", project!.id)).rejects.toMatchObject({ cause: { code: "23514" } });
+  });
+
+  it("invalidates a Project capture when its selected environment is removed", async () => {
+    const environmentId = randomUUID(), otherEnvironmentId = randomUUID();
+    const rows = await db.insert(projects).values([environmentId, otherEnvironmentId].map((id, index) => ({ companyId,
+      name: `Project environment ${index}`, executionWorkspacePolicy: { enabled: false, environmentId: id }, payloadSourceProtocolVersion: 1 }))).returning();
+    for (const row of rows) await bindOwner("projects", "project", row.id);
+    const [other] = await db.select().from(projects).where(eq(projects.id, rows[1]!.id));
+    expect(await projectService(db).clearExecutionWorkspaceEnvironmentSelection(companyId, environmentId)).toBe(1);
+    const [cleared] = await db.select().from(projects).where(eq(projects.id, rows[0]!.id));
+    expect(cleared!.executionWorkspacePolicy).toMatchObject({ environmentId: null });
+    expect(cleared!.payloadSourceSnapshot).toBeNull(); expect(cleared!.payloadSourceSnapshotInvalidated).toBe(true);
+    expect((await db.select().from(projects).where(eq(projects.id, rows[1]!.id)))[0]).toEqual(other);
+  });
+
+  it("invalidates a captured Comment through the native tombstone owner", async () => {
+    const task = await insert(0);
+    const rows = await db.insert(issueComments).values(["PRIVATE deleted comment", "Retained comment", ""].map(body => ({ companyId,
+      issueId: task.id, authorType: "user" as const, body, payloadSourceProtocolVersion: 1 }))).returning();
+    for (const row of rows) await bindOwner("issue_comments", "comment", row.id);
+    const [other] = await db.select().from(issueComments).where(eq(issueComments.id, rows[1]!.id));
+    const [sameBody] = await db.select().from(issueComments).where(eq(issueComments.id, rows[2]!.id));
+    await issueService(db).tombstoneComment(rows[0]!.id, { actorType: "user", userId: "structural-fixture" });
+    const [deleted] = await db.select().from(issueComments).where(eq(issueComments.id, rows[0]!.id));
+    expect(deleted!.body).not.toContain("PRIVATE"); expect(deleted!.deletedAt).toBeInstanceOf(Date);
+    expect(deleted!.payloadSourceSnapshot).toBeNull(); expect(deleted!.payloadSourceSnapshotInvalidated).toBe(true);
+    expect((await db.select().from(issueComments).where(eq(issueComments.id, rows[1]!.id)))[0]).toEqual(other);
+    await expect(bindOwner("issue_comments", "comment", rows[0]!.id)).rejects.toMatchObject({ cause: { code: "23514" } });
+    await issueService(db).tombstoneComment(rows[2]!.id, { actorType: "user", userId: "structural-fixture" });
+    const [unchanged] = await db.select().from(issueComments).where(eq(issueComments.id, rows[2]!.id));
+    expect(unchanged!.deletedAt).toBeInstanceOf(Date);
+    expect(unchanged!.payloadSourceSnapshot).toEqual(sameBody!.payloadSourceSnapshot);
+    expect(unchanged!.payloadSourceSnapshotInvalidated).toBe(false);
+  });
+
+
+  it.each(["issue", "project"] as const)("preserves a concurrently replaced %s environment selection", async kind => {
+    const environmentId = randomUUID(), nextEnvironmentId = randomUUID();
+    const table = kind === "issue" ? "issues" : "projects";
+    const column = kind === "issue" ? "execution_workspace_settings" : "execution_workspace_policy";
+    const settings = kind === "issue" ? { mode: "shared_workspace", environmentId } : { enabled: false, environmentId };
+    const [row] = kind === "issue"
+      ? await db.insert(issues).values({ companyId, title: "Concurrent environment Task", executionWorkspaceSettings: settings }).returning()
+      : await db.insert(projects).values({ companyId, name: "Concurrent environment Project", executionWorkspacePolicy: settings }).returning();
+    const replacement = { ...settings, environmentId: nextEnvironmentId };
+    let release!: () => void, locked!: () => void;
+    const releaseLock = new Promise<void>(resolve => { release = resolve; });
+    const rowLocked = new Promise<void>(resolve => { locked = resolve; });
+    const blocker = db.transaction(async tx => {
+      await tx.execute(sql`update ${sql.identifier(table)} set ${sql.identifier(column)}=${JSON.stringify(replacement)}::jsonb where id=${row!.id}::uuid`);
+      locked(); await releaseLock;
+    });
+    await rowLocked;
+    const clearing = (kind === "issue" ? issueService(db) : projectService(db)).clearExecutionWorkspaceEnvironmentSelection(companyId, environmentId);
+    try {
+      // Wait for the real UPDATE lock, not an assumed timing delay.
+      const deadline = Date.now() + 5_000;
+      let waiting = false;
+      while (!waiting && Date.now() < deadline) {
+        const [state] = await db.execute<{ waiting: boolean }>(sql`select exists(select 1 from pg_stat_activity
+          where datname=current_database() and wait_event_type='Lock' and query ilike ${`%update "${table}"%`}) as waiting`);
+        waiting = state!.waiting;
+        if (!waiting) await new Promise(resolve => setTimeout(resolve, 10));
+      }
+      expect(waiting).toBe(true);
+    } finally { release(); await blocker; }
+    expect(await clearing).toBe(0);
+    const [stored] = await db.execute<{ settings: unknown }>(sql`select ${sql.identifier(column)} as settings from ${sql.identifier(table)} where id=${row!.id}::uuid`);
+    expect(stored!.settings).toEqual(replacement);
   });
 
   it("latches invalidation and rejects marker edits and rebinding for every payload owner", async () => {
