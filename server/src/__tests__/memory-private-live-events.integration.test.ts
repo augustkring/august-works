@@ -62,13 +62,13 @@ describe("Native private Memory activity at live delivery", () => {
     }));
     try {
       await once(socket, "open");
-    const source = await memory.createPrivateMemory(companyId, agentId, { bindingId: binding.id,
-      memoryType: "lesson", title: "Private source lesson", content: canary, summary: null, sensitivity: "internal",
-      observedAt: new Date().toISOString(), validFrom: null, validUntil: null, expiresAt: null,
-      createdByOperationId: randomUUID(), evidence: [{ sourceClass: "task", sourceProvider: "fixture",
-        sourceType: "verified_fixture", sourceRef: `issue://${sourceTaskId}`, sourceVersion: "1", sourceUpdatedAt: null,
-        observedAt: new Date().toISOString(), excerptHash: createHash("sha256").update(canary).digest("hex"),
-        citation: { label: "Verified native source" }, trustLevel: "low", relation: "supports" }] }, producer);
+      const source = await memory.createPrivateMemory(companyId, agentId, { bindingId: binding.id,
+        memoryType: "lesson", title: "Private source lesson", content: canary, summary: null, sensitivity: "internal",
+        observedAt: new Date().toISOString(), validFrom: null, validUntil: null, expiresAt: null,
+        createdByOperationId: randomUUID(), evidence: [{ sourceClass: "task", sourceProvider: "fixture",
+          sourceType: "verified_fixture", sourceRef: `issue://${sourceTaskId}`, sourceVersion: "1", sourceUpdatedAt: null,
+          observedAt: new Date().toISOString(), excerptHash: createHash("sha256").update(canary).digest("hex"),
+          citation: { label: "Verified native source" }, trustLevel: "low", relation: "supports" }] }, producer);
       const creation = activities.find(event => event.payload.action === "memory.private_created" && event.payload.entityId === source.record.id);
       expect(creation).toBeDefined();
       expect(creation!.payload.runId).toBe(runId);
@@ -77,7 +77,7 @@ describe("Native private Memory activity at live delivery", () => {
       await expect(memory.get(companyId, source.record.id, { principal: { type: "user", userId: bobId } }))
         .rejects.toMatchObject({ status: 403 });
       expect((await memory.get(companyId, source.record.id, producer))?.record.content).toBe(canary);
-      const agentActor = { type: "agent" as const, source: "agent_jwt" as const, agentId, runId, responsibleUserId: aliceId };
+      const agentActor = { type: "agent" as const, source: "agent_jwt" as const, companyId, agentId, runId, onBehalfOfUserId: aliceId };
       expect(await analyticalLiveEventForReader(db, creation!, agentActor)).toEqual(creation);
       expect.soft(await analyticalLiveEventForReader(db, creation!, bob)).toBeNull();
       publishLiveEvent({ companyId, type: "agent.status", payload: { marker: "authorized barrier" } });
