@@ -231,7 +231,19 @@ export async function prepareRestoredQuarantine(
             eq(companySecrets.ownerUserId, user.user_id),
           ),
         );
-      await tx.delete(authUsers).where(eq(authUsers.id, user.user_id));
+      const retainedSupport = await tx.execute(sql`select 1 where
+        exists(select 1 from support_cases where opened_by_user_id=${user.user_id})
+        or exists(select 1 from support_case_events where author_user_id=${user.user_id})`);
+      if (retainedSupport.length) {
+        // Keep only the scrubbed FK principal while actual support erasure is
+        // pending. Replaying an old completed receipt cannot bypass this fence.
+        await tx.update(accountDeletionOperations).set({
+          status: "requested", errorCode: "account_erasure_pending",
+          completedAt: null, notBefore: new Date(),
+        }).where(eq(accountDeletionOperations.userId, user.user_id));
+      } else {
+        await tx.delete(authUsers).where(eq(authUsers.id, user.user_id));
+      }
     });
   }
 }

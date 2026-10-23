@@ -128,16 +128,6 @@ export function accountDeletionService(
             eq(companySecrets.ownerUserId, userId),
           ),
         );
-      await tx
-        .update(authUsers)
-        .set({
-          name: "Deleted account",
-          email: "deleted+" + sha256(userId) + "@account.invalid",
-          emailVerified: false,
-          image: null,
-          updatedAt: now,
-        })
-        .where(eq(authUsers.id, userId));
       return receipt(operation!);
     });
   }
@@ -231,7 +221,9 @@ export function accountDeletionService(
         // Completing the account must never outrun that physical erasure.
         const remaining = await tx.execute(sql`select 1 where
           exists(select 1 from customer_feedback_access where user_id=${operation.userId})
-          or exists(select 1 from feedback_image_deletions where account_deletion_id=${operation.id} and deleted_at is null)`);
+          or exists(select 1 from feedback_image_deletions where account_deletion_id=${operation.id} and deleted_at is null)
+          or exists(select 1 from support_cases where opened_by_user_id=${operation.userId})
+          or exists(select 1 from support_case_events where author_user_id=${operation.userId})`);
         if (remaining.length) throw Error("account_feedback_erasure_pending");
         await tx.delete(authUsers).where(eq(authUsers.id, operation.userId));
         await tx
@@ -269,6 +261,29 @@ export async function eraseAccountAccess(
   email?: string,
   now = new Date(),
 ) {
+  // Native intake takes the principal before the content root. Support roots
+  // precede feedback roots, matching company purge's ordering.
+  await tx.execute(sql`select id from "user" where id=${userId} for update`);
+  await tx.execute(sql`select c.id from support_cases c where c.id in (
+      select own.id from support_cases own where own.opened_by_user_id=${userId}
+      union select e.case_id from support_case_events e where e.author_user_id=${userId}
+    ) order by c.id for update`);
+  // A hold or attempted/unknown provider outcome keeps physical erasure
+  // pending; it must never roll back immediate credential revocation.
+  await tx.execute(sql`delete from support_case_events e using support_cases c
+    where c.id=e.case_id and c.company_id=e.company_id and e.author_user_id=${userId}
+      and not (c.legal_hold and (c.hold_release_at is null or c.hold_release_at>clock_timestamp()))
+      and c.provider_case_ref is null
+      and not exists(select 1 from support_case_events other where other.company_id=c.company_id
+        and other.case_id=c.id and (other.delivery_attempt_id is not null or other.delivery_provider_key is not null
+          or other.delivery_started_at is not null or other.provider_message_ref is not null
+          or other.delivery_state in ('sending','delivered','unknown')))`);
+  await tx.execute(sql`delete from support_cases c where c.opened_by_user_id=${userId}
+    and not (c.legal_hold and (c.hold_release_at is null or c.hold_release_at>clock_timestamp()))
+    and c.provider_case_ref is null and not exists(select 1 from support_case_events e
+      where e.company_id=c.company_id and e.case_id=c.id and (e.delivery_attempt_id is not null
+        or e.delivery_provider_key is not null or e.delivery_started_at is not null
+        or e.provider_message_ref is not null or e.delivery_state in ('sending','delivered','unknown')))`);
   // Erase this actor's feedback content and private ownership links together.
   // The same path covers no-name submissions without exposing them to triage.
   await tx.execute(sql`select f.id from customer_feedback f join customer_feedback_access a on a.company_id=f.company_id and a.feedback_id=f.id
@@ -316,4 +331,9 @@ export async function eraseAccountAccess(
   await tx.execute(
     sql`update email_deliveries set status='expired',payload_ciphertext=null,lease_owner=null,lease_until=null where user_id=${userId}`,
   );
+  // Quarantine replay and ordinary requests share the same profile scrub.
+  // Stable actor IDs remain only while required records still reference them.
+  await tx.execute(sql`update "user" set name='Deleted account',
+    email=${"deleted+" + sha256(userId) + "@account.invalid"},email_verified=false,
+    image=null,locale=null,updated_at=${now.toISOString()}::timestamptz where id=${userId}`);
 }

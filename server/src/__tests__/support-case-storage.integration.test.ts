@@ -186,4 +186,47 @@ describe("native support case storage and erasure boundaries", () => {
       await db.execute(sql`drop database ${sql.identifier(name)} with (force)`);
     }
   }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
+  it("replays account erasure without restoring access or falsely completing held support content", async () => {
+    const s = await seed();
+    const [message] = await db.insert(supportCaseEvents).values(event(s)).returning();
+    const [held] = await db.update(supportCases).set({ legalHold: true, holdReason: "Actual retained support hold" })
+      .where(eq(supportCases.id, s.row.id)).returning();
+    const [company] = await db.select().from(companies).where(eq(companies.id, s.companyId));
+    const [profile] = await db.select().from(authUsers).where(eq(authUsers.id, s.userId));
+    const name = `aw_restore_${randomUUID().replaceAll("-", "")}`, target = new URL(database.connectionString);
+    target.pathname = `/${name}`;
+    await db.execute(sql`create database ${sql.identifier(name)}`);
+    const restored = createDb(target.toString());
+    const ledger = { companies: [], memory: [], businessEvents: [], analyticalSources: [], feedback: [], supportCases: [],
+      users: [{ id: randomUUID(), user_id: s.userId, created_at: new Date().toISOString() }] };
+    try {
+      await applyPendingMigrations(target.toString());
+      await restored.insert(companies).values(company!);
+      await restored.insert(authUsers).values({ ...profile!, locale: "da" });
+      await restored.insert(supportCases).values(held!);
+      await restored.insert(supportCaseEvents).values(message!);
+      for (let attempt = 0; attempt < 2; attempt++) {
+        await prepareRestoredQuarantine(restored, target.toString(), ledger);
+        const [scrubbed] = await restored.select().from(authUsers).where(eq(authUsers.id, s.userId));
+        expect(scrubbed).toMatchObject({ name: "Deleted account", emailVerified: false, image: null, locale: null });
+        expect(scrubbed!.email).not.toBe(profile!.email);
+        const [operation] = await restored.select().from(accountDeletionOperations).where(eq(accountDeletionOperations.userId, s.userId));
+        expect(operation).toMatchObject({ status: "requested", errorCode: "account_erasure_pending", completedAt: null });
+        expect(await restored.select().from(supportCases)).toHaveLength(1);
+        expect(await restored.select().from(supportCaseEvents)).toHaveLength(1);
+        await expect(assertDatabaseRestoreAdmission(restored)).rejects.toThrow();
+      }
+      await restored.update(supportCases).set({ legalHold: false, holdReason: null }).where(eq(supportCases.id, s.row.id));
+      await prepareRestoredQuarantine(restored, target.toString(), ledger);
+      expect(await restored.select().from(authUsers)).toEqual([]);
+      expect(await restored.select().from(supportCases)).toEqual([]);
+      expect((await restored.select().from(supportCaseDeletionMarkers)).map(m => m.subjectId).sort())
+        .toEqual([s.row.id, message!.id].sort());
+      await expect(assertDatabaseRestoreAdmission(restored)).rejects.toThrow();
+    } finally {
+      await restored.$client.end({ timeout: 1 });
+      await db.execute(sql`drop database ${sql.identifier(name)} with (force)`);
+    }
+  }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
+
 });

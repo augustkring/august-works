@@ -20,6 +20,9 @@ import {
   companySecretVersions,
   emailDeliveries,
   principalPermissionGrants,
+  supportCaseDeletionMarkers,
+  supportCaseEvents,
+  supportCases,
   userSecretDefinitions,
   createDb,
 } from "@paperclipai/db";
@@ -107,6 +110,57 @@ const support = await getEmbeddedPostgresTestSupport();
         })),
       );
       return company!.id;
+    }
+    const supportDataPolicy = {
+      schemaVersion: 1,
+      policyVersion: "support-account-test-v1",
+      recipientName: "Blentera Support",
+      privacyNoticeUrl: "https://example.test/privacy",
+      processingRegion: "eu",
+      retentionTrigger: "after_last_customer_or_support_message",
+      retentionDays: 30,
+      backupMaxDays: 7,
+      restoreLagDays: 1,
+      deletionMarkerDays: 30,
+      legalHoldPolicyId: "support-account-test-v1",
+    } as const;
+    async function createSupportCase(
+      companyId: string,
+      openerUserId: string,
+      options: { legalHold?: boolean; deliveryState?: "pending" | "unknown" } = {},
+    ) {
+      const createdAt = new Date();
+      const [supportCase] = await db
+        .insert(supportCases)
+        .values({
+          companyId,
+          openedByUserId: openerUserId,
+          subject: "Account deletion support fixture",
+          description: "Private support case fixture",
+          dataPolicy: supportDataPolicy,
+          legalHold: options.legalHold ?? false,
+          holdReason: options.legalHold ? "Account deletion fixture hold" : null,
+          createdAt,
+          updatedAt: createdAt,
+          lastMessageAt: createdAt,
+          expiresAt: new Date(createdAt.getTime() + 86400000),
+        })
+        .returning();
+      const [event] = await db
+        .insert(supportCaseEvents)
+        .values({
+          companyId,
+          caseId: supportCase!.id,
+          authorUserId: openerUserId,
+          kind: "request",
+          body: "Private support event fixture",
+          customerStatus: "RECEIVED",
+          requestKey: randomUUID(),
+          requestHash: "a".repeat(64),
+          deliveryState: options.deliveryState ?? "pending",
+        })
+        .returning();
+      return { supportCase: supportCase!, event: event! };
     }
     it("requires exact confirmation and the current password, preserving a durable failed-attempt budget", async () => {
       await user("password-owner");
@@ -503,6 +557,221 @@ const support = await getEmbeddedPostgresTestSupport();
             .where(eq(activityLog.actorId, "member-delete"))
         )[0]!.action,
       ).toBe("fixture.audit");
+    });
+    it("erases local support content with deletion markers before completing personal account erasure", async () => {
+      await user("support-local-delete");
+      await user("support-local-coworker");
+      const companyId = await organization([
+        "support-local-delete",
+        "support-local-coworker",
+      ]);
+      const { supportCase, event } = await createSupportCase(
+        companyId,
+        "support-local-delete",
+      );
+      const service = accountDeletionService(db, effects);
+
+      const accepted = await service.request(
+        "support-local-delete",
+        input("support-local-delete-fixture-001"),
+      );
+      expect(accepted.status).toBe("requested");
+      expect(
+        await db
+          .select()
+          .from(supportCases)
+          .where(eq(supportCases.id, supportCase.id)),
+      ).toHaveLength(0);
+      expect(
+        await db
+          .select()
+          .from(supportCaseEvents)
+          .where(eq(supportCaseEvents.id, event.id)),
+      ).toHaveLength(0);
+      expect(
+        await db
+          .select()
+          .from(supportCaseDeletionMarkers)
+          .where(eq(supportCaseDeletionMarkers.caseId, supportCase.id)),
+      ).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({
+            subjectId: supportCase.id,
+            targetKind: "case",
+          }),
+          expect.objectContaining({
+            subjectId: event.id,
+            targetKind: "event",
+          }),
+        ]),
+      );
+
+      await service.processOne(new Date(Date.now() + 1000));
+      expect(
+        await db
+          .select()
+          .from(authUsers)
+          .where(eq(authUsers.id, "support-local-delete")),
+      ).toHaveLength(0);
+      expect(
+        (
+          await db
+            .select()
+            .from(accountDeletionOperations)
+            .where(eq(accountDeletionOperations.userId, "support-local-delete"))
+        )[0],
+      ).toMatchObject({ status: "completed", completedAt: expect.any(Date) });
+    });
+    it("keeps held support ownership as a scrubbed principal and leaves account erasure pending", async () => {
+      await user("support-held-delete");
+      await user("support-held-coworker");
+      await db
+        .update(authUsers)
+        .set({ locale: "da" })
+        .where(eq(authUsers.id, "support-held-delete"));
+      const companyId = await organization([
+        "support-held-delete",
+        "support-held-coworker",
+      ]);
+      const { supportCase, event } = await createSupportCase(
+        companyId,
+        "support-held-delete",
+        { legalHold: true, deliveryState: "unknown" },
+      );
+      const now = new Date();
+      await db.insert(authSessions).values({ id: randomUUID(), userId: "support-held-delete", token: randomUUID(),
+        createdAt: now, updatedAt: now, expiresAt: new Date(now.getTime() + 60000) });
+      const service = accountDeletionService(db, effects);
+
+      const accepted = await service.request(
+        "support-held-delete",
+        input("support-held-delete-fixture-001"),
+      );
+      expect(accepted.status).toBe("requested");
+      expect(
+        (
+          await db
+            .select()
+            .from(authUsers)
+            .where(eq(authUsers.id, "support-held-delete"))
+        )[0],
+      ).toMatchObject({
+        name: "Deleted account",
+        image: null,
+        emailVerified: false,
+        locale: null,
+      });
+      expect(
+        await db
+          .select()
+          .from(companyMemberships)
+          .where(eq(companyMemberships.principalId, "support-held-delete")),
+      ).toHaveLength(0);
+      expect(
+        await db
+          .select()
+          .from(supportCases)
+          .where(eq(supportCases.id, supportCase.id)),
+      ).toHaveLength(1);
+      expect(
+        await db
+          .select()
+          .from(supportCaseEvents)
+          .where(eq(supportCaseEvents.id, event.id)),
+      ).toHaveLength(1);
+
+      expect(await db.select().from(authSessions).where(eq(authSessions.userId, "support-held-delete"))).toEqual([]);
+      expect(await db.select().from(authAccounts).where(eq(authAccounts.userId, "support-held-delete"))).toEqual([]);
+      await service.processOne(new Date(Date.now() + 1000));
+      expect(
+        await db
+          .select()
+          .from(authUsers)
+          .where(eq(authUsers.id, "support-held-delete")),
+      ).toHaveLength(1);
+      expect(
+        (
+          await db
+            .select()
+            .from(accountDeletionOperations)
+            .where(eq(accountDeletionOperations.userId, "support-held-delete"))
+        )[0],
+      ).toMatchObject({
+        status: "processing",
+        completedAt: null,
+        errorCode: "account_erasure_pending",
+      });
+      await db.update(supportCases).set({ legalHold: false, holdReason: null }).where(eq(supportCases.id, supportCase.id));
+      await service.processOne(new Date(Date.now() + 61000));
+      expect(await db.select().from(supportCases).where(eq(supportCases.id, supportCase.id))).toHaveLength(1);
+      expect((await db.select().from(accountDeletionOperations)
+        .where(eq(accountDeletionOperations.userId, "support-held-delete")))[0])
+        .toMatchObject({ completedAt: null, errorCode: "account_erasure_pending" });
+    });
+    it("retains an authored local event when its other support case has uncertain sibling delivery", async () => {
+      await user("support-event-author");
+      await user("support-case-opener");
+      await user("support-event-coworker");
+      const companyId = await organization([
+        "support-event-author",
+        "support-case-opener",
+        "support-event-coworker",
+      ]);
+      const { supportCase } = await createSupportCase(
+        companyId,
+        "support-case-opener",
+      );
+      const [authoredEvent] = await db
+        .insert(supportCaseEvents)
+        .values({
+          companyId,
+          caseId: supportCase.id,
+          authorUserId: "support-event-author",
+          kind: "customer_reply",
+          body: "Private authored reply fixture",
+          customerStatus: "RECEIVED",
+          requestKey: randomUUID(),
+          requestHash: "b".repeat(64),
+          deliveryState: "pending",
+        })
+        .returning();
+      await db.insert(supportCaseEvents).values({
+        companyId,
+        caseId: supportCase.id,
+        authorUserId: "support-case-opener",
+        kind: "support_message",
+        body: "Provider outcome is uncertain",
+        customerStatus: "INVESTIGATING",
+        requestKey: randomUUID(),
+        requestHash: "c".repeat(64),
+        deliveryState: "unknown",
+      });
+      const service = accountDeletionService(db, effects);
+
+      await service.request(
+        "support-event-author",
+        input("support-event-author-fixture-001"),
+      );
+      expect(
+        await db
+          .select()
+          .from(supportCaseEvents)
+          .where(eq(supportCaseEvents.id, authoredEvent!.id)),
+      ).toHaveLength(1);
+      expect(
+        await db
+          .select()
+          .from(authUsers)
+          .where(eq(authUsers.id, "support-event-author")),
+      ).toHaveLength(1);
+      expect(
+        (
+          await db
+            .select()
+            .from(accountDeletionOperations)
+            .where(eq(accountDeletionOperations.userId, "support-event-author"))
+        )[0],
+      ).toMatchObject({ status: "requested", completedAt: null });
     });
   },
 );
