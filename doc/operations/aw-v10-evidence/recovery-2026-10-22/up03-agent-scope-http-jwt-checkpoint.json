@@ -1,5 +1,5 @@
 {
-  "status": "bounded source checkpoint; current verification retry pending after environment reset; NOT PR-ready",
+  "status": "bounded current ingress software checkpoint: actual64PASS; final compiler/UI checks pending; NOT PR-ready",
   "production_changes": [
     "Canonical Agent key company-stream admission uses actual Agent/current responsible Human and original company_scope:read; preserves original paused-read semantics.",
     "Malformed nonnull key restrictions no longer default to standard in shared normalizer, HTTP, signed JWT or WS; original null/absent standard storage remains valid.",
@@ -75,6 +75,15 @@
     "token_gates": {
       "session": 69433,
       "exit_code": 0
+    },
+    "final_retry": {
+      "session": 81784,
+      "exit_code": 0,
+      "durable_exit_file": "up03-agent-scope-http-jwt-retry.exit",
+      "passed": 64,
+      "seconds": 67.78,
+      "all_eleven_source_pins_unchanged": true,
+      "pg_http_socket_cleanup": "closed"
     }
   },
   "final_source_sha256": {
@@ -94,7 +103,7 @@
     "Canonical paused reads preserved; no new undocumented SaaS Agent-membership exception added.",
     "No full atomic credential/source-policy lifetime through every subsequent side effect, provider await or socket send proved.",
     "Native Task/private Memory copied-body leak and frozen actual input/source closure still OPEN.",
-    "New temporal fixture first failed schema validation, next used wrong get-denial assertion; both exact failures retained. Third corrected fixture was environment-interrupted before test verdict; no Memory temporal RED claim yet.",
+    "Earlier temporal fixture schema/denial-shape failures and interrupted attempt remain retained; corrected actual two-case temporal regression now fails genuine availability assertions (see separate temporal checkpoint).",
     "Current UI typecheck and final compiler/64-case actual exit retry remain pending; full pnpm test:run/build and whole current workspace checks remain OPEN.",
     "No merge/deploy/paid provider or PR-ready claim."
   ]
