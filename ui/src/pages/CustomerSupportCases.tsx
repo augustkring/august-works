@@ -10,6 +10,7 @@ import {
   supportCaseImpactSchema,
   supportCaseIntakePolicySchema, supportCaseSafeContextSchema, SUPPORT_CASE_LIMITS,
   type CreateSupportCase,
+  type CloseSupportCase,
   type ReplySupportCase,
   type SupportCaseCategory,
   type SupportCaseDetail,
@@ -84,6 +85,8 @@ function CustomerSupportCasesForAccount({ companyId, principal }: { companyId: s
     && getCompanyPathSegments(candidate, selectedCompany?.issuePrefix).length > 0 && candidate !== location.pathname
     ? candidate : "/work";
   const [composing, setComposing] = useState(true);
+  const resumeDraftButton = useRef<HTMLButtonElement>(null), descriptionInput = useRef<HTMLTextAreaElement>(null);
+  useEffect(() => { (composing ? descriptionInput.current : resumeDraftButton.current)?.focus(); }, [composing]);
   const selected = supportCaseDetailSchema.shape.id.safeParse(new URLSearchParams(location.search).get("case"));
   const selectedCaseId = selected.success ? selected.data : null;
   const activeCase = useRef(selectedCaseId);
@@ -118,7 +121,7 @@ function CustomerSupportCasesForAccount({ companyId, principal }: { companyId: s
   const [replyDrafts, setReplyDrafts] = useState<Record<string, string>>({});
   const reply = selectedCaseId ? replyDrafts[selectedCaseId] ?? "" : "";
   function setReply(body: string) { if (selectedCaseId) setReplyDrafts(previous => ({ ...previous, [selectedCaseId]: body })); }
-  const [replySubmission, setReplySubmission] = useState<{ caseId: string; key: string; payload: ReplySupportCase } | null>(null);
+  const [replySubmission, setReplySubmission] = useState<{ caseId: string; key: string; kind: "reply" | "close"; payload: ReplySupportCase | CloseSupportCase } | null>(null);
   const [accessLost, setAccessLost] = useState(false);
   const [submitMessage, setSubmitMessage] = useState<string | null>(null);
   const [replyMessage, setReplyMessage] = useState<string | null>(null);
@@ -317,13 +320,15 @@ function CustomerSupportCasesForAccount({ companyId, principal }: { companyId: s
     }
   }
 
-  async function submitReply() {
+  async function submitReply(kind: "reply" | "close" = "reply") {
     const detail = detailQuery.data;
-    if (replyInFlight.current || !ready || !detail || !reply.trim() || (replySubmission && replySubmission.caseId !== detail.id) || !hasCurrentV9Session(client, principal, identity.sessionId)) return;
+    if (replyInFlight.current || !ready || !detail || (kind === "reply" && !reply.trim()) || (replySubmission && replySubmission.caseId !== detail.id) || !hasCurrentV9Session(client, principal, identity.sessionId)) return;
     const attempt = replySubmission ?? {
       caseId: detail.id,
+      kind,
       key: crypto.randomUUID(),
-      payload: { expectedUserId: principal, idempotencyKey: "", body: reply, ...(safeContext ? { safeContext } : {}) } as ReplySupportCase,
+      payload: kind === "close" ? { expectedUserId: principal, idempotencyKey: "" }
+        : { expectedUserId: principal, idempotencyKey: "", body: reply, ...(safeContext ? { safeContext } : {}) },
     };
     if (!attempt.payload.idempotencyKey) attempt.payload.idempotencyKey = attempt.key;
     setReplySubmission(attempt);
@@ -332,14 +337,16 @@ function CustomerSupportCasesForAccount({ companyId, principal }: { companyId: s
     setReplyMessage(null);
     try {
       const result = await api.post<unknown>(
-        supportPath(companyId, `/cases/${encodeURIComponent(attempt.caseId)}/replies`),
+        supportPath(companyId, `/cases/${encodeURIComponent(attempt.caseId)}/${attempt.kind === "close" ? "close" : "replies"}`),
         attempt.payload,
       );
       const ack = safeDetail(result, companyId);
+      if (attempt.kind === "close" && (ack.id !== attempt.caseId || ack.status !== "CLOSED")) throw new Error("Support closure source changed");
       if (!acceptDetail(ack, attempt.caseId)) return;
       if (current()) {
-        setReply(""); setReplySubmission(null);
-        setReplyMessage(ack.followUpOfId ? t("supportCases.followUpCreated") : deliveryMessage(ack.delivery));
+        if (attempt.kind === "reply") setReply("");
+        setReplySubmission(null);
+        setReplyMessage(attempt.kind === "close" ? t("supportCases.closed") : ack.followUpOfId ? t("supportCases.followUpCreated") : deliveryMessage(ack.delivery));
       }
     } catch (error) {
       if (!current()) return;
@@ -348,9 +355,11 @@ function CustomerSupportCasesForAccount({ companyId, principal }: { companyId: s
       try {
         const recovered = await recoverRequest(attempt.key);
         if (recovered) {
+          if (attempt.kind === "close" && (recovered.id !== attempt.caseId || recovered.status !== "CLOSED")) throw new Error("Support closure source changed");
           if (!acceptDetail(recovered, attempt.caseId)) return;
-          setReply(""); setReplySubmission(null);
-          setReplyMessage(recovered.followUpOfId ? t("supportCases.followUpCreated") : deliveryMessage(recovered.delivery));
+          if (attempt.kind === "reply") setReply("");
+          setReplySubmission(null);
+          setReplyMessage(attempt.kind === "close" ? t("supportCases.closed") : recovered.followUpOfId ? t("supportCases.followUpCreated") : deliveryMessage(recovered.delivery));
           return;
         }
       } catch { /* Keep the same idempotency key for an explicit retry. */ }
@@ -407,6 +416,7 @@ function CustomerSupportCasesForAccount({ companyId, principal }: { companyId: s
     {privacy && !accessLost && <div className="space-y-1 rounded-md border border-border p-3 text-sm">
       <p>{t("supportCases.recipient", { recipientName: privacy.recipientName })}</p>
       <p>{t("supportCases.retention", { count: privacy.retentionDays })}</p>
+      <p>{t("supportCases.inputLimits", SUPPORT_CASE_LIMITS)}</p>
       <a className="underline" href={privacy.privacyNoticeUrl} target="_blank" rel="noreferrer">{t("supportCases.privacyNotice")}</a>
     </div>}
 
@@ -432,9 +442,12 @@ function CustomerSupportCasesForAccount({ companyId, principal }: { companyId: s
         <textarea aria-label={t("supportCases.replyLabel")} maxLength={SUPPORT_CASE_LIMITS.reply} className="min-h-24 w-full rounded-md border border-input bg-background p-3 text-foreground" value={reply} disabled={!!replySubmission} onChange={(event) => setReply(event.target.value)} />
       </label>
       {draftContext()}
-      <Button className="min-h-11" disabled={!reply.trim() || !ready || busy} onClick={() => void submitReply()}>
-        {replySubmission ? t("supportCases.retryReply") : t("supportCases.sendReply")}
+      <Button className="min-h-11" disabled={!reply.trim() || !ready || busy || replySubmission?.kind === "close"} onClick={() => void submitReply()}>
+        {replying && replySubmission?.kind === "reply" ? t("supportCases.sendingReply") : replySubmission?.kind === "reply" ? t("supportCases.retryReply") : t("supportCases.sendReply")}
       </Button>
+      {(detailQuery.data.status !== "CLOSED" || replySubmission?.kind === "close") && <Button variant="outline" className="min-h-11" disabled={!ready || busy || replySubmission?.kind === "reply"} onClick={() => void submitReply("close")}>
+        {replying && replySubmission?.kind === "close" ? t("supportCases.closing") : replySubmission?.kind === "close" ? t("supportCases.retryClose") : t("supportCases.closeCase")}
+      </Button>}
       {replyMessage && <p role="status">{replyMessage}</p>}
       </>}
       <div className="flex flex-wrap items-center justify-between gap-3">
@@ -458,11 +471,11 @@ function CustomerSupportCasesForAccount({ companyId, principal }: { companyId: s
       </div>
     </section>}
 
-    {!selectedCaseId && !composing && ready && !accessLost && <Button variant="outline" className="min-h-11" onClick={() => setComposing(true)}>{t("supportCases.resumeDraft")}</Button>}
+    {!selectedCaseId && !composing && ready && !accessLost && <Button variant="outline" className="min-h-11" ref={resumeDraftButton} onClick={() => setComposing(true)}>{t("supportCases.resumeDraft")}</Button>}
     {!selectedCaseId && composing && privacy && ready && !accessLost && <form className="space-y-4 border-t border-border pt-5" onSubmit={(event) => { event.preventDefault(); void submitCase(); }}>
       <h2 className="text-lg font-medium">{t("supportCases.newCase")}</h2>
       <label className="block space-y-2 text-sm font-medium">{labels.description}
-        <textarea aria-label={labels.description} className="min-h-32 w-full rounded-md border border-input bg-background p-3 text-foreground" maxLength={SUPPORT_CASE_LIMITS.description} required value={description} disabled={!!submission} onChange={(event) => setDescription(event.target.value)} aria-describedby="support-description-help" />
+        <textarea ref={descriptionInput} aria-label={labels.description} className="min-h-32 w-full rounded-md border border-input bg-background p-3 text-foreground" maxLength={SUPPORT_CASE_LIMITS.description} required value={description} disabled={!!submission} onChange={(event) => setDescription(event.target.value)} aria-describedby="support-description-help" />
       </label>
       <p id="support-description-help" className="text-sm text-muted-foreground">{labels.descriptionHelp}</p>
       <label className="block space-y-2 text-sm font-medium">{t("supportCases.subjectPreview")}
@@ -483,7 +496,7 @@ function CustomerSupportCasesForAccount({ companyId, principal }: { companyId: s
       <div className="flex items-center justify-between gap-3">
       <Button variant="outline" className="min-h-11" type="button" disabled={busy} onClick={() => setComposing(false)}>{t("supportCases.cancel")}</Button>
       <Button className="min-h-11" type="submit" disabled={!description.trim() || busy || !ready}>
-        {submission ? t("supportCases.retrySubmit") : t("supportCases.submit")}
+        {submitting ? t("supportCases.sending") : submission ? t("supportCases.retrySubmit") : t("supportCases.submit")}
       </Button>
       </div>
       {submitMessage && <p role="status">{submitMessage}</p>}

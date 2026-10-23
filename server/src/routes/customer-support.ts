@@ -45,6 +45,11 @@ export function customerSupportRoutes(db: Db, options: { runtimeEnv?: Readonly<R
     z.strictObject({}).parse(req.query);
     res.status(201).json(await cases.reply(req.actor, z.uuid().toLowerCase().parse(req.params.companyId), z.uuid().toLowerCase().parse(req.params.caseId), req.body));
   });
+  router.post("/companies/:companyId/support/cases/:caseId/close", async (req, res) => {
+    assertBoard(req);
+    z.strictObject({}).parse(req.query);
+    res.json(await cases.close(req.actor, z.uuid().toLowerCase().parse(req.params.companyId), z.uuid().toLowerCase().parse(req.params.caseId), req.body));
+  });
   router.get(
     "/companies/:companyId/experience/support-access",
     async (req, res) => {

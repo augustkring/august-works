@@ -2,11 +2,11 @@ import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { and, desc, eq, sql, type SQL } from "drizzle-orm";
 import {
-  accountDeletionOperations, authRateLimits, companies, companyDeletionOperations, companyMemberships,
+  accountDeletionOperations, authRateLimits, authUsers, companies, companyDeletionOperations, companyMemberships,
   supportCases, supportCaseEvents, supportCaseDeletionMarkers, type Db,
 } from "@paperclipai/db";
 import {
-  createSupportCaseSchema, replySupportCaseSchema, deriveSupportCaseSubject,
+  createSupportCaseSchema, replySupportCaseSchema, closeSupportCaseSchema, deriveSupportCaseSubject,
   supportCaseReadQuerySchema, supportCaseDetailSchema, supportCaseListSchema, supportCaseDataPolicySchema, supportCaseIntakePolicySchema,
   SUPPORT_CASE_LIMITS, type SupportCaseDataPolicy,
 } from "@paperclipai/shared";
@@ -240,6 +240,38 @@ export function customerSupportCaseService(db: Db, options: { dataPolicy: Readon
           safeContext: input.safeContext ?? null, requestKey: input.idempotencyKey, requestHash: hash, createdAt: at });
         await record(tx, publications, row, userId, row.id === original.id ? "support.customer_replied" : "support.follow_up_created");
         return detail(tx, row, userId, administrator);
+      });
+    },
+    async close(actor: AuthorizationActor, companyId: string, id: string, raw: unknown) {
+      const input = closeSupportCaseSchema.parse(raw);
+      human(actor, input.expectedUserId);
+      await budget(companyId, input.expectedUserId);
+      return within(actor, companyId, input.expectedUserId, true, async (tx, userId, administrator, publications) => {
+        const hash = digest(["close", companyId, userId, id, input]), prior = await existing(tx, companyId, userId, input.idempotencyKey);
+        if (prior) {
+          if (prior.requestHash !== hash) throw conflict("This request key was already used for different content");
+          return detail(tx, await currentCase(tx, companyId, userId, administrator, prior.caseId), userId, administrator);
+        }
+        const eventId = await requestIdentity(tx, companyId, userId, input.idempotencyKey);
+        const original = await currentCase(tx, companyId, userId, administrator, id, true);
+        if (original.customerStatus === "CLOSED") return detail(tx, original, userId, administrator);
+        // Closing adds no customer-supplied content and changes no recipient.
+        // Keep the original case policy even when new intake is unavailable.
+        const dataPolicy = original.dataPolicy;
+        const at = await now(tx), expiresAt = new Date(at.getTime() + dataPolicy.retentionDays * 86400000);
+        const [account] = await tx.select({ locale: authUsers.locale }).from(authUsers).where(eq(authUsers.id, userId)).limit(1);
+        const body = account?.locale === "da"
+          ? "Jeg har bedt om at få denne supportsag afsluttet."
+          : "I asked to close this support case.";
+        const [row] = await tx.update(supportCases).set({
+          customerStatus: "CLOSED", requestedResponse: null, closedAt: original.closedAt ?? at,
+          lastMessageAt: at, expiresAt, updatedAt: at, version: original.version + 1,
+        }).where(eq(supportCases.id, original.id)).returning();
+        await tx.insert(supportCaseEvents).values({ id: eventId, companyId, caseId: original.id, authorUserId: userId,
+          kind: "customer_reply", body, customerStatus: "CLOSED", requestKey: input.idempotencyKey,
+          requestHash: hash, createdAt: at });
+        await record(tx, publications, row!, userId, "support.customer_closed_case");
+        return detail(tx, row!, userId, administrator);
       });
     },
   };

@@ -156,6 +156,8 @@ export const createSupportCaseSchema = z.strictObject({
   impact: supportCaseImpactSchema.nullable().default(null),
   safeContext: supportCaseSafeContextSchema.optional(),
 });
+export const closeSupportCaseSchema = z.strictObject(supportCommandFields);
+export type CloseSupportCase = z.infer<typeof closeSupportCaseSchema>;
 export const replySupportCaseSchema = z.strictObject({
   ...supportCommandFields,
   body: supportText(SUPPORT_CASE_LIMITS.reply),

@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import express from "express";
 import request from "supertest";
 import { and, eq, sql } from "drizzle-orm";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
   accountDeletionOperations, authRateLimits, authUsers, boardApiKeys, companies, companyMemberships, agents, agentApiKeys, supportCaseDeletionMarkers,
   supportCaseEvents, supportCases, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
@@ -39,6 +39,8 @@ const policy = {
     .set(auth(name)).query({ expectedUserId: users[name] });
   const detail = (companyId: string, name: string, id: string) => request(app).get(`${path(companyId)}/cases/${id}`)
     .set(auth(name)).query({ expectedUserId: users[name] });
+  const closeCase = (companyId: string, name: string, id: string, key = randomUUID()) => request(app)
+    .post(`${path(companyId)}/cases/${id}/close`).set(auth(name)).send({ idempotencyKey: key, expectedUserId: users[name] });
 
   beforeAll(async () => {
     fixture = await startEmbeddedPostgresTestDatabase("v10-support-cases-");
@@ -67,6 +69,7 @@ const policy = {
     app.use("/api", customerSupportRoutes(db, { runtimeEnv: { AW_SUPPORT_CASE_DATA_POLICY_JSON: JSON.stringify(policy) } }));
     app.use(errorHandler);
   }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
+  beforeEach(async () => { await db.delete(authRateLimits); });
   afterAll(async () => { await fixture?.cleanup(); }, 30000);
 
   it("creates a local receipt with defaults and only the public customer projection", async () => {
@@ -125,6 +128,86 @@ const policy = {
     expect(reply.body.id).toBe(created.body.id);
     expect(reply.body.status).toBe("INVESTIGATING");
     expect(reply.body.timeline.at(-1)).toMatchObject({ kind: "customer_reply", body: "The issue is still happening.", status: "INVESTIGATING" });
+  });
+
+  it("closes through an idempotent customer command and preserves the closed message", async () => {
+    const created = await create(companyA, "opener", "Please close this case when resolved.");
+    expect(created.status).toBe(201);
+    expect((await closeCase(companyA, "member", created.body.id)).status).toBe(404);
+    const foreign = await create(companyB, "foreign", "Foreign case");
+    expect(foreign.status).toBe(201);
+    expect((await closeCase(companyA, "owner", foreign.body.id)).status).toBe(404);
+
+    const key = randomUUID();
+    const [first, repeated] = await Promise.all([
+      closeCase(companyA, "owner", created.body.id, key), closeCase(companyA, "owner", created.body.id, key),
+    ]);
+    expect(first.status).toBe(200); expect(repeated.status).toBe(200);
+    expect(first.body.id).toBe(created.body.id); expect(repeated.body.id).toBe(created.body.id);
+    expect(first.body.status).toBe("CLOSED");
+    const [before] = await db.select().from(supportCases).where(eq(supportCases.id, created.body.id));
+    const anotherClose = await closeCase(companyA, "owner", created.body.id);
+    expect(anotherClose.status).toBe(200);
+    const [after] = await db.select().from(supportCases).where(eq(supportCases.id, created.body.id));
+    expect(after!.version).toBe(before!.version);
+    expect(after!.expiresAt).toEqual(before!.expiresAt);
+    expect(anotherClose.body.timeline).toHaveLength(first.body.timeline.length);
+    expect(first.body.timeline.at(-1)).toMatchObject({ kind: "customer_reply", body: "I asked to close this support case.", status: "CLOSED", author: "customer", delivery: "pending" });
+    expect(await db.select().from(supportCaseEvents).where(and(
+      eq(supportCaseEvents.caseId, created.body.id), eq(supportCaseEvents.requestKey, key),
+    ))).toHaveLength(1);
+  });
+
+  it("keeps closed history and routes a later customer reply to a linked follow-up", async () => {
+    const created = await create(companyA, "opener", "Original case history stays intact.");
+    await db.update(authUsers).set({ locale: "da" }).where(eq(authUsers.id, users.opener));
+    const closed = await closeCase(companyA, "opener", created.body.id);
+    await db.update(authUsers).set({ locale: null }).where(eq(authUsers.id, users.opener));
+    expect(closed.status).toBe(200);
+    const replyKey = randomUUID(), body = "This is a new problem after closure.";
+    const response = await request(app).post(`${path(companyA)}/cases/${created.body.id}/replies`).set(auth("opener"))
+      .send({ idempotencyKey: replyKey, expectedUserId: users.opener, body });
+    expect(response.status).toBe(201);
+    expect(response.body).toMatchObject({ followUpOfId: created.body.id, subject: body, description: body, status: "RECEIVED" });
+    const original = await detail(companyA, "opener", created.body.id);
+    expect(original.status).toBe(200);
+    expect(original.body.status).toBe("CLOSED");
+    expect(original.body.timeline.map((event: { body: string }) => event.body)).toContain("Jeg har bedt om at få denne supportsag afsluttet.");
+    expect(await db.select().from(supportCaseEvents).where(and(
+      eq(supportCaseEvents.caseId, created.body.id), eq(supportCaseEvents.requestKey, replyKey),
+    ))).toEqual([]);
+  });
+
+  it("permits local closure under its original policy while new intake is unavailable", async () => {
+    const created = await create(companyA, "opener", "Close without changing the original recipient.");
+    const unavailable = express(); unavailable.use(express.json());
+    unavailable.use(actorMiddleware(db, { deploymentMode: "authenticated" }));
+    unavailable.use("/api", customerSupportRoutes(db, { runtimeEnv: {} }));
+    unavailable.use(errorHandler);
+    const response = await request(unavailable).post(`${path(companyA)}/cases/${created.body.id}/close`).set(auth("opener"))
+      .send({ expectedUserId: users.opener, idempotencyKey: randomUUID() });
+    expect(response.status).toBe(200);
+    expect(response.body.status).toBe("CLOSED");
+    const [row] = await db.select().from(supportCases).where(eq(supportCases.id, created.body.id));
+    expect(row!.dataPolicy).toEqual(policy);
+  });
+
+  it("shares the actual database request budget across route reconstruction", async () => {
+    const key = randomUUID(), description = "A repeated command still consumes the actual budget.";
+    const created = await create(companyA, "opener", description, key);
+    expect(created.status).toBe(201);
+    for (let index = 1; index < 20; index++) expect((await create(companyA, "opener", description, key)).status).toBe(201);
+    const restarted = express(); restarted.use(express.json());
+    restarted.use(actorMiddleware(db, { deploymentMode: "authenticated" }));
+    restarted.use("/api", customerSupportRoutes(db, { runtimeEnv: { AW_SUPPORT_CASE_DATA_POLICY_JSON: JSON.stringify(policy) } }));
+    restarted.use(errorHandler);
+    const retry = () => request(restarted).post(`${path(companyA)}/cases`).set(auth("opener"))
+      .send({ expectedUserId: users.opener, idempotencyKey: key, description });
+    expect((await retry()).status).toBe(429);
+    expect((await detail(companyA, "opener", created.body.id)).status).toBe(200);
+    await db.update(authRateLimits).set({ lastRequest: Date.now() - 600001 });
+    expect((await retry()).status).toBe(201);
+    expect(await db.select().from(supportCaseEvents).where(eq(supportCaseEvents.requestKey, key))).toHaveLength(1);
   });
 
   it("starts a reply-derived follow-up from CLOSED and makes repeated replies idempotent", async () => {

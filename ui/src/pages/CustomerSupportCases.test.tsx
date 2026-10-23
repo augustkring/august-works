@@ -276,7 +276,9 @@ it("preserves a cancelled draft and its company-bound return route without sendi
   await act(async () => setField("form textarea", "Keep this support draft"));
   await act(async () => [...container.querySelectorAll("button")].find(button => button.textContent === "Cancel")!.click());
   expect(container.querySelector("form")).toBeNull();
+  expect(document.activeElement?.textContent).toBe("Resume support draft");
   await act(async () => [...container.querySelectorAll("button")].find(button => button.textContent === "Resume support draft")!.click());
+  expect(document.activeElement).toBe(container.querySelector("form textarea"));
   expect(container.querySelector<HTMLTextAreaElement>("form textarea")?.value).toBe("Keep this support draft");
   await clickSubmit();
   await vi.waitFor(() => expect(post).toHaveBeenCalledTimes(1));
@@ -290,4 +292,30 @@ it.each(["/OTHER/issues/OTHER-1", "//example.test/BLT/work", "//[", "/BLT/../OTH
   await mount({ pathname: "/BLT/company/support", state: { companyId: state.companyId, expectedUserId: state.userId, returnPathname } });
   await vi.waitFor(() => expect(container.querySelector("form")).toBeTruthy());
   expect([...container.querySelectorAll("a")].find(link => link.textContent === "Back to work")?.getAttribute("href")).toBe("/BLT/work");
+});
+
+it("retries a closure with the same command key and preserves an unsent reply", async () => {
+  let closed = false;
+  const closedDetail = { ...waitingDetail, status: "CLOSED", requestedResponse: null, closedAt: "2026-10-23T11:00:00Z" };
+  vi.spyOn(api, "get").mockImplementation(async path => {
+    if (path.includes("/policy?")) return policy as never;
+    if (path.includes("/cases/requests/")) throw new ApiError("Not found", 404, null);
+    if (path.includes(`/cases/${waitingCase.id}?`)) return (closed ? closedDetail : waitingDetail) as never;
+    if (path.includes("/cases?")) return { ...list, entries: [closed ? closedDetail : waitingCase] } as never;
+    throw new Error("Unexpected support request");
+  });
+  const post = vi.spyOn(api, "post").mockRejectedValueOnce(new TypeError("Connection lost"))
+    .mockImplementationOnce(async () => { closed = true; return closedDetail as never; });
+  await mount({ pathname: "/company/support", search: `?case=${waitingCase.id}` });
+  await vi.waitFor(() => expect(container.querySelector("article textarea")).toBeTruthy());
+  await act(async () => setField("article textarea", "Keep my unsent reply"));
+  await act(async () => [...container.querySelectorAll("button")].find(button => button.textContent === "Close case")!.click());
+  await vi.waitFor(() => expect(container.textContent).toContain("Retry closing case"));
+  await act(async () => [...container.querySelectorAll("button")].find(button => button.textContent === "Retry closing case")!.click());
+  await vi.waitFor(() => expect(container.textContent).toContain("Case closed. Your history remains available."));
+  expect(post).toHaveBeenCalledTimes(2);
+  expect(post.mock.calls[0]).toEqual(post.mock.calls[1]);
+  expect(post.mock.calls[0]![0]).toContain(`/cases/${waitingCase.id}/close`);
+  expect(Object.keys(post.mock.calls[0]![1] as object).sort()).toEqual(["expectedUserId", "idempotencyKey"]);
+  expect(container.querySelector<HTMLTextAreaElement>("article textarea")?.value).toBe("Keep my unsent reply");
 });

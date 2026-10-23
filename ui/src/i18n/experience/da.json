@@ -3110,6 +3110,13 @@
     "firstAgentDefault": "Stabschef"
   },
   "supportCases": {
+    "sending": "Sender til support…",
+    "sendingReply": "Sender svar…",
+    "closing": "Afslutter supportsag…",
+    "inputLimits": "Beskrivelse: op til {{description}} tegn. Svar: op til {{reply}} tegn. Emne: op til {{subject}} tegn.",
+    "closeCase": "Afslut supportsag",
+    "retryClose": "Prøv at afslutte sagen igen",
+    "closed": "Supportsagen er afsluttet. Du kan stadig se historikken.",
     "cancel": "Annuller",
     "resumeDraft": "Fortsæt supportkladde",
     "title": "Kontakt support",

@@ -3110,6 +3110,13 @@
     "firstAgentDefault": "Chief of staff"
   },
   "supportCases": {
+    "sending": "Sending to support…",
+    "sendingReply": "Sending reply…",
+    "closing": "Closing case…",
+    "inputLimits": "Description: up to {{description}} characters. Replies: up to {{reply}} characters. Subject: up to {{subject}} characters.",
+    "closeCase": "Close case",
+    "retryClose": "Retry closing case",
+    "closed": "Case closed. Your history remains available.",
     "cancel": "Cancel",
     "resumeDraft": "Resume support draft",
     "title": "Contact support",

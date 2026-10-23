@@ -1,0 +1,12 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+
+ Test Files  1 passed (1)
+      Tests  11 passed (11)
+   Start at  18:20:18
+   Duration  19.74s (transform 8.28s, setup 88ms, import 14.72s, tests 1.46s, environment 2.85s)
+
