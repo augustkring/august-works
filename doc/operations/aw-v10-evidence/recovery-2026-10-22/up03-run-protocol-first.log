@@ -1,0 +1,35 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/db| src/native-input-source-protocol.test.ts (5 tests | 1 failed) 19832ms
+     × keeps original synthetic provider/draft/authoring probe markers at 0 34ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/db| src/native-input-source-protocol.test.ts > Native run input source writer protocol is insert-only, not readiness > keeps original synthetic provider/draft/authoring probe markers at 0
+PostgresError: agent_safe_test_original_run_scope_required
+ ❯ ErrorResponse ../../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+ ❯ cachedError ../../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/query.js:170:23
+ ❯ new Query ../../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/query.js:36:24
+ ❯ sql ../../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:112:11
+ ❯ insert src/native-input-source-protocol.test.ts:51:27
+     49|
+     50|   async function insert(version: number, triggerDetail: string | null …
+     51|     const [row] = await db`insert into heartbeat_runs(company_id,agent…
+       |                           ^
+     52|       values(${companyId},${agentId},${version},${triggerDetail}) retu…
+     53|     return row!;
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 4 passed (5)
+   Start at  06:48:11
+   Duration  33.03s (transform 6.88s, setup 0ms, import 12.76s, tests 19.83s, environment 0ms)
+

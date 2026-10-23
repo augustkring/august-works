@@ -1,0 +1,44 @@
+{
+  "scope": "Insert-only native run writer capability, not input readiness, source qualification, permission, or execution admission",
+  "generate": {
+    "exit": 0,
+    "log": "/workspace/v10-preparation/up03-run-protocol-generate.log",
+    "durableExit": "/workspace/v10-preparation/up03-run-protocol-generate.exit",
+    "restoredHistoricalSnapshots": 47
+  },
+  "firstCapture": {
+    "actualExit": 1,
+    "passed": 4,
+    "fixtureFailures": 1,
+    "durationSeconds": 33.03,
+    "reason": "Unbound protocol0 agent_safe_test rejected by existing deferred authoring admission; no production change",
+    "log": "/workspace/v10-preparation/up03-run-protocol-first.log",
+    "testSnapshot": "/workspace/v10-preparation/up03-run-protocol-first-test.ts",
+    "pinsUnchanged": true
+  },
+  "currentCapture": {
+    "actualExit": 0,
+    "passed": 5,
+    "log": "/workspace/v10-preparation/up03-run-protocol-current.log",
+    "durableExit": "/workspace/v10-preparation/up03-run-protocol-current.exit",
+    "before": "/workspace/v10-preparation/up03-run-protocol-current-before.sha256",
+    "after": "/workspace/v10-preparation/up03-run-protocol-current-after.sha256",
+    "pinsUnchanged": true
+  },
+  "files": {
+    "packages/db/src/schema/heartbeat_runs.ts": "5a02915c8bbac47a0f05a749a924cdfa9c17e3e026a9af665d5bac1eeb6f5c12",
+    "packages/db/src/migrations/0510_hard_colonel_america.sql": "71b046b973c73c2ef221214310a201229486f695158530cda8d0ff38064ccc04",
+    "packages/db/src/migrations/meta/_journal.json": "3943a24d24306fbbbd17d5fae4fb33fbd3a07c0df526555a37e0451a23e736cf",
+    "packages/db/src/migrations/meta/0510_snapshot.json": "253cea2d2e3107c6b0f3a3e2e3c2c1cbc35c86df228aa8c9c3177b2d4e4c1197",
+    "packages/db/src/native-input-source-protocol.test.ts": "5db0c6fe2cd3a8fad368844c7a25f1e4a03049c2e356d8cd4386ec4a69ad0d1a"
+  },
+  "limits": [
+    "No production constructor stamps1",
+    "Known synthetic triggerDetail markers denied; absence does not classify an ordinary run or grant admission",
+    "No change to sourceContextProvenanceQualified",
+    "Privileged SQL/replica restore bypass not solved",
+    "Existing heartbeat DTO spreads table columns and exposes new integer; Root owns follow-up",
+    "Original authoring positive admission is not requalified by these fixtures",
+    "No full types or broader suite claimed"
+  ]
+}

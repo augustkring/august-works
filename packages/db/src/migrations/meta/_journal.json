@@ -3557,6 +3557,13 @@
       "when": 1792720047373,
       "tag": "0509_nebulous_wong",
       "breakpoints": true
+    },
+    {
+      "idx": 510,
+      "version": "7",
+      "when": 1792738016680,
+      "tag": "0510_hard_colonel_america",
+      "breakpoints": true
     }
   ]
 }

@@ -53,6 +53,9 @@ export const heartbeatRuns = pgTable(
     runtimeModeReason: text("runtime_mode_reason"),
     runtimeModeResolvedAt: timestamp("runtime_mode_resolved_at", { withTimezone: true }),
     runnerProfileJson: jsonb("runner_profile_json").$type<Record<string, unknown>>(),
+    // Insert-only writer capability; never proves input qualification or admission.
+    // Historical and unspecified writers remain protocol 0.
+    nativeInputSourceProtocolVersion: integer("native_input_source_protocol_version").notNull().default(0),
     runnerInstanceId: uuid("runner_instance_id"),
     nativeSessionId: uuid("native_session_id"),
     nativeIssueId: uuid("native_issue_id"),
@@ -105,6 +108,7 @@ export const heartbeatRuns = pgTable(
     updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
   },
   (table) => ({
+    nativeInputSourceProtocolCheck: check("heartbeat_runs_native_input_source_protocol_check", sql`${table.nativeInputSourceProtocolVersion} in (0,1)`),
     sourceContextBoundsCheck: check("heartbeat_runs_source_context_bounds_check", sql`cardinality(${table.sourceContextManifestIds}) <= 64
       and array_position(${table.sourceContextManifestIds},null) is null`),
     scopeBindingCheck: check("heartbeat_runs_scope_binding_check", sql`(${table.scopeKind} = 'company' and ${table.issueId} is null) or ${table.scopeKind} = 'issue'`),
