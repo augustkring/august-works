@@ -1,0 +1,33 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/ui| src/adapters/codex-local/config-fields.test.tsx (5 tests | 1 failed) 142ms
+     × offers ACPX Claude without a redundant agent selector 39ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/ui| src/adapters/codex-local/config-fields.test.tsx > Paperclip Runner Codex configuration > offers ACPX Claude without a redundant agent selector
+AssertionError: expected '<div><div class="flex items-center ga…' to contain 'Allow Paperclip reads'
+
+Expected: "Allow Paperclip reads"
+Received: "<div><div class="flex items-center gap-1.5 mb-1"><label class="text-xs text-muted-foreground">Provider</label><button type="button" class="inline-flex text-muted-foreground/50 hover:text-muted-foreground transition-colors" data-state="closed" data-slot="tooltip-trigger"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-question-mark h-3 w-3" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><path d="M12 17h.01"></path></svg></button></div><select class="w-full rounded-md border border-border px-2.5 py-1.5 bg-transparent outline-none text-sm font-mono placeholder:text-muted-foreground/40"><option value="codex">Codex</option><option value="opencode">OpenCode 1.18.32</option><option value="claude_managed">Claude Managed</option><option value="aws_agentcore">AWS AgentCore</option><option value="acpx" selected="">ACPX Claude</option></select></div><div><div class="flex items-center gap-1.5 mb-1"><label class="text-xs text-muted-foreground">Permission mode</label><button type="button" class="inline-flex text-muted-foreground/50 hover:text-muted-foreground transition-colors" data-state="closed" data-slot="tooltip-trigger"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-question-mark h-3 w-3" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><path d="M12 17h.01"></path></svg></button></div><button type="button" role="combobox" aria-expanded="false" aria-autocomplete="none" dir="ltr" data-state="closed" data-slot="select-trigger" data-size="default" class="border-input data-[placeholder]:text-muted-foreground [&amp;_svg:not([class*=&#x27;text-&#x27;])]:text-muted-foreground focus-visible:border-ring focus-visible:ring-ring/50 aria-invalid:ring-destructive/20 dark:aria-invalid:ring-destructive/40 aria-invalid:border-destructive dark:bg-input/30 dark:hover:bg-input/50 flex items-center justify-between gap-2 rounded-md border bg-transparent px-3 py-2 text-base md:text-sm whitespace-nowrap shadow-xs transition-(--tp-color-box-shadow) outline-none focus-visible:ring-(length:--rad-3) disabled:cursor-not-allowed disabled:opacity-50 data-[size=default]:h-9 data-[size=sm]:h-8 *:data-[slot=select-value]:line-clamp-1 *:data-[slot=select-value]:flex *:data-[slot=select-value]:items-center *:data-[slot=select-value]:gap-2 [&amp;_svg]:pointer-events-none [&amp;_svg]:shrink-0 [&amp;_svg:not([class*=&#x27;size-&#x27;])]:size-4 w-full font-sans" aria-label="Permission mode"><span data-slot="select-value" style="pointer-events:none">Allow Blentera reads</span><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-chevron-down size-4 opacity-50" aria-hidden="true"><path d="m6 9 6 6 6-6"></path></svg></button><select aria-hidden="true" tabindex="-1" style="position:absolute;border:0;width:1px;height:1px;padding:0;margin:-1px;overflow:hidden;clip:rect(0, 0, 0, 0);white-space:nowrap;word-wrap:normal"></select></div><div><div class="flex items-center gap-1.5 mb-1"><label class="text-xs text-muted-foreground">Runner lifecycle</label><button type="button" class="inline-flex text-muted-foreground/50 hover:text-muted-foreground transition-colors" data-state="closed" data-slot="tooltip-trigger"><svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" class="lucide lucide-circle-question-mark h-3 w-3" aria-hidden="true"><circle cx="12" cy="12" r="10"></circle><path d="M9.09 9a3 3 0 0 1 5.83 1c0 2-3 3-3 3"></path><path d="M12 17h.01"></path></svg></button></div><select class="w-full rounded-md border border-border px-2.5 py-1.5 bg-transparent outline-none text-sm font-mono placeholder:text-muted-foreground/40"><option value="per_turn" selected="">Turn by turn</option><option value="warm">Warm session</option></select></div>"
+
+ ❯ src/adapters/codex-local/config-fields.test.tsx:69:18
+     67|     expect(html).not.toContain("ACPX Codex");
+     68|     expect(html).not.toContain("Pi via ACPX");
+     69|     expect(html).toContain("Allow Paperclip reads");
+       |                  ^
+     70|   });
+     71|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 1 passed (2)
+      Tests  1 failed | 14 passed (15)
+   Start at  11:27:59
+   Duration  20.44s (transform 8.78s, setup 86ms, import 19.32s, tests 172ms, environment 1ms)
+

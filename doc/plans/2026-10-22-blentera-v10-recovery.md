@@ -356,3 +356,8 @@ This closes the reproduced known→unknown→fakeknown integrity loophole only. 
 ### 2026-10-23 — Full configured workspace typecheck at ba7cd42ca
 
 With the worktree clean before and after, preflight workspace links followed by full recursive `pnpm -r --workspace-concurrency=1 typecheck` completed actual/durable0. This runs configured workspace scripts, including Rust/Runner build prerequisites, server, UI and CLI, with one workspace at a time and bounded CPU/memory. Exact HEAD and raw log retained in `v10-workspace-typecheck-ba7cd42ca-checkpoint.json`. A separate targeted UI run exposed one stale expected permission label after the shared product-name change; it is not hidden by the compiler result and will be corrected next. Full tests/build, actual host/provider/customer qualification and all open V10 privacy/source packages remain open.
+
+
+### 2026-10-23 — Shared identity in native transcript presentation
+
+Original parser now uses PRODUCT_IDENTITY for five display fallbacks/prefix/adapter-label positions while preserving actual protocol, event, operation, provider and model values. Existing Codex renderer had one stale Allow Paperclip reads assertion after the earlier permission-catalogue change; actual before-run1FAIL/14PASS20.44s is retained and only that directly affected expected copy changes. Final original parser/renderer2files15PASS26.47s, UI typecheck and token gates actual/durable0, final2 pins match. Bounded gpt-6-luna read/edit assistance; Root reviewed and verified. See `brand-runner-transcript-checkpoint.json`. Advanced setup/experimental and complete identity inventory, full tests/build and V10 release gates remain open.
