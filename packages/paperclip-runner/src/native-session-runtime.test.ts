@@ -202,6 +202,47 @@ function highestContiguous(events: PrpEvent[]): number {
 }
 
 describe("executeNativeSession recovery", () => {
+  it.each(["fresh", "recovered", "warm"] as const)("stops %s provider work when native admission rejects", async mode => {
+    const denied = new Error("current native source access withdrawn");
+    const capabilities = { resume: true, typedEvents: true, steering: false, interruption: false, structuredResult: true };
+    const checkpoint: PersistedNativeSession = { backendKind: "mock", sessionId: "driver-recovery", identity };
+    const session: NativeSession = {
+      identity: () => identity,
+      capabilities: vi.fn(async () => capabilities),
+      attachRun: vi.fn(async () => {}),
+      async *events() {},
+      startTurn: vi.fn(async () => ({ turnId: "unexpected-turn" })),
+      result: vi.fn(async () => null),
+      snapshot: vi.fn(async () => checkpoint),
+      close: vi.fn(async () => {}),
+    };
+    const backend: NativeSessionBackend = {
+      descriptor: async () => ({ kind: "mock", name: `admission-denied-${mode}`, version: "1", capabilities }),
+      openSession: vi.fn(async () => session),
+      recoverSession: vi.fn(async () => ({ recovered: true, session })),
+    };
+    const controlPlane: ControlPlanePort = {
+      openRun: vi.fn(async () => {}), checkpointSession: vi.fn(async () => {}),
+      appendEvent: vi.fn(async event => ({ cursor: event.sourceSeq, highestContiguousSourceSeq: event.sourceSeq, disposition: "committed" })),
+      replayEvents: vi.fn(async () => ({ events: [], highestContiguousSourceSeq: 0 })),
+      completeRun: vi.fn(async () => {}),
+    };
+    await expect(executeNativeSession({ input, backend, controlPlane,
+      runnerInstanceId: "runner-recovery", controlPlaneInstanceId: "control-recovery",
+      ...(mode === "recovered" ? { persistedSession: checkpoint } : {}),
+      ...(mode === "warm" ? { existingSession: session } : {}),
+      onSessionAdmission: async () => { throw denied; },
+    })).rejects.toBe(denied);
+    expect(backend.openSession).not.toHaveBeenCalled();
+    expect(backend.recoverSession).not.toHaveBeenCalled();
+    expect(session.attachRun).not.toHaveBeenCalled();
+    expect(session.startTurn).not.toHaveBeenCalled();
+    expect(controlPlane.openRun).not.toHaveBeenCalled();
+    expect(controlPlane.completeRun).not.toHaveBeenCalled();
+    // A retained idle session was never acquired, so this rejection cannot close it.
+    expect(session.close).not.toHaveBeenCalled();
+  });
+
   it.each([undefined, 0, 7 * 24 * 60 * 60 * 1000, 30 * 24 * 60 * 60 * 1000])(
     "honors long-lived turn duration independently of operation bounds (%s)",
     async (turnTimeoutMs) => {

@@ -8149,6 +8149,9 @@ async function executePaperclipNativeSessionWithinScope(
       input.db,
       input.execution.binding,
     );
+    // Staging, warm-session cleanup and the claim may all wait after the
+    // initial source admission. Recheck before preparing a provider backend.
+    await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, input.execution.binding.runId);
     const runnerdBackend =
       input.useRunnerd && input.backend === undefined
         ? await createRunnerdBackend({
@@ -8193,6 +8196,9 @@ async function executePaperclipNativeSessionWithinScope(
                 level: "info",
                 message: "Native execution requested; prior local stop evidence no longer applies.",
               });
+              // The launch-intent transaction can wait on the run row too.
+              // A committed intent never substitutes for current source access.
+              await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, input.execution.binding.runId);
             },
             input: runnerExecution,
             remoteCleanupScope: remoteCleanupLease ? remoteLeaseCleanupScope(remoteCleanupLease) : undefined,

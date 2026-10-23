@@ -7775,6 +7775,64 @@ describe("runnerd provider runtime wiring", () => {
     await expect(access(authPath)).rejects.toMatchObject({ code: "ENOENT" });
   });
 
+  it("blocks provider creation when source authority is withdrawn during attachment staging", async () => {
+    let sourceCurrent = true;
+    const denied = new HttpError(403, "Source access lost", { code: "analytical_source_access_lost" });
+    analyticalAdmission.mockImplementation(async () => { if (!sourceCurrent) throw denied; });
+    const cleanup = vi.fn(async () => undefined);
+    state.stageNativeRunnerWakeAttachments.mockImplementationOnce(async () => {
+      // The original admission succeeded; staging then crossed an I/O wait.
+      expect(analyticalAdmission).toHaveBeenCalled();
+      sourceCurrent = false;
+      return { attachments: [], cleanup };
+    });
+    state.createBackend.mockClear();
+    state.createTransport.mockClear();
+    state.execute.mockReset().mockResolvedValue({
+      result: { summary: "completed" }, terminal: { runTerminalState: "succeeded" },
+      turnId: "withdrawn-staging-turn", normalizedSessionId: "withdrawn-staging-session",
+      providerSessionId: null, driverKind: "test", driverVersion: "1",
+      nativeEventCount: 1, highestContiguousSourceSeq: 1, usage: null,
+    });
+    await expect(executePaperclipNativeSession({
+      db: leaseDb(execution), execution, runnerInstanceId: "withdrawn-staging", useRunnerd: true,
+    })).rejects.toBe(denied);
+    expect(state.createBackend).not.toHaveBeenCalled();
+    expect(state.createTransport).not.toHaveBeenCalled();
+    expect(state.execute).not.toHaveBeenCalled();
+    expect(cleanup).toHaveBeenCalledOnce();
+  });
+
+  it("blocks provider admission when source authority changes during launch-intent persistence", async () => {
+    let sourceCurrent = true;
+    const denied = new HttpError(403, "Source access lost", { code: "analytical_source_access_lost" });
+    analyticalAdmission.mockImplementation(async () => { if (!sourceCurrent) throw denied; });
+    const updates: Array<{ table: unknown; values: Record<string, unknown> }> = [];
+    const append = updates.push.bind(updates);
+    vi.spyOn(updates, "push").mockImplementation((...rows) => {
+      if (rows.some(row => row.table === heartbeatRunEvents
+        && row.values.eventType === "native.process_start_requested")) sourceCurrent = false;
+      return append(...rows);
+    });
+    const providerAdmission = vi.fn();
+    state.execute.mockReset().mockImplementationOnce(async options => {
+      await options.onSessionAdmission();
+      providerAdmission();
+      return {
+        result: { summary: "completed" }, terminal: { runTerminalState: "succeeded" },
+        turnId: "withdrawn-launch-turn", normalizedSessionId: "withdrawn-launch-session",
+        providerSessionId: null, driverKind: "test", driverVersion: "1",
+        nativeEventCount: 1, highestContiguousSourceSeq: 1, usage: null,
+      };
+    });
+    await expect(executePaperclipNativeSession({
+      db: leaseDb(execution, {}, {}, updates), execution, runnerInstanceId: "withdrawn-launch",
+    })).rejects.toBe(denied);
+    expect(updates).toContainEqual({ table: heartbeatRunEvents,
+      values: expect.objectContaining({ eventType: "native.process_start_requested" }) });
+    expect(providerAdmission).not.toHaveBeenCalled();
+  });
+
   it("stages from the authenticated run snapshot and cleans up after the provider turn", async () => {
     const cleanup = vi.fn(async () => undefined);
     state.stageNativeRunnerWakeAttachments.mockResolvedValueOnce({
