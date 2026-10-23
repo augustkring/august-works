@@ -2700,7 +2700,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     });
   });
 
-  it("persists the selected Task and plan source captures with the first native bootstrap before dispatch", async () => {
+  it("persists the selected Task, plan and inline comment sources with the first native bootstrap before dispatch", async () => {
     await withTempPaperclipHome(async () => {
       const { agentId, issueId, runId } = await seedQueuedIssueRunFixture();
       await db.update(agents).set({ adapterType: "paperclip_runner",
@@ -2708,6 +2708,10 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       }).where(eq(agents.id, agentId));
       await db.update(heartbeatRuns).set({ invocationSource: "automation" }).where(eq(heartbeatRuns.id, runId));
       const plan = await documentService(db).upsertIssueDocument({ issueId, key: "plan", format: "markdown", body: "Original native bootstrap plan" });
+      const [comment] = await db.insert(issueComments).values({ companyId: plan.document.companyId, issueId,
+        body: "Original native inline wake comment", authorUserId: "responsible-user" }).returning();
+      await db.update(heartbeatRuns).set({ contextSnapshot: { issueId, taskId: issueId, wakeReason: "issue_commented",
+        wakeCommentIds: [comment!.id] } }).where(eq(heartbeatRuns.id, runId));
       const factory = vi.fn(() => { throw new Error("provider must not start"); });
       let reachedDispatch = false;
       const heartbeat = heartbeatService(db, {
@@ -2726,11 +2730,19 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
             revisionId: plan.document.latestRevisionId, issueId,
             contentHash: createHash("sha256").update("Original native bootstrap plan").digest("hex") }, payloadSourceSnapshot: null }]);
           expect(profile.nativeBootstrapPlanningSources).toEqual([]);
+          const [commentVersion] = await db.execute<{ version: string }>(sql`select extract(epoch from updated_at)::text as version
+            from issue_comments where id=${comment!.id}::uuid`);
+          expect(profile.nativeBootstrapInlineWakeCommentSources).toEqual([{ input: { kind: "comment", issueId,
+            commentId: comment!.id, sourceVersion: commentVersion!.version,
+            contentHash: createHash("sha256").update(JSON.stringify({ body: comment!.body, presentation: null, metadata: null })).digest("hex") },
+            payloadSourceSnapshot: null }]);
+          expect(JSON.stringify(profile.nativeExecutionInput)).toContain(comment!.body);
           expect(JSON.stringify(profile.nativeExecutionInput)).toContain("Original native bootstrap plan");
           const retained = structuredClone(profile);
           await db.update(issues).set({ title: "Later Task title", updatedAt: new Date() }).where(eq(issues.id, issueId));
           await documentService(db).upsertIssueDocument({ issueId, key: "plan", format: "markdown", body: "Later plan revision",
             baseRevisionId: plan.document.latestRevisionId });
+          await db.update(issueComments).set({ body: "Later inline comment body", updatedAt: new Date() }).where(eq(issueComments.id, comment!.id));
           const [after] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, id));
           expect(after!.runnerProfileJson).toEqual(retained);
           await heartbeat.cancelRun(id);

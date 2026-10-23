@@ -16,7 +16,7 @@ import { publicChatTaskUrl } from "./chat-task-url.js";
 import { toolActionDeliveryService } from "./tool-action-delivery.js";
 import { githubBotConnectionIdsForRun } from "./chat-github-tools.js";
 import { readQueuedInteractionResponse } from "./queued-interaction-response.js";
-import { AGENT_CHAT_DIRECTIVE, conversationReplay, isConversation, isConversationExecutionWake, isWaitingConversation, prepareConversationTurn, settleConversationTurn } from "./agent-conversations.js";
+import { AGENT_CHAT_DIRECTIVE, type NativeCommentSourceCapture, conversationReplay, isConversation, isConversationExecutionWake, isWaitingConversation, prepareConversationTurn, settleConversationTurn } from "./agent-conversations.js";
 import { PROCESS_IDENTITY_RECORDED, recordNativeLocalProcessStop } from "./native-local-process-stop.js";
 import { hasAcknowledgedNativeReassignmentStopIntent, hasAcknowledgedNativeStopIntent, isAcknowledgedNativeStop, acknowledgedNativeStopExecutionHasStopped } from "./acknowledged-native-stop.js";
 import { legacyControllerBootId, legacyControllerClaim, renewLegacyControllerLease, hasLiveLegacyController, revokeExpiredLegacyController, watchLegacyControllerLease } from "./legacy-controller-lease.js";
@@ -7639,6 +7639,9 @@ export async function attestReviewedExternalChatRun(input: {
 
 export async function buildPaperclipWakePayload(input: {
   db: Db;
+  // Separate server-only captures of returned comment content. Attachments,
+  // annotations and other wake families require their own source capture.
+  onInlineCommentSourceCapture?: (capture: NativeCommentSourceCapture) => void;
   companyId: string;
   agentId?: string | null;
   runId?: string | null;
@@ -7725,6 +7728,10 @@ export async function buildPaperclipWakePayload(input: {
             deletedByRunId: issueComments.deletedByRunId,
             sourceTrust: issueComments.sourceTrust,
             createdAt: issueComments.createdAt,
+            ...(input.onInlineCommentSourceCapture ? {
+              sourceVersion: sql<string>`extract(epoch from ${issueComments.updatedAt})::text`,
+              payloadSourceSnapshot: issueComments.payloadSourceSnapshot,
+            } : {}),
           })
           .from(issueComments)
           .where(
@@ -8222,13 +8229,29 @@ export async function buildPaperclipWakePayload(input: {
     truncated: payloadTruncated,
     fallbackFetchNeeded: payloadTruncated || missingCommentCount > 0,
   };
-  return issueId
-    ? createRunSecretRedactionRegistry(input.db).redactForIssue(
+  const result = issueId
+    ? await createRunSecretRedactionRegistry(input.db).redactForIssue(
         input.companyId,
         issueId,
         payload,
       )
     : payload;
+  if (input.onInlineCommentSourceCapture) {
+    for (const comment of result.comments) {
+      if (comment.deletedAt !== null || typeof comment.id !== "string") continue;
+      const source = commentsById.get(comment.id);
+      if (!source || typeof source.sourceVersion !== "string") throw new Error("Selected inline comment source is unavailable");
+      input.onInlineCommentSourceCapture({
+        input: { kind: "comment", issueId: source.issueId, commentId: source.id, sourceVersion: source.sourceVersion,
+          // Exact final returned content after quarantine, body-budget and
+          // secret redaction. Final provider framing is separately bound.
+          contentHash: createHash("sha256").update(JSON.stringify({ body: comment.body,
+            presentation: comment.presentation, metadata: comment.metadata }), "utf8").digest("hex") },
+        payloadSourceSnapshot: source.payloadSourceSnapshot ?? null,
+      });
+    }
+  }
+  return result;
 }
 
 function runTaskKey(run: typeof heartbeatRuns.$inferSelect) {
@@ -20800,12 +20823,15 @@ export function heartbeatService(
             })
           : null;
       context.executionContinuation = executionContinuation;
+      const inlineWakeCommentSourceCaptures: NativeCommentSourceCapture[] = [];
       const paperclipWakePayload = await buildPaperclipWakePayload({
         db,
         companyId: agent.companyId,
         agentId: agent.id,
         runId: run.id,
         contextSnapshot: context,
+        onInlineCommentSourceCapture: agent.adapterType === "paperclip_runner"
+          ? capture => inlineWakeCommentSourceCaptures.push(capture) : undefined,
         continuationSummary,
         issueSummary: issueRef
           ? {
@@ -23832,6 +23858,7 @@ export function heartbeatService(
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapConversationReplaySources }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapTaskPlanSources, nativeBootstrapPlanningSources }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapTaskSource: taskSourceCapture, nativeBootstrapAncestorSources }),
+                  ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapInlineWakeCommentSources: inlineWakeCommentSourceCaptures }),
                   nativeExecutionInput:
                     lockedProfile.nativeExecutionInput ?? nativeExecution,
                   nativeToolContractFingerprint:

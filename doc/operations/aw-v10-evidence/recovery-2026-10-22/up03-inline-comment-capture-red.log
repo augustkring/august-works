@@ -1,0 +1,74 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+stdout | src/__tests__/issue-comment-redaction.test.ts > deleted issue comment redaction
+{
+  severity_local: 'NOTICE',
+  severity: 'NOTICE',
+  code: '42710',
+  message: 'extension "pg_trgm" already exists, skipping',
+  file: 'extension.c',
+  line: '1991',
+  routine: 'CreateExtension'
+}
+
+ ❯ |@paperclipai/server| src/__tests__/issue-comment-redaction.test.ts (8 tests | 2 failed | 6 skipped) 18789ms
+     × captures only selected inline comment renditions with their frozen sources, preserving unknown and deleted history 613ms
+     × captures only the body-budgeted inline comment prefix and preserves the explicit fallback state 142ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-comment-redaction.test.ts > deleted issue comment redaction > captures only selected inline comment renditions with their frozen sources, preserving unknown and deleted history
+Error: Failed query: insert into "issues" ("id", "payload_source_protocol_version", "payload_source_snapshot", "company_id", "conversation_agent_id", "conversation_user_id", "conversation_retired_at", "conversation_state", "conversation_session_generation", "conversation_boundary_comment_id", "project_id", "project_workspace_id", "goal_id", "parent_id", "visibility", "privacy_root_issue_id", "privacy_parent_issue_id", "title", "description", "status", "status_version", "last_status_decision_id", "work_mode", "harness_kind", "priority", "review_policy", "assignee_agent_id", "assignee_user_id", "checkout_run_id", "execution_run_id", "execution_agent_name_key", "execution_locked_at", "created_by_agent_id", "created_by_user_id", "responsible_user_id", "issue_number", "identifier", "origin_kind", "origin_id", "origin_run_id", "origin_identity_context_id", "continuation_identity_context_id", "origin_fingerprint", "request_depth", "billing_code", "assignee_adapter_overrides", "execution_policy", "execution_state", "monitor_next_check_at", "monitor_wake_requested_at", "monitor_last_triggered_at", "monitor_attempt_count", "monitor_notes", "monitor_scheduled_by", "execution_workspace_id", "execution_workspace_preference", "execution_workspace_settings", "source_trust", "unblock_descriptor", "blocked_transition_at", "blocked_owner_notified_at", "planned_start_at", "planned_end_at", "forecast_start_at", "forecast_end_at", "forecast_confidence", "forecast_reason", "milestone_id", "estimated_effort_minutes", "started_at", "completed_at", "cancelled_at", "hidden_at", "created_at", "updated_at") values ($1, default, default, $2, default, default, default, default, default, default, default, default, default, default, default, default, default, $3, default, $4, default, default, default, default, $5, default, default, default, default, default, default, default, default, default, default, default, $6, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default)
+params: de6c0de2-7b51-4b5e-b842-3f76e9f40d2e,c90fbfa7-ae57-44a5-b70e-571daa1793b7,Deleted comment redaction,todo,medium,RED-1
+ ❯ PostgresJsPreparedQuery.queryWithCache ../node_modules/.pnpm/drizzle-orm@0.45.2_@opentelemetry+api@1.9.1_kysely@0.29.5_pg@8.18.0_postgres@3.4.9_patch_hash_uil4xuf7icnddjurbgy2qn5oo4/node_modules/src/pg-core/session.ts:73:10
+ ❯ seedIssue src/__tests__/issue-comment-redaction.test.ts:101:5
+     99|       requireBoardApprovalForNewAgents: false,
+    100|     });
+    101|     await db.insert(issues).values({
+       |     ^
+    102|       id: issueId,
+    103|       companyId,
+ ❯ src/__tests__/issue-comment-redaction.test.ts:168:21
+
+Caused by: PostgresError: duplicate key value violates unique constraint "issues_identifier_idx"
+ ❯ ErrorResponse ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:819:30
+ ❯ handle ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:493:6
+ ❯ Socket.data ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/connection.js:324:9
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯
+Serialized Error: { severity_local: 'ERROR', severity: 'ERROR', code: '23505', detail: 'Key (identifier)=(RED-1) already exists.', schema_name: 'public', table_name: 'issues', constraint_name: 'issues_identifier_idx', file: 'nbtinsert.c', routine: '_bt_check_unique', query: 'insert into "issues" ("id", "payload_source_protocol_version", "payload_source_snapshot", "company_id", "conversation_agent_id", "conversation_user_id", "conversation_retired_at", "conversation_state", "conversation_session_generation", "conversation_boundary_comment_id", "project_id", "project_workspace_id", "goal_id", "parent_id", "visibility", "privacy_root_issue_id", "privacy_parent_issue_id", "title", "description", "status", "status_version", "last_status_decision_id", "work_mode", "harness_kind", "priority", "review_policy", "assignee_agent_id", "assignee_user_id", "checkout_run_id", "execution_run_id", "execution_agent_name_key", "execution_locked_at", "created_by_agent_id", "created_by_user_id", "responsible_user_id", "issue_number", "identifier", "origin_kind", "origin_id", "origin_run_id", "origin_identity_context_id", "continuation_identity_context_id", "origin_fingerprint", "request_depth", "billing_code", "assignee_adapter_overrides", "execution_policy", "execution_state", "monitor_next_check_at", "monitor_wake_requested_at", "monitor_last_triggered_at", "monitor_attempt_count", "monitor_notes", "monitor_scheduled_by", "execution_workspace_id", "execution_workspace_preference", "execution_workspace_settings", "source_trust", "unblock_descriptor", "blocked_transition_at", "blocked_owner_notified_at", "planned_start_at", "planned_end_at", "forecast_start_at", "forecast_end_at", "forecast_confidence", "forecast_reason", "milestone_id", "estimated_effort_minutes", "started_at", "completed_at", "cancelled_at", "hidden_at", "created_at", "updated_at") values ($1, default, default, $2, default, default, default, default, default, default, default, default, default, default, default, default, default, $3, default, $4, default, default, default, default, $5, default, default, default, default, default, default, default, default, default, default, default, $6, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default, default)', parameters: [ 'de6c0de2-7b51-4b5e-b842-3f76e9f40d2e', 'c90fbfa7-ae57-44a5-b70e-571daa1793b7', 'Deleted comment redaction', 'todo', 'medium', 'RED-1' ], args: [ 'de6c0de2-7b51-4b5e-b842-3f76e9f40d2e', 'c90fbfa7-ae57-44a5-b70e-571daa1793b7', 'Deleted comment redaction', 'todo', 'medium', 'RED-1' ], types: [ 2950, 2950, 25, 25, 25, 25 ] }
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-comment-redaction.test.ts > deleted issue comment redaction > captures only the body-budgeted inline comment prefix and preserves the explicit fallback state
+AssertionError: expected [] to deeply equal [ …(3) ]
+
+- Expected
++ Received
+
+- [
+-   "10e63dca-9dbd-48ce-8029-b84929c56181",
+-   "1ec529ff-37cd-4705-8a84-aa9219fa078d",
+-   "42a6ff1d-a3ff-431a-81a5-7ffbd39fbe9c",
+- ]
++ []
+
+ ❯ src/__tests__/issue-comment-redaction.test.ts:210:62
+    208|       wakeCommentIds: comments.map(comment => comment.id) }, onInlineC…
+    209|     expect(payload.comments).toHaveLength(3);
+    210|     expect(captures.map(capture => capture.input.commentId)).toEqual(c…
+       |                                                              ^
+    211|     expect(payload.truncated).toBe(true);
+    212|     expect(payload.fallbackFetchNeeded).toBe(true);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 6 skipped (8)
+   Start at  08:32:08
+   Duration  66.38s (transform 32.82s, setup 257ms, import 46.75s, tests 18.79s, environment 0ms)
+

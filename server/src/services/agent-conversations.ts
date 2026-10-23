@@ -355,7 +355,7 @@ export async function settleConversationTurn(
 }
 
 /** Fresh provider context uses only messages in this session, up to this turn. */
-export interface ConversationReplaySourceCapture {
+export interface NativeCommentSourceCapture {
   readonly input: Extract<NativePayloadSourceInput, { kind: "comment" }>;
   // Preserve unknown history. A rendition hash is not a completeness proof.
   readonly payloadSourceSnapshot: NativePayloadSourceSnapshot | null;
@@ -371,7 +371,7 @@ export async function conversationReplay(
     .select()
     .from(issues)
     .where(and(eq(issues.id, issueId), eq(issues.companyId, companyId)));
-  if (!isConversation(issue)) return { markdown: "", sourceCaptures: [] as ConversationReplaySourceCapture[] };
+  if (!isConversation(issue)) return { markdown: "", sourceCaptures: [] as NativeCommentSourceCapture[] };
   const [boundary] = issue.conversationBoundaryCommentId
     ? await db
         .select()
@@ -413,7 +413,7 @@ export async function conversationReplay(
     .orderBy(desc(issueComments.createdAt), desc(issueComments.id))
     .limit(40);
   const lines: string[] = [];
-  const sourceCaptures: ConversationReplaySourceCapture[] = [];
+  const sourceCaptures: NativeCommentSourceCapture[] = [];
   for (const row of rows.reverse()) {
     const line = JSON.stringify({
       author: row.authorAgentId ? "agent" : "user",

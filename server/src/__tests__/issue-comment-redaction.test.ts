@@ -1,7 +1,7 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import express from "express";
 import request from "supertest";
-import { sql } from "drizzle-orm";
+import { eq, sql } from "drizzle-orm";
 import {
   afterAll,
   afterEach,
@@ -33,9 +33,11 @@ import {
 import { errorHandler } from "../middleware/index.js";
 import { issueRoutes } from "../routes/issues.js";
 import { companySearchService } from "../services/company-search.js";
+import type { NativeCommentSourceCapture } from "../services/agent-conversations.js";
 import { buildPaperclipWakePayload } from "../services/heartbeat.js";
 import { issueReferenceService } from "../services/issue-references.js";
 import { issueService } from "../services/issues.js";
+import { buildLowTrustSourceTrust, LOW_TRUST_QUARANTINED_BODY } from "../services/source-trust.js";
 import type { StorageService } from "../storage/types.js";
 
 const externalTestDatabaseUrl = process.env.PAPERCLIP_TEST_DATABASE_URL;
@@ -146,6 +148,72 @@ describeEmbeddedPostgres("deleted issue comment redaction", () => {
     app.use(errorHandler);
     return app;
   }
+
+  it("captures only selected inline comment renditions with their frozen sources, preserving unknown and deleted history", async () => {
+    const { companyId, issueId } = await seedIssue();
+    const [known] = await db.insert(issueComments).values({ companyId, issueId, body: "Selected known comment",
+      authorUserId: "board-user-1", metadata: { version: 1, sections: [{ rows: [{ type: "text", text: "Selected metadata" }] }] }, payloadSourceProtocolVersion: 1 }).returning();
+    // Canonical structural fixture, not native producer or permission proof.
+    const [sealed] = await db.execute<{ snapshot: Record<string, unknown> }>(sql`with content as (
+      select jsonb_build_object('version',1,'owner',jsonb_build_object('kind','comment','companyId',company_id,'id',id,
+        'contentHash',public.aw_native_payload_body_hash('comment',to_jsonb(c))),
+        'policy',jsonb_build_object('issueIds','[]'::jsonb,'projectIds','[]'::jsonb,'runIds','[]'::jsonb,
+          'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as value from issue_comments c where id=${known!.id}::uuid)
+      update issue_comments set payload_source_snapshot=value || jsonb_build_object('digest',encode(sha256(convert_to(value::text,'UTF8')),'hex')),
+        updated_at='2026-10-23T01:02:03.123456Z'::timestamptz from content where id=${known!.id}::uuid returning payload_source_snapshot as snapshot`);
+    const [quarantined] = await db.insert(issueComments).values({ companyId, issueId, body: "QUARANTINED_PRIVATE_COMMENT",
+      authorUserId: "board-user-1", metadata: { version: 1, sections: [{ rows: [{ type: "text", text: "QUARANTINED_PRIVATE_METADATA" }] }] }, sourceTrust: buildLowTrustSourceTrust({ issueId }) }).returning();
+    const [long] = await db.insert(issueComments).values({ companyId, issueId, body: "L".repeat(6000), authorUserId: "board-user-1" }).returning();
+    const [deleted] = await db.insert(issueComments).values({ companyId, issueId, body: "DELETED_COMMENT_BODY", deletedAt: new Date(), authorUserId: "board-user-1" }).returning();
+    const foreign = { companyId: randomUUID(), issueId: randomUUID() };
+    await db.insert(companies).values({ id: foreign.companyId, name: "Other source company", issuePrefix: randomUUID() });
+    await db.insert(issues).values({ id: foreign.issueId, companyId: foreign.companyId, title: "Other source Task" });
+    const [foreignComment] = await db.insert(issueComments).values({ ...foreign, body: "FOREIGN_COMMENT_BODY", authorUserId: "board-user-1" }).returning();
+    const input = { db, companyId, contextSnapshot: { issueId, wakeReason: "issue_commented",
+      wakeCommentIds: [known!.id, quarantined!.id, long!.id, deleted!.id, foreignComment!.id, randomUUID()] } };
+    const normal = await buildPaperclipWakePayload(input);
+    const captures: NativeCommentSourceCapture[] = [];
+    const payload = (await buildPaperclipWakePayload({ ...input, onInlineCommentSourceCapture: capture => captures.push(capture) }))!;
+    expect(payload).toEqual(normal);
+    expect(captures.map(capture => capture.input.commentId)).toEqual([known!.id, quarantined!.id, long!.id]);
+    const versions = await db.execute<{ id: string; version: string }>(sql`select id,extract(epoch from updated_at)::text as version from issue_comments where company_id=${companyId}::uuid`);
+    const byId = new Map(versions.map(row => [row.id, row.version]));
+    for (const [index, capture] of captures.entries()) {
+      const comment = payload.comments.find(comment => comment.id === capture.input.commentId)!;
+      expect(capture).toEqual({ input: { kind: "comment", issueId, commentId: comment.id, sourceVersion: byId.get(String(comment.id)),
+        contentHash: createHash("sha256").update(JSON.stringify({ body: comment.body, presentation: comment.presentation, metadata: comment.metadata })).digest("hex") },
+        payloadSourceSnapshot: index === 0 ? sealed!.snapshot : null });
+      expect(comment).not.toHaveProperty("payloadSourceSnapshot");
+      expect(comment).not.toHaveProperty("sourceVersion");
+    }
+    expect(captures[0]!.input.sourceVersion).toMatch(/123456$/);
+    expect(payload.comments.find(comment => comment.id === quarantined!.id)!.body).toBe(LOW_TRUST_QUARANTINED_BODY);
+    expect(String(payload.comments.find(comment => comment.id === long!.id)!.body)).toHaveLength(4000);
+    expect(JSON.stringify(payload)).not.toContain("FOREIGN_COMMENT_BODY");
+    expect(JSON.stringify(payload)).not.toContain("DELETED_COMMENT_BODY");
+    expect(JSON.stringify(payload)).not.toContain("QUARANTINED_PRIVATE_COMMENT");
+    const retained = structuredClone(captures);
+    await db.update(issueComments).set({ body: "Later changed comment", payloadSourceSnapshot: null, updatedAt: new Date() }).where(eq(issueComments.id, known!.id));
+    expect(captures).toEqual(retained);
+    const later: NativeCommentSourceCapture[] = [];
+    await buildPaperclipWakePayload({ ...input, onInlineCommentSourceCapture: capture => later.push(capture) });
+    expect(later[0]!.payloadSourceSnapshot).toBeNull();
+    expect(later[0]!.input.contentHash).not.toBe(retained[0]!.input.contentHash);
+  });
+
+  it("captures only the body-budgeted inline comment prefix and preserves the explicit fallback state", async () => {
+    const { companyId, issueId } = await seedIssue();
+    const comments = await db.insert(issueComments).values(Array.from({ length: 4 }, (_, index) => ({ companyId, issueId,
+      body: String(index).repeat(6000), authorUserId: "board-user-1" }))).returning();
+    const captures: NativeCommentSourceCapture[] = [];
+    const payload = (await buildPaperclipWakePayload({ db, companyId, contextSnapshot: { issueId, wakeReason: "issue_commented",
+      wakeCommentIds: comments.map(comment => comment.id) }, onInlineCommentSourceCapture: capture => captures.push(capture) }))!;
+    expect(payload.comments).toHaveLength(3);
+    expect(captures.map(capture => capture.input.commentId)).toEqual(comments.slice(0, 3).map(comment => comment.id));
+    expect(payload.truncated).toBe(true);
+    expect(payload.fallbackFetchNeeded).toBe(true);
+    expect(captures.every(capture => capture.payloadSourceSnapshot === null)).toBe(true);
+  });
 
   it("redacts deleted comment bodies from ordinary reads, heartbeat context, and wake payloads", async () => {
     const { companyId, issueId } = await seedIssue();
