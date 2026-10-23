@@ -216,6 +216,7 @@ import {
   buildNativeExecutionInput,
   buildNativeExecutionWithCheckpoint,
   buildRetainedNativeRuntimeContext,
+  type NativeRuntimeAuthoredSourceCapture,
   cancelNativeSession,
   claimNativeRestartRecoveries,
   closeWarmNativeSessionsForEnvironment,
@@ -23234,6 +23235,7 @@ export function heartbeatService(
         // Exact Context inputs to this bootstrap only. NULL is unknown, never
         // a complete source-free input receipt; later tool reads are separate.
         let nativeBootstrapContextManifests: Array<{ companyId: string; contextManifestId: string }> | null = null;
+        let nativeBootstrapAuthoredSources: NativeRuntimeAuthoredSourceCapture | null = null;
         let nativeBootstrapConversationReplaySources: typeof conversationReplaySourceCaptures | null = null;
         let nativeBootstrapTaskPlanSources: DocumentRevisionSourceCapture[] | null = null;
         let nativeBootstrapPlanningSources: DocumentRevisionSourceCapture[] | null = null;
@@ -23697,6 +23699,7 @@ export function heartbeatService(
               runId: run.id,
               runtimeConfig,
               runtimeSkillEntries,
+              onAuthoredSourceCapture: (capture) => { nativeBootstrapAuthoredSources = capture; },
             });
             const nativeExecutionWithCheckpoint =
               buildNativeExecutionWithCheckpoint({
@@ -23902,6 +23905,7 @@ export function heartbeatService(
                   // Recovery preserves the original capture, including unknown
                   // historical sources. Never substitute a later live Context.
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapContextManifests }),
+                  ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapAuthoredSources }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapConversationReplaySources }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapTaskPlanSources, nativeBootstrapPlanningSources }),
                   ...(lockedProfile.nativeExecutionInput ? {} : { nativeBootstrapTaskSource: taskSourceCapture, nativeBootstrapAncestorSources }),

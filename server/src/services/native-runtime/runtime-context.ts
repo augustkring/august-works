@@ -13,6 +13,7 @@ import path from "node:path";
 import { and, eq } from "drizzle-orm";
 import { heartbeatRuns, type Db } from "@paperclipai/db";
 import type { PaperclipSkillEntry } from "@paperclipai/adapter-utils/server-utils";
+import type { NativePayloadSourceInput } from "@paperclipai/shared";
 import { isToolConnectionAttentionHealth } from "@paperclipai/shared";
 import {
   PAPERCLIP_OPERATIONAL_SKILL_KEY,
@@ -39,6 +40,11 @@ const MAX_ASSET_FILES = 10_000;
 const MAX_ASSET_BYTES = 64 * 1024 * 1024;
 type RuntimeAgent = { id: string; companyId: string; name: string; adapterType?: string | null; adapterConfig: unknown; runtimeConfig?: unknown };
 type AssetFile = { path: string; content: Buffer; mode: number };
+
+export type NativeRuntimeAuthoredSourceCapture = {
+  inputs: Array<Extract<NativePayloadSourceInput, { kind: "authored_definition" | "foundation_revision" | "playbook_revision" }>>;
+  contextManifests: Array<{ companyId: string; contextManifestId: string }>;
+};
 
 const sha256 = (value: string | Buffer) => createHash("sha256").update(value).digest("hex");
 const safeRelativePath = (value: string, label: string) => {
@@ -338,7 +344,8 @@ export async function resolveNativeRuntimeMcpSnapshot(input: { db: Db; agent: Pi
   return { assignmentSetId: `sha256:${assignmentDigest}`, digest: assignmentDigest, bindingId: assignment.connections.length ? `native-mcp:${input.runId}` : null };
 }
 
-export async function buildNativeRuntimeContext(input: { db: Db; agent: RuntimeAgent; runId: string; runtimeConfig: Record<string, unknown>; runtimeSkillEntries: PaperclipSkillEntry[] }): Promise<NativeRuntimeContextSnapshot> {
+export async function buildNativeRuntimeContext(input: { db: Db; agent: RuntimeAgent; runId: string; runtimeConfig: Record<string, unknown>; runtimeSkillEntries: PaperclipSkillEntry[];
+  onAuthoredSourceInputs?: (inputs: NativeRuntimeAuthoredSourceCapture["inputs"]) => void }): Promise<NativeRuntimeContextSnapshot> {
   const authored = await readAuthoredAgentDefinition(input.db, input.agent);
   let procedures: Awaited<ReturnType<typeof resolveAuthoringProcedures>> | null = null;
   if (authored?.procedureSnapshotHash) {
@@ -365,12 +372,25 @@ export async function buildNativeRuntimeContext(input: { db: Db; agent: RuntimeA
   if (authored && ((!procedures && skills.length) || mcp.bindingId !== null))
     throw new Error("Authored Agent version has no executable Skill or MCP authority");
   const snapshot = { prompt: { revision: PAPERCLIP_EXECUTION_PROMPT_REVISION, text: PAPERCLIP_EXECUTION_PROMPT, digest: nativeRuntimePromptDigest() }, instructions, skills, mcp };
-  return parseNativeRuntimeContext({ ...snapshot, aggregateDigest: canonicalNativeRuntimeContextDigest(snapshot) });
+  const parsed = parseNativeRuntimeContext({ ...snapshot, aggregateDigest: canonicalNativeRuntimeContextDigest(snapshot) });
+  input.onAuthoredSourceInputs?.([
+    ...(authored ? [{ kind: "authored_definition" as const, agentId: input.agent.id, revisionId: authored.revisionId,
+      definitionHash: authored.definitionHash, procedureSnapshotHash: authored.procedureSnapshotHash ?? null }] : []),
+    ...(procedures?.knowledge.map(pin => ({ kind: "foundation_revision" as const, foundationDocumentId: pin.foundationDocumentId,
+      documentId: pin.documentId, revisionId: pin.revisionId, contentHash: pin.bodyHash })) ?? []),
+    ...(procedures?.playbooks.map(pin => ({ kind: "playbook_revision" as const, playbookId: pin.playbookId,
+      revisionId: pin.revisionId, contentHash: pin.bodyHash })) ?? []),
+  ]);
+  return parsed;
 }
 
 /** Production publication uses the native run owner and keeps C7 excluded until all copies exist. */
-export async function buildRetainedNativeRuntimeContext(input: Parameters<typeof buildNativeRuntimeContext>[0]) {
-  return withRetainedNativeRuntimeAssets({ db: input.db, companyId: input.agent.companyId, agentId: input.agent.id, runId: input.runId },
+export async function buildRetainedNativeRuntimeContext(input: Omit<Parameters<typeof buildNativeRuntimeContext>[0], "onAuthoredSourceInputs"> & {
+  onAuthoredSourceCapture?: (capture: NativeRuntimeAuthoredSourceCapture) => void }) {
+  const { onAuthoredSourceCapture, ...runtimeInput } = input;
+  const contextManifests: NativeRuntimeAuthoredSourceCapture["contextManifests"] = [];
+  let authoredInputs: NativeRuntimeAuthoredSourceCapture["inputs"] = [];
+  const runtimeContext = await withRetainedNativeRuntimeAssets({ db: input.db, companyId: input.agent.companyId, agentId: input.agent.id, runId: input.runId },
     async db => {
       const authored = await assertAuthoredAgentSnapshotCurrent(db, input.agent);
       if (authored?.procedureSnapshotHash) {
@@ -382,12 +402,13 @@ export async function buildRetainedNativeRuntimeContext(input: Parameters<typeof
         if (procedures.hash !== authored.procedureSnapshotHash) throw new Error("The identified Agent's procedures changed; test and publish a fresh version");
         if (procedures.memory.length) {
           // The Original Context roots fence C7 before any preference body is copied.
-          await contextManifestService(db).create({ companyId: input.agent.companyId, agentId: input.agent.id,
+          const retained = await contextManifestService(db).create({ companyId: input.agent.companyId, agentId: input.agent.id,
             runId: input.runId, responsibleUserId: run.responsibleUserId, query: "Exact selected approved work preferences",
             policySnapshot: { intent: "authored_agent_work_preferences", procedureSnapshotHash: procedures.hash, grantsAuthority: false },
             selected: authoringMemoryEvidence(input.agent.companyId, procedures.memory).map(evidence => ({
               decision: { evidence, authorityRank: null, primaryForDomain: false, reason: "non_authoritative_source" as const },
               selectionReason: "exact_saved_memory_selection" })) });
+          contextManifests.push({ companyId: input.agent.companyId, contextManifestId: retained.manifest.id });
         }
         if (procedures.knowledge.length) {
           const pins = procedures.knowledge.map(({ foundationDocumentId, documentId, revisionId, bodyHash }) => ({ foundationDocumentId, documentId, revisionId, bodyHash }));
@@ -411,8 +432,10 @@ export async function buildRetainedNativeRuntimeContext(input: Parameters<typeof
         ...(authored.procedureSnapshotHash ? { procedureSnapshotHash: authored.procedureSnapshotHash } : {}),
         ...(authored.version ? { version: authored.version } : {}),
       } })}::jsonb` }).where(and(eq(heartbeatRuns.companyId, input.agent.companyId), eq(heartbeatRuns.agentId, input.agent.id), eq(heartbeatRuns.id, input.runId)));
-      return buildNativeRuntimeContext({ ...input, db });
+      return buildNativeRuntimeContext({ ...runtimeInput, db, onAuthoredSourceInputs: inputs => { authoredInputs = inputs; } });
     });
+  onAuthoredSourceCapture?.({ inputs: authoredInputs, contextManifests });
+  return runtimeContext;
 }
 
 /** Both original runtime context and connector preparation share the native

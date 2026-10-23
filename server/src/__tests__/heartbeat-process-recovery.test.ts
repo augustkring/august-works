@@ -2746,6 +2746,7 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
           const [task] = await db.select().from(issues).where(eq(issues.id, issueId));
           const [version] = await db.execute<{ version: string }>(sql`select extract(epoch from updated_at)::text as version from issues where id=${issueId}::uuid`);
           const profile = run!.runnerProfileJson!;
+          expect(profile.nativeBootstrapAuthoredSources).toEqual({ inputs: [], contextManifests: [] });
           expect(profile.nativeBootstrapTaskSource).toEqual({ input: { kind: "task", issueId, sourceVersion: version!.version,
             contentHash: createHash("sha256").update(JSON.stringify({ id: task!.id, identifier: task!.identifier,
               title: task!.title, description: task!.description, workMode: task!.workMode })).digest("hex") }, payloadSourceSnapshot: null });

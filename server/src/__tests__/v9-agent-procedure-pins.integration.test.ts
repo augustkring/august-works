@@ -5,17 +5,18 @@ import { randomUUID } from "node:crypto";
 import { stat } from "node:fs/promises";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { eq } from "drizzle-orm";
-import { agents, companySkills, companySkillVersions, createDb, heartbeatRuns, issues, documents, documentRevisions, memoryJobs, principalPermissionGrants } from "@paperclipai/db";
+import { agents, companySkills, companySkillVersions, contextManifestMemoryRoots, createDb, heartbeatRuns, issues, documents, documentRevisions, memoryJobs, principalPermissionGrants } from "@paperclipai/db";
 import { agentAuthoringContentSchema, AUTHORED_AGENT_DEFINITION_KEY } from "@paperclipai/shared";
 import { resolveAuthoringProcedures } from "../services/agents/authoring-procedures.js";
 import { assertAuthoredAgentManifestCurrent, compileAuthoredAgentDefinition } from "../services/agents/authored-definition.js";
 import { agentService } from "../services/agents.js";
+import { initializeRunIdentity } from "../services/run-identity.js";
 import { agentProviderBindingService } from "../services/agent-provider-bindings.js";
 import { agentRuntimeFabricService } from "../services/agent-runtime-fabric.js";
 import { discoverNativeCapabilities } from "../services/native-provider-conformance.js";
 import { makeProviderCapabilitySnapshot, providerConformanceRequirements } from "../services/provider-capabilities.js";
 import { hashContextPolicySnapshot } from "../services/context/context-manifest.js";
-import { buildNativeRuntimeContext, buildRetainedNativeRuntimeContext, readNativeRuntimeAssetText } from "../services/native-runtime/runtime-context.js";
+import { buildNativeRuntimeContext, buildRetainedNativeRuntimeContext, readNativeRuntimeAssetText, type NativeRuntimeAuthoredSourceCapture } from "../services/native-runtime/runtime-context.js";
 import { nativeRuntimeAssetsRoot } from "../services/native-runtime/runtime-asset-retention.js";
 import { seedRequiredAuthoringProcedures, seedApprovedAuthoringPlaybook, bindAuthoringPlaybook, grantAuthoringPlaybookReadFixture } from "./helpers/authoring-procedures.js";
 import { playbookService } from "../services/playbooks.js";
@@ -73,8 +74,15 @@ const support = await getEmbeddedPostgresTestSupport();
       { authoredPublication: definition, recordRevision: { id: definition.revisionId, source: "agent_authoring_publish", createdByUserId: f.userId } });
     const agent = (await agentService(db).update(f.presence.id, { status: "idle", pauseReason: null }))!;
     const [task] = await db.insert(issues).values({ companyId: f.home, title: "Draft the internal welcome",
-      description: "Only current approved Task input", assigneeAgentId: agent.id }).returning();
-    const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: agent.id, responsibleUserId: f.userId, status: "running" }).returning();
+      description: "Only current approved Task input", assigneeAgentId: agent.id,
+      responsibleUserId: f.userId, createdByUserId: f.userId }).returning();
+    const [createdRun] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: agent.id,
+      responsibleUserId: f.userId, status: "running", runtimeMode: "native", scopeKind: "issue",
+      issueId: task!.id, nativeIssueId: task!.id, contextSnapshot: { issueId: task!.id } }).returning();
+    await db.update(issues).set({ executionRunId: createdRun!.id }).where(eq(issues.id, task!.id));
+    await initializeRunIdentity(db, { companyId: f.home, runId: createdRun!.id, issueId: task!.id,
+      responsibleUserId: f.userId, cause: "dispatch" });
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, createdRun!.id));
     return { f, pins, playbook, knowledge, preference, procedures, definition, agent, config, run: run!, task: task!, execution: { ...input(f), runId: run!.id, issueId: task!.id, query: task!.title } };
   }
   async function replaceVersion(f: Awaited<ReturnType<typeof installed>>) {
@@ -173,6 +181,32 @@ const support = await getEmbeddedPostgresTestSupport();
     const loaded = await agentRuntimeFabricService(db).loadPlaybook({ type: "agent", source: "agent_jwt", companyId: f.f.home,
       agentId: f.agent.id, runId: f.run.id, onBehalfOfUserId: f.f.userId, ignoreInstanceAdmin: true }, f.f.home, f.run.id, f.playbook!.playbookId);
     expect(loaded.markdown).toBe(f.playbook!.body);
+  });
+  it("captures exact authored sources and retained Memory roots for the combined runtime input", async () => {
+    const f = await installed(true, true, true);
+    const captures: NativeRuntimeAuthoredSourceCapture[] = [];
+    const runtime = await buildRetainedNativeRuntimeContext({ db, agent: f.agent, runId: f.run.id,
+      runtimeConfig: f.config, runtimeSkillEntries: [], onAuthoredSourceCapture: value => { captures.push(value); } });
+    expect(runtime.instructions.bundle.digest).toMatch(/^[a-f0-9]{64}$/);
+    const files = await readNativeRuntimeAssetText(runtime.instructions.bundle, 128000, { companyId: f.f.home, runId: f.run.id });
+    const entry = files.find(file => file.path === runtime.instructions.entryPath)!.text;
+    for (const body of [f.preference!.body, f.knowledge!.body, f.playbook!.body]) expect(entry).toContain(body);
+    expect(captures).toHaveLength(1);
+    const capture = captures[0]!;
+    expect(capture).toEqual({
+      inputs: [
+        { kind: "authored_definition", agentId: f.agent.id, revisionId: f.definition.revisionId,
+          definitionHash: f.definition.definitionHash, procedureSnapshotHash: f.procedures.hash },
+        ...f.procedures.knowledge.map(pin => ({ kind: "foundation_revision", foundationDocumentId: pin.foundationDocumentId,
+          documentId: pin.documentId, revisionId: pin.revisionId, contentHash: pin.bodyHash })),
+        ...f.procedures.playbooks.map(pin => ({ kind: "playbook_revision", playbookId: pin.playbookId,
+          revisionId: pin.revisionId, contentHash: pin.bodyHash })),
+      ],
+      contextManifests: [{ companyId: f.f.home, contextManifestId: expect.any(String) }],
+    });
+    const [memoryRoot] = await db.select({ memoryRecordId: contextManifestMemoryRoots.memoryRecordId })
+      .from(contextManifestMemoryRoots).where(eq(contextManifestMemoryRoots.manifestId, capture.contextManifests[0]!.contextManifestId));
+    expect(memoryRoot?.memoryRecordId).toBe(f.preference!.id);
   });
   it("keeps draft Playbook edits outside the pin and refuses replacement of the approved revision", async () => {
     const f = await installed(true), service = playbookService(db);
