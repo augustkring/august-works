@@ -41,7 +41,7 @@ import { RouteErrorBoundary } from "./RouteErrorBoundary";
 import { SidebarShell } from "./SidebarShell.production";
 import { SecondarySidebar } from "./SecondarySidebar.production";
 import { SidebarAccountMenu } from "./SidebarAccountMenu.production";
-import { CustomerFeedbackDialog } from "./CustomerFeedbackDialog";
+import { ExperienceUtilities } from "./ExperienceUtilities";
 import { useDialogActions } from "../context/DialogContext";
 import { GeneralSettingsProvider } from "../context/GeneralSettingsContext";
 import { usePanel } from "../context/PanelContext";
@@ -720,7 +720,7 @@ export function Layout() {
                   "sticky top-0 z-20 bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/85",
               )}
             >
-              <CustomerFeedbackDialog />
+              <ExperienceUtilities safetyRecovery />
               <StandaloneBrowserControls mobile={isMobile} />
               <BreadcrumbBar />
               {isMobile && isCompanySettingsRoute ? (
