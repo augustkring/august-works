@@ -11518,9 +11518,10 @@ export function heartbeatService(
           clearReason: input.clearReason,
           clearedAt: input.now,
         }),
+        payloadSourceSnapshot: null,
         updatedAt: input.now,
       })
-      .where(eq(issues.id, input.claimed.id));
+      .where(and(eq(issues.companyId, input.claimed.companyId), eq(issues.id, input.claimed.id)));
 
     await logActivity(db, {
       companyId: input.claimed.companyId,
@@ -11743,9 +11744,10 @@ export function heartbeatService(
             policy,
             triggeredAt: input.now,
           }),
+          payloadSourceSnapshot: null,
           updatedAt: new Date(),
         })
-        .where(eq(issues.id, claimed.id));
+        .where(and(eq(issues.companyId, claimed.companyId), eq(issues.id, claimed.id)));
 
       await logActivity(db, {
         companyId: claimed.companyId,
@@ -11780,9 +11782,10 @@ export function heartbeatService(
                 clearReason: "dispatch_skipped",
                 clearedAt: input.now,
               }),
+              payloadSourceSnapshot: null,
               updatedAt: new Date(),
             })
-            .where(eq(issues.id, claimed.id));
+            .where(and(eq(issues.companyId, claimed.companyId), eq(issues.id, claimed.id)));
 
           await logActivity(db, {
             companyId: claimed.companyId,
@@ -16027,6 +16030,8 @@ export function heartbeatService(
                 ? {
                     executionWorkspaceId: null,
                     executionWorkspacePreference: null,
+                    payloadSourceSnapshot: sql`case when ${issues.executionWorkspacePreference} is not null
+                      then null else ${issues.payloadSourceSnapshot} end`,
                   }
                 : {}),
               updatedAt: now,

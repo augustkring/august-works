@@ -8,6 +8,7 @@ import { authUsers, companies, companyMemberships, createDb, EMBEDDED_POSTGRES_T
 import { agentRoutes } from "../routes/agents.js";
 import { issueRoutes } from "../routes/issues.js";
 import { memoryRoutes } from "../routes/memory.js";
+import { projectControlRoutes } from "../routes/project-control.js";
 import { projectRoutes } from "../routes/projects.js";
 import { errorHandler } from "../middleware/error-handler.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
@@ -18,7 +19,7 @@ describe("Native payload proofs stay on the server at public response boundaries
   beforeAll(async () => {
     database = await startEmbeddedPostgresTestDatabase("v10-payload-public-response-"); db = createDb(database.connectionString);
     await instanceSettingsService(db).updateExperimental({ enableFoundationV1: true, enableContextEngineV1: true,
-      enableCollectiveMemoryV1: true });
+      enableCollectiveMemoryV1: true, project_roadmap_v5: true, project_forecast_v5: true });
   }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
   afterAll(async () => { await database?.cleanup(); }, 30000);
 
@@ -30,7 +31,7 @@ describe("Native payload proofs stay on the server at public response boundaries
     const app = express(); app.use(express.json());
     // API serialization proof only, not credential middleware qualification.
     app.use((req, _res, next) => { req.actor = { type: "board", source: "session", userId, companyIds: [companyId] }; next(); });
-    app.use("/api", issueRoutes(db, {} as never)); app.use("/api", projectRoutes(db)); app.use("/api", memoryRoutes(db));
+    app.use("/api", issueRoutes(db, {} as never)); app.use("/api", projectRoutes(db)); app.use("/api", projectControlRoutes(db)); app.use("/api", memoryRoutes(db));
     app.use("/run-api", agentRoutes(db)); app.use(errorHandler);
     return { companyId, userId, http: request(app) };
   }
@@ -62,6 +63,20 @@ describe("Native payload proofs stay on the server at public response boundaries
     publicRow(detail.body, task!.id); expect(detail.body.description).toBe("Visible body");
     const list = await s.http.get(`/api/companies/${s.companyId}/issues`).expect(200);
     publicRow(list.body.find((row: { id: string }) => row.id === task!.id), task!.id);
+    expect((await db.select().from(issues).where(eq(issues.id, task!.id)))[0]!.payloadSourceSnapshot).not.toBeNull();
+  });
+
+  it("keeps forecast response proofs server-side while preserving an unchanged captured reason", async () => {
+    const s = await seed();
+    const [project] = await db.insert(projects).values({ companyId: s.companyId, name: "Forecast project", sourceProvenanceQualified: true }).returning();
+    const reason = "The original captured forecast explanation";
+    const [task] = await db.insert(issues).values({ companyId: s.companyId, projectId: project!.id, title: "Forecast Task",
+      createdByUserId: s.userId, responsibleUserId: s.userId, forecastReason: reason, payloadSourceProtocolVersion: 1 }).returning();
+    await bind("issues", "issue", task!.id);
+    const response = await s.http.patch(`/api/companies/${s.companyId}/projects/${project!.id}/roadmap/tasks/${task!.id}/forecast`)
+      .send({ expectedUpdatedAt: task!.updatedAt.toISOString(), forecastStartAt: null, forecastEndAt: null,
+        forecastConfidence: 0.7, forecastReason: reason }).expect(200);
+    publicRow(response.body, task!.id); expect(response.body.forecastReason).toBe(reason);
     expect((await db.select().from(issues).where(eq(issues.id, task!.id)))[0]!.payloadSourceSnapshot).not.toBeNull();
   });
 

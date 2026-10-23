@@ -152,6 +152,7 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
     issueStatus?: "in_progress" | "in_review";
     monitorAttemptCount?: number;
     monitor?: Record<string, unknown>;
+    bindBodySnapshot?: boolean;
   }) {
     const companyId = randomUUID();
     const agentId = randomUUID();
@@ -242,13 +243,27 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
       monitorAttemptCount,
       monitorNotes: "Check deploy",
       monitorScheduledBy: "assignee",
+      ...(input?.bindBodySnapshot ? { payloadSourceProtocolVersion: 1 } : {}),
     });
+
+    if (input?.bindBodySnapshot) {
+      // Structural snapshot for exercising the DB body-mutation guard only;
+      // this synthetic scheduler fixture does not claim an authenticated source capture.
+      await db.execute(sql`update issues target set payload_source_snapshot=(
+        select content || jsonb_build_object('digest',encode(sha256(convert_to(content::text,'UTF8')),'hex')) from (
+          select jsonb_build_object('version',1,'owner',jsonb_build_object('kind','issue','companyId',target.company_id,
+            'id',target.id,'contentHash',public.aw_native_payload_body_hash('issue',to_jsonb(target))),
+            'policy',jsonb_build_object('issueIds','[]'::jsonb,'projectIds','[]'::jsonb,'runIds','[]'::jsonb,
+              'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as content
+        ) body
+      ) where target.company_id=${companyId}::uuid and target.id=${issueId}::uuid`);
+    }
 
     return { companyId, agentId, issueId, nextCheckAt };
   }
 
   it("triggers due issue monitors once and clears the one-shot schedule", async () => {
-    const { issueId, agentId } = await seedFixture();
+    const { issueId, agentId } = await seedFixture({ bindBodySnapshot: true });
     const heartbeat = heartbeatService(db);
     const tickAt = new Date("2026-04-11T12:31:00.000Z");
 
@@ -266,6 +281,8 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
       lastTriggeredAt: tickAt.toISOString(),
       attemptCount: 1,
     });
+    expect(issue.payloadSourceSnapshot).toBeNull();
+    expect(issue.payloadSourceSnapshotInvalidated).toBe(true);
 
     const wakeup = await db
       .select()
@@ -424,7 +441,7 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
   });
 
   it("clears due monitors that cannot be dispatched and records a skip", async () => {
-    const { issueId } = await seedFixture({ agentStatus: "paused" });
+    const { issueId } = await seedFixture({ agentStatus: "paused", bindBodySnapshot: true });
     const heartbeat = heartbeatService(db);
     const tickAt = new Date("2026-04-11T12:31:00.000Z");
 
@@ -438,6 +455,8 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
       status: "cleared",
       clearReason: "dispatch_skipped",
     });
+    expect(issue.payloadSourceSnapshot).toBeNull();
+    expect(issue.payloadSourceSnapshotInvalidated).toBe(true);
 
     const activity = await db
       .select()
@@ -449,6 +468,7 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
 
   it("clears exhausted monitors and queues bounded owner recovery instead of another due check", async () => {
     const { issueId, agentId } = await seedFixture({
+      bindBodySnapshot: true,
       monitorAttemptCount: 1,
       monitor: {
         maxAttempts: 1,
@@ -469,6 +489,8 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
       status: "cleared",
       clearReason: "max_attempts_exhausted",
     });
+    expect(issue.payloadSourceSnapshot).toBeNull();
+    expect(issue.payloadSourceSnapshotInvalidated).toBe(true);
 
     const wakeup = await db
       .select()

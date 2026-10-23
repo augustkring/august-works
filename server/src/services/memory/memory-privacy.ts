@@ -440,7 +440,7 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
     ));
     if(copied.length){
       const revisions=copied.map(row=>row.id),docIds=[...new Set(copied.map(row=>row.documentId))];
-      await db.update(documentRevisions).set({title:null,body:"",changeSummary:null}).where(and(eq(documentRevisions.companyId,companyId),inArray(documentRevisions.id,revisions)));
+      await db.update(documentRevisions).set({title:null,body:"",changeSummary:null,payloadSourceSnapshot:null}).where(and(eq(documentRevisions.companyId,companyId),inArray(documentRevisions.id,revisions)));
       await db.update(foundationSections).set({headingPath:[],body:"",tokenCount:0}).where(and(eq(foundationSections.companyId,companyId),inArray(foundationSections.documentRevisionId,revisions)));
       await db.update(documents).set({title:null,latestBody:"",updatedAt:now}).where(and(eq(documents.companyId,companyId),inArray(documents.id,docIds),inArray(documents.latestRevisionId,revisions)));
       await eraseAnalyticalSourcesUnderMemory(db,companyId,"document",docIds,now);
@@ -476,7 +476,7 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
       const ids = linked.map(row => row.id); await eraseAnalyticalSourcesUnderMemory(db, companyId, "document", ids, now);
       await db.update(documents).set({ title: "Source-erased routine document", latestBody: "", updatedAt: now })
         .where(and(eq(documents.companyId, companyId), inArray(documents.id, ids)));
-      await db.update(documentRevisions).set({ title: null, body: "", changeSummary: null })
+      await db.update(documentRevisions).set({ title: null, body: "", changeSummary: null, payloadSourceSnapshot: null })
         .where(and(eq(documentRevisions.companyId, companyId), inArray(documentRevisions.documentId, ids)));
     }
   }
@@ -553,12 +553,12 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
   if (issueIds.length) {
     await eraseAnalyticalSourcesUnderMemory(db, companyId, "issue", issueIds, now);
     for (const issueId of issueIds) await eraseBusinessEventObjectUnderMemory(db, companyId, "issue", issueId);
-    await db.update(issues).set({ title: "Erased workflow task", description: null, updatedAt: now })
+    await db.update(issues).set({ title: "Erased workflow task", description: null, payloadSourceSnapshot: null, updatedAt: now })
       .where(and(eq(issues.companyId, companyId), inArray(issues.id, issueIds)));
     await db.update(completionContracts).set({ contractJson: { payloadDeleted: true } }).where(and(eq(completionContracts.companyId, companyId), inArray(completionContracts.issueId, issueIds)));
     await db.update(issueWorkProducts).set({ title: "Erased workflow output", url: null, externalId: null, summary: null, metadata: {}, sourceTrust: null, updatedAt: now })
       .where(and(eq(issueWorkProducts.companyId, companyId), inArray(issueWorkProducts.issueId, issueIds)));
-    await db.update(issueComments).set({ body: "Source payload erased", updatedAt: now })
+    await db.update(issueComments).set({ body: "Source payload erased", payloadSourceSnapshot: null, updatedAt: now })
       .where(and(eq(issueComments.companyId, companyId), inArray(issueComments.issueId, issueIds)));
     const linkedDocs = await db.select({ id: issueDocuments.documentId }).from(issueDocuments).where(and(
       eq(issueDocuments.companyId, companyId), inArray(issueDocuments.issueId, issueIds)));
@@ -567,7 +567,7 @@ export async function purgeDerivedWorkflowMemory(db: Db, companyId: string, reco
       await eraseAnalyticalSourcesUnderMemory(db, companyId, "document", ids, now);
       await db.update(documents).set({ title: "Erased workflow document", latestBody: "", updatedAt: now })
         .where(and(eq(documents.companyId, companyId), inArray(documents.id, ids)));
-      await db.update(documentRevisions).set({ title: null, body: "", changeSummary: null })
+      await db.update(documentRevisions).set({ title: null, body: "", changeSummary: null, payloadSourceSnapshot: null })
         .where(and(eq(documentRevisions.companyId, companyId), inArray(documentRevisions.documentId, ids)));
     }
   }

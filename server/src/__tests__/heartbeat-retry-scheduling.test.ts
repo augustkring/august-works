@@ -397,6 +397,7 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
     scheduledRetryAttempt?: number;
     runtimeConfig?: Record<string, unknown>;
     issueStatus?: string;
+    bindBodySnapshot?: boolean;
   }) {
     const companyId = input?.companyId ?? randomUUID();
     const agentId = input?.agentId ?? randomUUID();
@@ -472,6 +473,7 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
       executionLockedAt: now,
       issueNumber: 1,
       identifier: `${issuePrefix}-1`,
+      ...(input?.bindBodySnapshot ? { payloadSourceProtocolVersion: 1 } : {}),
     });
 
     return { companyId, agentId, issueId, runId, now };
@@ -970,7 +972,10 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
       }),
     },
   ])("quarantines a failed $name workspace before scheduling the accepted interaction retry", async ({ workspaceValidation }) => {
-    const { companyId, agentId, issueId, runId, now } = await seedMaxTurnFixture({ issueStatus: "in_review" });
+    const { companyId, agentId, issueId, runId, now } = await seedMaxTurnFixture({
+      issueStatus: "in_review",
+      bindBodySnapshot: true,
+    });
     const projectId = randomUUID();
     const executionWorkspaceId = randomUUID();
     const validation = workspaceValidation(executionWorkspaceId);
@@ -1006,6 +1011,17 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
         executionWorkspaceSettings: { mode: "isolated_workspace" },
       })
       .where(eq(issues.id, issueId));
+
+    // Bind only after setting the retry workspace preference. This structural
+    // snapshot exercises invalidation, not an authenticated source capture.
+    await db.execute(sql`update issues target set payload_source_snapshot=(
+      select content || jsonb_build_object('digest',encode(sha256(convert_to(content::text,'UTF8')),'hex')) from (
+        select jsonb_build_object('version',1,'owner',jsonb_build_object('kind','issue','companyId',target.company_id,
+          'id',target.id,'contentHash',public.aw_native_payload_body_hash('issue',to_jsonb(target))),
+          'policy',jsonb_build_object('issueIds','[]'::jsonb,'projectIds','[]'::jsonb,'runIds','[]'::jsonb,
+            'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as content
+      ) body
+    ) where target.company_id=${companyId}::uuid and target.id=${issueId}::uuid`);
 
     const interactionId = randomUUID();
     await db
@@ -1043,6 +1059,8 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
         executionWorkspaceId: issues.executionWorkspaceId,
         executionWorkspacePreference: issues.executionWorkspacePreference,
         executionWorkspaceSettings: issues.executionWorkspaceSettings,
+        payloadSourceSnapshot: issues.payloadSourceSnapshot,
+        payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated,
       })
       .from(issues)
       .where(eq(issues.id, issueId))
@@ -1052,6 +1070,8 @@ describeEmbeddedPostgres("heartbeat bounded retry scheduling", () => {
       executionWorkspaceId: null,
       executionWorkspacePreference: null,
       executionWorkspaceSettings: { mode: "isolated_workspace" },
+      payloadSourceSnapshot: null,
+      payloadSourceSnapshotInvalidated: true,
     });
 
     const workspace = await db

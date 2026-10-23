@@ -2,12 +2,12 @@ import { randomUUID } from "node:crypto";
 import { readFile } from "node:fs/promises";
 import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { assets, companies, createDb, documentRevisions, documents, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
+import { agents, assets, companies, createDb, documentRevisions, documents, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, heartbeatRuns, issueDocuments, memoryDeletionMarkers,
   issueAttachments, issueComments, issues, memoryBindings, memoryEvidence, memoryRecords, projects } from "@paperclipai/db";
 import type { NativePayloadSourceSnapshot } from "@paperclipai/shared";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { issueService } from "../services/issues.js";
-import { purgeMemoryRecords } from "../services/memory/memory-privacy.js";
+import { lockMemoryPrivacy, purgeDerivedWorkflowMemory, purgeMemoryRecords } from "../services/memory/memory-privacy.js";
 
 describe("Native payload source snapshot binds its original payload owner", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>, companyId: string;
@@ -230,6 +230,48 @@ describe("Native payload source snapshot binds its original payload owner", () =
     const rebound = await snapshot(row);
     await expect(db.update(issues).set({ payloadSourceSnapshot: rebound }).where(eq(issues.id, row.id)))
       .rejects.toMatchObject({ cause: { code: "23514" } });
+  });
+
+  it.each(["issue", "comment", "document_revision"] as const)("erases a captured derived %s through the original transactional purge", async kind => {
+    const [agent] = await db.insert(agents).values({ companyId, name: "Erasure fixture", role: "engineer", adapterType: "process" }).returning();
+    const source = await insert(0);
+    const [run] = await db.insert(heartbeatRuns).values({ companyId, agentId: agent!.id, runtimeMode: "native", nativeIssueId: source.id }).returning();
+    // New structural fixtures, never an in-place protocol or source-proof upgrade.
+    const [task] = await db.insert(issues).values({ companyId, title: "PRIVATE saved task", description: "PRIVATE saved body",
+      createdByAgentId: agent!.id, originKind: "manual", originRunId: run!.id, originId: `paperclip-runner:create-task:${source.id}:erasure-fixture`,
+      payloadSourceProtocolVersion: kind === "issue" ? 1 : 0 }).returning();
+    const [comment] = await db.insert(issueComments).values({ companyId, issueId: task!.id, body: "PRIVATE comment",
+      payloadSourceProtocolVersion: kind === "comment" ? 1 : 0 }).returning();
+    const [document] = await db.insert(documents).values({ companyId, title: "PRIVATE document", latestBody: "PRIVATE document body" }).returning();
+    const [revision] = await db.insert(documentRevisions).values({ companyId, documentId: document!.id, revisionNumber: 1,
+      title: "PRIVATE revision", body: "PRIVATE revision body", changeSummary: "PRIVATE revision summary",
+      payloadSourceProtocolVersion: kind === "document_revision" ? 1 : 0 }).returning();
+    await db.insert(issueDocuments).values({ companyId, issueId: task!.id, documentId: document!.id, key: "plan" });
+    await db.update(documents).set({ latestRevisionId: revision!.id }).where(eq(documents.id, document!.id));
+    const table = kind === "issue" ? "issues" : kind === "comment" ? "issue_comments" : "document_revisions";
+    const id = kind === "issue" ? task!.id : kind === "comment" ? comment!.id : revision!.id;
+    const [original] = await db.execute<{ body: string }>(sql`select
+      case when ${kind}='issue' then to_jsonb(r)->>'title' else to_jsonb(r)->>'body' end as body
+      from ${sql.identifier(table)} r where r.company_id=${companyId}::uuid and r.id=${id}::uuid`);
+    expect(original!.body).toContain("PRIVATE");
+    await bindOwner(table, kind, id);
+    const unrelated = await insert();
+    const unrelatedSnapshot = await snapshot(unrelated);
+    await db.update(issues).set({ payloadSourceSnapshot: unrelatedSnapshot }).where(eq(issues.id, unrelated.id));
+    await db.transaction(async rawTx => {
+      const tx = rawTx as unknown as typeof db;
+      await lockMemoryPrivacy(tx, companyId);
+      await tx.insert(memoryDeletionMarkers).values({ companyId, kind: "source", key: `memory-run-source-erasure:v1:${run!.id}` });
+      await purgeDerivedWorkflowMemory(tx, companyId, [], new Date(), { workflowRevisionIds: [], artifactVersionIds: [], runIds: [run!.id] });
+    });
+    const [erased] = await db.execute<{ body: string; captured: unknown; invalidated: boolean }>(sql`select
+      case when ${kind}='issue' then to_jsonb(r)->>'title' else to_jsonb(r)->>'body' end as body,
+      payload_source_snapshot as captured,payload_source_snapshot_invalidated as invalidated
+      from ${sql.identifier(table)} r where r.company_id=${companyId}::uuid and r.id=${id}::uuid`);
+    expect(erased!.body).not.toContain("PRIVATE");
+    expect(erased!.captured).toBeNull(); expect(erased!.invalidated).toBe(true);
+    expect((await db.select().from(issues).where(eq(issues.id, unrelated.id)))[0]!.payloadSourceSnapshot).toEqual(unrelatedSnapshot);
+    await expect(bindOwner(table, kind, id)).rejects.toMatchObject({ cause: { code: "23514" } });
   });
 
   it("latches invalidation and rejects marker edits and rebinding for every payload owner", async () => {

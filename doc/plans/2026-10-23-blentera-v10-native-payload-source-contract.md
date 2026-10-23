@@ -139,3 +139,8 @@ Original repeat preparation now preserves the entire locked current profile inst
 ## Concrete policy-only counterexample — 2026-10-23
 
 The new original-owner control retains a private Task input through a derived Task assigned to another Human and a subsequent Memory. Assignment does not publish the prior body. Original production withholds the Memory; a temporary blanket policy-only Task/Project traversal returns it. Both temporary candidates were restored and rejected. Preserve exact payload closure before changing anchor traversal. Migration0503 already normalizes heartbeatRuns.issueId; do not add another native Task binding workaround. See the dated ledger and `up03-retained-body-control-checkpoint.json`. The original three failing privacy/temporal cases remain mandatory.
+
+
+## Direct native body writer lifecycle — 2026-10-23
+
+The native Task updater, environment selection, plugin policy, forecast, monitor, failed-workspace retry and status blocker paths now explicitly preserve unchanged captures or invalidate changed bodies at their existing owners. Memory root and five derived Task/Comment/revision erasure updates invalidate with erasure. The original binding trigger still rejects arbitrary stale direct writes, and its irreversible unknown latch still rejects rebinding. These mutation checkpoints do not capture complete new input closures or activate any constructor. Other Project/Comment/Memory/Document mutation families remain unqualified. See the dated recovery ledger and `doc/operations/aw-v10-evidence/native-body-writers-2026-10-23/checkpoint.json`; original private-Memory and temporal reader regressions remain open.
