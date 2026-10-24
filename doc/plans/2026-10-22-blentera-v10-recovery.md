@@ -726,3 +726,8 @@ and enterprise recovery remain open. Two test instances in one process do not
 qualify deployed replicas or restart/failover. Structural stale-erasure fixtures
 do not qualify encrypted-backup restoration. Prior privacy, Workflow-origin,
 portability and whole-workspace/V10/PR gates remain open.
+
+
+### 2026-10-24 — native password session rotation
+
+The existing password reauthentication endpoint now rotates the actual native session in a proof-pinned physical PostgreSQL transaction, with cookie rollback and native hooks after commit. Complete credential HTTP/PostgreSQL suite: 14 pass; server compiler: zero. Evidence: `doc/operations/aw-v10-evidence/native-session-rotation-2026-10-24/checkpoint.json`. MFA/passkey ceremonies, operator/enterprise recovery and the overall V10/PR gates remain open.

@@ -1,11 +1,12 @@
 import { APIError, type BetterAuthPlugin } from "better-auth";
 import { createAuthEndpoint, createAuthMiddleware, sessionMiddleware } from "better-auth/api";
-import { deleteSessionCookie } from "better-auth/cookies";
+import { deleteSessionCookie, setSessionCookie } from "better-auth/cookies";
 import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
 import { authRateLimits, type Db } from "@paperclipai/db";
 import { LOCAL_PASSWORD_MAX_UTF16_LENGTH } from "@paperclipai/shared/local-password-policy";
+import { withNativeAuthenticationTransaction, type NativeAuthenticationSchema } from "./native-authentication-transaction.js";
 import { isAuthenticationStateBusy } from "./authenticator-assurance.js";
 
 function rethrowAuthenticationFailure(error: unknown): never {
@@ -18,26 +19,25 @@ function rethrowAuthenticationFailure(error: unknown): never {
 /** Keep last in the native plugin list: the two-factor plugin must first remove
  * a password-only session when it issues a challenge. A cookie refresh, reset
  * link, SSO callback or historic session never manufactures local factor proof. */
-export function nativeAuthenticationAssurancePlugin(db: Db): BetterAuthPlugin {
-  async function recordPassword(userId: string, sessionId: string, expectedVersion: number) {
-    return db.transaction(async (tx) => {
-      const [user] = await tx.execute<{ id: string }>(sql`
-        select id from "user" where id=${userId}
-          and authenticator_version=${expectedVersion} and not two_factor_enabled
-          and not exists (select 1 from account_deletion_operations where user_id=${userId})
-        for share nowait
-      `);
-      if (!user) return false;
-      const sessions = await tx.execute<{ id: string }>(sql`
-        update "session" set authentication_method='password',
-          authenticated_at=clock_timestamp(), authenticator_version=${expectedVersion}
-        where id=${sessionId} and user_id=${user.id} and expires_at>clock_timestamp()
-          and exists (select 1 from account where user_id=${user.id}
-            and provider_id='credential' and password is not null)
-        returning id
-      `);
-      return sessions.length === 1;
-    });
+export function nativeAuthenticationAssurancePlugin(db: Db, schema: NativeAuthenticationSchema): BetterAuthPlugin {
+  async function recordPassword(tx: Pick<Db, "execute">, userId: string, sessionId: string, expectedVersion: number) {
+    const [user] = await tx.execute<{ id: string }>(sql`
+      select id from "user" where id=${userId}
+        and authenticator_version=${expectedVersion} and not two_factor_enabled
+        and not exists (select 1 from account_deletion_operations where user_id=${userId})
+      for share nowait
+    `);
+    if (!user) return null;
+    const sessions = await tx.execute<{ authenticatedAt: Date | string }>(sql`
+      update "session" set authentication_method='password',
+        authenticated_at=clock_timestamp(), authenticator_version=${expectedVersion}
+      where id=${sessionId} and user_id=${user.id} and expires_at>clock_timestamp()
+        and exists (select 1 from account where user_id=${user.id}
+          and provider_id='credential' and password is not null)
+      returning authenticated_at as "authenticatedAt"
+    `);
+    return sessions[0] ? { authenticationMethod: "password",
+      authenticatedAt: new Date(sessions[0].authenticatedAt), authenticatorVersion: expectedVersion } : null;
   }
   return {
     id: "blentera-native-authentication-assurance",
@@ -79,9 +79,29 @@ export function nativeAuthenticationAssurancePlugin(db: Db): BetterAuthPlugin {
           code: "REAUTHENTICATION_RATE_LIMITED", message: "Too many confirmation attempts; try again later",
         });
         await ctx.context.password.checkPassword(user.id, ctx);
-        if (!await recordPassword(user.id, session.id, snapshot.version).catch(rethrowAuthenticationFailure)) throw new APIError("UNAUTHORIZED", {
-          code: "AUTHENTICATION_STATE_CHANGED", message: "Authenticate again to continue",
-        });
+        await withNativeAuthenticationTransaction(db, ctx, schema, async tx => {
+          // Lock the old session exclusively so concurrent confirmations cannot
+          // both rotate it. Pin the pre-verification credential generation.
+          const [current] = await tx.execute<{ id: string }>(sql`
+            select s.id from "session" s join "user" u on u.id=s.user_id
+            where s.id=${session.id} and u.id=${user.id} and s.expires_at>clock_timestamp()
+              and u.authenticator_version=${snapshot.version} and not u.two_factor_enabled
+              and not exists (select 1 from account_deletion_operations where user_id=u.id)
+            for update of s nowait for share of u nowait
+          `);
+          const proof = current && await recordPassword(tx, user.id, session.id, snapshot.version);
+          const freshUser = proof && await ctx.context.internalAdapter.findUserById(user.id);
+          if (!proof || !freshUser) throw new APIError("UNAUTHORIZED", {
+            code: "AUTHENTICATION_STATE_CHANGED", message: "Authenticate again to continue",
+          });
+          const dontRemember = !!await ctx.getSignedCookie(
+            ctx.context.authCookies.dontRememberToken.name, ctx.context.secret);
+          const freshSession = await ctx.context.internalAdapter.createSession(
+            user.id, dontRemember, proof, true, { deferSecondaryStorageWrites: true });
+          await setSessionCookie(ctx, { session: freshSession, user: freshUser }, dontRemember);
+          await ctx.context.internalAdapter.deleteSession(session.token);
+          ctx.context.session = { session: freshSession, user: freshUser };
+        }).catch(rethrowAuthenticationFailure);
         return ctx.json({ status: true });
       }),
     },
@@ -109,7 +129,7 @@ export function nativeAuthenticationAssurancePlugin(db: Db): BetterAuthPlugin {
           && capturedVersion >= 0 ? capturedVersion + (ctx.path === "/sign-up/email" ? 1 : 0) : null;
         let accepted = false;
         try {
-          accepted = expectedVersion !== null && await recordPassword(created.user.id, created.session.id, expectedVersion);
+          accepted = expectedVersion !== null && Boolean(await db.transaction(tx => recordPassword(tx, created.user.id, created.session.id, expectedVersion)));
         } catch {
           // A competing credential mutation holds the user row. Never return a
           // native success/cookie whose verified generation could not be pinned.

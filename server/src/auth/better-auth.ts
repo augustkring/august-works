@@ -16,6 +16,8 @@ import {
   authUsers,
   authVerifications,
   authRateLimits,
+  authTwoFactors,
+  authPasskeys,
 } from "@paperclipai/db";
 import type { Config } from "../config.js";
 import { resolvePaperclipInstanceId } from "../home-paths.js";
@@ -290,6 +292,16 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
   });
 
   const enterprisePlugins = config.deploymentProfile === "saas" && config.saasPlatform && config.publicOriginConfig ? enterpriseAuthPlugins(db, config.saasPlatform.deployment.sourceSha) : [];
+  const authSchema = {
+    user: authUsers,
+    session: authSessions,
+    account: authAccounts,
+    verification: authVerifications,
+    twoFactor: authTwoFactors,
+    passkey: authPasskeys,
+    ...(config.deploymentProfile === "saas" ? {rateLimit:authRateLimits} : {}),
+    ...(enterprisePlugins.length ? { ssoProvider,scimConnectionBinding,scimIdentityTombstone,scimSubject,scimUser,scimProjectionGrant,scimGroup,scimGroupMember,awEnterprisePolicy:enterpriseIdentityPolicies,awEnterpriseBinding:enterpriseSubjectBindings,awCompanyMembership:companyMemberships,awPermissionGrant:principalPermissionGrants,awActivity:activityLog } : {}),
+  };
   const authConfig = {
     baseURL: baseUrl,
     secret,
@@ -308,14 +320,7 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
     database: drizzleAdapter(db, {
       provider: "pg",
       transaction: enterprisePlugins.length > 0,
-      schema: {
-        user: authUsers,
-        session: authSessions,
-        account: authAccounts,
-        verification: authVerifications,
-        ...(config.deploymentProfile === "saas" ? {rateLimit:authRateLimits} : {}),
-        ...(enterprisePlugins.length ? { ssoProvider,scimConnectionBinding,scimIdentityTombstone,scimSubject,scimUser,scimProjectionGrant,scimGroup,scimGroupMember,awEnterprisePolicy:enterpriseIdentityPolicies,awEnterpriseBinding:enterpriseSubjectBindings,awCompanyMembership:companyMemberships,awPermissionGrant:principalPermissionGrants,awActivity:activityLog } : {}),
-      },
+      schema: authSchema,
     }),
     hooks: { before: localPasswordPolicy },
     emailAndPassword: {
@@ -348,7 +353,7 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
     ...(enterprisePlugins.length ? { disabledPaths: ENTERPRISE_DISABLED_AUTH_PATHS } : {}),
     plugins: [ ...enterprisePlugins, ...(resolveWorkspaceHandoffIdentity(config) ? [workspaceLoginHandoffPlugin({ db,
       resolveExpectedIdentity: () => resolveWorkspaceHandoffIdentity(config) ?? {key:null,instanceId:null,executionWorkspaceId:null,companyId:null,origin:null},
-    })] : []), nativeAuthenticationAssurancePlugin(db) ],
+    })] : []), nativeAuthenticationAssurancePlugin(db, authSchema) ],
   };
 
   if (!baseUrl) {

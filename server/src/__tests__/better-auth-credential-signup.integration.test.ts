@@ -16,7 +16,8 @@
 import { createHash, randomUUID } from "node:crypto";
 import { eq, inArray, sql } from "drizzle-orm";
 import { hashPassword, makeSignature } from "better-auth/crypto";
-import type { Auth } from "better-auth";
+import { APIError, type Auth } from "better-auth";
+import { queueAfterTransactionHook } from "@better-auth/core/context";
 import express from "express";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
@@ -286,9 +287,10 @@ describeEmbeddedPostgres("Better Auth credential sign-up against the real schema
     expect(signedIn.status).toBe(200);
   });
 
-  it("requires the real password to refresh unknown proof on the same native session", async () => {
+  it("rotates an aged native session only after real password verification", async () => {
     const fixture = await signedUpFixture();
-    await db.update(authSessions).set({ authenticationMethod: null, authenticatedAt: null, authenticatorVersion: null })
+    await db.update(authSessions).set({ authenticationMethod: null, authenticatedAt: null, authenticatorVersion: null,
+      createdAt: new Date(Date.now() - 2 * 86400_000) })
       .where(eq(authSessions.id, fixture.sessionId));
     const actor = { type: "board" as const, source: "session" as const,
       userId: fixture.userId, sessionId: fixture.sessionId };
@@ -299,21 +301,71 @@ describeEmbeddedPostgres("Better Auth credential sign-up against the real schema
     expect((await confirm("wrong password")).status).toBe(400);
     const [unknown] = await db.select().from(authSessions).where(eq(authSessions.id, fixture.sessionId));
     expect(unknown).toMatchObject({ authenticationMethod: null, authenticatedAt: null, authenticatorVersion: null });
+    expect((await request(app).get("/api/auth/list-sessions").set("Cookie", fixture.cookie)).status).toBe(403);
     const accepted = await confirm(PASSWORD);
     expect(accepted.status).toBe(200);
     expect(accepted.body).toEqual({ status: true });
     const sessions = await db.select().from(authSessions).where(eq(authSessions.userId, fixture.userId));
     expect(sessions).toHaveLength(1);
-    expect(sessions[0]).toMatchObject({ id: fixture.sessionId, authenticationMethod: "password" });
-    await expect(db.transaction(tx => assertHumanAuthentication(tx, actor, {
+    expect(sessions[0].id).not.toBe(fixture.sessionId);
+    expect(sessions[0].authenticationMethod).toBe("password");
+    await expect(assertHumanAuthentication(db, actor, { requireRecent: true, phishingResistant: false }))
+      .rejects.toMatchObject({ status: 403 });
+    const cookie = sessionCookies(accepted).map(value => value.split(";", 1)[0]).join("; ");
+    expect((await request(app).get("/api/auth/list-sessions").set("Cookie", cookie)).status).toBe(200);
+    const visible = await request(app).get("/api/auth/get-session").set("Cookie", cookie);
+    expect(visible.body.session).not.toHaveProperty("authenticatedAt");
+    await expect(db.transaction(tx => assertHumanAuthentication(tx, { ...actor, sessionId: sessions[0].id }, {
       requireRecent: true, phishingResistant: false,
     }))).resolves.toMatchObject({ method: "password" });
     const unauthenticated = await request(app).post("/api/auth/reauthenticate/password")
       .set("Origin", ORIGIN).send({ password: PASSWORD });
     expect(unauthenticated.status).toBe(401);
     const [clock] = await db.execute<{ fresh: boolean }>(sql`select authenticated_at<=clock_timestamp()
-      and authenticated_at>=clock_timestamp()-interval '5 seconds' as fresh from "session" where id=${fixture.sessionId}`);
+      and authenticated_at>=clock_timestamp()-interval '5 seconds' as fresh from "session" where id=${sessions[0].id}`);
     expect(clock.fresh).toBe(true);
+  });
+
+  it("rolls back native session writes and cookies and runs native hooks only after physical commit", async () => {
+    const fixture = await signedUpFixture();
+    await db.update(authSessions).set({ authenticationMethod: null, authenticatedAt: null, authenticatorVersion: null })
+      .where(eq(authSessions.id, fixture.sessionId));
+    const nativeContext = await (auth as unknown as Auth).$context;
+    const remove = nativeContext.internalAdapter.deleteSession.bind(nativeContext.internalAdapter);
+    let rollbackHookRan = false;
+    const spy = vi.spyOn(nativeContext.internalAdapter, "deleteSession").mockImplementationOnce(async token => {
+      await remove(token);
+      await queueAfterTransactionHook(async () => { rollbackHookRan = true; });
+      throw new APIError("BAD_REQUEST", { code: "FIXTURE_ROLLBACK", message: "Abort after native writes" });
+    });
+    const confirm = () => request(app).post("/api/auth/reauthenticate/password")
+      .set("Origin", ORIGIN).set("Cookie", fixture.cookie).send({ password: PASSWORD });
+    try {
+      const rejected = await confirm();
+      expect(rejected.status).toBe(400);
+      expect(sessionCookies(rejected)).toEqual([]);
+    } finally { spy.mockRestore(); }
+    expect(rollbackHookRan).toBe(false);
+    expect(await db.select().from(authSessions).where(eq(authSessions.userId, fixture.userId)))
+      .toMatchObject([{ id: fixture.sessionId, authenticationMethod: null }]);
+    const key = "password-reauth:" + createHash("sha256").update(fixture.userId).digest("hex");
+    expect(await db.select().from(authRateLimits).where(eq(authRateLimits.key, key))).toMatchObject([{ count: 1 }]);
+    let committed = false;
+    const success = vi.spyOn(nativeContext.internalAdapter, "deleteSession").mockImplementationOnce(async token => {
+      await remove(token);
+      await queueAfterTransactionHook(async () => {
+        // An independent connection must see the replacement, not uncommitted writes.
+        const rows = await db.select().from(authSessions).where(eq(authSessions.userId, fixture.userId));
+        committed = rows.length === 1 && rows[0].id !== fixture.sessionId
+          && rows[0].authenticationMethod === "password";
+      });
+    });
+    try {
+      const accepted = await confirm();
+      expect(accepted.status).toBe(200);
+      expect(sessionCookies(accepted)).toHaveLength(1);
+      expect(committed).toBe(true);
+    } finally { success.mockRestore(); }
   });
 
   it("commits password confirmation attempts across native instances without renewing the window", async () => {

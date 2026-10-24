@@ -143,7 +143,7 @@ after verification and treat it as the verified one. New native password login
 sessions retain their original internal user snapshot and already pass this fence.
 
 Password reauthentication uses the maintained `ctx.context.password.checkPassword`
-checker, keeps the original native session, and stamps only completed current
+checker, rotates the original native session, and stamps only completed current
 password proof. A per-principal native database budget commits before the verifier;
 it must share the actual user/session lifetime pin while reserving, so erasure
 cannot be followed by recreation of an identity-linked attempt row. Wrong
@@ -162,10 +162,30 @@ If registration rolls back, independently consume its signed native registration
 challenge after rollback so rejection does not restore a one-use nonce.
 
 The provider's fresh-session middleware also checks session creation age. Current
-password reauthentication refreshes proof on the same session; before full factor
-activation, reconcile that with native session rotation after real completed
-reauthentication, including old-session and fixation cases. Rotation must never be
+password reauthentication now rotates the session after real completed
+reauthentication. The actual PostgreSQL/HTTP regression covers an aged native
+session, denial of its old ID, native fresh-session compatibility, rollback of
+provider writes and staged cookies, and hooks observing the physical commit. Rotation must never be
 counted as the authentication event. Verified enterprise SSO needs its original
 qualified callback/policy owner and a real recent identity event for passwordless
 factor setup; do not invent a local password or infer strong MFA from an SSO
 session cookie.
+
+
+### 2026-10-24 — native session rotation checkpoint
+
+The existing password-confirmation endpoint now creates its replacement through
+Better Auth's maintained internal adapter within the same physical PostgreSQL
+transaction as the pre-verification generation fence. It transfers only the
+actual password proof and database authentication time, preserving native token,
+identifier and creation-time generation. The old session is exclusively locked
+and removed; concurrent confirmations cannot both rotate it. Attempt reservations
+remain committed independently. The transaction adapter binds native direct and
+internal writes, restores staged cookies/session context on rollback, and runs
+native hooks after physical commit. No new authentication method is activated.
+
+The complete credential HTTP/PostgreSQL suite passes 14 cases, including an actual
+failure after native replacement creation, staged cookie and old-session deletion,
+and an after-commit callback reading the committed replacement on an independent
+connection. Full MFA, passkey ceremony, enterprise recovery, operator admission and
+all V10 release gates remain separate unfinished work.
