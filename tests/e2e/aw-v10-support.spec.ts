@@ -29,6 +29,8 @@ test("Help retains its originating view and reload recovers requests before and 
   const company = await json(await page.request.post("/api/companies", { data: { name: "Disposable V10 support browser company" } }));
   const support = `/api/companies/${company.id}/support`;
   await page.goto(`/${company.issuePrefix}/work`);
+  await expect(page.getByRole("region", { name: "Global utilities", exact: true })
+    .getByRole("button", { name: "Ask Blentera", exact: true })).toBeVisible();
   const heading = await page.getByRole("heading", { level: 1, name: "Work", exact: true }).elementHandle();
   expect(heading).not.toBeNull();
   const helpEntry = page.locator("#help-center-utility-entry");
@@ -43,7 +45,7 @@ test("Help retains its originating view and reload recovers requests before and 
   };
   await openHelp();
   await page.getByRole("link", { name: "Import history", exact: true }).click();
-  await expect(page.getByRole("heading", { name: "Import history", exact: true })).toBeVisible();
+  await expect(page.getByRole("heading", { level: 1, name: "Import history", exact: true })).toBeVisible();
   await expect(page.getByText("No saved imports for this account and company.", { exact: true })).toBeVisible();
   expect(await page.getByRole("dialog").evaluate(node => node.matches(":modal"))).toBe(true);
   await page.keyboard.press("Tab");

@@ -333,6 +333,36 @@ jobs:
           pnpm install --frozen-lockfile --ignore-scripts
           git diff --exit-code -- pnpm-lock.yaml
 
+  help_docs:
+    name: Help docs metadata and links
+    needs: [gate]
+    runs-on: ${{ needs.gate.outputs.runner }}
+    timeout-minutes: 5
+
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
+        with:
+          persist-credentials: false
+
+      - name: Setup Node.js
+        uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
+        with:
+          node-version-file: .nvmrc
+          package-manager-cache: false
+
+      - name: Setup pnpm
+        uses: pnpm/action-setup@0977fd99725f1db4007ccb2928dbb4e90d06cc86 # v6
+        with:
+          version: 9.15.4
+          run_install: false
+
+      - name: Test Help docs validator
+        run: pnpm run test:help-docs
+
+      - name: Validate Help Center articles
+        run: pnpm run check:help-docs
+
   typecheck_release_registry:
     name: Typecheck + Release Registry
     needs: [gate]
@@ -622,7 +652,7 @@ jobs:
     # Preserve the legacy required-check name while the underlying work runs in parallel.
     name: verify
     if: ${{ always() }}
-    needs: [gate, policy, typecheck_release_registry, general_tests, verify_paperclip_runner, build, docker_context_integrity]
+    needs: [gate, policy, help_docs, typecheck_release_registry, general_tests, verify_paperclip_runner, build, docker_context_integrity]
     runs-on: ${{ needs.gate.outputs.runner }}
     timeout-minutes: 5
 
@@ -631,6 +661,7 @@ jobs:
         env:
           FULL_CI: ${{ needs.gate.outputs.full_ci }}
           POLICY_RESULT: ${{ needs.policy.result }}
+          HELP_DOCS_RESULT: ${{ needs.help_docs.result }}
           TYPECHECK_RELEASE_REGISTRY_RESULT: ${{ needs.typecheck_release_registry.result }}
           GENERAL_TESTS_RESULT: ${{ needs.general_tests.result }}
           RUNNER_VERIFICATION_RESULT: ${{ needs.verify_paperclip_runner.result }}
@@ -638,6 +669,7 @@ jobs:
           DOCKER_CONTEXT_INTEGRITY_RESULT: ${{ needs.docker_context_integrity.result }}
         run: |
           test "$POLICY_RESULT" = "success"
+          test "$HELP_DOCS_RESULT" = "success"
           case "$FULL_CI" in
             true)
               test "$TYPECHECK_RELEASE_REGISTRY_RESULT" = "success"

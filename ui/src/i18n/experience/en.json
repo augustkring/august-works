@@ -73,7 +73,7 @@
     "runtimeUnconfirmed": "The selected runtime could not be confirmed. Check the current runtime before proceeding."
   },
   "home": "Home",
-  "ask": "Ask August",
+  "ask": "Ask Blentera",
   "needsYou": "Needs You",
   "inProgress": "In Progress",
   "done": "Done",
@@ -764,7 +764,7 @@
       "create_task": "Prepare a Task",
       "connect_app": "Connect an App",
       "run_workflow": "Open Workflows to run",
-      "ask_august": "Ask August",
+      "ask_august": "Ask Blentera",
       "create_project": "Prepare a Project",
       "share_feedback": "Share feedback"
     }

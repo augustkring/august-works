@@ -66,5 +66,86 @@
     "App focused16PASS including exact Work/support draft retention and both Help-entry focus targets. History component3PASS: readonly unknown receipt, no hidden query, late reply after session switch withheld. Earlier Help retention/typecheck transition failures remain archived. Intermediate full workspace compiler encountered the cursor Date/string transition; final stable rerun pending here.",
     "New-company operations have no companyId until success and are not listed while running/unknown by this company-scoped route. Full durable operations lifecycle, source preview plan/selection confirmation, per-effect mapping, cancellation/reconciliation, complete Help IA/metadata/stale-link CI, Universal Find, grounded support assistant, hosted origins and manual accessibility remain open. Full build/browser/workspace results follow separately; no PR-ready, merge or deployment claim."
   ],
-  "implementationParentCommit": "ad03eb1b9"
+  "implementationParentCommit": "ad03eb1b9",
+  "followUp": {
+    "recordedAt": "2026-10-24T21:42:44.672543+00:00",
+    "implementationParentCommit": "6c89a25c8",
+    "checks": {
+      "workspace-final-typecheck": {
+        "exit": 0,
+        "log": "workspace-final-typecheck.log"
+      },
+      "workspace-final-build": {
+        "exit": 0,
+        "log": "workspace-final-build.log"
+      },
+      "help-history-browser": {
+        "exit": 1,
+        "log": "help-history-browser.log"
+      },
+      "help-history-browser-owned": {
+        "exit": 0,
+        "log": "help-history-browser-owned.log"
+      },
+      "help-history-browser-branded": {
+        "exit": 0,
+        "log": "help-history-browser-branded.log"
+      },
+      "help-docs-metadata": {
+        "exit": 1,
+        "log": "help-docs-metadata.log"
+      },
+      "help-docs-metadata-checked": {
+        "exit": 0,
+        "log": "help-docs-metadata-checked.log"
+      },
+      "help-docs-unit-owned": {
+        "exit": 0,
+        "log": "help-docs-unit-owned.log"
+      },
+      "help-docs-check-owned": {
+        "exit": 0,
+        "log": "help-docs-check-owned.log"
+      },
+      "help-docs-unit-final": {
+        "exit": 0,
+        "log": "help-docs-unit-final.log"
+      },
+      "help-docs-check-final": {
+        "exit": 0,
+        "log": "help-docs-check-final.log"
+      },
+      "help-history-tokens-final": {
+        "exit": 0,
+        "log": "help-history-tokens-final.log"
+      }
+    },
+    "browserLogRedaction": {
+      "help-history-browser": {
+        "rawSha256": "a2b30ad8941c3d3845aadebe47d6d93f2f91809fbcd788ec54e023ea8ad424d0",
+        "archivedSha256": "92693e1f2a002dace7679e215d5fd3e492287aa28fe5ceddb0234c211412b494",
+        "invitationSegmentsMasked": 1,
+        "databaseCredentialsMasked": 0
+      },
+      "help-history-browser-owned": {
+        "rawSha256": "4a09c28b64a3c6458ea1cf196314fa48475e6210839eece611ca4dcecd4996d1",
+        "archivedSha256": "3149309acf978eddf171afb0e3601a4b45f7782fcafb0388fe9ded18f7698dde",
+        "invitationSegmentsMasked": 1,
+        "databaseCredentialsMasked": 0
+      },
+      "help-history-browser-branded": {
+        "rawSha256": "739c4115b07d38c10a1da5e4912c446d4f6767786952773488f0ccb08875e013",
+        "archivedSha256": "c3fe57486be60e095ccc9b9ed336ff87097917c1e05ea318ff2927ac68aa4774",
+        "invitationSegmentsMasked": 1,
+        "databaseCredentialsMasked": 0
+      }
+    },
+    "observations": [
+      "Full workspace pnpm -r typecheck and pnpm build both actual exit0. The earlier compiler Date/string cursor transition was corrected; it did not pass. UI brand text changes then received a fresh production UI browser build.",
+      "Actual production UI/native cookie authentication/PostgreSQL/Chromium: final1PASS35.1s. Help\u2192history performs real private history GET; modal Tab remains in native dialog, Escape returns exact live Help focus and original Work heading remains connected. All original support draft/three-dismissal and before/after-acceptance interruption/reload/same-key/no-auto-retry assertions remain. No Task-composer, provider-delivery, multi-replica or manual accessibility proof inferred.",
+      "First browser run1FAIL was a strict locator resolving both a hidden H2 and real H1. Selector corrected to level1; unchanged user behavior then passed. A subsequent browser run explicitly verifies Ask Blentera (the observed stale Ask August product CTA was corrected in EN/DA).",
+      "Help docs CI uses a deliberately restricted flat scalar/frontmatter subset, required metadata, unique IDs, registry refs where available, real nonfuture review dates and existing local targets. Node tests5PASS and actual article check0; wired into original read-only trusted PR workflow and verify aggregation. No dependencies, no invented age-based expiry, full YAML support, external URL health or automatic linked-screen no-change approval.",
+      "Root static metadata check initially attempted an unavailable YAML module; it was replaced with stdlib checks and the committed dependency-free validator. Both failed and passing outcomes are retained. Token gate0. Full test:run has not passed or been claimed; private source/temporal/readiness and other full V10 gates remain open."
+    ]
+  }
 }

@@ -32,8 +32,10 @@
       "id": "V10-003",
       "sourceLine": 6766,
       "work": "Final launch-claim/evidence matrix.",
-      "reconciliation": "not_reconciled",
-      "evidence": []
+      "reconciliation": "in_progress",
+      "evidence": [
+        "doc/operations/aw-v10-evidence/help-import-history-2026-10-24/checkpoint.json"
+      ]
     },
     {
       "id": "V10-004",
@@ -270,8 +272,10 @@
       "id": "V10-033",
       "sourceLine": 6814,
       "work": "Help stale-link/version CI checks.",
-      "reconciliation": "not_reconciled",
-      "evidence": []
+      "reconciliation": "in_progress",
+      "evidence": [
+        "doc/operations/aw-v10-evidence/help-import-history-2026-10-24/checkpoint.json"
+      ]
     },
     {
       "id": "V10-034",

@@ -73,7 +73,7 @@
     "runtimeUnconfirmed": "Den valgte runtime kunne ikke bekræftes. Kontroller den aktuelle runtime, før du fortsætter."
   },
   "home": "Hjem",
-  "ask": "Spørg August",
+  "ask": "Spørg Blentera",
   "needsYou": "Kræver dig",
   "inProgress": "I gang",
   "done": "Færdigt",
@@ -764,7 +764,7 @@
       "create_task": "Forbered en opgave",
       "connect_app": "Forbind en app",
       "run_workflow": "Åbn workflows til kørsel",
-      "ask_august": "Spørg August",
+      "ask_august": "Spørg Blentera",
       "create_project": "Forbered et projekt",
       "share_feedback": "Del feedback"
     }
