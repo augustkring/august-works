@@ -1,0 +1,100 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "a6083a8189885989a3e7cd457e6e42d4eca63777",
+  "meaning": "Only the original read-only validateCopySources boundary can issue the native pre-effect rejection proof. Routes retain failed/known status for it; ordinary later422 and other throws remain unknown. Native CLI preserves original cross-company work-content denial/no-effect assertions, allows new-company/ZIP metadata+Agent imports and same-company full-content restores. Native processSIGKILL after an actual Agent write remains unknown and nonreplayable. First route/process run retained one receipt-message assertion defect while process control passed; finalroute47PASS,CLI1PASS,servercompiler0. Temporary diagnostic source instrumentation and duplicate diagnostic-only logs were removed after diagnosis; original focused failure and final checks remain. Authorized cross-company publication and full CE-08 lifecycle remain open.",
+  "logs": [
+    {
+      "name": "import-source-refusal-route-process",
+      "exitCode": 1,
+      "rawSha256": "9f5669a46ebc3e258f3b92018e43a567ebe8ee027ec6a941b0df39dfad215ab7",
+      "sanitizedSha256": "652d0e741adf2ef3fce1cb237eba9d414c649bdac32f812642c87da3b0271165",
+      "archiveSha256": "15a10485b924d3f8b24c5810306ced0df2a276899e801a2ba22a693d6868dbbb",
+      "redactions": {
+        "ansi": 36,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed | 1 passed (2)",
+        "Tests  1 failed | 47 passed (48)",
+        "Duration  32.75s (transform 12.05s, setup 125ms, import 8.05s, tests 24.32s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "import-source-refusal-route-final",
+      "exitCode": 0,
+      "rawSha256": "e0fe1b5d8099abb6f5e6dd27975ea5a11d077cd6b1931eb5ff3576e7e6a0742e",
+      "sanitizedSha256": "3fe2261efada87cf96518a5fbd868bb8b98784cca00d80febf219ae4fa86ef23",
+      "archiveSha256": "593010518b4616ad1185da42d4d63ac75978408751fc2fc23d850d687d011b0d",
+      "redactions": {
+        "ansi": 36,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  47 passed (47)",
+        "Duration  19.40s (transform 12.21s, setup 70ms, import 4.05s, tests 15.16s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "import-source-refusal-server-typecheck",
+      "exitCode": 0,
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "cli-import-export-focused",
+      "exitCode": 1,
+      "rawSha256": "dc93a4afb8057a7874fd043acd0c21918530d29877fbfb24c073e25673fbf8f4",
+      "sanitizedSha256": "dc93a4afb8057a7874fd043acd0c21918530d29877fbfb24c073e25673fbf8f4",
+      "archiveSha256": "c2f6a0474605eba6f402e18b1733031a92cd4e8c63897d9db4ececd79cd75527",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed (1)",
+        "Duration  30.48s (transform 2.12s, setup 0ms, import 3.88s, tests 26.48s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "cli-import-export-final",
+      "exitCode": 0,
+      "rawSha256": "030e1d4cfd66a92fcb4342da8cd72e3a147e30efbdc62480794800e2ac64bc19",
+      "sanitizedSha256": "030e1d4cfd66a92fcb4342da8cd72e3a147e30efbdc62480794800e2ac64bc19",
+      "archiveSha256": "e887b82be646aeae38e1f780e113d42247968518e43e0da529e72cd0b4d362ac",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed (1)",
+        "Duration  42.85s (transform 2.68s, setup 0ms, import 4.58s, tests 38.15s, environment 0ms)"
+      ]
+    }
+  ]
+}

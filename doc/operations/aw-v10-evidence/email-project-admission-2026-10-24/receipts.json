@@ -1,0 +1,65 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "a6083a8189885989a3e7cd457e6e42d4eca63777",
+  "meaning": "Native email tests use the canonical local-trusted Project HTTP constructor instead of a raw unknown Project source row. Existing email service and fake provider transport remain unchanged. Focused2PASS then full26PASS. Initial targeted run retained the actual old fixture failure. No actual email/provider qualification or new source/Ready flags.",
+  "logs": [
+    {
+      "name": "email-channel-repair-focused",
+      "exitCode": 1,
+      "rawSha256": "6bc19bf8db77dd8c53ebfbe2214313400e1b94149a7cfc1412907a0d4993d271",
+      "sanitizedSha256": "6bc19bf8db77dd8c53ebfbe2214313400e1b94149a7cfc1412907a0d4993d271",
+      "archiveSha256": "b2a4460b6de2bd5e21cdc9205adc85d138edb80f130d17f8413134634aac8997",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 1 passed | 24 skipped (26)",
+        "Duration  19.95s (transform 10.37s, setup 69ms, import 15.12s, tests 4.64s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "email-channel-repair-focused-2",
+      "exitCode": 0,
+      "rawSha256": "a9f47951f84908e13b43de7af1be66f429c0fb5ddfb1e48d04f358b62c0d07b7",
+      "sanitizedSha256": "a9f47951f84908e13b43de7af1be66f429c0fb5ddfb1e48d04f358b62c0d07b7",
+      "archiveSha256": "ef7c13d4fe216795b823c973261fa43e9ec6e38d09d41f2e9d136b1111f1a2cf",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  2 passed | 24 skipped (26)",
+        "Duration  19.95s (transform 10.51s, setup 71ms, import 15.11s, tests 4.67s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "email-channel-repair-full",
+      "exitCode": 0,
+      "rawSha256": "a7132b0b1f1377801c4916f92e431375f3c9156c3fc6dc55cae497ce4e4bde7e",
+      "sanitizedSha256": "a7132b0b1f1377801c4916f92e431375f3c9156c3fc6dc55cae497ce4e4bde7e",
+      "archiveSha256": "d2229a6527599f9d07bb14094c33c26bdebca81d7524fe482ad196a17e6561ab",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  26 passed (26)",
+        "Duration  23.41s (transform 10.04s, setup 70ms, import 14.61s, tests 8.62s, environment 0ms)"
+      ]
+    }
+  ]
+}

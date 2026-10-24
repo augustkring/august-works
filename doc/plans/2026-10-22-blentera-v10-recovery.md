@@ -1374,3 +1374,19 @@ Full two-suite workspace service/route run78PASS and server compiler0. Actual te
 The adapter/plugin/CLI projects that the earlier UI/DB group failures prevented from running now completed with the repository's source-only `**/dist/**` exclusion. Result3187PASS/1FAIL/12SKIP across209files. The unresolved CLI company import/export fixture hits a preserved unknown-outcome refusal and is under diagnosis. The initial direct invocation accidentally included compiled test copies; that interrupted attempt remains separate evidence. No test exclusions or expected-source assertions were removed.
 
 The run began before concurrent bounded Help/import edits and is not a stable full-current workspace receipt. Whole UI/DB repaired cases remain targeted evidence, not freshly green whole groups. Evidence: `doc/operations/aw-v10-evidence/remaining-workspaces-2026-10-24/receipts.json`.
+
+### 2026-10-24 — Expand actual Help coverage and preserve native browser evidence
+
+The existing Mintlify Help navigation now has the ten V10 topic groups and14 source-linked preview articles. Seven retained customer guides were revised against current screens/services and five missing guides added; existing technical references remain separate. Current source/article hashes and explicit decisions cover the linked flows. The generated Help search catalog includes the actual content. Source/code review metadata is evidence of this bounded review, not publication approval or representative Human acceptance.
+
+Node12PASS, focused search41PASS and actual production UI/cookie-auth/PostgreSQL/Chromium journey1PASS37.7sec. The latter retains original Work, Help search, support draft, keyboard focus and before/after-acceptance recovery. Early fixed count/order expectations and stale article hashes after metadata edits are retained. Evidence: `doc/operations/aw-v10-evidence/help-ia-2026-10-24/receipts.json`. Hosted docs, complete DA articles, a grounded assistant, complete release/deprecation history, analytics, live support delivery and full V10 acceptance remain open.
+
+### 2026-10-24 — Keep read-only import refusals out of unknown-effect recovery
+
+The original portability owner can now issue a native preflight error only around its read-only source-admission check before any company/secret/Agent/Project/Task effect. The route records that refusal as a known failed request. Ordinary domain422 errors and other post-invocation exceptions remain unknown. The existing source-preview mismatch retains its specific proof and message.
+
+Final native job/route47PASS, actual CLI1PASS, server compiler0; actual child SIGKILL after a real imported Agent still preserves unknown/nonreplayable state. The CLI fixture retains the original unauthorized cross-company content attempt plus no-effect assertions, exercises new-company/ZIP company+Agent configuration and restores full content inside its original company. Authorized cross-company publication remains unimplemented, rather than bypassed or claimed as tested. Evidence: `doc/operations/aw-v10-evidence/import-source-refusal-2026-10-24/receipts.json`.
+
+### 2026-10-24 — Canonical Project admission for email fixture
+
+The low-trust email fixture now creates its Project through the original authenticated local-trusted HTTP admission. Source defaults and actual email/provider behavior are unchanged. Focused two cases pass; complete email integration file26PASS. Native recovery already passed after the earlier actor fix. Existing fake provider transport remains a transport test, with no actual email delivery qualification. Evidence: `doc/operations/aw-v10-evidence/email-project-admission-2026-10-24/receipts.json`.
