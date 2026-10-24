@@ -14,6 +14,30 @@ The implementation target is the unchanged [V10 revision 4.0 brief](../reference
 
 ## Working sequence
 
+### 24 October — saved search and suite repair checkpoint
+
+The Help adapter now searches the checked docs-as-code projection through the
+existing company search owner. It preserves configured article slugs, indexes
+the full bounded article body, respects issue-only filters and checks generated
+catalog freshness without rewriting it during typecheck. Focused search checks
+passed (32 server and 22 UI tests); the integrated docs check passed. This is a
+bounded Help adapter, not completion of the remaining federated Find domains or
+the full Help information architecture.
+
+The full workspace test attempt on `9dcf8cfe9` was interrupted during environment
+reattachment after 21 failed suite summaries had been observed. Its retained
+[inventory](../operations/aw-v10-evidence/workspace-suite-2026-10-24/checkpoint.json)
+is a failure record, not a full-suite receipt. Subsequent fixes retain native
+Routine identity at initial creation, preserve manual Routine identity when
+linked to pipelines and repair genuine Human fixture records. The full external
+chat file passes 142 tests; built-in agents pass 33 tests; AI connections pass
+44 tests; the repair worktree server typecheck passes. The combined pipeline and
+bundle run still has two pipeline failures, now at source-authority validation.
+[Scoped receipts](../operations/aw-v10-evidence/suite-repairs-2026-10-24/checkpoint.json)
+keep these passes and unresolved failures separate. Private Routine, private
+Memory and temporal source regressions remain open. The V10 target remains
+`in_progress`; PR-ready, release and production qualification are not established.
+
 Follow brief §39: correctness/security, execution foundation, first value, daily work, service closure, remaining integration proof, optional intelligence, then release qualification. Preserve the existing V4–V9 domain owners. Reconcile the complete retained catalogue and gates before source completion.
 
 Current bounded implementation work:
