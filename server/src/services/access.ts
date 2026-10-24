@@ -353,6 +353,47 @@ export function accessService(db: Db) {
     }
   }
 
+  async function pauseActiveOwnedRoutinesForWithdrawal(
+    tx: Parameters<Parameters<Db["transaction"]>[0]>[0],
+    companyId: string,
+    userId: string,
+    actorUserId: string | null | undefined,
+  ) {
+    const owned = await tx
+      .select({ id: routines.id, originKind: routines.originKind })
+      .from(routines)
+      .where(and(
+        eq(routines.companyId, companyId),
+        eq(routines.responsibleUserId, userId),
+        eq(routines.status, "active"),
+      ))
+      .for("update");
+    if (owned.length === 0) return 0;
+
+    const service = routineService(db);
+    const actorId = actorUserId ?? "system";
+    for (const routine of owned) {
+      await service.pauseForResponsibleUserOffboardingInTransaction(
+        tx as unknown as Db,
+        companyId,
+        routine.id,
+        userId,
+        { userId: actorId },
+      );
+      await tx.insert(activityLog).values({
+        companyId,
+        actorType: "user",
+        actorId,
+        action: "routine.paused_for_responsible_user_offboarding",
+        entityType: "routine",
+        entityId: routine.id,
+        responsibleUserId: userId,
+        details: { privateSourcePreserved: routine.originKind === "conversation_draft" },
+      });
+    }
+    return owned.length;
+  }
+
   async function isInstanceAdmin(userId: string | null | undefined): Promise<boolean> {
     if (!userId) return false;
     const row = await db
@@ -545,6 +586,7 @@ export function accessService(db: Db) {
       const now = new Date();
       if (existing.status === "active" && nextStatus !== "active" && existing.principalType === "user") {
         await sweepMemberConnectionAccess(tx, companyId, existing.principalId, now);
+        await pauseActiveOwnedRoutinesForWithdrawal(tx, companyId, existing.principalId, grantedByUserId);
       }
       const updated = await tx
         .update(companyMemberships)
@@ -932,6 +974,12 @@ export function accessService(db: Db) {
         const now = new Date();
         for (const membership of toArchive) {
           await sweepMemberConnectionAccess(tx, membership.companyId, membership.principalId, now);
+          await pauseActiveOwnedRoutinesForWithdrawal(
+            tx,
+            membership.companyId,
+            membership.principalId,
+            options.actorUserId,
+          );
         }
         await tx
           .update(companyMemberships)
@@ -1169,6 +1217,7 @@ export function accessService(db: Db) {
       membershipRole?: string | null;
       status?: "pending" | "active" | "suspended";
     },
+    actorUserId: string | null = null,
   ) {
     return db.transaction(async (tx) => {
       await tx.execute(sql`
@@ -1219,10 +1268,11 @@ export function accessService(db: Db) {
       const now = new Date();
       if (
         existing.principalType === "user" &&
-        existing.status !== "suspended" &&
-        nextStatus === "suspended"
+        existing.status === "active" &&
+        nextStatus !== "active"
       ) {
         await sweepMemberConnectionAccess(tx, companyId, existing.principalId, now);
+        await pauseActiveOwnedRoutinesForWithdrawal(tx, companyId, existing.principalId, actorUserId);
       }
 
       return tx

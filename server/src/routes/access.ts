@@ -4480,7 +4480,7 @@ export function accessRoutes(
       if (!memberToUpdate) throw notFound("Member not found");
       await assertCanManageCompanyMember(req, access, companyId, memberToUpdate);
 
-      const updated = await access.updateMember(companyId, memberId, req.body);
+      const updated = await access.updateMember(companyId, memberId, req.body, req.actor.userId ?? null);
       if (!updated) throw notFound("Member not found");
 
       await logActivity(db, {

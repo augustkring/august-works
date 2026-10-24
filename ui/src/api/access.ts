@@ -1,4 +1,4 @@
-import type { AgentAdapterType, JoinRequest, PermissionKey } from "@paperclipai/shared";
+import type { AgentAdapterType, JoinRequest, PermissionKey, ArchiveCompanyMemberResponse as SharedArchiveCompanyMemberResponse } from "@paperclipai/shared";
 import { api, detachInflightGet } from "./client";
 
 export type HumanCompanyRole = "owner" | "admin" | "operator" | "viewer";
@@ -133,9 +133,8 @@ export type CompanyMember = {
   };
 };
 
-export type ArchiveCompanyMemberResponse = {
+export type ArchiveCompanyMemberResponse = Omit<SharedArchiveCompanyMemberResponse, "member"> & {
   member: CompanyMember;
-  reassignedIssueCount: number;
 };
 
 export type CompanyMembersResponse = {

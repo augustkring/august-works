@@ -3,6 +3,7 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   agents,
+  agentIdentities,
   activityLog,
   authUsers,
   companySecretBindings,
@@ -15,6 +16,7 @@ import {
   connectionGrants,
   instanceUserRoles,
   issues,
+  heartbeatRuns,
   principalPermissionGrants,
   routines,
   routineRevisions,
@@ -29,6 +31,7 @@ import {
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
 import { accessService } from "../services/access.js";
+import { issueService } from "../services/issues.js";
 import { grantsForHumanRole } from "../services/company-member-roles.js";
 import { backfillPrincipalAccessCompatibility } from "../services/principal-access-compatibility.js";
 
@@ -85,8 +88,10 @@ describeEmbeddedPostgres("access service", () => {
     await db.delete(routineRevisions);
     await db.delete(routines);
     await db.delete(principalPermissionGrants);
+    await db.delete(heartbeatRuns);
     await db.delete(instanceUserRoles);
     await db.delete(agents);
+    await db.delete(agentIdentities);
     await db.delete(companyMemberships);
     await db.delete(authUsers);
     await db.delete(companies);
@@ -297,23 +302,100 @@ describeEmbeddedPostgres("access service", () => {
       status: "active",
       membershipRole: "operator",
     }).returning().then((rows) => rows[0]!);
-    const originId = randomUUID();
+    const now = new Date();
+    await db.insert(authUsers).values({
+      id: member.principalId,
+      name: "Private routine source owner",
+      email: `${member.principalId}@example.test`,
+      emailVerified: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const identity = await db.insert(agentIdentities).values({
+      name: "Private routine source agent",
+      homeCompanyId: company.id,
+    }).returning().then((rows) => rows[0]!);
+    const agent = await db.insert(agents).values({
+      companyId: company.id,
+      agentIdentityId: identity.id,
+      name: "Private routine source agent",
+      status: "idle",
+    }).returning().then((rows) => rows[0]!);
+    await db.insert(companyMemberships).values({
+      companyId: company.id,
+      principalType: "agent",
+      principalId: agent.id,
+      status: "active",
+      membershipRole: "member",
+    });
+    const conversation = await issueService(db).create(company.id, {
+      title: "Private routine conversation",
+      status: "in_progress",
+      assigneeAgentId: agent.id,
+      conversationAgentId: agent.id,
+      conversationUserId: member.principalId,
+      conversationState: "active",
+      createdByUserId: member.principalId,
+    });
+    const originRun = await db.insert(heartbeatRuns).values({
+      companyId: company.id,
+      agentId: agent.id,
+      responsibleUserId: member.principalId,
+      nativeIssueId: conversation.id,
+      runtimeMode: "native",
+      status: "running",
+      contextSnapshot: { issueId: conversation.id, conversationSessionGeneration: 0 },
+    }).returning().then((rows) => rows[0]!);
     const inserted = await db.insert(routines).values({
       companyId: company.id,
       title: "Private conversation routine",
       status: "active",
       originKind: "conversation_draft",
-      originId,
+      originId: originRun.id,
+      createdByAgentId: agent.id,
       responsibleUserId: member.principalId,
     }).returning().then((rows) => rows[0]!);
+    const [unErased] = await db.execute<{ erased: boolean }>(sql`
+      select aw_conversation_routine_source_erased(${company.id}::uuid, ${inserted.id}::uuid) as erased
+    `);
+    expect(unErased?.erased).toBe(false);
 
     const result = await accessService(db).archiveMember(company.id, member.id, {}, owner.principalId);
     expect(result).toMatchObject({ reassignedRoutineCount: 0, pausedRoutineCount: 1, ownerActionRoutineCount: 1 });
     expect((await accessService(db).getMemberById(company.id, member.id))?.status).toBe("archived");
     const privateRoutine = (await db.select().from(routines).where(eq(routines.id, inserted.id)))[0]!;
-    expect(privateRoutine).toMatchObject({ status: "paused", originKind: "conversation_draft", originId, responsibleUserId: member.principalId });
+    expect(privateRoutine).toMatchObject({ status: "paused", originKind: "conversation_draft", originId: originRun.id, createdByAgentId: agent.id, responsibleUserId: member.principalId });
     const latestRevision = (await db.select().from(routineRevisions).where(eq(routineRevisions.id, privateRoutine.latestRevisionId!)))[0]!;
-    expect(latestRevision).toMatchObject({ responsibleUserId: member.principalId, snapshot: { routine: { originKind: "conversation_draft", responsibleUserId: member.principalId, status: "paused" } } });
+    expect(latestRevision).toMatchObject({ responsibleUserId: member.principalId, snapshot: { routine: { responsibleUserId: member.principalId, status: "paused" } } });
+  });
+
+  it.each(["suspended", "pending"] as const)("moves an active member to %s and pauses owned routines through the retained revision writer", async (status) => {
+    const { company, owner } = await createCompanyWithOwner(db);
+    const member = await db.insert(companyMemberships).values({
+      companyId: company.id,
+      principalType: "user",
+      principalId: `member-${randomUUID()}`,
+      status: "active",
+      membershipRole: "operator",
+    }).returning().then((rows) => rows[0]!);
+    const routine = await db.insert(routines).values({
+      companyId: company.id,
+      title: "Routine paused on suspension",
+      status: "active",
+      responsibleUserId: member.principalId,
+    }).returning().then((rows) => rows[0]!);
+
+    const suspended = await accessService(db).updateMember(
+      company.id,
+      member.id,
+      { status },
+      owner.principalId,
+    );
+    expect(suspended?.status).toBe(status);
+    const paused = (await db.select().from(routines).where(eq(routines.id, routine.id)))[0]!;
+    expect(paused).toMatchObject({ status: "paused", responsibleUserId: member.principalId });
+    const latestRevision = (await db.select().from(routineRevisions).where(eq(routineRevisions.id, paused.latestRevisionId!)))[0]!;
+    expect(latestRevision).toMatchObject({ responsibleUserId: member.principalId, snapshot: { routine: { status: "paused", responsibleUserId: member.principalId } } });
   });
 
   it("rejects instance-level company access removal for self and protected users", async () => {

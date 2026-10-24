@@ -470,17 +470,25 @@ export function experienceService(db: Db) {
                       await attentionIsVisible(actor, companyId, item, signal)
                     )
                       visible.push(item);
+                  let responsibilityCards: ExperienceCard[] = [];
+                  let responsibilityUnavailable = false;
+                  try {
+                    responsibilityCards = (await readRoutineResponsibilityAttention(db, actor, companyId, signal)).needsYou;
+                  } catch {
+                    signal.throwIfAborted();
+                    responsibilityUnavailable = true;
+                  }
                   return {
-                    ...(feed.nextCursor
+                    ...(feed.nextCursor || responsibilityUnavailable
                       ? {
                           coverage: {
                             state: "partial" as const,
-                            reason: "more_items_available" as const,
+                            reason: responsibilityUnavailable ? "source_stale" as const : "more_items_available" as const,
                           },
                         }
                       : {}),
                     needsYou: [
-                      ...(await readRoutineResponsibilityAttention(db, actor, companyId, signal)).needsYou,
+                      ...responsibilityCards,
                       ...visible.map((item) => attentionExperienceCard(item, feed.generatedAt)),
                     ],
                   };
