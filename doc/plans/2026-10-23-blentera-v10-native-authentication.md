@@ -577,3 +577,32 @@ Evidence:
 Remaining sandbox host-command admission, runtime control/operation provenance,
 operator bootstrap/recovery, source-owner failures and full V10/PR gates remain
 open.
+
+### 2026-10-24 — native sandbox host-command queue admission
+
+The existing native host-command bridge now receives the canonical operator list
+from the SaaS platform and fails closed without it. Each human invocation checks
+actual configured native passkey proof before host details, at original queue
+transaction entry, and before enqueue/idempotent return. Capabilities, inspection
+and effective-policy metadata require current proof; prepare, probes, provider
+revocation, Stop and destroy require recent proof. After waiting for a successful
+host reply, proof repeats before and after the original receipt/scope read in its
+transaction. No provider I/O holds these new authentication locks.
+
+The original host epoch, encrypted scope, company/resource permission, immutable
+request/hash, queue capacity, lease/claim-token, signed receipt and unknown-outcome
+owners remain. Worker claim/complete/reconcile code is unchanged and receives no
+fabricated session proof. Complete durable admission provenance and later dispatch
+qualification remain unresolved; a requester ID is not freshly authenticated
+operator authority. Physical workload apply/start admission remains closed until
+its original host controls are qualified.
+
+Native host-bridge/sandbox/host-auth suites pass32, including empty allowlist,
+missing/deleted session refusal before queue writes, stale proof refused for
+preparation but accepted for private capability reads, and the original actual
+crypto-envelope/lease/epoch checks. Host replies are owned fixtures, not physical
+host or external provider qualification. No migration/dependency change.
+Evidence:
+`doc/operations/aw-v10-evidence/native-operator-host-queue-2026-10-24/checkpoint.json`.
+Powerful Board/CLI credential creation, enterprise recovery/SSO, other sensitive
+owners, native input/source construction and full V10/PR gates remain open.

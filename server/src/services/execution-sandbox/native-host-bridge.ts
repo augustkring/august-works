@@ -15,6 +15,7 @@ import {
   type SandboxHostRequest,
 } from "@paperclipai/shared";
 import type { AuthorizationActor } from "../authorization.js";
+import { assertConfiguredOperatorAuthentication } from "../../auth/authenticator-assurance.js";
 import {
   assertV7Authorization,
   assertV7Enabled,
@@ -35,9 +36,22 @@ const safety = (action: string) =>
  * browser, Task body or model response can provide a transport or attestation. */
 export function nativeSandboxHostTransport(
   db: Db,
-  options: { suspectSeconds?: number; timeoutMs?: number } = {},
+  options: {
+    suspectSeconds?: number;
+    timeoutMs?: number;
+    operatorUserIds?: readonly string[];
+  } = {},
 ) {
   const auth = runtimeHostAuth(db);
+  const operatorUserIds = options.operatorUserIds ?? [];
+  const requireRecent = (action: SandboxHostRequest["action"]) =>
+    ["prepare", "probe", "revoke_providers", "stop", "destroy"].includes(
+      action,
+    );
+  const assertOperator = (actor: AuthorizationActor, action: SandboxHostRequest["action"], tx?: Db) =>
+    assertConfiguredOperatorAuthentication(tx ?? db, actor, operatorUserIds, {
+      requireRecent: requireRecent(action),
+    });
   async function current(
     tx: Db,
     request: SandboxHostRequest,
@@ -131,9 +145,13 @@ export function nativeSandboxHostTransport(
     };
     const userId = v7HumanActorId(actor),
       now = new Date();
+    // Fail closed before revealing host/capability state to an unconfigured
+    // or weakly authenticated operator.
+    await assertOperator(actor, action);
     const queued = await withV7ActivityTransaction(
       db,
       async (tx, publications) => {
+        await assertOperator(actor, action, tx);
         await assertV7Authorization(
           tx,
           actor,
@@ -178,6 +196,7 @@ export function nativeSandboxHostTransport(
             throw conflict(
               "Sandbox operation key belongs to different immutable inputs",
             );
+          await assertOperator(actor, action, tx);
           return existing;
         }
         const active = await tx
@@ -231,6 +250,7 @@ export function nativeSandboxHostTransport(
           },
           publications,
         );
+        await assertOperator(actor, action, tx);
         return command;
       },
     );
@@ -242,6 +262,7 @@ export function nativeSandboxHostTransport(
       if (!record) throw conflict("Native sandbox receipt unavailable");
       if (record.status === "SUCCEEDED") {
         return db.transaction(async (tx) => {
+          await assertOperator(actor, action, tx as unknown as Db);
           await current(
             tx as unknown as Db,
             sandboxHostRequestSchema.parse(record.payload),
@@ -251,6 +272,7 @@ export function nativeSandboxHostTransport(
           const reply = sandboxHostReplySchema.parse(record.safeResult);
           if (reply.action !== action)
             throw conflict("Native sandbox reply action changed");
+          await assertOperator(actor, action, tx as unknown as Db);
           return { commandId: record.id, reply };
         });
       }

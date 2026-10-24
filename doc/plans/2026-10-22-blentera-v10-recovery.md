@@ -843,3 +843,14 @@ and provider outcome reconciliation preserved. Native suites pass14; this is
 software/provider-fixture evidence, not a live host or dispatch qualification.
 Evidence: `doc/operations/aw-v10-evidence/native-operator-fleet-2026-10-24/checkpoint.json`.
 Complete operation provenance and the remaining V10/PR gates stay open.
+
+### 2026-10-24 — native sandbox command queue proof
+
+The original native sandbox host-command bridge now requires current/recent
+operator proof according to the actual action, pins it across queue admission and
+rechecks successful private receipt presentation. SaaS wiring passes the canonical
+operator list; no configuration fails closed. Original encrypted host scope,
+signature, lease, epoch and outcome checks remain. Native suites pass32 and server
+compilation passes; physical dispatch/host qualification stays open. Evidence:
+`doc/operations/aw-v10-evidence/native-operator-host-queue-2026-10-24/checkpoint.json`.
+Powerful credential/enterprise/input-source and complete V10/PR work remain open.

@@ -4,6 +4,7 @@ import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
 import {
   activityLog,
+  authSessions,
   billingAccounts,
   billingAccountCompanies,
   companyMemberships,
@@ -180,8 +181,36 @@ const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
         `command:${claim.id}:${host.id}:1`,
       );
     }
+    it("fails closed before queueing unless the configured operator has a current passkey session", async () => {
+      const transport = nativeSandboxHostTransport(db, {
+        operatorUserIds: [f.userId],
+      });
+      await expect(
+        nativeSandboxHostTransport(db).bridge(f.actor).capabilities(scope),
+      ).rejects.toMatchObject({ status: 403 });
+      const withoutSession = { ...f.actor, sessionId: undefined };
+      await expect(
+        transport.bridge(withoutSession).capabilities(scope),
+      ).rejects.toMatchObject({ status: 403 });
+      await db.update(authSessions).set({ authenticatedAt: new Date(Date.now() - 301000) })
+        .where(eq(authSessions.id, f.actor.sessionId!));
+      await expect(transport.bridge(f.actor).prepare(scope)).rejects.toMatchObject({ status: 403 });
+      await db.delete(authSessions).where(eq(authSessions.id, f.actor.sessionId!));
+      await expect(
+        transport.bridge(f.actor).capabilities(scope),
+      ).rejects.toMatchObject({ status: 403 });
+      expect(
+        await db
+          .select()
+          .from(runtimeHostCommands)
+          .where(eq(runtimeHostCommands.runtimeCellId, cell.id)),
+      ).toHaveLength(0);
+    });
     it("persists an encrypted current native scope and rejects mismatched receipts without earning capability", async () => {
-      const transport = nativeSandboxHostTransport(db),
+      // Private host metadata reads require current proof, not a new recent event.
+      await db.update(authSessions).set({ authenticatedAt: new Date(Date.now() - 301000) })
+        .where(eq(authSessions.id, f.actor.sessionId!));
+      const transport = nativeSandboxHostTransport(db, { operatorUserIds: [f.userId] }),
         result = transport.bridge(f.actor).capabilities(scope);
       await pending();
       const claim = await transport.claim(host.id);
@@ -230,7 +259,7 @@ const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
       "owner revocation",
       "rollout rollback",
     ])("cancels queued scope after %s changes", async (reason) => {
-      const transport = nativeSandboxHostTransport(db),
+      const transport = nativeSandboxHostTransport(db, { operatorUserIds: [f.userId] }),
         result = transport
           .bridge(f.actor)
           .capabilities(scope)
@@ -273,7 +302,7 @@ const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
         openshell_v7: false,
         sandbox_abstraction_v7: false,
       });
-      const transport = nativeSandboxHostTransport(db),
+      const transport = nativeSandboxHostTransport(db, { operatorUserIds: [f.userId] }),
         result = transport
           .bridge(f.actor)
           .stop({ ...scope, idempotencyKey: "fixture-safe-stop" });
@@ -312,7 +341,7 @@ const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
         .set({ hostAgentVersion: version })
         .where(eq(runtimeHosts.id, host.id));
       await expect(
-        nativeSandboxHostTransport(db).bridge(f.actor).capabilities(scope),
+        nativeSandboxHostTransport(db, { operatorUserIds: [f.userId] }).bridge(f.actor).capabilities(scope),
       ).rejects.toMatchObject({ status: 409 });
       expect(
         await db
@@ -322,7 +351,7 @@ const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
       ).toHaveLength(0);
     });
     it("retains unsupported host qualification without treating configured image as physical preparation", async () => {
-      const transport = nativeSandboxHostTransport(db);
+      const transport = nativeSandboxHostTransport(db, { operatorUserIds: [f.userId] });
       const service = executionSandboxService(db, {
         operatorUserIds: [f.userId],
         backendFor: (_binding, actor) =>
@@ -381,7 +410,7 @@ const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
       expect(retained.qualifications[0]?.results).toHaveLength(18);
     }, 20000);
     it("rejects a late completion after host fencing and expires bounded pending work", async () => {
-      const transport = nativeSandboxHostTransport(db),
+      const transport = nativeSandboxHostTransport(db, { operatorUserIds: [f.userId] }),
         result = transport
           .bridge(f.actor)
           .capabilities(scope)

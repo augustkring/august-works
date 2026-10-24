@@ -113,7 +113,10 @@ export function saasPlatform(
     config,
     notifications.notifyCompany,
   );
-  const sandboxHosts = nativeSandboxHostTransport(db, { suspectSeconds: config.runtime.suspectSeconds });
+  const sandboxHosts = nativeSandboxHostTransport(db, {
+    suspectSeconds: config.runtime.suspectSeconds,
+    operatorUserIds: config.operatorUserIds,
+  });
   const workerModels = config.workerModelProfiles?.length ? workerModelGateway(db, {
     profiles: config.workerModelProfiles, sourceSha: config.deployment.sourceSha,
     protectedEvidenceOrigin: origins.primaryAppOrigin,
