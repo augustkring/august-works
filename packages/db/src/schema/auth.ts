@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, timestamp, boolean, integer, bigint, index, uniqueIndex, check } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, integer, bigint, jsonb, index, uniqueIndex, check } from "drizzle-orm/pg-core";
 
 export const authUsers = pgTable("user", {
   id: text("id").primaryKey(),
@@ -100,10 +100,14 @@ export const authTwoFactors = pgTable("two_factor", {
   userId: text("user_id").notNull().references(() => authUsers.id, { onDelete: "cascade" }),
   verified: boolean("verified").notNull().default(true),
   failedVerificationCount: integer("failed_verification_count").notNull().default(0),
+  // Bounded one-use metadata for already verified OTPs; never plaintext codes.
+  totpReplayState: jsonb("totp_replay_state").$type<Array<{ fingerprint: string; expiresAtMs: number }>>()
+    .notNull().default([]),
   lockedUntil: timestamp("locked_until", { withTimezone: true }),
 }, (table) => ({
   userUq: uniqueIndex("two_factor_user_uq").on(table.userId),
   secretIdx: index("two_factor_secret_idx").on(table.secret),
+  totpReplayStateCheck: check("two_factor_totp_replay_state_check", sql`jsonb_typeof(${table.totpReplayState})='array' and jsonb_array_length(${table.totpReplayState})<=16`),
   failedVerificationCountCheck: check("two_factor_failed_verification_count_check", sql`${table.failedVerificationCount} >= 0`),
 }));
 

@@ -3,7 +3,8 @@ import express from "express";
 import request from "supertest";
 import { eq, sql } from "drizzle-orm";
 import { hashPassword, makeSignature, symmetricDecrypt } from "better-auth/crypto";
-import type { Auth } from "better-auth";
+import { createOTP } from "@better-auth/utils/otp";
+import { APIError, type Auth } from "better-auth";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { authAccounts, authRateLimits, authSessions, authTwoFactors, authUsers, authVerifications,
   createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS } from "@paperclipai/db";
@@ -54,12 +55,18 @@ describe("maintained native TOTP and recovery lifecycle", () => {
     expect(response.status).toBe(200);
     return { email, userId: response.body.user.id as string, cookie: cookies("", response) };
   }
+  const usedSteps = new Map<string, number>();
   async function code(userId: string) {
     const [factor] = await db.select().from(authTwoFactors).where(eq(authTwoFactors.userId, userId));
     const context = await (auth as unknown as Auth).$context;
     const secret = await symmetricDecrypt({ key: context.secretConfig, data: factor.secret });
-    const api = auth.api as unknown as { generateTOTP(input: { body: { secret: string } }): Promise<{ code: string }> };
-    return (await api.generateTOTP({ body: { secret } })).code;
+    const step = Math.floor(Date.now()/30_000);
+    const previous = usedSteps.get(userId);
+    const next = previous === undefined ? step : Math.max(step, previous+1);
+    usedSteps.set(userId, next);
+    // Retain the real native generator; its documented adjacent step supplies
+    // a distinct valid code without changing clocks or mocking verification.
+    return createOTP(secret).hotp(next);
   }
   async function enrolled() {
     const fixture = await signup();
@@ -68,12 +75,13 @@ describe("maintained native TOTP and recovery lifecycle", () => {
     expect(new URL(enabled.body.totpURI).pathname).toContain("Blentera");
     expect(enabled.body.backupCodes).toHaveLength(10);
     fixture.cookie = cookies(fixture.cookie, enabled);
-    const completed = await post("two-factor/verify-totp", fixture.cookie).send({ code: await code(fixture.userId) });
+    const firstCode = await code(fixture.userId);
+    const completed = await post("two-factor/verify-totp", fixture.cookie).send({ code: firstCode });
     expect(completed.status).toBe(200);
     expect(completed.body.user.twoFactorEnabled).toBe(true);
     expect(completed.body.user).not.toHaveProperty("authenticatorVersion");
     fixture.cookie = cookies(fixture.cookie, completed);
-    return { ...fixture, backupCodes: enabled.body.backupCodes as string[] };
+    return { ...fixture, firstCode, backupCodes: enabled.body.backupCodes as string[] };
   }
 
   it("verifies real TOTP and one-use recovery codes while fencing native password challenges", async () => {
@@ -101,7 +109,7 @@ describe("maintained native TOTP and recovery lifecycle", () => {
     const complete = await post("two-factor/verify-totp", challenge).send({ code: await code(fixture.userId) });
     expect(complete.status).toBe(200);
     expect(cookies("", complete)).toContain("session_token");
-    expect((await post("two-factor/verify-totp", challenge).send({ code: await code(fixture.userId) })).status).toBe(401);
+    expect((await post("two-factor/verify-totp", challenge).send({ code: fixture.firstCode })).status).toBe(401);
     const recoverySignin = await post("sign-in/email").send({ email: fixture.email, password: PASSWORD });
     const recovered = await post("two-factor/verify-backup-code", cookies("", recoverySignin))
       .send({ code: fixture.backupCodes[0] });
@@ -192,7 +200,8 @@ describe("maintained native TOTP and recovery lifecycle", () => {
       newPassword: replacementPassword, revokeOtherSessions: false });
     expect((await change()).status).toBe(403);
     expect((await db.select().from(authAccounts).where(eq(authAccounts.id, credential.id)))[0].password).toBe(credential.password);
-    const confirmed = await post("two-factor/verify-totp", fixture.cookie).send({ code: await code(fixture.userId) });
+    const confirmationCode = await code(fixture.userId);
+    const confirmed = await post("two-factor/verify-totp", fixture.cookie).send({ code: confirmationCode });
     expect(confirmed.status).toBe(200); fixture.cookie = cookies(fixture.cookie, confirmed);
     const [proof] = await db.select().from(authSessions).where(eq(authSessions.userId, fixture.userId));
     const changed = await change(); expect(changed.status).toBe(200);
@@ -201,7 +210,10 @@ describe("maintained native TOTP and recovery lifecycle", () => {
       authenticatorVersion: proof.authenticatorVersion!+1 });
     expect(session.id).not.toBe(proof.id);
     expect((await post("sign-in/email").send({ email: fixture.email, password: PASSWORD })).status).toBe(401);
-    expect((await post("sign-in/email").send({ email: fixture.email, password: replacementPassword })).body.twoFactorRedirect).toBe(true);
+    const challenge = await post("sign-in/email").send({ email: fixture.email, password: replacementPassword });
+    expect(challenge.body.twoFactorRedirect).toBe(true);
+    const replay = await post("two-factor/verify-totp", cookies("", challenge)).send({ code: confirmationCode });
+    expect(replay.status).toBe(401); expect(replay.body.code).toBe("OTP_ALREADY_USED");
   }, 60_000);
 
   it("requires a current recent factor session for irreversible account exit", async () => {
@@ -224,6 +236,67 @@ describe("maintained native TOTP and recovery lifecycle", () => {
       .resolves.toMatchObject({ status: "requested" });
     expect(await db.select().from(authSessions).where(eq(authSessions.userId, fixture.userId))).toEqual([]);
     expect(await db.select().from(authTwoFactors).where(eq(authTwoFactors.userId, fixture.userId))).toEqual([]);
+  }, 60_000);
+
+  it("refuses a verified TOTP value reused with another real password challenge", async () => {
+    const fixture = await enrolled();
+    const signin = await post("sign-in/email").send({ email: fixture.email, password: PASSWORD });
+    expect(signin.body.twoFactorRedirect).toBe(true);
+    const replay = await post("two-factor/verify-totp", cookies("", signin)).send({ code: fixture.firstCode });
+    expect.soft(replay.status).toBe(401);
+    expect.soft(replay.body.code).toBe("OTP_ALREADY_USED");
+    expect.soft(await db.select().from(authSessions).where(eq(authSessions.userId, fixture.userId))).toHaveLength(1);
+  }, 60_000);
+
+  it("commits a verified OTP consumption once across simultaneous native challenges", async () => {
+    const fixture = await enrolled();
+    const first = await post("sign-in/email").send({ email: fixture.email, password: PASSWORD });
+    const second = await post("sign-in/email").send({ email: fixture.email, password: PASSWORD });
+    const value = await code(fixture.userId);
+    const results = await Promise.all([first, second].map(response => post("two-factor/verify-totp", cookies("", response))
+      .send({ code: value })));
+    expect(results.filter(response => response.status===200)).toHaveLength(1);
+    expect(results.filter(response => response.status===401 || response.status===409)).toHaveLength(1);
+    const [factor] = await db.select().from(authTwoFactors).where(eq(authTwoFactors.userId, fixture.userId));
+    expect(factor.totpReplayState).toHaveLength(2); // Enrollment plus the one accepted new code.
+    expect(factor.totpReplayState.every(entry => /^[a-f0-9]{64}$/.test(entry.fingerprint))).toBe(true);
+    expect(await db.select().from(authSessions).where(eq(authSessions.userId, fixture.userId))).toHaveLength(2);
+  }, 60_000);
+
+  it("keeps a verified OTP consumed when the subsequent native session write fails", async () => {
+    const fixture = await enrolled(), context = await (auth as unknown as Auth).$context;
+    const value = await code(fixture.userId);
+    const spy = vi.spyOn(context.internalAdapter, "createSession").mockImplementationOnce(async () => {
+      throw new APIError("BAD_REQUEST", { code: "FIXTURE_SESSION_WRITE_FAILURE", message: "Abort session completion" });
+    });
+    try {
+      const failed = await post("two-factor/verify-totp", fixture.cookie).send({ code: value });
+      expect(failed.status).toBe(400);
+    } finally { spy.mockRestore(); }
+    const retried = await post("two-factor/verify-totp", fixture.cookie).send({ code: value });
+    expect(retried.status).toBe(401);
+    expect(retried.body.code).toBe("OTP_ALREADY_USED");
+    expect(await db.select().from(authSessions).where(eq(authSessions.userId, fixture.userId))).toHaveLength(1);
+  }, 60_000);
+
+  it("pins the actual prior session while publishing a fresh in-session factor proof", async () => {
+    const fixture = await enrolled(), context = await (auth as unknown as Auth).$context;
+    const [old] = await db.select().from(authSessions).where(eq(authSessions.userId, fixture.userId));
+    const create = context.internalAdapter.createSession.bind(context.internalAdapter);
+    let pinned = false;
+    const spy = vi.spyOn(context.internalAdapter, "createSession").mockImplementationOnce(async (...args) => {
+      try {
+        await db.transaction(tx => tx.execute(sql`select id from "session" where id=${old.id} for update nowait`));
+      } catch (error) {
+        pinned = (error as { cause?: { code?: string } }).cause?.code === "55P03";
+        if (!pinned) throw error;
+      }
+      return create(...args);
+    });
+    try {
+      const confirmed = await post("two-factor/verify-totp", fixture.cookie).send({ code: await code(fixture.userId) });
+      expect(confirmed.status).toBe(200); expect(pinned).toBe(true);
+    } finally { spy.mockRestore(); }
   }, 60_000);
 
   it("rejects stale first-factor verification before issuing any MFA challenge", async () => {

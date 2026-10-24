@@ -1,0 +1,60 @@
+{
+  "parentCommit": "077fd1d032265901984e129c592e6c497d95e249",
+  "sourcePins": {
+    "packages/db/src/schema/auth.ts": "5b493f8584d74cc0e208bc913f806bee7600d6477fc6ad225008e4c06e055687",
+    "packages/db/src/migrations/0523_crazy_lake.sql": "478508ac594af8bb609509812435e504e2d785a4ed70e879cae31263ef672cdd",
+    "packages/db/src/migrations/meta/0523_snapshot.json": "cbd9eda8b47f7eaf7f84447c9edf55f29d4be6849bb3a50d8c60752cd3ab7f7b",
+    "packages/db/src/migrations/meta/_journal.json": "60d01e34c30cc29cb6d069062344c0e2bc9970491374a48e1634a873577b59e7",
+    "server/src/auth/native-two-factor.ts": "ba0131611bde0dcdb8e80b9f98b5fab5d4bcce9914715023345b7e99b80b07c8",
+    "server/src/__tests__/native-two-factor.integration.test.ts": "2014c17f260bfa2b874cdf32c10078688357bafa25d33812b645ef1fac1fda29"
+  },
+  "checks": {
+    "originalReplayBaseline": {
+      "exit": 1,
+      "failedCases": 1,
+      "failedAssertions": 3,
+      "filtered": 7
+    },
+    "firstConsumptionStage": {
+      "exit": 0,
+      "passed": 46,
+      "suites": 4
+    },
+    "rollbackBaseline": {
+      "exit": 1,
+      "failedCases": 1,
+      "filtered": 9
+    },
+    "independentConsumptionStage": {
+      "exit": 0,
+      "passed": 47,
+      "suites": 4
+    },
+    "finalNativeSuites": {
+      "exit": 0,
+      "passed": 48,
+      "suites": 4
+    },
+    "serverCompiler": {
+      "exit": 0
+    },
+    "nativeMigrationChecks": {
+      "exit": 0
+    }
+  },
+  "observations": [
+    "The original maintained verifier accepts the same valid TOTP value on a second password challenge, returning 200 and leaving two sessions. The exact original-product regression fails three assertions.",
+    "The existing native factor row now retains bounded fingerprints of already verified codes. A database constraint bounds the array to 16 entries; successful use drops expired entries. Neither plaintext codes nor another identity/factor system is stored.",
+    "The 90-second database-time consumption window covers the maintained verifier's current and adjacent 30-second steps. Fingerprints remain on the same factor across password and backup-code changes and disappear with the factor on erasure. Retained bounded fingerprints are security metadata, not a timed physical-erasure claim.",
+    "The first atomic implementation passes 46 cases but rolls consumption back when later session creation fails. A new actual native session-write failure regression demonstrates code reuse after that rollback; the exact stage is archived.",
+    "Final consumption commits in an independent proof-pinned transaction after real provider verification. Session publication repeats current user/factor checks, uses the original verification time and cannot restore the consumed value on failure.",
+    "The current native session is physically pinned during in-session TOTP completion using the shared proof owner. A separate PostgreSQL transaction cannot acquire a conflicting lock while the real native replacement is being created.",
+    "Two actual concurrent password challenges using one new valid code yield one successful completion. Reuse after a password change and after injected native session-write failure is refused. All real verifiers remain maintained provider code. Tests use the provider's maintained current/adjacent-step generators without changing clocks.",
+    "Final four complete PostgreSQL/HTTP suites pass 48 cases; final server compiler and native migration checks return zero. Native generation creates 0523 and prunes only the oldest snapshot; no committed migration SQL is edited."
+  ],
+  "limits": [
+    "Account settings/enrollment UX, explicit expected-principal request binding, passkey UV/operator bootstrap, enterprise recovery, other sensitive actions and full V10 release admission remain open.",
+    "Actual tests use one environment and one PostgreSQL cluster. They do not qualify deployed replicas, production clock alignment, restart/failover, recovery from encrypted backups or hosts/providers.",
+    "The compiler excludes tests; latest full workspace test/build and PR readiness remain open."
+  ]
+}

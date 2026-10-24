@@ -1,4 +1,4 @@
-import { createHash, randomUUID } from "node:crypto";
+import { createHash, createHmac, randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { APIError, type GenericEndpointContext } from "better-auth";
 import { changePassword as nativeChangePassword, createAuthEndpoint, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
@@ -159,20 +159,58 @@ export function nativeTwoFactorPlugin(db: Db, schema: NativeAuthenticationSchema
       }).catch(nativeFailure);
 
       if (!owner.factorId || !owner.secret || operation === "backup_code" && !owner.verified) deny();
+      const factorSecret = owner.secret;
       try {
         // Keep native failed-attempt and one-use writes outside the completion
         // transaction: a rejected confirmation must not roll its budget back.
         const response = await invoke(ctx, endpoint);
-        const session = await withNativeAuthenticationTransaction(db, ctx, schema, async tx => {
-          const version = owner.version + (operation === "backup_code" || !owner.verified && !owner.enabled ? 1 : 0);
-          const [valid] = await tx.execute<{ at: Date | string }>(sql`select clock_timestamp() as at
+        const version = owner.version + (operation === "backup_code" || !owner.verified && !owner.enabled ? 1 : 0);
+        async function pinVerifiedFactor(tx: Pick<Db, "execute">) {
+          const [valid] = await tx.execute<{ at: Date | string; secret: string }>(sql`select clock_timestamp() as at,f.secret
             from "user" u join two_factor f on f.user_id=u.id
             where u.id=${owner.userId} and u.authenticator_version=${version} and u.two_factor_enabled
-              and f.id=${owner.factorId} and f.secret=${owner.secret} and f.verified
-              and not exists(select 1 from account_deletion_operations where user_id=u.id) for update of u nowait`);
-          if (!valid) deny();
+              and f.id=${owner.factorId} and f.verified
+              and not exists(select 1 from account_deletion_operations where user_id=u.id)
+              for update of u nowait`);
+          if (!valid || valid.secret !== owner.secret) deny();
+          if (operation === "totp" && owner.verified && owner.sessionId) {
+            await assertHumanAuthentication(tx, { type: "board", source: "session", userId: owner.userId,
+              sessionId: owner.sessionId }, { requireRecent: false, phishingResistant: false });
+          }
+          return valid;
+        }
+        let verifiedAt: Date | null = null;
+        if (operation === "totp") {
+          // Consumption commits independently: a later session/cookie failure
+          // cannot make an already verified code usable again.
+          verifiedAt = await db.transaction(async tx => {
+            const valid = await pinVerifiedFactor(tx);
+            // Keep consumed fingerprints across password and backup-code
+            // changes; those changes do not replace the TOTP authenticator.
+            const code = "code" in ctx.body ? ctx.body.code : deny();
+            const fingerprint = createHmac("sha256", factorSecret).update(code).digest("hex");
+            const now = sql`floor(extract(epoch from statement_timestamp())*1000)::bigint`;
+            const [consumed] = await tx.execute<{ id: string }>(sql`
+              update two_factor set totp_replay_state=coalesce((
+                select jsonb_agg(receipt) from jsonb_array_elements(totp_replay_state) receipt
+                where (receipt->>'expiresAtMs')::bigint>${now}
+              ),'[]'::jsonb)||jsonb_build_array(jsonb_build_object(
+                'fingerprint',${fingerprint}::text,'expiresAtMs',${now}+90000))
+              where id=${owner.factorId} and not exists (
+                select 1 from jsonb_array_elements(totp_replay_state) receipt
+                where receipt->>'fingerprint'=${fingerprint} and (receipt->>'expiresAtMs')::bigint>${now})
+              returning id
+            `);
+            if (!consumed) throw new APIError("UNAUTHORIZED", {
+              code: "OTP_ALREADY_USED", message: "Wait for a new authenticator code or use a recovery code",
+            });
+            return new Date(valid.at);
+          });
+        }
+        const session = await withNativeAuthenticationTransaction(db, ctx, schema, async tx => {
+          const valid = await pinVerifiedFactor(tx);
           return rotate(ctx, tx, owner, version, { authenticationMethod: operation,
-            authenticatedAt: new Date(valid.at) });
+            authenticatedAt: verifiedAt ?? new Date(valid.at) });
         });
         return { ...response, token: session.token, user: parseUserOutput(ctx.context.options, ctx.context.session!.user) };
       } catch (error) {

@@ -3648,6 +3648,13 @@
       "when": 1792804467516,
       "tag": "0522_native_challenge_generation",
       "breakpoints": true
+    },
+    {
+      "idx": 523,
+      "version": "7",
+      "when": 1792805697750,
+      "tag": "0523_crazy_lake",
+      "breakpoints": true
     }
   ]
 }

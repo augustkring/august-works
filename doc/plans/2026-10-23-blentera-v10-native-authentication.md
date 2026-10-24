@@ -244,3 +244,32 @@ release. Account enrollment/recovery settings UI, full passkey UV and operator
 admission/bootstrap, enterprise recovery, other powerful-action guards and overall
 V10 admission remain open. Two native auth instances in one process are not a
 deployed replica/restart qualification. Server compiler excludes test files.
+
+
+### 2026-10-24 — verified TOTP consumption survives session failure
+
+The original verifier's accepted same-code replay is now fenced by bounded
+fingerprints on the existing native factor row. Migration 0523 adds only that
+private metadata and its 16-entry bound. A successful maintained verification
+consumes the fingerprint under the actual user/factor generation in an independent
+physical transaction. The 90-second database-time window covers the provider's
+current/adjacent 30-second steps. Password and backup-code rotation preserve this
+state because neither replaces the TOTP secret. Factor erasure removes it. Old
+fingerprints expire for replay matching and are pruned on use; bounded retained
+security metadata is not a claim of physical removal exactly at expiry.
+
+Session creation repeats the current user/factor check and retains the original
+verification time. It cannot roll code consumption back on a later native write
+failure. Existing in-session TOTP confirmation also uses the shared physical
+session proof pin during completion. Simultaneous true native challenges grant
+one completion for one valid code. A real native session-write failure still
+leaves the code consumed. Original replay baseline: one case/three assertions
+fail; first-stage rollback baseline: one case fails. Staged complete suites pass
+46, then47, then48 cases; final server compiler and migration checks return zero.
+Exact stages: `native-totp-replay-2026-10-24/checkpoint.json`.
+
+This closes the bounded software same-code consumption regression identified in
+the previous checkpoint. Account settings/enrollment UX, expected-principal
+request binding, passkeys/operator bootstrap, enterprise recovery, other
+sensitive-action owners, production clock/replica and full V10 admission remain
+open. Existing native verifiers are retained; no custom OTP verifier is added.
