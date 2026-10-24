@@ -524,3 +524,34 @@ compilation pass. The real typed-origin lifecycle baseline remains open.
 ### 2026-10-24 — Typed Task origins after runtime recovery
 
 Migration0526 and the original Task owner preserve WorkflowRun/RoutineRun namespaces and exact retained revision ownership, without substituting a same-ID heartbeat. Actor runs remain heartbeat sources even when their UUID equals a typed execution UUID. Native Routine assignment now follows a committed received run/Task intent and retains uncertainty for bounded reconciliation. Final native tests88/88, additional pending-intent tests3/3, and server typechecks pass. Private typed source tests2/4 still fail at legitimate owner creation; private authoring/Memory sources remain closed. Current source pins, all intermediate failures and limits are in `../operations/aw-v10-evidence/typed-task-routine-recovery-2026-10-24/checkpoint.json`. No complete input receipt or protocol activation follows from empty stored source arrays or these structural queue acknowledgements.
+
+### 24 October — original customer query owner inventory
+
+The remaining private Routine owner failure occurs during the original Task
+writer's source validation, before the subsequent detail read. The SQL Routine
+node predicate still admits only `manual` origins. The procedural Routine source
+owner also checks the current verified Human, native authoring run/conversation,
+company/Agent/Task permissions, analytical/Memory ancestry and erasure. An
+owner-ID comparison cannot replace those checks.
+
+The production caller inventory identifies these original query owners:
+
+| Customer surface | Existing owner | Current boundary and required transport |
+|---|---|---|
+| Task detail/list/count, read metrics and blocker rows | `routes/issues.ts`, `services/issues.ts` | List/count predicates and enrichment use the application DB. Construct and consume source predicates inside the same actual transaction; use the existing service factory's transaction argument. |
+| Project reference/detail/list and Task-derived metrics | `routes/projects.ts`, `services/projects.ts` | Reference and list predicates currently escape to application-DB queries. Keep direct source checks, selected rows and derived metrics on the original transaction. |
+| Universal Find and extraction | `routes/issues.ts`, `services/company-search.ts`, `services/company-search-extract.ts` | All search branches/counts capture the factory DB. Build that factory and its source predicates on the actual query transaction. Rate limits must still precede query work. |
+| Native task context/search and child outcomes | `paperclip-runner-tool-authority.ts`, `child-review-outcomes.ts` | Tool readers currently use the application DB. Pass the actual transaction through the existing Task and outcome owners; a post-query content filter is insufficient. |
+| Company export selection | `company-portability.ts` | Source-sensitive selected reads need the same transaction and canonical policy. Export formatting and file construction do not need to hold source locks. |
+| Activity and Agent audit projections | `activity-privacy.ts`, `activity.ts`, `agent-action-audit.ts` | These also compose Task source predicates; their current factory DB is autocommit. They remain part of the privacy boundary. |
+
+Typed WorkflowRun/RoutineRun source validation in the original Task writer
+already receives its actual mutation transaction. Existing strategy-reference
+and business-metric readers provide bounded-source transaction examples.
+`withReadSources` already pins canonical Foundation and principal authority and
+invalidates its scoped callback afterward. Its existence does not qualify an
+autocommit-built SQL expression, a different connection, or an escaped callback.
+
+This inventory is implementation groundwork. It supplies no new permission,
+complete producer-input receipt, source qualification or private-source bypass.
+The selected private Memory and temporal-body counterexamples remain open.
