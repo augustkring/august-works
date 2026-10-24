@@ -5,6 +5,11 @@ import os from "node:os";
 import path from "node:path";
 import { randomUUID } from "node:crypto";
 import { promisify } from "node:util";
+import express from "express";
+import request from "supertest";
+import { actorMiddleware } from "../middleware/auth.js";
+import { errorHandler } from "../middleware/error-handler.js";
+import { projectRoutes } from "../routes/projects.js";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq, inArray, sql } from "drizzle-orm";
 import {
@@ -292,13 +297,25 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
     await tempDb?.cleanup();
   });
 
+  async function createManualProject(companyId: string, name: string) {
+    // Exercise original local-trusted admission; raw historical rows cannot
+    // stand in for a qualified Project source during Task mutations.
+    const app = express();
+    app.use(express.json());
+    app.use(actorMiddleware(db, { deploymentMode: "local_trusted" }));
+    app.use("/api", projectRoutes(db));
+    app.use(errorHandler);
+    const response = await request(app).post(`/api/companies/${companyId}/projects`)
+      .send({ name, status: "in_progress" }).expect(201);
+    return response.body.id as string;
+  }
+
   async function seedTerminalWorkspace(options: {
     mergedPr?: boolean;
     activeRun?: boolean;
     childStatus?: "done" | "todo";
   } = {}) {
     const companyId = randomUUID();
-    const projectId = randomUUID();
     const executionWorkspaceId = randomUUID();
     const sourceIssueId = randomUUID();
     const issuePrefix = `P${companyId.slice(0, 8).toUpperCase()}`;
@@ -319,12 +336,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
       issuePrefix,
       requireBoardApprovalForNewAgents: false,
     });
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
-      name: "Terminal workspaces",
-      status: "in_progress",
-    });
+    const projectId = await createManualProject(companyId, "Terminal workspaces");
     await db.insert(executionWorkspaces).values({
       id: executionWorkspaceId,
       companyId,
@@ -1847,6 +1859,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
     await issueService(db).update(eligible.sourceIssueId, {
       status: "todo",
       actorUserId: "local-board",
+      privacyActor: { type: "board", source: "local_implicit", userId: "local-board" },
     });
     const reopenedWorkspace = await db
       .select({ status: executionWorkspaces.status })
@@ -2192,6 +2205,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
     const result = await svc.reconcileExecutionWorkspaceBranch(executionWorkspaceId, {
       mode: "forward",
       reason: null,
+      privacyActor: { type: "board", source: "local_implicit", userId: "local-board" },
       actor: {
         actorType: "user",
         actorId: "local-board",
@@ -2299,6 +2313,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
     const result = await svc.reconcileExecutionWorkspaceBranch(executionWorkspaceId, {
       mode: "forward",
       reason: null,
+      privacyActor: { type: "board", source: "local_implicit", userId: "local-board" },
       actor: {
         actorType: "user",
         actorId: "local-board",
@@ -2380,6 +2395,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
     await expect(svc.reconcileExecutionWorkspaceBranch(executionWorkspaceId, {
       mode: "forward",
       reason: null,
+      privacyActor: { type: "board", source: "local_implicit", userId: "local-board" },
       actor: {
         actorType: "user",
         actorId: "local-board",
@@ -2453,6 +2469,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
     await expect(svc.reconcileExecutionWorkspaceBranch(executionWorkspaceId, {
       mode: "forward",
       reason: null,
+      privacyActor: { type: "board", source: "local_implicit", userId: "local-board" },
       actor: {
         actorType: "user",
         actorId: "local-board",
@@ -2478,7 +2495,6 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
 
     const companyId = randomUUID();
     const agentId = randomUUID();
-    const projectId = randomUUID();
     const projectWorkspaceId = randomUUID();
     const issueId = randomUUID();
     const executionWorkspaceId = randomUUID();
@@ -2509,12 +2525,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
       runtimeConfig: {},
       permissions: {},
     });
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
-      name: "Branch reconcile",
-      status: "in_progress",
-    });
+    const projectId = await createManualProject(companyId, "Branch reconcile");
     await db.insert(projectWorkspaces).values({
       id: projectWorkspaceId,
       companyId,
@@ -2569,6 +2580,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
     const result = await svc.reconcileExecutionWorkspaceBranch(executionWorkspaceId, {
       mode: "quarantine_restore",
       reason: "rescue dirty work and restore recorded branch",
+      privacyActor: { type: "board", source: "local_implicit", userId: "local-board" },
       actor: {
         actorType: "user",
         actorId: "local-board",
@@ -2706,6 +2718,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
 
     await expect(svc.reconcileExecutionWorkspaceBranch(executionWorkspaceId, {
       mode: "quarantine_restore",
+      privacyActor: { type: "board", source: "local_implicit", userId: "local-board" },
       actor: {
         actorType: "user",
         actorId: "local-board",
@@ -2755,7 +2768,6 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
     const companyId = randomUUID();
     const coderAgentId = randomUUID();
     const reviewerAgentId = randomUUID();
-    const projectId = randomUUID();
     const projectWorkspaceId = randomUUID();
     const issueId = randomUUID();
     const executionWorkspaceId = randomUUID();
@@ -2800,12 +2812,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
         permissions: {},
       },
     ]);
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
-      name: "Branch reconcile",
-      status: "in_progress",
-    });
+    const projectId = await createManualProject(companyId, "Branch reconcile");
     await db.insert(projectWorkspaces).values({
       id: projectWorkspaceId,
       companyId,
@@ -2881,6 +2888,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
     const result = await svc.reconcileExecutionWorkspaceBranch(executionWorkspaceId, {
       mode: "quarantine_restore",
       reason: "rescue dirty work and restore recorded branch",
+      privacyActor: { type: "board", source: "local_implicit", userId: "local-board" },
       actor: {
         actorType: "user",
         actorId: "local-board",
@@ -3157,6 +3165,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
     await expect(svc.reconcileExecutionWorkspaceBranch(executionWorkspaceId, {
       mode: "override",
       reason: "operator override still requires idle clean workspace",
+      privacyActor: { type: "board", source: "local_implicit", userId: "local-board" },
       actor: {
         actorType: "user",
         actorId: "local-board",
@@ -3242,6 +3251,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
     await expect(svc.reconcileExecutionWorkspaceBranch(executionWorkspaceId, {
       mode: "override",
       reason: "operator override still requires idle workspace",
+      privacyActor: { type: "board", source: "local_implicit", userId: "local-board" },
       actor: {
         actorType: "user",
         actorId: "local-board",
@@ -3446,6 +3456,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
     await expect(svc.reconcileExecutionWorkspaceBranch(executionWorkspaceId, {
       mode: "override",
       reason: "operator override still requires stopped services",
+      privacyActor: { type: "board", source: "local_implicit", userId: "local-board" },
       actor: {
         actorType: "user",
         actorId: "local-board",
@@ -3570,6 +3581,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
     const reconcileExpectation = expect(svc.reconcileExecutionWorkspaceBranch(executionWorkspaceId, {
       mode: "override",
       reason: "operator override still requires stopped services",
+      privacyActor: { type: "board", source: "local_implicit", userId: "local-board" },
       actor: {
         actorType: "user",
         actorId: "local-board",
@@ -3850,6 +3862,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
     await expect(svc.reconcileExecutionWorkspaceBranch(executionWorkspaceId, {
       mode: "forward",
       reason: null,
+      privacyActor: { type: "board", source: "local_implicit", userId: "local-board" },
       actor: {
         actorType: "user",
         actorId: "local-board",

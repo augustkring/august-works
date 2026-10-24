@@ -45,6 +45,7 @@ import {
 import { parseProjectExecutionWorkspacePolicy } from "./execution-workspace-policy.js";
 import { issueRecoveryActionService } from "./issue-recovery-actions.js";
 import { logActivity } from "./activity-log.js";
+import type { AuthorizationActor } from "./authorization.js";
 import {
   createPullRequestMergeDetailsResolver,
   extractGitHubPullRequestReferences,
@@ -3390,6 +3391,8 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
         mode: ExecutionWorkspaceBranchReconcileMode;
         reason?: string | null;
         actor: ExecutionWorkspaceBranchReconcileActor;
+        /** Original server-verified actor; display attribution is not a credential. */
+        privacyActor?: AuthorizationActor;
         alternateRecoveryFingerprints?: string[] | null;
       },
     ): Promise<ExecutionWorkspaceBranchReconcileResult> => {
@@ -3658,6 +3661,7 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
               ...transition.patch,
               actorAgentId: input.actor.agentId ?? null,
               actorUserId: input.actor.actorType === "user" ? input.actor.actorId : null,
+              privacyActor: input.privacyActor,
             },
             tx,
           );

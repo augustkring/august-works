@@ -236,6 +236,7 @@ describe.sequential("execution workspace routes", () => {
     expect(mockExecutionWorkspaceService.reconcileExecutionWorkspaceBranch).toHaveBeenCalledWith("workspace-1", {
       mode: "forward",
       reason: null,
+      privacyActor: { type: "board", userId: "local-board", companyIds: ["company-1"], source: "session", isInstanceAdmin: false },
       actor: {
         actorType: "user",
         actorId: "local-board",
@@ -316,6 +317,7 @@ describe.sequential("execution workspace routes", () => {
     expect(mockExecutionWorkspaceService.reconcileExecutionWorkspaceBranch).toHaveBeenCalledWith("workspace-1", {
       mode: "quarantine_restore",
       reason: null,
+      privacyActor: { type: "board", userId: "local-board", companyIds: ["company-1"], source: "session", isInstanceAdmin: false },
       actor: {
         actorType: "user",
         actorId: "local-board",

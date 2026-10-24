@@ -1057,6 +1057,7 @@ export function executionWorkspaceRoutes(db: Db, opts: { pluginWorkerManager?: P
     const result = await svc.reconcileExecutionWorkspaceBranch(id, {
       mode: req.body.mode,
       reason: req.body.reason ?? null,
+      privacyActor: req.actor,
       actor: {
         actorType: actor.actorType,
         actorId: actor.actorId,
