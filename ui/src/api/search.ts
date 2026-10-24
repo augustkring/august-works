@@ -22,7 +22,7 @@ function appendMulti(search: URLSearchParams, key: string, values: readonly stri
 }
 
 export const searchApi = {
-  search: (companyId: string, params: CompanySearchParams) => {
+  search: (companyId: string, params: CompanySearchParams, signal?: AbortSignal) => {
     const search = new URLSearchParams();
     search.set("q", params.q);
     if (params.scope) search.set("scope", params.scope);
@@ -39,7 +39,7 @@ export const searchApi = {
     if (params.sort !== undefined) search.set("sort", params.sort);
     const qs = search.toString();
     return api.get<CompanySearchResponse>(
-      `/companies/${companyId}/search${qs ? `?${qs}` : ""}`,
+      `/companies/${companyId}/search${qs ? `?${qs}` : ""}`, { signal },
     );
   },
 };

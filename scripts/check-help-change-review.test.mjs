@@ -40,6 +40,24 @@ test("unrelated changes do not block or create Help review evidence", () => {
   assert.deepEqual(result.evidence, []);
 });
 
+test("additional Help articles join coverage through their own linked source review", () => {
+  const extra = { articleId: "new-help", filename: "docs/help/new.md", sourceFiles: ["ui/src/NewHelp.tsx"] };
+  bytes.set(extra.sourceFiles[0], "new-source");
+  bytes.set(extra.filename, "new-article");
+  const extraReview = { source: extra.sourceFiles[0], articleId: extra.articleId,
+    sourceSha256: hash(bytes.get(extra.sourceFiles[0])), articleSha256: hash(bytes.get(extra.filename)),
+    decision: "no_change", rationale: "The article accurately describes this current behavior." };
+  const result = validateHelpChangeReview({ articles: [article, extra], reviews: [baselineNoChange, extraReview], changedPaths: [],
+    hashFile: filename => hash(bytes.get(filename)) });
+  assert.deepEqual(result.errors, []);
+});
+
+test("invalid review collections keep the normal result shape for CI evidence", () => {
+  const result = validateHelpChangeReview({ articles: [article], reviews: null, changedPaths: [], hashFile: () => "" });
+  assert.ok(Array.isArray(result.errors));
+  assert.deepEqual(result.evidence, []);
+});
+
 test("a no-change determination cannot be reused after linked source bytes change", () => {
   bytes.set(source, "source-v2");
   const result = validateHelpChangeReview({ articles: [article], reviews: [baselineNoChange], changedPaths: [source],

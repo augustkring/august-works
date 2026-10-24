@@ -17,6 +17,8 @@ linked_source_files: [ui/src/App.tsx, ui/src/components/ExperienceUtilities.tsx,
 
 Open **Help** in the app to browse guidance, open support cases, or check the configured service status page. You can contact human support directly at [support@blentera.com](mailto:support@blentera.com). You do not need to converse with an assistant first.
 
+Search product terms inside Help to find matching guidance. Open a result in a new tab to keep your work and the Help view available.
+
 When you open Help from signed-in work in the same company, close it to return to your original view. Do not put passwords, recovery codes, API keys, or other secrets in a support message. Review any diagnostic information before sharing it.
 
 ## Support cases
