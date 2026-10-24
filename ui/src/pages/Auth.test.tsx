@@ -17,12 +17,23 @@ import { saasApi } from "../api/saas";
 const getSessionMock = vi.hoisted(() => vi.fn());
 const signInEmailMock = vi.hoisted(() => vi.fn());
 const signUpEmailMock = vi.hoisted(() => vi.fn());
+const verifyTotpMock = vi.hoisted(() => vi.fn());
+const verifyBackupCodeMock = vi.hoisted(() => vi.fn());
 
 vi.mock("../api/auth", () => ({
   authApi: {
     getSession: () => getSessionMock(),
     signInEmail: (input: unknown) => signInEmailMock(input),
     signUpEmail: (input: unknown) => signUpEmailMock(input),
+    verifyTotp: (code: string) => verifyTotpMock(code),
+    verifyBackupCode: (code: string) => verifyBackupCodeMock(code),
+  },
+  parseTwoFactorSignInChallenge: (value: unknown) => {
+    if (!value || typeof value !== "object") return null;
+    const candidate = value as { twoFactorRedirect?: unknown; twoFactorMethods?: unknown };
+    return candidate.twoFactorRedirect === true && Array.isArray(candidate.twoFactorMethods) && candidate.twoFactorMethods.every(method => typeof method === "string")
+      ? candidate
+      : null;
   },
 }));
 
@@ -95,6 +106,8 @@ describe("AuthPage", () => {
     getSessionMock.mockResolvedValue(null);
     signInEmailMock.mockResolvedValue(undefined);
     signUpEmailMock.mockResolvedValue(undefined);
+    verifyTotpMock.mockResolvedValue(undefined);
+    verifyBackupCodeMock.mockResolvedValue(undefined);
   });
 
   afterEach(async () => {
@@ -105,14 +118,15 @@ describe("AuthPage", () => {
     vi.clearAllMocks();
   });
 
-  async function mount() {
+  async function mount(initialEntry: string | { pathname: string; search?: string; state?: unknown } = "/auth") {
     const { root, queryClient } = renderAuthPage(container);
     await act(async () => {
       root.render(
-        <MemoryRouter initialEntries={["/auth"]}>
+        <MemoryRouter initialEntries={[initialEntry]}>
           <QueryClientProvider client={queryClient}>
             <Routes>
               <Route path="/auth" element={<AuthPage />} />
+              <Route path="/private" element={<p>Private destination</p>} />
             </Routes>
           </QueryClientProvider>
         </MemoryRouter>,
@@ -261,6 +275,72 @@ describe("AuthPage", () => {
     await act(async () => {
       root.unmount();
     });
+  });
+
+  it("keeps a native two-factor challenge pending until the server confirms a session", async () => {
+    const { root, queryClient } = await mount("/auth?next=%2Fprivate");
+    queryClient.setQueryData(queryKeys.health, { status: "ok", deploymentMode: "authenticated" });
+    signInEmailMock.mockResolvedValueOnce({ twoFactorRedirect: true, twoFactorMethods: ["totp"] });
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    const email = container.querySelector('input[name="email"]') as HTMLInputElement;
+    const password = container.querySelector('input[name="password"]') as HTMLInputElement;
+    await act(async () => {
+      setter.call(email, "jane@example.com"); email.dispatchEvent(new Event("input", { bubbles: true }));
+      setter.call(password, "original-secret"); password.dispatchEvent(new Event("input", { bubbles: true }));
+      container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await flushReact(); await flushReact();
+
+    expect(container.querySelector("h1")?.textContent).toBe("Verify it’s you");
+    expect(container.querySelector('input[name="password"]')).toBeNull();
+    expect(container.querySelector('input[name="code"]')).not.toBeNull();
+    expect(container.textContent).not.toContain("Private destination");
+    expect(queryClient.getQueryState(queryKeys.health)?.isInvalidated).toBe(false);
+    expect(signInEmailMock).toHaveBeenCalledTimes(1);
+    expect(verifyTotpMock).not.toHaveBeenCalled();
+
+    const recoveryChoice = [...container.querySelectorAll("button")].find(button => button.textContent === "Recovery code");
+    await act(async () => { recoveryChoice!.click(); });
+    const code = container.querySelector('input[name="code"]') as HTMLInputElement;
+    await act(async () => {
+      setter.call(code, "ABCD-EFGH"); code.dispatchEvent(new Event("input", { bubbles: true }));
+      container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await flushReact();
+    expect(verifyBackupCodeMock).toHaveBeenCalledWith("ABCD-EFGH");
+    expect(container.textContent).not.toContain("Private destination");
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Your sign-in could not be confirmed");
+
+    getSessionMock.mockResolvedValue(v9SessionFixture("jane"));
+    // Re-submit a fresh challenge code after the first verification mock succeeds.
+    // The challenge remains until a canonical Better Auth session read confirms it.
+    verifyBackupCodeMock.mockImplementationOnce(async () => {
+      getSessionMock.mockResolvedValue(v9SessionFixture("jane"));
+    });
+    await act(async () => {
+      setter.call(code, "IJKL-MNOP"); code.dispatchEvent(new Event("input", { bubbles: true }));
+      container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await flushReact(); await flushReact();
+    expect(verifyBackupCodeMock).toHaveBeenLastCalledWith("IJKL-MNOP");
+    expect(container.textContent).toContain("Private destination");
+    await act(async () => { root.unmount(); });
+  });
+
+  it("hydrates only the native challenge view from router state and can return to sign-in", async () => {
+    const { root } = await mount({ pathname: "/auth", search: "?next=%2Fprivate", state: {
+      twoFactorChallenge: { twoFactorRedirect: true, twoFactorMethods: ["totp"] },
+    } });
+    expect(container.querySelector("h1")?.textContent).toBe("Verify it’s you");
+    expect(container.querySelector('input[name="password"]')).toBeNull();
+
+    const back = [...container.querySelectorAll("button")].find(button => button.textContent === "Back to sign in");
+    await act(async () => { back!.click(); });
+    await flushReact();
+    expect(container.querySelector("h1")?.textContent).toBe("Sign in to Blentera");
+    expect(container.querySelector('input[name="password"]')).not.toBeNull();
+    expect(verifyTotpMock).not.toHaveBeenCalled();
+    await act(async () => { root.unmount(); });
   });
   it("validates new passwords by Unicode code points while keeping the exact submitted value", async () => {
     const { root } = await mount();

@@ -2,8 +2,8 @@ import { useEffect, useMemo, useState, useRef } from "react";
 import { useTranslation } from "@/i18n";
 import { ExperienceLanguageSelect } from "../components/ExperienceLanguageSelect";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
-import { useNavigate, useSearchParams } from "@/lib/router";
-import { authApi } from "../api/auth";
+import { useLocation, useNavigate, useSearchParams } from "@/lib/router";
+import { authApi, parseTwoFactorSignInChallenge, type TwoFactorSignInChallenge } from "../api/auth";
 import { queryKeys } from "../lib/queryKeys";
 import { getRememberedInvitePath } from "../lib/invite-memory";
 import { Button } from "@/components/ui/button";
@@ -17,17 +17,32 @@ import { hasValidNewLocalPasswordLength, LOCAL_PASSWORD_MAX_LENGTH, LOCAL_PASSWO
 
 type AuthMode = "sign_in" | "sign_up";
 
+function challengeFromRouteState(state: unknown): TwoFactorSignInChallenge | null {
+  if (!state || typeof state !== "object") return null;
+  try {
+    // Router state only selects the challenge view; Better Auth's signed
+    // challenge cookie remains the authority at either verification endpoint.
+    return parseTwoFactorSignInChallenge((state as Record<string, unknown>).twoFactorChallenge);
+  } catch {
+    return null;
+  }
+}
+
 export function AuthPage() {
   const { t } = useTranslation("experience");
   const saas = useSaasCapabilities();
   const [verificationSent, setVerificationSent] = useState(false);
   const queryClient = useQueryClient();
   const navigate = useNavigate();
+  const location = useLocation();
   const [searchParams] = useSearchParams();
   const [mode, setMode] = useState<AuthMode>("sign_in");
   const [name, setName] = useState("");
   const [email, setEmail] = useState("");
   const [password, setPassword] = useState("");
+  const [challenge, setChallenge] = useState<TwoFactorSignInChallenge | null>(() => challengeFromRouteState(location.state));
+  const [challengeMethod, setChallengeMethod] = useState<"totp" | "backup_code">("totp");
+  const [challengeCode, setChallengeCode] = useState("");
   const [error, setError] = useState<string | null>(null);
   const errorId = "auth-error";
   const errorSummary = useRef<HTMLParagraphElement>(null);
@@ -52,30 +67,39 @@ export function AuthPage() {
     }
   }, [session, navigate, nextPath]);
 
+  const finishSignIn = async () => {
+    await queryClient.invalidateQueries({ queryKey: queryKeys.auth.session });
+    await queryClient.invalidateQueries({ queryKey: queryKeys.health });
+    // Reset rather than invalidate: the company list is shared app-wide and
+    // sign-in can change accounts.
+    await queryClient.resetQueries({ queryKey: queryKeys.companies.all });
+    navigate(nextPath, { replace: true });
+  };
+
   const ssoMutation = useMutation({mutationFn:()=>authApi.signInSso(email,nextPath,searchParams.get("ssoProvider")??undefined),onSuccess:(url)=>window.location.assign(url),onError:()=>setError("authFlow.companyFailed")});
   const mutation = useMutation({
     mutationFn: async () => {
       if (mode === "sign_in") {
-        await authApi.signInEmail({ email: email.trim(), password });
-        return;
+        return { mode: "sign_in" as const, challenge: await authApi.signInEmail({ email: email.trim(), password }) };
       }
       await authApi.signUpEmail({
         name: name.trim(),
         email: email.trim(),
         password,
       });
+      return { mode: "sign_up" as const };
     },
-    onSuccess: async () => {
+    onSuccess: async (result) => {
       setError(null);
-      if (mode === "sign_up" && saas.data?.emailVerification) { setVerificationSent(true); return; }
-      await queryClient.invalidateQueries({ queryKey: queryKeys.auth.session });
-      await queryClient.invalidateQueries({ queryKey: queryKeys.health });
-      // Reset rather than invalidate: the `["companies"]` entry is shared app-wide and
-      // is not account-scoped, so invalidating leaves the previous account's list
-      // readable (and any fetch for that session in flight) until the refetch lands.
-      // Sign-in can change accounts, so drop the list outright.
-      await queryClient.resetQueries({ queryKey: queryKeys.companies.all });
-      navigate(nextPath, { replace: true });
+      if (result.mode === "sign_in" && result.challenge) {
+        setChallenge(result.challenge);
+        setChallengeMethod("totp");
+        setChallengeCode("");
+        setPassword("");
+        return;
+      }
+      if (result.mode === "sign_up" && saas.data?.emailVerification) { setVerificationSent(true); return; }
+      await finishSignIn();
     },
     onError: (err) => {
       const code = err && typeof err === "object" && "code" in err ? err.code : null;
@@ -87,11 +111,38 @@ export function AuthPage() {
     },
   });
 
+  const challengeMutation = useMutation({
+    mutationFn: ({ method, code }: { method: "totp" | "backup_code"; code: string }) =>
+      method === "totp" ? authApi.verifyTotp(code) : authApi.verifyBackupCode(code),
+    onSuccess: async () => {
+      setError(null);
+      try {
+        // The verification response alone is not treated as an authenticated
+        // session; confirm Better Auth's cookie with its canonical session API.
+        const verifiedSession = await authApi.getSession();
+        if (!verifiedSession) {
+          setError("authFlow.challengeFailed");
+          return;
+        }
+        setChallenge(null);
+        setChallengeCode("");
+        queryClient.setQueryData(queryKeys.auth.session, verifiedSession);
+        await finishSignIn();
+      } catch {
+        setError("authFlow.challengeFailed");
+      }
+    },
+    onError: () => setError("authFlow.challengeInvalid"),
+  });
+
+  const challengeAvailable = Boolean(challenge?.twoFactorMethods.includes("totp"));
   const canSubmit =
-    email.trim().length > 0 &&
-    (mode === "sign_in"
-      ? password.length > 0
-      : name.trim().length > 0 && hasValidNewLocalPasswordLength(password));
+    challenge
+      ? challengeAvailable && challengeCode.trim().length > 0
+      : email.trim().length > 0 &&
+        (mode === "sign_in"
+          ? password.length > 0
+          : name.trim().length > 0 && hasValidNewLocalPasswordLength(password));
 
   if (isSessionLoading) {
     return (
@@ -115,10 +166,10 @@ export function AuthPage() {
           </div>
 
           <h1 className="text-xl font-semibold">
-            {mode === "sign_in" ? (saas.data ? t("authFlow.signInTitle", { productName: PRODUCT_IDENTITY.productName }) : t("authFlow.legacySignInTitle", { productName: PRODUCT_IDENTITY.productName })) : (saas.data ? t("authFlow.createTitle") : t("authFlow.legacyCreateTitle", { productName: PRODUCT_IDENTITY.productName }))}
+            {challenge ? t("authFlow.challengeTitle") : mode === "sign_in" ? (saas.data ? t("authFlow.signInTitle", { productName: PRODUCT_IDENTITY.productName }) : t("authFlow.legacySignInTitle", { productName: PRODUCT_IDENTITY.productName })) : (saas.data ? t("authFlow.createTitle") : t("authFlow.legacyCreateTitle", { productName: PRODUCT_IDENTITY.productName }))}
           </h1>
           <p className="mt-1 text-sm text-muted-foreground">
-            {mode === "sign_in"
+            {challenge ? t("authFlow.challengeHelp") : mode === "sign_in"
               ? t("authFlow.signInHelp")
               : saas.data?.emailVerification ? t("authFlow.verifyHelp") : t("authFlow.legacyCreateHelp")}
           </p>
@@ -128,9 +179,18 @@ export function AuthPage() {
           <form
             className="mt-6 space-y-4"
             method="post"
-            action={mode === "sign_up" ? "/api/auth/sign-up/email" : "/api/auth/sign-in/email"}
+            action={challenge ? undefined : mode === "sign_up" ? "/api/auth/sign-up/email" : "/api/auth/sign-in/email"}
             onSubmit={(event) => {
               event.preventDefault();
+              if (challenge) {
+                if (challengeMutation.isPending) return;
+                if (!canSubmit) {
+                  setError(challengeAvailable ? "authFlow.requiredFields" : "authFlow.challengeUnavailable");
+                  return;
+                }
+                challengeMutation.mutate({ method: challengeMethod, code: challengeCode.trim() });
+                return;
+              }
               if (mutation.isPending) return;
               if (!canSubmit) {
                 setError(mode === "sign_up" && name.trim() && email.trim() && password.length > 0
@@ -141,6 +201,58 @@ export function AuthPage() {
               mutation.mutate();
             }}
           >
+            {challenge ? (
+              <>
+                {!challengeAvailable ? (
+                  <p role="status" className="text-sm text-muted-foreground">{t("authFlow.challengeUnavailable")}</p>
+                ) : (
+                  <>
+                    <fieldset className="space-y-2">
+                      <legend className="text-xs text-muted-foreground">{t("authFlow.challengeMethod")}</legend>
+                      <div className="flex gap-2">
+                        <Button type="button" disabled={challengeMutation.isPending} variant={challengeMethod === "totp" ? "default" : "outline"} aria-pressed={challengeMethod === "totp"} onClick={() => { setChallengeMethod("totp"); setChallengeCode(""); setError(null); }}>
+                          {t("authFlow.challengeTotp")}
+                        </Button>
+                        <Button type="button" disabled={challengeMutation.isPending} variant={challengeMethod === "backup_code" ? "default" : "outline"} aria-pressed={challengeMethod === "backup_code"} onClick={() => { setChallengeMethod("backup_code"); setChallengeCode(""); setError(null); }}>
+                          {t("authFlow.challengeBackupCode")}
+                        </Button>
+                      </div>
+                    </fieldset>
+                    <div>
+                      <label htmlFor="two-factor-code" className="text-xs text-muted-foreground mb-1 block">{challengeMethod === "totp" ? t("authFlow.challengeTotpLabel") : t("authFlow.challengeBackupCodeLabel")}</label>
+                      <input
+                        id="two-factor-code"
+                        name="code"
+                        className="w-full rounded-md border border-border bg-transparent px-3 py-2 text-sm outline-none focus:ring-1 focus:ring-ring placeholder:text-muted-foreground/50"
+                        type="text"
+                        inputMode={challengeMethod === "totp" ? "numeric" : "text"}
+                        autoComplete="one-time-code"
+                        value={challengeCode}
+                        onChange={(event) => setChallengeCode(event.target.value)}
+                        required
+                        aria-required="true"
+                        aria-invalid={error ? true : undefined}
+                        aria-describedby={error ? errorId : undefined}
+                        autoFocus
+                      />
+                    </div>
+                  </>
+                )}
+                {error && <p ref={errorSummary} tabIndex={-1} id={errorId} role="alert" className="text-xs text-destructive">{t(error)}</p>}
+                <Button type="submit" disabled={challengeMutation.isPending || !challengeAvailable} aria-disabled={!canSubmit || challengeMutation.isPending} className={`w-full ${!canSubmit && !challengeMutation.isPending ? "opacity-50" : ""}`}>
+                  {challengeMutation.isPending ? t("authFlow.working") : t("authFlow.challengeVerify")}
+                </Button>
+                <Button type="button" variant="outline" disabled={challengeMutation.isPending} className="w-full" onClick={() => {
+                  setChallenge(null);
+                  setChallengeCode("");
+                  setPassword("");
+                  setError(null);
+                  navigate({ pathname: location.pathname, search: location.search, hash: location.hash }, { replace: true, state: null });
+                }}>
+                  {t("authFlow.challengeBack")}
+                </Button>
+              </>
+            ) : <>
             {mode === "sign_up" && (
               <div>
                 <label htmlFor="name" className="text-xs text-muted-foreground mb-1 block">{t("authFlow.name")}</label>
@@ -212,10 +324,11 @@ export function AuthPage() {
                   ? t("authFlow.signIn")
                   : saas.data ? t("authFlow.continue") : t("authFlow.createLegacy")}
             </Button>
+            </>}
           </form>
-          {mode === "sign_in" && saas.data?.enterpriseSso ? <Button className="w-full mt-3" variant="outline" disabled={!email.trim() || ssoMutation.isPending || mutation.isPending} onClick={() => ssoMutation.mutate()}>{t("authFlow.companySso")}</Button> : null}
+          {!challenge && mode === "sign_in" && saas.data?.enterpriseSso ? <Button className="w-full mt-3" variant="outline" disabled={!email.trim() || ssoMutation.isPending || mutation.isPending} onClick={() => ssoMutation.mutate()}>{t("authFlow.companySso")}</Button> : null}
 
-          {(!saas.data || saas.data.signup || mode === "sign_up") && <div className="mt-5 text-sm text-muted-foreground">
+          {!challenge && (!saas.data || saas.data.signup || mode === "sign_up") && <div className="mt-5 text-sm text-muted-foreground">
             {mode === "sign_in" ? t("authFlow.needAccount") : t("authFlow.alreadyAccount")}{" "}
             <button
               type="button"
@@ -228,7 +341,7 @@ export function AuthPage() {
               {mode === "sign_in" ? t("authFlow.createOne") : t("authFlow.signInLink")}
             </button>
           </div>}
-          {saas.data && <p className="saas-muted"><Link className="saas-link" to="/saas/reset-password">{t("authFlow.forgotPassword")}</Link></p>}
+          {!challenge && saas.data && <p className="saas-muted"><Link className="saas-link" to="/saas/reset-password">{t("authFlow.forgotPassword")}</Link></p>}
         </div>
       </div>
 

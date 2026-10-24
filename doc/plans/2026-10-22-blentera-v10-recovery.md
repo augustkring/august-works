@@ -655,3 +655,42 @@ Broader actual run64PASS/19FAIL470.21s includes all four binding/Memory/private-
 Both candidate/active Skill lifecycles and both accountable preparation/native Context cases pass together4PASS140.44s (102.06s actual tests) under a120-second complete-lifecycle test budget. Earlier30-second expiry and isolated cold mandatory Context timeout remain raw evidence. Profiling observed live queries without blocking PIDs; no production timeout, permission bypass or performance qualification is introduced. Instrumentation is removed from final sources. Final server compiler actual0 before the separate authentication schema work; product pins remain unchanged, tests excluded. See learning-telegram-capture-2026-10-23/checkpoint.json for exact stages, pins and limitations.
 
 Confirmed open production defect: native Workflow Tasks store workflow_runs.id in originRunId, but Task mutation and generic privacy traversal assume heartbeat_runs. Do not repair this by flipping fixture flags, discarding provenance or relaxing source denials. Four original Optimizer cases and two no-wait Workflow cases need a truthful typed origin/source-owner repair. Full original Learning, source privacy/temporal, portability and whole-workspace/V10/PR gates remain open. No complete source producer, provider or PR-ready claim.
+
+### 2026-10-24 — Native password proof and authenticator lifetime foundation
+
+The existing Better Auth owner now records completed email/password signup and
+sign-in on the actual native session, against the trusted captured user generation
+and database clock. Private assurance fields reject client writes and remain out
+of native HTTP responses. Historic sessions, cookie refresh, reset links and SSO
+are not backfilled. New generated 0518/0519 provide exact official provider models,
+credential/factor generation guards, concurrent authority pinning, monotonic
+passkey counters and final-key retention. The original account erasure owner also
+destroys authenticators while a scrubbed principal remains; its canonical deletion
+marker permits irreversible erasure and quarantine replay, not recovery access.
+
+Native challenge handling in Auth and InviteLanding preserves intended navigation
+and supports maintained TOTP/recovery endpoints without logging secrets. The
+account confirmation input and shared API validator accept the full supported
+Unicode password bound, with original native verification and legacy short
+credential compatibility preserved. Official passkey dependencies are pinned to
+the maintained provider version; MFA/passkey plugins are not yet activated.
+
+Actual PostgreSQL/HTTP stages: three complete native suites pass 26 tests; after
+the matching Unicode confirmation bound, the complete account suite passes 11,
+including the added 128-astral-codepoint confirmation. Verified-mail/recovery
+regression passes 4. UI Auth/API/InviteLanding/Account suites pass 74. Final server
+and UI compilers, token gates and native migration safety return zero; all sessions
+are closed. Server compiler excludes tests. Initial lifecycle assertion mistakes,
+the obsolete retained-session fixture, and the reproduced retained-factor erasure
+failure remain in raw evidence. Exact archived erasure baseline, final pins and
+bounded stages: native-authentication-lifetime-2026-10-24/checkpoint.json.
+
+V10-166 remains in progress. Full enrollment/removal/recovery UI, native factor
+proof completion, recent-action checks in the actual mutation transaction,
+operator phishing resistance and bootstrap/recovery admission remain open.
+Pending passkey registration JSON also needs generation binding and user-data
+erasure before activation; the simple TOTP verification-value cleanup does not
+reach that provider shape. Structural factor/key fixtures do not qualify MFA,
+WebAuthn, physical authenticators or restored-backup MFA. Existing source
+privacy/temporal, typed Workflow origins, portability and whole-workspace gates
+remain open. No full V10, provider deployment or PR-ready claim.

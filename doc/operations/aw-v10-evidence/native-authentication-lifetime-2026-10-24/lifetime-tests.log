@@ -1,0 +1,71 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/authenticator-lifetime.integration.test.ts (8 tests | 2 failed) 10550ms
+     × cascades user deletion across native factor, passkey, session, and verification rows 47ms
+     × requires matching native human, session, credential, factor, and passkey evidence 61ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/authenticator-lifetime.integration.test.ts > native authenticator lifetime constraints > cascades user deletion across native factor, passkey, session, and verification rows
+AssertionError: expected [ { …(6) } ] to deeply equal []
+
+- Expected
++ Received
+
+- []
++ [
++   {
++     "createdAt": 2026-10-24T00:00:37.998Z,
++     "expiresAt": 2026-10-24T00:10:37.998Z,
++     "id": "eae93cec-3eb9-4534-bb26-6bb85abb4d7a",
++     "identifier": "native-factor-fixture-5b93a7a7-2655-4241-8d48-0ad2d2ac116a",
++     "updatedAt": 2026-10-24T00:00:37.998Z,
++     "value": "1f9aad87-6ef5-43f9-8d12-31657f20c992",
++   },
++ ]
+
+ ❯ src/__tests__/authenticator-lifetime.integration.test.ts:310:99
+    308|     expect(await db.select().from(authPasskeys).where(eq(authPasskeys.…
+    309|     expect(await db.select().from(authSessions).where(eq(authSessions.…
+    310|     expect(await db.select().from(authVerifications).where(eq(authVeri…
+       |                                                                                                   ^
+    311|   });
+    312|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/authenticator-lifetime.integration.test.ts > native authenticator lifetime constraints > requires matching native human, session, credential, factor, and passkey evidence
+AssertionError: promise resolved "{ method: 'passkey', …(2) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "authenticatedAt": "2026-10-24 00:00:38.091664+00",
++   "authenticatorVersion": 2,
++   "method": "passkey",
+  }
+
+ ❯ expectAssuranceDenied src/__tests__/authenticator-lifetime.integration.test.ts:102:64
+    100|     phishingResistant: false,
+    101|   }) {
+    102|     await expect(assertHumanAuthentication(db, actor, options)).reject…
+       |                                                                ^
+    103|       status: 403,
+    104|       details: { code: "recent_authentication_required" },
+ ❯ src/__tests__/authenticator-lifetime.integration.test.ts:361:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 6 passed (8)
+   Start at  00:00:13
+   Duration  24.74s (transform 7.06s, setup 233ms, import 13.54s, tests 10.55s, environment 0ms)
+

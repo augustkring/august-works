@@ -47,6 +47,7 @@
     "@aws-sdk/client-s3": "^3.1122.0",
     "@aws-sdk/s3-request-presigner": "3.1122.0",
     "@better-auth/core": "1.7.2",
+    "@better-auth/passkey": "1.7.2",
     "@better-auth/scim": "1.7.2",
     "@better-auth/sso": "1.7.2",
     "@better-auth/utils": "0.4.2",

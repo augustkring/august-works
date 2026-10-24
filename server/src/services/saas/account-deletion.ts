@@ -303,6 +303,8 @@ export async function eraseAccountAccess(
   await tx.execute(sql`delete from ${authRateLimits} where key like ${"support-case:" + sha256(JSON.stringify(userId)) + ":%"}`);
   await tx.execute(sql`delete from "session" where user_id=${userId}`);
   await tx.execute(sql`delete from "account" where user_id=${userId}`);
+  await tx.execute(sql`delete from two_factor where user_id=${userId}`);
+  await tx.execute(sql`delete from passkey where user_id=${userId}`);
   await tx.execute(sql`delete from board_api_keys where user_id=${userId}`);
   await tx.execute(
     sql`delete from verification where value=${userId} ${email ? sql`or identifier=${email}` : sql``}`,
@@ -338,5 +340,5 @@ export async function eraseAccountAccess(
   // Stable actor IDs remain only while required records still reference them.
   await tx.execute(sql`update "user" set name='Deleted account',
     email=${"deleted+" + sha256(userId) + "@account.invalid"},email_verified=false,
-    image=null,locale=null,updated_at=${now.toISOString()}::timestamptz where id=${userId}`);
+    image=null,locale=null,two_factor_enabled=false,updated_at=${now.toISOString()}::timestamptz where id=${userId}`);
 }

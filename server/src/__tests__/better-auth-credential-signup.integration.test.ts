@@ -15,12 +15,12 @@
 
 import { randomUUID } from "node:crypto";
 import { eq, inArray } from "drizzle-orm";
-import { hashPassword } from "better-auth/crypto";
+import { hashPassword, makeSignature } from "better-auth/crypto";
 import type { Auth } from "better-auth";
 import express from "express";
 import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { authAccounts, authUsers, createDb } from "@paperclipai/db";
+import { authAccounts, authSessions, authUsers, createDb } from "@paperclipai/db";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -105,6 +105,12 @@ describeEmbeddedPostgres("Better Auth credential sign-up against the real schema
     // A missing `account` column fails here with a 500 and an empty body.
     expect(signUp.status).toBe(200);
     expect(signUp.body?.user?.email).toBe(EMAIL);
+    expect(signUp.body.user).not.toHaveProperty("authenticatorVersion");
+    expect(signUp.body.user).not.toHaveProperty("phishingResistantRequired");
+    const [createdUser] = await db.select().from(authUsers).where(eq(authUsers.id, signUp.body.user.id));
+    const [createdSession] = await db.select().from(authSessions).where(eq(authSessions.userId, createdUser.id));
+    expect(createdSession).toMatchObject({ authenticationMethod: "password", authenticatorVersion: createdUser.authenticatorVersion });
+    expect(createdSession.authenticatedAt).toBeInstanceOf(Date);
 
     // Sign-up has to leave a usable account row behind. A half-created user —
     // a `user` row with no `account` — cannot sign in, cannot sign up again,
@@ -120,11 +126,34 @@ describeEmbeddedPostgres("Better Auth credential sign-up against the real schema
     const signIn = await request(app)
       .post("/api/auth/sign-in/email")
       .set("origin", ORIGIN)
-      .send({ email: EMAIL, password: PASSWORD });
+      .send({ email: EMAIL, password: PASSWORD, authenticatorVersion: 999,
+        phishingResistantRequired: true, authenticationMethod: "passkey", authenticatedAt: "2099-01-01" });
 
     expect(signIn.status).toBe(200);
     expect(signIn.body?.user?.email).toBe(EMAIL);
     expect(sessionCookies(signIn).length).toBeGreaterThan(0);
+    expect(signIn.body.user).not.toHaveProperty("authenticatorVersion");
+    expect(signIn.body.user).not.toHaveProperty("phishingResistantRequired");
+    const sessions = await db.select().from(authSessions).where(eq(authSessions.userId, createdUser.id));
+    expect(sessions).toHaveLength(2);
+    expect(sessions.every(session => session.authenticationMethod === "password"
+      && session.authenticatorVersion === createdUser.authenticatorVersion)).toBe(true);
+    const current = await request(app).get("/api/auth/get-session")
+      .set("Cookie", sessionCookies(signIn).map(cookie => cookie.split(";", 1)[0]).join("; "));
+    expect(current.status).toBe(200);
+    expect(current.body.user.id).toBe(createdUser.id);
+    for (const field of ["authenticationMethod", "authenticatedAt", "authenticatorVersion"]) {
+      expect(current.body.session).not.toHaveProperty(field);
+    }
+    expect(current.body.user).not.toHaveProperty("authenticatorVersion");
+    expect(current.body.user).not.toHaveProperty("phishingResistantRequired");
+    const privateUpdate = await request(app).post("/api/auth/update-user").set("Origin", ORIGIN)
+      .set("Cookie", sessionCookies(signIn).map(cookie => cookie.split(";", 1)[0]).join("; "))
+      .send({ authenticatorVersion: 999, phishingResistantRequired: true });
+    expect(privateUpdate.status).toBe(400);
+    const [unchangedUser] = await db.select().from(authUsers).where(eq(authUsers.id, createdUser.id));
+    expect(unchangedUser).toMatchObject({ authenticatorVersion: createdUser.authenticatorVersion,
+      phishingResistantRequired: false });
   });
 
   it("keeps existing credentials usable in SaaS with secure cookies while refusing public signup", async () => {
@@ -220,11 +249,21 @@ describeEmbeddedPostgres("Better Auth credential sign-up against the real schema
       .send({ email, password, name: "Passwordless account fixture" });
     expect(created.status).toBe(200);
     const userId = created.body.user.id;
-    // Model an existing passwordless account while retaining its real fresh session.
+    // Removing a credential now revokes the original native session.
     await db.delete(authAccounts).where(eq(authAccounts.userId, userId));
-    const headers = new Headers({ origin: ORIGIN,
-      cookie: sessionCookies(created).map(value => value.split(";", 1)[0]).join("; ") });
     const nativeApi = auth.api as Auth["api"];
+    const oldHeaders = new Headers({ origin: ORIGIN,
+      cookie: sessionCookies(created).map(value => value.split(";", 1)[0]).join("; ") });
+    await expect(nativeApi.setPassword({ headers: oldHeaders, body: { newPassword: "A longer native café passphrase 2026" } }))
+      .rejects.toMatchObject({ status: "UNAUTHORIZED" });
+    // Seed a passwordless native session through the maintained provider. This
+    // structural fixture tests password policy, not SSO or MFA qualification.
+    const nativeContext = await (auth as unknown as Auth).$context;
+    const fresh = await nativeContext.internalAdapter.createSession(userId);
+    expect(fresh).toBeTruthy();
+    const signature = await makeSignature(fresh!.token, nativeContext.secret);
+    const headers = new Headers({ origin: ORIGIN,
+      cookie: `${nativeContext.authCookies.sessionToken.name}=${encodeURIComponent(`${fresh!.token}.${signature}`)}` });
     await expect(nativeApi.setPassword({ headers, body: { newPassword: "passwordpassword" } }))
       .rejects.toMatchObject({ status: "BAD_REQUEST", body: { code: "PASSWORD_TOO_COMMON" } });
     expect(await db.select().from(authAccounts).where(eq(authAccounts.userId, userId))).toEqual([]);

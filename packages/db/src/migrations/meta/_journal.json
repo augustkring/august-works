@@ -3613,6 +3613,20 @@
       "when": 1792795604144,
       "tag": "0517_native_payload_erasure",
       "breakpoints": true
+    },
+    {
+      "idx": 518,
+      "version": "7",
+      "when": 1792799544077,
+      "tag": "0518_safe_hiroim",
+      "breakpoints": true
+    },
+    {
+      "idx": 519,
+      "version": "7",
+      "when": 1792799557442,
+      "tag": "0519_native_authenticator_lifetime",
+      "breakpoints": true
     }
   ]
 }

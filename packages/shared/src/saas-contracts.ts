@@ -1,5 +1,6 @@
 import { z } from "zod";
 import { activationWebsiteSchema } from "./activation.js";
+import { LOCAL_PASSWORD_MAX_UTF16_LENGTH } from "./local-password-policy.js";
 export const runtimeBackupPolicySchema = z
   .object({
     enabled: z.boolean(),
@@ -158,7 +159,7 @@ export const companyDeletionRequestSchema = z
 export const accountDeletionRequestSchema = z
   .object({
     confirmation: z.literal("DELETE MY ACCOUNT"),
-    password: z.string().min(1).max(128),
+    password: z.string().min(1).max(LOCAL_PASSWORD_MAX_UTF16_LENGTH),
     acknowledgeExport: z.literal(true),
     idempotencyKey: idempotencyKeySchema,
   })

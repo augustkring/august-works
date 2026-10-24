@@ -380,17 +380,24 @@ export function InviteLandingPage() {
   const authMutation = useMutation({
     mutationFn: async () => {
       if (authMode === "sign_in") {
-        await authApi.signInEmail({ email: email.trim(), password });
-        return;
+        const challenge = await authApi.signInEmail({ email: email.trim(), password });
+        return challenge ? { kind: "challenge" as const, challenge } : { kind: "complete" as const };
       }
       await authApi.signUpEmail({
         name: name.trim(),
         email: email.trim(),
         password,
       });
+      return { kind: "complete" as const };
     },
-    onSuccess: async () => {
+    onSuccess: async (result) => {
       setAuthFeedback(null);
+      if (result.kind === "challenge") {
+        rememberPendingInviteToken(token);
+        setPassword("");
+        navigate("/auth", { state: { twoFactorChallenge: result.challenge } });
+        return;
+      }
       rememberPendingInviteToken(token);
       await queryClient.invalidateQueries({ queryKey: queryKeys.auth.session });
       await queryClient.invalidateQueries({ queryKey: queryKeys.health });

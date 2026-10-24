@@ -24,6 +24,22 @@ export interface SignOutResult {
   redirectTo?: string;
 }
 
+export interface TwoFactorSignInChallenge {
+  twoFactorRedirect: true;
+  twoFactorMethods: string[];
+}
+
+export function parseTwoFactorSignInChallenge(value: unknown): TwoFactorSignInChallenge | null {
+  if (!value || typeof value !== "object") return null;
+  const payload = value as Record<string, unknown>;
+  if (payload.twoFactorRedirect !== true) return null;
+  if (!Array.isArray(payload.twoFactorMethods) || payload.twoFactorMethods.length === 0 ||
+      !payload.twoFactorMethods.every((method) => typeof method === "string")) {
+    throw new Error("Invalid native two-factor challenge response");
+  }
+  return { twoFactorRedirect: true, twoFactorMethods: payload.twoFactorMethods };
+}
+
 export class AuthApiError extends Error {
   status: number;
   code: string | null;
@@ -177,8 +193,16 @@ export const authApi = {
     if(target.protocol!=="https:" || target.username || target.password) throw new Error("Invalid identity provider redirect");
     return target.href;
   },
-  signInEmail: async (input: { email: string; password: string }) => {
-    await authPost("/sign-in/email", input);
+  signInEmail: async (input: { email: string; password: string }): Promise<TwoFactorSignInChallenge | null> => {
+    return parseTwoFactorSignInChallenge(await authPost("/sign-in/email", input));
+  },
+
+  verifyTotp: async (code: string): Promise<void> => {
+    await authPost("/two-factor/verify-totp", { code });
+  },
+
+  verifyBackupCode: async (code: string): Promise<void> => {
+    await authPost("/two-factor/verify-backup-code", { code });
   },
 
   signUpEmail: async (input: { name: string; email: string; password: string }) => {

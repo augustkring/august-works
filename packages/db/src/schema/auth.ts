@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { pgTable, text, timestamp, boolean, uniqueIndex, check } from "drizzle-orm/pg-core";
+import { pgTable, text, timestamp, boolean, integer, bigint, index, uniqueIndex, check } from "drizzle-orm/pg-core";
 
 export const authUsers = pgTable("user", {
   id: text("id").primaryKey(),
@@ -9,9 +9,13 @@ export const authUsers = pgTable("user", {
   image: text("image"),
   locale: text("locale"),
   keyboardShortcuts: boolean("keyboard_shortcuts").notNull().default(false),
+  twoFactorEnabled: boolean("two_factor_enabled").notNull().default(false),
+  authenticatorVersion: integer("authenticator_version").notNull().default(0),
+  phishingResistantRequired: boolean("phishing_resistant_required").notNull().default(false),
   createdAt: timestamp("created_at", { withTimezone: true }).notNull(),
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
 }, (table) => ({
+  authenticatorVersionCheck: check("user_authenticator_version_check", sql`${table.authenticatorVersion} >= 0`),
   localeCheck: check("user_locale_check", sql`${table.locale} is null or ${table.locale} in ('en', 'da')`),
 }));
 
@@ -23,8 +27,19 @@ export const authSessions = pgTable("session", {
   updatedAt: timestamp("updated_at", { withTimezone: true }).notNull(),
   ipAddress: text("ip_address"),
   userAgent: text("user_agent"),
+  // Server-owned proof of a completed native ceremony; legacy sessions stay unknown.
+  authenticationMethod: text("authentication_method").$type<"password" | "totp" | "backup_code" | "passkey">(),
+  authenticatedAt: timestamp("authenticated_at", { withTimezone: true }),
+  authenticatorVersion: integer("authenticator_version"),
   userId: text("user_id").notNull().references(() => authUsers.id, { onDelete: "cascade" }),
-});
+}, (table) => ({
+  authenticationProofCheck: check("session_authentication_proof_check", sql`
+    (${table.authenticationMethod} is null and ${table.authenticatedAt} is null and ${table.authenticatorVersion} is null)
+    or (${table.authenticationMethod} is not null and ${table.authenticatorVersion} is not null
+      and ${table.authenticationMethod} in ('password','totp','backup_code','passkey')
+      and ${table.authenticatedAt} is not null and ${table.authenticatorVersion} >= 0)
+  `),
+}));
 
 /**
  * Better Auth's `account` model. Every column here has to exist for the
@@ -71,3 +86,37 @@ export const authVerifications = pgTable("verification", {
   createdAt: timestamp("created_at", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }),
 });
+
+
+// Exact provider models. Better Auth owns cryptographic verification and encryption.
+export const authTwoFactors = pgTable("two_factor", {
+  id: text("id").primaryKey(),
+  secret: text("secret").notNull(),
+  backupCodes: text("backup_codes").notNull(),
+  userId: text("user_id").notNull().references(() => authUsers.id, { onDelete: "cascade" }),
+  verified: boolean("verified").notNull().default(true),
+  failedVerificationCount: integer("failed_verification_count").notNull().default(0),
+  lockedUntil: timestamp("locked_until", { withTimezone: true }),
+}, (table) => ({
+  userUq: uniqueIndex("two_factor_user_uq").on(table.userId),
+  secretIdx: index("two_factor_secret_idx").on(table.secret),
+  failedVerificationCountCheck: check("two_factor_failed_verification_count_check", sql`${table.failedVerificationCount} >= 0`),
+}));
+
+export const authPasskeys = pgTable("passkey", {
+  id: text("id").primaryKey(),
+  name: text("name"),
+  publicKey: text("public_key").notNull(),
+  userId: text("user_id").notNull().references(() => authUsers.id, { onDelete: "cascade" }),
+  credentialID: text("credential_id").notNull(),
+  counter: bigint("counter", { mode: "number" }).notNull(),
+  deviceType: text("device_type").notNull(),
+  backedUp: boolean("backed_up").notNull(),
+  transports: text("transports"),
+  createdAt: timestamp("created_at", { withTimezone: true }),
+  aaguid: text("aaguid"),
+}, (table) => ({
+  userIdx: index("passkey_user_idx").on(table.userId),
+  credentialUq: uniqueIndex("passkey_credential_uq").on(table.credentialID),
+  counterCheck: check("passkey_counter_check", sql`${table.counter} between 0 and 4294967295`),
+}));

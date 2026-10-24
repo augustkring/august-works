@@ -91,6 +91,57 @@ describe("authApi.signOut", () => {
   });
 });
 
+describe("authApi two-factor sign-in", () => {
+  it("leaves the ordinary sign-in response on its existing success path", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ token: "native-token", user: { id: "human" } }), {
+      status: 200, headers: { "Content-Type": "application/json" },
+    })));
+    await expect(authApi.signInEmail({ email: "person@example.test", password: "secret" })).resolves.toBeNull();
+  });
+
+  it("preserves the native challenge response and posts the exact TOTP and recovery-code bodies", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ twoFactorRedirect: true, twoFactorMethods: ["totp"] }), {
+        status: 200, headers: { "Content-Type": "application/json" },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ token: "native-token" }), {
+        status: 200, headers: { "Content-Type": "application/json" },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({ token: "native-token" }), {
+        status: 200, headers: { "Content-Type": "application/json" },
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+
+    await expect(authApi.signInEmail({ email: "person@example.test", password: "secret" })).resolves.toEqual({
+      twoFactorRedirect: true,
+      twoFactorMethods: ["totp"],
+    });
+    await authApi.verifyTotp("123456");
+    await authApi.verifyBackupCode("ABCD-EFGH");
+
+    expect(fetchMock.mock.calls.map(([url, init]) => [url, JSON.parse(String(init?.body))])).toEqual([
+      ["/api/auth/sign-in/email", { email: "person@example.test", password: "secret" }],
+      ["/api/auth/two-factor/verify-totp", { code: "123456" }],
+      ["/api/auth/two-factor/verify-backup-code", { code: "ABCD-EFGH" }],
+    ]);
+  });
+
+  it("keeps native verification error codes available to callers", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ code: "INVALID_TOTP", message: "invalid" }), {
+      status: 400, headers: { "Content-Type": "application/json" },
+    })));
+    await expect(authApi.verifyTotp("000000")).rejects.toMatchObject({ status: 400, code: "INVALID_TOTP" });
+  });
+
+  it("rejects a malformed native challenge instead of treating it as ordinary sign-in", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response(JSON.stringify({ twoFactorRedirect: true, twoFactorMethods: [] }), {
+      status: 200, headers: { "Content-Type": "application/json" },
+    })));
+    await expect(authApi.signInEmail({ email: "person@example.test", password: "secret" }))
+      .rejects.toThrow("Invalid native two-factor challenge response");
+  });
+});
+
 describe("authentication diagnostics", () => {
   it("keeps network diagnostics without logging invitation paths or arbitrary error content", async () => {
     const diagnostic = vi.spyOn(console, "error").mockImplementation(() => {});

@@ -14,6 +14,7 @@ import { queryKeys } from "../lib/queryKeys";
 import { ApiError } from "../api/client";
 import { useTranslation } from "react-i18next";
 import type { SaasNotificationPreference } from "@paperclipai/shared";
+import { LOCAL_PASSWORD_MAX_UTF16_LENGTH } from "@paperclipai/shared/local-password-policy";
 import { readPendingAccountDeletion, retainPendingAccountDeletion, clearPendingAccountDeletion } from "../lib/pending-account-deletion";
 import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
 import { NotificationPolicySettings } from "../components/NotificationPolicySettings";
@@ -200,7 +201,7 @@ function AccountSecurityScope({ principal, companyId }: { principal: string; com
           deletionInFlight.current = true; deletion.mutate();
         }}>
           <label className="saas-label">{t("account.confirmDelete")}<input className="saas-input" value={deleteConfirmation} onChange={event => setDeleteConfirmation(event.target.value)} required autoComplete="off" disabled={deleteLocked} /></label>
-          <label className="saas-label">{t("account.currentPassword")}<input className="saas-input" type="password" autoComplete="current-password" maxLength={128} value={deletePassword} onChange={event => setDeletePassword(event.target.value)} required disabled={deleteLocked} /></label>
+          <label className="saas-label">{t("account.currentPassword")}<input className="saas-input" type="password" autoComplete="current-password" maxLength={LOCAL_PASSWORD_MAX_UTF16_LENGTH} value={deletePassword} onChange={event => setDeletePassword(event.target.value)} required disabled={deleteLocked} /></label>
           <label className="saas-row"><input type="checkbox" checked={exportAcknowledged} onChange={event => setExportAcknowledged(event.target.checked)} disabled={deleteLocked} />{t("account.exportAcknowledgement")}</label>
           <Button type="submit" variant="destructive" disabled={recoveryUnavailable || deletion.isPending || deleteConfirmation !== "DELETE MY ACCOUNT" || !deletePassword || !exportAcknowledged}>{t(recoveringDeletion || deletionAttempt.current ? "account.retryDeletion" : "account.delete")}</Button>
         </form>

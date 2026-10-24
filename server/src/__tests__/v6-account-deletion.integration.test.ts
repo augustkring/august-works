@@ -8,8 +8,10 @@ import {
   accountDeletionOperations,
   activityLog,
   authAccounts,
+  authPasskeys,
   authRateLimits,
   authSessions,
+  authTwoFactors,
   authUsers,
   billingAccounts,
   billingSubscriptions,
@@ -772,6 +774,39 @@ const support = await getEmbeddedPostgresTestSupport();
             .where(eq(accountDeletionOperations.userId, "support-event-author"))
         )[0],
       ).toMatchObject({ status: "requested", completedAt: null });
+    });
+    it("accepts the full supported Unicode password for irreversible account confirmation", async () => {
+      const id = "unicode-password-offboarding", unicodePassword = "🚀".repeat(128);
+      await user(id);
+      await db.update(authAccounts).set({ password: await hashPassword(unicodePassword) })
+        .where(eq(authAccounts.userId, id));
+      await expect(accountDeletionService(db, effects).request(id, {
+        ...input("unicode-password-offboarding-001"), password: unicodePassword,
+      })).resolves.toMatchObject({ status: "requested" });
+    });
+    it("erases native authenticators when offboarding retains a scrubbed user row", async () => {
+      const id = "native-authenticator-erasure";
+      await user(id);
+      // Structural provider records only; this test qualifies erasure, not an
+      // MFA ceremony or an operator authentication policy.
+      await db.insert(authTwoFactors).values({
+        id: randomUUID(), userId: id, secret: "fixture-encrypted-totp",
+        backupCodes: "fixture-encrypted-recovery", verified: true,
+      });
+      await db.update(authUsers).set({ twoFactorEnabled: true, phishingResistantRequired: true })
+        .where(eq(authUsers.id, id));
+      const [passkey] = await db.insert(authPasskeys).values({
+        id: randomUUID(), userId: id, publicKey: "fixture-public-key", credentialID: randomUUID(),
+        counter: 1, deviceType: "singleDevice", backedUp: false,
+      }).returning();
+      await expect(db.delete(authPasskeys).where(eq(authPasskeys.id, passkey.id)))
+        .rejects.toMatchObject({ cause: { code: "23514" } });
+      await accountDeletionService(db, effects).request(id, input("native-authenticator-erasure-001"));
+      expect(await db.select().from(authTwoFactors).where(eq(authTwoFactors.userId, id))).toEqual([]);
+      expect(await db.select().from(authPasskeys).where(eq(authPasskeys.userId, id))).toEqual([]);
+      const [retained] = await db.select().from(authUsers).where(eq(authUsers.id, id));
+      expect(retained).toMatchObject({ name: "Deleted account", emailVerified: false,
+        twoFactorEnabled: false, phishingResistantRequired: true });
     });
   },
 );

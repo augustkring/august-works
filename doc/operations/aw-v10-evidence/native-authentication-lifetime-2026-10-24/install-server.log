@@ -1,0 +1,104 @@
+(node:154924) [DEP0169] DeprecationWarning: `url.parse()` behavior is not standardized and prone to errors that have security implications. Use the WHATWG URL API instead. CVEs are not issued for `url.parse()` vulnerabilities.
+(Use `node --trace-deprecation ...` to show where the warning was created)
+.                                        |  WARN  `node_modules` is present. Lockfile only installation will make it out-of-date
+
+   ╭───────────────────────────────────────────────────────────────────╮
+   │                                                                   │
+   │                Update available! 9.15.4 → 12.15.0.                │
+   │   Changelog: https://github.com/pnpm/pnpm/releases/tag/v12.15.0   │
+   │         Run "corepack install -g pnpm@12.15.0" to update.         │
+   │                                                                   │
+   ╰───────────────────────────────────────────────────────────────────╯
+
+Progress: resolved 1, reused 0, downloaded 0, added 0
+server                                   |  WARN  deprecated @types/sharp@0.32.0
+Progress: resolved 19, reused 0, downloaded 0, added 0
+Progress: resolved 36, reused 0, downloaded 0, added 0
+Progress: resolved 39, reused 0, downloaded 0, added 0
+Progress: resolved 46, reused 0, downloaded 0, added 0
+Progress: resolved 59, reused 0, downloaded 0, added 0
+Progress: resolved 63, reused 0, downloaded 0, added 0
+Progress: resolved 78, reused 0, downloaded 0, added 0
+Progress: resolved 94, reused 0, downloaded 0, added 0
+Progress: resolved 111, reused 0, downloaded 0, added 0
+Progress: resolved 127, reused 0, downloaded 0, added 0
+Progress: resolved 134, reused 0, downloaded 0, added 0
+ WARN  GET https://registry.npmjs.org/@codemirror%2Fstate error (503). Will retry in 10 seconds. 2 retries left.
+Progress: resolved 135, reused 0, downloaded 0, added 0
+Progress: resolved 136, reused 0, downloaded 0, added 0
+Progress: resolved 143, reused 0, downloaded 0, added 0
+Progress: resolved 164, reused 0, downloaded 0, added 0
+Progress: resolved 184, reused 0, downloaded 0, added 0
+Progress: resolved 203, reused 0, downloaded 0, added 0
+Progress: resolved 212, reused 0, downloaded 0, added 0
+Progress: resolved 230, reused 0, downloaded 0, added 0
+Progress: resolved 248, reused 0, downloaded 0, added 0
+Progress: resolved 272, reused 0, downloaded 0, added 0
+Progress: resolved 289, reused 0, downloaded 0, added 0
+Progress: resolved 315, reused 0, downloaded 0, added 0
+Progress: resolved 338, reused 0, downloaded 0, added 0
+Progress: resolved 358, reused 0, downloaded 0, added 0
+Progress: resolved 379, reused 0, downloaded 0, added 0
+Progress: resolved 397, reused 0, downloaded 0, added 0
+Progress: resolved 424, reused 0, downloaded 0, added 0
+Progress: resolved 456, reused 0, downloaded 0, added 0
+Progress: resolved 465, reused 0, downloaded 0, added 0
+Progress: resolved 473, reused 0, downloaded 0, added 0
+Progress: resolved 499, reused 0, downloaded 0, added 0
+Progress: resolved 514, reused 0, downloaded 0, added 0
+Progress: resolved 539, reused 0, downloaded 0, added 0
+Progress: resolved 565, reused 0, downloaded 0, added 0
+Progress: resolved 581, reused 0, downloaded 0, added 0
+Progress: resolved 591, reused 0, downloaded 0, added 0
+Progress: resolved 602, reused 0, downloaded 0, added 0
+Progress: resolved 610, reused 0, downloaded 0, added 0
+Progress: resolved 619, reused 0, downloaded 0, added 0
+Progress: resolved 625, reused 0, downloaded 0, added 0
+Progress: resolved 638, reused 0, downloaded 0, added 0
+Progress: resolved 654, reused 0, downloaded 0, added 0
+Progress: resolved 673, reused 0, downloaded 0, added 0
+Progress: resolved 678, reused 0, downloaded 0, added 0
+Progress: resolved 694, reused 0, downloaded 0, added 0
+Progress: resolved 706, reused 0, downloaded 0, added 0
+Progress: resolved 730, reused 0, downloaded 0, added 0
+Progress: resolved 757, reused 0, downloaded 0, added 0
+Progress: resolved 780, reused 0, downloaded 0, added 0
+Progress: resolved 802, reused 0, downloaded 0, added 0
+Progress: resolved 826, reused 0, downloaded 0, added 0
+Progress: resolved 852, reused 0, downloaded 0, added 0
+Progress: resolved 874, reused 0, downloaded 0, added 0
+Progress: resolved 904, reused 0, downloaded 0, added 0
+Progress: resolved 948, reused 0, downloaded 0, added 0
+Progress: resolved 969, reused 0, downloaded 0, added 0
+Progress: resolved 992, reused 0, downloaded 0, added 0
+Progress: resolved 1017, reused 0, downloaded 0, added 0
+Progress: resolved 1041, reused 0, downloaded 0, added 0
+Progress: resolved 1043, reused 0, downloaded 0, added 0
+Progress: resolved 1063, reused 0, downloaded 0, added 0
+Progress: resolved 1084, reused 0, downloaded 0, added 0
+Progress: resolved 1113, reused 0, downloaded 0, added 0
+Progress: resolved 1138, reused 0, downloaded 0, added 0
+Progress: resolved 1165, reused 0, downloaded 0, added 0
+Progress: resolved 1201, reused 0, downloaded 0, added 0
+Progress: resolved 1223, reused 0, downloaded 0, added 0
+Progress: resolved 1251, reused 0, downloaded 0, added 0
+Progress: resolved 1280, reused 0, downloaded 0, added 0
+Progress: resolved 1303, reused 0, downloaded 0, added 0
+Progress: resolved 1329, reused 0, downloaded 0, added 0
+Progress: resolved 1332, reused 0, downloaded 0, added 0
+Progress: resolved 1344, reused 0, downloaded 0, added 0
+Progress: resolved 1360, reused 0, downloaded 0, added 0
+Progress: resolved 1364, reused 0, downloaded 0, added 0
+Progress: resolved 1372, reused 0, downloaded 0, added 0
+Progress: resolved 1408, reused 0, downloaded 0, added 0
+Progress: resolved 1432, reused 0, downloaded 0, added 0
+Progress: resolved 1459, reused 0, downloaded 0, added 0
+Progress: resolved 1486, reused 0, downloaded 0, added 0
+Progress: resolved 1533, reused 0, downloaded 0, added 0
+Progress: resolved 1556, reused 0, downloaded 0, added 0
+Progress: resolved 1592, reused 0, downloaded 0, added 0
+ WARN  5 deprecated subdependencies found: @esbuild-kit/core-utils@3.3.2, @esbuild-kit/esm-loader@2.6.5, @ungap/structured-clone@1.3.0, glob@10.5.0, node-domexception@1.0.0
+Progress: resolved 1603, reused 0, downloaded 0, added 0
+Progress: resolved 1603, reused 0, downloaded 0, added 0, done
+.                                        |  +28   -4 +++-
+Done in 1m 45.4s
