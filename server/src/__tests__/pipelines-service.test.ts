@@ -4,6 +4,7 @@ import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   activityLog,
   agents,
+  authUsers,
   companies,
   companyMemberships,
   principalPermissionGrants,
@@ -25,6 +26,7 @@ import {
   projectWorkspaces,
   projects,
   routineRuns,
+  routineRevisions,
   routines,
   workflowRevisions,
   workflowRuns,
@@ -64,6 +66,14 @@ describeEmbeddedPostgres("pipelineService", () => {
   beforeAll(async () => {
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-pipelines-service-");
     db = createDb(tempDb.connectionString);
+    await db.insert(authUsers).values({
+      id: userActor.userId,
+      name: "Pipeline test Human",
+      email: "pipeline-board-user@test.invalid",
+      emailVerified: true,
+      createdAt: new Date(),
+      updatedAt: new Date(),
+    });
     svc = pipelineService(db, { heartbeat: noopHeartbeat });
   }, 20_000);
 
@@ -1367,6 +1377,11 @@ describeEmbeddedPostgres("pipelineService", () => {
         { key: "cancelled", name: "Cancelled", kind: "cancelled" },
       ],
     });
+    const [sourceRoutine] = await db
+      .select({ originKind: routines.originKind, originId: routines.originId })
+      .from(routines)
+      .where(eq(routines.id, routine.id));
+    expect(sourceRoutine).toEqual({ originKind: "manual", originId: null });
     const created = await svc.ingestCase({
       companyId: company.id,
       pipelineId: pipeline.id,
@@ -1677,6 +1692,8 @@ describeEmbeddedPostgres("pipelineService", () => {
       actor: userActor,
     });
 
+    console.log("PIPELINE FAILURE DEBUG", moved.automationExecution,
+      await db.select().from(routineRuns), await db.select().from(routineRevisions));
     expect(moved.automationExecution.status).toBe("succeeded");
     const executionIssueId = moved.automationExecution.status === "succeeded"
       ? moved.automationExecution.execution.executionIssueId
