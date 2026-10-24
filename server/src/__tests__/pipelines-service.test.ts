@@ -26,7 +26,6 @@ import {
   projectWorkspaces,
   projects,
   routineRuns,
-  routineRevisions,
   routines,
   workflowRevisions,
   workflowRuns,
