@@ -1,0 +1,391 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts (44 tests | 17 failed) 46258ms
+     × requires instance admin for new-company import apply 36ms
+     × accepts trusted Cloud async import jobs and reports success by job id 47ms
+     × reports trusted Cloud async import job failures with the tenant error message 29ms
+     × accepts trusted Cloud async import jobs before validating the full import payload 37ms
+     × forwards pauseAutomations from the global import body to the portability service 40ms
+     × runs board-session async imports as jobs and reports the full result by job id 42ms
+     × hides a board import job from other board users 33ms
+     × returns 409 with the running job when a board user resubmits an import 31ms
+     × rejects a concurrent different import without adopting the running job 42ms
+     × fails a board async import job when the bundle import throws 31ms
+     × returns 404 for an unknown import job id 29ms
+     × forwards pauseAutomations from CEO-safe import apply bodies to the portability service 30016ms
+     × imports a company from a multipart zip upload, unzipping into the same inline bundle 45ms
+     × runs a multipart zip import as an async board job via ?async=1 37ms
+     × engages the async path for board sessions via ?async=1, not the stripped cloud header 57ms
+     × keeps a board import synchronous when neither async signal is present 32ms
+     × still engages the async path for cloud tenants via the x-paperclip-cloud-async-import header 33ms
+ ❯ |@paperclipai/server| src/__tests__/company-import-cloud-floor.test.ts (8 tests | 2 failed) 3549ms
+     × keeps import open when only other company pages are hidden 8ms
+     × preserves self-hosted import job polling 4ms
+
+⎯⎯⎯⎯⎯⎯ Failed Tests 19 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-import-cloud-floor.test.ts > company import Cloud floor > keeps import open when only other company pages are hidden
+AssertionError: expected 500 to be 404 // Object.is equality
+
+- Expected
++ Received
+
+- 404
++ 500
+
+ ❯ src/__tests__/company-import-cloud-floor.test.ts:165:24
+    163|     const res = await request(app).get("/api/companies/import/jobs/unk…
+    164|
+    165|     expect(res.status).toBe(404);
+       |                        ^
+    166|     expect(res.body).toMatchObject({ error: "Import job not found" });
+    167|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-import-cloud-floor.test.ts > company import Cloud floor > preserves self-hosted import job polling
+AssertionError: expected 500 to be 404 // Object.is equality
+
+- Expected
++ Received
+
+- 404
++ 500
+
+ ❯ src/__tests__/company-import-cloud-floor.test.ts:202:24
+    200|     const res = await request(app).get("/api/companies/import/jobs/unk…
+    201|
+    202|     expect(res.status).toBe(404);
+       |                        ^
+    203|     expect(res.body).toMatchObject({ error: "Import job not found" });
+    204|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > requires instance admin for new-company import apply
+AssertionError: expected 500 to be 403 // Object.is equality
+
+- Expected
++ Received
+
+- 403
++ 500
+
+ ❯ src/__tests__/company-portability-routes.test.ts:993:24
+    991|       });
+    992|
+    993|     expect(res.status).toBe(403);
+       |                        ^
+    994|     expect(res.body.error).toContain("Instance admin");
+    995|     expect(mockCompanyPortabilityService.importBundle).not.toHaveBeenC…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > accepts trusted Cloud async import jobs and reports success by job id
+AssertionError: expected 500 to be 202 // Object.is equality
+
+- Expected
++ Received
+
+- 202
++ 500
+
+ ❯ src/__tests__/company-portability-routes.test.ts:1012:29
+    1010|       .send(importRequest);
+    1011|
+    1012|     expect(accepted.status).toBe(202);
+       |                             ^
+    1013|     expect(accepted.body.job.status).toBe("running");
+    1014|     expect(accepted.body.statusUrl).toMatch(/^\/api\/companies\/import…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[4/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > reports trusted Cloud async import job failures with the tenant error message
+AssertionError: expected 500 to be 202 // Object.is equality
+
+- Expected
++ Received
+
+- 202
++ 500
+
+ ❯ src/__tests__/company-portability-routes.test.ts:1075:29
+    1073|       .send(importRequest);
+    1074|
+    1075|     expect(accepted.status).toBe(202);
+       |                             ^
+    1076|     const failed = await waitForImportJobStatus(app, accepted.body.sta…
+    1077|
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[5/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > accepts trusted Cloud async import jobs before validating the full import payload
+AssertionError: expected 500 to be 202 // Object.is equality
+
+- Expected
++ Received
+
+- 202
++ 500
+
+ ❯ src/__tests__/company-portability-routes.test.ts:1095:29
+    1093|       .send({ target: { mode: "existing_company", companyId } });
+    1094|
+    1095|     expect(accepted.status).toBe(202);
+       |                             ^
+    1096|     expect(accepted.body.job.status).toBe("running");
+    1097|     expect(mockCompanyPortabilityService.importBundle).not.toHaveBeenC…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[6/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > forwards pauseAutomations from the global import body to the portability service
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/company-portability-routes.test.ts:1140:24
+    1138|       .send({ ...importRequest, pauseAutomations: true });
+    1139|
+    1140|     expect(res.status).toBe(200);
+       |                        ^
+    1141|     expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalle…
+    1142|       { ...importRequest, pauseAutomations: true },
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[7/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > runs board-session async imports as jobs and reports the full result by job id
+AssertionError: expected 500 to be 202 // Object.is equality
+
+- Expected
++ Received
+
+- 202
++ 500
+
+ ❯ src/__tests__/company-portability-routes.test.ts:1162:29
+    1160|       .send(importRequest);
+    1161|
+    1162|     expect(accepted.status).toBe(202);
+       |                             ^
+    1163|     expect(accepted.body.job.status).toBe("running");
+    1164|     // Board jobs get their own id prefix, distinct from the tenant-im…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[8/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > hides a board import job from other board users
+AssertionError: expected 500 to be 202 // Object.is equality
+
+- Expected
++ Received
+
+- 202
++ 500
+
+ ❯ src/__tests__/company-portability-routes.test.ts:1200:29
+    1198|       .send(importRequest);
+    1199|
+    1200|     expect(accepted.status).toBe(202);
+       |                             ^
+    1201|
+    1202|     const crossUser = await request(app).get(accepted.body.statusUrl).…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[9/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > returns 409 with the running job when a board user resubmits an import
+AssertionError: expected 500 to be 202 // Object.is equality
+
+- Expected
++ Received
+
+- 202
++ 500
+
+ ❯ src/__tests__/company-portability-routes.test.ts:1221:26
+    1219|       .send(importRequest);
+    1220|
+    1221|     expect(first.status).toBe(202);
+       |                          ^
+    1222|
+    1223|     const duplicate = await request(app)
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[10/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > rejects a concurrent different import without adopting the running job
+AssertionError: expected 500 to be 202 // Object.is equality
+
+- Expected
++ Received
+
+- 202
++ 500
+
+ ❯ src/__tests__/company-portability-routes.test.ts:1259:28
+    1257|         .send(importRequest);
+    1258|
+    1259|       expect(first.status).toBe(202);
+       |                            ^
+    1260|
+    1261|       // Same user, a *different* import (another destination) while t…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[11/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > fails a board async import job when the bundle import throws
+AssertionError: expected 500 to be 202 // Object.is equality
+
+- Expected
++ Received
+
+- 202
++ 500
+
+ ❯ src/__tests__/company-portability-routes.test.ts:1289:29
+    1287|       .send(importRequest);
+    1288|
+    1289|     expect(accepted.status).toBe(202);
+       |                             ^
+    1290|
+    1291|     const failed = await waitForImportJobStatusAs(app, accepted.body.s…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[12/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > returns 404 for an unknown import job id
+AssertionError: expected 500 to be 404 // Object.is equality
+
+- Expected
++ Received
+
+- 404
++ 500
+
+ ❯ src/__tests__/company-portability-routes.test.ts:1325:24
+    1323|       .set(TEST_USER_HEADER, "board-user-a");
+    1324|
+    1325|     expect(res.status).toBe(404);
+       |                        ^
+    1326|     expect(res.body.error).toBe("Import job not found");
+    1327|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[13/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > forwards pauseAutomations from CEO-safe import apply bodies to the portability service
+Error: Test timed out in 30000ms.
+If this is a long-running test, pass a timeout value as the last argument or configure it globally with "testTimeout".
+ ❯ src/__tests__/company-portability-routes.test.ts:1329:6
+    1327|   });
+    1328|
+    1329|   it.sequential("forwards pauseAutomations from CEO-safe import apply …
+       |      ^
+    1330|     mockCompanyPortabilityService.importBundle.mockResolvedValueOnce(c…
+    1331|     const app = await createApp({
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[14/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > imports a company from a multipart zip upload, unzipping into the same inline bundle
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/company-portability-routes.test.ts:1364:24
+    1362|       .attach("package", zip, "paperclip-demo.zip");
+    1363|
+    1364|     expect(res.status).toBe(200);
+       |                        ^
+    1365|     expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalle…
+    1366|     const call = mockCompanyPortabilityService.importBundle.mock.calls…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[15/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > runs a multipart zip import as an async board job via ?async=1
+AssertionError: expected 500 to be 202 // Object.is equality
+
+- Expected
++ Received
+
+- 202
++ 500
+
+ ❯ src/__tests__/company-portability-routes.test.ts:1409:29
+    1407|       .attach("package", zip, "paperclip-demo.zip");
+    1408|
+    1409|     expect(accepted.status).toBe(202);
+       |                             ^
+    1410|     expect(accepted.body.job.status).toBe("running");
+    1411|     expect(accepted.body.statusUrl).toMatch(/^\/api\/companies\/import…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[16/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > engages the async path for board sessions via ?async=1, not the stripped cloud header
+AssertionError: expected 500 to be 202 // Object.is equality
+
+- Expected
++ Received
+
+- 202
++ 500
+
+ ❯ src/__tests__/company-portability-routes.test.ts:1441:29
+    1439|       .send(importRequest);
+    1440|
+    1441|     expect(accepted.status).toBe(202);
+       |                             ^
+    1442|     expect(accepted.body.job.status).toBe("running");
+    1443|     expect(accepted.body.statusUrl).toMatch(/^\/api\/companies\/import…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[17/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > keeps a board import synchronous when neither async signal is present
+AssertionError: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ src/__tests__/company-portability-routes.test.ts:1454:24
+    1452|       .send(importRequest);
+    1453|
+    1454|     expect(res.status).toBe(200);
+       |                        ^
+    1455|     expect(res.body.company.id).toBe(companyId);
+    1456|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[18/19]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > still engages the async path for cloud tenants via the x-paperclip-cloud-async-import header
+AssertionError: expected 500 to be 202 // Object.is equality
+
+- Expected
++ Received
+
+- 202
++ 500
+
+ ❯ src/__tests__/company-portability-routes.test.ts:1468:29
+    1466|       .send(importRequest);
+    1467|
+    1468|     expect(accepted.status).toBe(202);
+       |                             ^
+    1469|     expect(accepted.body.statusUrl).toMatch(/^\/api\/companies\/import…
+    1470|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[19/19]⎯
+
+
+ Test Files  2 failed (2)
+      Tests  19 failed | 33 passed (52)
+   Start at  20:01:37
+   Duration  50.40s (transform 13.41s, setup 133ms, import 227ms, tests 49.81s, environment 0ms)
+

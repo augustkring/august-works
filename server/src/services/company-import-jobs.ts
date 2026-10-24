@@ -65,21 +65,10 @@ export function companyImportJobService(db: Db) {
         )).limit(1);
         if (existing) {
           if (existing.inputHash !== input.inputHash) throw conflict("Import request key already refers to different input", { code: "import_request_changed" });
-          if (existing.status === "failed" && existing.progressStage === "rejected_before_import") {
-            // Only the original owner's pre-domain failure can resume. The
-            // request is unchanged and this admission has a current requester;
-            // an old callback cannot settle the new fenced attempt.
-            const [resumed] = await tx.update(customerOperations).set({ status: "running", progressStage: "admitted",
-              attempt: sql`${customerOperations.attempt} + 1`, attemptId: randomUUID(), errorCode: null,
-              startedAt: null, completedAt: null, resultRef: null, domainOperationRef: input.transferId ?? null,
-              updatedAt: sql`clock_timestamp()`, progressAt: sql`clock_timestamp()` })
-              .where(and(eq(customerOperations.id, existing.id), eq(customerOperations.attemptId, existing.attemptId)))
-              .returning();
-            return finish({ job: resumed!, replay: false });
-          }
           if (existing.status === "needs_reconciliation") throw conflict("The import outcome is unknown. Reconcile the existing import before trying again.",
             { code: "import_outcome_unknown", operationId: existing.id });
-          return finish({ job: existing, replay: true });
+          if (existing.status !== "failed" || existing.progressStage !== "rejected_before_import")
+            return finish({ job: existing, replay: true });
         }
         const [uncertainTransfer] = await tx.select({ id: companyTransferRuns.id }).from(companyTransferRuns).where(and(
           eq(companyTransferRuns.actorKey, input.actorKey), eq(companyTransferRuns.direction, "import"),
@@ -96,6 +85,18 @@ export function companyImportJobService(db: Db) {
           ? "An earlier import has an unconfirmed outcome. Reconcile it before starting another import."
           : "A different import is already running for this account. Wait for it to finish before starting another.",
           { code: active.status === "needs_reconciliation" ? "import_outcome_unknown" : "import_already_running" });
+        if (existing) {
+          // Only the original owner's pre-domain failure can resume. The
+          // request is unchanged and this admission has a current requester;
+          // an old callback cannot settle the new fenced attempt.
+          const [resumed] = await tx.update(customerOperations).set({ status: "running", progressStage: "admitted",
+            attempt: sql`${customerOperations.attempt} + 1`, attemptId: randomUUID(), errorCode: null,
+            startedAt: null, completedAt: null, resultRef: null, domainOperationRef: input.transferId ?? null,
+            updatedAt: sql`clock_timestamp()`, progressAt: sql`clock_timestamp()` })
+            .where(and(eq(customerOperations.id, existing.id), eq(customerOperations.attemptId, existing.attemptId)))
+            .returning();
+          return finish({ job: resumed!, replay: false });
+        }
         const [job] = await tx.insert(customerOperations).values({
           id: `${input.actorKind === "cloud_tenant" ? "tenant-import" : "import"}-${randomUUID()}`,
           operationType: "company_import", domain: "company_portability", domainOperationRef: input.transferId ?? null,
@@ -124,7 +125,7 @@ export function companyImportJobService(db: Db) {
         }
         if (currentActor && job.scopeKey === "new_company" && currentActor.source !== "local_implicit"
           && currentActor.source !== "cloud_tenant" && !(await hasCurrentInstanceAdminRole(tx, currentActor.userId)))
-          throw forbidden("The current import operator is unavailable");
+          throw forbidden("Instance admin is required to start a new-company import");
         const rows = await tx.update(customerOperations).set({ progressStage: "importing", startedAt: sql`clock_timestamp()`,
           progressAt: sql`clock_timestamp()`, updatedAt: sql`clock_timestamp()` }).where(and(
           eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),

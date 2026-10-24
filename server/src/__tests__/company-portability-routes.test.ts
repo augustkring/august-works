@@ -364,6 +364,9 @@ describe.sequential("company portability routes", () => {
   beforeEach(async () => {
     await db.delete(customerOperations);
     vi.clearAllMocks();
+    // Async admissions can finish a case before a queued one-shot mock is
+    // consumed. Each case owns a fresh native import invocation fixture.
+    mockCompanyPortabilityService.importBundle.mockReset();
     mockAgentService.getById.mockImplementation(async (id: string) => ({
       id,
       companyId,
@@ -1318,7 +1321,7 @@ describe.sequential("company portability routes", () => {
     expect(failed.body.job.status).toBe("needs_reconciliation");
     expect(failed.body.job.error.message).toBe("The import outcome is unknown. Reconcile the existing import before trying again.");
     expect(failed.body.job.importResult).toBeUndefined();
-    // A resubmit is allowed once the job is terminal.
+    // An unknown outcome is not permission to resubmit.
     expect(mockLogActivity).not.toHaveBeenCalled();
   });
 

@@ -197,4 +197,18 @@ describeEmbeddedPostgres("native company import job ledger", () => {
       attempt: retry.job.attempt, attemptId: retry.job.attemptId, inputHash: input.inputHash, domainOperationRef: null });
     expect(JSON.stringify(running)).not.toContain(sourceBody);
   }, 90_000);
+  it("does not resume a rejected import while a different operation owns the requester's slot", async () => {
+    const authority = await seedAuthority();
+    const service = companyImportJobService(db);
+    const firstInput = admission(authority);
+    const first = await service.admit(firstInput);
+    expect(await service.start(first.job)).toBe(true);
+    await service.fail(first.job, false); // Native pre-domain refusal fixture.
+    const second = await service.admit(admission(authority, { idempotencyKey: "second-intent",
+      inputHash: createHash("sha256").update("different input").digest("hex") }));
+    await expect(service.admit(firstInput)).rejects.toMatchObject({ status: 409, details: { code: "import_already_running" } });
+    expect((await service.get(first.job.id, authority.actorKey))!.attemptId).toBe(first.job.attemptId);
+    expect((await service.get(second.job.id, authority.actorKey))!.status).toBe("running");
+  });
+
 });

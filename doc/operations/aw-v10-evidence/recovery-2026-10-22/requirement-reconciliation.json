@@ -150,8 +150,10 @@
       "id": "V10-019",
       "sourceLine": 6794,
       "work": "CustomerOperation shared envelope/state machine.",
-      "reconciliation": "not_reconciled",
-      "evidence": []
+      "reconciliation": "in_progress",
+      "evidence": [
+        "doc/operations/aw-v10-evidence/durable-import-2026-10-24/checkpoint.json"
+      ]
     },
     {
       "id": "V10-020",
@@ -164,22 +166,28 @@
       "id": "V10-021",
       "sourceLine": 6796,
       "work": "CompanyImport migration from process memory.",
-      "reconciliation": "not_reconciled",
-      "evidence": []
+      "reconciliation": "in_progress",
+      "evidence": [
+        "doc/operations/aw-v10-evidence/durable-import-2026-10-24/checkpoint.json"
+      ]
     },
     {
       "id": "V10-022",
       "sourceLine": 6797,
       "work": "process-kill/restart/idempotency/unknown-outcome tests.",
-      "reconciliation": "not_reconciled",
-      "evidence": []
+      "reconciliation": "in_progress",
+      "evidence": [
+        "doc/operations/aw-v10-evidence/durable-import-2026-10-24/checkpoint.json"
+      ]
     },
     {
       "id": "V10-023",
       "sourceLine": 6798,
       "work": "generic operation status UX.",
-      "reconciliation": "not_reconciled",
-      "evidence": []
+      "reconciliation": "in_progress",
+      "evidence": [
+        "doc/operations/aw-v10-evidence/durable-import-2026-10-24/checkpoint.json"
+      ]
     },
     {
       "id": "V10-024",
@@ -212,7 +220,7 @@
     {
       "id": "V10-028",
       "sourceLine": 6806,
-      "work": "orphan scanner → Action needed.",
+      "work": "orphan scanner \u2192 Action needed.",
       "reconciliation": "not_reconciled",
       "evidence": []
     },
@@ -317,7 +325,7 @@
     {
       "id": "V10-043",
       "sourceLine": 6827,
-      "work": "support case → V6 support-session request flow.",
+      "work": "support case \u2192 V6 support-session request flow.",
       "reconciliation": "not_reconciled",
       "evidence": []
     },
@@ -681,7 +689,7 @@
     {
       "id": "V10-095",
       "sourceLine": 6903,
-      "work": "support/feedback/incident → Issue/Learning/Decision bridge.",
+      "work": "support/feedback/incident \u2192 Issue/Learning/Decision bridge.",
       "reconciliation": "not_reconciled",
       "evidence": []
     },
@@ -849,7 +857,7 @@
     {
       "id": "V10-119",
       "sourceLine": 6933,
-      "work": "final V6–V10 evidence reconciliation.",
+      "work": "final V6\u2013V10 evidence reconciliation.",
       "reconciliation": "not_reconciled",
       "evidence": []
     },
@@ -940,7 +948,7 @@
     {
       "id": "V10-132",
       "sourceLine": 6954,
-      "work": "canonical `skills/blentera-platform/SKILL.md` + focused references from §21B.",
+      "work": "canonical `skills/blentera-platform/SKILL.md` + focused references from \u00a721B.",
       "reconciliation": "not_reconciled",
       "evidence": []
     },
@@ -1223,7 +1231,7 @@
       "id": "V10-164",
       "sourceLine": 6981,
       "work": "Short activation composition over retained logical states",
-      "nativeOwnerOrContract": "UX-02/03 / ONB-01–12; C",
+      "nativeOwnerOrContract": "UX-02/03 / ONB-01\u201312; C",
       "requiredOutcome": "No fabricated skipped step, duplicate command, required project/website or technical first-run setup",
       "reconciliation": "not_reconciled",
       "evidence": []
@@ -1254,7 +1262,7 @@
       "id": "V10-167",
       "sourceLine": 6984,
       "work": "Complete paired copy and rendered state acceptance",
-      "nativeOwnerOrContract": "§35 / UX-01; C–H",
+      "nativeOwnerOrContract": "\u00a735 / UX-01; C\u2013H",
       "requiredOutcome": "Both locales preserve action, actor, cost, data and status meaning across all critical states",
       "reconciliation": "in_progress",
       "evidence": [
@@ -1266,7 +1274,7 @@
       "id": "V10-168",
       "sourceLine": 6985,
       "work": "Mandatory beta profile and exact live evidence dossier",
-      "nativeOwnerOrContract": "§§47/55; H",
+      "nativeOwnerOrContract": "\u00a7\u00a747/55; H",
       "requiredOutcome": "No required capability hidden by narrowing claims; real source/runtime/human/operator evidence",
       "reconciliation": "not_reconciled",
       "evidence": []
@@ -1275,7 +1283,7 @@
       "id": "V10-169",
       "sourceLine": 6986,
       "work": "Compatibility and migration phase reconciliation",
-      "nativeOwnerOrContract": "MIG-01–07 / §7; every affected wave",
+      "nativeOwnerOrContract": "MIG-01\u201307 / \u00a77; every affected wave",
       "requiredOutcome": "Current writer/state/recovery is defined for each phase and old/new combinations pass",
       "reconciliation": "in_progress",
       "evidence": [
