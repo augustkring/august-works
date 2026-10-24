@@ -1390,3 +1390,9 @@ Final native job/route47PASS, actual CLI1PASS, server compiler0; actual child SI
 ### 2026-10-24 — Canonical Project admission for email fixture
 
 The low-trust email fixture now creates its Project through the original authenticated local-trusted HTTP admission. Source defaults and actual email/provider behavior are unchanged. Focused two cases pass; complete email integration file26PASS. Native recovery already passed after the earlier actor fix. Existing fake provider transport remains a transport test, with no actual email delivery qualification. Evidence: `doc/operations/aw-v10-evidence/email-project-admission-2026-10-24/receipts.json`.
+
+### 2026-10-24 — Prevent private input from replacing an original public Task body
+
+An actual native counterexample showed a Run copying its selected private Memory into its original public Task. Own-Run source edges are intentionally excluded to avoid cycles; changing only the description also bypassed privacy re-resolution. The shared Task update now reuses the original native body hash and refuses changed Agent bodies when restricted Run sources cannot yet be retained. This keeps the old body. It grants no private-source publication or fabricated snapshot. Public-source body changes and private-run priority-only changes remain valid.
+
+Focused native/credential/manual-input23PASS, server compiler0. Broader Task service138cases has18 existing admission/fixture failures before this new guard (unknown raw Projects and missing current Human); those fixtures remain under canonical-admission repair. Evidence: `doc/operations/aw-v10-evidence/private-memory-own-task-2026-10-24/receipts.json`. Exact body-bound private Agent source snapshots and owner-positive private body updates remain required; this conservative refusal does not complete that feature or V10.
