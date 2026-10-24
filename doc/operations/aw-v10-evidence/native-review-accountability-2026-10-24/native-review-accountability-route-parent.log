@@ -1,0 +1,68 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts (82 tests | 2 failed | 80 skipped) 57504ms
+     × accepts suggested tasks and wakes created assignees plus the current assignee 4959ms
+     × allows an agent to reject a pending review confirmation by default 3681ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > accepts suggested tasks and wakes created assignees plus the current assignee
+AssertionError: TypeError: db.select(...).from(...).where(...).limit is not a function
+    at canActorReadIssuePrivacy (/workspace/blentera-v10/server/src/services/authorization.ts:701:174)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at assertPublicTaskWriteAdmission (/workspace/blentera-v10/server/src/routes/issues.ts:3548:13)
+    at /workspace/blentera-v10/server/src/routes/issues.ts:3560:16: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ canActorReadIssuePrivacy src/services/authorization.ts:701:174
+    699|
+    700| export async function canActorReadIssuePrivacy(db: Db | DbTransaction,…
+    701|   return (await db.select({ id: issues.id }).from(issues).where(and(eq…
+       |                                                                                                                                                                              ^
+    702| }
+    703| export async function canActorReadProjectPrivacy(db: Db | DbTransactio…
+ ❯ assertPublicTaskWriteAdmission src/routes/issues.ts:3548:13
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:791:87
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-thread-interaction-routes.test.ts > issue thread interaction routes > allows an agent to reject a pending review confirmation by default
+AssertionError: TypeError: db.select(...).from(...).where(...).limit is not a function
+    at canActorReadIssuePrivacy (/workspace/blentera-v10/server/src/services/authorization.ts:701:174)
+    at processTicksAndRejections (node:internal/process/task_queues:104:5)
+    at assertPublicTaskWriteAdmission (/workspace/blentera-v10/server/src/routes/issues.ts:3548:13)
+    at /workspace/blentera-v10/server/src/routes/issues.ts:3560:16: expected 500 to be 200 // Object.is equality
+
+- Expected
++ Received
+
+- 200
++ 500
+
+ ❯ canActorReadIssuePrivacy src/services/authorization.ts:701:174
+    699|
+    700| export async function canActorReadIssuePrivacy(db: Db | DbTransaction,…
+    701|   return (await db.select({ id: issues.id }).from(issues).where(and(eq…
+       |                                                                                                                                                                              ^
+    702| }
+    703| export async function canActorReadProjectPrivacy(db: Db | DbTransactio…
+ ❯ assertPublicTaskWriteAdmission src/routes/issues.ts:3548:13
+ ❯ src/__tests__/issue-thread-interaction-routes.test.ts:2489:87
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed | 80 skipped (82)
+   Start at  14:42:46
+   Duration  59.50s (transform 43.51s, setup 423ms, import 807ms, tests 57.50s, environment 0ms)
+

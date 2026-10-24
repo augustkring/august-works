@@ -18,6 +18,7 @@ import {
   sql,
 } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
+import type { AuthorizationActor } from "./authorization.js";
 import {
   agents,
   authUsers,
@@ -138,6 +139,8 @@ export { extractGitHubPullRequestReferences } from "./github-pull-request-merge.
 export type { GitHubPullRequestReference } from "./github-pull-request-merge.js";
 
 type InteractionActor = {
+  /** Original authenticated request identity, never request-body metadata. */
+  requestActor?: AuthorizationActor;
   identityContextId?: string | null;
   agentId?: string | null;
   runId?: string | null;
@@ -2257,6 +2260,8 @@ export function issueThreadInteractionService(
           {
             status: "done",
             actorAgentId: args.actor.agentId ?? null,
+            actorRunId: args.actor.runId ?? null,
+            privacyActor: args.actor.requestActor,
             actorUserId: args.actor.userId ?? null,
           },
           tx,
@@ -2287,6 +2292,8 @@ export function issueThreadInteractionService(
             assigneeAgentId: lockedCurrent.createdByAgentId,
             assigneeUserId: null,
             actorAgentId: args.actor.agentId ?? null,
+            actorRunId: args.actor.runId ?? null,
+            privacyActor: args.actor.requestActor,
             actorUserId: args.actor.userId ?? null,
           },
           tx,
@@ -2310,6 +2317,8 @@ export function issueThreadInteractionService(
           {
             workMode: "standard",
             actorAgentId: args.actor.agentId ?? null,
+            actorRunId: args.actor.runId ?? null,
+            privacyActor: args.actor.requestActor,
             actorUserId: args.actor.userId ?? null,
           },
           tx,
@@ -2527,6 +2536,8 @@ export function issueThreadInteractionService(
             assigneeAgentId: issueContext.assigneeAgentId,
             assigneeUserId: null,
             actorAgentId: args.actor.agentId ?? null,
+            actorRunId: args.actor.runId ?? null,
+            privacyActor: args.actor.requestActor,
             actorUserId: args.actor.userId ?? null,
           },
           tx,

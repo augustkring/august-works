@@ -16474,6 +16474,7 @@ export function issueRoutes(
         );
       const { interaction, createdIssues, continuationIssue } =
         await interactionSvc.acceptInteraction(issue, interactionId, req.body, {
+          requestActor: { ...req.actor },
           agentId: actor.agentId,
           runId: actor.runId,
           userId: actor.actorType === "user" ? actor.actorId : null,
@@ -16789,6 +16790,7 @@ export function issueRoutes(
         interactionId,
         req.body,
         {
+          requestActor: { ...req.actor },
           agentId: actor.agentId,
           runId: actor.runId,
           userId: actor.actorType === "user" ? actor.actorId : null,

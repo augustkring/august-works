@@ -1,5 +1,5 @@
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { asc, eq, sql } from "drizzle-orm";
+import { and, asc, eq, sql } from "drizzle-orm";
 import { randomUUID } from "node:crypto";
 import { renderPaperclipWakePrompt } from "@paperclipai/adapter-utils/server-utils";
 import { readCompletedAssistantMessageCandidate, resolveHeartbeatRunResponse, selectHeartbeatRunFinalAgentMessage } from "../heartbeat-run-summary.js";
@@ -7,6 +7,8 @@ import {
   activityLog,
   agentWakeupRequests,
   agents,
+  authUsers,
+  companyMemberships,
   companies,
   completionContracts,
   createDb,
@@ -84,6 +86,11 @@ describe("PaperclipControlPlanePort conformance", () => {
     db = createDb(temporary.connectionString);
     const identity = CONTROL_PLANE_CONFORMANCE_OPEN.identity;
     await db.insert(companies).values({ id: identity.companyId, name: "Phase 6", issuePrefix: "P6C" });
+    const reviewerNow = new Date();
+    await db.insert(authUsers).values(["reviewer-24", "reviewer-25"].map(id => ({ id, name: "Review owner", email: `${id}@test.invalid`,
+      emailVerified: true, createdAt: reviewerNow, updatedAt: reviewerNow })));
+    await db.insert(companyMemberships).values(["reviewer-24", "reviewer-25"].map(principalId => ({
+      companyId: identity.companyId, principalType: "user" as const, principalId, status: "active", membershipRole: "member" })));
     await db.insert(agents).values({
       id: identity.agentId,
       companyId: identity.companyId,
@@ -290,7 +297,9 @@ describe("PaperclipControlPlanePort conformance", () => {
       await db.delete(completionContracts);
       await db.delete(issues);
       await db.delete(agents);
+      await db.delete(companyMemberships);
       await db.delete(companies);
+      await db.delete(authUsers);
       await temporary.cleanup();
     }
   });
@@ -932,8 +941,11 @@ describe("PaperclipControlPlanePort conformance", () => {
       backendKind: "mock" as const,
       sourceInstanceId: runnerInstanceId,
     };
+    await expect(db.update(heartbeatRuns).set({ nativeIssueId: taskIssueId }).where(eq(heartbeatRuns.id, runId)))
+      .rejects.toMatchObject({ cause: { message: "run source binding is immutable" } });
+    await expect(db.select({ nativeIssueId: heartbeatRuns.nativeIssueId }).from(heartbeatRuns)
+      .where(eq(heartbeatRuns.id, runId))).resolves.toEqual([{ nativeIssueId: issueId }]);
     const mutations = [
-      { invalid: { nativeIssueId: taskIssueId }, restore: { nativeIssueId: issueId } },
       { invalid: { nativeSessionId: taskSessionId }, restore: { nativeSessionId: sessionId } },
       { invalid: { runnerInstanceId: taskRunnerId }, restore: { runnerInstanceId } },
       { invalid: { completionContractId: taskContractId }, restore: { completionContractId: localContractId } },
@@ -1145,7 +1157,7 @@ describe("PaperclipControlPlanePort conformance", () => {
     };
     await db.update(agentWakeupRequests).set({ runId: reviewRunId }).where(eq(agentWakeupRequests.id, reviewWakes[0]!.id));
     const [reviewRun] = await db.insert(heartbeatRuns).values({
-      id: reviewRunId, companyId: identity.companyId, agentId: reviewerAgentId,
+      id: reviewRunId, companyId: identity.companyId, agentId: reviewerAgentId, responsibleUserId: "reviewer-24",
       status: "queued", runtimeMode: "native", nativeIssueId: issueId,
       wakeupRequestId: reviewWakes[0]!.id,
       contextSnapshot: { issueId, wakeReason: "native_completion_review", ...nativeReview },
@@ -1288,6 +1300,26 @@ describe("PaperclipControlPlanePort conformance", () => {
     const remaining = await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.issueId, issueId));
     expect(remaining).toHaveLength(2);
     const secondReview = remaining.find((entry) => entry.status === "pending")!;
+    // A running reviewer cannot turn its saved Human into a current grant.
+    const membership = and(eq(companyMemberships.companyId, identity.companyId),
+      eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, "reviewer-24"));
+    await db.delete(companyMemberships).where(membership);
+    await db.update(heartbeatRuns).set({ responsibleUserId: "reviewer-25" }).where(eq(heartbeatRuns.id, reviewRunId));
+    try {
+      await expect(issueThreadInteractionService(db).acceptInteraction(
+        { id: issueId, companyId: identity.companyId, projectId: null, goalId: null, status: "in_review" },
+        secondReview.id, {}, { agentId: reviewerAgentId, runId: reviewRunId, requestActor: { type: "agent", source: "agent_jwt",
+          companyId: identity.companyId, agentId: reviewerAgentId, runId: reviewRunId, onBehalfOfUserId: "reviewer-24" } },
+      )).rejects.toMatchObject({ status: 403 });
+      expect(await db.select({ status: issueThreadInteractions.status }).from(issueThreadInteractions)
+        .where(eq(issueThreadInteractions.id, secondReview.id))).toEqual([{ status: "pending" }]);
+      expect(await db.select({ status: issues.status }).from(issues).where(eq(issues.id, issueId)))
+        .toEqual([{ status: "in_review" }]);
+    } finally {
+      await db.update(heartbeatRuns).set({ responsibleUserId: "reviewer-24" }).where(eq(heartbeatRuns.id, reviewRunId));
+      await db.insert(companyMemberships).values({ companyId: identity.companyId, principalType: "user", principalId: "reviewer-24",
+        status: "active", membershipRole: "member" });
+    }
     await issueThreadInteractionService(db).acceptInteraction(
       { id: issueId, companyId: identity.companyId, projectId: null, goalId: null, status: "in_review" },
       secondReview.id, {}, { agentId: reviewerAgentId, runId: reviewRunId },

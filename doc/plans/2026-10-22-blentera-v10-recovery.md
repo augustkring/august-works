@@ -1165,3 +1165,33 @@ account/membership. All five remain explicit next work. The six typed/private-
 Memory/temporal cases, source/action/erasure/lifetime and full V10/PR gates remain
 open. Evidence:
 `doc/operations/aw-v10-evidence/native-child-review-privacy-2026-10-24/checkpoint.json`.
+
+### 2026-10-24 — preserve authenticated identity through review Task changes
+
+All four original review accept/reject Task mutations now preserve the actual
+run ID and, for authenticated HTTP calls, the original private actor context.
+A real PostgreSQL counterexample removes the authenticated Human membership
+and changes the stored reviewer run to another active Human: dropping only
+the actor forwarding incorrectly completes the Task, while the fix rejects403
+and preserves the pending interaction and Task. Saved run ownership cannot
+replace the original caller's current authority. The actor context is never a
+request-body field, persisted interaction field or returned DTO.
+
+The five native baseline failures from the previous checkpoint are resolved:
+reviewer/recovery fixtures own actual Users and active memberships, and the
+DB-immutable nativeIssueId mutation is asserted as a rejection with unchanged
+binding. Native74 cases pass across ControlPlanePort and safe replacement;
+the later original-actor regression also passes all15 ControlPlanePort cases.
+Interaction/resolver units pass30 selected cases. Legacy route mocks now expose
+the existing canonical open-Task query and keep custom Task rows stable across
+admission/resolution reads; negative creator/review-policy checks are retained.
+The failed intermediate and parent-control logs remain in the evidence.
+
+Generic Task credential expiry/revocation during physical row waits remains
+separate next work. Six typed/private-Memory/temporal source regressions,
+complete-input receipts, broader V10 implementation and full PR acceptance
+remain open. Evidence:
+`doc/operations/aw-v10-evidence/native-review-accountability-2026-10-24/checkpoint.json`.
+
+Final full interaction route suite:82/82 pass.
+Server compilation passes for the final review actor forwarding and tests.

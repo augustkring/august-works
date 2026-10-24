@@ -1,6 +1,6 @@
 import express from "express";
 import request from "supertest";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const ASSIGNEE_AGENT_ID = "11111111-1111-4111-8111-111111111111";
 const UNRELATED_AGENT_ID = "33333333-3333-4333-8333-333333333333";
@@ -296,6 +296,9 @@ async function createApp(actor: Record<string, unknown> = {
     next();
   });
   app.use("/api", issueRoutes(mockDb as any, {} as any, routeOptions));
+  app.use((error: unknown, _req: express.Request, _res: express.Response, next: express.NextFunction) => {
+    app.locals.routeError = error; next(error);
+  });
   app.use(errorHandler);
   return app;
 }
@@ -315,6 +318,10 @@ async function resolveMockInteraction(
 }
 
 describe.sequential("issue thread interaction routes", () => {
+  beforeAll(async () => {
+    registerModuleMocks();
+    await loadAppModules();
+  }, 90_000);
   beforeEach(async () => {
     vi.resetModules();
     vi.doUnmock("../routes/issues.js");
@@ -351,6 +358,8 @@ describe.sequential("issue thread interaction routes", () => {
       reason: "allow_explicit_grant",
       explanation: "Allowed by test grant.",
     }));
+    // Admission and resolution independently reload the same current Task.
+    // Per-test overrides remain stable across both reads.
     mockIssueService.getById.mockResolvedValue(createIssue());
     mockIssueService.listReviewAttention.mockResolvedValue(new Map());
     mockInteractionService.listForIssue.mockResolvedValue([]);
@@ -573,6 +582,9 @@ describe.sequential("issue thread interaction routes", () => {
     mockDbSelect.mockImplementation(() => ({ from: mockDbSelectFrom }));
     mockDbSelectFrom.mockImplementation(() => ({ where: mockDbSelectWhere }));
     mockDbSelectWhere.mockImplementation(() => ({
+      // Open-Task routing control only. Real source privacy is exercised by
+      // the native PostgreSQL suites, not this mocked query graph.
+      limit: () => Promise.resolve([{ id: ISSUE_ID }]),
       then: (onFulfilled: (rows: unknown[]) => unknown, onRejected?: (reason: unknown) => unknown) =>
         Promise.resolve(mockRunAttribution.value ? [mockRunAttribution.value] : []).then(
           onFulfilled,
@@ -781,12 +793,14 @@ describe.sequential("issue thread interaction routes", () => {
       .post("/api/issues/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/interactions/interaction-1/accept")
       .send({ selectedClientKeys: ["task-1"] });
 
-    expect(res.status).toBe(200);
+    expect(res.status, String(app.locals.routeError?.stack ?? app.locals.routeError)).toBe(200);
     expect(mockInteractionService.acceptInteraction).toHaveBeenCalledWith(
       expect.objectContaining({ id: "aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa" }),
       "interaction-1",
       { selectedClientKeys: ["task-1"] },
-      expect.objectContaining({ userId: "local-board" }),
+      expect.objectContaining({ userId: "local-board", requestActor: expect.objectContaining({
+        type: "board", userId: "local-board", source: "local_implicit",
+      }) }),
     );
     expect(mockHeartbeatService.wakeup).toHaveBeenCalledTimes(2);
     expect(mockHeartbeatService.wakeup).toHaveBeenNthCalledWith(
@@ -1015,7 +1029,7 @@ describe.sequential("issue thread interaction routes", () => {
   });
 
   it("allows the creator agent to withdraw and wakes a different assignee", async () => {
-    mockIssueService.getById.mockResolvedValueOnce(createIssue({ status: "in_review", reviewPolicy: null }));
+    mockIssueService.getById.mockResolvedValue(createIssue({ status: "in_review", reviewPolicy: null }));
     mockInteractionService.getForIssue.mockResolvedValueOnce({
       id: "interaction-withdraw",
       kind: "request_confirmation",
@@ -1035,7 +1049,7 @@ describe.sequential("issue thread interaction routes", () => {
   });
 
   it("allows the assignee agent to withdraw without waking itself", async () => {
-    mockIssueService.getById.mockResolvedValueOnce(createIssue({ status: "todo" }));
+    mockIssueService.getById.mockResolvedValue(createIssue({ status: "todo" }));
     const app = await createApp({ type: "agent", agentId: ASSIGNEE_AGENT_ID, companyId: "company-1", runId: RUN_2 });
     const res = await request(app)
       .post("/api/issues/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/interactions/interaction-withdraw/withdraw")
@@ -1715,7 +1729,7 @@ describe.sequential("issue thread interaction routes", () => {
     { label: "omitted", targetIssueId: undefined },
     { label: "null", targetIssueId: null },
   ])("forces a fresh workspace-aware session when accepting a planning confirmation with $label issueId", async ({ targetIssueId }) => {
-    mockIssueService.getById.mockResolvedValueOnce(createIssue({ workMode: "planning" }));
+    mockIssueService.getById.mockResolvedValue(createIssue({ workMode: "planning" }));
     mockInteractionService.acceptInteraction.mockResolvedValueOnce({
       interaction: {
         id: "interaction-plan",
@@ -1846,7 +1860,7 @@ describe.sequential("issue thread interaction routes", () => {
   });
 
   it("forces a fresh workspace-aware session when accepting a plan document confirmation on a standard-work issue", async () => {
-    mockIssueService.getById.mockResolvedValueOnce(createIssue({ workMode: "standard" }));
+    mockIssueService.getById.mockResolvedValue(createIssue({ workMode: "standard" }));
     mockInteractionService.acceptInteraction.mockResolvedValueOnce({
       interaction: {
         id: "interaction-standard-plan",
@@ -1905,7 +1919,7 @@ describe.sequential("issue thread interaction routes", () => {
   });
 
   it("wakes the returned agent when accepting an agent-authored confirmation from a board review assignee", async () => {
-    mockIssueService.getById.mockResolvedValueOnce(createIssue({
+    mockIssueService.getById.mockResolvedValue(createIssue({
       status: "in_review",
       assigneeAgentId: null,
       assigneeUserId: "local-board",
@@ -2346,7 +2360,7 @@ describe.sequential("issue thread interaction routes", () => {
   });
 
   it("allows a different in-scope agent run to respond when policy permits", async () => {
-    mockIssueService.getById.mockResolvedValueOnce(createIssue({ status: "todo" }));
+    mockIssueService.getById.mockResolvedValue(createIssue({ status: "todo" }));
     const app = await createApp({
       type: "agent",
       agentId: ASSIGNEE_AGENT_ID,
@@ -2381,7 +2395,7 @@ describe.sequential("issue thread interaction routes", () => {
       actorId: CREATED_AGENT_ID,
       details: { reviewInteractionId: "interaction-agent-review" },
     };
-    mockIssueService.getById.mockResolvedValueOnce(createIssue({
+    mockIssueService.getById.mockResolvedValue(createIssue({
       status: "in_review",
       reviewPolicy: null,
       createdByAgentId: CREATED_AGENT_ID,
@@ -2429,6 +2443,7 @@ describe.sequential("issue thread interaction routes", () => {
       "interaction-agent-review",
       {},
       {
+        requestActor: { type: "agent", agentId: ASSIGNEE_AGENT_ID, companyId: "company-1", runId: RUN_2 },
         agentId: ASSIGNEE_AGENT_ID,
         runId: RUN_2,
         userId: null,
@@ -2449,7 +2464,7 @@ describe.sequential("issue thread interaction routes", () => {
       actorId: CREATED_AGENT_ID,
       details: { reviewInteractionId: "interaction-agent-reject" },
     };
-    mockIssueService.getById.mockResolvedValueOnce(createIssue({
+    mockIssueService.getById.mockResolvedValue(createIssue({
       status: "in_review",
       reviewPolicy: null,
       createdByAgentId: CREATED_AGENT_ID,
@@ -2476,12 +2491,13 @@ describe.sequential("issue thread interaction routes", () => {
       .post("/api/issues/aaaaaaaa-aaaa-4aaa-8aaa-aaaaaaaaaaaa/interactions/interaction-agent-reject/reject")
       .send({ reason: "Needs changes" });
 
-    expect(res.status).toBe(200);
+    expect(res.status, String(app.locals.routeError?.stack ?? app.locals.routeError)).toBe(200);
     expect(mockInteractionService.rejectInteraction).toHaveBeenCalledWith(
       expect.anything(),
       "interaction-agent-reject",
       { reason: "Needs changes" },
       expect.objectContaining({
+        requestActor: expect.objectContaining({ type: "agent", agentId: ASSIGNEE_AGENT_ID, runId: RUN_2 }),
         agentId: ASSIGNEE_AGENT_ID,
         resolverPolicyRestriction: "anyone",
       }),
@@ -2494,7 +2510,7 @@ describe.sequential("issue thread interaction routes", () => {
       actorId: CREATED_AGENT_ID,
       details: { reviewInteractionId: "interaction-agent-review" },
     };
-    mockIssueService.getById.mockResolvedValueOnce(createIssue({
+    mockIssueService.getById.mockResolvedValue(createIssue({
       status: "in_review",
       reviewPolicy: null,
       createdByAgentId: CREATED_AGENT_ID,
@@ -2535,7 +2551,7 @@ describe.sequential("issue thread interaction routes", () => {
       actorId: CREATED_AGENT_ID,
       details: { reviewInteractionId: "interaction-agent-review" },
     };
-    mockIssueService.getById.mockResolvedValueOnce(createIssue({
+    mockIssueService.getById.mockResolvedValue(createIssue({
       status: "in_review",
       reviewPolicy: null,
       createdByAgentId: CREATED_AGENT_ID,
@@ -2599,7 +2615,7 @@ describe.sequential("issue thread interaction routes", () => {
       actorId: requesterAgentId,
       details: { reviewInteractionId: "interaction-agent-review-scope" },
     };
-    mockIssueService.getById.mockResolvedValueOnce(createIssue({
+    mockIssueService.getById.mockResolvedValue(createIssue({
       status: "in_review",
       reviewPolicy: "not_creator",
       createdByAgentId: requesterAgentId,
@@ -2636,7 +2652,7 @@ describe.sequential("issue thread interaction routes", () => {
       actorId: CREATED_AGENT_ID,
       details: { reviewInteractionId: "interaction-human-only" },
     };
-    mockIssueService.getById.mockResolvedValueOnce(createIssue({
+    mockIssueService.getById.mockResolvedValue(createIssue({
       status: "in_review",
       reviewPolicy: "human_only",
       createdByAgentId: CREATED_AGENT_ID,
@@ -2681,7 +2697,7 @@ describe.sequential("issue thread interaction routes", () => {
       actorId: "local-board",
       details: { status: "in_review", _previous: { status: "in_progress" } },
     };
-    mockIssueService.getById.mockResolvedValueOnce(createIssue({
+    mockIssueService.getById.mockResolvedValue(createIssue({
       status: "in_review",
       reviewPolicy: "human_only",
       createdByAgentId: null,
@@ -2726,7 +2742,7 @@ describe.sequential("issue thread interaction routes", () => {
       actorId: "local-board",
       details: { status: "in_review", _previous: { status: "in_progress" } },
     };
-    mockIssueService.getById.mockResolvedValueOnce(createIssue({
+    mockIssueService.getById.mockResolvedValue(createIssue({
       status: "in_review",
       reviewPolicy: "human_only",
       createdByAgentId: null,
@@ -2846,7 +2862,7 @@ describe.sequential("issue thread interaction routes", () => {
       resolverPolicyProvenance: "legacy_inherited_restriction",
       payload: { version: 1, questions: [] },
     });
-    mockIssueService.getById.mockResolvedValueOnce(createIssue({
+    mockIssueService.getById.mockResolvedValue(createIssue({
       status: "todo",
       assigneeAgentId: CREATED_AGENT_ID,
     }));
@@ -2876,7 +2892,7 @@ describe.sequential("issue thread interaction routes", () => {
       effectiveResolverPolicySource: "requested",
       payload: { version: 1, questions: [] },
     });
-    mockIssueService.getById.mockResolvedValueOnce(createIssue({
+    mockIssueService.getById.mockResolvedValue(createIssue({
       status: "todo",
       assigneeAgentId: CREATED_AGENT_ID,
     }));
@@ -2958,7 +2974,7 @@ describe.sequential("issue thread interaction routes", () => {
       effectiveResolverPolicy: "anyone",
       payload,
     });
-    mockIssueService.getById.mockResolvedValueOnce(createIssue({
+    mockIssueService.getById.mockResolvedValue(createIssue({
       status: "todo",
       assigneeAgentId: CREATED_AGENT_ID,
     }));
@@ -2987,7 +3003,7 @@ describe.sequential("issue thread interaction routes", () => {
       effectiveResolverPolicy: "not_creator",
       payload: { version: 1, questions: [] },
     });
-    mockIssueService.getById.mockResolvedValueOnce(createIssue({ status: "todo" }));
+    mockIssueService.getById.mockResolvedValue(createIssue({ status: "todo" }));
     const sameRunApp = await createApp({
       type: "agent",
       agentId: ASSIGNEE_AGENT_ID,
@@ -3000,7 +3016,7 @@ describe.sequential("issue thread interaction routes", () => {
     expect(sameRun.status).toBe(403);
     expect(sameRun.body).toMatchObject({ code: "interaction_creator_excluded" });
 
-    mockIssueService.getById.mockResolvedValueOnce(createIssue({ status: "todo" }));
+    mockIssueService.getById.mockResolvedValue(createIssue({ status: "todo" }));
     const missingRunApp = await createApp({
       type: "agent",
       agentId: ASSIGNEE_AGENT_ID,
@@ -3260,7 +3276,7 @@ describe.sequential("issue thread interaction routes", () => {
   ) {
     // The run authenticated below is working OTHER_ISSUE_ID, so resolving this
     // card is a cross-issue mutation even though the audience is open.
-    mockIssueService.getById.mockResolvedValueOnce(createIssue({ status: "todo" }));
+    mockIssueService.getById.mockResolvedValue(createIssue({ status: "todo" }));
     mockInteractionService.getForIssue.mockResolvedValueOnce({
       id: `interaction-cross-${kind}`,
       kind,

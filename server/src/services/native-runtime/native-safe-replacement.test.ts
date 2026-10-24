@@ -23,6 +23,8 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   agents,
+  authUsers,
+  companyMemberships,
   companies,
   createDb,
   heartbeatRunEvents,
@@ -234,11 +236,19 @@ const support = externalDatabaseUrl
         fingerprint: source.runId, ownerType: "board", returnOwnerAgentId: source.agentId,
         status: "resolved", outcome: "blocked", evidence, nextAction: "Preserve this hold.",
       }).returning();
-      if (mode === "manual_reblock") await issueService(db).update(source.issueId, { status: "blocked", actorUserId: "operator" });
+      const operatorUserId = randomUUID();
+      if (mode === "manual_reblock" || mode === "dependency_edit") {
+        const now = new Date();
+        await db.insert(authUsers).values({ id: operatorUserId, name: "Recovery operator", email: `${operatorUserId}@test.invalid`,
+          emailVerified: true, createdAt: now, updatedAt: now });
+        await db.insert(companyMemberships).values({ companyId: source.companyId, principalType: "user", principalId: operatorUserId,
+          status: "active", membershipRole: "member" });
+      }
+      if (mode === "manual_reblock") await issueService(db).update(source.issueId, { status: "blocked", actorUserId: operatorUserId });
       if (mode === "dependency_edit") {
         const blockerId = randomUUID();
         await db.insert(issues).values({ id: blockerId, companyId: source.companyId, title: "Human dependency", status: "todo" });
-        await issueService(db).update(source.issueId, { blockedByIssueIds: [blockerId], actorUserId: "operator" });
+        await issueService(db).update(source.issueId, { blockedByIssueIds: [blockerId], actorUserId: operatorUserId });
       }
       const comment = mode === "queued_comment" ? await issueService(db).addComment(source.issueId, "Also explain the result", { userId: "operator" }) : null;
       const retire = vi.fn(() => true);
