@@ -464,7 +464,7 @@ describeEmbeddedPostgres("paperclipai company import/export e2e", () => {
         "--new-company-name",
         `Imported ${sourceCompany.name}`,
         "--include",
-        "company,agents,projects,issues",
+        "company,agents",
         "--yes",
       ],
       {
@@ -495,8 +495,26 @@ describeEmbeddedPostgres("paperclipai company import/export e2e", () => {
     const importedMatchingIssues = importedIssues.filter((issue) => issue.title === sourceIssue.title);
 
     expect(importedAgents.map((agent) => agent.name)).toContain(sourceAgent.name);
-    expect(importedProjects.map((project) => project.name)).toContain(sourceProject.name);
-    expect(importedMatchingIssues).toHaveLength(1);
+    expect(importedProjects).toEqual([]);
+    expect(importedMatchingIssues).toHaveLength(0);
+
+    const companiesBeforeDeniedCopy = await api<Array<{ id: string }>>(apiBase, "/api/companies");
+    const sourceAgentsBeforeDeniedCopy = await api<Array<{ id: string }>>(apiBase, `/api/companies/${sourceCompany.id}/agents`);
+    const sourceProjectsBeforeDeniedCopy = await api<Array<{ id: string }>>(apiBase, `/api/companies/${sourceCompany.id}/projects`);
+    const sourceIssuesBeforeDeniedCopy = await api<Array<{ id: string }>>(apiBase, `/api/companies/${sourceCompany.id}/issues`);
+    await expect(runCliJson([
+      "company", "import", exportDir, "--target", "new", "--new-company-name", `Denied ${sourceCompany.name}`,
+      "--include", "company,agents,projects,issues", "--yes",
+    ], { apiBase, configPath, paperclipHome, instanceId: paperclipInstanceId, shellHome: cliShellHome }))
+      .rejects.toThrow("Task and project source release across organizations requires an authorized publication operation");
+    const companiesAfterDeniedCopy = await api<Array<{ id: string }>>(apiBase, "/api/companies");
+    const sourceAgentsAfterDeniedCopy = await api<Array<{ id: string }>>(apiBase, `/api/companies/${sourceCompany.id}/agents`);
+    const sourceProjectsAfterDeniedCopy = await api<Array<{ id: string }>>(apiBase, `/api/companies/${sourceCompany.id}/projects`);
+    const sourceIssuesAfterDeniedCopy = await api<Array<{ id: string }>>(apiBase, `/api/companies/${sourceCompany.id}/issues`);
+    expect(companiesAfterDeniedCopy.map((row) => row.id)).toEqual(companiesBeforeDeniedCopy.map((row) => row.id));
+    expect(sourceAgentsAfterDeniedCopy.map((row) => row.id)).toEqual(sourceAgentsBeforeDeniedCopy.map((row) => row.id));
+    expect(sourceProjectsAfterDeniedCopy.map((row) => row.id)).toEqual(sourceProjectsBeforeDeniedCopy.map((row) => row.id));
+    expect(sourceIssuesAfterDeniedCopy.map((row) => row.id)).toEqual(sourceIssuesBeforeDeniedCopy.map((row) => row.id));
 
     const previewExisting = await runCliJson<{
       errors: string[];
@@ -514,7 +532,7 @@ describeEmbeddedPostgres("paperclipai company import/export e2e", () => {
         "--target",
         "existing",
         "--company-id",
-        importedNew.company.id,
+        sourceCompany.id,
         "--include",
         "company,agents,projects,issues",
         "--collision",
@@ -547,7 +565,7 @@ describeEmbeddedPostgres("paperclipai company import/export e2e", () => {
         "--target",
         "existing",
         "--company-id",
-        importedNew.company.id,
+        sourceCompany.id,
         "--include",
         "company,agents,projects,issues",
         "--collision",
@@ -568,15 +586,15 @@ describeEmbeddedPostgres("paperclipai company import/export e2e", () => {
 
     const twiceImportedAgents = await api<Array<{ id: string; name: string; metadata?: Record<string, unknown> | null }>>(
       apiBase,
-      `/api/companies/${importedNew.company.id}/agents`,
+      `/api/companies/${sourceCompany.id}/agents`,
     );
     const twiceImportedProjects = await api<Array<{ id: string; name: string }>>(
       apiBase,
-      `/api/companies/${importedNew.company.id}/projects`,
+      `/api/companies/${sourceCompany.id}/projects`,
     );
     const twiceImportedIssues = await api<Array<{ id: string; title: string; identifier: string }>>(
       apiBase,
-      `/api/companies/${importedNew.company.id}/issues`,
+      `/api/companies/${sourceCompany.id}/issues`,
     );
     const twiceImportedMatchingIssues = twiceImportedIssues.filter((issue) => issue.title === sourceIssue.title);
     const twiceImportedPortableAgents = twiceImportedAgents.filter(isPortableAgent);
@@ -605,7 +623,7 @@ describeEmbeddedPostgres("paperclipai company import/export e2e", () => {
         "--new-company-name",
         `Zip Imported ${sourceCompany.name}`,
         "--include",
-        "company,agents,projects,issues",
+        "company,agents",
         "--yes",
       ],
       {

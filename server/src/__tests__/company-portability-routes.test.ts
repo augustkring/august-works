@@ -1,5 +1,5 @@
 import express from "express";
-import { ImportSourceChangedError } from "../errors.js";
+import { ImportPreflightError, ImportSourceChangedError, unprocessable } from "../errors.js";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { authUsers, companies, companyMemberships, createDb, customerOperations, instanceUserRoles } from "@paperclipai/db";
@@ -1098,6 +1098,30 @@ describe.sequential("company portability routes", () => {
     expect(rejected.body.job.status).toBe("failed");
     expect(rejected.body.operation.unknownOutcome).toBe(false);
     expect(rejected.body.job.error.message).toBe("The package changed after preview. Preview it again before importing.");
+    expect(mockLogActivity).not.toHaveBeenCalled();
+  });
+
+  it.sequential("retains a native pre-effect source refusal as a known rejection", async () => {
+    mockCompanyPortabilityService.importBundle.mockRejectedValueOnce(new ImportPreflightError(422, "Source publication is required"));
+    const app = await createApp(cloudTenantActor());
+    const accepted = await request(app).post("/api/companies/import")
+      .set("x-paperclip-cloud-async-import", "1").set(cloudHeaders).send(importRequest);
+    expect(accepted.status).toBe(202);
+    const rejected = await waitForImportJobStatus(app, accepted.body.statusUrl, "failed");
+    expect(rejected.body.operation.unknownOutcome).toBe(false);
+    expect(rejected.body.job.error.message).toBe("The import request was rejected before import work started.");
+    expect(mockLogActivity).not.toHaveBeenCalled();
+  });
+
+  it.sequential("does not treat an ordinary domain 422 as proof that no effect committed", async () => {
+    mockCompanyPortabilityService.importBundle.mockRejectedValueOnce(unprocessable("Domain refused after an uncertain write"));
+    const app = await createApp(cloudTenantActor());
+    const accepted = await request(app).post("/api/companies/import")
+      .set("x-paperclip-cloud-async-import", "1").set(cloudHeaders).send(importRequest);
+    expect(accepted.status).toBe(202);
+    const unknown = await waitForImportJobStatus(app, accepted.body.statusUrl, "needs_reconciliation");
+    expect(unknown.body.operation.unknownOutcome).toBe(true);
+    expect(unknown.body.job.error.message).toMatch(/outcome is unknown/i);
     expect(mockLogActivity).not.toHaveBeenCalled();
   });
 

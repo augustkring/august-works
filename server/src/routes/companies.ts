@@ -39,7 +39,7 @@ import {
   type CompanyImportTransferPartUploadResult,
   type CompanyImportTransferStatus,
 } from "@paperclipai/shared/company-import-transfer";
-import { badRequest, conflict, forbidden, notFound, unprocessable, ImportSourceChangedError } from "../errors.js";
+import { badRequest, conflict, forbidden, notFound, unprocessable, ImportPreflightError, ImportSourceChangedError } from "../errors.js";
 import { PORTABLE_ZIP_UPLOAD_LIMIT_BYTES } from "../http/body-limits.js";
 import { logger } from "../middleware/logger.js";
 import { validate } from "../middleware/validate.js";
@@ -757,7 +757,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
       } catch (error) {
         // Only the native pre-effect proof can turn an invoked owner into a
         // known rejection. Ordinary throws remain an unknown outcome.
-        if (error instanceof ImportSourceChangedError) domainInvoked = false;
+        if (error instanceof ImportPreflightError) domainInvoked = false;
         if (domainInvoked) await hooks?.onFailure?.(errorMessage(error));
         else await hooks?.onConflict?.();
         throw error;

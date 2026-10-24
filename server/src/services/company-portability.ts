@@ -83,7 +83,7 @@ import {
 import { requireOpenCodeModelId } from "@paperclipai/adapter-opencode-local/server";
 import { findServerAdapter } from "../adapters/index.js";
 import { formatAttachmentSize, MAX_ATTACHMENT_BYTES } from "../attachment-types.js";
-import { HttpError, ImportSourceChangedError, forbidden, notFound, unprocessable } from "../errors.js";
+import { HttpError, ImportPreflightError, ImportSourceChangedError, forbidden, notFound, unprocessable } from "../errors.js";
 import { ghFetch, gitHubApiBase, resolveRawGitHubUrl } from "./github-fetch.js";
 import type { StorageService } from "../storage/types.js";
 import { accessService } from "./access.js";
@@ -5494,7 +5494,15 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     const include = plan.include;
     const importActor: AuthorizationActor = options?.actor ?? (actorUserId
       ? { type: "board", userId: actorUserId, source: "session" } : { type: "none" });
-    const copySources = await validateCopySources(sourceManifest, input.target, include, importActor, options?.privateWorkAdmission);
+    let copySources: Awaited<ReturnType<typeof validateCopySources>>;
+    try {
+      copySources = await validateCopySources(sourceManifest, input.target, include, importActor, options?.privateWorkAdmission);
+    } catch (error) {
+      // This source-admission owner only reads. No company, secret, Agent,
+      // Project or Task effect has begun here. Later throws remain unknown.
+      if (error instanceof HttpError) throw new ImportPreflightError(error.status, error.message, error.details);
+      throw error;
+    }
 
     if (include.agents) {
       const importedAgentSlugs = new Set(
