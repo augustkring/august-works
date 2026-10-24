@@ -6,7 +6,7 @@ import { Button } from "./ui/button";
 import { hasCurrentV9Session, useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
 import { LOCAL_PASSWORD_MAX_UTF16_LENGTH } from "@paperclipai/shared/local-password-policy";
 import { queryKeys } from "../lib/queryKeys";
-import { authSessionSchema } from "@paperclipai/shared";
+import { authSessionSchema, type NativePasskey } from "@paperclipai/shared";
 
 type SecretView =
   | { kind: "enrollment"; sessionId: string; totpSecret: string; backupCodes: string[]; verified: false }
@@ -46,6 +46,7 @@ export function NativeAuthenticationSettings({ principal }: { principal: string 
   const [focusTarget, setFocusTarget] = useState<string | null>(null);
   const lastFocus = useRef<string | null>(null);
   const [confirmed, setConfirmed] = useState(false);
+  const [passkeyName, setPasskeyName] = useState("");
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
   const aliveRef = useRef(true);
@@ -77,6 +78,13 @@ export function NativeAuthenticationSettings({ principal }: { principal: string 
   const statusCurrent = ownsCurrentSession() && status.isSuccess && !status.isFetching &&
     !statusState?.isInvalidated && status.data?.userId === principal;
   const currentStatus = statusCurrent ? status.data : null;
+
+  const passkeysKey = ["native-passkeys", principal, identity.authorityEpoch] as const;
+  const passkeys = useQuery({ queryKey: passkeysKey, enabled: !busy && statusCurrent && currentStatus?.passkeysAvailable === true,
+    queryFn: ({ signal }) => authApi.listPasskeys(principal, currentSessionId(), signal), staleTime: 0, gcTime: 0, retry: false });
+  const passkeysCurrent = statusCurrent && ownsCurrentSession() && passkeys.isSuccess && !passkeys.isFetching &&
+    !client.getQueryState(passkeysKey)?.isInvalidated;
+  const canUsePasskey = passkeysCurrent && passkeys.data.length>0;
 
   useEffect(() => {
     aliveRef.current = true;
@@ -118,6 +126,7 @@ export function NativeAuthenticationSettings({ principal }: { principal: string 
     if (expectedSessionId) await authApi.securityStatus(principal, undefined, expectedSessionId);
     await client.invalidateQueries({ queryKey: ["native-authenticator-status", principal], refetchType: busyRef.current ? "none" : "active" });
     if (!busyRef.current) await client.refetchQueries({ queryKey: ["native-authenticator-status", principal] });
+    await client.invalidateQueries({ queryKey: ["native-passkeys", principal], refetchType: busyRef.current ? "none" : "active" });
     if (!belongsToPrincipal()) throw sourceChanged();
   }
 
@@ -131,6 +140,7 @@ export function NativeAuthenticationSettings({ principal }: { principal: string 
       // An old native session read can expire its cookie after a successful
       // rotation. Stop background status reads until the new session is pinned.
       await client.cancelQueries({ queryKey: ["native-authenticator-status", principal] });
+      await client.cancelQueries({ queryKey: ["native-passkeys", principal] });
       await action();
       if (aliveRef.current && belongsToPrincipal()) setFocusTarget("native-authenticator-heading");
     } catch (failure) {
@@ -193,9 +203,47 @@ export function NativeAuthenticationSettings({ principal }: { principal: string 
     const result = totpCode.trim()
       ? await authApi.verifyTotp(totpCode.trim(), principal, currentSessionId())
       : recoveryCode.trim() ? await authApi.verifyBackupCode(recoveryCode.trim(), principal, currentSessionId()) : null;
-    if (!result) throw new Error("A current authenticator code is required");
+    if (!result) { if (canUsePasskey) return confirmPasskey(); throw new Error("A current authenticator code is required"); }
     await refreshNativeSessionAndStatus(result.sessionId);
     return result.sessionId;
+  }
+
+  async function confirmPasskey() {
+    const result = await authApi.authenticatePasskey(principal, currentSessionId());
+    if (result.userId !== principal) throw sourceChanged();
+    await refreshNativeSessionAndStatus(result.sessionId);
+    return result.sessionId;
+  }
+  async function confirmKeyChange() {
+    if (currentStatus?.phishingResistantRequired || canUsePasskey && !totpCode && !recoveryCode) return confirmPasskey();
+    if (currentStatus?.twoFactorEnabled) return confirmFreshFactor();
+    if (!currentStatus?.hasPassword || !password) throw new Error("Confirm your identity first");
+    await authApi.reauthenticatePassword(password, principal, currentSessionId());
+    await refreshNativeSessionAndStatus();
+    return currentSessionId();
+  }
+  async function addKey() {
+    await runAction(async () => {
+      const sessionId = await confirmKeyChange();
+      const result = await authApi.addPasskey(passkeyName.trim(), principal, sessionId);
+      await refreshNativeSessionAndStatus(result.sessionId);
+      setPasskeyName("");
+    });
+  }
+  async function renameKey(id: string, name: string) {
+    await runAction(async () => {
+      const sessionId = await confirmKeyChange();
+      await authApi.renamePasskey(id, name, principal, sessionId);
+      await refreshNativeSessionAndStatus(sessionId);
+    });
+  }
+  async function removeKey(id: string) {
+    await runAction(async () => {
+      const sessionId = await confirmKeyChange();
+      await authApi.deletePasskey(id, principal, sessionId);
+      await client.cancelQueries({ queryKey: queryKeys.auth.session, exact: true });
+      client.setQueryData(queryKeys.auth.session, await authApi.getSession());
+    });
   }
 
   async function confirmIdentity() {
@@ -296,7 +344,7 @@ export function NativeAuthenticationSettings({ principal }: { principal: string 
       </div>}
       {currentStatus.phishingResistantRequired && <>
         <p role="status" className="saas-muted">{t("account.authenticator.phishingResistantRequired")}</p>
-        <p role="status" className="saas-muted">{t("account.authenticator.phishingResistantSettingsUnavailable")}</p>
+        {!currentStatus.passkeysAvailable && <p role="status" className="saas-muted">{t("account.authenticator.phishingResistantSettingsUnavailable")}</p>}
       </>}
       {!currentStatus.phishingResistantRequired && !currentStatus.twoFactorEnabled && !secretView && !cancellationSession && <>
         {currentStatus.hasPassword ? <>
@@ -310,6 +358,28 @@ export function NativeAuthenticationSettings({ principal }: { principal: string 
             onClick={() => void confirmIdentity()}>{t("account.authenticator.confirmIdentity")}</Button>
         </> : <p role="status" className="saas-muted">{t("account.authenticator.passwordlessEnrollmentUnavailable")}</p>}
       </>}
+      {currentStatus.passkeysAvailable && !secretView && !cancellationSession && <section className="saas-section" aria-labelledby="native-passkeys-heading">
+        <h3 className="saas-subtitle" id="native-passkeys-heading">{t("account.passkeys.heading")}</h3>
+        <p className="saas-muted">{t("account.passkeys.confirmation")}</p>
+        {!passkeysCurrent && <div role={passkeys.isError ? "alert" : "status"}><p>{t(passkeys.isError ? "account.passkeys.failed" : "account.passkeys.loading")}</p>
+          {passkeys.isError && <Button variant="outline" className="min-h-11" onClick={() => void refreshNativeSessionAndStatus().catch(() => {})}>{t("account.authenticator.reloadSettings")}</Button>}
+        </div>}
+        {passkeysCurrent && <>
+          {passkeys.data.length===0 && <p className="saas-muted">{t("account.passkeys.empty")}</p>}
+          {canUsePasskey && <Button variant="outline" className="min-h-11" disabled={busy} onClick={() => void runAction(async () => {
+            await confirmPasskey(); setConfirmed(true);
+          })}>{t("account.passkeys.confirm")}</Button>}
+          <label className="saas-label" htmlFor="native-passkey-name">{t("account.passkeys.newName")}
+            <input className="saas-input" id="native-passkey-name" autoComplete="off" maxLength={120} value={passkeyName} disabled={busy}
+              onChange={event => setPasskeyName(event.target.value)} />
+          </label>
+          <Button variant="outline" className="min-h-11" disabled={busy || passkeys.data.length>=16 ||
+            (!canUsePasskey && (currentStatus.twoFactorEnabled ? !totpCode && !recoveryCode : !currentStatus.hasPassword || !password))}
+            onClick={() => void addKey()}>{t("account.passkeys.add")}</Button>
+          <p className="saas-muted">{t("account.passkeys.removal")}</p>
+          {passkeys.data.map(key => <PasskeyRow key={key.id} value={key} disabled={busy} onRename={renameKey} onRemove={removeKey} />)}
+        </>}
+      </section>}
       {secretView?.kind === "enrollment" && !secretView.verified && !hiddenForAuthority && <div className="saas-section">
         <p className="saas-muted">{t("account.authenticator.enrollmentInstructions")}</p>
         <label className="saas-label" htmlFor="native-authenticator-setup-key">{t("account.authenticator.setupKey")}
@@ -342,11 +412,11 @@ export function NativeAuthenticationSettings({ principal }: { principal: string 
             value={recoveryCode} onChange={event => { setRecoveryCode(event.target.value); setTotpCode(""); }} disabled={busy || !statusCurrent} />
         </label>
         <div className="saas-row">
-          <Button variant="outline" className="min-h-11" disabled={busy || !statusCurrent || (!totpCode && !recoveryCode)}
+          <Button variant="outline" className="min-h-11" disabled={busy || !statusCurrent || (!totpCode && !recoveryCode && !canUsePasskey)}
             onClick={() => void confirmIdentity()}>{t("account.authenticator.confirmIdentity")}</Button>
-          <Button variant="outline" className="min-h-11" disabled={busy || !statusCurrent || (currentStatus.hasPassword && !password) || (!totpCode && !recoveryCode)}
+          <Button variant="outline" className="min-h-11" disabled={busy || !statusCurrent || (currentStatus.hasPassword && !password) || (!totpCode && !recoveryCode && !canUsePasskey)}
             onClick={() => void rotateRecoveryCodes()}>{t("account.authenticator.rotateRecoveryCodes")}</Button>
-          <Button variant="destructive" className="min-h-11" disabled={busy || !statusCurrent || (currentStatus.hasPassword && !password) || (!totpCode && !recoveryCode)}
+          <Button variant="destructive" className="min-h-11" disabled={busy || !statusCurrent || (currentStatus.hasPassword && !password) || (!totpCode && !recoveryCode && !canUsePasskey)}
             onClick={() => void disableAuthenticator()}>{t("account.authenticator.disable")}</Button>
         </div>
       </div>}
@@ -365,4 +435,21 @@ export function NativeAuthenticationSettings({ principal }: { principal: string 
     {confirmed && statusCurrent && <p role="status" className="saas-muted">{t("account.authenticator.identityConfirmed")}</p>}
     {busy && <p role="status" className="saas-muted">{t("account.authenticator.working")}</p>}
   </section>;
+}
+
+
+function PasskeyRow({ value, disabled, onRename, onRemove }: { value: NativePasskey; disabled: boolean;
+  onRename: (id: string, name: string) => Promise<void>; onRemove: (id: string) => Promise<void> }) {
+  const { t } = useTranslation("experience"), [name, setName] = useState(value.name ?? "");
+  return <div className="saas-section">
+    <label className="saas-label" htmlFor={`native-passkey-${value.id}`}>{t("account.passkeys.name")}
+      <input id={`native-passkey-${value.id}`} className="saas-input" value={name} autoComplete="off" maxLength={120}
+        disabled={disabled} onChange={event => setName(event.target.value)} />
+    </label>
+    <div className="saas-row justify-between">
+      <Button variant="destructive" className="min-h-11" disabled={disabled} onClick={() => void onRemove(value.id)}>{t("account.passkeys.remove")}</Button>
+      <Button variant="outline" className="min-h-11" disabled={disabled || !name.trim() || name.trim()===value.name}
+        onClick={() => void onRename(value.id, name.trim())}>{t("account.passkeys.rename")}</Button>
+    </div>
+  </div>;
 }

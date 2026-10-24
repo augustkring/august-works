@@ -26,7 +26,7 @@ function rethrowAuthenticationFailure(error: unknown): never {
 /** Keep last in the native plugin list: the two-factor plugin must first remove
  * a password-only session when it issues a challenge. A cookie refresh, reset
  * link, SSO callback or historic session never manufactures local factor proof. */
-export function nativeAuthenticationAssurancePlugin(db: Db, schema: NativeAuthenticationSchema, operatorUserIds: readonly string[] = []): BetterAuthPlugin {
+export function nativeAuthenticationAssurancePlugin(db: Db, schema: NativeAuthenticationSchema, operatorUserIds: readonly string[] = [], passkeysAvailable = false): BetterAuthPlugin {
   async function recordPassword(tx: Pick<Db, "execute">, userId: string, sessionId: string, expectedVersion: number) {
     const [user] = await tx.execute<{ id: string }>(sql`
       select id from "user" where id=${userId}
@@ -49,13 +49,18 @@ export function nativeAuthenticationAssurancePlugin(db: Db, schema: NativeAuthen
   return {
     id: "blentera-native-authentication-assurance",
     endpoints: {
+      authenticationMethods: createAuthEndpoint("/methods", { method: "GET" }, async ctx => {
+        ctx.setHeader("Cache-Control", "no-store");
+        return ctx.json({ passkey: passkeysAvailable });
+      }),
       authenticationSecurity: createAuthEndpoint("/security", { method: "GET", use: [sessionMiddleware] }, async ctx => {
         const { user, session } = ctx.context.session;
         assertExpectedAuthenticationUser(ctx, user.id);
         assertExpectedAuthenticationSession(ctx, session.id);
-        const [status] = await db.execute<{ userId: string; hasPassword: boolean; twoFactorEnabled: boolean; phishingResistantRequired: boolean }>(sql`
+        const [status] = await db.execute<{ userId: string; hasPassword: boolean; twoFactorEnabled: boolean; phishingResistantRequired: boolean; enterpriseBound: boolean }>(sql`
           select u.id as "userId",u.two_factor_enabled as "twoFactorEnabled",u.phishing_resistant_required as "phishingResistantRequired",
-            exists(select 1 from account where user_id=u.id and provider_id='credential' and password is not null) as "hasPassword"
+            exists(select 1 from account where user_id=u.id and provider_id='credential' and password is not null) as "hasPassword",
+            exists(select 1 from enterprise_subject_bindings b where b.user_id=u.id and b.status='active') as "enterpriseBound"
           from "user" u join "session" s on s.user_id=u.id
           where u.id=${user.id} and s.id=${session.id} and s.expires_at>clock_timestamp()
             and not exists(select 1 from account_deletion_operations where user_id=u.id)
@@ -66,7 +71,7 @@ export function nativeAuthenticationAssurancePlugin(db: Db, schema: NativeAuthen
           { requireRecent: false, phishingResistant: operatorUserIds.includes(user.id) }).catch(rethrowAuthenticationFailure);
         ctx.setHeader("Cache-Control", "no-store");
         return ctx.json(nativeAuthenticationSecuritySchema.parse({ ...status,
-          phishingResistantRequired: status.phishingResistantRequired || operatorUserIds.includes(user.id) }));
+          phishingResistantRequired: status.phishingResistantRequired || operatorUserIds.includes(user.id), passkeysAvailable: passkeysAvailable && !status.enterpriseBound }));
       }),
       reauthenticatePassword: createAuthEndpoint("/reauthenticate/password", {
         method: "POST", use: [sessionMiddleware],

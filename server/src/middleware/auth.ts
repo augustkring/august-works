@@ -236,7 +236,7 @@ const publicMcpGatewayProtocolPath = /^\/mcp\/gateways\/gw_[a-f0-9]{32}\/?$/i;
 
 export function actorMiddleware(db: Db, opts: ActorMiddlewareOptions): RequestHandler {
   const boardAuth = boardAuthService(db);
-  return async (req, _res, next) => {
+  return async (req, res, next) => {
     req.actor =
       opts.deploymentMode === "local_trusted"
         ? {
@@ -289,11 +289,13 @@ export function actorMiddleware(db: Db, opts: ActorMiddlewareOptions): RequestHa
         let session: BetterAuthSessionResult | null = null;
         try {
           session = await opts.resolveSession(req);
-        } catch (err) {
+        } catch {
           logger.warn(
-            { err, method: req.method, url: req.originalUrl },
+            { method: req.method, url: stripSecretBearingUrlParts(req.originalUrl) },
             "Failed to resolve auth session from request headers",
           );
+          res.status(503).json({ error: "Authentication is temporarily unavailable", code: "AUTHENTICATION_UNAVAILABLE" });
+          return;
         }
         if (session?.user?.id && session.session?.id) {
           const userId = session.user.id;
@@ -417,7 +419,7 @@ export function actorMiddleware(db: Db, opts: ActorMiddlewareOptions): RequestHa
       if (agentRunWritesRevoked(identityRun)
         && !["GET", "HEAD", "OPTIONS"].includes(req.method)) {
         const conversation = identityRun?.contextSnapshot?.conversationMode === true;
-        _res.status(403).json({ error: conversation ? "This conversation turn was cancelled" : "This run was cancelled",
+        res.status(403).json({ error: conversation ? "This conversation turn was cancelled" : "This run was cancelled",
           code: conversation ? "conversation_turn_cancelled" : "agent_run_cancelled" });
         return;
       }

@@ -1,11 +1,15 @@
+import { isIP } from "node:net";
 import { LOCAL_PASSWORD_MIN_LENGTH, LOCAL_PASSWORD_MAX_UTF16_LENGTH } from "@paperclipai/shared/local-password-policy";
 import { localPasswordPolicy } from "./local-password-policy.js";
+import { logger } from "../middleware/logger.js";
+import { nativePasskeyPlugin } from "./native-passkey.js";
 import { nativeTwoFactorPlugin } from "./native-two-factor.js";
 import { nativeAuthenticationAssurancePlugin } from "./native-authentication-assurance.js";
 import { enterpriseAuthPlugins, ENTERPRISE_DISABLED_AUTH_PATHS } from "./enterprise-auth-plugins.js";
 import { enterpriseIdentityPolicies, enterpriseSubjectBindings, ssoProvider, scimConnectionBinding, scimIdentityTombstone, scimSubject, scimUser, scimProjectionGrant, scimGroup, scimGroupMember, companyMemberships, principalPermissionGrants, activityLog } from "@paperclipai/db";
 import type { Request, RequestHandler } from "express";
 import type { IncomingHttpHeaders } from "node:http";
+import { APIError, isAPIError } from "better-auth/api";
 import { betterAuth, type Auth } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { toNodeHandler } from "better-auth/node";
@@ -303,7 +307,26 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
     ...(config.deploymentProfile === "saas" ? {rateLimit:authRateLimits} : {}),
     ...(enterprisePlugins.length ? { ssoProvider,scimConnectionBinding,scimIdentityTombstone,scimSubject,scimUser,scimProjectionGrant,scimGroup,scimGroupMember,awEnterprisePolicy:enterpriseIdentityPolicies,awEnterpriseBinding:enterpriseSubjectBindings,awCompanyMembership:companyMemberships,awPermissionGrant:principalPermissionGrants,awActivity:activityLog } : {}),
   };
+  let passkeyOrigin: string | undefined;
+  const configuredPasskeyUrl = baseUrl ?? publicUrl;
+  if (configuredPasskeyUrl && URL.canParse(configuredPasskeyUrl)) {
+    const configured = new URL(configuredPasskeyUrl);
+    if (!configured.username && !configured.password && !isIP(configured.hostname.replace(/^\[|\]$/g, "")) && (configured.protocol === "https:" ||
+      configured.protocol === "http:" && configured.hostname === "localhost")) passkeyOrigin = configured.origin;
+  }
   const authConfig = {
+    // Native verifier exceptions can embed clientDataJSON challenge/origin.
+    // Keep SDK diagnostics separate from ceremony and credential payloads.
+    logger: { log(level: "debug" | "info" | "warn" | "error") {
+      logger[level]({ component: "native-authentication" }, "Native authentication provider event");
+    } },
+    onAPIError: { onError(error: unknown) {
+      if (isAPIError(error) && error.statusCode<500) return;
+      logger.error({ component: "native-authentication" }, "Native authentication request failed");
+      // Better Call otherwise prints unknown exceptions directly, outside the
+      // configured SDK logger, potentially including native SQL parameters.
+      throw new APIError("INTERNAL_SERVER_ERROR", { code: "AUTHENTICATION_UNAVAILABLE", message: "Authentication is temporarily unavailable" });
+    } },
     baseURL: baseUrl,
     secret,
     trustedOrigins,
@@ -354,7 +377,7 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
     ...(enterprisePlugins.length ? { disabledPaths: ENTERPRISE_DISABLED_AUTH_PATHS } : {}),
     plugins: [ ...enterprisePlugins, ...(resolveWorkspaceHandoffIdentity(config) ? [workspaceLoginHandoffPlugin({ db,
       resolveExpectedIdentity: () => resolveWorkspaceHandoffIdentity(config) ?? {key:null,instanceId:null,executionWorkspaceId:null,companyId:null,origin:null},
-    })] : []), nativeTwoFactorPlugin(db, authSchema, config.saasPlatform?.operatorUserIds ?? []), nativeAuthenticationAssurancePlugin(db, authSchema, config.saasPlatform?.operatorUserIds ?? []) ],
+    })] : []), ...(passkeyOrigin ? [nativePasskeyPlugin(db, authSchema, passkeyOrigin, config.saasPlatform?.operatorUserIds ?? [])] : []), nativeTwoFactorPlugin(db, authSchema, config.saasPlatform?.operatorUserIds ?? []), nativeAuthenticationAssurancePlugin(db, authSchema, config.saasPlatform?.operatorUserIds ?? [], !!passkeyOrigin) ],
   };
 
   if (!baseUrl) {
@@ -419,9 +442,13 @@ export async function resolveBetterAuthSessionFromHeaders(
   const api = auth.api;
   if (!api?.getSession) return null;
 
-  const sessionValue = await api.getSession({
-    headers,
-  });
+  let sessionValue: unknown;
+  try { sessionValue = await api.getSession({ headers }); }
+  catch {
+    // The caller logs lookup failures; raw driver errors may contain the
+    // native token parameter even though no authenticated session was returned.
+    throw new Error("Native authentication session resolution failed");
+  }
   if (!sessionValue || typeof sessionValue !== "object") return null;
 
   const value = sessionValue as {

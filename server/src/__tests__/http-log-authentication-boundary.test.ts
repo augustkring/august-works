@@ -55,3 +55,30 @@ describe("HTTP authentication metadata boundary", () => {
     expect(log.level).toBe(status === 500 ? 50 : status === 403 ? 40 : 30);
   });
 });
+
+describe("native authentication payload privacy", () => {
+  it.each([200, 401, 403, 500])("omits complete ceremony and recovery payloads from HTTP %s logs", async status => {
+    const chunks: string[] = [];
+    const stream = new Writable({ write(chunk, _encoding, done) { chunks.push(chunk.toString()); done(); } });
+    const app = express();
+    app.use(express.json());
+    app.use(createHttpLogger(pino({ redact: [...HTTP_LOG_REDACT_PATHS] }, stream)));
+    app.post("/api/auth/passkey/verify-authentication", (_req, res) => {
+      if (status===500) (res as any).err = new Error("SDK-ERROR-CEREMONY-CANARY");
+      res.status(status).end();
+    });
+    await request(app).post("/api/auth/passkey/verify-authentication?context=QUERY-CEREMONY-CANARY")
+      .set("X-Blentera-Expected-User", "EXPECTED-USER-CANARY")
+      .set("X-Blentera-Expected-Session", "EXPECTED-SESSION-CANARY")
+      .send({ code: "OTP-CANARY", backupCode: "RECOVERY-CANARY", response: {
+        id: "CREDENTIAL-ID-CANARY", response: { clientDataJSON: "CLIENT-DATA-CANARY", signature: "SIGNATURE-CANARY" },
+      } }).expect(status);
+    const output = chunks.join("");
+    expect(output).not.toContain("CANARY");
+    const log = JSON.parse(output.trim());
+    expect(log.req.url).toBe("/api/auth/:operation");
+    expect(log.req.method).toBe("POST");
+    expect(log.res.statusCode).toBe(status);
+    if (status>=400) expect(log.reqBody).toBe("[REDACTED]");
+  });
+});

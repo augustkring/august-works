@@ -174,6 +174,59 @@ it("retries an uncertain cancellation with its original session reference", asyn
   await vi.waitFor(() => expect(host.textContent).not.toContain("Setup cancellation has not been confirmed"));
 });
 
+async function showPasskeySettings() {
+  vi.mocked(authApi.securityStatus).mockResolvedValue({ userId: "owner", hasPassword: true,
+    twoFactorEnabled: false, phishingResistantRequired: false, passkeysAvailable: true });
+  vi.spyOn(authApi, "listPasskeys").mockResolvedValue([]);
+  await act(async () => { await client.invalidateQueries({ queryKey: ["native-authenticator-status", "owner"] }); });
+  await vi.waitFor(() => expect(button("Add a passkey")).toBeTruthy());
+}
+
+it("registers a passkey for the current principal and session, then reads that session's list", async () => {
+  await mount();
+  await showPasskeySettings();
+  vi.spyOn(authApi, "reauthenticatePassword").mockResolvedValue(undefined);
+  let added = false;
+  vi.mocked(authApi.listPasskeys).mockImplementation(async () => added ? [
+    { id: "native-key-1", name: "Work laptop", createdAt: "2026-10-24T12:00:00.000Z" },
+  ] : []);
+  vi.spyOn(authApi, "addPasskey").mockImplementation(async () => {
+    added = true;
+    return { id: "native-key-1", name: "Work laptop", createdAt: "2026-10-24T12:00:00.000Z", sessionId: "session-owner" };
+  });
+
+  await act(async () => {
+    setInput(host.querySelector<HTMLInputElement>("#native-authenticator-password")!, "CURRENT-PRIVATE-PASSWORD");
+    setInput(host.querySelector<HTMLInputElement>("#native-passkey-name")!, "Work laptop");
+    button("Add a passkey").click();
+  });
+
+  await vi.waitFor(() => expect(host.querySelector<HTMLInputElement>("#native-passkey-native-key-1")?.value).toBe("Work laptop"));
+  expect(authApi.reauthenticatePassword).toHaveBeenCalledWith("CURRENT-PRIVATE-PASSWORD", "owner", "session-owner");
+  expect(authApi.addPasskey).toHaveBeenCalledWith("Work laptop", "owner", "session-owner");
+  expect(authApi.listPasskeys).toHaveBeenLastCalledWith("owner", "session-owner", expect.anything());
+});
+
+it("withholds a passkey registration acknowledgement from a different native session", async () => {
+  await mount();
+  await showPasskeySettings();
+  vi.spyOn(authApi, "reauthenticatePassword").mockResolvedValue(undefined);
+  vi.spyOn(authApi, "addPasskey").mockResolvedValue({
+    id: "wrong-session-key", name: "Wrong session key", createdAt: "2026-10-24T12:00:00.000Z", sessionId: "session-other",
+  });
+
+  await act(async () => {
+    setInput(host.querySelector<HTMLInputElement>("#native-authenticator-password")!, "CURRENT-PRIVATE-PASSWORD");
+    setInput(host.querySelector<HTMLInputElement>("#native-passkey-name")!, "Wrong session key");
+    button("Add a passkey").click();
+  });
+
+  await vi.waitFor(() => expect(host.textContent).toContain("The security change could not be confirmed"));
+  expect(authApi.addPasskey).toHaveBeenCalledWith("Wrong session key", "owner", "session-owner");
+  expect(host.textContent).not.toContain("Wrong session key");
+  expect(host.querySelector("#native-passkey-wrong-session-key")).toBeNull();
+});
+
 it("holds background native status reads while the current session is being rotated", async () => {
   const enrollment = deferred<Awaited<ReturnType<typeof authApi.enableTwoFactor>>>();
   vi.spyOn(authApi, "reauthenticatePassword").mockResolvedValue(undefined);

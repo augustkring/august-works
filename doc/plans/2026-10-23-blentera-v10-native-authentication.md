@@ -1,7 +1,8 @@
 # Blentera V10 — Native authentication completion
 
 Status: implementation in progress. Maintained TOTP/recovery is enabled with
-native session assurance; passkeys and complete CE-03 admission remain open. This
+native session assurance and configured-origin UV passkeys. Complete CE-03
+admission, operator effect fences and enterprise completion remain open. This
 plan implements CE-03 in the V10 rev4.0 brief through the existing Better Auth
 1.7.2, account, session, enterprise and authorization owners. It confers no pilot,
 operator, provider or hardware qualification.
@@ -71,7 +72,7 @@ operation. Existing-factor changes need current factor proof and a complete
 replacement/recovery lifecycle. Native backup-code consumption remains one-use;
 a lost response cannot authorize a replay.
 
-## Current evidence limits
+## Initial evidence limits (before the dated checkpoints)
 
 The earlier password/mail/session checkpoints remain bounded software evidence.
 No MFA/passkey activation, supported-method completeness, fresh-factor assurance,
@@ -312,3 +313,88 @@ ceremonies. This is disposable private-instance software evidence, not SaaS mail
 external IdP, passkey/hardware, deployed replica or host qualification. The
 separate checkpoint records compiler/UI/native suite results and source hashes.
 Full CE-03, powerful-action/operator guards and full V10 admission remain open.
+
+
+### 2026-10-24 — maintained passkeys, one-use ceremonies and private failures
+
+The existing Better Auth/passkey1.7.2 owner now supports local-account key
+registration, full sign-in, current confirmation, bounded summary listing,
+renaming and removal. The fixed configured origin/RP is independent of request
+headers. HTTPS DNS origins and localhost development are supported; IP addresses
+are not advertised as passkey RPs. English/Danish controls stay outside paid
+capability gates. Private summaries omit credential public keys, credential IDs
+and counters. Device private keys remain with the authenticator.
+
+Both native verifier callbacks require their actual verified UV flag. An
+AsyncLocalStorage ceremony context transfers only trusted pre-verification user,
+operation and credential facts; browser metadata cannot assert successful UV.
+The real user/generation/key and current native session are pinned in the same
+physical mutation transaction. Generation is captured before verification.
+Registration retains the genuine preceding authentication event/time, rather
+than claiming that registration or session creation was MFA. Actual verified
+passkey authentication alone stamps a fresh passkey event using the database
+clock. Key removal revokes native sessions and requires new sign-in; deleting the
+last required key remains blocked by both the controller and native DB guard.
+
+The provider's atomic challenge consume commits before the protected mutation.
+Its exact consumed row is handed once to the unchanged maintained verifier inside
+the transaction. Failed database work or process loss cannot restore it. No
+verification row is recreated. Registration challenges also bind the actual
+original session/generation through server-owned provider context. A newer native
+session cannot repurpose an old enrollment, and client-supplied context/name does
+not select the registration identity. Known-credential attempts use the existing
+durable native budget with a current-user lifetime fence; erasure removes it.
+
+Enterprise-bound users are deliberately withheld from this local passkey path
+until the existing enterprise policy/verified-identity owner can qualify their
+recovery and first-factor lifetime. SaaS email-verification requirements are
+also checked at the actual native proof pin. Operator authentication can retain
+the private phishing-resistant requirement after genuine UV; this does not grant
+an operator role or close operator domain-effect admission.
+
+Actual built-app Chromium ceremonies cover successful creation, current
+confirmation, rename, anonymous passkey sign-in, removal/sign-out and password
+fallback. Client-weakened creation/authentication options produce real WebAuthn
+responses without UV; the server refuses both and refuses their replays. A
+fixture-user-specific native PostgreSQL trigger rejects replacement-session
+insertion after real successful WebAuthn verification/key writing. A
+nontransactional test sequence proves that exact point was reached. The key,
+generation and session mutation roll back, the genuine prior password session
+survives, and the consumed challenge remains unusable. All SQL fault controls
+exist only in the isolated Playwright database and are removed in finally.
+
+The browser also found SDK Date revival and raw-SQL timestamp mismatches. The
+SDK preserves the wire JSON contract and list reads use the existing typed
+Drizzle schema. Read-only key listing takes a shared user pin. A private key label
+is sent in the verification body and removed from the SDK's redundant options
+GET query. Private HTTP logging now covers the entire native auth namespace,
+including failures and unexpected methods. Intent headers are redacted. SDK logs
+retain static structured event metadata, while the supported API-error hook
+normalizes unhandled/server errors before the lower router can print exception
+arguments. Native session-resolution errors do not forward driver/token details;
+unknown session lookup returns503 instead of being treated as signed-out.
+
+Evidence and exact final gate counts are recorded at
+`doc/operations/aw-v10-evidence/native-passkeys-2026-10-24/checkpoint.json`.
+These are software/emulated-authenticator results, not hardware, deployed
+replicas/restarts, mail/IdP, representative Human or production-host qualification.
+All remaining V10/PR gates stay open.
+
+### Next operator admission owner work
+
+Preserve the actual AuthorizationActor instead of reducing authenticated requests
+to bare user IDs. Repeat configured-operator membership, native session lifetime
+and phishing-resistant proof in the original effect transaction. Admission
+middleware alone cannot fence a later committed write. Existing seams are
+`pinCurrentBoardActor` and `assertHumanAuthentication`; tenant permissions, owner
+approval, operation receipts and explicit scheduler/service lanes remain separate
+requirements.
+
+Concrete owners: instance-settings routes/services; execution-sandbox service
+mutation transactions; SaaS support, runtime catalog/fleet/control and billing
+cost services; enterprise qualification; agent-package publication/revocation;
+and feedback triage/retention/internal reads. The retained Luna audit identifies
+that support/feedback already repeat domain/user checks, but still lack a native
+session/MFA pin. Queue/provider effects must keep their existing operation and
+unknown-outcome owners while carrying genuine current authority; a stored
+operator ID or source snapshot is not a fresh permission grant.

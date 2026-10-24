@@ -1,0 +1,33 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[04:39:41] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[04:39:55] [31mERROR[39m: [36mNative authentication request failed[39m [90m{"component":"native-authentication"}[39m
+[04:40:16] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[04:40:16] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[04:40:17] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[04:40:20] [33mWARN[39m: [36mNative authentication provider event[39m [90m{"component":"native-authentication"}[39m
+[04:41:07] [33mWARN[39m: [36mFailed to resolve auth session from request headers[39m [90m{"method":"GET","url":"/actor"}[39m
+[04:41:10] [32mINFO[39m: [36mworkspace login handoff accepted[39m [90m{"nonce":"-5JSQG6otCvlYs3aBzyrPXAI","userId":"cloned-user-1","executionWorkspaceId":"ews-endpoint-1","instanceId":"pap-17572-endpoint-1122334455","issuerInstanceId":"primary"}[39m
+[04:41:10] [32mINFO[39m: [36mworkspace login handoff accepted[39m [90m{"nonce":"R5K4UUiENQcEaoaKW2610O33","userId":"cloned-user-1","executionWorkspaceId":"ews-endpoint-1","instanceId":"pap-17572-endpoint-1122334455","issuerInstanceId":"primary"}[39m
+[04:41:10] [33mWARN[39m: [36mworkspace login handoff rejected[39m [90m{"reason":"replayed","nonce":"R5K4UUiENQcEaoaKW2610O33","executionWorkspaceId":"ews-endpoint-1","instanceId":"pap-17572-endpoint-1122334455","keyFingerprint":"b0acaf07e557","needsRepair":false}[39m
+[04:41:10] [33mWARN[39m: [36mworkspace login handoff rejected[39m [90m{"reason":"expired","nonce":null,"executionWorkspaceId":"ews-endpoint-1","instanceId":"pap-17572-endpoint-1122334455","keyFingerprint":"b0acaf07e557","needsRepair":false}[39m
+[04:41:10] [33mWARN[39m: [36mworkspace login handoff rejected[39m [90m{"reason":"missing_membership","nonce":"BeWUSeLPRU3KHLKywcs8lyKK","executionWorkspaceId":"ews-endpoint-1","instanceId":"pap-17572-endpoint-1122334455","keyFingerprint":"b0acaf07e557","needsRepair":true}[39m
+[04:41:10] [33mWARN[39m: [36mworkspace login handoff rejected[39m [90m{"reason":"unknown_user","nonce":"lEq15nAkAwEctwiewhI6mQys","executionWorkspaceId":"ews-endpoint-1","instanceId":"pap-17572-endpoint-1122334455","keyFingerprint":"b0acaf07e557","needsRepair":true}[39m
+[04:41:10] [33mWARN[39m: [36mworkspace login handoff rejected[39m [90m{"reason":"origin_mismatch","nonce":null,"executionWorkspaceId":"ews-endpoint-1","instanceId":"pap-17572-endpoint-1122334455","keyFingerprint":"b0acaf07e557","needsRepair":false}[39m
+[04:41:10] [33mWARN[39m: [36mworkspace login handoff rejected[39m [90m{"reason":"workspace_mismatch","nonce":null,"executionWorkspaceId":"ews-endpoint-1","instanceId":"pap-17572-endpoint-1122334455","keyFingerprint":"b0acaf07e557","needsRepair":false}[39m
+[04:41:10] [33mWARN[39m: [36mworkspace login handoff rejected[39m [90m{"reason":"instance_mismatch","nonce":null,"executionWorkspaceId":"ews-endpoint-1","instanceId":"pap-17572-endpoint-1122334455","keyFingerprint":"b0acaf07e557","needsRepair":false}[39m
+[04:41:10] [33mWARN[39m: [36mworkspace login handoff rejected[39m [90m{"reason":"company_mismatch","nonce":null,"executionWorkspaceId":"ews-endpoint-1","instanceId":"pap-17572-endpoint-1122334455","keyFingerprint":"b0acaf07e557","needsRepair":false}[39m
+[04:41:10] [33mWARN[39m: [36mworkspace login handoff rejected[39m [90m{"reason":"malformed","nonce":null,"executionWorkspaceId":"ews-endpoint-1","instanceId":"pap-17572-endpoint-1122334455","keyFingerprint":"b0acaf07e557","needsRepair":false}[39m
+[04:41:10] [33mWARN[39m: [36mworkspace login handoff rejected[39m [90m{"reason":"bad_signature","nonce":null,"executionWorkspaceId":"ews-endpoint-1","instanceId":"pap-17572-endpoint-1122334455","keyFingerprint":"b0acaf07e557","needsRepair":false}[39m
+[04:41:10] [33mWARN[39m: [36mworkspace login handoff rejected[39m [90m{"reason":"not_configured","nonce":null,"executionWorkspaceId":"ews-endpoint-1","instanceId":"pap-17572-endpoint-1122334455","keyFingerprint":null,"needsRepair":false}[39m
+[04:41:10] [33mWARN[39m: [36mworkspace login handoff rejected[39m [90m{"reason":"origin_mismatch","nonce":null,"executionWorkspaceId":"ews-endpoint-1","instanceId":"pap-17572-endpoint-1122334455","keyFingerprint":"b0acaf07e557","needsRepair":false}[39m
+
+ Test Files  10 passed (10)
+      Tests  128 passed (128)
+   Start at  04:38:54
+   Duration  147.06s (transform 21.97s, setup 1.14s, import 80.54s, tests 62.35s, environment 1ms)
+

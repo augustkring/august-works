@@ -314,6 +314,7 @@ export async function eraseAccountAccess(
   await tx.execute(sql`delete from ${authRateLimits} where key like ${"support-case:" + sha256(JSON.stringify(userId)) + ":%"}`);
   await tx.execute(sql`delete from ${authRateLimits} where key=${"password-reauth:" + sha256(userId)}`);
   await tx.execute(sql`delete from ${authRateLimits} where key=${"factor-reauth:" + sha256(userId)}`);
+  await tx.execute(sql`delete from ${authRateLimits} where key=${"passkey-auth:" + sha256(userId)}`);
   await tx.execute(sql`delete from "session" where user_id=${userId}`);
   await tx.execute(sql`delete from "account" where user_id=${userId}`);
   await tx.execute(sql`delete from two_factor where user_id=${userId}`);

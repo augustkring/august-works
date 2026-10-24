@@ -761,3 +761,27 @@ Evidence: `doc/operations/aw-v10-evidence/native-authenticator-settings-2026-10-
 This advances CE-03; passkeys/operator bootstrap, enterprise restrictions, other
 sensitive owners, the original source-privacy/portability regressions and full
 V10/PR gates remain open. No PR-ready, release or host/provider claim.
+
+
+### 2026-10-24 — maintained local passkey ceremonies and private error boundaries
+
+Configured-origin local passkeys now use the installed maintained provider,
+actual verified UV callbacks, pre-verification generation/key pins and one-use
+native challenge consumption committed before protected writes. EN/DA account
+controls provide creation, confirmation, rename and removal without paid gates;
+real anonymous passkey sign-in is available only for a configured canonical RP.
+Enterprise-bound local passkey use is withheld pending its qualified policy owner.
+
+The full built browser passes real TOTP/passkey lifecycles, both signed UV=false
+refusals/replays, and actual database failure after verified key insertion but
+before replacement-session creation. The original key/user/session mutation
+rolls back and the consumed nonce remains gone. Native HTTP, direct SDK and
+lower-router errors now omit credential/ceremony payloads; missing session lookup
+knowledge is503, not an anonymous identity. Exact checkpoint:
+`doc/operations/aw-v10-evidence/native-passkeys-2026-10-24/checkpoint.json`.
+
+Next: propagate actual current actor/session proof into every configured-operator
+owner's effect transaction. Enterprise SSO/recovery, other sensitive actions,
+auth security audit completion, physical/deployed qualification, original payload
+source privacy/typed origins/portability regressions and the rest of V10 remain
+open. This is no PR-ready or release-admission claim.

@@ -111,6 +111,18 @@ export function AuthPage() {
     },
   });
 
+  const methods = useQuery({ queryKey: ["native-authentication-methods"], queryFn: ({ signal }) => authApi.authenticationMethods(signal), retry: false, staleTime: 0 });
+  const passkeyMutation = useMutation({
+    mutationFn: () => authApi.authenticatePasskey(),
+    onSuccess: async ({ userId, sessionId }) => {
+      const verified = await authApi.getSession();
+      if (!verified || verified.user.id !== userId || verified.session.id !== sessionId) { setError("authFlow.challengeFailed"); return; }
+      queryClient.setQueryData(queryKeys.auth.session, verified);
+      setPassword(""); await finishSignIn();
+    },
+    onError: () => setError("authFlow.passkeyFailed"),
+  });
+
   const challengeMutation = useMutation({
     mutationFn: async ({ method, code }: { method: "totp" | "backup_code"; code: string }) => {
       const userId = challenge?.userId;
@@ -318,8 +330,8 @@ export function AuthPage() {
             )}
             <Button
               type="submit"
-              disabled={mutation.isPending}
-              aria-disabled={!canSubmit || mutation.isPending}
+              disabled={mutation.isPending || passkeyMutation.isPending || ssoMutation.isPending}
+              aria-disabled={!canSubmit || mutation.isPending || passkeyMutation.isPending || ssoMutation.isPending}
               className={`w-full ${!canSubmit && !mutation.isPending ? "opacity-50" : ""}`}
             >
               {mutation.isPending
@@ -330,6 +342,8 @@ export function AuthPage() {
             </Button>
             </>}
           </form>
+          {!challenge && mode === "sign_in" && methods.data?.passkey && <Button className="w-full mt-3" variant="outline"
+            disabled={mutation.isPending || passkeyMutation.isPending || ssoMutation.isPending} onClick={() => { setError(null); passkeyMutation.mutate(); }}>{t(passkeyMutation.isPending ? "authFlow.working" : "authFlow.signInPasskey")}</Button>}
           {!challenge && mode === "sign_in" && saas.data?.enterpriseSso ? <Button className="w-full mt-3" variant="outline" disabled={!email.trim() || ssoMutation.isPending || mutation.isPending} onClick={() => ssoMutation.mutate()}>{t("authFlow.companySso")}</Button> : null}
 
           {!challenge && (!saas.data || saas.data.signup || mode === "sign_up") && <div className="mt-5 text-sm text-muted-foreground">

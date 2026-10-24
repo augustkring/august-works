@@ -1,4 +1,6 @@
 export const HTTP_LOG_SENSITIVE_HEADERS = [
+  "x-blentera-expected-user",
+  "x-blentera-expected-session",
   "x-paperclip-cloud-tenant-token",
   "x-paperclip-cloud-session-id",
   "x-paperclip-cloud-runtime-identity",

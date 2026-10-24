@@ -58,7 +58,8 @@ export function isPrivateExperienceHttpRequest(method: string | undefined, url: 
   if (!method || !url) return false;
   if (isPrivateTaskDraftUrl(url)) return true;
   const pathname = normalizePath(url).replace(/^https?:\/\/[^/]*/i, "");
-  return /^\/api\/approvals(?:\/|$)/i.test(pathname)
+  return /^\/api\/auth(?:\/|$)/i.test(pathname)
+    || /^\/api\/approvals(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]*\/projects(?:\/|$)/i.test(pathname)
     || /^\/api\/agent-packages(?:\/|$)/i.test(pathname)
     || /^\/api\/companies\/[^/]*\/(?:agent-packages|agent-package-options|agent-package-installations|agent-package-evaluations|agent-package-update-proposals)(?:\/|$)/i.test(pathname)
@@ -95,6 +96,7 @@ export function privateExperienceLogUrl(url: string): string {
   if (/\/notifications\/channel-preferences(?:\/|$)/i.test(normalizePath(url))) return "/api/companies/:companyId/notifications/channel-preferences/:operation";
   if (/\/notifications\/preference-proposals(?:\/|$)/i.test(normalizePath(url))) return "/api/companies/:companyId/notifications/preference-proposals/:operation";
   const pathname = normalizePath(url).replace(/^https?:\/\/[^/]*/i, "");
+  if (/^\/api\/auth(?:\/|$)/i.test(pathname)) return "/api/auth/:operation";
   if (/^\/api\/approvals(?:\/|$)/i.test(pathname)) return "/api/approvals/:approvalId/:operation";
   if (/^\/api\/companies\/[^/]*\/projects(?:\/|$)/i.test(pathname)) return "/api/companies/:companyId/projects/:operation";
   if (/^\/api\/projects(?:\/|$)/i.test(pathname)) return "/api/projects/:projectId/:operation";

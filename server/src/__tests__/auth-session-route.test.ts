@@ -73,6 +73,20 @@ describe("actorMiddleware authenticated session profile", () => {
     });
   });
 
+  it("keeps a failed session lookup unavailable instead of running an anonymous request", async () => {
+    const reached = vi.fn();
+    const app = express();
+    app.use(actorMiddleware(createDb(), { deploymentMode: "authenticated", resolveSession: async () => {
+      throw new Error("Provider SQL contained PRIVATE-SESSION-CANARY");
+    } }));
+    app.get("/actor", (_req, res) => { reached(); res.json({ anonymous: true }); });
+    const response = await request(app).get("/actor?ticket=PRIVATE-REQUEST-CANARY");
+    expect(response.status).toBe(503);
+    expect(response.body).toEqual({ error: "Authentication is temporarily unavailable", code: "AUTHENTICATION_UNAVAILABLE" });
+    expect(reached).not.toHaveBeenCalled();
+    expect(JSON.stringify(response.body)).not.toContain("CANARY");
+  });
+
   it("trusts Cloud tenant identity headers and seeds board access", async () => {
     process.env.PAPERCLIP_CLOUD_TENANT_SERVER_TOKEN = "tenant-token";
     const inserts: Array<{ values: Record<string, unknown> }> = [];

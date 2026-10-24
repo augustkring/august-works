@@ -1,3 +1,4 @@
+import { inspect } from "node:util";
 import { createHash, createHmac, randomUUID } from "node:crypto";
 import express from "express";
 import request from "supertest";
@@ -10,11 +11,12 @@ import { authAccounts, authRateLimits, authSessions, authTwoFactors, authUsers, 
   createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS } from "@paperclipai/db";
 import { createBetterAuthHandler, createBetterAuthInstance } from "../auth/better-auth.js";
 import { accountDeletionService } from "../services/saas/account-deletion.js";
+import { logger } from "../middleware/logger.js";
 import { assertHumanAuthentication } from "../auth/authenticator-assurance.js";
 import type { Config } from "../config.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 
-const ORIGIN = "http://127.0.0.1:41999", PASSWORD = "A native factor fixture password 2026";
+const ORIGIN = "http://localhost:41999", PASSWORD = "A native factor fixture password 2026";
 function cookies(previous: string, response: request.Response) {
   const jar = new Map(previous.split(";").filter(Boolean).map(part => {
     const index = part.indexOf("="); return [part.slice(0, index).trim(), part.slice(index + 1)];
@@ -305,7 +307,7 @@ describe("maintained native TOTP and recovery lifecycle", () => {
       .set("X-Blentera-Expected-User", first.userId);
     expect(info.status).toBe(200);
     expect(info.headers["cache-control"]).toContain("no-store");
-    expect(info.body).toEqual({ userId: first.userId, hasPassword: true, twoFactorEnabled: false, phishingResistantRequired: false });
+    expect(info.body).toEqual({ userId: first.userId, hasPassword: true, twoFactorEnabled: false, phishingResistantRequired: false, passkeysAvailable: true });
     expect((await request(app).get("/api/auth/security").set("Cookie", first.cookie)
       .set("X-Blentera-Expected-User", other.userId)).status).toBe(409);
     expect((await post("reauthenticate/password", first.cookie).set("X-Blentera-Expected-User", other.userId)
@@ -355,6 +357,78 @@ describe("maintained native TOTP and recovery lifecycle", () => {
     const verified = await enrolled();
     expect((await post("two-factor/cancel-enrollment", verified.cookie).send({})).status).toBe(401);
     expect((await db.select().from(authTwoFactors).where(eq(authTwoFactors.userId, verified.userId)))[0].verified).toBe(true);
+  }, 60_000);
+
+  it("keeps direct maintained provider error messages and arguments out of SDK logs", async () => {
+    const spy = vi.spyOn(logger, "error").mockImplementation(() => {});
+    try {
+      const context = await (auth as unknown as Auth).$context;
+      context.logger.error("NATIVE-CLIENT-DATA-CANARY", new Error("NATIVE-CHALLENGE-CANARY"));
+      expect(spy).toHaveBeenCalledWith({ component: "native-authentication" }, "Native authentication provider event");
+      expect(inspect(spy.mock.calls, { depth: null })).not.toContain("CANARY");
+    } finally { spy.mockRestore(); }
+  });
+
+  it("binds native registration options to the server-owned account, session and generation", async () => {
+    const first = await signup(), other = await signup();
+    expect((await request(app).get("/api/auth/methods")).body).toEqual({ passkey: true });
+    expect((await request(app).get("/api/auth/passkey/generate-register-options")).status).toBe(401);
+    const [active] = await db.select().from(authSessions).where(eq(authSessions.userId, first.userId));
+    const options = await request(app).get("/api/auth/passkey/generate-register-options")
+      .query({ context: "untrusted-client-context", name: "untrusted-user-name" }).set("Cookie", first.cookie)
+      .set("X-Blentera-Expected-User", first.userId).set("X-Blentera-Expected-Session", active.id);
+    expect(options.status).toBe(200);
+    expect(options.body.rp).toEqual({ name: "Blentera", id: "localhost" });
+    expect(options.body.authenticatorSelection.userVerification).toBe("required");
+    const rows = await db.select().from(authVerifications).where(sql`${authVerifications.value} like ${'%"type":"registration"%'}`);
+    const pending = rows.find(row => JSON.parse(row.value).userData.id === first.userId)!;
+    expect(JSON.parse(pending.value).context).toBe(JSON.stringify({ sessionId: active.id, version: active.authenticatorVersion }));
+    const raw = options.headers["set-cookie"] as unknown as string[];
+    const challengeOnly = { headers: { "set-cookie": raw.filter(value => value.split("=",1)[0].includes("better-auth-passkey")) } } as unknown as request.Response;
+    expect((await post("passkey/verify-registration", cookies(other.cookie, challengeOnly))
+      .set("X-Blentera-Expected-User", other.userId).send({ response: {} })).status).toBe(401);
+    expect(await db.select().from(authVerifications).where(eq(authVerifications.id, pending.id))).toEqual([]);
+    expect((await post("passkey/verify-registration", cookies(first.cookie, options)).send({ response: {} })).status).toBe(401);
+    expect(await db.execute(sql`select id from passkey where user_id=${first.userId}`)).toHaveLength(0);
+  }, 60_000);
+
+  it("commits the maintained challenge consumption before a failed protected database transaction", async () => {
+    const fixture = await signup();
+    const options = await request(app).get("/api/auth/passkey/generate-register-options").set("Cookie", fixture.cookie);
+    expect(options.status).toBe(200);
+    const cookie = cookies(fixture.cookie, options), observer = createDb(database.connectionString);
+    const rows = await db.select().from(authVerifications).where(sql`${authVerifications.value} like ${'%"type":"registration"%'}`);
+    const pending = rows.find(row => JSON.parse(row.value).userData.id===fixture.userId)!;
+    const original = db.transaction.bind(db);
+    let observed = false;
+    const spy = vi.spyOn(db, "transaction").mockImplementation(async (...args) => {
+      const visible = await observer.select().from(authVerifications).where(eq(authVerifications.id, pending.id));
+      if (!visible.length) { observed = true; throw new Error("Protected native transaction unavailable: SQL-TOKEN-CANARY"); }
+      return original(...args);
+    });
+    const consoleError = vi.spyOn(console, "error").mockImplementation(() => {});
+    try {
+      const response = await post("passkey/verify-registration", cookie).send({ response: {} });
+      expect(response.status).toBe(500);
+      expect(observed).toBe(true);
+      expect(inspect(consoleError.mock.calls, { depth: null })).not.toContain("CANARY");
+      expect(JSON.stringify(response.body)).not.toContain("CANARY");
+    } finally { spy.mockRestore(); consoleError.mockRestore(); }
+    expect(await observer.select().from(authVerifications).where(eq(authVerifications.id, pending.id))).toEqual([]);
+    expect((await post("passkey/verify-registration", cookie).send({ response: {} })).status).toBe(401);
+    expect(await db.execute(sql`select id from passkey where user_id=${fixture.userId}`)).toHaveLength(0);
+    expect(await db.select().from(authSessions).where(eq(authSessions.userId, fixture.userId))).toHaveLength(1);
+  }, 60_000);
+
+  it("does not let registration request a new login session or reuse its rejected native challenge", async () => {
+    const fixture = await signup();
+    const options = await request(app).get("/api/auth/passkey/generate-register-options").set("Cookie", fixture.cookie);
+    expect(options.status).toBe(200);
+    const cookie = cookies(fixture.cookie, options);
+    expect((await post("passkey/verify-registration", cookie).send({ response: {}, createSession: true })).status).toBe(401);
+    expect((await post("passkey/verify-registration", cookie).send({ response: {} })).status).toBe(401);
+    expect(await db.execute(sql`select id from passkey where user_id=${fixture.userId}`)).toHaveLength(0);
+    expect(await db.select().from(authSessions).where(eq(authSessions.userId, fixture.userId))).toHaveLength(1);
   }, 60_000);
 
   it("rejects stale first-factor verification before issuing any MFA challenge", async () => {

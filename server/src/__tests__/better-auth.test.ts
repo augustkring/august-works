@@ -2,6 +2,7 @@ import { afterEach, describe, expect, it } from "vitest";
 import type { BetterAuthOptions } from "better-auth";
 import { getCookies } from "better-auth/cookies";
 import {
+  resolveBetterAuthSessionFromHeaders,
   buildBetterAuthAdvancedOptions,
   buildBetterAuthRateLimitOptions,
   deriveAuthCookiePrefix,
@@ -241,4 +242,15 @@ describe("Better Auth cookie scoping", () => {
     expect(trustedOrigins).not.toContain("https://board.example.test:3100");
     expect(trustedOrigins).not.toContain("http://board.example.test:3100");
   });
+});
+
+
+it("does not forward native token/driver details from a failed session resolution", async () => {
+  const error = await resolveBetterAuthSessionFromHeaders({ api: { getSession: async () => {
+    throw new Error("Native SQL token=LOOKUP-TOKEN-CANARY");
+  } } }, new Headers({ cookie: "LOOKUP-COOKIE-CANARY" })).catch(error => error);
+  expect(error).toBeInstanceOf(Error);
+  expect(error.message).toBe("Native authentication session resolution failed");
+  expect(error.stack).not.toContain("CANARY");
+  expect(error.cause).toBeUndefined();
 });

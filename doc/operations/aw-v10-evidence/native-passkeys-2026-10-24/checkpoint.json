@@ -1,0 +1,55 @@
+{
+  "parentCommit": "15f3f47b2f53382fbbbba7b4e0a67e553f6a7457",
+  "sourcePinsFile": "source-pins.json",
+  "checks": {
+    "nativeBackend": {
+      "exit": 0,
+      "suites": 10,
+      "passed": 128
+    },
+    "ui": {
+      "exit": 0,
+      "suites": 5,
+      "passed": 83
+    },
+    "builtApplicationChromium151": {
+      "exit": 0,
+      "passed": 1
+    },
+    "serverCompiler": {
+      "exit": 0
+    },
+    "uiCompilerIncludingTests": {
+      "exit": 0
+    },
+    "privateLogging": {
+      "exit": 0,
+      "passed": 205
+    },
+    "preFixHttpLoggingNegativeControl": {
+      "exit": 1,
+      "failed": 4
+    },
+    "preFixLowerRouterLoggingNegativeControl": {
+      "exit": 1,
+      "failed": 1,
+      "skipped": 16
+    },
+    "tokenGates": {
+      "exit": 0
+    }
+  },
+  "observations": [
+    "Maintained native WebAuthn verification with actual UV enforcement, server-owned registration context, physical user/key/session generation pins and independently committed one-use challenge consumption.",
+    "Real built-app browser uses actual Chromium CTAP2 virtual authenticators, native cookies and isolated PostgreSQL without HTTP route or verifier mocks. Genuine non-UV registration/authentication responses and their replays are refused.",
+    "Actual replacement-session insertion failure after successful verified key writing rolls back key, generation and session changes; the genuine prior session survives and the consumed nonce remains unusable. A fixture-only PostgreSQL sequence proves that write point was reached.",
+    "Actual SDK and HTTP error paths retain static metadata without forwarding raw authentication errors. The lower-router negative control inspects Error messages using Node inspect; JSON.stringify(Error) alone does not qualify a negative control.",
+    "Final UI compilation includes tests. Production UI build is exercised by the browser. Evidence logs exclude earlier staged browser logs containing disposable WebAuthn wire metadata."
+  ],
+  "limits": [
+    "Local-account canonical RP software/emulated-authenticator qualification only. Enterprise-bound users are withheld pending full enterprise recovery and verified first-factor policy integration.",
+    "Configured-operator domain admission/bootstrap, other powerful actions, full V10 privacy/workflow/portability and remaining product work stay open.",
+    "No physical authenticator, external IdP, SaaS email, deployed replicas/restarts, representative Human, host or production qualification.",
+    "Latest complete workspace typecheck/test/build and complete V10 acceptance remain required before PR-ready hand-off. No PR, merge or deployment readiness claim."
+  ]
+}

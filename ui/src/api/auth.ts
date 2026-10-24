@@ -1,6 +1,10 @@
 import {
   authSessionSchema,
   nativeAuthenticationSecuritySchema,
+  nativeAuthenticationMethodsSchema,
+  nativePasskeyListSchema,
+  nativePasskeyRegistrationSchema,
+  nativePasskeyAuthenticationSchema,
   nativeAuthenticationConfirmationSchema,
   nativeRecoveryCodesSchema,
   nativeTotpEnrollmentSchema,
@@ -13,6 +17,8 @@ import {
   type CurrentUserProfile,
   type UpdateCurrentUserProfile,
 } from "@paperclipai/shared";
+import { createAuthClient } from "better-auth/client";
+import { passkeyClient } from "@better-auth/passkey/client";
 import { tenantSessionRecovery } from "@/lib/tenant-session-recovery";
 import { i18n } from "@/i18n";
 
@@ -174,7 +180,51 @@ async function authPatch<T>(path: string, body: Record<string, unknown>, parse: 
   return parse(payload);
 }
 
+function nativePasskeys(expectedUserId?: string, expectedSessionId?: string) {
+  return createAuthClient({ baseURL: window.location.origin, plugins: [passkeyClient()], fetchOptions: {
+    credentials: "include", jsonParser: JSON.parse,
+    onRequest(context) {
+      const url = new URL(context.url);
+      // The SDK repeats this private label in its options GET; the maintained
+      // verification POST already carries it, so keep it out of request URLs.
+      if (url.pathname === "/api/auth/passkey/generate-register-options") {
+        url.searchParams.delete("name"); return { ...context, url };
+      }
+    },
+    headers: {
+      "X-Blentera-Locale": i18n.resolvedLanguage === "da" ? "da" : "en",
+      ...(expectedUserId ? { "X-Blentera-Expected-User": expectedUserId } : {}),
+      ...(expectedSessionId ? { "X-Blentera-Expected-Session": expectedSessionId } : {}),
+    },
+  } });
+}
+function passkeyResult(result: { data: unknown; error: { code?: string; message?: string; status?: number } | null }) {
+  if (result.error) throw new AuthApiError(result.error.message ?? "Passkey confirmation failed", result.error.status ?? 400, null, result.error.code ?? null);
+  return result.data;
+}
+
 export const authApi = {
+  authenticationMethods: async (signal?: AbortSignal) => {
+    const response = await fetch("/api/auth/methods", { cache: "no-store", credentials: "include", signal });
+    if (!response.ok) throw new Error("Sign-in methods could not be loaded");
+    return nativeAuthenticationMethodsSchema.parse(await response.json());
+  },
+  authenticatePasskey: async (expectedUserId?: string, expectedSessionId?: string) =>
+    nativePasskeyAuthenticationSchema.parse(passkeyResult(await nativePasskeys(expectedUserId, expectedSessionId).signIn.passkey())),
+  addPasskey: async (name: string, expectedUserId: string, expectedSessionId: string) =>
+    nativePasskeyRegistrationSchema.parse(passkeyResult(await nativePasskeys(expectedUserId, expectedSessionId).passkey.addPasskey({ name }))),
+  listPasskeys: async (expectedUserId: string, expectedSessionId: string, signal?: AbortSignal) => {
+    const response = await fetch("/api/auth/passkey/list-user-passkeys", { credentials: "include", cache: "no-store", signal,
+      headers: { "X-Blentera-Expected-User": expectedUserId, "X-Blentera-Expected-Session": expectedSessionId } });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) throw extractAuthError(payload, response.status);
+    return nativePasskeyListSchema.parse(payload);
+  },
+  renamePasskey: async (id: string, name: string, expectedUserId: string, expectedSessionId: string) =>
+    authPost("/passkey/update-passkey", { id, name }, expectedUserId, expectedSessionId),
+  deletePasskey: async (id: string, expectedUserId: string, expectedSessionId: string) =>
+    authPost("/passkey/delete-passkey", { id }, expectedUserId, expectedSessionId),
+
   getSession: async (): Promise<AuthSession | null> => {
     const res = await fetch("/api/auth/get-session", {
       credentials: "include",

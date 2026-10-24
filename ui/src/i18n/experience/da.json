@@ -1313,6 +1313,20 @@
       "retention": "Kontrollerer opbevaring",
       "purge": "Sletter organisationsdata",
       "completed": "Afsluttet"
+    },
+    "passkeys": {
+      "heading": "Passkeys",
+      "confirmation": "Bekræft med din adgangskode, autentifikatorkode eller en eksisterende passkey, før du ændrer nøgler. Din enhed beder dig bekræfte en passkey med skærmlås eller sikkerhedsnøgle.",
+      "loading": "Kontrollerer aktuelle passkeys…",
+      "failed": "Passkeys kunne ikke hentes. Genindlæs indstillingerne og prøv igen.",
+      "empty": "Der er ingen passkeys på denne konto.",
+      "confirm": "Bekræft med en passkey",
+      "newName": "Navn til en ny passkey (valgfrit)",
+      "add": "Tilføj en passkey",
+      "removal": "Fjernelse af en passkey logger dine sessioner ud. Behold en erstatning, før du fjerner den sidste nøgle, hvis din konto kræver en.",
+      "name": "Passkey-navn",
+      "rename": "Omdøb passkey",
+      "remove": "Fjern og log ud"
     }
   },
   "hireCatalog": {
@@ -1679,7 +1693,9 @@
     "passwordMinimum": "Brug 15–128 tegn. Mellemrum er tilladt.",
     "passwordTooShort": "Brug mindst 15 tegn. Mellemrum tæller med.",
     "passwordTooLong": "Brug højst 128 tegn.",
-    "passwordTooCommon": "Vælg en anden adgangskode; denne er for almindelig."
+    "passwordTooCommon": "Vælg en anden adgangskode; denne er for almindelig.",
+    "signInPasskey": "Log ind med en passkey",
+    "passkeyFailed": "Login med passkey kunne ikke bekræftes. Prøv igen, eller brug en anden tilgængelig loginmetode."
   },
   "memoryMaintenance": {
     "title": "Hukommelsens vedligeholdelseshistorik",

@@ -219,6 +219,7 @@ export const nativeAuthenticationSecuritySchema = z.object({
   hasPassword: z.boolean(),
   twoFactorEnabled: z.boolean(),
   phishingResistantRequired: z.boolean(),
+  passkeysAvailable: z.boolean().optional(),
 });
 export type NativeAuthenticationSecurity = z.infer<typeof nativeAuthenticationSecuritySchema>;
 export const nativeAuthenticationConfirmationSchema = z.object({ sessionId: z.string().min(1) });
@@ -258,3 +259,11 @@ export const updateCurrentUserPreferencesSchema = z.object({
   });
 export type CurrentUserPreferences = z.infer<typeof currentUserPreferencesSchema>;
 export type UpdateCurrentUserPreferences = z.infer<typeof updateCurrentUserPreferencesSchema>;
+
+
+export const nativeAuthenticationMethodsSchema = z.object({ passkey: z.boolean() });
+export const nativePasskeySchema = z.object({ id: z.string().min(1).max(256), name: z.string().max(120).nullable(), createdAt: z.string().datetime() });
+export const nativePasskeyListSchema = z.array(nativePasskeySchema).max(16);
+export const nativePasskeyRegistrationSchema = nativePasskeySchema.extend({ sessionId: z.string().min(1) });
+export const nativePasskeyAuthenticationSchema = nativeAuthenticationConfirmationSchema.extend({ userId: z.string().min(1) });
+export type NativePasskey = z.infer<typeof nativePasskeySchema>;

@@ -1313,6 +1313,20 @@
       "retention": "Checking retention",
       "purge": "Erasing organization data",
       "completed": "Completed"
+    },
+    "passkeys": {
+      "heading": "Passkeys",
+      "confirmation": "Confirm with your password, authenticator code or an existing passkey before changing keys. Your device will ask you to confirm a passkey with its screen lock or security key.",
+      "loading": "Checking current passkeys…",
+      "failed": "Passkeys could not be loaded. Reload settings and try again.",
+      "empty": "No passkeys are registered for this account.",
+      "confirm": "Confirm with a passkey",
+      "newName": "Name for a new passkey (optional)",
+      "add": "Add a passkey",
+      "removal": "Removing a passkey signs out your sessions. Keep a replacement before removing the last key if your account requires one.",
+      "name": "Passkey name",
+      "rename": "Rename passkey",
+      "remove": "Remove and sign out"
     }
   },
   "hireCatalog": {
@@ -1679,7 +1693,9 @@
     "passwordMinimum": "Use 15–128 characters. Spaces are allowed.",
     "passwordTooShort": "Use at least 15 characters. Spaces count toward the minimum.",
     "passwordTooLong": "Use no more than 128 characters.",
-    "passwordTooCommon": "Choose a different password; this one is too common."
+    "passwordTooCommon": "Choose a different password; this one is too common.",
+    "signInPasskey": "Sign in with a passkey",
+    "passkeyFailed": "Passkey sign-in could not be confirmed. Try again, or use another available sign-in method."
   },
   "memoryMaintenance": {
     "title": "Memory maintenance history",
