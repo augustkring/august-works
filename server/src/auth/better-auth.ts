@@ -1,5 +1,6 @@
 import { LOCAL_PASSWORD_MIN_LENGTH, LOCAL_PASSWORD_MAX_UTF16_LENGTH } from "@paperclipai/shared/local-password-policy";
 import { localPasswordPolicy } from "./local-password-policy.js";
+import { nativeTwoFactorPlugin } from "./native-two-factor.js";
 import { nativeAuthenticationAssurancePlugin } from "./native-authentication-assurance.js";
 import { enterpriseAuthPlugins, ENTERPRISE_DISABLED_AUTH_PATHS } from "./enterprise-auth-plugins.js";
 import { enterpriseIdentityPolicies, enterpriseSubjectBindings, ssoProvider, scimConnectionBinding, scimIdentityTombstone, scimSubject, scimUser, scimProjectionGrant, scimGroup, scimGroupMember, companyMemberships, principalPermissionGrants, activityLog } from "@paperclipai/db";
@@ -353,7 +354,7 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
     ...(enterprisePlugins.length ? { disabledPaths: ENTERPRISE_DISABLED_AUTH_PATHS } : {}),
     plugins: [ ...enterprisePlugins, ...(resolveWorkspaceHandoffIdentity(config) ? [workspaceLoginHandoffPlugin({ db,
       resolveExpectedIdentity: () => resolveWorkspaceHandoffIdentity(config) ?? {key:null,instanceId:null,executionWorkspaceId:null,companyId:null,origin:null},
-    })] : []), nativeAuthenticationAssurancePlugin(db, authSchema) ],
+    })] : []), nativeTwoFactorPlugin(db, authSchema, config.saasPlatform?.operatorUserIds ?? []), nativeAuthenticationAssurancePlugin(db, authSchema) ],
   };
 
   if (!baseUrl) {

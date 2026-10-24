@@ -33,10 +33,11 @@ import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
 } from "./helpers/embedded-postgres.js";
-import { accountDeletionService } from "../services/saas/account-deletion.js";
+import { accountDeletionService as nativeAccountDeletionService } from "../services/saas/account-deletion.js";
 import { saasRoutes } from "../routes/saas.js";
 import { saasCommercialGuard } from "../middleware/saas-commercial-guard.js";
 import { errorHandler } from "../middleware/error-handler.js";
+import type { AuthorizationActor } from "../services/authorization.js";
 import type { SaasPlatform } from "../services/saas/platform.js";
 
 const support = await getEmbeddedPostgresTestSupport();
@@ -58,6 +59,14 @@ const support = await getEmbeddedPostgresTestSupport();
         db.delete(companySecrets).where(eq(companySecrets.id, id)),
       cancelRun: async () => {},
     };
+    const fixtureActors = new Map<string, Extract<AuthorizationActor, { type: "board" }>>();
+    // These fixtures exercise the real domain owner with actual stored native
+    // session IDs. Provider ceremonies are covered in native-two-factor tests.
+    function accountDeletionService(reader: typeof db, callbacks: Parameters<typeof nativeAccountDeletionService>[1]) {
+      const service = nativeAccountDeletionService(reader, callbacks);
+      return { ...service, request: (id: string, raw: unknown, now = new Date(), actor = fixtureActors.get(id)) =>
+        service.request(id, raw, now, actor) };
+    }
     beforeAll(async () => {
       database = await startEmbeddedPostgresTestDatabase(
         "aw-v6-account-delete-",
@@ -89,6 +98,12 @@ const support = await getEmbeddedPostgresTestSupport();
         createdAt: now,
         updatedAt: now,
       });
+      const [principal] = await db.select().from(authUsers).where(eq(authUsers.id, id));
+      const sessionId = randomUUID();
+      await db.insert(authSessions).values({ id: sessionId, userId: id, token: randomUUID(), createdAt: now, updatedAt: now,
+        expiresAt: new Date(now.getTime()+3600_000), authenticationMethod: "password", authenticatedAt: now,
+        authenticatorVersion: principal.authenticatorVersion });
+      fixtureActors.set(id, { type: "board", source: "session", userId: id, sessionId });
     }
     async function organization(
       owners: string[],
@@ -214,6 +229,7 @@ const support = await getEmbeddedPostgresTestSupport();
           source: req.header("x-fixture-local") ? "local_implicit" : "session",
           userId: "http-user",
           companyIds: [],
+          sessionId: fixtureActors.get("http-user")?.sessionId,
         };
         next();
       });
@@ -781,6 +797,12 @@ const support = await getEmbeddedPostgresTestSupport();
       await user(id);
       await db.update(authAccounts).set({ password: await hashPassword(unicodePassword) })
         .where(eq(authAccounts.userId, id));
+      const now = new Date(), sessionId = randomUUID();
+      const [principal] = await db.select().from(authUsers).where(eq(authUsers.id, id));
+      await db.insert(authSessions).values({ id: sessionId, userId: id, token: randomUUID(), createdAt: now, updatedAt: now,
+        expiresAt: new Date(now.getTime()+300_000), authenticationMethod: "password", authenticatedAt: now,
+        authenticatorVersion: principal.authenticatorVersion });
+      fixtureActors.set(id, { type: "board", source: "session", userId: id, sessionId });
       await expect(accountDeletionService(db, effects).request(id, {
         ...input("unicode-password-offboarding-001"), password: unicodePassword,
       })).resolves.toMatchObject({ status: "requested" });
@@ -809,8 +831,19 @@ const support = await getEmbeddedPostgresTestSupport();
         expiresAt: new Date(now.getTime()+300_000), createdAt: now, updatedAt: now }).returning();
       const reauthKey = "password-reauth:" + createHash("sha256").update(id).digest("hex");
       await db.insert(authRateLimits).values({ id: randomUUID(), key: reauthKey, count: 3, lastRequest: 0 });
-      await accountDeletionService(db, effects).request(id, input("native-authenticator-erasure-001"));
+      const factorKey = "factor-reauth:" + createHash("sha256").update(id).digest("hex");
+      await db.insert(authRateLimits).values({ id: randomUUID(), key: factorKey, count: 2, lastRequest: 0 });
+      // Structural native proof only. Actual TOTP/recovery ceremonies are
+      // exercised in native-two-factor.integration.test.ts.
+      const [principal] = await db.select().from(authUsers).where(eq(authUsers.id, id));
+      const proofId = randomUUID();
+      await db.insert(authSessions).values({ id: proofId, userId: id, token: randomUUID(),
+        createdAt: now, updatedAt: now, expiresAt: new Date(now.getTime()+300_000),
+        authenticationMethod: "passkey", authenticatedAt: now, authenticatorVersion: principal.authenticatorVersion });
+      await accountDeletionService(db, effects).request(id, input("native-authenticator-erasure-001"), now,
+        { type: "board", source: "session", userId: id, sessionId: proofId });
       expect(await db.select().from(authVerifications).where(eq(authVerifications.id, challenge.id))).toEqual([]);
+      expect(await db.select().from(authRateLimits).where(eq(authRateLimits.key, factorKey))).toEqual([]);
       expect(await db.select().from(authRateLimits).where(eq(authRateLimits.key, reauthKey))).toEqual([]);
       expect(await db.select().from(authTwoFactors).where(eq(authTwoFactors.userId, id))).toEqual([]);
       expect(await db.select().from(authPasskeys).where(eq(authPasskeys.userId, id))).toEqual([]);

@@ -736,3 +736,8 @@ The existing password reauthentication endpoint now rotates the actual native se
 ### 2026-10-24 — typed native challenge cleanup
 
 Migration 0520 and the original account erasure owner remove the maintained passkey provider's identity-bearing JSON challenges on actual authenticator generation change or user erasure. Owned challenge writes pin a live, non-erased user. Three prior-product regression cases fail; final three complete native suites: 37 pass, migration checks/server compiler: zero. Evidence: `doc/operations/aw-v10-evidence/native-challenge-lifetime-2026-10-24/checkpoint.json`. Structural fixtures qualify storage/lifetime only. Full MFA/passkey ceremonies, operator and enterprise recovery and V10/PR gates remain open.
+
+
+### 2026-10-24 — native TOTP/recovery and sensitive account actions
+
+The maintained native backend now composes TOTP/recovery verification with first-factor generation binding, independent durable attempt reservation, current-factor completion and actual native session rotation. Configuration, password change and irreversible personal exit require current proof; exit also requires an actual same-user session, with prior structural fixtures corrected accordingly. Initial2 native lifecycle cases pass; staged4-suite runs pass42 then44; final server compiler and migration checks return0. Evidence: `doc/operations/aw-v10-evidence/native-two-factor-2026-10-24/checkpoint.json`. Same-code TOTP replay within its accepted window still requires an atomic consumption fence. Settings/enrollment UI, passkeys/operator/enterprise recovery, other sensitive owners and complete V10/PR gates remain open. No release/readiness claim.

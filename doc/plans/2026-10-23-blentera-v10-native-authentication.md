@@ -208,3 +208,39 @@ Three original-product regressions failed before the fix. The three complete
 PostgreSQL/HTTP suites now pass 37 cases; native migration checks and server
 compiler return zero. Exact evidence is retained under
 `native-challenge-lifetime-2026-10-24/checkpoint.json`.
+
+
+### 2026-10-24 — maintained TOTP/recovery backend
+
+The native two-factor plugin is now composed before the existing final password
+assurance hook. Its original verifier, encrypted secrets, account lockout and
+backup-code CAS remain in use. A physical transaction fences the original verified
+password generation before issuing a native challenge; migrations 0521/0522 bind
+its private generation and invalidate unknown historic challenges. Current native
+MFA completion fences the captured factor identity/version and rotates its actual
+session with database-time proof. A durable per-user verification budget commits
+before crypto/completion, including in-session confirmations that the provider's
+sign-in-only lockout does not cover. Wrong attempts cannot roll this budget back.
+
+Configuration requires recent actual proof in the same provider transaction.
+Enrollment remains pending until real TOTP verification. Enabled-secret replacement
+is refused, backup-code rotation preserves the real earlier authentication event,
+and disabling forces a new sign-in. Historic trusted-device cookies and
+session-skipping recovery do not bypass the factor/challenge. Unconfigured OTP
+paths are absent over HTTP. Password changes preserve the actual prior MFA event
+under their own credential change; irreversible account exit requires current
+recent MFA and an actual same-user native session. Sole ownership, billing and
+other original exit blockers remain intact. Account erasure clears factor budgets.
+
+Actual native lifecycle tests first pass 2 cases, then the four complete native
+suites pass 42 cases, and the final four suites pass 44 cases after sensitive-action
+and current-session integration. Final server compiler and migration checks return
+zero. Exact stages and source pins are retained in
+`native-two-factor-2026-10-24/checkpoint.json`.
+
+This checkpoint does not qualify TOTP same-code replay inside its valid window;
+add an atomic consumption fence while retaining the maintained verifier before
+release. Account enrollment/recovery settings UI, full passkey UV and operator
+admission/bootstrap, enterprise recovery, other powerful-action guards and overall
+V10 admission remain open. Two native auth instances in one process are not a
+deployed replica/restart qualification. Server compiler excludes test files.

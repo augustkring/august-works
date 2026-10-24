@@ -1,3 +1,5 @@
+import { assertHumanAuthentication } from "../../auth/authenticator-assurance.js";
+import type { AuthorizationActor } from "../authorization.js";
 import { randomUUID } from "node:crypto";
 import { verifyPassword } from "better-auth/crypto";
 import { and, eq, inArray, lt, sql } from "drizzle-orm";
@@ -28,8 +30,10 @@ export function accountDeletionService(
     removeFeedbackImages?(operationId: string): Promise<unknown>;
   },
 ) {
-  async function request(userId: string, raw: unknown, now = new Date()) {
+  async function request(userId: string, raw: unknown, now = new Date(), actor?: AuthorizationActor) {
     const input = accountDeletionRequestSchema.parse(raw);
+    if (actor?.type !== "board" || actor.source !== "session" || actor.userId !== userId || !actor.sessionId)
+      throw unauthorized("A current account session is required");
     const key = "account-delete:" + sha256(userId),
       budgetNow = sql`floor(extract(epoch from statement_timestamp()) * 1000)::bigint`,
       cutoff = sql`${budgetNow} - 600000`;
@@ -65,6 +69,9 @@ export function accountDeletionService(
         return receipt(existing);
       }
       if (!user?.emailVerified) throw unauthorized("Verified account required");
+      const [activeSession] = await tx.execute<{ id: string }>(sql`select id from "session"
+        where id=${actor.sessionId} and user_id=${userId} and expires_at>clock_timestamp() for share nowait`);
+      if (!activeSession) throw unauthorized("A current account session is required");
       const [credential] = await tx
         .select()
         .from(authAccounts)
@@ -83,6 +90,10 @@ export function accountDeletionService(
         }))
       )
         throw forbidden("Current password confirmation required");
+      if (user.twoFactorEnabled || user.phishingResistantRequired) {
+        if (actor?.type !== "board" || actor.userId !== userId) throw forbidden("Recent factor confirmation required");
+        await assertHumanAuthentication(tx, actor, { requireRecent: true, phishingResistant: false });
+      }
       // This rare, bounded operation must also serialize native membership writers that
       // do not take a company lock. Never remove the last owner using a stale snapshot.
       await tx.execute(
@@ -302,6 +313,7 @@ export async function eraseAccountAccess(
   await tx.execute(sql`delete from ${authRateLimits} where key like ${"customer-feedback:" + sha256(JSON.stringify(userId)) + ":%"}`);
   await tx.execute(sql`delete from ${authRateLimits} where key like ${"support-case:" + sha256(JSON.stringify(userId)) + ":%"}`);
   await tx.execute(sql`delete from ${authRateLimits} where key=${"password-reauth:" + sha256(userId)}`);
+  await tx.execute(sql`delete from ${authRateLimits} where key=${"factor-reauth:" + sha256(userId)}`);
   await tx.execute(sql`delete from "session" where user_id=${userId}`);
   await tx.execute(sql`delete from "account" where user_id=${userId}`);
   await tx.execute(sql`delete from two_factor where user_id=${userId}`);

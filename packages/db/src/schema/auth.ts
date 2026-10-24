@@ -82,10 +82,14 @@ export const authVerifications = pgTable("verification", {
   id: text("id").primaryKey(),
   identifier: text("identifier").notNull(),
   value: text("value").notNull(),
+  // Server-owned generation of the first factor that issued a native challenge.
+  authenticatorVersion: integer("authenticator_version"),
   expiresAt: timestamp("expires_at", { withTimezone: true }).notNull(),
   createdAt: timestamp("created_at", { withTimezone: true }),
   updatedAt: timestamp("updated_at", { withTimezone: true }),
-});
+}, (table) => ({
+  authenticatorVersionCheck: check("verification_authenticator_version_check", sql`${table.authenticatorVersion} is null or ${table.authenticatorVersion} >= 0`),
+}));
 
 
 // Exact provider models. Better Auth owns cryptographic verification and encryption.

@@ -546,7 +546,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
     res
       .status(202)
       .set("Cache-Control", "no-store")
-      .json(await platform.accountDeletion.request(actor.id, req.body));
+      .json(await platform.accountDeletion.request(actor.id, req.body, new Date(), req.actor));
   });
   router.post(
     "/saas/internal/support/:sessionId/runtime-cells/:cellId/operations",
