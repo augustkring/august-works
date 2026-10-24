@@ -1742,7 +1742,7 @@ export function routineService(
     const originId = origin?.id ?? routine.id;
     const pendingIntent = await executor.select({ issue: issues })
       .from(routineRuns)
-      .innerJoin(issues, and(eq(issues.companyId, routineRuns.companyId), eq(issues.id, routineRuns.linkedIssueId), eq(issues.originRunId, routineRuns.id)))
+      .innerJoin(issues, and(eq(issues.companyId, routineRuns.companyId), eq(issues.id, routineRuns.linkedIssueId), sql`lower(${issues.originRunId}) = ${routineRuns.id}::text`))
       .innerJoin(routineRevisions, and(eq(routineRevisions.id, routineRuns.routineRevisionId), eq(routineRevisions.companyId, routineRuns.companyId), eq(routineRevisions.routineId, routineRuns.routineId)))
       .where(and(
         eq(routineRuns.companyId, routine.companyId), eq(routineRuns.routineId, routine.id),
@@ -3853,7 +3853,7 @@ export function routineService(
       const pending = await db.select({ id: routineRuns.id, companyId: routineRuns.companyId })
         .from(routineRuns)
         .innerJoin(issues, and(eq(issues.companyId, routineRuns.companyId), eq(issues.id, routineRuns.linkedIssueId),
-          eq(issues.originRunId, routineRuns.id)))
+          sql`lower(${issues.originRunId}) = ${routineRuns.id}::text`))
         .innerJoin(routines, and(eq(routines.companyId, routineRuns.companyId), eq(routines.id, routineRuns.routineId)))
         .where(and(eq(routineRuns.status, "received"), isNotNull(routineRuns.linkedIssueId)))
         .orderBy(asc(routineRuns.triggeredAt), asc(routineRuns.id)).limit(100);

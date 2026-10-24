@@ -4,6 +4,7 @@ import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   agents,
   authUsers,
+  agentWakeupRequests,
   companies,
   companyMemberships,
   createDb,
@@ -82,6 +83,86 @@ describe("Routine run and revision source identity", () => {
     const [completedRun] = await db.select().from(routineRuns).where(eq(routineRuns.id, run.id));
     expect(completedRun).toMatchObject({ status: "completed", companyId: owner.companyId,
       routineId: routine.id, routineRevisionId: originalRevisionId });
+  }, 90_000);
+
+  it("commits the retained run and linked Task before invoking native assignment wakeup", async () => {
+    const owner = await seedCompany("Routine intent commit visibility");
+    const routine = await createRoutine(owner, "Committed before assignment");
+    const observed: Array<{ run: typeof routineRuns.$inferSelect | undefined; task: typeof issues.$inferSelect | undefined }> = [];
+    const service = routineService(db, { heartbeat: { wakeup: async (_agentId, options) => {
+      const [task] = await db.select().from(issues).where(eq(issues.id, options.payload?.issueId as string));
+      // The wake payload names the Task. Its originRunId identifies the exact
+      // already-committed received RoutineRun.
+      const [ownerRun] = task?.originRunId ? await db.select().from(routineRuns).where(eq(routineRuns.id, task.originRunId)) : [];
+      observed.push({ run: ownerRun, task });
+      return { status: "queued" };
+    } } });
+    const result = await service.runRoutine(routine.id, { source: "api", idempotencyKey: randomUUID() });
+    expect(observed[0]?.run).toMatchObject({ id: result.id, status: "received", linkedIssueId: result.linkedIssueId });
+    expect(observed[0]?.task).toMatchObject({ id: result.linkedIssueId, originKind: "routine_execution", originId: routine.id,
+      originRunId: result.id });
+    expect(result.status).toBe("issue_created");
+  }, 90_000);
+
+  it("retries a failed assignment wake through a fresh service with the same idempotency key", async () => {
+    const owner = await seedCompany("Routine pending assignment retry");
+    const routine = await createRoutine(owner, "Retry pending assignment");
+    const idempotencyKey = randomUUID();
+    let firstWakeCount = 0;
+    const firstService = routineService(db, { heartbeat: { wakeup: async () => {
+      firstWakeCount++;
+      throw new Error("simulated queue response loss before receipt");
+    } } });
+    const first = await firstService.runRoutine(routine.id, { source: "api", idempotencyKey });
+    expect(first).toMatchObject({ status: "received", failureReason: "assignment_queue_pending", linkedIssueId: expect.any(String) });
+    expect(firstWakeCount).toBe(1);
+
+    let retryWakeCount = 0;
+    const retryService = routineService(db, { heartbeat: { wakeup: async () => {
+      retryWakeCount++;
+      return { status: "queued" };
+    } } });
+    const replay = await retryService.runRoutine(routine.id, { source: "api", idempotencyKey });
+    expect(replay).toMatchObject({ id: first.id, linkedIssueId: first.linkedIssueId, status: "issue_created" });
+    expect(retryWakeCount).toBe(1);
+    expect(await db.select({ id: issues.id }).from(issues).where(eq(issues.originRunId, first.id))).toHaveLength(1);
+    const [stored] = await db.select().from(routineRuns).where(eq(routineRuns.id, first.id));
+    expect(stored).toMatchObject({ status: "issue_created", linkedIssueId: first.linkedIssueId });
+  }, 90_000);
+
+  it("recognizes a persisted native queue receipt after a lost response and does not wake twice", async () => {
+    const owner = await seedCompany("Routine accepted assignment receipt");
+    const routine = await createRoutine(owner, "Accepted before response loss");
+    const idempotencyKey = randomUUID();
+    let firstIssueId: string | null = null;
+    let firstWakeCount = 0;
+    const firstService = routineService(db, { heartbeat: { wakeup: async (agentId, options) => {
+      firstWakeCount++;
+      firstIssueId = String(options.payload?.issueId);
+      expect(options.source).toBe("assignment");
+      expect(options.idempotencyKey).toBeTruthy();
+      await db.insert(agentWakeupRequests).values({ companyId: owner.companyId, agentId, source: "assignment",
+        triggerDetail: "system", reason: "issue_assigned", payload: { issueId: firstIssueId, mutation: "create" },
+        idempotencyKey: options.idempotencyKey! });
+      throw new Error("simulated accepted queue request with lost response");
+    } } });
+    const first = await firstService.runRoutine(routine.id, { source: "api", idempotencyKey });
+    expect(first).toMatchObject({ status: "received", failureReason: "assignment_queue_pending", linkedIssueId: expect.any(String) });
+    expect(firstIssueId).toBe(first.linkedIssueId);
+    expect(firstWakeCount).toBe(1);
+
+    const retryService = routineService(db, { heartbeat: { wakeup: async () => {
+      throw new Error("a persisted queue receipt must suppress another wake");
+    } } });
+    const replay = await retryService.runRoutine(routine.id, { source: "api", idempotencyKey });
+    expect(replay).toMatchObject({ id: first.id, linkedIssueId: first.linkedIssueId, status: "issue_created" });
+    const [receipt] = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.idempotencyKey,
+      `routine-assignment:${first.id}`));
+    expect(receipt).toMatchObject({ companyId: owner.companyId, agentId: owner.agentId, source: "assignment",
+      payload: { issueId: first.linkedIssueId } });
+    expect(await db.select({ id: issues.id }).from(issues).where(eq(issues.originRunId, first.id))).toHaveLength(1);
+    const [stored] = await db.select().from(routineRuns).where(eq(routineRuns.id, first.id));
+    expect(stored).toMatchObject({ status: "issue_created", linkedIssueId: first.linkedIssueId });
   }, 90_000);
 
   it("rejects cross-company, wrong-parent, and retargeted run or revision identities", async () => {
