@@ -189,7 +189,7 @@ export interface CompanyPortabilityIssueManifestEntry {
   visibility?: "open" | "private";
   privacyRootIssueId?: string | null;
   privacyParentIssueId?: string | null;
-  privacySources?: Array<{ sourceKind: "issue" | "project" | "run"; sourceId: string }>;
+  privacySources?: Array<{ sourceKind: "issue" | "project" | "run" | "workflow_run" | "routine_run"; sourceId: string }>;
   responsibleUserId?: string | null;
   createdByUserId?: string | null;
   slug: string;

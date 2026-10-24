@@ -1258,3 +1258,7 @@ V10/PR gates remain open. Evidence:
 
 Final selected5 identity/deletion/legacy compatibility cases and server
 compilation pass. The real typed-origin lifecycle baseline remains open.
+
+### 2026-10-24 — Recover after executor replacement
+
+The replacement executor contained the older V5 checkout, without the V10 worktree or its uncommitted typed-origin / Routine assignment changes. Re-fetched `codex/blentera-v10` at `2f221c4f5ccc1ffb1b637016ab0436590ac632fe` from GitHub into a new worktree. All committed V10 work is retained remotely. The final uncommitted slice and its local logs must be reconstructed and rerun; prior 74/74 Routine results describe the lost working tree and do not qualify this reconstructed tree. Small recovery commits are pushed as work proceeds. No merge, deployment, or PR-ready claim.

@@ -215,7 +215,7 @@ export const portabilityIssueManifestEntrySchema = z.object({
   visibility: z.enum(["open", "private"]).optional(),
   privacyRootIssueId: z.string().uuid().nullable().optional(),
   privacyParentIssueId: z.string().uuid().nullable().optional(),
-  privacySources: z.array(z.object({ sourceKind: z.enum(["issue", "project", "run"]), sourceId: z.string().uuid() }).strict()).max(256).optional(),
+  privacySources: z.array(z.object({ sourceKind: z.enum(["issue", "project", "run", "workflow_run", "routine_run"]), sourceId: z.string().uuid() }).strict()).max(256).optional(),
   responsibleUserId: z.string().nullable().optional(),
   createdByUserId: z.string().nullable().optional(),
   slug: z.string().min(1),

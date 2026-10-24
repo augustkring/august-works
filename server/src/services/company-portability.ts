@@ -3619,7 +3619,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       }
     }
     if (!tasks.length && !projects.length) return { tasks: new Map<string, { source: typeof issueRows.$inferSelect;
-      visibility: "open" | "private"; sources: Array<{ sourceKind: "issue" | "project" | "run"; sourceId: string }> }>(),
+      visibility: "open" | "private"; sources: Array<{ sourceKind: "issue" | "project" | "run" | "workflow_run" | "routine_run"; sourceId: string }> }>(),
       projects: new Map<string, { source: typeof projectRows.$inferSelect; visibility: "open" | "private";
         sourceIssueIds: string[]; sourceProjectIds: string[] }>() };
     if (target.mode !== "existing_company") throw unprocessable("Task and project source release across organizations requires an authorized publication operation");
@@ -3639,7 +3639,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       throw notFound("Import source run is unavailable");
     }
     const taskProofs = new Map<string, { source: typeof issueRows.$inferSelect; visibility: "open" | "private";
-      sources: Array<{ sourceKind: "issue" | "project" | "run"; sourceId: string }> }>();
+      sources: Array<{ sourceKind: "issue" | "project" | "run" | "workflow_run" | "routine_run"; sourceId: string }> }>();
     for (const task of tasks) {
       if (task.recurring) throw unprocessable("Copying source content into a recurring task requires retained native routine provenance");
       if (task.sourceCompanyId !== companyId || !task.sourceIssueId || !task.visibility || !Array.isArray(task.privacySources)
@@ -3662,7 +3662,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       const currentSources = await sourceDb.select({ sourceKind: issuePrivacySources.sourceKind, sourceId: issuePrivacySources.sourceId })
         .from(issuePrivacySources).where(and(eq(issuePrivacySources.companyId, companyId), eq(issuePrivacySources.issueId, source.id)));
       const sources = [...task.privacySources, ...currentSources.map(entry => {
-        if (entry.sourceKind !== "issue" && entry.sourceKind !== "project" && entry.sourceKind !== "run") {
+        if (entry.sourceKind !== "issue" && entry.sourceKind !== "project" && entry.sourceKind !== "run" && entry.sourceKind !== "workflow_run" && entry.sourceKind !== "routine_run") {
           throw unprocessable("Task source provenance is invalid");
         }
         return { sourceKind: entry.sourceKind, sourceId: entry.sourceId };
