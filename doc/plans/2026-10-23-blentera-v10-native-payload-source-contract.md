@@ -356,3 +356,29 @@ without changing production permission or response requirements. Failed stages
 are retained. The six typed/private-Memory/temporal cases, complete run receipts
 and broader read-lifetime/V10/PR gates remain open. Evidence:
 `doc/operations/aw-v10-evidence/native-manual-upload-2026-10-24/checkpoint.json`.
+
+### 2026-10-24 — original document tool-result source capture
+
+The actual `read_document` tool now forwards the original getter's exact
+revision/issue/body hash and nullable source snapshot. Per-call state prevents
+concurrent reads mixing sources. Its callback runs after orchestration succeeds
+and before the result returns, and includes a digest of the selected structured
+JSON. The original runnerd epoch binds the callback to its current run/launch;
+current analytical access surrounds owned coordinator/run/launch persistence.
+The bounded append includes the actual capture-time nullable Human. It checks
+the exact returned write and the lease again; a failed/suppressed write prevents
+return of the document. No raw document body or complete receipt is stored.
+
+A parent-production control also exposed three native Task update callers that
+lost their actual run ID. They now pass the original binding so the existing
+canonical mutation guard can resolve the responsible Human. Current membership
+and permissions remain required. Native fixtures were repaired with real users,
+memberships and responsible runs, preserving all negative assertions.
+
+All543 distinct cases across the four relevant suites pass in the recorded final
+stages, as does server compilation. Earlier fixture failures and the genuine
+parent regression are retained. This runtime-only change adds no UI, dependency
+or migration and does not activate run protocol1, complete source receipts or
+private work. The six typed/private-Memory/temporal cases and other read/action
+and lifetime closures remain open. Evidence:
+`doc/operations/aw-v10-evidence/native-document-tool-source-2026-10-24/checkpoint.json`.

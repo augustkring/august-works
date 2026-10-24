@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { eq, and } from "drizzle-orm";
-import { activityLog, agents, companies, createDb, heartbeatRuns, issues, issueComments } from "@paperclipai/db";
+import { activityLog, agents, authUsers, companyMemberships, companies, createDb, heartbeatRuns, issues, issueComments } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { issueService } from "../issues.js";
 import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
@@ -16,8 +16,10 @@ describe("runner task reassignment", () => {
   afterAll(async () => { await temporary?.cleanup(); });
 
   async function fixture(status = "todo") {
-    const companyId = randomUUID(), agentId = randomUUID(), nextId = randomUUID(), issueId = randomUUID(), targetId = randomUUID(), runId = randomUUID();
+    const companyId = randomUUID(), userId = randomUUID(), agentId = randomUUID(), nextId = randomUUID(), issueId = randomUUID(), targetId = randomUUID(), runId = randomUUID();
     await db.insert(companies).values({ id: companyId, name: "Reassignment", issuePrefix: `R${companyId.slice(0, 6)}` });
+    await db.insert(authUsers).values({ id: userId, name: "Reassignment owner", email: `${userId}@test.invalid`, createdAt: new Date(), updatedAt: new Date() });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId, status: "active", membershipRole: "member" });
     await db.insert(agents).values([
       { id: agentId, companyId, name: "Manager", role: "ceo", status: "active", adapterType: "paperclip_runner" },
       { id: nextId, companyId, name: "Engineer", role: "engineer", status: "active", adapterType: "paperclip_runner" },
@@ -26,7 +28,7 @@ describe("runner task reassignment", () => {
       { id: issueId, companyId, title: "Coordinate", status: "in_progress", assigneeAgentId: agentId },
       { id: targetId, companyId, title: "Existing work", status, assigneeAgentId: agentId, description: "Keep the existing plan and context" },
     ]);
-    await db.insert(heartbeatRuns).values({ id: runId, companyId, agentId, status: "running", runtimeMode: "native", nativeIssueId: issueId, invocationSource: "assignment", triggerDetail: "system", contextSnapshot: { issueId } });
+    await db.insert(heartbeatRuns).values({ id: runId, companyId, agentId, responsibleUserId: userId, status: "running", runtimeMode: "native", nativeIssueId: issueId, invocationSource: "assignment", triggerDetail: "system", contextSnapshot: { issueId } });
     await db.update(issues).set({ executionRunId: runId }).where(eq(issues.id, issueId));
     const enqueueWakeup = vi.fn().mockResolvedValue({ id: randomUUID() });
     const stopTaskForReassignment = vi.fn().mockResolvedValue(undefined);
@@ -34,7 +36,7 @@ describe("runner task reassignment", () => {
     const authority = new PaperclipRunnerToolAuthority(db, binding);
     const call = { tool: "reassign_task", callId: "handoff", arguments: { taskId: targetId, assigneeActorId: nextId, expectedAssigneeActorId: agentId, expectedStatusVersion: 0, reason: "Engineer owns implementation; retain the existing plan.", idempotencyKey: "handoff" } };
     const target = async () => (await db.select().from(issues).where(eq(issues.id, targetId)))[0]!;
-    return { companyId, agentId, nextId, issueId, targetId, runId, authority, binding, call, target, enqueueWakeup, stopTaskForReassignment };
+    return { companyId, userId, agentId, nextId, issueId, targetId, runId, authority, binding, call, target, enqueueWakeup, stopTaskForReassignment };
   }
 
   it("moves existing work once, persists context and audit, and dispatches a guarded wake", async () => {
@@ -60,7 +62,7 @@ describe("runner task reassignment", () => {
     const f = await fixture();
     const receipt = await f.authority.execute(f.call);
     const replacement = randomUUID();
-    await db.insert(heartbeatRuns).values({ id: replacement, companyId: f.companyId, agentId: f.agentId, nativeIssueId: f.issueId, runtimeMode: "native", status: "running", invocationSource: "assignment", triggerDetail: "system" });
+    await db.insert(heartbeatRuns).values({ id: replacement, companyId: f.companyId, agentId: f.agentId, responsibleUserId: f.userId, nativeIssueId: f.issueId, runtimeMode: "native", status: "running", invocationSource: "assignment", triggerDetail: "system" });
     await db.update(issues).set({ executionRunId: replacement }).where(eq(issues.id, f.issueId));
     await expect(new PaperclipRunnerToolAuthority(db, { ...f.binding, runId: replacement }).execute(f.call)).resolves.toEqual(receipt);
     expect((await f.target()).statusVersion).toBe(1);
@@ -156,7 +158,7 @@ describe("runner task reassignment", () => {
 
   it("rejects conversations and the caller’s own task", async () => {
     const f = await fixture();
-    await db.update(issues).set({ conversationAgentId: f.agentId, conversationUserId: "test-user", conversationState: "active", status: "in_progress" }).where(eq(issues.id, f.targetId));
+    await db.update(issues).set({ conversationAgentId: f.agentId, conversationUserId: f.userId, conversationState: "active", status: "in_progress" }).where(eq(issues.id, f.targetId));
     await expect(f.authority.execute(f.call)).rejects.toThrow("conversation_locked");
     await expect(f.authority.execute({ ...f.call, arguments: { ...f.call.arguments, taskId: f.issueId } })).rejects.toThrow("current_task");
     expect(f.stopTaskForReassignment).not.toHaveBeenCalled();

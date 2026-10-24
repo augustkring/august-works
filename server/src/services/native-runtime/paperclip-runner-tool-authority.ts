@@ -52,6 +52,7 @@ import { CAPABILITY_SEMANTIC_TOOL_CATALOG, runnerCodexDynamicToolsFit } from "..
 import { agentService } from "../agents.js";
 import { approvalService } from "../approvals.js";
 import { documentService } from "../documents.js";
+import type { DocumentRevisionSourceCapture } from "../documents.js";
 import { issueService } from "../issues.js";
 import { issueThreadInteractionService } from "../issue-thread-interactions.js";
 import { getNativeReviewAssignment, readNativeReviewAssignmentContext, type NativeReviewAssignmentContext } from "./native-review-participant.js";
@@ -140,6 +141,13 @@ type ToolReceipt = {
   operationId: string;
   input: unknown;
   result: unknown;
+};
+
+export type NativeDocumentToolResultSource = {
+  callId: string;
+  tool: "read_document";
+  resultDigest: string;
+  source: DocumentRevisionSourceCapture | null;
 };
 
 function record(value: unknown): Record<string, unknown> {
@@ -257,14 +265,21 @@ export class PaperclipRunnerToolAuthority {
     tool: string;
     callId: string;
     arguments: unknown;
-  }): Promise<unknown> {
+  }, options: { onDocumentRead?: (source: NativeDocumentToolResultSource) => Promise<void> } = {}): Promise<unknown> {
     this.binding.authoritySignal?.throwIfAborted();
-    return withOrchestrationNativeTool(this.db, this.binding, call,
-      () => this.#executeAdmitted(call),
+    let documentSource: DocumentRevisionSourceCapture | null = null;
+    const result = await withOrchestrationNativeTool(this.db, this.binding, call,
+      () => this.#executeAdmitted(call, source => { documentSource = source; }),
       call.tool !== "paperclip_search_assigned_tools" && (this.binding.assignedMcpTools?.has(call.tool) ?? false));
+    if (call.tool === "read_document" && options.onDocumentRead) {
+      await options.onDocumentRead({ callId: call.callId, tool: "read_document",
+        resultDigest: createHash("sha256").update(JSON.stringify(result)).digest("hex"), source: documentSource });
+    }
+    return result;
   }
 
-  async #executeAdmitted(call: { tool: string; callId: string; arguments: unknown }): Promise<unknown> {
+  async #executeAdmitted(call: { tool: string; callId: string; arguments: unknown },
+    onDocumentReadSource?: (source: DocumentRevisionSourceCapture | null) => void): Promise<unknown> {
     if (this.binding.nativeReview) {
       if (call.tool === "resolve_review") return this.#resolveReview(call.arguments);
       if (!NATIVE_REVIEW_READ_TOOLS.has(call.tool)) {
@@ -505,7 +520,9 @@ export class PaperclipRunnerToolAuthority {
       case "list_documents":
         return { documents: await documentService(this.db).listIssueDocuments(this.binding.issueId) };
       case "read_document": {
-        const document = await documentService(this.db).getIssueDocumentByKey(this.binding.issueId, requiredString(input.key));
+        const document = await documentService(this.db).getIssueDocumentByKey(this.binding.issueId, requiredString(input.key), {
+          onSourceCapture: source => { onDocumentReadSource?.(source); },
+        });
         if (!document) throw new Error("paperclip_runner_document_not_found");
         return { document };
       }
@@ -924,6 +941,7 @@ export class PaperclipRunnerToolAuthority {
           const readyChild = await issueService(tx).update(child.id, {
             status: "todo",
             actorAgentId: this.binding.agentId,
+            actorRunId: this.binding.runId,
           }, tx);
           if (readyChild) {
             childStatus = readyChild.status;
@@ -1118,7 +1136,7 @@ export class PaperclipRunnerToolAuthority {
       const updated = changed ? await issueService(tx).update(taskId, {
         companyGuard: this.binding.companyId, assigneeAgentId, assigneeUserId: null,
         status: target.status === "in_progress" ? "todo" : target.status,
-        statusVersion: target.statusVersion + 1, actorAgentId: this.binding.agentId,
+        statusVersion: target.statusVersion + 1, actorAgentId: this.binding.agentId, actorRunId: this.binding.runId,
       }, tx) : target;
       if (!updated) throw new Error("paperclip_runner_task_not_found");
       const receipt = {
@@ -1167,6 +1185,7 @@ export class PaperclipRunnerToolAuthority {
       const updated = await issueService(tx).update(this.binding.issueId, {
         blockedByIssueIds,
         actorAgentId: this.binding.agentId,
+        actorRunId: this.binding.runId,
       }, tx);
       if (!updated) throw new Error("paperclip_runner_task_not_found");
       return {

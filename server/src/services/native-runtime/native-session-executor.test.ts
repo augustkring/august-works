@@ -224,8 +224,8 @@ vi.mock("./paperclip-runner-tool-authority.js", () => ({
       return state.toolAuthorityDefinitions(this.binding);
     }
 
-    async execute(call: unknown) {
-      return state.toolAuthorityExecute(this.binding, call);
+    async execute(call: unknown, options?: { onDocumentRead?: (capture: import("./paperclip-runner-tool-authority.js").NativeDocumentToolResultSource) => Promise<void> }) {
+      return state.toolAuthorityExecute(this.binding, call, options);
     }
   },
 }));
@@ -4629,6 +4629,7 @@ function leaseDb(
   runStatus = "running",
   failAttachmentCaptureWrite = false,
   failModelInputCaptureWrite = false,
+  failDocumentCaptureWrite = false,
 ): Db {
   const coordinator: LeaseCoordinator = {
     runId: boundExecution.binding.runId,
@@ -4645,6 +4646,9 @@ function leaseDb(
     set: (values: Record<string, unknown>) => {
       return {
         where: () => {
+          if (failDocumentCaptureWrite && table === heartbeatRuns && values.runnerProfileJson &&
+              typeof values.runnerProfileJson === "object" && "nativeDocumentToolResultSources" in values.runnerProfileJson)
+            throw new Error("Injected document SQL parameters PRIVATE_DOCUMENT_RESULT");
           if (failModelInputCaptureWrite && table === heartbeatRuns &&
               values.runnerProfileJson && typeof values.runnerProfileJson === "object" &&
               "nativeModelInputDispatchIntents" in values.runnerProfileJson) {
@@ -8092,6 +8096,45 @@ describe("runnerd provider runtime wiring", () => {
     } else {
       await result;
       expect(providerDispatch).toHaveBeenCalledOnce();
+    }
+  });
+
+  it.each([false, true])("records a document tool result before returning it to the backend (write fails: %s)", async failWrite => {
+    const updates: Array<{ table: unknown; values: Record<string, unknown> }> = [];
+    const providerResult = vi.fn();
+    const result = { document: { body: "PRIVATE_DOCUMENT_RESULT" } };
+    const digest = createHash("sha256").update(JSON.stringify(result)).digest("hex");
+    state.toolAuthorityExecute.mockReset().mockImplementation(async (_binding, call, options) => {
+      await options.onDocumentRead({ callId: call.callId, tool: "read_document", resultDigest: digest, source: null });
+      return result;
+    });
+    state.execute.mockReset().mockImplementationOnce(async options => {
+      await options.onSessionAdmission();
+      const backendOptions = state.createBackend.mock.calls.at(-1)![1];
+      const selected = await backendOptions.dynamicToolHandler!({ tool: "read_document", callId: "model-document-read", arguments: { key: "notes" } });
+      const write = updates.findLast(row => row.table === heartbeatRuns && row.values.runnerProfileJson &&
+        typeof row.values.runnerProfileJson === "object" && "nativeDocumentToolResultSources" in row.values.runnerProfileJson);
+      expect(write).toBeDefined();
+      const profile = write!.values.runnerProfileJson as Record<string, unknown>;
+      expect(profile.nativeDocumentToolResultSources).toEqual([expect.objectContaining({ callId: "model-document-read",
+        tool: "read_document", resultDigest: digest, source: null, responsibleUserId: null })]);
+      expect(JSON.stringify(profile)).not.toContain("PRIVATE_DOCUMENT_RESULT");
+      expect(profile).not.toHaveProperty("nativeInputSourceReceipt");
+      providerResult(selected);
+      return { result: { summary: "completed" }, terminal: { runTerminalState: "succeeded" },
+        turnId: "document-input-turn", normalizedSessionId: "document-input-session", providerSessionId: null,
+        driverKind: "test", driverVersion: "1", nativeEventCount: 1, highestContiguousSourceSeq: 1, usage: null };
+    });
+    const executing = executePaperclipNativeSession({
+      db: leaseDb(execution, {}, {}, updates, {}, "running", false, false, failWrite),
+      execution, runnerInstanceId: `document-result-${failWrite}`, useRunnerd: true,
+    });
+    if (failWrite) {
+      await expect(executing).rejects.toThrow("native_document_tool_capture_persistence_failed");
+      expect(providerResult).not.toHaveBeenCalled();
+    } else {
+      await executing;
+      expect(providerResult).toHaveBeenCalledWith(result);
     }
   });
 

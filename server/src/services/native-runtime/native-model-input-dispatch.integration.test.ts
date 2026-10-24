@@ -3,6 +3,9 @@ import { eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   agents,
+  authUsers,
+  authSessions,
+  companyMemberships,
   companies,
   createDb,
   EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
@@ -13,7 +16,9 @@ import {
 } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { PROCESS_START_REQUESTED } from "../native-local-process-stop.js";
-import { recordNativeModelInputDispatchIntent } from "./native-session-executor.js";
+import { recordNativeModelInputDispatchIntent, recordNativeDocumentToolResultIntent } from "./native-session-executor.js";
+import { documentService, type DocumentRevisionSourceCapture } from "../documents.js";
+import { nativeSha256 } from "./canonical.js";
 import { currentNativeControllerIdentity } from "./native-restart-recovery.js";
 
 describe("native model input dispatch intent", () => {
@@ -99,6 +104,107 @@ describe("native model input dispatch intent", () => {
       turnInput,
     };
   }
+
+  function documentArgs(seeded: Awaited<ReturnType<typeof seed>>, source: DocumentRevisionSourceCapture | null = null) {
+    const { turnInput: _turnInput, ...binding } = dispatchArgs(seeded, { message: { role: "user", text: "unused" } });
+    return { ...binding, capture: { callId: "actual-document-read", tool: "read_document" as const,
+      resultDigest: nativeSha256({ document: null }), source } };
+  }
+
+  it("retains the exact document read before later revision edits without inventing source history", async () => {
+    const seeded = await seed();
+    const service = documentService(db), body = "ACTUAL_TOOL_DOCUMENT /private/document/path";
+    const { document } = await service.upsertIssueDocument({ issueId: seeded.issueId, key: "notes", title: "Read version", format: "markdown", body });
+    let source: DocumentRevisionSourceCapture | null = null;
+    const selected = await service.getIssueDocumentByKey(seeded.issueId, "notes", { onSourceCapture: capture => { source = capture; } });
+    expect(source).not.toBeNull();
+    await service.upsertIssueDocument({ issueId: seeded.issueId, key: "notes", title: "Later version", format: "markdown",
+      body: "Never substitute this later document", baseRevisionId: document.latestRevisionId! });
+    const args = documentArgs(seeded, source);
+    args.capture.resultDigest = createHash("sha256").update(JSON.stringify({ document: selected })).digest("hex");
+    await recordNativeDocumentToolResultIntent(args);
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
+    expect(run!.runnerProfileJson).toMatchObject({ retainedProfileField: "preserve-me", nativeDocumentToolResultSources: [{
+      eventSeq: seeded.eventSeq, attempt: seeded.attempt, responsibleUserId,
+      callId: "actual-document-read", tool: "read_document", resultDigest: args.capture.resultDigest,
+      source: { input: { kind: "document_revision", issueId: seeded.issueId, documentId: document.id,
+        revisionId: document.latestRevisionId, contentHash: createHash("sha256").update(body).digest("hex") }, payloadSourceSnapshot: null },
+    }] });
+    expect(JSON.stringify(run!.runnerProfileJson)).not.toContain(body);
+    expect(run!.nativeInputSourceProtocolVersion).toBe(0);
+    expect(run!.runnerProfileJson).not.toHaveProperty("nativeInputSourceReceipt");
+  });
+
+  it("retains an actual direct Human revision snapshot and rejects a substituted owner", async () => {
+    const seeded = await seed(), userId = randomUUID(), sessionId = randomUUID(), now = new Date();
+    await db.insert(authUsers).values({ id: userId, name: "Literal document Human", email: `${userId}@test.invalid`, createdAt: now, updatedAt: now });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId, status: "active", membershipRole: "member" });
+    await db.insert(authSessions).values({ id: sessionId, userId, token: randomUUID(), createdAt: now, updatedAt: now,
+      expiresAt: new Date(now.getTime() + 3600000) });
+    await db.update(heartbeatRuns).set({ responsibleUserId: userId }).where(eq(heartbeatRuns.id, seeded.runId));
+    const service = documentService(db);
+    await service.upsertIssueDocument({ issueId: seeded.issueId, key: "literal", title: "Actual literal document",
+      format: "markdown", body: "Independent literal Human input", createdByUserId: userId,
+      manualInputActor: { type: "board", source: "session", userId, sessionId, companyIds: [companyId] } });
+    let source: DocumentRevisionSourceCapture | null = null;
+    const selected = await service.getIssueDocumentByKey(seeded.issueId, "literal", { onSourceCapture: capture => { source = capture; } });
+    expect(source).toMatchObject({ payloadSourceSnapshot: { version: 1, owner: { kind: "document_revision", companyId } } });
+    const args = documentArgs(seeded, source);
+    args.capture.resultDigest = createHash("sha256").update(JSON.stringify({ document: selected })).digest("hex");
+    await recordNativeDocumentToolResultIntent(args);
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
+    expect(run!.runnerProfileJson!.nativeDocumentToolResultSources).toEqual([expect.objectContaining({ responsibleUserId: userId, source })]);
+    const substituted = structuredClone(args.capture);
+    substituted.source!.payloadSourceSnapshot!.owner.companyId = randomUUID();
+    await expect(recordNativeDocumentToolResultIntent({ ...args, capture: substituted })).rejects.toThrow("native_document_tool_capture_binding_invalid");
+    const [unchanged] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
+    expect(unchanged!.runnerProfileJson).toEqual(run!.runnerProfileJson);
+  });
+
+  it("preserves earlier result facts and explicit unknown source/Human markers", async () => {
+    const prior = { callId: "earlier-read", source: null, responsibleUserId: "earlier-human" };
+    const seeded = await seed({ responsibleUserId: null, runnerProfileJson: { nativeDocumentToolResultSources: [prior] } });
+    await recordNativeDocumentToolResultIntent(documentArgs(seeded));
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
+    expect(run!.runnerProfileJson!.nativeDocumentToolResultSources).toEqual([prior, expect.objectContaining({ source: null, responsibleUserId: null })]);
+  });
+
+  it.each(["launch", "lease", "attempt", "foreign_task"] as const)("refuses document capture with a changed %s binding", async kind => {
+    const seeded = await seed(), args = documentArgs(seeded);
+    if (kind === "launch") args.eventSeq++;
+    else if (kind === "lease") args.leaseOwner = "stale-document-lease";
+    else if (kind === "attempt") args.attempt++;
+    else args.capture.source = { input: { kind: "document_revision", documentId: randomUUID(), revisionId: randomUUID(),
+      issueId: randomUUID(), contentHash: "a".repeat(64) }, payloadSourceSnapshot: null };
+    await expect(recordNativeDocumentToolResultIntent(args)).rejects.toThrow(kind === "launch" || kind === "foreign_task"
+      ? "native_document_tool_capture_binding_invalid" : "native_session_lease_lost");
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
+    expect(run!.runnerProfileJson).toEqual({ retainedProfileField: "preserve-me" });
+  });
+
+  it("refuses exhausted document result history without replacing the retained facts", async () => {
+    const prior = Array.from({ length: 256 }, (_, index) => ({ index }));
+    const seeded = await seed({ runnerProfileJson: { nativeDocumentToolResultSources: prior } });
+    await expect(recordNativeDocumentToolResultIntent(documentArgs(seeded))).rejects.toThrow("native_document_tool_capture_budget_exceeded");
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
+    expect(run!.runnerProfileJson!.nativeDocumentToolResultSources).toEqual(prior);
+  });
+
+  it("refuses a silently suppressed document fact and hides private database diagnostics", async () => {
+    const seeded = await seed(), suffix = seeded.runId.replaceAll("-", ""), name = `suppress_document_${suffix}`;
+    await db.execute(sql`create function public.${sql.identifier(name)}() returns trigger language plpgsql as $function$
+      begin if new.id=${sql.raw(`'${seeded.runId}'::uuid`)} then
+        new.runner_profile_json=new.runner_profile_json-'nativeDocumentToolResultSources'; end if; return new; end $function$`);
+    await db.execute(sql`create trigger ${sql.identifier(name)} before update on heartbeat_runs for each row execute function public.${sql.identifier(name)}()`);
+    try {
+      await expect(recordNativeDocumentToolResultIntent(documentArgs(seeded))).rejects.toThrow("native_document_tool_capture_persistence_failed");
+      const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
+      expect(run!.runnerProfileJson).toEqual({ retainedProfileField: "preserve-me" });
+    } finally {
+      await db.execute(sql`drop trigger if exists ${sql.identifier(name)} on heartbeat_runs`);
+      await db.execute(sql`drop function if exists public.${sql.identifier(name)}()`);
+    }
+  });
 
   it.each([
     { responsibleUserId, continuation: true as const },

@@ -50,7 +50,7 @@ import type {
   AdapterExecutionResult,
   AdapterRuntimeEvent,
 } from "../../adapters/index.js";
-import type { NativeFinalizationResult } from "@paperclipai/shared";
+import { nativePayloadSourceInputSchema, nativePayloadSourceSnapshotSchema, type NativeFinalizationResult } from "@paperclipai/shared";
 import type {
   HarnessRuntimeRequestResolution,
   NativeExecutionInput,
@@ -121,7 +121,7 @@ import {
 import { PaperclipControlPlanePort } from "./paperclip-control-plane-port.js";
 import { appendHeartbeatRunEvent } from "../heartbeat-run-events.js";
 import { nativeSha256 } from "./canonical.js";
-import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
+import { PaperclipRunnerToolAuthority, type NativeDocumentToolResultSource } from "./paperclip-runner-tool-authority.js";
 import {nativeManagementToolsAvailable} from "./management-analytical-tools.js";
 import { createAssignedMcpTools, getAssignedMcpGateway } from "./assigned-mcp-tools.js";
 import { getNativeReviewAssignment, readNativeReviewAssignmentContext } from "./native-review-participant.js";
@@ -1420,7 +1420,8 @@ class SessionToolAuthorityEpoch {
   #authority: PaperclipRunnerToolAuthority;
   #revoked = false;
 
-  constructor(runId: string, authority: PaperclipRunnerToolAuthority, private readonly toolTrace?: NativeToolTrace) {
+  constructor(runId: string, authority: PaperclipRunnerToolAuthority, private readonly toolTrace?: NativeToolTrace,
+    private readonly onDocumentRead?: (source: NativeDocumentToolResultSource) => Promise<void>) {
     this.runId = runId;
     this.#authority = authority;
   }
@@ -1442,9 +1443,10 @@ class SessionToolAuthorityEpoch {
 
   async execute(call: Parameters<PaperclipRunnerToolAuthority["execute"]>[0]) {
     this.#assertCurrent();
-    return this.toolTrace
-      ? await this.toolTrace.execute(call, () => this.#authority.execute(call))
-      : await this.#authority.execute(call);
+    const execute = () => this.#authority.execute(call, { onDocumentRead: this.onDocumentRead });
+    const result = this.toolTrace ? await this.toolTrace.execute(call, execute) : await execute();
+    if (call.tool === "read_document") this.#assertCurrent();
+    return result;
   }
 }
 
@@ -7111,6 +7113,64 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
   });
 }
 
+/** A fact about one document result selected for return, not delivery,
+ * source permission or a complete model-input receipt. */
+export async function recordNativeDocumentToolResultIntent(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
+  agentId: string; eventSeq: number; capture: NativeDocumentToolResultSource;
+}): Promise<void> {
+  try {
+    const capture = input.capture;
+    if (!Number.isSafeInteger(input.eventSeq) || input.eventSeq < 0 || capture.tool !== "read_document" ||
+      !/^[\x21-\x7e]{1,240}$/.test(capture.callId) || !/^[0-9a-f]{64}$/.test(capture.resultDigest))
+      throw new Error("native_document_tool_capture_binding_invalid");
+    const source = capture.source === null ? null : {
+      input: nativePayloadSourceInputSchema.parse(capture.source.input),
+      payloadSourceSnapshot: capture.source.payloadSourceSnapshot === null ? null
+        : nativePayloadSourceSnapshotSchema.parse(capture.source.payloadSourceSnapshot),
+    };
+    if (source && (source.input.kind !== "document_revision" || source.input.issueId !== input.issueId ||
+      source.payloadSourceSnapshot && (source.payloadSourceSnapshot.owner.kind !== "document_revision" ||
+        source.payloadSourceSnapshot.owner.companyId !== input.companyId || source.payloadSourceSnapshot.owner.id !== source.input.revisionId)))
+      throw new Error("native_document_tool_capture_binding_invalid");
+    await input.db.transaction(async tx => {
+      // Same owned coordinator -> run -> launch order as selected turn inputs.
+      await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
+      const [run] = await tx.select().from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, input.companyId),
+        eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId),
+        eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.status, "running"),
+      )).for("update");
+      if (!run) throw new Error("native_document_tool_capture_binding_invalid");
+      const [launch] = await tx.select({ seq: heartbeatRunEvents.seq }).from(heartbeatRunEvents).where(and(
+        eq(heartbeatRunEvents.companyId, input.companyId), eq(heartbeatRunEvents.runId, input.runId),
+        eq(heartbeatRunEvents.agentId, input.agentId), eq(heartbeatRunEvents.seq, input.eventSeq),
+        eq(heartbeatRunEvents.eventType, PROCESS_START_REQUESTED),
+      )).for("share");
+      if (!launch) throw new Error("native_document_tool_capture_binding_invalid");
+      const profile = record(run.runnerProfileJson), previous = profile.nativeDocumentToolResultSources ?? [];
+      if (!Array.isArray(previous) || previous.length >= 256)
+        throw new Error("native_document_tool_capture_budget_exceeded");
+      const captures = [...previous, { eventSeq: launch.seq, attempt: input.attempt,
+        responsibleUserId: run.responsibleUserId ?? null, callId: capture.callId, tool: capture.tool,
+        resultDigest: capture.resultDigest, source }];
+      if (Buffer.byteLength(JSON.stringify(captures)) > 2 * 1024 * 1024)
+        throw new Error("native_document_tool_capture_budget_exceeded");
+      const [stored] = await tx.update(heartbeatRuns).set({
+        runnerProfileJson: { ...profile, nativeDocumentToolResultSources: captures }, updatedAt: new Date(),
+      }).where(eq(heartbeatRuns.id, run.id)).returning({ profile: heartbeatRuns.runnerProfileJson });
+      const retained = record(stored?.profile).nativeDocumentToolResultSources;
+      if (!Array.isArray(retained) || nativeSha256(retained) !== nativeSha256(captures))
+        throw new Error("native_document_tool_capture_persistence_failed");
+      await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "";
+    throw new Error(["native_session_lease_lost", "native_session_lease_ttl_invalid",
+      "native_document_tool_capture_binding_invalid", "native_document_tool_capture_budget_exceeded"].includes(message)
+      ? message : "native_document_tool_capture_persistence_failed");
+  }
+}
+
 function startNativeSessionExecutionLeaseRenewal(input: {
   db: Db;
   runId: string;
@@ -8211,6 +8271,7 @@ async function executePaperclipNativeSessionWithinScope(
     // Staging, warm-session cleanup and the claim may all wait after the
     // initial source admission. Recheck before preparing a provider backend.
     await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, input.execution.binding.runId);
+    let launchEventSeq: number | null = null;
     const runnerdBackend =
       input.useRunnerd && input.backend === undefined
         ? await createRunnerdBackend({
@@ -8223,6 +8284,17 @@ async function executePaperclipNativeSessionWithinScope(
             durableEnvironmentLeaseId: durableRunnerBinding?.environmentLeaseId,
             trace,
             toolTrace,
+            onDocumentRead: async capture => {
+              if (launchEventSeq === null) throw new Error("native_document_tool_capture_binding_invalid");
+              await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
+              await recordNativeDocumentToolResultIntent({ db: input.db, runId,
+                companyId: input.execution.binding.companyId, issueId: input.execution.binding.issueId,
+                agentId: input.execution.binding.agentId, leaseOwner, attempt, controller, eventSeq: launchEventSeq, capture });
+              await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
+              await renewNativeSessionExecutionLease({ db: input.db, runId,
+                companyId: input.execution.binding.companyId, issueId: input.execution.binding.issueId,
+                leaseOwner, attempt, controller });
+            },
           })
         : null;
     const remoteCleanupLease = input.runnerExecutionTarget?.kind === "remote" &&
@@ -8234,7 +8306,6 @@ async function executePaperclipNativeSessionWithinScope(
           )).then(rows => rows[0])
       : null;
     nativeSessionExecuteStartedAtMs = Date.now();
-    let launchEventSeq: number | null = null;
     native = await trace.measure(
       "native.session.execute",
       async () => {
@@ -10519,6 +10590,7 @@ export async function createRunnerdBackend(input: {
   runnerRemoteProviderPackPath?: string | null;
   trace?: NativeRunTrace;
   toolTrace?: NativeToolTrace;
+  onDocumentRead?: (source: NativeDocumentToolResultSource) => Promise<void>;
   onLog?: (stream: "stdout" | "stderr", chunk: string) => Promise<void>;
   stopTaskForReassignment?: (target: { companyId: string; issueId: string; agentId: string; runId: string | null }) => Promise<void>;
   enqueueWakeup?: (
@@ -10670,6 +10742,7 @@ async function createRunnerdBackendWithinSessionClaim(
     input.execution.binding.runId,
     authority,
     input.toolTrace,
+    input.onDocumentRead,
   );
   let dynamicTools: Awaited<
     ReturnType<SessionToolAuthorityEpoch["definitions"]>

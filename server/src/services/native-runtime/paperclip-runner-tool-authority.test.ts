@@ -1,9 +1,11 @@
 import * as cloudIdentity from "../cloud-runtime-identity.js";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import {
   activityLog,
+  authUsers,
+  companyMemberships,
   agents,
   approvals,
   companies,
@@ -18,6 +20,7 @@ import {
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { initializeRunIdentity, reserveSteeredIdentity, reconcileSteeredIdentity } from "../run-identity.js";
 import { documentService } from "../documents.js";
+import type { DocumentRevisionSourceCapture } from "../documents.js";
 import { issueService } from "../issues.js";
 import { issueThreadInteractionService } from "../issue-thread-interactions.js";
 import { PaperclipRunnerToolAuthority } from "./paperclip-runner-tool-authority.js";
@@ -35,6 +38,21 @@ describe("PaperclipRunnerToolAuthority", () => {
   const agentId = "00000000-0000-4000-8000-000000000102";
   const issueId = "00000000-0000-4000-8000-000000000103";
   const runId = "00000000-0000-4000-8000-000000000104";
+  const userId = randomUUID();
+
+  async function seedDocumentReader() {
+    const companyId = randomUUID(), agentId = randomUUID(), issueId = randomUUID(), runId = randomUUID();
+    const issuePrefix = `RDR${companyId.slice(0, 4).toUpperCase()}`;
+    await db.insert(companies).values({ id: companyId, name: "Document source reader", issuePrefix });
+    await db.insert(agents).values({ id: agentId, companyId, name: "Document source reader", adapterType: "paperclip_runner", status: "active" });
+    await db.insert(issues).values({ id: issueId, companyId, issueNumber: 1, identifier: `${issuePrefix}-1`,
+      title: "Read document source", status: "in_progress", workMode: "standard", assigneeAgentId: agentId });
+    await db.insert(heartbeatRuns).values({ id: runId, companyId, agentId, status: "running", runtimeMode: "native",
+      nativeIssueId: issueId, invocationSource: "assignment", triggerDetail: "system", contextSnapshot: { issueId } });
+    await db.update(issues).set({ executionRunId: runId }).where(eq(issues.id, issueId));
+    return { companyId, agentId, issueId, runId,
+      authority: new PaperclipRunnerToolAuthority(db, { companyId, agentId, issueId, runId }) };
+  }
 
   beforeEach(() => {
     vi.stubEnv("PAPERCLIP_RUNNER_API_TOOLS_ENABLED", undefined);
@@ -53,6 +71,10 @@ describe("PaperclipRunnerToolAuthority", () => {
       issuePrefix: "RNT",
       issueCounter: 1,
     });
+    await db.insert(authUsers).values({ id: userId, name: "Actual tool Human", email: `${userId}@test.invalid`,
+      createdAt: new Date(), updatedAt: new Date() });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
+      membershipRole: "admin", status: "active" });
     await db.insert(agents).values({
       id: agentId,
       companyId,
@@ -76,6 +98,7 @@ describe("PaperclipRunnerToolAuthority", () => {
       id: runId,
       companyId,
       agentId,
+      responsibleUserId: userId,
       status: "running",
       runtimeMode: "native",
       nativeIssueId: issueId,
@@ -200,6 +223,69 @@ describe("PaperclipRunnerToolAuthority", () => {
         arguments: {},
       }),
     ).rejects.toThrow("paperclip_runner_tool_not_advertised");
+  });
+
+  it("captures the exact read_document revision and digest of the returned result", async () => {
+    const fixture = await seedDocumentReader();
+    const key = `source-${randomUUID()}`;
+    const body = "Exact document bytes delivered by read_document.";
+    const created = await documentService(db).upsertIssueDocument({
+      issueId: fixture.issueId, key, title: "Read source", format: "markdown", body,
+    });
+    const captures: Array<{
+      callId: string;
+      tool: "read_document";
+      resultDigest: string;
+      source: DocumentRevisionSourceCapture | null;
+    }> = [];
+    const result = await fixture.authority.execute({ tool: "read_document", callId: "read-exact-source", arguments: { key } }, {
+      onDocumentRead: async capture => { captures.push(capture); },
+    }) as { document: { id: string; latestRevisionId: string; body: string } };
+    expect(result.document).toMatchObject({ id: created.document.id, latestRevisionId: created.document.latestRevisionId, body });
+    expect(captures).toHaveLength(1);
+    expect(captures[0]).toMatchObject({ callId: "read-exact-source", tool: "read_document",
+      resultDigest: createHash("sha256").update(JSON.stringify(result)).digest("hex"),
+      source: { input: { kind: "document_revision", documentId: created.document.id,
+        revisionId: created.document.latestRevisionId, issueId: fixture.issueId,
+        contentHash: createHash("sha256").update(body, "utf8").digest("hex") }, payloadSourceSnapshot: null } });
+    await fixture.authority.execute({ tool: "get_task_context", callId: "non-document-read", arguments: {} }, {
+      onDocumentRead: async capture => { captures.push(capture); },
+    });
+    expect(captures).toHaveLength(1);
+  });
+
+  it("keeps concurrent read_document source captures local to their calls", async () => {
+    const fixture = await seedDocumentReader();
+    const docs = await Promise.all(["first", "second"].map(async label => {
+      const key = `${label}-${randomUUID()}`;
+      const body = `Actual ${label} document body.`;
+      const created = await documentService(db).upsertIssueDocument({ issueId: fixture.issueId, key, title: label, format: "markdown", body });
+      return { label, key, body, documentId: created.document.id, revisionId: created.document.latestRevisionId };
+    }));
+    const captures = new Map<string, DocumentRevisionSourceCapture | null>();
+    const results = await Promise.all(docs.map(({ label, key }) => fixture.authority.execute({
+      tool: "read_document", callId: `read-${label}`, arguments: { key },
+    }, { onDocumentRead: async capture => {
+      await new Promise(resolve => setTimeout(resolve, label === "first" ? 10 : 0));
+      captures.set(capture.callId, capture.source);
+    } }) as Promise<{ document: { body: string } }>));
+    for (let i = 0; i < docs.length; i += 1) {
+      const doc = docs[i]!;
+      expect(results[i]!.document.body).toBe(doc.body);
+      expect(captures.get(`read-${doc.label}`)).toMatchObject({ input: {
+        kind: "document_revision", documentId: doc.documentId, revisionId: doc.revisionId, issueId: fixture.issueId,
+        contentHash: createHash("sha256").update(doc.body, "utf8").digest("hex"),
+      }, payloadSourceSnapshot: null });
+    }
+  });
+
+  it("withholds the read_document result when its source capture callback fails", async () => {
+    const fixture = await seedDocumentReader();
+    const key = `callback-failure-${randomUUID()}`;
+    await documentService(db).upsertIssueDocument({ issueId: fixture.issueId, key, title: "Callback failure", format: "markdown", body: "Do not deliver." });
+    await expect(fixture.authority.execute({ tool: "read_document", callId: "read-callback-failure", arguments: { key } }, {
+      onDocumentRead: async () => { throw new Error("capture persistence rejected"); },
+    })).rejects.toThrow("capture persistence rejected");
   });
 
   it("returns public task URLs from the current claimed origin in context and search results", async () => {
@@ -1083,6 +1169,7 @@ describe("PaperclipRunnerToolAuthority", () => {
     await issueService(db).update(prerequisiteId, {
       status: "done",
       actorAgentId: agentId,
+      actorRunId: runId,
     });
     await expect(
       authority.execute({
@@ -1110,6 +1197,7 @@ describe("PaperclipRunnerToolAuthority", () => {
       id: nextRunId,
       companyId,
       agentId,
+      responsibleUserId: userId,
       status: "running",
       runtimeMode: "native",
       nativeIssueId: issueId,

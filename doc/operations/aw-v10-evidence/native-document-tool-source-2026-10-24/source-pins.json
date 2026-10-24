@@ -1,0 +1,14 @@
+{
+  "server/src/services/native-runtime/paperclip-runner-tool-authority.ts": "4695af3b299897133d400025dd37527e7b4bd88f04e7946efcab82072e54c9e3",
+  "server/src/services/native-runtime/paperclip-runner-tool-authority.test.ts": "aa6d21feddc6e5ded3d614f21d8771b205b22d934f64e8a2db8814b6baceaa28",
+  "server/src/services/native-runtime/native-session-executor.ts": "67e56664e70afb719a618008703f4e825967cf62a2279015ff450d4814c68c88",
+  "server/src/services/native-runtime/native-session-executor.test.ts": "dc62cd7db13a25d605d20bc43c67ec456cb640632464516ee0ca5a20c5e410cc",
+  "server/src/services/native-runtime/native-model-input-dispatch.integration.test.ts": "5b33cd0d7ccb46c8b65953c9b2da523463fa2fb234b9e3eb2cc50c5612a396d1",
+  "server/src/services/native-runtime/task-reassignment.test.ts": "11af50062300236a6f8a787a59e53897f42f9c3b1e2ae1adac1c2ad074ed3e25",
+  "server/src/services/documents.ts": "30afda5f377efdc32b3dc296faf2c6f06609f8a0d27f50a64faff1326fb99c19",
+  "server/src/services/orchestration/native-tool-boundary.ts": "5de08bc964a284dd801d5c51e3fc6f2359b5c1fdaf1d83b6dd3f7d1e28d09f29",
+  "server/src/services/memory/memory-privacy.ts": "f342b89a3ac9db4898aba86fa07414d6f02809797d0685b04676632366ef7c7a",
+  "packages/shared/src/validators/native-payload-source-snapshot.ts": "04d4145dd77c6e9d788d8f6e5b067dafe67dfa095632a944218f558d54b8b38c",
+  "packages/db/src/migrations/0511_native_run_input_source_binding.sql": "0159ed3cab84b8393e4340b437b5adca393b1372006c796207fec71e8a5342b0",
+  "pnpm-lock.yaml": "8a36edd8ee2893e7b29b4f99d4c590611aac1c6c133db45169dd8bf89fc737d9"
+}
