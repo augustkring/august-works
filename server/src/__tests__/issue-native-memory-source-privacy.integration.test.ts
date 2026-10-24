@@ -114,5 +114,8 @@ describe("Native Task derivatives retain their producer's selected private Memor
       await expect(assertAnalyticalContextPayloadAccess(db, companyId, bob, { issueId: child.id }))
         .rejects.toMatchObject({ status: 403 });
     }
+    await memory.forget(companyId, source.record.id, producer);
+    expect(await canActorReadIssuePrivacy(db, aliceReader, child)).toBe(false);
+    expect(await canActorReadIssuePrivacy(db, aliceReader, { companyId, id: sourceTaskId })).toBe(true);
   });
 });
