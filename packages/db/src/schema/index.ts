@@ -1,3 +1,4 @@
+export { customerOperations } from "./customer_operations.js";
 export { companies } from "./companies.js";
 export { agentConfigurationRuntimeCandidates, agentRuntimeCandidateConformanceRequests } from "./agent_configuration_runtime_candidates.js";
 export { decisionContexts, decisionContextVersions, decisionContextPreparations, decisionContextBindings,
