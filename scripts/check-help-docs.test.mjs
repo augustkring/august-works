@@ -32,6 +32,7 @@ locale: en
 last_verified_at: 2026-10-24
 review_trigger: Relevant customer behavior changes
 security_or_privacy_sensitive: false
+linked_source_files: []
 ---
 
 ${body}

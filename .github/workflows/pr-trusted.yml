@@ -338,12 +338,16 @@ jobs:
     needs: [gate]
     runs-on: ${{ needs.gate.outputs.runner }}
     timeout-minutes: 5
+    permissions:
+      contents: read
+      pull-requests: read
 
     steps:
       - name: Checkout repository
         uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7
         with:
           persist-credentials: false
+          fetch-depth: 0
 
       - name: Setup Node.js
         uses: actions/setup-node@820762786026740c76f36085b0efc47a31fe5020 # v7
@@ -362,6 +366,21 @@ jobs:
 
       - name: Validate Help Center articles
         run: pnpm run check:help-docs
+
+      - name: Check linked Help changes and write release evidence
+        env:
+          BASE_SHA: ${{ github.event.pull_request.base.sha }}
+          HEAD_SHA: ${{ github.event.pull_request.head.sha }}
+          EVIDENCE_FILE: ${{ runner.temp }}/help-change-review-evidence.json
+        run: node ./scripts/check-help-change-review.mjs --base "$BASE_SHA" --head "$HEAD_SHA" --evidence-out "$EVIDENCE_FILE"
+
+      - name: Retain Help change review evidence
+        if: always()
+        uses: actions/upload-artifact@043fb46d1a93c77aae656e7c1c64a875d1fc6a0a # v7
+        with:
+          name: help-change-review-evidence
+          path: ${{ runner.temp }}/help-change-review-evidence.json
+          if-no-files-found: ignore
 
   typecheck_release_registry:
     name: Typecheck + Release Registry
