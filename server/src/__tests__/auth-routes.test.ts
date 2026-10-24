@@ -86,6 +86,7 @@ describe.sequential("auth routes", () => {
       {
         type: "board",
         userId: "user-1",
+        sessionId: "native-session-1",
         source: "session",
       },
       baseUser,
@@ -96,7 +97,7 @@ describe.sequential("auth routes", () => {
     expect(res.status).toBe(200);
     expect(res.body).toEqual({
       session: {
-        id: "paperclip:session:user-1",
+        id: "native-session-1",
         userId: "user-1",
         localImplicit: false,
       },
@@ -106,8 +107,13 @@ describe.sequential("auth routes", () => {
     });
   });
 
+  it("refuses a native actor without its actual session identity", async () => {
+    const app = createApp({ type: "board", userId: "user-1", source: "session" }, baseUser);
+    expect((await request(app).get("/api/auth/get-session")).status).toBe(401);
+  });
+
   it.each(["local_implicit", "session"] as const)("reports actual %s provenance even when the user is named local-board", async source => {
-    const app = createApp({ type: "board", userId: "local-board", source }, { ...baseUser, id: "local-board" });
+    const app = createApp({ type: "board", userId: "local-board", sessionId: "native-session-1", source }, { ...baseUser, id: "local-board" });
     const res = await request(app).get("/api/auth/get-session");
     expect(res.status).toBe(200);
     expect(res.body.session.localImplicit).toBe(source === "local_implicit");
@@ -120,6 +126,7 @@ describe.sequential("auth routes", () => {
       {
         type: "board",
         userId: "user-1",
+        sessionId: "native-session-1",
         source: "session",
       },
       baseUser,
@@ -137,6 +144,7 @@ describe.sequential("auth routes", () => {
       {
         type: "board",
         userId: "user-1",
+        sessionId: "native-session-1",
         source: "session",
       },
       baseUser,
@@ -156,6 +164,7 @@ describe.sequential("auth routes", () => {
       {
         type: "board",
         userId: "user-1",
+        sessionId: "native-session-1",
         source: "session",
       },
       baseUser,
@@ -175,6 +184,7 @@ describe.sequential("auth routes", () => {
       {
         type: "board",
         userId: "user-1",
+        sessionId: "native-session-1",
         source: "session",
       },
       baseUser,
@@ -194,6 +204,7 @@ describe.sequential("auth routes", () => {
       {
         type: "board",
         userId: "user-1",
+        sessionId: "native-session-1",
         source: "session",
       },
       baseUser,
@@ -226,7 +237,7 @@ describe.sequential("auth routes", () => {
     "sends the configured Sentry environment %s to board actors",
     async (environment) => {
       vi.stubEnv("SENTRY_ENVIRONMENT", environment);
-      const app = createApp({ type: "board", userId: "user-1", source: "session" }, baseUser);
+      const app = createApp({ type: "board", userId: "user-1", sessionId: "native-session-1", source: "session" }, baseUser);
 
       const res = await request(app).get("/api/auth/get-session");
 
@@ -237,7 +248,7 @@ describe.sequential("auth routes", () => {
 
   it.each([undefined, ""])("sends null for an unset Sentry environment (%s)", async (environment) => {
     vi.stubEnv("SENTRY_ENVIRONMENT", environment);
-    const app = createApp({ type: "board", userId: "user-1", source: "session" }, baseUser);
+    const app = createApp({ type: "board", userId: "user-1", sessionId: "native-session-1", source: "session" }, baseUser);
 
     const res = await request(app).get("/api/auth/get-session");
 
@@ -311,6 +322,7 @@ describe.sequential("auth routes", () => {
       {
         type: "board",
         userId: "user-1",
+        sessionId: "native-session-1",
         source: "session",
       },
       baseUser,
@@ -329,6 +341,7 @@ describe.sequential("auth routes", () => {
       {
         type: "board",
         userId: "user-1",
+        sessionId: "native-session-1",
         source: "session",
       },
       baseUser,
@@ -343,7 +356,7 @@ describe.sequential("auth routes", () => {
 
   it("reads nullable account locale through preferences", async () => {
     const app = createApp(
-      { type: "board", userId: "user-1", source: "session" },
+      { type: "board", userId: "user-1", sessionId: "native-session-1", source: "session" },
       { ...baseUser, keyboardShortcuts: false, locale: null },
     );
     const res = await request(app)
@@ -355,7 +368,7 @@ describe.sequential("auth routes", () => {
 
   it("saves account locale before company membership without changing keyboard preference", async () => {
     const app = createApp(
-      { type: "board", userId: "user-1", source: "session", companyIds: [] },
+      { type: "board", userId: "user-1", sessionId: "native-session-1", source: "session", companyIds: [] },
       { ...baseUser, keyboardShortcuts: true, locale: null },
     );
     const res = await request(app)
@@ -370,7 +383,7 @@ describe.sequential("auth routes", () => {
     [{ expectedUserId: "user-1", locale: "fr" }, 400],
   ])("rejects swapped-account or invalid locale preference updates", async (body, status) => {
     const app = createApp(
-      { type: "board", userId: "user-1", source: "session", companyIds: [] },
+      { type: "board", userId: "user-1", sessionId: "native-session-1", source: "session", companyIds: [] },
       { ...baseUser, keyboardShortcuts: false, locale: null },
     );
     const res = await request(app).patch("/api/auth/preferences").send(body);
@@ -380,7 +393,7 @@ describe.sequential("auth routes", () => {
   it("preserves locale when updating keyboard shortcuts with company audit context", async () => {
     const companyId = "11111111-1111-4111-8111-111111111111";
     const app = createApp(
-      { type: "board", userId: "user-1", source: "session", companyIds: [companyId] },
+      { type: "board", userId: "user-1", sessionId: "native-session-1", source: "session", companyIds: [companyId] },
       { ...baseUser, keyboardShortcuts: false, locale: "da" },
     );
     const res = await request(app)

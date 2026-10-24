@@ -299,6 +299,64 @@ describe("maintained native TOTP and recovery lifecycle", () => {
     } finally { spy.mockRestore(); }
   }, 60_000);
 
+  it("binds browser security intent to its actual cookie or first-factor account", async () => {
+    const first = await signup(), other = await signup();
+    const info = await request(app).get("/api/auth/security").set("Cookie", first.cookie)
+      .set("X-Blentera-Expected-User", first.userId);
+    expect(info.status).toBe(200);
+    expect(info.headers["cache-control"]).toContain("no-store");
+    expect(info.body).toEqual({ userId: first.userId, hasPassword: true, twoFactorEnabled: false, phishingResistantRequired: false });
+    expect((await request(app).get("/api/auth/security").set("Cookie", first.cookie)
+      .set("X-Blentera-Expected-User", other.userId)).status).toBe(409);
+    expect((await post("reauthenticate/password", first.cookie).set("X-Blentera-Expected-User", other.userId)
+      .send({ password: PASSWORD })).status).toBe(409);
+    expect((await post("two-factor/enable", first.cookie).set("X-Blentera-Expected-User", other.userId)
+      .send({ password: PASSWORD })).status).toBe(409);
+    expect(await db.select().from(authTwoFactors).where(eq(authTwoFactors.userId, first.userId))).toEqual([]);
+    const enabled = await post("two-factor/enable", first.cookie).set("X-Blentera-Expected-User", first.userId)
+      .send({ password: PASSWORD });
+    expect(enabled.status).toBe(200); first.cookie = cookies(first.cookie, enabled);
+    const firstCode = await code(first.userId);
+    expect((await post("two-factor/verify-totp", first.cookie).set("X-Blentera-Expected-User", other.userId)
+      .send({ code: firstCode })).status).toBe(409);
+    expect((await db.select().from(authUsers).where(eq(authUsers.id, first.userId)))[0].twoFactorEnabled).toBe(false);
+    expect((await post("two-factor/verify-totp", first.cookie).set("X-Blentera-Expected-User", first.userId)
+      .send({ code: firstCode })).status).toBe(200);
+    const signin = await post("sign-in/email").send({ email: first.email, password: PASSWORD });
+    expect(signin.body).toMatchObject({ userId: first.userId, twoFactorRedirect: true });
+    const challenge = cookies("", signin), nextCode = await code(first.userId);
+    expect((await post("two-factor/verify-totp", challenge).set("X-Blentera-Expected-User", other.userId)
+      .send({ code: nextCode })).status).toBe(409);
+    expect((await post("two-factor/verify-totp", challenge).set("X-Blentera-Expected-User", first.userId)
+      .send({ code: nextCode })).status).toBe(200);
+  }, 60_000);
+
+  it("cancels an unverified enrollment through its native owner without disabling a verified factor", async () => {
+    const fixture = await signup();
+    const enabled = await post("two-factor/enable", fixture.cookie).send({ password: PASSWORD });
+    expect(enabled.status).toBe(200); fixture.cookie = cookies(fixture.cookie, enabled);
+    const cancelled = await post("two-factor/cancel-enrollment", fixture.cookie)
+      .set("X-Blentera-Expected-User", fixture.userId).set("X-Blentera-Expected-Session", enabled.body.sessionId).send({});
+    expect(cancelled.status).toBe(200); fixture.cookie = cookies(fixture.cookie, cancelled);
+    expect(await db.select().from(authTwoFactors).where(eq(authTwoFactors.userId, fixture.userId))).toEqual([]);
+    expect((await db.select().from(authUsers).where(eq(authUsers.id, fixture.userId)))[0].twoFactorEnabled).toBe(false);
+    const [current] = await db.select().from(authSessions).where(eq(authSessions.userId, fixture.userId));
+    expect(current.authenticationMethod).toBe("password");
+    expect((await post("two-factor/cancel-enrollment", fixture.cookie)
+      .set("X-Blentera-Expected-Session", enabled.body.sessionId).send({})).status).toBe(200);
+    expect((await db.select().from(authSessions).where(eq(authSessions.userId, fixture.userId)))[0].id).toBe(current.id);
+    const replacement = await post("two-factor/enable", fixture.cookie).send({ password: PASSWORD });
+    expect(replacement.status).toBe(200); fixture.cookie = cookies(fixture.cookie, replacement);
+    expect((await post("two-factor/cancel-enrollment", fixture.cookie)
+      .set("X-Blentera-Expected-Session", enabled.body.sessionId).send({})).status).toBe(409);
+    expect(await db.select().from(authTwoFactors).where(eq(authTwoFactors.userId, fixture.userId))).toHaveLength(1);
+    expect((await post("two-factor/cancel-enrollment", fixture.cookie)
+      .set("X-Blentera-Expected-Session", replacement.body.sessionId).send({})).status).toBe(200);
+    const verified = await enrolled();
+    expect((await post("two-factor/cancel-enrollment", verified.cookie).send({})).status).toBe(401);
+    expect((await db.select().from(authTwoFactors).where(eq(authTwoFactors.userId, verified.userId)))[0].verified).toBe(true);
+  }, 60_000);
+
   it("rejects stale first-factor verification before issuing any MFA challenge", async () => {
     const fixture = await enrolled();
     const context = await (auth as unknown as Auth).$context, verify = context.password.verify;

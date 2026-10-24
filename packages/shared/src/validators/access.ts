@@ -214,6 +214,17 @@ export const authSessionSchema = z.object({
 
 export type AuthSession = z.infer<typeof authSessionSchema>;
 
+export const nativeAuthenticationSecuritySchema = z.object({
+  userId: z.string().min(1),
+  hasPassword: z.boolean(),
+  twoFactorEnabled: z.boolean(),
+  phishingResistantRequired: z.boolean(),
+});
+export type NativeAuthenticationSecurity = z.infer<typeof nativeAuthenticationSecuritySchema>;
+export const nativeAuthenticationConfirmationSchema = z.object({ sessionId: z.string().min(1) });
+export const nativeRecoveryCodesSchema = z.object({ sessionId: z.string().min(1), backupCodes: z.array(z.string().min(1).max(128)).min(1).max(32) });
+export const nativeTotpEnrollmentSchema = nativeRecoveryCodesSchema.extend({ totpURI: z.string().min(1).max(4096) });
+
 export const updateCurrentUserProfileSchema = z.object({
   name: z.string().trim().min(1).max(120),
   image: z

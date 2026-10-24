@@ -354,7 +354,7 @@ export function createBetterAuthInstance(db: Db, config: Config, trustedOrigins:
     ...(enterprisePlugins.length ? { disabledPaths: ENTERPRISE_DISABLED_AUTH_PATHS } : {}),
     plugins: [ ...enterprisePlugins, ...(resolveWorkspaceHandoffIdentity(config) ? [workspaceLoginHandoffPlugin({ db,
       resolveExpectedIdentity: () => resolveWorkspaceHandoffIdentity(config) ?? {key:null,instanceId:null,executionWorkspaceId:null,companyId:null,origin:null},
-    })] : []), nativeTwoFactorPlugin(db, authSchema, config.saasPlatform?.operatorUserIds ?? []), nativeAuthenticationAssurancePlugin(db, authSchema) ],
+    })] : []), nativeTwoFactorPlugin(db, authSchema, config.saasPlatform?.operatorUserIds ?? []), nativeAuthenticationAssurancePlugin(db, authSchema, config.saasPlatform?.operatorUserIds ?? []) ],
   };
 
   if (!baseUrl) {

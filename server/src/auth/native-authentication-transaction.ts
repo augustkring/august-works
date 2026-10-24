@@ -1,10 +1,26 @@
-import type { GenericEndpointContext } from "better-auth";
+import { APIError, type GenericEndpointContext } from "better-auth";
 import { drizzleAdapter } from "better-auth/adapters/drizzle";
 import { getCurrentDBAdapterAsyncLocalStorage } from "@better-auth/core/context";
 import type { Db } from "@paperclipai/db";
 
 export type NativeAuthenticationSchema = NonNullable<Parameters<typeof drizzleAdapter>[1]["schema"]>;
 type Transaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+/** A browser intent may narrow the actual cookie principal, never choose it.
+ * Native SDK calls without this optional precondition retain their own-user API. */
+export function assertExpectedAuthenticationUser(ctx: GenericEndpointContext, userId: string) {
+  const expected = ctx.getHeader("X-Blentera-Expected-User");
+  if (expected !== null && expected !== userId) throw new APIError("CONFLICT", {
+    code: "ACCOUNT_CHANGED", message: "Account changed; reload this page",
+  });
+}
+
+export function assertExpectedAuthenticationSession(ctx: GenericEndpointContext, sessionId: string | undefined) {
+  const expected = ctx.getHeader("X-Blentera-Expected-Session");
+  if (expected !== null && expected !== sessionId) throw new APIError("CONFLICT", {
+    code: "AUTHENTICATION_STATE_CHANGED", message: "Sign-in changed; confirm the current account again",
+  });
+}
 
 /** Bind the maintained provider to the same physical transaction as its proof
  * check. Native after-commit hooks and cookie publication follow the real commit. */

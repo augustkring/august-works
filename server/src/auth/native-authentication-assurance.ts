@@ -5,21 +5,28 @@ import { createHash, randomUUID } from "node:crypto";
 import { z } from "zod";
 import { sql } from "drizzle-orm";
 import { authRateLimits, type Db } from "@paperclipai/db";
+import { nativeAuthenticationSecuritySchema } from "@paperclipai/shared";
 import { LOCAL_PASSWORD_MAX_UTF16_LENGTH } from "@paperclipai/shared/local-password-policy";
-import { withNativeAuthenticationTransaction, type NativeAuthenticationSchema } from "./native-authentication-transaction.js";
-import { isAuthenticationStateBusy } from "./authenticator-assurance.js";
+import { assertExpectedAuthenticationSession, assertExpectedAuthenticationUser, withNativeAuthenticationTransaction, type NativeAuthenticationSchema } from "./native-authentication-transaction.js";
+import { assertHumanAuthentication, isAuthenticationStateBusy } from "./authenticator-assurance.js";
 
 function rethrowAuthenticationFailure(error: unknown): never {
   if (isAuthenticationStateBusy(error)) throw new APIError("CONFLICT", {
     code: "authentication_state_busy", message: "Authentication state is changing; try again",
   });
+  if (error && typeof error === "object" && "status" in error && error.status === 403) {
+    throw new APIError("FORBIDDEN", { code: "recent_authentication_required", message: "Authenticate again to continue" });
+  }
+  if (error && typeof error === "object" && "status" in error && error.status === 409) {
+    throw new APIError("CONFLICT", { code: "authentication_state_busy", message: "Authentication state is changing; try again" });
+  }
   throw error;
 }
 
 /** Keep last in the native plugin list: the two-factor plugin must first remove
  * a password-only session when it issues a challenge. A cookie refresh, reset
  * link, SSO callback or historic session never manufactures local factor proof. */
-export function nativeAuthenticationAssurancePlugin(db: Db, schema: NativeAuthenticationSchema): BetterAuthPlugin {
+export function nativeAuthenticationAssurancePlugin(db: Db, schema: NativeAuthenticationSchema, operatorUserIds: readonly string[] = []): BetterAuthPlugin {
   async function recordPassword(tx: Pick<Db, "execute">, userId: string, sessionId: string, expectedVersion: number) {
     const [user] = await tx.execute<{ id: string }>(sql`
       select id from "user" where id=${userId}
@@ -42,11 +49,32 @@ export function nativeAuthenticationAssurancePlugin(db: Db, schema: NativeAuthen
   return {
     id: "blentera-native-authentication-assurance",
     endpoints: {
+      authenticationSecurity: createAuthEndpoint("/security", { method: "GET", use: [sessionMiddleware] }, async ctx => {
+        const { user, session } = ctx.context.session;
+        assertExpectedAuthenticationUser(ctx, user.id);
+        assertExpectedAuthenticationSession(ctx, session.id);
+        const [status] = await db.execute<{ userId: string; hasPassword: boolean; twoFactorEnabled: boolean; phishingResistantRequired: boolean }>(sql`
+          select u.id as "userId",u.two_factor_enabled as "twoFactorEnabled",u.phishing_resistant_required as "phishingResistantRequired",
+            exists(select 1 from account where user_id=u.id and provider_id='credential' and password is not null) as "hasPassword"
+          from "user" u join "session" s on s.user_id=u.id
+          where u.id=${user.id} and s.id=${session.id} and s.expires_at>clock_timestamp()
+            and not exists(select 1 from account_deletion_operations where user_id=u.id)
+        `);
+        if (!status) throw new APIError("UNAUTHORIZED", { code: "AUTHENTICATION_STATE_CHANGED", message: "Authenticate again to continue" });
+        if (ctx.getHeader("X-Blentera-Expected-Session") !== null) await assertHumanAuthentication(db,
+          { type: "board", source: "session", userId: user.id, sessionId: session.id },
+          { requireRecent: false, phishingResistant: operatorUserIds.includes(user.id) }).catch(rethrowAuthenticationFailure);
+        ctx.setHeader("Cache-Control", "no-store");
+        return ctx.json(nativeAuthenticationSecuritySchema.parse({ ...status,
+          phishingResistantRequired: status.phishingResistantRequired || operatorUserIds.includes(user.id) }));
+      }),
       reauthenticatePassword: createAuthEndpoint("/reauthenticate/password", {
         method: "POST", use: [sessionMiddleware],
         body: z.object({ password: z.string().min(1).max(LOCAL_PASSWORD_MAX_UTF16_LENGTH) }),
       }, async (ctx) => {
         const { user, session } = ctx.context.session;
+        assertExpectedAuthenticationUser(ctx, user.id);
+        assertExpectedAuthenticationSession(ctx, session.id);
         // Reserve against the actual native session/user before verification.
         // This short transaction commits attempts independently of the verifier,
         // while erasure and credential changes cannot cross the reservation.

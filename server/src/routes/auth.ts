@@ -48,10 +48,13 @@ export function authRoutes(db: Db) {
       throw unauthorized("Board authentication required");
     }
 
+    if (req.actor.source === "session" && !req.actor.sessionId) {
+      throw unauthorized("Native session identity required");
+    }
     const user = await loadCurrentUserProfile(db, req.actor.userId);
     res.json(authSessionSchema.parse({
       session: {
-        id: `paperclip:${req.actor.source ?? "none"}:${req.actor.userId}`,
+        id: req.actor.source === "session" ? req.actor.sessionId! : `paperclip:${req.actor.source ?? "none"}:${req.actor.userId}`,
         userId: req.actor.userId,
         localImplicit: req.actor.source === "local_implicit",
       },

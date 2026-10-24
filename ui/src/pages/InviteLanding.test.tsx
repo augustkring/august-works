@@ -621,7 +621,7 @@ describe("InviteLandingPage", () => {
   });
 
   it("hands a native sign-in challenge to AuthPage and remembers the invite return without putting its token in router state", async () => {
-    signInEmailMock.mockResolvedValueOnce({ twoFactorRedirect: true, twoFactorMethods: ["totp"] });
+    signInEmailMock.mockResolvedValueOnce({ userId: "human", twoFactorRedirect: true, twoFactorMethods: ["totp"] });
     const root = createRoot(container);
     const queryClient = new QueryClient({ defaultOptions: { queries: { retry: false } } });
     await act(async () => {
@@ -651,9 +651,9 @@ describe("InviteLandingPage", () => {
     });
     await flushReact(); await flushReact();
 
-    expect(container.querySelector('[data-testid="auth-challenge-state"]')?.textContent).toBe(JSON.stringify({
-      twoFactorChallenge: { twoFactorRedirect: true, twoFactorMethods: ["totp"] },
-    }));
+    await vi.waitFor(() => expect(container.querySelector('[data-testid="auth-challenge-state"]')?.textContent).toBe(JSON.stringify({
+      twoFactorChallenge: { userId: "human", twoFactorRedirect: true, twoFactorMethods: ["totp"] },
+    })));
     expect(container.textContent).not.toContain("original-secret");
     expect(localStorage.getItem("paperclip:pending-invite-token")).toBe("pcp_invite_test");
     expect(acceptInviteMock).not.toHaveBeenCalled();

@@ -112,15 +112,19 @@ export function AuthPage() {
   });
 
   const challengeMutation = useMutation({
-    mutationFn: ({ method, code }: { method: "totp" | "backup_code"; code: string }) =>
-      method === "totp" ? authApi.verifyTotp(code) : authApi.verifyBackupCode(code),
-    onSuccess: async () => {
+    mutationFn: async ({ method, code }: { method: "totp" | "backup_code"; code: string }) => {
+      const userId = challenge?.userId;
+      if (!userId) throw new Error("Sign-in challenge is unavailable");
+      const confirmed = method === "totp" ? await authApi.verifyTotp(code, userId) : await authApi.verifyBackupCode(code, userId);
+      return { userId, sessionId: confirmed.sessionId };
+    },
+    onSuccess: async ({ userId, sessionId }) => {
       setError(null);
       try {
         // The verification response alone is not treated as an authenticated
         // session; confirm Better Auth's cookie with its canonical session API.
         const verifiedSession = await authApi.getSession();
-        if (!verifiedSession) {
+        if (!verifiedSession || verifiedSession.user.id !== userId || verifiedSession.session.id !== sessionId) {
           setError("authFlow.challengeFailed");
           return;
         }

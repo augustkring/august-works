@@ -746,3 +746,18 @@ The maintained native backend now composes TOTP/recovery verification with first
 ### 2026-10-24 — one-use verified TOTP completion
 
 Existing factor metadata now atomically consumes already verified OTP fingerprints across challenges and credential/recovery-code changes. Consumption commits before session publication and survives later native session-write failure; actual old-session proof remains physically pinned. Original replay baseline1case/3assertions fail; initial rollback baseline1case fails. Staged complete native runs46→47→48 pass; final server compiler and native migration checks0. Evidence: `doc/operations/aw-v10-evidence/native-totp-replay-2026-10-24/checkpoint.json`. UI/enrollment, expected-principal binding, passkey/operator/enterprise and full V10/PR gates remain open. Native production clock/replica/backup qualification is separate.
+
+
+### 2026-10-24 — actual native authenticator settings lifecycle
+
+Account settings now cover maintained TOTP enrollment/verification, recent
+confirmation, one-time recovery display/replacement, disabling with forced
+sign-out and retry-safe pending cancellation in EN/DA, outside paid capability
+gates. Actual expected-user/session preconditions and response-session matching
+withhold stale private replies. The full built-app browser found and drove fixes
+to synthetic session IDs, status/cookie rotation races and stale query refreshes.
+The complete real-cookie/PG/maintained-crypto browser lifecycle now passes.
+Evidence: `doc/operations/aw-v10-evidence/native-authenticator-settings-2026-10-24/checkpoint.json`.
+This advances CE-03; passkeys/operator bootstrap, enterprise restrictions, other
+sensitive owners, the original source-privacy/portability regressions and full
+V10/PR gates remain open. No PR-ready, release or host/provider claim.

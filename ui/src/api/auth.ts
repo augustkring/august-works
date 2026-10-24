@@ -1,5 +1,10 @@
 import {
   authSessionSchema,
+  nativeAuthenticationSecuritySchema,
+  nativeAuthenticationConfirmationSchema,
+  nativeRecoveryCodesSchema,
+  nativeTotpEnrollmentSchema,
+  type NativeAuthenticationSecurity,
   currentUserPreferencesSchema,
   type CurrentUserPreferences,
   type UpdateCurrentUserPreferences,
@@ -25,6 +30,7 @@ export interface SignOutResult {
 }
 
 export interface TwoFactorSignInChallenge {
+  userId: string;
   twoFactorRedirect: true;
   twoFactorMethods: string[];
 }
@@ -33,11 +39,11 @@ export function parseTwoFactorSignInChallenge(value: unknown): TwoFactorSignInCh
   if (!value || typeof value !== "object") return null;
   const payload = value as Record<string, unknown>;
   if (payload.twoFactorRedirect !== true) return null;
-  if (!Array.isArray(payload.twoFactorMethods) || payload.twoFactorMethods.length === 0 ||
+  if (typeof payload.userId !== "string" || !payload.userId || !Array.isArray(payload.twoFactorMethods) || payload.twoFactorMethods.length === 0 ||
       !payload.twoFactorMethods.every((method) => typeof method === "string")) {
     throw new Error("Invalid native two-factor challenge response");
   }
-  return { twoFactorRedirect: true, twoFactorMethods: payload.twoFactorMethods };
+  return { userId: payload.userId, twoFactorRedirect: true, twoFactorMethods: payload.twoFactorMethods };
 }
 
 export class AuthApiError extends Error {
@@ -124,7 +130,7 @@ function logAuthHttpError(method: string, path: string, status: number) {
   });
 }
 
-async function authPost(path: string, body: Record<string, unknown>): Promise<unknown> {
+async function authPost(path: string, body: Record<string, unknown>, expectedUserId?: string, expectedSessionId?: string): Promise<unknown> {
   let res: Response;
   try {
     res = await fetch(`/api/auth${path}`, {
@@ -133,6 +139,8 @@ async function authPost(path: string, body: Record<string, unknown>): Promise<un
       headers: {
         "Content-Type": "application/json",
         "X-Blentera-Locale": i18n.resolvedLanguage === "da" ? "da" : "en",
+        ...(expectedUserId ? { "X-Blentera-Expected-User": expectedUserId } : {}),
+        ...(expectedSessionId ? { "X-Blentera-Expected-Session": expectedSessionId } : {}),
       },
       body: JSON.stringify(body),
     });
@@ -197,16 +205,43 @@ export const authApi = {
     return parseTwoFactorSignInChallenge(await authPost("/sign-in/email", input));
   },
 
-  verifyTotp: async (code: string): Promise<void> => {
-    await authPost("/two-factor/verify-totp", { code });
+  verifyTotp: async (code: string, expectedUserId?: string, expectedSessionId?: string) =>
+    nativeAuthenticationConfirmationSchema.parse(await authPost("/two-factor/verify-totp", { code }, expectedUserId, expectedSessionId)),
+
+  reauthenticatePassword: async (password: string, expectedUserId?: string, expectedSessionId?: string): Promise<void> => {
+    await authPost("/reauthenticate/password", { password }, expectedUserId, expectedSessionId);
   },
 
-  reauthenticatePassword: async (password: string): Promise<void> => {
-    await authPost("/reauthenticate/password", { password });
+  verifyBackupCode: async (code: string, expectedUserId?: string, expectedSessionId?: string) =>
+    nativeAuthenticationConfirmationSchema.parse(await authPost("/two-factor/verify-backup-code", { code }, expectedUserId, expectedSessionId)),
+
+  securityStatus: async (expectedUserId: string, signal?: AbortSignal, expectedSessionId?: string): Promise<NativeAuthenticationSecurity> => {
+    const response = await fetch("/api/auth/security", { credentials: "include", cache: "no-store", signal,
+      headers: { Accept: "application/json", "X-Blentera-Expected-User": expectedUserId,
+        ...(expectedSessionId ? { "X-Blentera-Expected-Session": expectedSessionId } : {}) } });
+    const payload = await response.json().catch(() => null);
+    if (!response.ok) {
+      const recovery = tenantSessionRecovery.recoverIfNeeded(response.status, payload);
+      if (recovery) return recovery;
+      throw extractAuthError(payload as AuthErrorBody, response.status);
+    }
+    const status = nativeAuthenticationSecuritySchema.parse(payload);
+    if (status.userId !== expectedUserId) throw new AuthApiError("Account changed", 409, null, "ACCOUNT_CHANGED");
+    return status;
   },
 
-  verifyBackupCode: async (code: string): Promise<void> => {
-    await authPost("/two-factor/verify-backup-code", { code });
+  enableTwoFactor: async (password: string | undefined, expectedUserId: string, expectedSessionId?: string) =>
+    nativeTotpEnrollmentSchema.parse(await authPost("/two-factor/enable", { password, method: "totp" }, expectedUserId, expectedSessionId)),
+
+  generateBackupCodes: async (password: string | undefined, expectedUserId: string, expectedSessionId?: string) =>
+    nativeRecoveryCodesSchema.parse(await authPost("/two-factor/generate-backup-codes", { password }, expectedUserId, expectedSessionId)),
+
+  cancelTwoFactorEnrollment: async (expectedUserId: string, expectedSessionId?: string): Promise<void> => {
+    await authPost("/two-factor/cancel-enrollment", {}, expectedUserId, expectedSessionId);
+  },
+
+  disableTwoFactor: async (password: string | undefined, expectedUserId: string, expectedSessionId?: string): Promise<void> => {
+    await authPost("/two-factor/disable", { password }, expectedUserId, expectedSessionId);
   },
 
   signUpEmail: async (input: { name: string; email: string; password: string }) => {

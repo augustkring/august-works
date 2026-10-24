@@ -1,6 +1,7 @@
 # Blentera V10 — Native authentication completion
 
-Status: implementation in progress. No MFA/passkey plugin is enabled yet. This
+Status: implementation in progress. Maintained TOTP/recovery is enabled with
+native session assurance; passkeys and complete CE-03 admission remain open. This
 plan implements CE-03 in the V10 rev4.0 brief through the existing Better Auth
 1.7.2, account, session, enterprise and authorization owners. It confers no pilot,
 operator, provider or hardware qualification.
@@ -273,3 +274,41 @@ the previous checkpoint. Account settings/enrollment UX, expected-principal
 request binding, passkeys/operator bootstrap, enterprise recovery, other
 sensitive-action owners, production clock/replica and full V10 admission remain
 open. Existing native verifiers are retained; no custom OTP verifier is added.
+
+
+### 2026-10-24 — native authenticator account settings and response binding
+
+The personal security page now uses the maintained TOTP/recovery owner for
+setup, first verification, one-time recovery-code display, recent confirmation,
+replacement recovery codes, disabling with forced sign-out, and cancelling an
+unverified setup. English and Danish copy use the existing design tokens. The
+settings card is independent of paid SaaS capabilities. Passwordless enterprise
+setup and passkey/operator confirmation remain explicitly unavailable here.
+
+Optional expected-user/session headers narrow the actual cookie or first-factor
+principal. Native setup/code/completion responses include the actual replacement
+session ID. The browser verifies the canonical response and that exact current
+native source before showing a private result. A late response for another user
+or session is discarded. Cancellation retains only its original session ID for
+retry: an absent original factor is a safe no-op; a newer pending enrollment is
+not removed by an old retry. Verified factors cannot use this cancellation path.
+
+The built-browser regression exposed the original `/get-session` route's
+synthetic per-user ID. Native actors now receive their actual native session ID;
+missing native identity is refused. Local implicit/cloud provenance keeps its
+separate representation. The route/middleware suites pass38 cases. A subsequent
+browser run exposed status requests racing cookie rotation and a session-cache
+refresh interrupting a valid multi-step action. Background native status reads
+are cancelled/held during changes. Each refresh reads a new canonical response;
+following native writes use the verified response's session ID. Private rendering
+still waits for the current idle account cache and exact session match.
+
+A complete Chromium151 run against the production UI build and migrated native
+PostgreSQL passes setup, actual maintained TOTP, fresh confirmation/session
+rotation, real one-use recovery verification, code replacement, disabling,
+sign-out/new password sign-in and pending cancellation. It uses real HTTP-only
+cookies and no API route mocks. Trace/screenshots are disabled for these private
+ceremonies. This is disposable private-instance software evidence, not SaaS mail,
+external IdP, passkey/hardware, deployed replica or host qualification. The
+separate checkpoint records compiler/UI/native suite results and source hashes.
+Full CE-03, powerful-action/operator guards and full V10 admission remain open.

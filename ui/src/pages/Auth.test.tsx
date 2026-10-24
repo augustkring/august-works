@@ -25,8 +25,8 @@ vi.mock("../api/auth", () => ({
     getSession: () => getSessionMock(),
     signInEmail: (input: unknown) => signInEmailMock(input),
     signUpEmail: (input: unknown) => signUpEmailMock(input),
-    verifyTotp: (code: string) => verifyTotpMock(code),
-    verifyBackupCode: (code: string) => verifyBackupCodeMock(code),
+    verifyTotp: (code: string, userId: string) => verifyTotpMock(code, userId),
+    verifyBackupCode: (code: string, userId: string) => verifyBackupCodeMock(code, userId),
   },
   parseTwoFactorSignInChallenge: (value: unknown) => {
     if (!value || typeof value !== "object") return null;
@@ -106,8 +106,8 @@ describe("AuthPage", () => {
     getSessionMock.mockResolvedValue(null);
     signInEmailMock.mockResolvedValue(undefined);
     signUpEmailMock.mockResolvedValue(undefined);
-    verifyTotpMock.mockResolvedValue(undefined);
-    verifyBackupCodeMock.mockResolvedValue(undefined);
+    verifyTotpMock.mockResolvedValue({ sessionId: "session-jane" });
+    verifyBackupCodeMock.mockResolvedValue({ sessionId: "session-jane" });
   });
 
   afterEach(async () => {
@@ -280,7 +280,7 @@ describe("AuthPage", () => {
   it("keeps a native two-factor challenge pending until the server confirms a session", async () => {
     const { root, queryClient } = await mount("/auth?next=%2Fprivate");
     queryClient.setQueryData(queryKeys.health, { status: "ok", deploymentMode: "authenticated" });
-    signInEmailMock.mockResolvedValueOnce({ twoFactorRedirect: true, twoFactorMethods: ["totp"] });
+    signInEmailMock.mockResolvedValueOnce({ userId: "jane", twoFactorRedirect: true, twoFactorMethods: ["totp"] });
     const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
     const email = container.querySelector('input[name="email"]') as HTMLInputElement;
     const password = container.querySelector('input[name="password"]') as HTMLInputElement;
@@ -307,29 +307,41 @@ describe("AuthPage", () => {
       container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
     await flushReact();
-    expect(verifyBackupCodeMock).toHaveBeenCalledWith("ABCD-EFGH");
+    expect(verifyBackupCodeMock).toHaveBeenCalledWith("ABCD-EFGH", "jane");
     expect(container.textContent).not.toContain("Private destination");
     expect(container.querySelector('[role="alert"]')?.textContent).toContain("Your sign-in could not be confirmed");
 
+    verifyBackupCodeMock.mockImplementationOnce(async () => {
+      getSessionMock.mockResolvedValue(v9SessionFixture("different-account"));
+      return { sessionId: "session-jane" };
+    });
+    await act(async () => {
+      setter.call(code, "OTHER-ACCOUNT-CHECK"); code.dispatchEvent(new Event("input", { bubbles: true }));
+      container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
+    });
+    await flushReact(); await flushReact();
+    expect(container.textContent).not.toContain("Private destination");
+    expect(container.querySelector('[role="alert"]')?.textContent).toContain("Your sign-in could not be confirmed");
     getSessionMock.mockResolvedValue(v9SessionFixture("jane"));
     // Re-submit a fresh challenge code after the first verification mock succeeds.
     // The challenge remains until a canonical Better Auth session read confirms it.
     verifyBackupCodeMock.mockImplementationOnce(async () => {
       getSessionMock.mockResolvedValue(v9SessionFixture("jane"));
+      return { sessionId: "session-jane" };
     });
     await act(async () => {
       setter.call(code, "IJKL-MNOP"); code.dispatchEvent(new Event("input", { bubbles: true }));
       container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true }));
     });
     await flushReact(); await flushReact();
-    expect(verifyBackupCodeMock).toHaveBeenLastCalledWith("IJKL-MNOP");
+    expect(verifyBackupCodeMock).toHaveBeenLastCalledWith("IJKL-MNOP", "jane");
     expect(container.textContent).toContain("Private destination");
     await act(async () => { root.unmount(); });
   });
 
   it("hydrates only the native challenge view from router state and can return to sign-in", async () => {
     const { root } = await mount({ pathname: "/auth", search: "?next=%2Fprivate", state: {
-      twoFactorChallenge: { twoFactorRedirect: true, twoFactorMethods: ["totp"] },
+      twoFactorChallenge: { userId: "jane", twoFactorRedirect: true, twoFactorMethods: ["totp"] },
     } });
     expect(container.querySelector("h1")?.textContent).toBe("Verify it’s you");
     expect(container.querySelector('input[name="password"]')).toBeNull();

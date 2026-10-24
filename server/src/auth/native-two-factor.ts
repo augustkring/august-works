@@ -1,13 +1,13 @@
 import { createHash, createHmac, randomUUID } from "node:crypto";
 import { sql } from "drizzle-orm";
 import { APIError, type GenericEndpointContext } from "better-auth";
-import { changePassword as nativeChangePassword, createAuthEndpoint, createAuthMiddleware, getSessionFromCtx } from "better-auth/api";
+import { changePassword as nativeChangePassword, createAuthEndpoint, createAuthMiddleware, getSessionFromCtx, sessionMiddleware } from "better-auth/api";
 import { deleteSessionCookie, expireCookie, setSessionCookie } from "better-auth/cookies";
 import { twoFactor } from "better-auth/plugins";
 import { parseUserOutput } from "better-auth/db";
 import { authRateLimits, type Db } from "@paperclipai/db";
 import { assertHumanAuthentication, isAuthenticationStateBusy } from "./authenticator-assurance.js";
-import { withNativeAuthenticationTransaction, type NativeAuthenticationSchema } from "./native-authentication-transaction.js";
+import { assertExpectedAuthenticationSession, assertExpectedAuthenticationUser, withNativeAuthenticationTransaction, type NativeAuthenticationSchema } from "./native-authentication-transaction.js";
 
 type NativeEndpoint = ReturnType<typeof twoFactor>["endpoints"][
   "enableTwoFactor" | "disableTwoFactor" | "generateBackupCodes" | "getTOTPURI" | "verifyTOTP" | "verifyBackupCode"] | typeof nativeChangePassword;
@@ -27,6 +27,9 @@ function nativeFailure(error: unknown): never {
   });
   if (error && typeof error === "object" && "status" in error && error.status === 403) {
     throw new APIError("FORBIDDEN", { code: "recent_authentication_required", message: "Authenticate again to continue" });
+  }
+  if (error && typeof error === "object" && "status" in error && error.status === 409) {
+    throw new APIError("CONFLICT", { code: "authentication_state_busy", message: "Authentication state is changing; try again" });
   }
   throw error;
 }
@@ -48,7 +51,7 @@ export function nativeTwoFactorPlugin(db: Db, schema: NativeAuthenticationSchema
     return result.response;
   }
 
-  async function snapshot(ctx: GenericEndpointContext, reserveAttempt: boolean): Promise<FactorSnapshot> {
+  async function snapshot(ctx: GenericEndpointContext, reserveAttempt: boolean, cancelling = false): Promise<FactorSnapshot> {
     const session = await getSessionFromCtx(ctx);
     const cookie = ctx.context.createAuthCookie("two_factor");
     const nonce = !session && await ctx.getSignedCookie(cookie.name, ctx.context.secret);
@@ -66,9 +69,12 @@ export function nativeTwoFactorPlugin(db: Db, schema: NativeAuthenticationSchema
         for share of u nowait
       `);
       if (!owner) deny();
+      assertExpectedAuthenticationUser(ctx, owner.userId);
+      // An already absent pending factor is a safe idempotent cancellation.
+      if (!cancelling || owner.factorId) assertExpectedAuthenticationSession(ctx, session?.session.id);
       if (session) {
         await assertHumanAuthentication(tx, { type: "board", source: "session", userId: owner.userId,
-          sessionId: session.session.id }, { requireRecent: !reserveAttempt,
+          sessionId: session.session.id }, { requireRecent: !reserveAttempt || owner.verified !== true,
           phishingResistant: operatorUserIds.includes(owner.userId) });
       } else if (operatorUserIds.includes(owner.userId)) {
         // A password challenge plus TOTP cannot authenticate a platform operator.
@@ -151,9 +157,10 @@ export function nativeTwoFactorPlugin(db: Db, schema: NativeAuthenticationSchema
         } else if (operation === "enable" || operation === "codes") {
           // Configuration keeps the real earlier event/time, rather than claiming
           // that issuing a cookie or new recovery codes was MFA verification.
-          await rotate(ctx, tx, owner, owner.version + 1, {
+          const updated = await rotate(ctx, tx, owner, owner.version + 1, {
             authenticationMethod: proof.method, authenticatedAt: proof.authenticatedAt,
           });
+          return { ...response, sessionId: updated.id };
         }
         return response;
       }).catch(nativeFailure);
@@ -212,7 +219,7 @@ export function nativeTwoFactorPlugin(db: Db, schema: NativeAuthenticationSchema
           return rotate(ctx, tx, owner, version, { authenticationMethod: operation,
             authenticatedAt: verifiedAt ?? new Date(valid.at) });
         });
-        return { ...response, token: session.token, user: parseUserOutput(ctx.context.options, ctx.context.session!.user) };
+        return { ...response, sessionId: session.id, token: session.token, user: parseUserOutput(ctx.context.options, ctx.context.session!.user) };
       } catch (error) {
         const created = ctx.context.newSession;
         if (created?.user.id === owner.userId) {
@@ -231,8 +238,35 @@ export function nativeTwoFactorPlugin(db: Db, schema: NativeAuthenticationSchema
     // verifier paths and the maintained server-only utilities.
     generateTOTP: native.endpoints.generateTOTP,
     viewBackupCodes: native.endpoints.viewBackupCodes,
+    cancelTwoFactorEnrollment: createAuthEndpoint("/two-factor/cancel-enrollment", {
+      method: "POST", use: [sessionMiddleware],
+    }, async ctx => {
+      const owner = await snapshot(ctx, false, true);
+      return withNativeAuthenticationTransaction(db, ctx, schema, async tx => {
+        const [current] = await tx.execute<{ id: string }>(sql`select id from "user" where id=${owner.userId}
+          and authenticator_version=${owner.version} and not two_factor_enabled for update nowait`);
+        if (!current || !owner.sessionId) deny();
+        const proof = await assertHumanAuthentication(tx, { type: "board", source: "session",
+          userId: owner.userId, sessionId: owner.sessionId }, { requireRecent: true,
+          phishingResistant: operatorUserIds.includes(owner.userId) });
+        if (owner.enabled || owner.verified) throw new APIError("CONFLICT", {
+          code: "FACTOR_ALREADY_ENABLED", message: "Use the enabled authenticator settings",
+        });
+        if (!owner.factorId) return ctx.json({ status: true });
+        const [pending] = await tx.execute<{ id: string }>(sql`select id from two_factor
+          where id=${owner.factorId} and user_id=${owner.userId} and not verified for update nowait`);
+        if (!pending) deny();
+        await ctx.context.adapter.delete({ model: "twoFactor", where: [{ field: "id", value: pending.id }] });
+        await rotate(ctx, tx, owner, owner.version+1, {
+          authenticationMethod: proof.method, authenticatedAt: proof.authenticatedAt,
+        });
+        return ctx.json({ status: true });
+      }).catch(nativeFailure);
+    }),
     changePassword: createAuthEndpoint(nativeChangePassword.path, nativeChangePassword.options, async ctx => {
       const active = ctx.context.session;
+      assertExpectedAuthenticationUser(ctx, active.user.id);
+      assertExpectedAuthenticationSession(ctx, active.session.id);
       return withNativeAuthenticationTransaction(db, ctx, schema, async tx => {
         const [current] = await tx.execute<FactorSnapshot>(sql`select u.id as "userId",
           u.authenticator_version as version,u.two_factor_enabled as enabled,
@@ -251,7 +285,7 @@ export function nativeTwoFactorPlugin(db: Db, schema: NativeAuthenticationSchema
         const session = await rotate(ctx, tx, { ...current, sessionToken: active.session.token }, current.version+1, {
           authenticationMethod: proof?.method ?? "password", authenticatedAt: proof?.authenticatedAt ?? new Date(clock!.at),
         });
-        return { ...response, token: session.token, user: parseUserOutput(ctx.context.options, ctx.context.session!.user) };
+        return { ...response, sessionId: session.id, token: session.token, user: parseUserOutput(ctx.context.options, ctx.context.session!.user) };
       }).catch(nativeFailure);
     }),
     enableTwoFactor: wrap(native.endpoints.enableTwoFactor, "enable"),
@@ -280,7 +314,7 @@ export function nativeTwoFactorPlugin(db: Db, schema: NativeAuthenticationSchema
         const result = await originalHook.handler({ ...ctx, headers, asResponse: false, returnHeaders: true }) as unknown as NativeResponse;
         for (const [key, value] of result.headers) if (key.toLowerCase() !== "set-cookie") ctx.setHeader(key, value);
         for (const cookie of result.headers.getSetCookie()) ctx.responseHeaders.append("set-cookie", cookie);
-        return result.response;
+        return { ...result.response, userId: created.user.id };
       });
     } catch (error) {
       deleteSessionCookie(ctx);

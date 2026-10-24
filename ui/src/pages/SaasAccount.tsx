@@ -18,6 +18,7 @@ import { LOCAL_PASSWORD_MAX_UTF16_LENGTH } from "@paperclipai/shared/local-passw
 import { readPendingAccountDeletion, retainPendingAccountDeletion, clearPendingAccountDeletion } from "../lib/pending-account-deletion";
 import { useV9FeatureEnabled } from "../hooks/useV9FeatureEnabled";
 import { NotificationPolicySettings } from "../components/NotificationPolicySettings";
+import { NativeAuthenticationSettings } from "../components/NativeAuthenticationSettings";
 
 export function SaasAccountPage() {
   const { t } = useTranslation("experience");
@@ -163,6 +164,7 @@ function AccountSecurityScope({ principal, companyId }: { principal: string; com
   const deleteLocked = deletion.isPending || !!deletionAttempt.current || recoveryUnavailable;
   return <section className="saas-page" aria-labelledby="account-security-title">
     <h1 id="account-security-title" className="saas-title outline-none" tabIndex={-1} ref={heading}>{t("account.heading")}</h1>
+    <NativeAuthenticationSettings key={principal} principal={principal} />
     {!privateReady && <div>
       <p role={scope.failed ? "alert" : "status"}>{t(scope.failed ? "account.checkFailed" : capabilities.isSuccess && !capabilities.data ? "account.unavailable" : "account.checking")}</p>
       {scope.failed && <Button variant="outline" className="min-h-11" onClick={() => {

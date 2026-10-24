@@ -101,24 +101,28 @@ describe("authApi two-factor sign-in", () => {
 
   it("preserves the native challenge response and posts the exact TOTP and recovery-code bodies", async () => {
     const fetchMock = vi.fn()
-      .mockResolvedValueOnce(new Response(JSON.stringify({ twoFactorRedirect: true, twoFactorMethods: ["totp"] }), {
+      .mockResolvedValueOnce(new Response(JSON.stringify({ userId: "human", twoFactorRedirect: true, twoFactorMethods: ["totp"] }), {
         status: 200, headers: { "Content-Type": "application/json" },
       }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ token: "native-token" }), {
+      .mockResolvedValueOnce(new Response(JSON.stringify({ token: "native-token", sessionId: "session-human" }), {
         status: 200, headers: { "Content-Type": "application/json" },
       }))
-      .mockResolvedValueOnce(new Response(JSON.stringify({ token: "native-token" }), {
+      .mockResolvedValueOnce(new Response(JSON.stringify({ token: "native-token", sessionId: "session-human" }), {
         status: 200, headers: { "Content-Type": "application/json" },
       }));
     vi.stubGlobal("fetch", fetchMock);
 
     await expect(authApi.signInEmail({ email: "person@example.test", password: "secret" })).resolves.toEqual({
+      userId: "human",
       twoFactorRedirect: true,
       twoFactorMethods: ["totp"],
     });
-    await authApi.verifyTotp("123456");
-    await authApi.verifyBackupCode("ABCD-EFGH");
+    await authApi.verifyTotp("123456", "human");
+    await authApi.verifyBackupCode("ABCD-EFGH", "human");
 
+    for (const [, init] of fetchMock.mock.calls.slice(1)) {
+      expect(init?.headers).toMatchObject({ "X-Blentera-Expected-User": "human" });
+    }
     expect(fetchMock.mock.calls.map(([url, init]) => [url, JSON.parse(String(init?.body))])).toEqual([
       ["/api/auth/sign-in/email", { email: "person@example.test", password: "secret" }],
       ["/api/auth/two-factor/verify-totp", { code: "123456" }],
@@ -139,6 +143,18 @@ describe("authApi two-factor sign-in", () => {
     })));
     await expect(authApi.signInEmail({ email: "person@example.test", password: "secret" }))
       .rejects.toThrow("Invalid native two-factor challenge response");
+  });
+});
+
+describe("native security account binding", () => {
+  it("reads uncached status with cancellation and refuses another principal in its response", async () => {
+    const controller = new AbortController();
+    const fetchMock = vi.fn().mockResolvedValue(new Response(JSON.stringify({ userId: "other", hasPassword: true,
+      twoFactorEnabled: false, phishingResistantRequired: false }), { status: 200 }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(authApi.securityStatus("human", controller.signal)).rejects.toMatchObject({ status: 409, code: "ACCOUNT_CHANGED" });
+    expect(fetchMock).toHaveBeenCalledWith("/api/auth/security", expect.objectContaining({ cache: "no-store", signal: controller.signal,
+      headers: { Accept: "application/json", "X-Blentera-Expected-User": "human" } }));
   });
 });
 
