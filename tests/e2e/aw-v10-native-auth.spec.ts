@@ -1,4 +1,5 @@
 import { readFile } from "node:fs/promises";
+import { randomUUID } from "node:crypto";
 import { tmpdir } from "node:os";
 import { createDb, closeRegisteredClients } from "../../packages/db/src/index.ts";
 import { sql } from "../../server/node_modules/drizzle-orm/index.js";
@@ -45,15 +46,20 @@ test("native CLI consent and account settings use real session and authenticator
   const manualTask = await json(await page.request.post(`/api/companies/${company.id}/issues`, { data: {
     title: "Direct Human source binding", description: "An independent manual request.", status: "todo",
   } }));
+  const manualComment = await json(await page.request.post(`/api/issues/${manualTask.id}/comments`, { data: {
+    body: "A direct Human clarification.", clientRequestId: randomUUID(),
+  } }));
   for (const field of ["payloadSourceProtocolVersion", "payloadSourceSnapshot", "payloadSourceSnapshotInvalidated"]) {
     expect(manualTask).not.toHaveProperty(field);
     expect(manualProject).not.toHaveProperty(field);
+    expect(manualComment).not.toHaveProperty(field);
   }
   const sourceFixture = await fixtureDatabase(config);
   try {
     for (const owner of [
       { kind: "issue", table: "issues", id: manualTask.id, action: "issue.payload_source_captured" },
       { kind: "project", table: "projects", id: manualProject.id, action: "project.payload_source_captured" },
+      { kind: "comment", table: "issue_comments", id: manualComment.id, action: "comment.payload_source_captured", auditEntityId: manualTask.id },
     ]) {
       const [stored] = await sourceFixture.db.execute(sql`select t.payload_source_protocol_version as protocol,
         t.payload_source_snapshot as snapshot,
@@ -65,10 +71,11 @@ test("native CLI consent and account settings use real session and authenticator
       expect(stored?.snapshot).toMatchObject({ owner: {
         kind: owner.kind, companyId: company.id, id: owner.id, contentHash: stored?.hash,
       }, inputs: [] });
-      const audit = await sourceFixture.db.execute(sql`select actor_type,actor_id from activity_log
-        where company_id=${company.id}::uuid and entity_id=${owner.id} and action=${owner.action}`);
+      const audit = await sourceFixture.db.execute(sql`select actor_type,actor_id,details from activity_log
+        where company_id=${company.id}::uuid and entity_id=${owner.auditEntityId ?? owner.id} and action=${owner.action}`);
       expect(audit).toHaveLength(1);
       expect(audit[0]).toMatchObject({ actor_type: "user", actor_id: signup.user.id });
+      if (owner.kind === "comment") expect(audit[0]?.details).toMatchObject({ commentId: owner.id, contentHash: stored?.hash });
     }
   } finally { await closeRegisteredClients(sourceFixture.url); }
   const accountPath = `/${company.issuePrefix}/company/settings/security`;

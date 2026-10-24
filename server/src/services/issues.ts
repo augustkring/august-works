@@ -12700,23 +12700,89 @@ export function issueService(db: Db) {
         clientRequestId?: string;
         /** Server-only: authenticated Paperclip messages also belong in the Slack thread. */
         mirrorToSlack?: boolean;
+        /** Actual HTTP actor, never inferred from author attribution. */
+        manualInputActor?: AuthorizationActor;
       },
       dbOrTx: any = db,
+      manualInputProtocol?: 1,
     ): Promise<IssueComment> {
       if (dbOrTx === db && (actor.runId || actor.userId)) {
-        const append = () =>
-          db.transaction(async (tx) => {
+        const candidate = options?.manualInputActor;
+        const directActor = candidate?.type === "board" && candidate.source === "session" &&
+          candidate.userId === actor.userId && candidate.sessionId && !candidate.runId && !actor.agentId && !actor.runId &&
+          (!options?.authorType || options.authorType === "user") && !options?.presentation && !options?.metadata &&
+          !options?.createdAt && (!options?.authorizationReason || options.authorizationReason === "allow_board_actor") &&
+          !options?.attachmentIds?.length ? { ...candidate } : null;
+        const append = async () => {
+          let sourcePublication: ActivityPublication | null = null;
+          const result = await db.transaction(async (tx) => {
+            let expiresAt: number | null = null, operator = false, companyId: string | null = null;
+            if (directActor) {
+              const pinned = await pinCurrentBoardActor(tx, directActor);
+              if (!pinned || pinned.credentialExpiresAt === null || !Number.isFinite(pinned.credentialExpiresAt))
+                throw forbidden("The current manual input session is unavailable");
+              expiresAt = pinned.credentialExpiresAt;
+              const [target] = await tx.select({ companyId: issues.companyId }).from(issues).where(eq(issues.id, issueId));
+              if (!target) throw notFound("Issue not found");
+              companyId = target.companyId;
+              operator = await pinIssueMutationHuman(tx, directActor, companyId, true) === "instance_admin";
+              if (operator) await assertHumanAuthentication(tx, directActor, { requireRecent: true, phishingResistant: true });
+              await assertManualInputCredentialCurrent(tx, directActor, expiresAt);
+              await lockIssuePrivacyTree(tx, companyId);
+            }
             // Serialize run-authored comments on the issue so a provider retry
             // cannot publish the same visible result twice. This needs no schema
             // change: the issue row is the transaction fence, and the recursive
             // call below performs the lookup and insert while holding it.
-            await tx
-              .select({ id: issues.id })
+            const [lockedIssue] = await tx
+              .select({ id: issues.id, companyId: issues.companyId, status: issues.status,
+                assigneeAgentId: issues.assigneeAgentId, assigneeUserId: issues.assigneeUserId })
               .from(issues)
               .where(eq(issues.id, issueId))
               .for("update");
-            return addComment(issueId, body, actor, options, tx);
+            let freshInput = false;
+            if (directActor) {
+              if (!lockedIssue || lockedIssue.companyId !== companyId) throw notFound("Issue not found");
+              const currentActor = { ...directActor, isInstanceAdmin: false, ignoreInstanceAdmin: !operator };
+              const decision = await authorizationService(tx).decide({ actor: currentActor, action: "issue:comment",
+                resource: { type: "issue", companyId: lockedIssue.companyId, issueId,
+                  status: lockedIssue.status, assigneeAgentId: lockedIssue.assigneeAgentId,
+                  assigneeUserId: lockedIssue.assigneeUserId }, enforceResponsibleUserIntersection: true });
+              if (!decision.allowed || !await canActorReadIssuePrivacy(tx, currentActor, lockedIssue))
+                throw forbidden("Current task comment authority is required");
+              const existing = options?.clientRequestId ? await tx.select({ id: issueComments.id }).from(issueComments)
+                .where(and(eq(issueComments.issueId, issueId), eq(issueComments.authorUserId, directActor.userId!),
+                  eq(issueComments.clientRequestId, options.clientRequestId))).limit(1) : [];
+              freshInput = existing.length === 0;
+            }
+            const comment = await addComment(issueId, body, actor, options, tx, freshInput ? 1 : undefined);
+            if (directActor && expiresAt !== null && companyId) {
+              if (freshInput) {
+                const [captured] = await tx.update(issueComments)
+                  .set({ payloadSourceSnapshot: directHumanPayloadSnapshotSql("comment") })
+                  .where(and(eq(issueComments.id, comment.id), eq(issueComments.companyId, companyId),
+                    eq(issueComments.issueId, issueId), eq(issueComments.authorUserId, directActor.userId!),
+                    eq(issueComments.payloadSourceProtocolVersion, 1), isNull(issueComments.payloadSourceSnapshot),
+                    eq(issueComments.payloadSourceSnapshotInvalidated, false), isNull(issueComments.deletedAt))).returning();
+                if (!captured?.payloadSourceSnapshot) throw conflict("Manual comment source capture was not stored");
+                const snapshot = nativePayloadSourceSnapshotSchema.parse(captured.payloadSourceSnapshot);
+                const activity = await persistActivity(tx as unknown as Db, { companyId, actorType: "user",
+                  actorId: directActor.userId!, action: "comment.payload_source_captured", entityType: "issue",
+                  entityId: issueId, details: { commentId: comment.id, producer: "direct_manual_input",
+                    contentHash: snapshot.owner.contentHash, digest: snapshot.digest } });
+                sourcePublication = activity.publication;
+              }
+              if (operator) await assertHumanAuthentication(tx, directActor, { requireRecent: true, phishingResistant: true });
+              await assertManualInputCredentialCurrent(tx, directActor, expiresAt);
+            }
+            return comment;
           });
+          if (sourcePublication) {
+            try { publishActivity(sourcePublication); }
+            catch (err) { logger.warn({ err }, "Failed to publish committed comment source activity"); }
+          }
+          return result;
+        };
         return options?.authorizationReason ===
           CHAT_RUN_PRESENTATION_AUTHORIZATION_REASON
           ? retryNativeChatReviewPresentation(append)
@@ -12973,6 +13039,7 @@ export function issueService(db: Db) {
             authorType,
             createdByRunId,
             body: redactedBody,
+            ...(manualInputProtocol ? { payloadSourceProtocolVersion: manualInputProtocol } : {}),
             clientRequestId: options?.clientRequestId ?? null,
             presentation,
             metadata,

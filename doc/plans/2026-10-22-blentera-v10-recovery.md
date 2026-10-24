@@ -1003,3 +1003,27 @@ The pre-run Context/accountable-run failure, historical assessment source-read
 checks and runtime source-currentness remain open. Evidence:
 `doc/operations/aw-v10-evidence/native-package-review-custody-2026-10-24/checkpoint.json`.
 Full V10/PR acceptance is still open.
+
+### 2026-10-24 — direct Human comment source and native event owner
+
+The original ordinary comment owner now captures independent direct Human
+input using its actual pinned native actor, same-transaction body binding and
+source audit, and final source deadlines on both new input and old replay.
+Historical protocol0 and unknown protocol1 comments remain unknown; service
+attribution and structured/attachment/specialized inputs supply no capture.
+The audit uses the native parent Task entity and exact comment detail so its
+actual live event follows existing current Task source authorization.
+
+Final9 native comment checks, final built cookie/authenticator browser and
+server compilation pass. Six public DTO checks also pass in a gate whose
+separate initial private-event fixture expected HTTP201 incorrectly: the
+original private-work guard correctly returned422 and remains closed. The
+corrected native-domain event control proves owner delivery/other-member
+exclusion without qualifying private HTTP work. Earlier26 Task/Project owner
+cases pass after the shared SQL change; failed metadata fixtures and their
+source-stage limits are retained.
+
+Company HTTP activity/audit source-aware pre-limit reads and lifetimes remain
+open, along with the six typed/private source/temporal failures, other producers
+and complete Native input receipts. This is no full V10/PR admission. Evidence:
+`doc/operations/aw-v10-evidence/native-manual-comment-2026-10-24/checkpoint.json`.

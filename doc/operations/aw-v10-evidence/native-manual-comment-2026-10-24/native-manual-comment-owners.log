@@ -1,0 +1,45 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/manual-comment-payload-source.integration.test.ts (7 tests | 1 failed) 14264ms
+     × keeps structured or service-attributed comments unknown 159ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/manual-comment-payload-source.integration.test.ts > direct Human comment payload source capture > keeps structured or service-attributed comments unknown
+ZodError: [
+  {
+    "origin": "array",
+    "code": "too_small",
+    "minimum": 1,
+    "inclusive": true,
+    "path": [
+      "sections"
+    ],
+    "message": "Too small: expected array to have >=1 items"
+  }
+]
+ ❯ addComment src/services/issues.ts:12937:10
+    12935|       const metadata = issueCommentMetadataSchema
+    12936|         .nullable()
+    12937|         .parse(
+       |          ^
+    12938|           actor.agentId
+    12939|             ? withAgentCommentAuthorizationMetadata(
+ ❯ src/services/issues.ts:12758:29
+ ❯ scope ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18
+ ❯ sql.begin ../node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14
+ ❯ append src/services/issues.ts:12718:26
+ ❯ src/__tests__/manual-comment-payload-source.integration.test.ts:89:24
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 2 passed (3)
+      Tests  1 failed | 32 passed (33)
+   Start at  10:46:46
+   Duration  101.14s (transform 26.02s, setup 545ms, import 59.02s, tests 40.23s, environment 0ms)
+

@@ -275,3 +275,36 @@ source pins are retained in:
 The six typed/private-Memory/temporal failures, remaining producers/mutations,
 complete input receipts and read families, portability/Context/readiness and
 full V10/PR admission remain open.
+
+### 2026-10-24 — original direct Human comment constructor
+
+The ordinary HTTP comment branch now passes its actual native Board/session
+actor to the original comment owner. Only independent user body input, without
+run/agent attribution, structured metadata/presentation, attachments, imported
+timestamps or specialized authorizations, enters the direct producer. Other
+comment constructors and attachment/conversation/special-decision branches
+remain unknown. No author UID or client-provided proof field supplies capture.
+
+The original transaction pins native User/session and current write membership
+(or native recent passkey-qualified operator role) before privacy-tree and Task
+locks. Canonical current comment permission and Task privacy narrow admission.
+The fresh INSERT chooses protocol1; final stored comment bytes are then bound
+to their DB body hash/digest with the actual Task as a current policy anchor,
+not a claim that the Task body was copied. The actual Human source audit is in
+that same transaction and its notification follows commit. Final source-session
+and operator deadlines apply to successful new writes and old replays.
+
+The Task row serializes exact user/request-ID lookup before the constructor.
+Historical protocol0 and unknown protocol1 comments remain unknown; neither
+dedup nor attribution can reconstruct their lost source history. The internal
+INSERT protocol argument alone creates no known snapshot or grant. Existing
+queued-body edits, metadata upgrades and erasure writers invalidate changed
+body proof; operational trust/session-generation metadata remains outside the
+comment body hash. The original tombstone test verifies monotonic invalidation.
+
+Actual focused PostgreSQL checks cover these properties and audit rollback.
+The built cookie/authenticator browser additionally checks the original HTTP
+producer's stored hash/digest and actual Human audit. This slice does not
+activate a run receipt, qualify model input completeness, fix the six remaining
+typed/private-Memory/temporal cases or admit private work/full V10/PR readiness.
+Evidence: `doc/operations/aw-v10-evidence/native-manual-comment-2026-10-24/checkpoint.json`.

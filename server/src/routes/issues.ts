@@ -18210,6 +18210,7 @@ export function issueRoutes(
           mirrorToSlack: actor.actorType === "user",
           authorizationReason: commentAuthorizationReason,
           sourceTrust: await sourceTrustForActorWrite(currentIssue, actor),
+          ...(req.actor.type === "board" && req.actor.source === "session" ? { manualInputActor: { ...req.actor } } : {}),
         };
         const add = (dbOrTx: Db = db) =>
           svc.addComment(
