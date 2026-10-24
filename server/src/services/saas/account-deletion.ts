@@ -301,6 +301,7 @@ export async function eraseAccountAccess(
       and r.legal_hold and (r.hold_release_at is null or r.hold_release_at>clock_timestamp()))`);
   await tx.execute(sql`delete from ${authRateLimits} where key like ${"customer-feedback:" + sha256(JSON.stringify(userId)) + ":%"}`);
   await tx.execute(sql`delete from ${authRateLimits} where key like ${"support-case:" + sha256(JSON.stringify(userId)) + ":%"}`);
+  await tx.execute(sql`delete from ${authRateLimits} where key=${"password-reauth:" + sha256(userId)}`);
   await tx.execute(sql`delete from "session" where user_id=${userId}`);
   await tx.execute(sql`delete from "account" where user_id=${userId}`);
   await tx.execute(sql`delete from two_factor where user_id=${userId}`);

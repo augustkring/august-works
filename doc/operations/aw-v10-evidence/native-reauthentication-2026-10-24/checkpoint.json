@@ -1,0 +1,57 @@
+{
+  "parentCommit": "4bba7ed992890d1e47f97783c63c46350b2fc12c",
+  "status": "Bounded native password reauthentication; complete MFA/operator admission remains open",
+  "sourcePins": {
+    "server/src/__tests__/better-auth-credential-signup.integration.test.ts": "26085a51510bfa28dc67db8fd974562478b84a1a9c9b25b2d14dde9deefcb9f7",
+    "server/src/__tests__/v6-account-deletion.integration.test.ts": "74b004d9a560b7bdb165afd8229e5790b6a5787bff514aca00de7db9294cf0a4",
+    "server/src/auth/authenticator-assurance.ts": "6cd889834ecaf926803253d93fa31e8829af900e8b2a94453c63a1bbcbb8c7bd",
+    "server/src/auth/native-authentication-assurance.ts": "f0388fb0a8e4f4b37cac3454188aa27cb1e9134bb195932207d47ee5fc2644a9",
+    "server/src/services/saas/account-deletion.ts": "d5966e34a1e75a653ecf9b5c99a509187fddb62c196ef18d84dc3ccf7b6e93f2",
+    "ui/src/api/auth.ts": "50fbc92f6d490b10e91e90f3355c0def643c7a8f67ab3f1c1c92ca09ee3857e3"
+  },
+  "checks": {
+    "reauthentication-regression": {
+      "exit": 0,
+      "logSha256": "cbc3cc31f7389c3d27175aaf1aaa484a4bf737206a815b4b1678aa0c63a8b92e"
+    },
+    "reauth-budget-pinning-baseline": {
+      "exit": 1,
+      "logSha256": "347e9f8b7d0e50c8d8b524bf365cbaf79b2372eae9d4253ddb93b2f766b02386"
+    },
+    "reauthentication-final": {
+      "exit": 0,
+      "logSha256": "a457c68e1357283f9b632d83164f5de3c4cf988ec340087b648e83cb486d18f5"
+    },
+    "reauth-server-types": {
+      "exit": 0,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "reauth-client-tests": {
+      "exit": 0,
+      "logSha256": "93bfed2790d28b1663d665fac576c26e8b2a43df9c106eb4925c02171e7799a3"
+    },
+    "reauth-ui-types": {
+      "exit": 0,
+      "logSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855"
+    },
+    "reauth-ui-tokens": {
+      "exit": 0,
+      "logSha256": "8a0e7e5dea82ee84952378e72ed2821626a7332a8b72d8bf9a7fd53dd32eec29"
+    }
+  },
+  "observations": [
+    "Initial three complete PostgreSQL/HTTP suites: 31 pass before the additional marker/budget-lock assertions. Archived test-before-assertions.ts and product owners identify that stage.",
+    "Budget-pinning baseline: 2 cases fail / 11 filtered, with four failing assertions. Erased identities recreate an attempt row; an already-held native user lock returns 500 and commits an attempt, so the later successful retry observes count 2. Exact product/helper/test sources archived.",
+    "Final three complete native suites: 32 pass, zero skipped. They retain original credential, lifetime, account erasure and Unicode cases and add real password reauthentication, two native instances sharing one durable principal budget, erased-marker refusal, real maintained password verification interleaved with a committed credential rotation, and physical user-lock reservation denial.",
+    "Native session middleware strips private user fields. Actual native session/user IDs locate the trusted database generation before verification. Proof completion compares that original version, current session/credential and canonical erasure marker in a separate physical transaction.",
+    "Attempt reservation pins actual session and user while committing its durable budget before verification. Bad passwords and limited denials cannot roll the budget back; absent/erased/locked identities cannot create its row. The same original account erasure owner removes this principal budget.",
+    "Auth client regression: 10 pass. Final server/UI compiler and token gates return zero; sessions closed. Server compiler excludes tests."
+  ],
+  "limits": [
+    "Current password reauthentication refreshes proof on the same native session. Native session rotation/fresh-age compatibility will be completed with protected factor integration; no factor UI is offered by this endpoint yet.",
+    "Two native auth instances use real shared PostgreSQL in one test process. This is not qualification of separate deployed replicas, restarts or failover.",
+    "Erasure marker restoration is structural state, not encrypted-backup restoration qualification. Existing factor fixtures do not qualify MFA/WebAuthn ceremonies.",
+    "MFA/passkey plugins, full enrollment/recovery/reauthentication UI, powerful-action enforcement, operator phishing resistance/bootstrap and enterprise recovery remain open.",
+    "No full workspace, V10, provider deployment or PR-ready claim."
+  ]
+}

@@ -1,4 +1,4 @@
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import express from "express";
 import request from "supertest";
 import { hashPassword } from "better-auth/crypto";
@@ -801,7 +801,10 @@ const support = await getEmbeddedPostgresTestSupport();
       }).returning();
       await expect(db.delete(authPasskeys).where(eq(authPasskeys.id, passkey.id)))
         .rejects.toMatchObject({ cause: { code: "23514" } });
+      const reauthKey = "password-reauth:" + createHash("sha256").update(id).digest("hex");
+      await db.insert(authRateLimits).values({ id: randomUUID(), key: reauthKey, count: 3, lastRequest: 0 });
       await accountDeletionService(db, effects).request(id, input("native-authenticator-erasure-001"));
+      expect(await db.select().from(authRateLimits).where(eq(authRateLimits.key, reauthKey))).toEqual([]);
       expect(await db.select().from(authTwoFactors).where(eq(authTwoFactors.userId, id))).toEqual([]);
       expect(await db.select().from(authPasskeys).where(eq(authPasskeys.userId, id))).toEqual([]);
       const [retained] = await db.select().from(authUsers).where(eq(authUsers.id, id));

@@ -694,3 +694,35 @@ reach that provider shape. Structural factor/key fixtures do not qualify MFA,
 WebAuthn, physical authenticators or restored-backup MFA. Existing source
 privacy/temporal, typed Workflow origins, portability and whole-workspace gates
 remain open. No full V10, provider deployment or PR-ready claim.
+
+### 2026-10-24 — Native password reauthentication and attempt lifetime
+
+The existing native policy plugin exposes password reauthentication through the
+maintained Better Auth checker. It obtains the actual session/user generation
+from PostgreSQL before verification, because native session middleware returns
+public fields, then stamps current proof only if that original generation,
+session, credential and erasure state still hold. Existing private proof fields
+and native sessions remain the sole authority. Canonical erasure markers deny
+fresh authority even if stale credential/session material reappears.
+
+A database-clock principal budget commits under actual user/session lifetime pins
+before verification. Bad-password and rate-limit responses retain their attempts;
+locked, absent or erased identities cannot create that row. The original account
+erasure owner clears it. The native IP limiter remains an additional guard.
+
+Initial three-suite stage passes 31. Additional physical-lock and erased-marker
+assertions reproduce two failing cases/four assertions, including a persisted
+attempt on locked admission. The corrected complete PostgreSQL/HTTP suites pass
+32, with actual native verifier/committed password-rotation interleaving and two
+native instances sharing one principal budget. Auth client regression passes 10;
+final server/UI compilers and token gates return zero and sessions close. Server
+compiler excludes tests. Exact stages, baseline archives and final pins are in
+native-reauthentication-2026-10-24/checkpoint.json.
+
+V10-166 remains in progress: same-session password proof is not full factor
+integration. Native session rotation/fresh-age compatibility, protected native
+factor transactions, actual MFA/WebAuthn ceremonies, full UI, operator/bootstrap
+and enterprise recovery remain open. Two test instances in one process do not
+qualify deployed replicas or restart/failover. Structural stale-erasure fixtures
+do not qualify encrypted-backup restoration. Prior privacy, Workflow-origin,
+portability and whole-workspace/V10/PR gates remain open.

@@ -6,6 +6,16 @@ import type { AuthorizationActor } from "../services/authorization.js";
 export const RECENT_AUTHENTICATION_SECONDS = 300;
 export type NativeAuthenticationMethod = "password" | "totp" | "backup_code" | "passkey";
 
+export function isAuthenticationStateBusy(error: unknown): boolean {
+  let cause = error;
+  for (let depth = 0; depth < 4 && cause && typeof cause === "object"; depth++) {
+    const candidate = cause as { code?: unknown; cause?: unknown };
+    if (candidate.code === "55P03") return true;
+    cause = candidate.cause;
+  }
+  return false;
+}
+
 /** Authentication proof narrows the original domain authorization; it never
  * grants membership, a permission or operator status. Use the domain's physical
  * transaction and repeat the check before commit after intervening waits. */
@@ -26,6 +36,7 @@ export async function assertHumanAuthentication(
       where s.id=${actor.sessionId} and u.id=${actor.userId}
         and s.expires_at>clock_timestamp()
         and s.authenticator_version=u.authenticator_version
+        and not exists (select 1 from account_deletion_operations where user_id=u.id)
         and s.authenticated_at<=clock_timestamp()
         and ${options.requireRecent
           ? sql`s.authenticated_at>=clock_timestamp()-${RECENT_AUTHENTICATION_SECONDS}*interval '1 second'`
@@ -45,12 +56,7 @@ export async function assertHumanAuthentication(
     if (!proof) throw denied();
     return { ...proof, authenticatedAt: new Date(proof.authenticatedAt) };
   } catch (error) {
-    let cause: unknown = error;
-    for (let depth = 0; depth < 4 && cause && typeof cause === "object"; depth++) {
-      const candidate = cause as { code?: unknown; cause?: unknown };
-      if (candidate.code === "55P03") throw conflict("Authentication state is changing; try again", { code: "authentication_state_busy" });
-      cause = candidate.cause;
-    }
+    if (isAuthenticationStateBusy(error)) throw conflict("Authentication state is changing; try again", { code: "authentication_state_busy" });
     throw error;
   }
 }

@@ -201,6 +201,10 @@ export const authApi = {
     await authPost("/two-factor/verify-totp", { code });
   },
 
+  reauthenticatePassword: async (password: string): Promise<void> => {
+    await authPost("/reauthenticate/password", { password });
+  },
+
   verifyBackupCode: async (code: string): Promise<void> => {
     await authPost("/two-factor/verify-backup-code", { code });
   },

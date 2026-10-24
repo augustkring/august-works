@@ -13,14 +13,15 @@
  * happens.
  */
 
-import { randomUUID } from "node:crypto";
-import { eq, inArray } from "drizzle-orm";
+import { createHash, randomUUID } from "node:crypto";
+import { eq, inArray, sql } from "drizzle-orm";
 import { hashPassword, makeSignature } from "better-auth/crypto";
 import type { Auth } from "better-auth";
 import express from "express";
 import request from "supertest";
-import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { authAccounts, authSessions, authUsers, createDb } from "@paperclipai/db";
+import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
+import { accountDeletionOperations, authAccounts, authRateLimits, authSessions, authUsers, createDb } from "@paperclipai/db";
+import { assertHumanAuthentication } from "../auth/authenticator-assurance.js";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -95,6 +96,17 @@ describeEmbeddedPostgres("Better Auth credential sign-up against the real schema
     if (originalEnv.rateLimit === undefined) delete process.env.PAPERCLIP_AUTH_RATE_LIMIT_ENABLED;
     else process.env.PAPERCLIP_AUTH_RATE_LIMIT_ENABLED = originalEnv.rateLimit;
   });
+
+  async function signedUpFixture() {
+    const email = `reauth-${randomUUID()}@example.test`;
+    const response = await request(app).post("/api/auth/sign-up/email").set("Origin", ORIGIN)
+      .send({ email, password: PASSWORD, name: "Reauthentication fixture" });
+    expect(response.status).toBe(200);
+    const userId: string = response.body.user.id;
+    const [session] = await db.select().from(authSessions).where(eq(authSessions.userId, userId));
+    return { email, userId, sessionId: session.id,
+      cookie: sessionCookies(response).map(cookie => cookie.split(";", 1)[0]).join("; ") };
+  }
 
   it("creates the user and its credential account, then signs that user in", async () => {
     const signUp = await request(app)
@@ -272,5 +284,133 @@ describeEmbeddedPostgres("Better Auth credential sign-up against the real schema
     const signedIn = await request(app).post("/api/auth/sign-in/email").set("Origin", ORIGIN)
       .send({ email, password: "A longer native café passphrase 2026" });
     expect(signedIn.status).toBe(200);
+  });
+
+  it("requires the real password to refresh unknown proof on the same native session", async () => {
+    const fixture = await signedUpFixture();
+    await db.update(authSessions).set({ authenticationMethod: null, authenticatedAt: null, authenticatorVersion: null })
+      .where(eq(authSessions.id, fixture.sessionId));
+    const actor = { type: "board" as const, source: "session" as const,
+      userId: fixture.userId, sessionId: fixture.sessionId };
+    await expect(assertHumanAuthentication(db, actor, { requireRecent: true, phishingResistant: false }))
+      .rejects.toMatchObject({ status: 403 });
+    const confirm = (password: string) => request(app).post("/api/auth/reauthenticate/password")
+      .set("Origin", ORIGIN).set("Cookie", fixture.cookie).send({ password });
+    expect((await confirm("wrong password")).status).toBe(400);
+    const [unknown] = await db.select().from(authSessions).where(eq(authSessions.id, fixture.sessionId));
+    expect(unknown).toMatchObject({ authenticationMethod: null, authenticatedAt: null, authenticatorVersion: null });
+    const accepted = await confirm(PASSWORD);
+    expect(accepted.status).toBe(200);
+    expect(accepted.body).toEqual({ status: true });
+    const sessions = await db.select().from(authSessions).where(eq(authSessions.userId, fixture.userId));
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]).toMatchObject({ id: fixture.sessionId, authenticationMethod: "password" });
+    await expect(db.transaction(tx => assertHumanAuthentication(tx, actor, {
+      requireRecent: true, phishingResistant: false,
+    }))).resolves.toMatchObject({ method: "password" });
+    const unauthenticated = await request(app).post("/api/auth/reauthenticate/password")
+      .set("Origin", ORIGIN).send({ password: PASSWORD });
+    expect(unauthenticated.status).toBe(401);
+    const [clock] = await db.execute<{ fresh: boolean }>(sql`select authenticated_at<=clock_timestamp()
+      and authenticated_at>=clock_timestamp()-interval '5 seconds' as fresh from "session" where id=${fixture.sessionId}`);
+    expect(clock.fresh).toBe(true);
+  });
+
+  it("commits password confirmation attempts across native instances without renewing the window", async () => {
+    const fixture = await signedUpFixture();
+    const second = express();
+    second.all("/api/auth/{*authPath}", createBetterAuthHandler(createBetterAuthInstance(db, testConfig(), [ORIGIN])));
+    const key = "password-reauth:" + createHash("sha256").update(fixture.userId).digest("hex");
+    let windowStart: number | null = null;
+    for (let i = 0; i < 10; i++) {
+      const response = await request(i % 2 ? second : app).post("/api/auth/reauthenticate/password")
+        .set("Origin", ORIGIN).set("Cookie", fixture.cookie).send({ password: "wrong password" });
+      expect(response.status).toBe(400);
+      const [budget] = await db.select().from(authRateLimits).where(eq(authRateLimits.key, key));
+      windowStart ??= budget.lastRequest;
+      expect(budget).toMatchObject({ count: i + 1, lastRequest: windowStart });
+    }
+    const limited = await request(second).post("/api/auth/reauthenticate/password")
+      .set("Origin", ORIGIN).set("Cookie", fixture.cookie).send({ password: PASSWORD });
+    expect(limited.status).toBe(429);
+    const [budget] = await db.select().from(authRateLimits).where(eq(authRateLimits.key, key));
+    expect(budget).toMatchObject({ count: 11, lastRequest: windowStart });
+    const independent = await signedUpFixture();
+    expect((await request(second).post("/api/auth/reauthenticate/password")
+      .set("Origin", ORIGIN).set("Cookie", independent.cookie).send({ password: PASSWORD })).status).toBe(200);
+  });
+
+  it("denies erased identity markers despite restored password material and stale native sessions", async () => {
+    const fixture = await signedUpFixture();
+    // Structural restored-state marker, not encrypted-backup qualification.
+    await db.insert(accountDeletionOperations).values({ userId: fixture.userId,
+      idempotencyKey: createHash("sha256").update(randomUUID()).digest("hex"),
+      status: "completed", completedAt: new Date() });
+    await expect(assertHumanAuthentication(db, { type: "board", source: "session",
+      userId: fixture.userId, sessionId: fixture.sessionId }, { requireRecent: true, phishingResistant: false }))
+      .rejects.toMatchObject({ status: 403 });
+    const reauth = await request(app).post("/api/auth/reauthenticate/password")
+      .set("Origin", ORIGIN).set("Cookie", fixture.cookie).send({ password: PASSWORD });
+    expect(reauth.status).toBe(401);
+    const key = "password-reauth:" + createHash("sha256").update(fixture.userId).digest("hex");
+    expect(await db.select().from(authRateLimits).where(eq(authRateLimits.key, key))).toEqual([]);
+    const signin = await request(app).post("/api/auth/sign-in/email").set("Origin", ORIGIN)
+      .send({ email: fixture.email, password: PASSWORD });
+    expect(signin.status).toBe(401);
+    expect(signin.body.code).toBe("AUTHENTICATION_STATE_CHANGED");
+    expect(await db.select().from(authSessions).where(eq(authSessions.userId, fixture.userId)))
+      .toHaveLength(1); // Only the structural stale session; no new login survives.
+  });
+
+  it("rejects a password login whose credential changes after native verification", async () => {
+    const fixture = await signedUpFixture();
+    const replacement = "A different native password after rotation 2026";
+    const replacementHash = await hashPassword(replacement);
+    const nativeContext = await (auth as unknown as Auth).$context;
+    const verify = nativeContext.password.verify;
+    let interleaved = false;
+    // Keep the maintained verifier and real PostgreSQL writes. Interleave a
+    // committed rotation after verification but before native session creation.
+    const spy = vi.spyOn(nativeContext.password, "verify").mockImplementationOnce(async input => {
+      const verified = await verify(input);
+      expect(verified).toBe(true);
+      await db.update(authAccounts).set({ password: replacementHash }).where(eq(authAccounts.userId, fixture.userId));
+      interleaved = true;
+      return verified;
+    });
+    try {
+      const response = await request(app).post("/api/auth/sign-in/email").set("Origin", ORIGIN)
+        .send({ email: fixture.email, password: PASSWORD });
+      expect(interleaved).toBe(true);
+      expect(response.status).toBe(401);
+      expect(response.body.code).toBe("AUTHENTICATION_STATE_CHANGED");
+    } finally { spy.mockRestore(); }
+    expect(await db.select().from(authSessions).where(eq(authSessions.userId, fixture.userId))).toEqual([]);
+    const old = await request(app).post("/api/auth/sign-in/email").set("Origin", ORIGIN)
+      .send({ email: fixture.email, password: PASSWORD });
+    expect(old.status).toBe(401);
+    const current = await request(app).post("/api/auth/sign-in/email").set("Origin", ORIGIN)
+      .send({ email: fixture.email, password: replacement });
+    expect(current.status).toBe(200);
+    const [user] = await db.select().from(authUsers).where(eq(authUsers.id, fixture.userId));
+    const [session] = await db.select().from(authSessions).where(eq(authSessions.userId, fixture.userId));
+    expect(session).toMatchObject({ authenticationMethod: "password", authenticatorVersion: user.authenticatorVersion });
+  });
+
+  it("does not reserve confirmation attempts past a held native user lock", async () => {
+    const fixture = await signedUpFixture();
+    const key = "password-reauth:" + createHash("sha256").update(fixture.userId).digest("hex");
+    await db.transaction(async tx => {
+      await tx.select().from(authUsers).where(eq(authUsers.id, fixture.userId)).for("update");
+      const response = await request(app).post("/api/auth/reauthenticate/password")
+        .set("Origin", ORIGIN).set("Cookie", fixture.cookie).send({ password: PASSWORD });
+      expect.soft(response.status).toBe(409);
+      expect.soft(await db.select().from(authRateLimits).where(eq(authRateLimits.key, key))).toEqual([]);
+    });
+    const retried = await request(app).post("/api/auth/reauthenticate/password")
+      .set("Origin", ORIGIN).set("Cookie", fixture.cookie).send({ password: PASSWORD });
+    expect(retried.status).toBe(200);
+    const [budget] = await db.select().from(authRateLimits).where(eq(authRateLimits.key, key));
+    expect(budget.count).toBe(1);
   });
 });

@@ -131,3 +131,41 @@ registration records. Before activating passkeys, bind pending registration to
 its original user/session generation and erase its actual stored user data on
 factor changes, account erasure and quarantine replay. Cover the native stored
 shape and malformed/unrelated verification values without logging their contents.
+
+### Reauthentication integration details
+
+Better Auth 1.7.2 `getSessionFromCtx` assigns the parsed public response back to
+`ctx.context.session`; private generation fields are therefore absent from
+session middleware. Capture a trusted database generation using the actual
+native session/user before password or in-session factor verification, then
+fence completion against that captured generation. Never load a new generation
+after verification and treat it as the verified one. New native password login
+sessions retain their original internal user snapshot and already pass this fence.
+
+Password reauthentication uses the maintained `ctx.context.password.checkPassword`
+checker, keeps the original native session, and stamps only completed current
+password proof. A per-principal native database budget commits before the verifier;
+it must share the actual user/session lifetime pin while reserving, so erasure
+cannot be followed by recreation of an identity-linked attempt row. Wrong
+passwords cannot roll back attempts. Rate-limited attempts must still commit their
+bounded denial state. Deny canonical erasure markers even if stale credential or
+session material reappears; restore qualification remains separate.
+
+For protected native configuration endpoints, retain the official endpoint body,
+metadata and middleware and execute its handler on a native transactional Drizzle
+adapter inside the actual proof-pinned PostgreSQL transaction. The native
+`getCurrentDBAdapterAsyncLocalStorage` advanced API can bind direct adapter calls,
+internal-adapter calls and pending after-commit hooks to that physical transaction.
+Publish native cookie headers and after-commit hooks only after its real commit;
+preserve the native endpoint's response/status and separate Set-Cookie headers.
+If registration rolls back, independently consume its signed native registration
+challenge after rollback so rejection does not restore a one-use nonce.
+
+The provider's fresh-session middleware also checks session creation age. Current
+password reauthentication refreshes proof on the same session; before full factor
+activation, reconcile that with native session rotation after real completed
+reauthentication, including old-session and fixation cases. Rotation must never be
+counted as the authentication event. Verified enterprise SSO needs its original
+qualified callback/policy owner and a real recent identity event for passwordless
+factor setup; do not invent a local password or infer strong MFA from an SSO
+session cookie.
