@@ -12,7 +12,7 @@ locale: en
 last_verified_at: 2026-10-24
 review_trigger: Import source, receipt, recovery, authorization, or retention behavior changes
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/App.tsx, ui/src/pages/CompanyImport.tsx, ui/src/pages/CompanyImportHistory.tsx, server/src/routes/companies.ts, server/src/services/company-import-jobs.ts, server/src/services/company-import-transfers.ts, server/src/services/company-portability.ts, server/src/services/company-export-readme.ts, packages/shared/src/customer-operations.ts, packages/shared/src/company-import-transfer.ts, cli/src/commands/client/company.ts]
+linked_source_files: [ui/src/App.tsx, ui/src/pages/CompanyImport.tsx, ui/src/pages/CompanyImportHistory.tsx, server/src/routes/companies.ts, server/src/services/company-import-jobs.ts, server/src/services/company-import-transfers.ts, server/src/services/company-portability.ts, server/src/services/company-export-readme.ts, packages/shared/src/customer-operations.ts, packages/shared/src/company-import-transfer.ts, cli/src/commands/client/company.ts, server/src/errors.ts, packages/shared/src/types/company-portability.ts, server/src/services/github-fetch.ts]
 ---
 
 Blentera companies can be exported to portable markdown packages and imported from local directories or GitHub repositories. This lets you share company configurations, duplicate setups, and version-control your agent teams.
@@ -58,6 +58,8 @@ Preview the package before importing. The app checks the resolved files again be
 For GitHub packages, the preview shows the exact source commit. All package files come from that revision. If the branch moves to a different commit, review a new preview even when the files appear unchanged. An incomplete file list or an unavailable revision stops the preview. Packages with unresolved submodules inside the selected directory are not supported; use a package whose files are included directly.
 
 Keep **Start imported agents and routines paused** selected while reviewing a package. An import does not authorize imported credentials or scripts. Review each selected Co-worker and routine before activation.
+
+Task and project content currently requires retained source access in its original company. Moving that content to another company requires an authorized publication flow, which this import page does not provide. A new-company package can contain company and Co-worker configuration without those work items. A source-access refusal before import changes begin is a rejected request; it does not mean work items were copied.
 
 ## Recover an interrupted import
 

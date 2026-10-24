@@ -102,7 +102,7 @@
       "source": "ui/src/App.tsx",
       "articleId": "company-import-export",
       "sourceSha256": "a18f03eba75b3cd5837cc27e83577a941324f1a2aadd7cb8452a0bb54db0deb8",
-      "articleSha256": "bba7e82b758b0d9127e9c8b37831d15ed33ac86208f0c1823826e2186c767816",
+      "articleSha256": "adf791f10f2c215b73587e6900804d0818a8d33a539a4025e6f739731807bb96",
       "decision": "no_change",
       "rationale": "Reviewed App.tsx: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
@@ -110,7 +110,7 @@
       "source": "ui/src/pages/CompanyImport.tsx",
       "articleId": "company-import-export",
       "sourceSha256": "e035bd1c6197d83465c8c0584be3931c15a6cd96199ae089eaf3d7ecc76c67ed",
-      "articleSha256": "bba7e82b758b0d9127e9c8b37831d15ed33ac86208f0c1823826e2186c767816",
+      "articleSha256": "adf791f10f2c215b73587e6900804d0818a8d33a539a4025e6f739731807bb96",
       "decision": "updated",
       "rationale": "Reviewed the original GitHub resolver and Import preview: the guide now explains the displayed immutable commit, changed-revision confirmation, complete tree checks and unsupported selected submodules."
     },
@@ -118,23 +118,23 @@
       "source": "ui/src/pages/CompanyImportHistory.tsx",
       "articleId": "company-import-export",
       "sourceSha256": "848676297a26bb77b3f53b31256f8bbfcfb296421cc5ce1c0d4dc61827fda7fa",
-      "articleSha256": "bba7e82b758b0d9127e9c8b37831d15ed33ac86208f0c1823826e2186c767816",
+      "articleSha256": "adf791f10f2c215b73587e6900804d0818a8d33a539a4025e6f739731807bb96",
       "decision": "updated",
       "rationale": "Extended authorized Import history to find the original requester’s unbound new-company receipt; the article now states the honest target label and its limits."
     },
     {
       "source": "server/src/routes/companies.ts",
       "articleId": "company-import-export",
-      "sourceSha256": "3f771cf957af2ebccf0852eeb300b60ce68aa6ad5d639a50166be417cb7b4775",
-      "articleSha256": "bba7e82b758b0d9127e9c8b37831d15ed33ac86208f0c1823826e2186c767816",
+      "sourceSha256": "a20708388cc5e06ce6bd834407b95b62a1ee7463b0401c1be22c6f5787f07ac7",
+      "articleSha256": "adf791f10f2c215b73587e6900804d0818a8d33a539a4025e6f739731807bb96",
       "decision": "updated",
-      "rationale": "Extended authorized Import history to find the original requester’s unbound new-company receipt; the article now states the honest target label and its limits."
+      "rationale": "Reviewed the original GitHub resolver and Import preview: the guide explains the displayed immutable commit, changed-revision confirmation, complete tree checks, unsupported selected submodules and known source refusal before any effect; ordinary uncertain outcomes still require reconciliation."
     },
     {
       "source": "server/src/services/company-import-jobs.ts",
       "articleId": "company-import-export",
       "sourceSha256": "37682d39ad51f1ade89469c8812bf9347138d5115db026d1e273dbcc7d2e33e3",
-      "articleSha256": "bba7e82b758b0d9127e9c8b37831d15ed33ac86208f0c1823826e2186c767816",
+      "articleSha256": "adf791f10f2c215b73587e6900804d0818a8d33a539a4025e6f739731807bb96",
       "decision": "updated",
       "rationale": "Extended authorized Import history to find the original requester’s unbound new-company receipt; the article now states the honest target label and its limits."
     },
@@ -142,23 +142,23 @@
       "source": "server/src/services/company-import-transfers.ts",
       "articleId": "company-import-export",
       "sourceSha256": "30e1043a913d7960b2d6a4338c69ea766066c8a41ac2778e007b0743b8be52e2",
-      "articleSha256": "bba7e82b758b0d9127e9c8b37831d15ed33ac86208f0c1823826e2186c767816",
+      "articleSha256": "adf791f10f2c215b73587e6900804d0818a8d33a539a4025e6f739731807bb96",
       "decision": "no_change",
       "rationale": "Reviewed company-import-transfers.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
     {
       "source": "server/src/services/company-portability.ts",
       "articleId": "company-import-export",
-      "sourceSha256": "5c2ae9123409dbb7e8e24d656fb3c3fc75da81b3b03c2f42f10876e0d0bb7834",
-      "articleSha256": "bba7e82b758b0d9127e9c8b37831d15ed33ac86208f0c1823826e2186c767816",
+      "sourceSha256": "530451cbb380b6ff45862b73b3f46b6c97dda4dd00b1999c7b16a384a37a2f71",
+      "articleSha256": "adf791f10f2c215b73587e6900804d0818a8d33a539a4025e6f739731807bb96",
       "decision": "updated",
-      "rationale": "Reviewed the original GitHub resolver and Import preview: the guide now explains the displayed immutable commit, changed-revision confirmation, complete tree checks and unsupported selected submodules."
+      "rationale": "Reviewed the original GitHub resolver and Import preview: the guide explains the displayed immutable commit, changed-revision confirmation, complete tree checks, unsupported selected submodules and known source refusal before any effect; ordinary uncertain outcomes still require reconciliation."
     },
     {
       "source": "server/src/services/company-export-readme.ts",
       "articleId": "company-import-export",
       "sourceSha256": "7cb1334151504af8c56bdfb906bbae318eb468b18268cd24a85f5721f9f1a481",
-      "articleSha256": "bba7e82b758b0d9127e9c8b37831d15ed33ac86208f0c1823826e2186c767816",
+      "articleSha256": "adf791f10f2c215b73587e6900804d0818a8d33a539a4025e6f739731807bb96",
       "decision": "no_change",
       "rationale": "Reviewed company-export-readme.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
@@ -166,7 +166,7 @@
       "source": "packages/shared/src/customer-operations.ts",
       "articleId": "company-import-export",
       "sourceSha256": "04380661ffda0dc43419e19c1f8ba7a7247a09c30d9cd4cc90fd03155e9d0bfd",
-      "articleSha256": "bba7e82b758b0d9127e9c8b37831d15ed33ac86208f0c1823826e2186c767816",
+      "articleSha256": "adf791f10f2c215b73587e6900804d0818a8d33a539a4025e6f739731807bb96",
       "decision": "no_change",
       "rationale": "Reviewed customer-operations.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
@@ -174,7 +174,7 @@
       "source": "packages/shared/src/company-import-transfer.ts",
       "articleId": "company-import-export",
       "sourceSha256": "dbeeea0632b22d2bf0cd4b7e6ae7eded1883ed930a10ed48483f8c6c6576c370",
-      "articleSha256": "bba7e82b758b0d9127e9c8b37831d15ed33ac86208f0c1823826e2186c767816",
+      "articleSha256": "adf791f10f2c215b73587e6900804d0818a8d33a539a4025e6f739731807bb96",
       "decision": "no_change",
       "rationale": "Reviewed company-import-transfer.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
@@ -182,7 +182,7 @@
       "source": "cli/src/commands/client/company.ts",
       "articleId": "company-import-export",
       "sourceSha256": "2a859ee4e334ddfbdb76d32e511a76cb665fd4f46b7a8d1e689ee1e7996225d6",
-      "articleSha256": "bba7e82b758b0d9127e9c8b37831d15ed33ac86208f0c1823826e2186c767816",
+      "articleSha256": "adf791f10f2c215b73587e6900804d0818a8d33a539a4025e6f739731807bb96",
       "decision": "no_change",
       "rationale": "Reviewed company.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
@@ -534,7 +534,7 @@
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "recovering-work",
       "sourceSha256": "8be44f0a61787fe84a5d049ccdcbc2d40ca7fd0626f8f4ef2d062fcd32914af5",
-      "articleSha256": "6135fbda7303f28bf82f6c16182dd7b7ad490cd62503b92516268d0fd72d2323",
+      "articleSha256": "a6601c43c0b37a662474bb499bc08c7f2bcc909b93a31ea62aafa334363b9640",
       "decision": "updated",
       "rationale": "Added current task/run status checks and safe use of retry and stop actions without claiming remote success."
     },
@@ -542,7 +542,7 @@
       "source": "ui/src/components/IssueBlockedNotice.tsx",
       "articleId": "recovering-work",
       "sourceSha256": "90983e55a2fa9ea9a8abe2b33a5aab817e05a463a65bf5d5795335149d769fd2",
-      "articleSha256": "6135fbda7303f28bf82f6c16182dd7b7ad490cd62503b92516268d0fd72d2323",
+      "articleSha256": "a6601c43c0b37a662474bb499bc08c7f2bcc909b93a31ea62aafa334363b9640",
       "decision": "updated",
       "rationale": "Added current task/run status checks and safe use of retry and stop actions without claiming remote success."
     },
@@ -550,7 +550,7 @@
       "source": "ui/src/lib/wait-for-stopped-runs.ts",
       "articleId": "recovering-work",
       "sourceSha256": "ce5726db6b535d3dd592bfde111b94de36291c1fe7dd5a85198dd22799bbe8c2",
-      "articleSha256": "6135fbda7303f28bf82f6c16182dd7b7ad490cd62503b92516268d0fd72d2323",
+      "articleSha256": "a6601c43c0b37a662474bb499bc08c7f2bcc909b93a31ea62aafa334363b9640",
       "decision": "updated",
       "rationale": "Added current task/run status checks and safe use of retry and stop actions without claiming remote success."
     },
@@ -558,7 +558,7 @@
       "source": "server/src/services/issue-recovery-actions.ts",
       "articleId": "recovering-work",
       "sourceSha256": "5dba9a4821f71474d1bd510f87c55093ccd62223d1f28eba8adee287325869e0",
-      "articleSha256": "6135fbda7303f28bf82f6c16182dd7b7ad490cd62503b92516268d0fd72d2323",
+      "articleSha256": "a6601c43c0b37a662474bb499bc08c7f2bcc909b93a31ea62aafa334363b9640",
       "decision": "updated",
       "rationale": "Added current task/run status checks and safe use of retry and stop actions without claiming remote success."
     },
@@ -609,6 +609,38 @@
       "articleSha256": "1d4d2db664346000357fafa1735eed2371dca17e2e96cb270d5ed5900cfff170",
       "decision": "updated",
       "rationale": "Added links to the existing API, CLI, and deployment references and limited availability statements to documented behavior."
+    },
+    {
+      "source": "server/src/errors.ts",
+      "articleId": "company-import-export",
+      "sourceSha256": "ca1aa21e985ea9ae479038441040be65916af3fe4d3fcf533fd8cdeae2e56fca",
+      "articleSha256": "adf791f10f2c215b73587e6900804d0818a8d33a539a4025e6f739731807bb96",
+      "decision": "updated",
+      "rationale": "Reviewed native preflight error identity: the guide distinguishes verified rejection before effects from an unknown import outcome after effects may have started."
+    },
+    {
+      "source": "packages/shared/src/types/company-portability.ts",
+      "articleId": "company-import-export",
+      "sourceSha256": "1b0ed12dadfe3466d2b4a19b6c7e750fe7060a577bc067792cd5cbbfd281c2e1",
+      "articleSha256": "adf791f10f2c215b73587e6900804d0818a8d33a539a4025e6f739731807bb96",
+      "decision": "updated",
+      "rationale": "Reviewed the shared preview contract: the guide explains the actual GitHub sourceRevision and commit-bound sourceFingerprint without granting source publication authority."
+    },
+    {
+      "source": "server/src/services/github-fetch.ts",
+      "articleId": "company-import-export",
+      "sourceSha256": "9b65647b3ee53f51eeff5ac130ae7a5f26f7b345e5303d05cea07564280d54fb",
+      "articleSha256": "adf791f10f2c215b73587e6900804d0818a8d33a539a4025e6f739731807bb96",
+      "decision": "updated",
+      "rationale": "Reviewed GitHub and Enterprise API/raw transport URL owners: the guide describes commit-bound package reads and preserves unsupported source limits."
+    },
+    {
+      "source": "server/src/services/issues.ts",
+      "articleId": "recovering-work",
+      "sourceSha256": "21f100a85b0378c02885179254f89f83175d15a8e5b0374e8a4c0531b208cbed",
+      "articleSha256": "a6601c43c0b37a662474bb499bc08c7f2bcc909b93a31ea62aafa334363b9640",
+      "decision": "updated",
+      "rationale": "Reviewed the original Task mutation owner: its native body hash detects Agent body changes and refuses uncaptured restricted run sources before the write; recovery guidance says the old content is retained and asks for review before repeating the update."
     }
   ]
 }
