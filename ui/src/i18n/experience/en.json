@@ -96,6 +96,8 @@
     "description": "Search and browse product guidance, check service status, or contact a person for help.",
     "browse": "Search and browse the Help Center",
     "cases": "My support cases",
+    "imports": "Import history",
+    "importsDescription": "View saved import receipts for this company.",
     "status": "Service status",
     "humanTitle": "Contact a person",
     "humanDescription": "You can contact the support team directly. You do not need to use an assistant first.",

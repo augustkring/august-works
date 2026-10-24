@@ -11,7 +11,7 @@
 import type { ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { Link, MemoryRouter, useLocation } from "react-router-dom";
+import { Link, MemoryRouter, useLocation, useNavigate } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
 import { HELP_CENTER_NAVIGATION_ENTRY_ID, HELP_CENTER_UTILITY_ENTRY_ID } from "./lib/help-navigation";
@@ -133,11 +133,21 @@ vi.mock("./pages/CustomerSupportCases", async () => {
     </div>;
   } };
 });
+vi.mock("./pages/CompanyImportHistory", () => ({
+  CompanyImportHistory: ({ active = true }: { active?: boolean }) => <section data-testid="import-history-overlay" data-active={String(active)}>
+    <p>Import history overlay content</p>
+  </section>,
+}));
 vi.mock("./pages/CustomerHelpCenter", () => ({
-  CustomerHelpCenter: () => {
+  CustomerHelpCenter: ({ navigationState }: { navigationState?: unknown }) => {
     const location = useLocation();
+    const navigate = useNavigate();
+    const state = navigationState ?? location.state;
     return <div data-testid="customer-help-center"><p>Help Center content</p>
-      <Link to="/PAP/company/support" state={location.state} replace data-support-help-entry>My support cases</Link>
+      <Link to="/PAP/company/support" state={state} replace data-support-help-entry
+        onClick={event => { event.preventDefault(); navigate("/PAP/company/support", { replace: true, state }); }}>My support cases</Link>
+      <Link to="/PAP/company/imports" state={state} data-import-history-entry
+        onClick={event => { event.preventDefault(); navigate("/PAP/company/imports", { replace: true, state }); }}>Import history</Link>
     </div>;
   },
 }));
@@ -236,7 +246,38 @@ describe("App Cases routing (PAP-13002)", () => {
     expect(container.querySelector('textarea[aria-label="Unsent work"]')).toBe(work);
     flushSync(() => document.querySelector<HTMLButtonElement>('[data-slot="dialog-close"]')!.click());
     await vi.waitFor(() => expect(document.querySelector<HTMLElement>('[role="dialog"]')?.style.display).toBe("none"));
-    console.log("DEBUG after close", support.isConnected, document.querySelectorAll('textarea[aria-label="Unsent support"]').length);
+    await vi.waitFor(() => expect(document.activeElement).toBe(helpEntry));
+    unmountApp(root);
+  });
+
+  it("keeps Work mounted through import history opened from Help and disables the hidden history pane", async () => {
+    const root = createRoot(container);
+    mountedRoot = root;
+    flushSync(() => root.render(<MemoryRouter initialEntries={["/PAP/work"]}>
+      <HelpCenterEntryForTest /><App />
+    </MemoryRouter>));
+    await vi.waitFor(() => expect(container.querySelector('textarea[aria-label="Unsent work"]')).toBeTruthy());
+    const helpEntry = container.querySelector<HTMLAnchorElement>(`#${HELP_CENTER_NAVIGATION_ENTRY_ID}`)!;
+    const work = container.querySelector<HTMLTextAreaElement>('textarea[aria-label="Unsent work"]')!;
+    flushSync(() => {
+      Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(work, "Draft kept while checking imports");
+      work.dispatchEvent(new Event("input", { bubbles: true }));
+      helpEntry.click();
+    });
+    await waitForPortal("Help Center content");
+    expect(document.querySelector('[data-testid="import-history-overlay"]')?.getAttribute("data-active")).toBe("false");
+    flushSync(() => document.querySelector<HTMLAnchorElement>("a[data-import-history-entry]")!.click());
+    await waitForPortal("Import history overlay content");
+    await vi.waitFor(() => expect(document.querySelector('[data-testid="import-history-overlay"]')?.getAttribute("data-active")).toBe("true"));
+    expect(document.querySelector('[role="dialog"]')?.getAttribute("aria-labelledby")).toBe("customer-help-dialog-title");
+    expect(container.querySelector('textarea[aria-label="Unsent work"]')).toBe(work);
+    expect(work.value).toBe("Draft kept while checking imports");
+    expect(container.querySelector('[data-testid="work-location"]')?.textContent).toBe("/PAP/work");
+    flushSync(() => document.querySelector<HTMLButtonElement>('[data-slot="dialog-close"]')!.click());
+    await vi.waitFor(() => expect(document.querySelector<HTMLElement>('[role="dialog"]')?.style.display).toBe("none"));
+    expect(document.querySelector('[data-testid="import-history-overlay"]')?.getAttribute("data-active")).toBe("false");
+    expect(container.querySelector('textarea[aria-label="Unsent work"]')).toBe(work);
+    expect(work.value).toBe("Draft kept while checking imports");
     await vi.waitFor(() => expect(document.activeElement).toBe(helpEntry));
     unmountApp(root);
   });
@@ -291,7 +332,6 @@ describe("App Cases routing (PAP-13002)", () => {
     const openCases = () => flushSync(() => document.querySelector<HTMLAnchorElement>('a[data-support-help-entry]')!.click());
     openHelp();
     await waitForPortal("Help Center content");
-    console.log("DEBUG after help", support.isConnected, document.querySelectorAll('textarea[aria-label="Unsent support"]').length);
     openCases();
     await waitForPortal("Support overlay content");
     const support = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Unsent support"]')!;
@@ -311,7 +351,6 @@ describe("App Cases routing (PAP-13002)", () => {
     await waitForPortal("Help Center content");
     openCases();
     await vi.waitFor(() => expect(document.querySelector<HTMLElement>('[role="dialog"]')?.style.display).not.toBe("none"));
-    console.log("DEBUG after cases", support.isConnected, document.querySelectorAll('textarea[aria-label="Unsent support"]').length);
     expect(document.querySelector('textarea[aria-label="Unsent support"]')).toBe(support);
     expect(support.value).toBe("Private unsent support");
     unmountApp(root);

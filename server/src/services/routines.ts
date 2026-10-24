@@ -3,6 +3,7 @@ import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
 import { assertConversationRoutineAuthoring, assertRoutineConversationDraftEntry } from "./routine-authoring-authority.js";
 import { assertRoutineSourceAccess } from "./routine-source-authority.js";
 import type { AuthorizationActor } from "./authorization.js";
+import { isAuthenticationStateBusy } from "../auth/authenticator-assurance.js";
 import { assertRoutineReviewDelegation, draftRoutineManagementReview } from "./management-reviews/routine.js";
 import { verifyAppWebhook } from "./app-webhook.js";
 import { workflowDelegationForActor } from "./workflows/workflow-delegation.js";
@@ -14,6 +15,7 @@ import {
   agents,
   agentWakeupRequests,
   activityLog,
+  authUsers,
   companies,
   companyMemberships,
   companySecretBindings,
@@ -58,6 +60,7 @@ import type {
   UpdateRoutine,
   UpdateRoutineTrigger,
 } from "@paperclipai/shared";
+import type { DeploymentMode } from "@paperclipai/shared";
 import {
   WORKSPACE_BRANCH_ROUTINE_VARIABLE,
   getBuiltinRoutineVariableValues,
@@ -756,6 +759,7 @@ export function routineService(
     heartbeat?: IssueAssignmentWakeupDeps;
     pluginWorkerManager?: PluginWorkerManager;
     runtimeEnv?: Record<string, string | undefined>;
+    deploymentMode?: DeploymentMode;
     sourceActor?: AuthorizationActor;
   } = {},
 ) {
@@ -766,6 +770,47 @@ export function routineService(
   const heartbeat = deps.heartbeat ?? heartbeatService(db, {
     pluginWorkerManager: deps.pluginWorkerManager,
   });
+
+  function isTrustedLocalImplicitResponsibleUser(userId: string) {
+    return userId === "local-board" && (
+      deps.deploymentMode === "local_trusted" ||
+      (deps.sourceActor?.type === "board" && deps.sourceActor.source === "local_implicit" &&
+        (!deps.sourceActor.userId || deps.sourceActor.userId === "local-board"))
+    );
+  }
+
+  async function hasCurrentRoutineResponsibleUser(
+    executor: Db,
+    companyId: string,
+    userId: string | null,
+  ) {
+    if (!userId) return false;
+    try {
+      // Match native account-withdrawal lock order and never wait behind a
+      // revocation that may itself be waiting on routine state.
+      const [account] = await executor
+        .select({ id: authUsers.id })
+        .from(authUsers)
+        .where(eq(authUsers.id, userId))
+        .for("share", { noWait: true });
+      const [membership] = await executor
+        .select({ id: companyMemberships.id })
+        .from(companyMemberships)
+        .where(and(
+          eq(companyMemberships.companyId, companyId),
+          eq(companyMemberships.principalType, "user"),
+          eq(companyMemberships.principalId, userId),
+          eq(companyMemberships.status, "active"),
+        ))
+        .for("share", { noWait: true });
+      if (!membership) return false;
+      return Boolean(account) || isTrustedLocalImplicitResponsibleUser(userId);
+    } catch (error) {
+      if (isAuthenticationStateBusy(error))
+        throw conflict("Authentication state is changing; try again", { code: "authentication_state_busy" });
+      throw error;
+    }
+  }
 
   async function getRoutineById(id: string) {
     const routine = await db
@@ -2025,10 +2070,14 @@ export function routineService(
           withdrawn = routine.status !== "active" || !trigger || !trigger.enabled || trigger.archived || trigger.setupPending;
         }
         if (!withdrawn) {
-          await assertRoutineSourceAccess(tx, routine, deps.sourceActor);
-          await queueIssueAssignmentWakeup({ heartbeat, issue: task, reason: "issue_assigned", mutation: "create",
-            contextSource: "routine.dispatch", requestedByActorType: intent.source === "schedule" ? "system" : undefined,
-            idempotencyKey, rethrowOnError: true });
+          if (!await hasCurrentRoutineResponsibleUser(tx, companyId, intent.responsibleUserId)) {
+            withdrawn = true;
+          } else {
+            await assertRoutineSourceAccess(tx, routine, deps.sourceActor);
+            await queueIssueAssignmentWakeup({ heartbeat, issue: task, reason: "issue_assigned", mutation: "create",
+              contextSource: "routine.dispatch", requestedByActorType: intent.source === "schedule" ? "system" : undefined,
+              idempotencyKey, rethrowOnError: true });
+          }
         }
       }
       const failure = task.status === "cancelled" || task.status === "blocked";
@@ -2221,6 +2270,42 @@ export function routineService(
         : null;
       const responsibleUserId =
         manualRunnerUserId ?? latestRevisionResponsibleUserId ?? input.routine.responsibleUserId ?? null;
+      const nextRunAt = input.nextRunAtOverride !== undefined
+        ? input.nextRunAtOverride
+        : input.trigger?.kind === "schedule" && input.trigger.cronExpression && input.trigger.timezone
+          ? nextCronTickInTimeZone(input.trigger.cronExpression, input.trigger.timezone, triggeredAt)
+          : undefined;
+      if (!await hasCurrentRoutineResponsibleUser(txDb, input.routine.companyId, responsibleUserId)) {
+        if (input.source === "manual") {
+          throw forbidden("The routine's responsible Human no longer has active company access");
+        }
+        const [suppressed] = await txDb
+          .insert(routineRuns)
+          .values({
+            companyId: input.routine.companyId,
+            routineId: input.routine.id,
+            triggerId: input.trigger?.id ?? null,
+            source: input.source,
+            status: "skipped",
+            triggeredAt,
+            idempotencyKey: input.idempotencyKey ?? null,
+            triggerPayload,
+            dispatchFingerprint,
+            routineRevisionId: input.routine.latestRevisionId,
+            responsibleUserId,
+            failureReason: "responsible_user_inactive",
+            completedAt: triggeredAt,
+          })
+          .returning();
+        await updateRoutineTouchedState({
+          routineId: input.routine.id,
+          triggerId: input.trigger?.id ?? null,
+          triggeredAt,
+          status: "skipped",
+          nextRunAt,
+        }, txDb);
+        return suppressed!;
+      }
       const [createdRun] = await txDb
         .insert(routineRuns)
         .values({
@@ -2237,12 +2322,6 @@ export function routineService(
           responsibleUserId,
         })
         .returning();
-
-      const nextRunAt = input.nextRunAtOverride !== undefined
-        ? input.nextRunAtOverride
-        : input.trigger?.kind === "schedule" && input.trigger.cronExpression && input.trigger.timezone
-          ? nextCronTickInTimeZone(input.trigger.cronExpression, input.trigger.timezone, triggeredAt)
-          : undefined;
 
       if (executionTarget.kind === "workflow") {
         const activeWorkflow = await findLiveWorkflowExecution(

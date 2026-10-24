@@ -15,6 +15,7 @@ import {
   ActivationPage,
 } from "./pages/V9RouteEntries";
 import { CustomerHelpCenter } from "./pages/CustomerHelpCenter";
+import { CompanyImportHistory } from "./pages/CompanyImportHistory";
 import { OrgUnits, CompanyRelationships } from "./pages/OrganizationV5";
 import { V5Gate } from "./components/V5Gate";
 import { ProjectRoadmap } from "./pages/ProjectRoadmap";
@@ -260,6 +261,7 @@ function boardRoutes(streamlinedUiEnabled: boolean) {
       <Route path="company/settings/runtime" element={<SaasRuntimesPage />} />
       <Route path="company/settings/support" element={<SaasSupportPage />} />
       <Route path="company/help" element={<CustomerHelpCenter />} />
+      <Route path="company/imports" element={<DeferredRouteSurface><CompanyImportHistory /></DeferredRouteSurface>} />
       <Route path="company/support" element={<DeferredRouteSurface><CustomerSupportCases /></DeferredRouteSurface>} />
       <Route path="company/support-access" element={<CustomerSupport />} />
       <Route path="company/settings/deletion" element={<SaasDeletionPage />} />
@@ -954,15 +956,16 @@ export function App() {
   const companySurface = companySegments.join("/").toLowerCase();
   const isSupport = companySurface === "company/support";
   const isHelpCenter = companySurface === "company/help";
-  const isHelpSurface = isSupport || isHelpCenter;
+  const isImportHistory = companySurface === "company/imports";
+  const isHelpSurface = isSupport || isHelpCenter || isImportHistory;
   if (origin.current && (origin.current.companyId !== selectedCompanyId || origin.current.userId !== account.userId || origin.current.sessionId !== account.sessionId)) origin.current = null;
   if (!isHelpSurface) origin.current = companySegments.length > 0 && selectedCompanyId && account.userId && !account.localImplicit
     ? { location, companyId: selectedCompanyId, userId: account.userId, sessionId: account.sessionId } : null;
   const carried = location.state as { companyId?: unknown; expectedUserId?: unknown; returnPathname?: unknown; backgroundKey?: unknown; returnFocusId?: unknown } | null;
   if (isHelpSurface && isHelpCenterEntryId(carried?.returnFocusId)) returnFocusId.current = carried.returnFocusId;
   const background = isHelpSurface && origin.current && !account.localImplicit &&
-    carried?.companyId === selectedCompanyId && carried.expectedUserId === account.userId &&
-    carried.backgroundKey === origin.current.location.key && carried.returnPathname === origin.current.location.pathname
+    origin.current.companyId === selectedCompanyId && origin.current.userId === account.userId &&
+    origin.current.sessionId === account.sessionId
     ? origin.current.location : null;
   const supportScope = selectedCompanyId && account.userId && account.sessionId && !account.localImplicit
     ? `${selectedCompanyId}:${account.userId}:${account.sessionId}` : null;
@@ -979,6 +982,13 @@ export function App() {
     if (window.getComputedStyle(target).display === "none" || window.getComputedStyle(target).visibility === "hidden") return;
     target.focus();
   }
+  const helpNavigationState = background && origin.current ? {
+    companyId: selectedCompanyId,
+    expectedUserId: account.userId,
+    returnPathname: origin.current.location.pathname,
+    backgroundKey: origin.current.location.key,
+    returnFocusId: isHelpCenterEntryId(returnFocusId.current) ? returnFocusId.current : HELP_CENTER_UTILITY_ENTRY_ID,
+  } : location.state;
   useLayoutEffect(() => {
     const dialog = helpDialog.current;
     if (!dialog) return;
@@ -990,6 +1000,13 @@ export function App() {
       else dialog.removeAttribute("open");
     }
     if (!background) window.setTimeout(restoreHelpFocus, 0);
+    if (background && typeof dialog.showModal !== "function") {
+      const onKeyDown = (event: KeyboardEvent) => {
+        if (event.key === "Escape") { event.preventDefault(); returnToWork(); }
+      };
+      document.addEventListener("keydown", onKeyDown);
+      return () => document.removeEventListener("keydown", onKeyDown);
+    }
   }, [background]);
 
   return (
@@ -1134,28 +1151,26 @@ export function App() {
       {supportScope && retainedSupportScope.current === supportScope && <Activity mode="visible">
       <dialog ref={helpDialog} role="dialog" aria-modal={background ? "true" : undefined}
         aria-labelledby="customer-help-dialog-title" aria-describedby="customer-help-dialog-description"
-        className="fixed inset-0 z-50 m-auto max-h-(--sz-calc-18) w-full max-w-(--sz-calc-25) overflow-y-auto rounded-lg border bg-background p-6 shadow-lg outline-none sm:max-w-3xl [&::backdrop]:bg-black/50"
+        className="fixed inset-0 z-50 m-auto max-h-(--sz-calc-18) w-full max-w-(--sz-calc-25) overflow-y-auto rounded-lg border bg-background p-6 shadow-lg outline-none sm:max-w-3xl backdrop:bg-dialog-backdrop"
         style={{ display: background ? "block" : "none" }}
-        onCancel={event => { event.preventDefault(); returnToWork(); }}
-        onKeyDown={event => {
-          if (typeof helpDialog.current?.showModal !== "function" && event.key === "Escape") {
-            event.preventDefault(); returnToWork();
-          }
-        }}>
+        onCancel={event => { event.preventDefault(); returnToWork(); }}>
           <div className="flex justify-end pr-8"><AccountExperienceLanguageSelect /></div>
-          <h2 id="customer-help-dialog-title" className="sr-only">{isHelpCenter ? t("helpCenter.title") : t("help")}</h2>
-          <p id="customer-help-dialog-description" className="sr-only">{isHelpCenter ? t("helpCenter.description") : t("supportCases.intro")}</p>
+          <h2 id="customer-help-dialog-title" className="sr-only">{isImportHistory ? t("helpCenter.imports") : isHelpCenter ? t("helpCenter.title") : t("help")}</h2>
+          <p id="customer-help-dialog-description" className="sr-only">{isHelpCenter ? t("helpCenter.description") : isImportHistory ? t("helpCenter.importsDescription") : t("supportCases.intro")}</p>
           <Button variant="ghost" type="button" data-slot="dialog-close" aria-label={t("supportCases.backToWork")}
             className="absolute right-4 top-4 h-8 w-8 p-0" onClick={returnToWork}>
             <XIcon className="h-4 w-4" aria-hidden="true" />
             <span className="sr-only">{t("supportCases.backToWork")}</span>
           </Button>
           <DeferredRouteSurface>
-            <div hidden={isHelpCenter}>
+            <div hidden={!isSupport}>
               <CustomerSupportCases onReturn={returnToWork} active={isSupport} />
             </div>
             <div hidden={!isHelpCenter}>
-              <CustomerHelpCenter />
+              <CustomerHelpCenter navigationState={helpNavigationState} />
+            </div>
+            <div hidden={!isImportHistory}>
+              <CompanyImportHistory active={!!background && isImportHistory} />
             </div>
           </DeferredRouteSurface>
       </dialog>

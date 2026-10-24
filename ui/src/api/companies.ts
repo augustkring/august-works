@@ -1,5 +1,6 @@
 import type {
   Company,
+  CustomerOperationReceipt,
   CompanyPortabilityExportRequest,
   CompanyPortabilityExportPreviewResult,
   CompanyPortabilityExportResult,
@@ -80,7 +81,17 @@ export interface CompanyImportJobStatus {
   retryAfterMs?: number;
 }
 
+export interface CompanyImportJobHistory {
+  jobs: Array<CompanyImportJobStatus & { operation: CustomerOperationReceipt }>;
+  nextCursor: string | null;
+}
+
 export const companiesApi = {
+  importHistory: (companyId: string, expectedUserId: string, cursor?: string, signal?: AbortSignal) => {
+    const query = new URLSearchParams({ expectedUserId });
+    if (cursor) query.set("cursor", cursor);
+    return api.get<CompanyImportJobHistory>(`/companies/${encodeURIComponent(companyId)}/import/jobs?${query}`, { signal });
+  },
   list: () => api.get<Company[]>(COMPANIES_LIST_PATH),
   directory: () => api.get<Company[]>(COMPANIES_DIRECTORY_PATH),
   detachInflightDirectory: () => detachInflightGet(COMPANIES_DIRECTORY_PATH),

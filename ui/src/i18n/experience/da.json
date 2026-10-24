@@ -96,6 +96,8 @@
     "description": "Søg i produktvejledninger, se tjenestestatus, eller kontakt en person for at få hjælp.",
     "browse": "Søg i og gennemse Hjælp",
     "cases": "Mine supportsager",
+    "imports": "Importhistorik",
+    "importsDescription": "Se gemte importkvitteringer for dette firma.",
     "status": "Tjenestestatus",
     "humanTitle": "Kontakt en person",
     "humanDescription": "Du kan kontakte supportteamet direkte. Du behøver ikke først at bruge en assistent.",

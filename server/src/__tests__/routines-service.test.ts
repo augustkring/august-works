@@ -139,7 +139,7 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
     const userId = randomUUID();
     const sessionId = randomUUID();
     const now = new Date();
-    const defaultResponsibleUserId = randomUUID();
+    const defaultResponsibleUserId = userId;
     const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
     const wakeups: Array<{
       agentId: string;
@@ -249,7 +249,7 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
       {},
     );
 
-    return { actor, companyId, agentId, issueSvc, projectId, routine, svc, wakeups };
+    return { actor, companyId, userId, sessionId, agentId, issueSvc, projectId, routine, svc, wakeups };
   }
 
   async function armWorktreeExecution(cutoff: Date, instanceId = "worktree-routines-test") {
@@ -1252,9 +1252,60 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
     ]);
   });
 
+  it("suppresses a fresh routine dispatch after its responsible Human loses active company access", async () => {
+    const active = await seedFixture();
+    const allowed = await active.svc.runRoutine(active.routine.id, { source: "api" });
+    expect(allowed.status).toBe("issue_created");
+    expect(active.wakeups).toHaveLength(1);
+
+    const withdrawn = await seedFixture();
+    await db.delete(companyMemberships).where(eq(companyMemberships.principalId, withdrawn.userId));
+
+    const suppressed = await withdrawn.svc.runRoutine(withdrawn.routine.id, { source: "api" });
+
+    expect(suppressed).toMatchObject({ status: "skipped", failureReason: "responsible_user_inactive" });
+    expect(withdrawn.wakeups).toHaveLength(0);
+    await expect(db.select({ id: issues.id }).from(issues)
+      .where(eq(issues.originId, withdrawn.routine.id))).resolves.toHaveLength(0);
+    await expect(db.select({ id: authSessions.id }).from(authSessions)
+      .where(eq(authSessions.id, withdrawn.sessionId))).resolves.toHaveLength(1);
+  });
+
+  it("fails fast on a locked membership and fences the retry after revocation commits", async () => {
+    const { companyId, routine, svc, userId, wakeups } = await seedFixture();
+    let notifyLocked!: () => void;
+    let releaseLock!: () => void;
+    const locked = new Promise<void>(resolve => { notifyLocked = resolve; });
+    const release = new Promise<void>(resolve => { releaseLock = resolve; });
+    const revocation = db.transaction(async tx => {
+      await tx.select({ id: companyMemberships.id }).from(companyMemberships)
+        .where(eq(companyMemberships.principalId, userId)).for("update");
+      notifyLocked();
+      await release;
+      await tx.update(companyMemberships).set({ status: "inactive", updatedAt: new Date() })
+        .where(eq(companyMemberships.principalId, userId));
+    });
+    await locked;
+
+    await expect(svc.runRoutine(routine.id, { source: "api" })).rejects.toMatchObject({
+      status: 409,
+      details: { code: "authentication_state_busy" },
+    });
+    expect(wakeups).toHaveLength(0);
+    await expect(db.select({ id: issues.id }).from(issues)
+      .where(eq(issues.originId, routine.id))).resolves.toHaveLength(0);
+
+    releaseLock();
+    await revocation;
+    const retry = await svc.runRoutine(routine.id, { source: "api" });
+    expect(retry).toMatchObject({ status: "skipped", failureReason: "responsible_user_inactive" });
+    expect(wakeups).toHaveLength(0);
+    await expect(db.select({ id: issues.id }).from(issues)
+      .where(eq(issues.originId, routine.id))).resolves.toHaveLength(0);
+  });
+
   it("records the manual board runner on fresh routine issues so they appear in that user's inbox", async () => {
-    const { companyId, agentId, issueSvc, routine, svc } = await seedFixture();
-    const userId = randomUUID();
+    const { companyId, agentId, issueSvc, routine, svc, userId } = await seedFixture();
 
     const run = await svc.runRoutine(routine.id, { source: "manual" }, { userId });
 
@@ -1285,8 +1336,7 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
   });
 
   it("uses the routine revision responsible-user snapshot for automatic runs", async () => {
-    const { companyId, agentId, projectId, svc } = await seedFixture();
-    const responsibleUserId = randomUUID();
+    const { companyId, agentId, projectId, svc, userId: responsibleUserId } = await seedFixture();
     const driftUserId = randomUUID();
     const routine = await svc.create(
       companyId,
@@ -1383,8 +1433,7 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
   });
 
   it("touches a coalesced routine issue for the manual runner's inbox", async () => {
-    const { agentId, companyId, issueSvc, routine, svc } = await seedFixture();
-    const userId = randomUUID();
+    const { agentId, companyId, issueSvc, routine, svc, userId } = await seedFixture();
     const liveHeartbeatRunId = randomUUID();
     const { runId: previousRunId, issue: previousIssue } = await createTypedExecutionIssue({
       companyId, issueSvc, routine, status: "in_progress", triggeredAt: new Date("2026-03-20T12:00:00.000Z") });
@@ -1442,8 +1491,7 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
   });
 
   it("touches a skipped active routine issue for the manual runner's inbox", async () => {
-    const { agentId, companyId, issueSvc, routine, svc } = await seedFixture();
-    const userId = randomUUID();
+    const { agentId, companyId, issueSvc, routine, svc, userId } = await seedFixture();
     const liveHeartbeatRunId = randomUUID();
 
     await db
@@ -2047,6 +2095,26 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
       .where(eq(issues.originId, routine.id));
 
     expect(routineIssues).toHaveLength(1);
+  });
+
+  it("does not retry a pending assignment wake after the responsible Human loses company access", async () => {
+    const { routine, svc, userId, wakeups } = await seedFixture({
+      wakeup: async () => { throw new Error("queue unavailable"); },
+    });
+    const run = await svc.runRoutine(routine.id, { source: "api" });
+    expect(run.status).toBe("received");
+    expect(wakeups).toHaveLength(1);
+
+    await db.delete(companyMemberships).where(eq(companyMemberships.principalId, userId));
+    await svc.tickScheduledTriggers(new Date());
+
+    const [settled] = await db.select().from(routineRuns).where(eq(routineRuns.id, run.id));
+    expect(settled).toMatchObject({ status: "issue_created", failureReason: "assignment_withdrawn" });
+    expect(wakeups).toHaveLength(1);
+    await expect(db.select({ id: issues.id }).from(issues)
+      .where(eq(issues.originId, routine.id))).resolves.toHaveLength(1);
+    await expect(db.select({ id: routineRuns.id }).from(routineRuns)
+      .where(eq(routineRuns.id, run.id))).resolves.toHaveLength(1);
   });
 
   it("accepts standard second-precision webhook timestamps for HMAC triggers", async () => {

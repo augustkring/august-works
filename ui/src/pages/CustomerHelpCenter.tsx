@@ -1,12 +1,14 @@
 import { useTranslation } from "react-i18next";
 import { FEEDBACK_CONTACTS, PRODUCT_IDENTITY } from "@paperclipai/shared";
-import { Link, useLocation } from "../lib/router";
+import { Link, useLocation, useNavigate } from "../lib/router";
 
 const linkClass = "inline-flex min-h-11 items-center rounded-md border border-border px-4 text-sm font-medium hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring";
 
-export function CustomerHelpCenter() {
+export function CustomerHelpCenter({ navigationState }: { navigationState?: unknown } = {}) {
   const { t } = useTranslation("experience");
   const location = useLocation();
+  const navigate = useNavigate();
+  const supportState = navigationState ?? location.state;
 
   return (
     <section aria-labelledby="customer-help-title" className="space-y-6">
@@ -20,9 +22,12 @@ export function CustomerHelpCenter() {
         <a className={linkClass} href={PRODUCT_IDENTITY.docsOrigin} target="_blank" rel="noreferrer">
           {t("helpCenter.browse")}
         </a>
-        <Link className={linkClass} to="/company/support" state={location.state} replace data-support-help-entry>
+        <Link className={linkClass} to="/company/support" state={supportState} replace data-support-help-entry
+          onClick={event => { event.preventDefault(); navigate("/company/support", { replace: true, state: supportState }); }}>
           {t("helpCenter.cases")}
         </Link>
+        <Link className={linkClass} to="/company/imports" state={supportState} replace data-import-history-entry
+          onClick={event => { event.preventDefault(); navigate("/company/imports", { replace: true, state: supportState }); }}>{t("helpCenter.imports")}</Link>
         <a className={linkClass} href={PRODUCT_IDENTITY.statusOrigin} target="_blank" rel="noreferrer">
           {t("helpCenter.status")}
         </a>
