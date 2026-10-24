@@ -927,14 +927,15 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     const owner = createAuthorizationService(db, context);
     try {
       const result = await read({ decide: owner.decide });
-        if (context.credentialUserId) {
-          const [{ current }] = await db.execute<{ current: boolean }>(sql`
-            select (${context.credentialExpiresAt === null
-              ? sql`true`
-              : sql`clock_timestamp() < to_timestamp(${context.credentialExpiresAt} / 1000.0)`}
-              and not exists(select 1 from ${accountDeletionOperations} where user_id=${context.credentialUserId})) as current
-          `);
-          if (!current) throw forbidden("Native Source credential is no longer available.");
+      if (context.credentialExpiresAt !== null || context.credentialUserId !== null) {
+        const deadlineCurrent = context.credentialExpiresAt === null ? sql`true`
+          : sql`clock_timestamp() < to_timestamp(${context.credentialExpiresAt} / 1000.0)`;
+        const principalAvailable = context.credentialUserId === null ? sql`true`
+          : sql`not exists(select 1 from ${accountDeletionOperations} where user_id=${context.credentialUserId})`;
+        const [credential] = await db.execute<{ current: boolean }>(sql`
+          select (${deadlineCurrent} and ${principalAvailable}) as current
+        `);
+        if (!credential?.current) throw forbidden("Native Source credential is no longer available.");
       }
       return result;
     }
