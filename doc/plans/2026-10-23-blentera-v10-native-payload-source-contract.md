@@ -144,3 +144,31 @@ The new original-owner control retains a private Task input through a derived Ta
 ## Direct native body writer lifecycle — 2026-10-23
 
 The native Task updater, environment selection, plugin policy, forecast, monitor, failed-workspace retry and status blocker paths now explicitly preserve unchanged captures or invalidate changed bodies at their existing owners. Memory root and five derived Task/Comment/revision erasure updates invalidate with erasure. The original binding trigger still rejects arbitrary stale direct writes, and its irreversible unknown latch still rejects rebinding. These mutation checkpoints do not capture complete new input closures or activate any constructor. Other Project/Comment/Memory/Document mutation families remain unqualified. See the dated recovery ledger and `doc/operations/aw-v10-evidence/native-body-writers-2026-10-23/checkpoint.json`; original private-Memory and temporal reader regressions remain open.
+
+
+## Actual selected turn input — 2026-10-24
+
+The original runner now exposes an awaited finalized-input boundary immediately
+before `NativeSession.startTurn`, after warm continuation and semantic-result
+recovery choose the actual message. The callback observes a detached copy; it
+cannot rewrite the original backend call. Existing active/terminal adoption and
+goal-control-only paths do not fabricate a fresh input. A persistence rejection
+uses the existing startup abort/cleanup owner and prevents that turn from starting.
+
+The server binds a bounded `nativeModelInputDispatchIntents` history to the real
+launch event, current coordinator lease/attempt, native run and its then-current
+responsible Human (NULL stays unknown). It retains digest/byte count and the
+actual continuation flag, without copying model prose, paths or credentials.
+Original profile/history is preserved; exact returned persisted intent is checked
+because source/erasure triggers may suppress writes. Unexpected DB errors are
+normalized without their private profile/query parameters. The shared native
+lease renewal now uses database wall time, including after transaction waits.
+
+These are pre-I/O dispatch intentions, not provider acknowledgements or complete
+source captures. No constructor is upgraded, no complete receipt is synthesized,
+and no source-free/Ready/private-work admission follows. Complete input-family
+capture and original privacy/temporal regressions remain mandatory. Actual native
+PG controls first reproduced lease revival, private SQL error leakage and silent
+write suppression; final PG10 + executor mock471 + runner mock142 and targeted
+compilers/build pass. Evidence:
+`doc/operations/aw-v10-evidence/native-model-dispatch-2026-10-24/checkpoint.json`.

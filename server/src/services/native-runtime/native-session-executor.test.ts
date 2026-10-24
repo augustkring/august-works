@@ -4628,6 +4628,7 @@ function leaseDb(
   runnerProfileJson: Record<string, unknown> = {},
   runStatus = "running",
   failAttachmentCaptureWrite = false,
+  failModelInputCaptureWrite = false,
 ): Db {
   const coordinator: LeaseCoordinator = {
     runId: boundExecution.binding.runId,
@@ -4644,6 +4645,11 @@ function leaseDb(
     set: (values: Record<string, unknown>) => {
       return {
         where: () => {
+          if (failModelInputCaptureWrite && table === heartbeatRuns &&
+              values.runnerProfileJson && typeof values.runnerProfileJson === "object" &&
+              "nativeModelInputDispatchIntents" in values.runnerProfileJson) {
+            throw new Error("Injected dispatch SQL parameters PRIVATE_MODEL_INPUT");
+          }
           if (
             failAttachmentCaptureWrite &&
             table === heartbeatRuns &&
@@ -4666,8 +4672,9 @@ function leaseDb(
           > & {
             returning: () => Promise<Array<{ runId: string }>>;
           };
-          result.returning = () =>
-            Promise.resolve([{ runId: coordinator.runId, nextEventSeq: 2 }]);
+          result.returning = (fields?: { profile?: unknown }) =>
+            Promise.resolve([{ runId: coordinator.runId, nextEventSeq: 2,
+              ...(fields?.profile === heartbeatRuns.runnerProfileJson ? { profile: runnerProfileJson } : {}) }]);
           return result;
         },
       };
@@ -4691,6 +4698,8 @@ function leaseDb(
                   status: runStatus,
                 },
               ]
+            : table === heartbeatRunEvents
+              ? updates.filter(row => row.table === heartbeatRunEvents).map(row => row.values)
             : table === issues
               ? [
                   {
@@ -8041,6 +8050,49 @@ describe("runnerd provider runtime wiring", () => {
     expect(providerAdmissionReached).toBe(false);
     expect(state.createTransport).not.toHaveBeenCalled();
     expect(cleanup).toHaveBeenCalledTimes(1);
+  });
+
+  it.each([false, true])("records the selected turn input before provider dispatch (write fails: %s)", async failWrite => {
+    const updates: Array<{ table: unknown; values: Record<string, unknown> }> = [];
+    const prior = { eventSeq: 0, attempt: 1, responsibleUserId: null, turnInputDigest: "a".repeat(64) };
+    const turnInput = { message: { role: "user" as const, text: "PRIVATE_MODEL_INPUT /private/model/path" }, continuation: true as const };
+    const providerDispatch = vi.fn();
+    state.execute.mockReset().mockImplementationOnce(async options => {
+      await options.onSessionAdmission();
+      await options.onTurnInput(turnInput);
+      const profileWrite = updates.findLast(row => row.table === heartbeatRuns &&
+        row.values.runnerProfileJson && typeof row.values.runnerProfileJson === "object" &&
+        "nativeModelInputDispatchIntents" in row.values.runnerProfileJson);
+      expect(profileWrite).toBeDefined();
+      const profile = profileWrite!.values.runnerProfileJson as Record<string, unknown>;
+      const intents = profile.nativeModelInputDispatchIntents as Array<Record<string, unknown>>;
+      expect(intents).toEqual([prior, expect.objectContaining({
+        turnInputDigest: createHash("sha256").update(JSON.stringify(turnInput)).digest("hex"),
+        byteSize: Buffer.byteLength(JSON.stringify(turnInput)), continuation: true, responsibleUserId: null,
+      })]);
+      expect(profile.retainedProfileValue).toBe("preserved");
+      expect(JSON.stringify(intents)).not.toContain("PRIVATE_MODEL_INPUT");
+      expect(JSON.stringify(intents)).not.toContain("/private/model/path");
+      expect(profile).not.toHaveProperty("nativeInputSourceReceipt");
+      providerDispatch();
+      return {
+        result: { summary: "completed" }, terminal: { runTerminalState: "succeeded" },
+        turnId: "dispatch-input-turn", normalizedSessionId: "dispatch-input-session",
+        providerSessionId: null, driverKind: "test", driverVersion: "1",
+        nativeEventCount: 1, highestContiguousSourceSeq: 1, usage: null,
+      };
+    });
+    const result = executePaperclipNativeSession({
+      db: leaseDb(execution, {}, {}, updates, { retainedProfileValue: "preserved", nativeModelInputDispatchIntents: [prior] },
+        "running", false, failWrite), execution, runnerInstanceId: `input-dispatch-${failWrite}`, useRunnerd: true,
+    });
+    if (failWrite) {
+      await expect(result).rejects.toThrow("native_model_input_dispatch_persistence_failed");
+      expect(providerDispatch).not.toHaveBeenCalled();
+    } else {
+      await result;
+      expect(providerDispatch).toHaveBeenCalledOnce();
+    }
   });
 
   it("passes the run checkpoint active turn into restart recovery", async () => {

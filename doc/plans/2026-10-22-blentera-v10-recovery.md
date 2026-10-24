@@ -882,3 +882,19 @@ own session recheck; acknowledgement is bound to the verifier's actual SID.
 Challenge reads detach from an older account's in-flight HTTP request. Software
 virtual-authenticator/fixture evidence does not qualify enterprise recovery,
 physical hosts/keys, mixed-version deployment or complete V10/PR admission.
+
+
+### 2026-10-24 — actual model-turn selection and dispatch intention
+
+A new awaited boundary observes the exact finalized backend turn input after
+resumption/recovery selection. Its production callback records only bounded
+hash/length/continuation facts on the original run, fenced by real launch event,
+coordinator lease, attempt and current run. Returned persistence is checked and
+private SQL diagnostics are withheld. Actual PG regressions reproduced and then
+closed transaction-time lease revival, private error leakage and suppressed writes.
+Final evidence:10 native database cases,471 executor mock cases,142 runner mock
+cases, runner TypeScript build and server compilation. Original source regressions
+still reproduce3 failures with the retained private-body control passing. Complete
+input receipts/constructors, typed origins, cross-owner reads and full V10/PR gates
+remain open. Evidence:
+`doc/operations/aw-v10-evidence/native-model-dispatch-2026-10-24/checkpoint.json`.

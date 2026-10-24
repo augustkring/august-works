@@ -186,6 +186,8 @@ export interface NativeSessionGoalControl {
 export interface ExecuteNativeSessionOptions {
   /** Durable launch intent, after cleanup admission and before provider calls. */
   onSessionAdmission?: () => Promise<void>;
+  /** Observe the finalized provider input immediately before its turn starts. */
+  onTurnInput?: (input: Parameters<NativeSession["startTurn"]>[0]) => Promise<void>;
   input: NativeExecutionInput;
   backend: NativeSessionBackend;
   controlPlane: ControlPlanePort;
@@ -2359,13 +2361,15 @@ export async function executeNativeSession(
               "Use the existing session context to invoke exactly one paperclip_finish or paperclip_block with the accurate current disposition, then stop without additional user-facing prose.",
             ].join("\n");
           }
-          await session.startTurn({
+          const turnInput: Parameters<NativeSession["startTurn"]>[0] = {
             message: { role: "user", text: JSON.stringify(modelEnvelope) },
             ...(recovered && modelEnvelope.schema === "paperclip.native-continuation.v1"
               ? { continuation: true as const } : {}),
             requestedCollaborationMode:
               "executionMode" in input ? input.executionMode : "default",
-          });
+          };
+          await options.onTurnInput?.(structuredClone(turnInput));
+          await session.startTurn(turnInput);
           await checkpoint();
         }
       } catch (error) {

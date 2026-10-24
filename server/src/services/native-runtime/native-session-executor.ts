@@ -7032,8 +7032,8 @@ export async function renewNativeSessionExecutionLease(input: {
   const [updated] = await input.db
     .update(nativeRunFinalizations)
     .set({
-      leaseExpiresAt: sql`now() + (${leaseTtlMs} * interval '1 millisecond')`,
-      updatedAt: sql`now()`,
+      leaseExpiresAt: sql`clock_timestamp() + (${leaseTtlMs} * interval '1 millisecond')`,
+      updatedAt: sql`clock_timestamp()`,
     })
     .where(
       and(
@@ -7048,11 +7048,67 @@ export async function renewNativeSessionExecutionLease(input: {
           nativeRunFinalizations.controllerProcessStartedAt,
           controller.processStartedAt,
         ),
-        gt(nativeRunFinalizations.leaseExpiresAt, sql`now()`),
+        gt(nativeRunFinalizations.leaseExpiresAt, sql`clock_timestamp()`),
       ),
     )
     .returning({ runId: nativeRunFinalizations.runId });
   if (!updated) throw new Error("native_session_lease_lost");
+}
+
+/** Chosen backend-call bytes before I/O, not proof of delivery or complete
+ * source provenance. Keep unknown sends and prior attempts as separate facts. */
+export async function recordNativeModelInputDispatchIntent(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
+  agentId: string;
+  eventSeq: number;
+  turnInput: Parameters<NativeSession["startTurn"]>[0];
+}): Promise<void> {
+  if (!Number.isSafeInteger(input.eventSeq) || input.eventSeq < 0)
+    throw new Error("native_model_input_launch_binding_invalid");
+  const encoded = JSON.stringify(input.turnInput);
+  await input.db.transaction(async tx => {
+    // Keep the original coordinator -> run lock order, and repeat the actual
+    // lease check after intervening waits before committing this fact.
+    await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
+    const [run] = await tx.select().from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, input.companyId),
+      eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId),
+      eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.status, "running"),
+    )).for("update");
+    if (!run) throw new Error("native_model_input_run_binding_changed");
+    const [launch] = await tx.select({ seq: heartbeatRunEvents.seq }).from(heartbeatRunEvents).where(and(
+      eq(heartbeatRunEvents.companyId, input.companyId), eq(heartbeatRunEvents.runId, input.runId),
+      eq(heartbeatRunEvents.agentId, input.agentId), eq(heartbeatRunEvents.seq, input.eventSeq),
+      eq(heartbeatRunEvents.eventType, PROCESS_START_REQUESTED),
+    )).for("share");
+    if (!launch) throw new Error("native_model_input_launch_binding_changed");
+    const profile = record(run.runnerProfileJson);
+    const previous = profile.nativeModelInputDispatchIntents ?? [];
+    if (!Array.isArray(previous) || previous.length >= 64)
+      throw new Error("native_model_input_dispatch_budget_exceeded");
+    const intents = [...previous, {
+      eventSeq: launch.seq, attempt: input.attempt, responsibleUserId: run.responsibleUserId ?? null,
+      turnInputDigest: createHash("sha256").update(encoded).digest("hex"),
+      byteSize: Buffer.byteLength(encoded), continuation: input.turnInput.continuation === true,
+    }];
+    if (Buffer.byteLength(JSON.stringify(intents)) > 2 * 1024 * 1024)
+      throw new Error("native_model_input_dispatch_budget_exceeded");
+    const [stored] = await tx.update(heartbeatRuns).set({
+      runnerProfileJson: { ...profile, nativeModelInputDispatchIntents: intents }, updatedAt: new Date(),
+    }).where(eq(heartbeatRuns.id, run.id)).returning({ profile: heartbeatRuns.runnerProfileJson });
+    const storedIntents = record(stored?.profile).nativeModelInputDispatchIntents;
+    if (!Array.isArray(storedIntents) || nativeSha256(storedIntents) !== nativeSha256(intents))
+      throw new Error("native_model_input_dispatch_persistence_failed");
+    await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
+  }).catch((error: unknown) => {
+    // A driver's query/params can include the existing private run profile.
+    // Keep only our finite control errors; never propagate raw DB diagnostics.
+    const message = error instanceof Error ? error.message : "";
+    throw new Error([
+      "native_session_lease_lost", "native_session_lease_ttl_invalid",
+      "native_model_input_run_binding_changed", "native_model_input_launch_binding_changed",
+      "native_model_input_dispatch_budget_exceeded",
+    ].includes(message) ? message : "native_model_input_dispatch_persistence_failed");
+  });
 }
 
 function startNativeSessionExecutionLeaseRenewal(input: {
@@ -8178,6 +8234,7 @@ async function executePaperclipNativeSessionWithinScope(
           )).then(rows => rows[0])
       : null;
     nativeSessionExecuteStartedAtMs = Date.now();
+    let launchEventSeq: number | null = null;
     native = await trace.measure(
       "native.session.execute",
       async () => {
@@ -8199,6 +8256,7 @@ async function executePaperclipNativeSessionWithinScope(
                 level: "info",
                 message: "Native execution requested; prior local stop evidence no longer applies.",
               });
+              launchEventSeq = launchIntent.row.seq;
               // The launch-intent transaction can wait on the run row too.
               // A committed intent never substitutes for current source access.
               await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, input.execution.binding.runId);
@@ -8231,6 +8289,20 @@ async function executePaperclipNativeSessionWithinScope(
                 // Capture persistence may itself wait; it is never a grant.
                 await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
               }
+            },
+            onTurnInput: async turnInput => {
+              if (launchEventSeq === null) throw new Error("native_model_input_launch_binding_invalid");
+              await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
+              await recordNativeModelInputDispatchIntent({
+                db: input.db, runId, companyId: input.execution.binding.companyId,
+                issueId: input.execution.binding.issueId, agentId: input.execution.binding.agentId,
+                leaseOwner, attempt, controller, eventSeq: launchEventSeq, turnInput,
+              });
+              await assertNativeAnalyticalRunPayloadAccess(input.db, input.execution.binding.companyId, runId);
+              await renewNativeSessionExecutionLease({
+                db: input.db, runId, companyId: input.execution.binding.companyId,
+                issueId: input.execution.binding.issueId, leaseOwner, attempt, controller,
+              });
             },
             input: runnerExecution,
             remoteCleanupScope: remoteCleanupLease ? remoteLeaseCleanupScope(remoteCleanupLease) : undefined,
