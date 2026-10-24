@@ -13,7 +13,7 @@ import { suppressAnalyticalSource } from "./analytical-privacy.js";
 import { forgetMemoryForDeletedIssue, lockMemoryPrivacy } from "./memory/memory-privacy.js";
 import { lockBusinessEventCompany, suppressBusinessEventsForObject } from "./business-event-privacy.js";
 import { authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, pinCurrentBoardActor, type AuthorizationActor } from "./authorization.js";
-import { assertHumanAuthentication } from "../auth/authenticator-assurance.js";
+import { assertHumanAuthentication, isAuthenticationStateBusy } from "../auth/authenticator-assurance.js";
 import { directHumanPayloadSnapshotSql, assertDirectInputSessionCurrent as assertManualInputCredentialCurrent } from "./native-direct-input.js";
 import { resolveTaskWatchdogMutationScope, taskWatchdogScopeAllowsIssueMutation } from "./task-watchdog-scope.js";
 import {
@@ -11455,6 +11455,26 @@ export function issueService(db: Db) {
           currentActor = { type: "agent", agentId: actorAgentId, companyId: receiptExisting.companyId,
             runId: actorRunId ?? undefined, onBehalfOfUserId: run?.responsibleUserId ?? undefined };
         }
+        let mutationCredentialExpiresAt = currentActor?.authenticatedCredentialExpiresAt ?? null;
+        let pinnedBoardCredential = false;
+        if (mutationCredentialExpiresAt !== null && !Number.isFinite(mutationCredentialExpiresAt))
+          throw forbidden("The authenticated Task mutation credential is unavailable");
+        if (currentActor?.type === "board" && currentActor.source !== "local_implicit"
+          && (currentActor.sessionId != null || currentActor.keyId != null
+            || mutationCredentialExpiresAt !== null || currentActor.source === "board_key")) {
+          // Reuse the original credential verifier's identity after the Task
+          // wait. NOWAIT pins avoid reversing account-erasure lock ordering.
+          const pinned = await pinCurrentBoardActor(tx, currentActor).catch(error => {
+            if (isAuthenticationStateBusy(error))
+              throw conflict("Authentication state is changing; try again", { code: "authentication_state_busy" });
+            throw error;
+          });
+          if (!pinned || (pinned.credentialExpiresAt !== null && !Number.isFinite(pinned.credentialExpiresAt)))
+            throw forbidden("The authenticated Task mutation credential is unavailable");
+          currentActor = pinned.actor;
+          mutationCredentialExpiresAt = pinned.credentialExpiresAt;
+          pinnedBoardCredential = true;
+        }
         if (currentActor) {
           const scope = await resolveTaskWatchdogMutationScope(tx, currentActor);
           if (scope.kind === "invalid") throw forbidden(scope.detail);
@@ -11814,6 +11834,16 @@ export function issueService(db: Db) {
             },
           });
           activityPublications.push(publication);
+        }
+        if (pinnedBoardCredential || mutationCredentialExpiresAt !== null) {
+          // Child-row effects can wait after authorization and the Task write.
+          // Check the original ceiling after this owner's effects.
+          const humanId = currentActor?.type === "agent" ? currentActor.onBehalfOfUserId : currentActor?.userId;
+          const [credential] = await tx.execute(sql`select
+            (${mutationCredentialExpiresAt}::double precision is null
+              or ${mutationCredentialExpiresAt}::double precision>extract(epoch from clock_timestamp())*1000)
+            and not exists(select 1 from account_deletion_operations where user_id=${humanId ?? null}) as active`);
+          if (!credential?.active) throw forbidden("The authenticated Task mutation credential is unavailable");
         }
         return {
           ...enriched,

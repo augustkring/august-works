@@ -1195,3 +1195,34 @@ remain open. Evidence:
 
 Final full interaction route suite:82/82 pass.
 Server compilation passes for the final review actor forwarding and tests.
+
+### 2026-10-24 — generic Task credentials across native row waits
+
+Actual PostgreSQL counterexamples reproduce three unauthorized Task commits:
+session expiry during a held Task row, Board key revocation during that wait,
+and expiry during a held issue_labels DELETE after the Task write. The shared
+Task updater now reuses the native Board credential pinner after the row wait
+and checks the original earliest expiry against the database clock after its
+child-row effects. Pending account erasure also rejects that final boundary.
+Existing canonical action and source privacy decisions remain authoritative.
+
+The existing NOWAIT credential pins prevent reversing account-erasure lock
+ordering. A further held-session-row counterexample reproduced raw55P03;
+the Task caller now reuses the existing authentication-state classifier and
+409 authentication_state_busy response. Finite original AgentJWT deadlines
+also reach the final check. Real locally signed/verified JWT positive/expiry
+cases use an actual accountable running run and assignee Agent. Session renewal
+during an observed wait cannot extend the original authenticated deadline.
+
+Initial four focused cases and the expanded93 cases across five native suites
+pass. The final seven focused cases pass after the additional busy-response
+counterexample. Board session/key fixtures are post-authentication carriers;
+Agent tests exercise the actual local JWT helper. Neither supplies provider
+execution, complete inputs, current Agent-key pinning or later outer-transaction
+effect/commit qualification. Broader V10/source/privacy/lifetime and PR gates
+remain open. Evidence:
+`doc/operations/aw-v10-evidence/generic-task-credential-lifetime-2026-10-24/checkpoint.json`.
+
+Server compilation and the built native cookie/authenticator browser pass.
+The browser includes a real authenticated Task PATCH and verifies unchanged
+source hashes/audits afterward; its virtual authenticator is no hardware proof.

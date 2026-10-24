@@ -46,6 +46,8 @@ test("native CLI consent and account settings use real session and authenticator
   const manualTask = await json(await page.request.post(`/api/companies/${company.id}/issues`, { data: {
     title: "Direct Human source binding", description: "An independent manual request.", status: "todo",
   } }));
+  const updatedTask = await json(await page.request.patch(`/api/issues/${manualTask.id}`, { data: { priority: "high" } }));
+  expect(updatedTask.priority).toBe("high");
   const manualComment = await json(await page.request.post(`/api/issues/${manualTask.id}/comments`, { data: {
     body: "A direct Human clarification.", clientRequestId: randomUUID(),
   } }));
@@ -57,6 +59,7 @@ test("native CLI consent and account settings use real session and authenticator
   }));
   for (const field of ["payloadSourceProtocolVersion", "payloadSourceSnapshot", "payloadSourceSnapshotInvalidated"]) {
     expect(manualTask).not.toHaveProperty(field);
+    expect(updatedTask).not.toHaveProperty(field);
     expect(manualProject).not.toHaveProperty(field);
     expect(manualComment).not.toHaveProperty(field);
     expect(manualDocument).not.toHaveProperty(field);
