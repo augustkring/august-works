@@ -1,0 +1,70 @@
+{
+  "recordedAt": "2026-10-24T21:23:00.018903+00:00",
+  "status": "in_progress; bounded software evidence, not full V10/PR qualification",
+  "requirements": [
+    "HELP-01",
+    "HELP-02",
+    "V10-021",
+    "V10-023",
+    "V10-031",
+    "V10-032"
+  ],
+  "checks": {
+    "help-ui-checked": {
+      "exit": 1,
+      "log": "help-ui-checked.log"
+    },
+    "help-app-final": {
+      "exit": 0,
+      "log": "help-app-final.log"
+    },
+    "import-history-focused": {
+      "exit": 0,
+      "log": "import-history-focused.log"
+    },
+    "import-history-final": {
+      "exit": 0,
+      "log": "import-history-final.log"
+    },
+    "import-history-ui": {
+      "exit": 0,
+      "log": "import-history-ui.log"
+    },
+    "import-history-tokens": {
+      "exit": 0,
+      "log": "import-history-tokens.log"
+    },
+    "continuity-help-tokens": {
+      "exit": 0,
+      "log": "continuity-help-tokens.log"
+    },
+    "continuity-help-ui-types": {
+      "exit": 1,
+      "log": "continuity-help-ui-types.log"
+    },
+    "continuity-help-ui-types-final": {
+      "exit": 1,
+      "log": "continuity-help-ui-types-final.log"
+    },
+    "continuity-help-ui-types-owned": {
+      "exit": 1,
+      "log": "continuity-help-ui-types-owned.log"
+    },
+    "continuity-help-ui-types-final-owned": {
+      "exit": 1,
+      "log": "continuity-help-ui-types-final-owned.log"
+    },
+    "workspace-current-typecheck": {
+      "exit": 1,
+      "log": "workspace-current-typecheck.log"
+    }
+  },
+  "observations": [
+    "Both native shell Help entries open Help rather than operator support settings. Original same-company/User/session Work stays mounted. Help/cases/import-history are panes in one persistently mounted native dialog; browser platform showModal/close owns modality. Exact support draft state/DOM survives closing and reopening; hidden panes disable private reads. Focus returns only to allowlisted exact live original shell entry. No private draft in router/browser storage.",
+    "Help projects configured docs/status origins, original support cases and direct Human/security/privacy contacts. Reuses Mintlify docs with Blentera presentation and two versioned articles with capability/screen references. It does not assert deployed external content, approved full content inventory, support provider delivery or a grounded Support Agent.",
+    "Company import history lists original requester/co only; verifies expectedUserId against original authenticated actor, pins native credentials and repeats current company access before presentation. Bounded50 with full PostgreSQL microsecond keyset cursor; no raw hash/key/attempt nonce/source input/full cached prose. ActualPG/HTTP one scenario covers pagination (3 rows within1ms), foreign/forged cursors, other requester, account mismatch, crosscompany and membership withdrawal during read.",
+    "App focused16PASS including exact Work/support draft retention and both Help-entry focus targets. History component3PASS: readonly unknown receipt, no hidden query, late reply after session switch withheld. Earlier Help retention/typecheck transition failures remain archived. Intermediate full workspace compiler encountered the cursor Date/string transition; final stable rerun pending here.",
+    "New-company operations have no companyId until success and are not listed while running/unknown by this company-scoped route. Full durable operations lifecycle, source preview plan/selection confirmation, per-effect mapping, cancellation/reconciliation, complete Help IA/metadata/stale-link CI, Universal Find, grounded support assistant, hosted origins and manual accessibility remain open. Full build/browser/workspace results follow separately; no PR-ready, merge or deployment claim."
+  ],
+  "implementationParentCommit": "ad03eb1b9"
+}

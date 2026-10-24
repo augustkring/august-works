@@ -1,0 +1,33 @@
+
+ RUN  v4.1.11 /workspace/blentera-v10/server
+
+ ✓ src/__tests__/v9-experience.integration.test.ts > V9 experience on migrated PostgreSQL > suppresses a task hidden during fan-out and marks the bounded source partial 282ms
+ ✓ src/__tests__/v9-experience.integration.test.ts > V9 experience on migrated PostgreSQL > suppresses a task changed during fan-out and marks the bounded source partial 148ms
+ ✓ src/__tests__/v9-experience.integration.test.ts > V9 experience on migrated PostgreSQL > rechecks current expert grants and presentation eligibility after native fan-out 144ms
+ ✓ src/__tests__/v9-experience.integration.test.ts > V9 experience on migrated PostgreSQL > fails closed when the native feature context changes during fan-out 123ms
+ ✓ src/__tests__/v9-experience.integration.test.ts > V9 experience on migrated PostgreSQL > drops attention resolved during the read without materializing native queues 103ms
+ ✓ src/__tests__/v9-experience.integration.test.ts > V9 experience on migrated PostgreSQL > offers Share feedback only while the original feedback rollout is enabled, without creating feedback or company work 77ms
+ ✓ src/__tests__/v9-experience.integration.test.ts > V9 experience on migrated PostgreSQL > admits only deterministic current-scope commands and native-visible resource matches 315ms
+ ✓ src/__tests__/v9-experience.integration.test.ts > V9 experience on migrated PostgreSQL > refuses retained command results after an actual native source becomes hidden_task 72ms
+ ✓ src/__tests__/v9-experience.integration.test.ts > V9 experience on migrated PostgreSQL > refuses retained command results after an actual native source becomes changed_task 60ms
+ ✓ src/__tests__/v9-experience.integration.test.ts > V9 experience on migrated PostgreSQL > refuses retained command results after an actual native source becomes terminated_agent 30ms
+ ✓ src/__tests__/v9-experience.integration.test.ts > V9 experience on migrated PostgreSQL > refuses retained command results after an actual native source becomes archived_project 135ms
+ ✓ src/__tests__/v9-experience.integration.test.ts > V9 experience on migrated PostgreSQL > rechecks a real command grant revoked after its availability decision 28ms
+ ✓ src/__tests__/v9-experience.integration.test.ts > V9 experience on migrated PostgreSQL > keeps ten Company categories stable while filtering current native grants and account context 74ms
+ ✓ src/__tests__/v9-experience.integration.test.ts > V9 experience on migrated PostgreSQL > rechecks users:invite revoked during the Company read before returning controls 66ms
+ ✓ src/__tests__/v9-experience.integration.test.ts > V9 experience on migrated PostgreSQL > rechecks tools:manage_connections revoked during the Company read before returning controls 52ms
+ ✓ src/__tests__/v9-experience.integration.test.ts > V9 experience on migrated PostgreSQL > enforces disabled rollout, tenant scope and human-only access 15ms
+ ✓ src/__tests__/v9-experience.integration.test.ts > V9 experience on migrated PostgreSQL > returns native company tasks with current versions and cannot escalate a viewer profile 116ms
+ ✓ src/__tests__/v9-experience.integration.test.ts > V9 experience on migrated PostgreSQL > keeps a native attention page boundary visible without inventing a full-queue count 119ms
+ ✓ src/__tests__/v9-experience.integration.test.ts > V9 experience on migrated PostgreSQL > filters attention linked to foreign work and leaves queue materialization to its native owner 101ms
+ ✓ src/__tests__/v9-experience.integration.test.ts > V9 experience on migrated PostgreSQL > preserves authorized expert destinations and removes them when their native gate closes 128ms
+ ✓ src/__tests__/v9-experience.integration.test.ts > V9 experience on migrated PostgreSQL > checks current persisted membership even when middleware carries old company access 20ms
+ ✓ src/__tests__/v9-experience.integration.test.ts > V9 experience on migrated PostgreSQL > lets an authorized owner choose depth without granting a viewer administrative authority 184ms
+ ✓ src/__tests__/v9-experience.integration.test.ts > V9 experience on migrated PostgreSQL > fences a browser request issued for another account 13ms
+ ✓ src/__tests__/v9-experience.integration.test.ts > V9 experience on migrated PostgreSQL > rejects broken graph updates atomically and preserves disabled defaults 19ms
+
+ Test Files  1 passed (1)
+      Tests  24 passed (24)
+   Start at  21:08:04
+   Duration  22.08s (transform 11.16s, setup 73ms, import 15.38s, tests 6.51s, environment 0ms)
+

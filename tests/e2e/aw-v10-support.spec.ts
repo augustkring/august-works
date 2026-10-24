@@ -41,6 +41,17 @@ test("Help retains its originating view and reload recovers requests before and 
     await page.getByRole("link", { name: "My support cases", exact: true }).click();
     await expect(page.getByLabel("What do you need help with?", { exact: true })).toBeVisible();
   };
+  await openHelp();
+  await page.getByRole("link", { name: "Import history", exact: true }).click();
+  await expect(page.getByRole("heading", { name: "Import history", exact: true })).toBeVisible();
+  await expect(page.getByText("No saved imports for this account and company.", { exact: true })).toBeVisible();
+  expect(await page.getByRole("dialog").evaluate(node => node.matches(":modal"))).toBe(true);
+  await page.keyboard.press("Tab");
+  expect(await page.evaluate(() => !!document.activeElement?.closest("dialog"))).toBe(true);
+  await page.keyboard.press("Escape");
+  await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(helpEntry).toBeFocused();
+  expect(await heading!.evaluate(node => node.isConnected)).toBe(true);
   const unsent = "Private unsent support draft retained only in this account's memory.";
   for (const dismissal of ["close", "escape", "return"] as const) {
     await openHelp();

@@ -168,7 +168,8 @@
       "work": "CompanyImport migration from process memory.",
       "reconciliation": "in_progress",
       "evidence": [
-        "doc/operations/aw-v10-evidence/durable-import-2026-10-24/checkpoint.json"
+        "doc/operations/aw-v10-evidence/durable-import-2026-10-24/checkpoint.json",
+        "doc/operations/aw-v10-evidence/help-import-history-2026-10-24/checkpoint.json"
       ]
     },
     {
@@ -186,7 +187,8 @@
       "work": "generic operation status UX.",
       "reconciliation": "in_progress",
       "evidence": [
-        "doc/operations/aw-v10-evidence/durable-import-2026-10-24/checkpoint.json"
+        "doc/operations/aw-v10-evidence/durable-import-2026-10-24/checkpoint.json",
+        "doc/operations/aw-v10-evidence/help-import-history-2026-10-24/checkpoint.json"
       ]
     },
     {
@@ -200,15 +202,19 @@
       "id": "V10-025",
       "sourceLine": 6803,
       "work": "responsibility projection / owner-group contract.",
-      "reconciliation": "not_reconciled",
-      "evidence": []
+      "reconciliation": "in_progress",
+      "evidence": [
+        "doc/operations/aw-v10-evidence/owner-continuity-2026-10-24/checkpoint.json"
+      ]
     },
     {
       "id": "V10-026",
       "sourceLine": 6804,
       "work": "member-removal responsibility preflight.",
-      "reconciliation": "not_reconciled",
-      "evidence": []
+      "reconciliation": "in_progress",
+      "evidence": [
+        "doc/operations/aw-v10-evidence/owner-continuity-2026-10-24/checkpoint.json"
+      ]
     },
     {
       "id": "V10-027",
@@ -221,8 +227,10 @@
       "id": "V10-028",
       "sourceLine": 6806,
       "work": "orphan scanner \u2192 Action needed.",
-      "reconciliation": "not_reconciled",
-      "evidence": []
+      "reconciliation": "in_progress",
+      "evidence": [
+        "doc/operations/aw-v10-evidence/owner-continuity-2026-10-24/checkpoint.json"
+      ]
     },
     {
       "id": "V10-029",
@@ -235,22 +243,28 @@
       "id": "V10-030",
       "sourceLine": 6808,
       "work": "offboarding credential/revocation reconciliation.",
-      "reconciliation": "not_reconciled",
-      "evidence": []
+      "reconciliation": "in_progress",
+      "evidence": [
+        "doc/operations/aw-v10-evidence/owner-continuity-2026-10-24/checkpoint.json"
+      ]
     },
     {
       "id": "V10-031",
       "sourceLine": 6812,
       "work": "Help Center IA/rebrand over existing docs infrastructure.",
-      "reconciliation": "not_reconciled",
-      "evidence": []
+      "reconciliation": "in_progress",
+      "evidence": [
+        "doc/operations/aw-v10-evidence/help-import-history-2026-10-24/checkpoint.json"
+      ]
     },
     {
       "id": "V10-032",
       "sourceLine": 6813,
       "work": "Help metadata + Screen Contract linking.",
-      "reconciliation": "not_reconciled",
-      "evidence": []
+      "reconciliation": "in_progress",
+      "evidence": [
+        "doc/operations/aw-v10-evidence/help-import-history-2026-10-24/checkpoint.json"
+      ]
     },
     {
       "id": "V10-033",

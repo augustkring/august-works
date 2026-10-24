@@ -1,0 +1,48 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[21:16:15] [33mWARN[39m: [36mfailed to wake assignee on issue assignment[39m [90m{"issueId":"2cf1c63e-5fc1-43c4-bee1-8aae8c7ef2e6"}[39m
+    err: {
+      "type": "Error",
+      "message": "queue unavailable",
+      "stack":
+          Error: queue unavailable
+              at Object.wakeup (/workspace/blentera-v10/server/src/__tests__/routines-service.test.ts:2082:15)
+              at Object.wakeup (/workspace/blentera-v10/server/src/__tests__/routines-service.test.ts:201:41)
+              at queueIssueAssignmentWakeup (/workspace/blentera-v10/server/src/services/issue-assignment-wakeup.ts:58:6)
+              at /workspace/blentera-v10/server/src/services/routines.ts:2077:19
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at scope (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+              at sql.begin (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+              at dispatchRoutineRun (/workspace/blentera-v10/server/src/services/routines.ts:2569:19)
+              at /workspace/blentera-v10/server/src/__tests__/routines-service.test.ts:2086:17
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[21:16:15] [33mWARN[39m: [36mroutine Task dispatch remains pending[39m [90m{"routineRunId":"2c35d019-0e09-428d-917b-ceb44741a47d"}[39m
+[21:16:15] [33mWARN[39m: [36mfailed to wake assignee on issue assignment[39m [90m{"issueId":"13964145-bff7-453f-8600-5ef42ee21376"}[39m
+    err: {
+      "type": "Error",
+      "message": "queue unavailable",
+      "stack":
+          Error: queue unavailable
+              at Object.wakeup (/workspace/blentera-v10/server/src/__tests__/routines-service.test.ts:2102:35)
+              at Object.wakeup (/workspace/blentera-v10/server/src/__tests__/routines-service.test.ts:201:41)
+              at queueIssueAssignmentWakeup (/workspace/blentera-v10/server/src/services/issue-assignment-wakeup.ts:58:6)
+              at /workspace/blentera-v10/server/src/services/routines.ts:2077:19
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at scope (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:279:18)
+              at sql.begin (file:///workspace/blentera-v10/node_modules/.pnpm/postgres@3.4.9_patch_hash=sryle6qd5qfmnxvoebal4gashi/node_modules/postgres/src/index.js:257:14)
+              at dispatchRoutineRun (/workspace/blentera-v10/server/src/services/routines.ts:2569:19)
+              at /workspace/blentera-v10/server/src/__tests__/routines-service.test.ts:2104:17
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[21:16:15] [33mWARN[39m: [36mroutine Task dispatch remains pending[39m [90m{"routineRunId":"38e5fcd6-2134-4a48-9c32-6485b656d656"}[39m
+
+ Test Files  1 passed (1)
+      Tests  77 passed (77)
+   Start at  21:15:46
+   Duration  36.80s (transform 11.69s, setup 77ms, import 16.31s, tests 20.27s, environment 0ms)
+

@@ -1,0 +1,35 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v9-experience.integration.test.ts (24 tests | 1 failed | 23 skipped) 3689ms
+     × refuses retained command results after an actual native source becomes archived_project 115ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v9-experience.integration.test.ts > V9 experience on migrated PostgreSQL > refuses retained command results after an actual native source becomes archived_project
+Error: expected 409 "Conflict", got 500 "Internal Server Error"
+ ❯ src/__tests__/v9-experience.integration.test.ts:431:12
+    429|             `/api/companies/${companyId}/experience/commands?q=PRIVATE…
+    430|           )
+    431|           .expect(409);
+       |            ^
+    432|         assertChanged();
+    433|         expect(response.headers["cache-control"]).toBe("private, no-st…
+ ❯ Test._assertStatus ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:309:14
+ ❯ ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:365:13
+ ❯ Test._assertFunction ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:342:13
+ ❯ Test.assert ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:195:23
+ ❯ localAssert ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:138:14
+ ❯ Server.<anonymous> ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:152:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 23 skipped (24)
+   Start at  21:02:37
+   Duration  19.13s (transform 10.99s, setup 122ms, import 15.16s, tests 3.69s, environment 0ms)
+

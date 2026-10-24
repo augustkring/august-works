@@ -622,6 +622,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
   // two prefixes cover every import route registered below.
   router.use(COMPANY_IMPORT_ROUTE_PATH, importFloor);
   router.use("/:companyId/imports", importFloor);
+  router.use("/:companyId/import/jobs", importFloor);
 
   router.post("/import/preview", async (req, res) => {
     assertBoard(req);
@@ -629,6 +630,48 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     assertImportTargetAccess(req, body.target);
     const preview = await portability.previewImport(body);
     res.json(preview);
+  });
+
+  router.get("/:companyId/import/jobs", async (req, res) => {
+    assertBoard(req);
+    const companyId = z.uuid().parse(req.params.companyId);
+    assertCompanyAccess(req, companyId);
+    const query = z.strictObject({
+      limit: z.coerce.number().int().min(1).max(50).default(20),
+      cursor: z.string().min(1).max(512).optional(),
+      expectedUserId: z.string().optional(),
+    }).parse(req.query);
+    if (req.actor.source === "local_implicit") {
+      if (query.expectedUserId !== undefined && query.expectedUserId !== "local-board")
+        throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
+    } else if (req.actor.userId) {
+      if (query.expectedUserId !== req.actor.userId)
+        throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
+    } else if (query.expectedUserId !== undefined) {
+      throw conflict("Account changed; reload this page", { code: "ACCOUNT_CHANGED" });
+    }
+    let before: { createdAt: string; id: string } | undefined;
+    if (query.cursor) {
+      try {
+        const decoded = JSON.parse(Buffer.from(query.cursor, "base64url").toString("utf8"));
+        const cursor = z.strictObject({ createdAt: z.string().datetime({ precision: 6 }),
+          id: z.string().regex(/^(?:tenant-)?import-[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i) }).parse(decoded);
+        before = { createdAt: cursor.createdAt, id: cursor.id };
+      } catch { throw badRequest("Invalid import history cursor"); }
+    }
+    const page = await importJobs.listForRequesterCompany({ actorKey: importJobActorKey(req), companyId,
+      requestedByUserId: req.actor.userId ?? null, limit: query.limit, before }, req.actor);
+    const jobs = page.jobs.map(job => {
+      const record = importJobRecord(job);
+      return { job: {
+        id: record.id, status: record.status, createdAt: record.createdAt, updatedAt: record.updatedAt,
+        ...(record.completedAt ? { completedAt: record.completedAt } : {}),
+        ...(record.result ? { result: record.result } : {}), ...(record.error ? { error: record.error } : {}),
+      }, operation: companyImportOperationReceipt(job) };
+    });
+    const nextCursor = page.nextCursor ? Buffer.from(JSON.stringify({ createdAt: page.nextCursor.createdAt,
+      id: page.nextCursor.id })).toString("base64url") : null;
+    res.json({ jobs, nextCursor });
   });
 
   router.get("/import/jobs/:jobId", async (req, res) => {

@@ -1,0 +1,97 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+Not implemented: HTMLCanvasElement's getContext() method: without installing the canvas npm package
+ ❯ |@paperclipai/ui| src/App.cases-routing.test.tsx (14 tests | 6 failed) 4724ms
+     × retains support state after return while releasing the modal's work-surface effects 196ms
+     × retains support state after close while releasing the modal's work-surface effects 172ms
+     × retains support state after escape while releasing the modal's work-surface effects 167ms
+     × discards a hidden support draft after its account changes 1049ms
+     × discards a hidden support draft after its session changes 1048ms
+     × discards a hidden support draft after its company changes 1047ms
+ ❯ |@paperclipai/server| src/__tests__/access-service.test.ts (21 tests | 1 failed) 4656ms
+     × blocks member archive when owned private conversation routines lack a supported handoff 28ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 7 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/access-service.test.ts > access service > blocks member archive when owned private conversation routines lack a supported handoff
+AssertionError: expected Error: Replacement routine responsible us… { …(2) } to match object { status: 409, details: { …(2) } }
+
+- Expected
++ Received
+
+- {
+-   "details": {
+-     "code": "PRIVATE_ROUTINE_HANDOFF_UNSUPPORTED",
+-     "privateRoutineCount": 1,
+-   },
++ HttpError {
++   "details": undefined,
+    "status": 409,
+  }
+
+ ❯ src/__tests__/access-service.test.ts:295:27
+    293|     await expect(accessService(db).archiveMember(company.id, member.id…
+    294|       routineResponsibleUserId: owner.principalId,
+    295|     }, owner.principalId)).rejects.toMatchObject({
+       |                           ^
+    296|       status: 409,
+    297|       details: { code: "PRIVATE_ROUTINE_HANDOFF_UNSUPPORTED", privateR…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/7]⎯
+
+ FAIL  |@paperclipai/ui| src/App.cases-routing.test.tsx > App Cases routing (PAP-13002) > retains support state after return while releasing the modal's work-surface effects
+ FAIL  |@paperclipai/ui| src/App.cases-routing.test.tsx > App Cases routing (PAP-13002) > retains support state after close while releasing the modal's work-surface effects
+ FAIL  |@paperclipai/ui| src/App.cases-routing.test.tsx > App Cases routing (PAP-13002) > retains support state after escape while releasing the modal's work-surface effects
+AssertionError: expected <textarea …(1)></textarea> to be <textarea …(1)></textarea> // Object.is equality
+
+- Expected
++ Received
+
+  <textarea
+    aria-label="Unsent support"
+- >
+-   Private unsent support
+- </textarea>
++ />
+
+ ❯ src/App.cases-routing.test.tsx:306:77
+    304|     openCases();
+    305|     await vi.waitFor(() => expect(document.querySelector<HTMLElement>(…
+    306|     expect(document.querySelector('textarea[aria-label="Unsent support…
+       |                                                                             ^
+    307|     expect(support.value).toBe("Private unsent support");
+    308|     unmountApp(root);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/7]⎯
+
+ FAIL  |@paperclipai/ui| src/App.cases-routing.test.tsx > App Cases routing (PAP-13002) > discards a hidden support draft after its account changes
+ FAIL  |@paperclipai/ui| src/App.cases-routing.test.tsx > App Cases routing (PAP-13002) > discards a hidden support draft after its session changes
+ FAIL  |@paperclipai/ui| src/App.cases-routing.test.tsx > App Cases routing (PAP-13002) > discards a hidden support draft after its company changes
+AssertionError: expected null to be truthy
+
+- Expected:
+true
+
++ Received:
+null
+
+ ❯ src/App.cases-routing.test.tsx:313:90
+    311|   it.each(["account", "session", "company"])("discards a hidden suppor…
+    312|     const root = await renderAppAt(container, "/PAP/work");
+    313|     await vi.waitFor(() => expect(container.querySelector('a[data-supp…
+       |                                                                                          ^
+    314|     flushSync(() => container.querySelector<HTMLAnchorElement>('a[data…
+    315|     await waitForPortal("Help Center content");
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/7]⎯
+
+
+ Test Files  2 failed | 2 passed (4)
+      Tests  7 failed | 58 passed (65)
+   Start at  20:50:50
+   Duration  39.99s (transform 17.98s, setup 81ms, import 27.38s, tests 10.46s, environment 1.60s)
+

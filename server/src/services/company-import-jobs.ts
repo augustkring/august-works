@@ -1,5 +1,5 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
+import { and, desc, eq, inArray, isNull, lt, ne, or, sql } from "drizzle-orm";
 import { customerOperations, companyTransferRuns, type Db } from "@paperclipai/db";
 import type { CompanyPortabilityImportResult, CustomerOperationReceipt } from "@paperclipai/shared";
 import { conflict, forbidden } from "../errors.js";
@@ -111,6 +111,41 @@ export function companyImportJobService(db: Db) {
       return db.select().from(customerOperations).where(and(eq(customerOperations.id, id),
         eq(customerOperations.requesterKeyHash, hash(actorKey)), eq(customerOperations.operationType, "company_import")))
         .limit(1).then(rows => rows[0] ?? null);
+    },
+
+    /** Bounded discoverability for the original requester; never returns the
+     * raw operation row outside this native owner. */
+    async listForRequesterCompany(input: { actorKey: string; companyId: string; requestedByUserId: string | null;
+      limit: number; before?: { createdAt: string; id: string } }, actor: AuthorizationActor) {
+      if (actor.type !== "board" || (actor.userId ?? null) !== input.requestedByUserId)
+        throw forbidden("The original import requester is required");
+      const limit = Math.max(1, Math.min(50, Math.trunc(input.limit) || 20));
+      return db.transaction(async tx => {
+        const pinned = await pinImportCredential(tx, actor);
+        const currentActor = pinned?.actor ?? actor;
+        const decision = await authorizationService(tx).decide({ actor: currentActor, action: "company_scope:read",
+          resource: { type: "company", companyId: input.companyId }, enforceResponsibleUserIntersection: true });
+        if (!decision.allowed) throw forbidden("Current company access is required");
+        const requester = input.requestedByUserId === null
+          ? isNull(customerOperations.requestedByUserId) : eq(customerOperations.requestedByUserId, input.requestedByUserId);
+        const rows = await tx.select({ job: customerOperations,
+          cursorCreatedAt: sql<string>`to_char(${customerOperations.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
+        }).from(customerOperations).where(and(
+          eq(customerOperations.requesterKeyHash, hash(input.actorKey)), eq(customerOperations.operationType, "company_import"),
+          eq(customerOperations.companyId, input.companyId), requester,
+          input.before ? or(sql`${customerOperations.createdAt} < ${input.before.createdAt}::timestamptz`, and(
+            sql`${customerOperations.createdAt} = ${input.before.createdAt}::timestamptz`, lt(customerOperations.id, input.before.id))) : undefined,
+        )).orderBy(desc(customerOperations.createdAt), desc(customerOperations.id)).limit(limit + 1);
+        const current = await authorizationService(tx).decide({ actor: currentActor, action: "company_scope:read",
+          resource: { type: "company", companyId: input.companyId }, enforceResponsibleUserIntersection: true });
+        if (!current.allowed) throw forbidden("Current company access is required");
+        await finishImportCredential(tx, pinned);
+        const hasMore = rows.length > limit;
+        const page = hasMore ? rows.slice(0, limit) : rows;
+        const last = page.at(-1);
+        return { jobs: page.map(row => row.job), nextCursor: hasMore && last
+          ? { createdAt: last.cursorCreatedAt, id: last.job.id } : null };
+      });
     },
 
     async start(job: CompanyImportJob, actor?: AuthorizationActor) {
