@@ -6,7 +6,7 @@
       "source": "ui/src/App.tsx",
       "articleId": "help-and-human-support",
       "sourceSha256": "a18f03eba75b3cd5837cc27e83577a941324f1a2aadd7cb8452a0bb54db0deb8",
-      "articleSha256": "9275c802b4100f273b4f3f4546ce7aaff4cc979fd5aee050f491062f117474d8",
+      "articleSha256": "4fdd98fe9f0506dd6b2edaf37da1ba07f7342ec707d5314fe03139cb9cc13783",
       "decision": "no_change",
       "rationale": "Reviewed App.tsx: current Help navigation, support intake, human contact, and request recovery behavior matches the article; no wording change is needed."
     },
@@ -14,7 +14,7 @@
       "source": "ui/src/components/ExperienceUtilities.tsx",
       "articleId": "help-and-human-support",
       "sourceSha256": "d44832d4849da6c1eb50a91b97f08d43b8d14ed55fe3fe56a6c565dc0e5ae781",
-      "articleSha256": "9275c802b4100f273b4f3f4546ce7aaff4cc979fd5aee050f491062f117474d8",
+      "articleSha256": "4fdd98fe9f0506dd6b2edaf37da1ba07f7342ec707d5314fe03139cb9cc13783",
       "decision": "no_change",
       "rationale": "Reviewed ExperienceUtilities.tsx: current Help navigation, support intake, human contact, and request recovery behavior matches the article; no wording change is needed."
     },
@@ -22,7 +22,7 @@
       "source": "ui/src/pages/CustomerHelpCenter.tsx",
       "articleId": "help-and-human-support",
       "sourceSha256": "cdc034d72d2ce1f9eba7878b4ef385fc4d527fb48fb926becc2c915348aa2249",
-      "articleSha256": "9275c802b4100f273b4f3f4546ce7aaff4cc979fd5aee050f491062f117474d8",
+      "articleSha256": "4fdd98fe9f0506dd6b2edaf37da1ba07f7342ec707d5314fe03139cb9cc13783",
       "decision": "updated",
       "rationale": "Added in-place Help search; the linked article now explains that results open in a new tab and preserve the originating work view."
     },
@@ -30,7 +30,7 @@
       "source": "ui/src/pages/CustomerSupportCases.tsx",
       "articleId": "help-and-human-support",
       "sourceSha256": "be3af7f1dc8f2f07b507bac12bc28bcd41661923d8bc89a4824ad90e5db81b86",
-      "articleSha256": "9275c802b4100f273b4f3f4546ce7aaff4cc979fd5aee050f491062f117474d8",
+      "articleSha256": "4fdd98fe9f0506dd6b2edaf37da1ba07f7342ec707d5314fe03139cb9cc13783",
       "decision": "no_change",
       "rationale": "Reviewed CustomerSupportCases.tsx: current Help navigation, support intake, human contact, and request recovery behavior matches the article; no wording change is needed."
     },
@@ -38,7 +38,7 @@
       "source": "ui/src/lib/help-navigation.ts",
       "articleId": "help-and-human-support",
       "sourceSha256": "132369ced166ef7e7b15204f09b42fe1cb7551d67d1436006b35448108155a2b",
-      "articleSha256": "9275c802b4100f273b4f3f4546ce7aaff4cc979fd5aee050f491062f117474d8",
+      "articleSha256": "4fdd98fe9f0506dd6b2edaf37da1ba07f7342ec707d5314fe03139cb9cc13783",
       "decision": "no_change",
       "rationale": "Reviewed help-navigation.ts: current Help navigation, support intake, human contact, and request recovery behavior matches the article; no wording change is needed."
     },
@@ -46,7 +46,7 @@
       "source": "server/src/routes/customer-support.ts",
       "articleId": "help-and-human-support",
       "sourceSha256": "ee5c3ad776c8bd20a7b2f4011f6d4c645d8e2a470165190684c48d62682c50fe",
-      "articleSha256": "9275c802b4100f273b4f3f4546ce7aaff4cc979fd5aee050f491062f117474d8",
+      "articleSha256": "4fdd98fe9f0506dd6b2edaf37da1ba07f7342ec707d5314fe03139cb9cc13783",
       "decision": "no_change",
       "rationale": "Reviewed customer-support.ts: current Help navigation, support intake, human contact, and request recovery behavior matches the article; no wording change is needed."
     },
@@ -54,7 +54,7 @@
       "source": "server/src/services/experience/customer-support.ts",
       "articleId": "help-and-human-support",
       "sourceSha256": "a66506818899ee0940bb54f71d8f2941fd66ead42f3bea7d884e726f0313f49e",
-      "articleSha256": "9275c802b4100f273b4f3f4546ce7aaff4cc979fd5aee050f491062f117474d8",
+      "articleSha256": "4fdd98fe9f0506dd6b2edaf37da1ba07f7342ec707d5314fe03139cb9cc13783",
       "decision": "no_change",
       "rationale": "Reviewed customer-support.ts: current Help navigation, support intake, human contact, and request recovery behavior matches the article; no wording change is needed."
     },
@@ -62,7 +62,7 @@
       "source": "server/src/services/experience/support-cases.ts",
       "articleId": "help-and-human-support",
       "sourceSha256": "93a029cbda26f28c40f23c7294c2e5fbde908091a5546734ce8c3c26ee30f754",
-      "articleSha256": "9275c802b4100f273b4f3f4546ce7aaff4cc979fd5aee050f491062f117474d8",
+      "articleSha256": "4fdd98fe9f0506dd6b2edaf37da1ba07f7342ec707d5314fe03139cb9cc13783",
       "decision": "no_change",
       "rationale": "Reviewed support-cases.ts: current Help navigation, support intake, human contact, and request recovery behavior matches the article; no wording change is needed."
     },
@@ -70,7 +70,7 @@
       "source": "packages/shared/src/customer-support.ts",
       "articleId": "help-and-human-support",
       "sourceSha256": "3cac98df03888f2b9414fdb77a80e55992986dfeb404f75373ac1d5a9cbd4883",
-      "articleSha256": "9275c802b4100f273b4f3f4546ce7aaff4cc979fd5aee050f491062f117474d8",
+      "articleSha256": "4fdd98fe9f0506dd6b2edaf37da1ba07f7342ec707d5314fe03139cb9cc13783",
       "decision": "no_change",
       "rationale": "Reviewed customer-support.ts: current Help navigation, support intake, human contact, and request recovery behavior matches the article; no wording change is needed."
     },
@@ -78,7 +78,7 @@
       "source": "packages/shared/src/customer-feedback.ts",
       "articleId": "help-and-human-support",
       "sourceSha256": "0f49bdcaf851b08f3dab373ba79b49d0809072d47fa5d88f7aeae1f2315804c7",
-      "articleSha256": "9275c802b4100f273b4f3f4546ce7aaff4cc979fd5aee050f491062f117474d8",
+      "articleSha256": "4fdd98fe9f0506dd6b2edaf37da1ba07f7342ec707d5314fe03139cb9cc13783",
       "decision": "no_change",
       "rationale": "Reviewed customer-feedback.ts: current Help navigation, support intake, human contact, and request recovery behavior matches the article; no wording change is needed."
     },
@@ -86,7 +86,7 @@
       "source": "packages/shared/src/product-identity.ts",
       "articleId": "help-and-human-support",
       "sourceSha256": "085231253fdee6684f2d088a4b9bf183da1c3f5ecc6a27a423e3716570ee350f",
-      "articleSha256": "9275c802b4100f273b4f3f4546ce7aaff4cc979fd5aee050f491062f117474d8",
+      "articleSha256": "4fdd98fe9f0506dd6b2edaf37da1ba07f7342ec707d5314fe03139cb9cc13783",
       "decision": "no_change",
       "rationale": "Reviewed product-identity.ts: current Help navigation, support intake, human contact, and request recovery behavior matches the article; no wording change is needed."
     },
@@ -94,7 +94,7 @@
       "source": "packages/shared/src/support-diagnostics.ts",
       "articleId": "help-and-human-support",
       "sourceSha256": "862d5d636ddf9ebf55e7d6e6f809fa34aba9f8cfd274f1777af9eb3ccc755075",
-      "articleSha256": "9275c802b4100f273b4f3f4546ce7aaff4cc979fd5aee050f491062f117474d8",
+      "articleSha256": "4fdd98fe9f0506dd6b2edaf37da1ba07f7342ec707d5314fe03139cb9cc13783",
       "decision": "no_change",
       "rationale": "Reviewed support-diagnostics.ts: current Help navigation, support intake, human contact, and request recovery behavior matches the article; no wording change is needed."
     },
@@ -120,7 +120,7 @@
       "sourceSha256": "848676297a26bb77b3f53b31256f8bbfcfb296421cc5ce1c0d4dc61827fda7fa",
       "articleSha256": "2cbe5b01f43f6bf2778fc5053696411d74ecfd8a51e12b91d9f373e006aa4d1c",
       "decision": "updated",
-      "rationale": "Extended authorized Import history to find the original requester’s unbound new-company receipt; the article now states the honest target label and its limits."
+      "rationale": "Extended authorized Import history to find the original requester\u2019s unbound new-company receipt; the article now states the honest target label and its limits."
     },
     {
       "source": "server/src/routes/companies.ts",
@@ -128,7 +128,7 @@
       "sourceSha256": "3f771cf957af2ebccf0852eeb300b60ce68aa6ad5d639a50166be417cb7b4775",
       "articleSha256": "2cbe5b01f43f6bf2778fc5053696411d74ecfd8a51e12b91d9f373e006aa4d1c",
       "decision": "updated",
-      "rationale": "Extended authorized Import history to find the original requester’s unbound new-company receipt; the article now states the honest target label and its limits."
+      "rationale": "Extended authorized Import history to find the original requester\u2019s unbound new-company receipt; the article now states the honest target label and its limits."
     },
     {
       "source": "server/src/services/company-import-jobs.ts",
@@ -136,7 +136,7 @@
       "sourceSha256": "37682d39ad51f1ade89469c8812bf9347138d5115db026d1e273dbcc7d2e33e3",
       "articleSha256": "2cbe5b01f43f6bf2778fc5053696411d74ecfd8a51e12b91d9f373e006aa4d1c",
       "decision": "updated",
-      "rationale": "Extended authorized Import history to find the original requester’s unbound new-company receipt; the article now states the honest target label and its limits."
+      "rationale": "Extended authorized Import history to find the original requester\u2019s unbound new-company receipt; the article now states the honest target label and its limits."
     },
     {
       "source": "server/src/services/company-import-transfers.ts",
@@ -185,6 +185,38 @@
       "articleSha256": "2cbe5b01f43f6bf2778fc5053696411d74ecfd8a51e12b91d9f373e006aa4d1c",
       "decision": "no_change",
       "rationale": "Reviewed company.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
+    },
+    {
+      "source": "ui/src/api/search.ts",
+      "articleId": "help-and-human-support",
+      "sourceSha256": "b63f9dfc82b2109e9cb57f202210d4dae49617b987192b98aa2f364c5cc79135",
+      "articleSha256": "4fdd98fe9f0506dd6b2edaf37da1ba07f7342ec707d5314fe03139cb9cc13783",
+      "decision": "no_change",
+      "rationale": "Reviewed the existing search client: Help uses the company-scoped query and abort signal; no customer guidance change is needed."
+    },
+    {
+      "source": "server/src/services/company-search.ts",
+      "articleId": "help-and-human-support",
+      "sourceSha256": "df82573b5b239958b5ca74bb04519cb935b751aad23b31db24927793b7535c19",
+      "articleSha256": "4fdd98fe9f0506dd6b2edaf37da1ba07f7342ec707d5314fe03139cb9cc13783",
+      "decision": "no_change",
+      "rationale": "Reviewed the native Help projection: checked article metadata, full bounded article text and issue-only filter behavior match the guidance."
+    },
+    {
+      "source": "server/src/routes/issues.ts",
+      "articleId": "help-and-human-support",
+      "sourceSha256": "9ebfd1ef540feb983110c183ea4be2c43154e247feaf6324754231d8f4676953",
+      "articleSha256": "4fdd98fe9f0506dd6b2edaf37da1ba07f7342ec707d5314fe03139cb9cc13783",
+      "decision": "no_change",
+      "rationale": "Reviewed the current company search route: native company authorization, Help scope and bounded responses match the documented in-place search."
+    },
+    {
+      "source": "packages/shared/src/types/search.ts",
+      "articleId": "help-and-human-support",
+      "sourceSha256": "25805fa121307b96c5b7441425325799ac5a2c1daa1131b6c9ae861de35a6084",
+      "articleSha256": "4fdd98fe9f0506dd6b2edaf37da1ba07f7342ec707d5314fe03139cb9cc13783",
+      "decision": "no_change",
+      "rationale": "Reviewed the shared Help result contract: article identity, preview maturity, version, locale and verification date match the guidance."
     }
   ]
 }
