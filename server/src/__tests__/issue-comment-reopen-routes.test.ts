@@ -22,6 +22,18 @@ const mockAccessService = vi.hoisted(() => ({
   decide: vi.fn(),
   hasPermission: vi.fn(),
 }));
+const mockCurrentTaskSourceRead = vi.hoisted(() => vi.fn(async () => true));
+const mockAnalyticalSourceRead = vi.hoisted(() => vi.fn(async () => undefined));
+
+// These route units model public Task fixtures and mocked domain effects.
+// Native source ACL/provenance is covered by the PostgreSQL integration suites.
+vi.mock("../services/authorization.js", async () => ({
+  ...await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js"),
+  canActorReadIssuePrivacy: mockCurrentTaskSourceRead,
+}));
+vi.mock("../services/analytical-context-authority.js", () => ({
+  assertAnalyticalContextPayloadAccess: mockAnalyticalSourceRead,
+}));
 
 const mockHeartbeatService = vi.hoisted(() => ({
   wakeup: vi.fn(async () => undefined),
@@ -215,6 +227,11 @@ vi.mock("../services/cross-issue-influence-limit.js", () => ({
   crossIssueInfluenceRunContextError: mockCrossIssueInfluenceRunContextError,
 }));
 
+const [{ issueRoutes }, { errorHandler }] = await Promise.all([
+  import("../routes/issues.js"),
+  import("../middleware/index.js"),
+]);
+
 function createApp() {
   const app = express();
   app.use(express.json());
@@ -225,10 +242,6 @@ async function installActor(
   app: express.Express,
   actor?: Record<string, unknown>,
 ) {
-  const [{ issueRoutes }, { errorHandler }] = await Promise.all([
-    import("../routes/issues.js"),
-    import("../middleware/index.js"),
-  ]);
   app.use((req, _res, next) => {
     (req as any).actor = actor ?? {
       type: "board",
@@ -320,6 +333,8 @@ async function waitForWakeup(assertion: () => void) {
 describe.sequential("issue comment reopen routes", () => {
   beforeEach(() => {
     vi.clearAllMocks();
+    mockCurrentTaskSourceRead.mockReset().mockResolvedValue(true);
+    mockAnalyticalSourceRead.mockReset().mockResolvedValue(undefined);
     mockIssueService.getById.mockReset();
     mockIssueService.getByIdForUpdate.mockReset();
     mockIssueService.assertCheckoutOwner.mockReset();
@@ -821,7 +836,7 @@ describe.sequential("issue comment reopen routes", () => {
     });
     mockAccessService.decide.mockImplementation(
       async (input: { action?: string }) => {
-        const allowed = input.action === "issue:comment";
+        const allowed = input.action === "issue:comment" || input.action === "issue:read";
         return {
           allowed,
           action: input.action,
@@ -869,7 +884,7 @@ describe.sequential("issue comment reopen routes", () => {
       });
       mockAccessService.decide.mockImplementation(
         async (input: { action?: string }) => {
-          const allowed = input.action === "issue:comment";
+          const allowed = input.action === "issue:comment" || input.action === "issue:read";
           return {
             allowed,
             action: input.action,
@@ -1266,10 +1281,10 @@ describe.sequential("issue comment reopen routes", () => {
 
   it("skips the assignee wakeup when the issue is concurrently cancelled while the comment is being written", async () => {
     const app = await installActor(createApp());
-    // First call is the route's pre-insert fetch; second is the wake-decision
-    // re-fetch. A stale wake decision would use the first (open, assigned)
-    // snapshot instead of the second (cancelled) one.
+    // The public-source admission and pre-insert reads see the open Task.
+    // The post-insert wake decision must observe the subsequent cancellation.
     mockIssueService.getById
+      .mockResolvedValueOnce(makeIssue("in_progress"))
       .mockResolvedValueOnce(makeIssue("in_progress"))
       .mockResolvedValueOnce(makeIssue("cancelled"));
     mockIssueService.addComment.mockResolvedValue({
@@ -1294,6 +1309,7 @@ describe.sequential("issue comment reopen routes", () => {
     const app = await installActor(createApp());
     const reassignedAgentId = "44444444-4444-4444-8444-444444444444";
     mockIssueService.getById
+      .mockResolvedValueOnce(makeIssue("in_progress"))
       .mockResolvedValueOnce(makeIssue("in_progress"))
       .mockResolvedValueOnce({
         ...makeIssue("in_progress"),
@@ -1330,6 +1346,7 @@ describe.sequential("issue comment reopen routes", () => {
     // the persisted comment (a 5xx would invite a retry that duplicates it) and
     // fall back to the in-hand snapshot so a legitimate wake isn't dropped.
     mockIssueService.getById
+      .mockResolvedValueOnce(makeIssue("in_progress"))
       .mockResolvedValueOnce(makeIssue("in_progress"))
       .mockRejectedValueOnce(new Error("transient read failure"));
     mockIssueService.addComment.mockResolvedValue({
@@ -2938,6 +2955,18 @@ describe.sequential("issue comment reopen routes", () => {
     );
   });
 
+  it("withholds a comment mutation when the current Task source reader refuses it", async () => {
+    mockIssueService.getById.mockResolvedValue(makeIssue("in_progress"));
+    mockCurrentTaskSourceRead.mockResolvedValue(false);
+    const response = await request(await installActor(createApp()))
+      .post("/api/issues/11111111-1111-4111-8111-111111111111/comments")
+      .send({ body: "A comment requiring current source access" });
+    expect(response.status).toBe(404);
+    expect(mockIssueService.addComment).not.toHaveBeenCalled();
+    expect(mockIssueService.update).not.toHaveBeenCalled();
+    expect(mockHeartbeatService.wakeup).not.toHaveBeenCalled();
+  });
+
   it("auto-approves a reviewer comment with the APPROVED review marker", async () => {
     const reviewerAgentId = "33333333-3333-4333-8333-333333333333";
     const policy = await normalizePolicy({
@@ -3018,6 +3047,10 @@ describe.sequential("issue comment reopen routes", () => {
         status: "done",
         actorAgentId: reviewerAgentId,
         actorUserId: null,
+        privacyActor: expect.objectContaining({
+          type: "agent", source: "agent_key", agentId: reviewerAgentId,
+          runId: "run-review-1",
+        }),
         executionState: expect.objectContaining({
           status: "completed",
           lastDecisionId: expect.any(String),

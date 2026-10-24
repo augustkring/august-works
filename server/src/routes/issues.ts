@@ -6296,6 +6296,7 @@ export function issueRoutes(
 
   async function blockWatchdogParentOnCurrentChild(input: {
     actor: ReturnType<typeof getActorInfo>;
+    requestActor: Request["actor"];
     watchdogParentIssueId: string | null | undefined;
     currentChildIssueId: string | null | undefined;
   }) {
@@ -6318,6 +6319,7 @@ export function issueRoutes(
       input.currentChildIssueId,
     );
     await svc.update(watchdogParent.id, {
+      privacyActor: input.requestActor,
       status: "blocked",
       blockedByIssueIds: nextBlockedByIssueIds,
       actorAgentId: input.actor.agentId,
@@ -12696,6 +12698,7 @@ export function issueRoutes(
       }
       await blockWatchdogParentOnCurrentChild({
         actor,
+        requestActor: req.actor,
         watchdogParentIssueId: serializationContext?.watchdogParentIssueId,
         currentChildIssueId: currentSerializedChild?.id ?? issue.id,
       });
@@ -12957,6 +12960,7 @@ export function issueRoutes(
       }
       await blockWatchdogParentOnCurrentChild({
         actor,
+        requestActor: req.actor,
         watchdogParentIssueId: serializationContext?.watchdogParentIssueId,
         currentChildIssueId:
           existingSerializedChild?.id ?? result.newlyCreatedIssues[0]?.id,
@@ -18080,6 +18084,7 @@ export function issueRoutes(
 
         issueBeforeCommentDecision = currentIssue;
         const updatePatch = {
+          privacyActor: req.actor,
           ...transition.patch,
           status:
             typeof transition.patch.status === "string"
