@@ -2098,7 +2098,7 @@ async function assertIssuePrivacySourcesReadable(tx: DbTransaction, actor: Autho
   }
 }
 
-async function pinIssueMutationHuman(tx: DbTransaction, actor: AuthorizationActor, companyId: string, noWait = false) {
+export async function pinIssueMutationHuman(tx: DbTransaction, actor: AuthorizationActor, companyId: string, noWait = false) {
   if (actor.type === "none" || actor.source === "local_implicit") return;
   const userId = actor.type === "agent" ? actor.onBehalfOfUserId : actor.userId;
   if (!userId) throw forbidden("Current organization access is required");

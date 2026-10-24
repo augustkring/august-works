@@ -308,3 +308,26 @@ producer's stored hash/digest and actual Human audit. This slice does not
 activate a run receipt, qualify model input completeness, fix the six remaining
 typed/private-Memory/temporal cases or admit private work/full V10/PR readiness.
 Evidence: `doc/operations/aw-v10-evidence/native-manual-comment-2026-10-24/checkpoint.json`.
+
+### 2026-10-24 — actual first document revision capture
+
+A fresh ordinary HTTP document now carries its actual native Board/session
+actor into the original upsert owner. No base revision, Agent/run attribution
+or locked-document copy may claim independent direct input. Existing, edited,
+restored and imported versions retain their original unknown/known status.
+
+The original transaction pins actual source credentials and current membership
+or recent native operator proof before privacy/Task waits. Canonical Task write
+permission and current privacy remain required. Its first revision chooses
+protocol1 at INSERT. The later same-transaction binding hashes the actual stored
+revision and selects its Task anchor from the just-inserted unique same-company
+link. Its actual Human audit follows the native Task entity; only committed
+publication is emitted. Failure or expired source authority leaves no document,
+revision or link. Public document and revision projections omit private fields;
+the existing selected-source callback retains the actual revision snapshot.
+
+The9-case actual native owner,33-case relevant regression suites, extended built
+cookie/authenticator browser and compiler pass. Complete run receipts, all six
+remaining typed/private-Memory/temporal cases, other producers and read lifetime
+closure remain open; no run protocol/private-work/PR admission is activated.
+Evidence: `doc/operations/aw-v10-evidence/native-manual-document-2026-10-24/checkpoint.json`.

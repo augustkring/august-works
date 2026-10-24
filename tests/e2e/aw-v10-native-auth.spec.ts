@@ -49,10 +49,14 @@ test("native CLI consent and account settings use real session and authenticator
   const manualComment = await json(await page.request.post(`/api/issues/${manualTask.id}/comments`, { data: {
     body: "A direct Human clarification.", clientRequestId: randomUUID(),
   } }));
+  const manualDocument = await json(await page.request.put(`/api/issues/${manualTask.id}/documents/native-source-notes`, { data: {
+    title: "Direct Human notes", format: "markdown", body: "Independent first document input.",
+  } }));
   for (const field of ["payloadSourceProtocolVersion", "payloadSourceSnapshot", "payloadSourceSnapshotInvalidated"]) {
     expect(manualTask).not.toHaveProperty(field);
     expect(manualProject).not.toHaveProperty(field);
     expect(manualComment).not.toHaveProperty(field);
+    expect(manualDocument).not.toHaveProperty(field);
   }
   const sourceFixture = await fixtureDatabase(config);
   try {
@@ -60,6 +64,8 @@ test("native CLI consent and account settings use real session and authenticator
       { kind: "issue", table: "issues", id: manualTask.id, action: "issue.payload_source_captured" },
       { kind: "project", table: "projects", id: manualProject.id, action: "project.payload_source_captured" },
       { kind: "comment", table: "issue_comments", id: manualComment.id, action: "comment.payload_source_captured", auditEntityId: manualTask.id },
+      { kind: "document_revision", table: "document_revisions", id: manualDocument.latestRevisionId,
+        action: "document_revision.payload_source_captured", auditEntityId: manualTask.id },
     ]) {
       const [stored] = await sourceFixture.db.execute(sql`select t.payload_source_protocol_version as protocol,
         t.payload_source_snapshot as snapshot,
@@ -76,6 +82,7 @@ test("native CLI consent and account settings use real session and authenticator
       expect(audit).toHaveLength(1);
       expect(audit[0]).toMatchObject({ actor_type: "user", actor_id: signup.user.id });
       if (owner.kind === "comment") expect(audit[0]?.details).toMatchObject({ commentId: owner.id, contentHash: stored?.hash });
+      if (owner.kind === "document_revision") expect(audit[0]?.details).toMatchObject({ revisionId: owner.id, contentHash: stored?.hash });
     }
   } finally { await closeRegisteredClients(sourceFixture.url); }
   const accountPath = `/${company.issuePrefix}/company/settings/security`;

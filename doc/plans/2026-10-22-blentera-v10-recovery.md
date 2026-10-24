@@ -1050,3 +1050,22 @@ source/auth lifetimes through enrichment/export, issue-specific projections,
 the six typed/private-Memory/temporal cases or complete run receipts. No full
 V10/PR admission is claimed. Evidence:
 `doc/operations/aw-v10-evidence/native-activity-source-privacy-2026-10-24/checkpoint.json`.
+
+### 2026-10-24 — fresh direct Human document revision sources
+
+The original HTTP document owner now passes its actual native actor for fresh
+literal-user input. Its transaction pins User/session/current write membership
+(or recent native operator proof) before privacy/Task locks, checks current
+canonical Task mutation/source privacy, creates the original document/revision
+and link, then binds final stored bytes with the actual unique Task link as a
+policy anchor. The Human source audit commits with those rows and notifies
+through the native parent Task after commit. Final source deadlines cover waits
+and effects. No new public fields or schema/dependency were introduced.
+
+Nine native document controls,33 cases across four relevant suites, the extended
+built cookie/authenticator browser and server compilation pass. Edits, imports,
+restoration, attribution and locked copies remain unknown; old known revision
+proof is preserved rather than transferred to a new version. This is another
+input-owner building block, not a complete run receipt/private-work/PR gate.
+The six typed/private-Memory/temporal cases and remaining read lifetimes persist.
+Evidence: `doc/operations/aw-v10-evidence/native-manual-document-2026-10-24/checkpoint.json`.

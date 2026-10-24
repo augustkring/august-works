@@ -10560,6 +10560,7 @@ export function issueRoutes(
         sourceTrust,
         lockedDocumentStrategy:
           req.actor.type === "agent" ? "create_new_document" : "conflict",
+        ...(req.actor.type === "board" && req.actor.source === "session" ? { manualInputActor: { ...req.actor } } : {}),
       });
       const doc = result.document;
       const redirectedFromLockedDocument =

@@ -1,0 +1,43 @@
+{
+  "parentCommit": "4d8006a2a",
+  "requirements": [
+    "KRN-01"
+  ],
+  "sourcePinsFile": "source-pins.json",
+  "checks": {
+    "initialNativeDocumentOwner": {
+      "exit": 0,
+      "passed": 9,
+      "suites": 1,
+      "log": "native-manual-document-initial.log"
+    },
+    "nativeDocumentAndExistingOwnerSuites": {
+      "exit": 0,
+      "passed": 33,
+      "suites": 4,
+      "log": "native-manual-document-owned.log"
+    },
+    "builtCookieAndAuthenticatorBrowser": {
+      "exit": 0,
+      "passed": 1,
+      "log": "native-manual-document-browser.log"
+    },
+    "serverCompiler": {
+      "exit": 0,
+      "log": "native-manual-document-types.log"
+    }
+  },
+  "observations": [
+    "The original ordinary document HTTP upsert passes its actual Board/session actor. Only a fresh document without base revision, agent/run attribution or locked-document-copy strategy can receive capture. Author UID, imports, service attribution, Board keys, edits and restoration do not create known payload-source proof.",
+    "The actual native User/session and current non-viewer membership or native recent passkey-qualified instance role are pinned before the company privacy tree and Task UPDATE lock. Canonical current issue:mutate and Task privacy narrow admission. Source-session expiry and operator recency are checked after waits and after awaited new-document effects, before commit.",
+    "The fresh INSERT selects protocol1. After the actual document, first revision, head pointer and unique same-company issue_documents link exist in the same transaction, the shared SQL binds the final stored revision body/title/format/changeSummary and canonical digest. Its Task policy anchor is selected from that actual unique document link rather than an input declaration.",
+    "The actual Human capture audit is in that same transaction and uses the native parent issue entity with document/revision/key and hashes only. Failure rolls back document, revision and link. Its live notification follows commit and a publication failure cannot undo a committed acknowledgement.",
+    "Nine actual native domain controls verify stored hash/digest and source callback, hidden document/revision DTO fields, duplicate create conflict without restamping, unknown edit/restored revisions with preserved original snapshot, attribution/Board-key unknown history, expired/wrong-user/viewer rejection, source-audit rollback, and an observed real privacy-lock wait expiring the source session.",
+    "The maintained built UI/localhost cookie/password/TOTP/recovery/software virtual-UV passkey browser passes. It now verifies original HTTP Task, Project, comment and first-document revision capture, actual DB hashes/digests, private-field omission and actual Human audits, including document revision-to-Task audit linkage."
+  ],
+  "limits": [
+    "The native domain suite uses real PostgreSQL principals, sessions, memberships, resources and transactions with a structural HTTP actor carrier. Its source-wait controls are not a cryptographic or physical authenticator ceremony. The separate browser supplies maintained cookie and software virtual-authenticator evidence only.",
+    "Only the fresh literal-user document branch is qualified. Existing/revised/restored/imported/generated/locked-copy versions remain unknown. This does not reconstruct historical sources or qualify complete Native run inputs, provider transport or a run protocol writer.",
+    "The six typed/private-Memory/temporal regressions, remaining source producers, other activity/read families and physical source/auth lifetimes remain open. Private-work admission, full V10/PR readiness, release/compliance/merge/deployment are not claimed."
+  ]
+}

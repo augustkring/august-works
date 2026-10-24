@@ -1,15 +1,21 @@
 import { createHash, randomUUID } from "node:crypto";
-import { and, asc, desc, eq } from "drizzle-orm";
+import { and, asc, desc, eq, isNull } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { documentRevisions, documents, issueDocuments, issues } from "@paperclipai/db";
-import { isSystemIssueDocumentKey, issueDocumentKeySchema, type NativePayloadSourceInput, type NativePayloadSourceSnapshot } from "@paperclipai/shared";
-import { conflict, notFound, unprocessable } from "../errors.js";
+import { isSystemIssueDocumentKey, issueDocumentKeySchema, nativePayloadSourceSnapshotSchema, type NativePayloadSourceInput, type NativePayloadSourceSnapshot } from "@paperclipai/shared";
+import { conflict, forbidden, notFound, unprocessable } from "../errors.js";
 import { isUniqueViolation } from "../db-errors.js";
 import { insertRowsInChunks } from "./batch-insert.js";
 import type { ImportIssueDocumentRow } from "./import-write-types.js";
 
 import { lockAnalyticalCompany, suppressAnalyticalSource } from "./analytical-privacy.js";
 import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
+import { authorizationService, canActorReadIssuePrivacy, pinCurrentBoardActor, type AuthorizationActor } from "./authorization.js";
+import { lockIssuePrivacyTree, pinIssueMutationHuman } from "./issues.js";
+import { assertHumanAuthentication } from "../auth/authenticator-assurance.js";
+import { assertDirectInputSessionCurrent, directHumanPayloadSnapshotSql } from "./native-direct-input.js";
+import { persistActivity, publishActivity, type ActivityPublication } from "./activity-log.js";
+import { logger } from "../middleware/logger.js";
 
 /** Selected native revision data, separate from every public document DTO.
  * A matching rendition and hash identify input bytes, never current access. */
@@ -232,7 +238,13 @@ export function documentService(db: Db) {
       createdByRunId?: string | null;
       sourceTrust?: typeof documents.$inferInsert.sourceTrust;
       lockedDocumentStrategy?: "conflict" | "create_new_document";
+      /** Actual request actor; author attribution alone is not input capture. */
+      manualInputActor?: AuthorizationActor;
     }) => {
+      const candidate = input.manualInputActor;
+      const manualActor = candidate?.type === "board" && candidate.source === "session" && candidate.userId && candidate.sessionId &&
+        candidate.userId === input.createdByUserId && !candidate.runId && !input.createdByAgentId && !input.createdByRunId &&
+        !input.baseRevisionId && input.lockedDocumentStrategy !== "create_new_document" ? { ...candidate } : null;
       const key = normalizeDocumentKey(input.key);
       const issue = await db
         .select({ id: issues.id, companyId: issues.companyId })
@@ -244,7 +256,35 @@ export function documentService(db: Db) {
       const maxAttempts = input.lockedDocumentStrategy === "create_new_document" ? 3 : 1;
       for (let attempt = 0; attempt < maxAttempts; attempt += 1) {
         try {
-          return await db.transaction(async (tx) => {
+          let sourcePublication: ActivityPublication | null = null;
+          const result = await db.transaction(async (tx) => {
+          let sourceExpiresAt: number | null = null, sourceOperator = false;
+          const finishManualInput = async () => {
+            if (manualActor && sourceExpiresAt !== null) {
+              if (sourceOperator) await assertHumanAuthentication(tx, manualActor, { requireRecent: true, phishingResistant: true });
+              await assertDirectInputSessionCurrent(tx, manualActor, sourceExpiresAt);
+            }
+          };
+          if (manualActor) {
+            const pinned = await pinCurrentBoardActor(tx, manualActor);
+            if (!pinned || pinned.credentialExpiresAt === null || !Number.isFinite(pinned.credentialExpiresAt))
+              throw forbidden("The current manual input session is unavailable");
+            sourceExpiresAt = pinned.credentialExpiresAt;
+            sourceOperator = await pinIssueMutationHuman(tx, manualActor, issue.companyId, true) === "instance_admin";
+            await finishManualInput();
+            await lockIssuePrivacyTree(tx, issue.companyId);
+            const [current] = await tx.select({ id: issues.id, companyId: issues.companyId, status: issues.status,
+              assigneeAgentId: issues.assigneeAgentId, assigneeUserId: issues.assigneeUserId }).from(issues)
+              .where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId))).for("update");
+            if (!current) throw notFound("Issue not found");
+            await finishManualInput();
+            const actor = { ...manualActor, isInstanceAdmin: false, ignoreInstanceAdmin: !sourceOperator };
+            const decision = await authorizationService(tx).decide({ actor, action: "issue:mutate",
+              resource: { type: "issue", companyId: issue.companyId, issueId: issue.id, status: current.status,
+                assigneeAgentId: current.assigneeAgentId, assigneeUserId: current.assigneeUserId }, enforceResponsibleUserIntersection: true });
+            if (!decision.allowed || !await canActorReadIssuePrivacy(tx, actor, current))
+              throw forbidden("Current document write authority is required");
+          }
           const now = new Date();
           const existing = await tx
             .select({
@@ -473,6 +513,7 @@ export function documentService(db: Db) {
               companyId: issue.companyId,
               documentId: document.id,
               revisionNumber: 1,
+              ...(manualActor ? { payloadSourceProtocolVersion: 1 } : {}),
               title: input.title ?? null,
               format: input.format,
               body: input.body,
@@ -497,6 +538,23 @@ export function documentService(db: Db) {
             createdAt: now,
             updatedAt: now,
           });
+
+          if (manualActor) {
+            const [captured] = await tx.update(documentRevisions)
+              .set({ payloadSourceSnapshot: directHumanPayloadSnapshotSql("document_revision") })
+              .where(and(eq(documentRevisions.id, revision.id), eq(documentRevisions.companyId, issue.companyId),
+                eq(documentRevisions.documentId, document.id), eq(documentRevisions.createdByUserId, manualActor.userId!),
+                eq(documentRevisions.payloadSourceProtocolVersion, 1), isNull(documentRevisions.payloadSourceSnapshot),
+                eq(documentRevisions.payloadSourceSnapshotInvalidated, false))).returning();
+            if (!captured?.payloadSourceSnapshot) throw conflict("Manual document source capture was not stored");
+            const snapshot = nativePayloadSourceSnapshotSchema.parse(captured.payloadSourceSnapshot);
+            const source = await persistActivity(tx as unknown as Db, { companyId: issue.companyId, actorType: "user",
+              actorId: manualActor.userId!, action: "document_revision.payload_source_captured", entityType: "issue", entityId: issue.id,
+              details: { documentId: document.id, revisionId: revision.id, key, producer: "direct_manual_input",
+                contentHash: snapshot.owner.contentHash, digest: snapshot.digest } });
+            sourcePublication = source.publication;
+            await finishManualInput();
+          }
 
           return {
             created: true as const,
@@ -523,6 +581,11 @@ export function documentService(db: Db) {
             },
           };
           });
+          if (sourcePublication) {
+            try { publishActivity(sourcePublication); }
+            catch (err) { logger.warn({ err }, "Failed to publish committed document source activity"); }
+          }
+          return result;
         } catch (error) {
           if (isUniqueViolation(error, "issue_documents_company_issue_key_uq")) {
             if (input.lockedDocumentStrategy === "create_new_document" && attempt < maxAttempts - 1) {
