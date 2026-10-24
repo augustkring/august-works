@@ -1396,3 +1396,9 @@ The low-trust email fixture now creates its Project through the original authent
 An actual native counterexample showed a Run copying its selected private Memory into its original public Task. Own-Run source edges are intentionally excluded to avoid cycles; changing only the description also bypassed privacy re-resolution. The shared Task update now reuses the original native body hash and refuses changed Agent bodies when restricted Run sources cannot yet be retained. This keeps the old body. It grants no private-source publication or fabricated snapshot. Public-source body changes and private-run priority-only changes remain valid.
 
 Focused native/credential/manual-input23PASS, server compiler0. Broader Task service138cases has18 existing admission/fixture failures before this new guard (unknown raw Projects and missing current Human); those fixtures remain under canonical-admission repair. Evidence: `doc/operations/aw-v10-evidence/private-memory-own-task-2026-10-24/receipts.json`. Exact body-bound private Agent source snapshots and owner-positive private body updates remain required; this conservative refusal does not complete that feature or V10.
+
+### 2026-10-24 — Complete the Task service admission fixture repair
+
+The full138-case Task service suite now passes. Workspace inheritance fixtures create their Projects through the canonical HTTP/local-trusted source owner; two attributed mutation cases use persisted verified Human accounts and active memberships. Existing inheritance, assignment, OAuth-state invalidation, terminal transition and source-denial assertions remain. The new restricted Agent-body refusal remains enabled.
+
+This supersedes the preceding18-failure fixture checkpoint, whose log remains retained. Evidence: `doc/operations/aw-v10-evidence/task-service-admission-2026-10-24/receipts.json`. Native source/Readiness package failures, typed private sources, temporal provenance and full V10 acceptance remain open.
