@@ -42,6 +42,7 @@ describe("company search query validation", () => {
     expect(companySearchHelpHref("guides/board-operator/importing-and-exporting")).toBe(
       "https://docs.blentera.com/guides/board-operator/importing-and-exporting",
     );
+    expect(companySearchHelpHref("help/index")).toBe("https://docs.blentera.com/help/index");
     for (const unsafe of ["https://evil.example/page", "//evil.example/page", "../private", "guides/../private"]) {
       expect(companySearchHelpHref(unsafe)).toBeNull();
     }
@@ -591,7 +592,7 @@ describeEmbeddedPostgres("companySearchService", () => {
 
     for (const q of ["%", "_", "\\"]) {
       const result = await svc.search(companyId, companySearchQuerySchema.parse({ q }));
-      expect(result.results, `q=${q}`).toEqual([]);
+      expect(result.results.map((row) => row.id), `q=${q}`).toEqual(q === "\\" ? ["company-import-export"] : []);
     }
   });
 
@@ -890,8 +891,15 @@ describeEmbeddedPostgres("companySearchService", () => {
     expect(allRows.results.map((row) => row.type)).toContain("issue");
     expect(allRows.results.map((row) => row.type)).toContain("help");
     const filtered = await svc.search(companyId, companySearchQuerySchema.parse({ q: "company", scope: "all", status: "blocked" }));
-    expect(filtered.results[0]?.type).toBe("help");
-    expect(filtered.countsByType.help).toBe(first.countsByType.help);
+    expect(filtered.results).toEqual([]);
+    expect(filtered.countsByType.help).toBe(0);
     expect(filtered.countsByType.issue).toBe(0);
+
+    const prefix = await svc.search(companyId, companySearchQuerySchema.parse({ q: "impor", scope: "help" }));
+    expect(prefix.results.map((row) => row.id)).toEqual(["company-import-export", "help-and-human-support"]);
+    for (const q of ["changed package", "outcome unknown"]) {
+      const recovery = await svc.search(companyId, companySearchQuerySchema.parse({ q, scope: "help" }));
+      expect(recovery.results.map((row) => row.id), `query=${q}`).toContain("company-import-export");
+    }
   });
 });

@@ -480,7 +480,7 @@ export function Search() {
       else if (value === "help") count = counts.help ?? 0;
       // Issue-only filters don't constrain agents/projects, so show a dash there
       // rather than an unfiltered count that would misrepresent the result set.
-      const dashOut = filtersActive && (value === "agents" || value === "projects" || value === "help");
+      const dashOut = filtersActive && (value === "agents" || value === "projects");
       return {
         value,
         label: (
