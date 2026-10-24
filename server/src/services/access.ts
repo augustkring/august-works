@@ -2,6 +2,8 @@ import { and, eq, inArray, ne, notInArray, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   companyMemberships,
+  activityLog,
+  authUsers,
   companySecretBindings,
   companySecrets,
   connectionGrantDelegations,
@@ -9,6 +11,7 @@ import {
   connectionGrants,
   instanceUserRoles,
   issues,
+  routines,
   principalPermissionGrants,
   toolAccessAuditEvents,
   toolConnections,
@@ -19,6 +22,7 @@ import { conflict } from "../errors.js";
 import { assertAssignableAgent } from "./agent-assignability.js";
 import { authorizationService, type AuthorizationActor, type AuthorizationResource } from "./authorization.js";
 import { ensureHumanRoleDefaultGrants } from "./principal-access-compatibility.js";
+import { routineService } from "./routines.js";
 
 type MembershipRow = typeof companyMemberships.$inferSelect;
 type GrantInput = {
@@ -31,6 +35,7 @@ type MemberArchiveInput = {
     assigneeAgentId?: string | null;
     assigneeUserId?: string | null;
   } | null;
+  routineResponsibleUserId?: string | null;
 };
 
 export function accessService(db: Db) {
@@ -643,7 +648,7 @@ export function accessService(db: Db) {
     await assertAssignableAgent(tx as Db, companyId, input.assigneeAgentId, { kind: "work" });
   }
 
-  async function archiveMember(companyId: string, memberId: string, input: MemberArchiveInput = {}) {
+  async function archiveMember(companyId: string, memberId: string, input: MemberArchiveInput = {}, actorUserId = "system") {
     return db.transaction(async (tx) => {
       await tx.execute(sql`
         select ${companyMemberships.id}
@@ -666,7 +671,13 @@ export function accessService(db: Db) {
         throw conflict("Only human company members can be archived");
       }
       if (existing.status === "archived") {
-        return { member: existing, reassignedIssueCount: 0 };
+        return {
+          member: existing,
+          reassignedIssueCount: 0,
+          reassignedRoutineCount: 0,
+          pausedRoutineCount: 0,
+          ownerActionRoutineCount: 0,
+        };
       }
       if (input.reassignment?.assigneeUserId === existing.principalId) {
         throw conflict("Replacement user cannot be the archived member");
@@ -680,6 +691,32 @@ export function accessService(db: Db) {
         tx,
       );
       await assertAssignableArchiveTarget(companyId, input.reassignment, tx);
+
+      const ownedRoutines = await tx
+        .select({ id: routines.id, originKind: routines.originKind, status: routines.status })
+        .from(routines)
+        .where(and(
+          eq(routines.companyId, companyId),
+          eq(routines.responsibleUserId, existing.principalId),
+          inArray(routines.status, ["active", "paused"]),
+        ))
+        .for("update");
+      let routineReplacementUserId: string | null = null;
+      if (input.routineResponsibleUserId && input.routineResponsibleUserId !== existing.principalId) {
+        const replacement = await tx
+          .select({ id: companyMemberships.id, userId: authUsers.id })
+          .from(companyMemberships)
+          .innerJoin(authUsers, eq(authUsers.id, companyMemberships.principalId))
+          .where(and(
+            eq(companyMemberships.companyId, companyId),
+            eq(companyMemberships.principalType, "user"),
+            eq(companyMemberships.principalId, input.routineResponsibleUserId),
+            eq(companyMemberships.status, "active"),
+          ))
+          .for("update")
+          .then((rows) => rows[0] ?? null);
+        if (replacement) routineReplacementUserId = replacement.userId;
+      }
 
       const now = new Date();
       await sweepMemberConnectionAccess(tx, companyId, existing.principalId, now);
@@ -711,6 +748,73 @@ export function accessService(db: Db) {
         .where(and(assignedOpenIssueWhere, ne(issues.status, "in_progress")))
         .returning({ id: issues.id });
 
+      let reassignedRoutineCount = 0;
+      let pausedRoutineCount = 0;
+      let ownerActionRoutineCount = 0;
+      const routinesSvc = ownedRoutines.length > 0 ? routineService(db) : null;
+      for (const routine of ownedRoutines) {
+        const txDb = tx as unknown as Db;
+        if (routine.originKind === "conversation_draft") {
+          if (routine.status === "active") {
+            await routinesSvc!.pauseForResponsibleUserOffboardingInTransaction(
+              txDb, companyId, routine.id, existing.principalId, { userId: actorUserId },
+            );
+            pausedRoutineCount++;
+            await tx.insert(activityLog).values({
+              companyId,
+              actorType: "user",
+              actorId: actorUserId,
+              action: "routine.paused_for_responsible_user_offboarding",
+              entityType: "routine",
+              entityId: routine.id,
+              responsibleUserId: existing.principalId,
+              details: { privateSourcePreserved: true },
+            });
+          }
+          ownerActionRoutineCount++;
+          continue;
+        }
+        if (routineReplacementUserId) {
+          await routinesSvc!.transferResponsibilityInTransaction(
+            txDb,
+            companyId,
+            routine.id,
+            existing.principalId,
+            routineReplacementUserId,
+            { userId: actorUserId },
+          );
+          await tx.insert(activityLog).values({
+            companyId,
+            actorType: "user",
+            actorId: actorUserId,
+            action: "routine.responsibility_transferred",
+            entityType: "routine",
+            entityId: routine.id,
+            responsibleUserId: routineReplacementUserId,
+            details: { previousResponsibleUserId: existing.principalId },
+          });
+          reassignedRoutineCount++;
+          continue;
+        }
+        if (routine.status === "active") {
+          await routinesSvc!.pauseForResponsibleUserOffboardingInTransaction(
+            txDb, companyId, routine.id, existing.principalId, { userId: actorUserId },
+          );
+          pausedRoutineCount++;
+          await tx.insert(activityLog).values({
+            companyId,
+            actorType: "user",
+            actorId: actorUserId,
+            action: "routine.paused_for_responsible_user_offboarding",
+            entityType: "routine",
+            entityId: routine.id,
+            responsibleUserId: existing.principalId,
+            details: { privateSourcePreserved: false },
+          });
+        }
+        ownerActionRoutineCount++;
+      }
+
       await tx
         .delete(principalPermissionGrants)
         .where(
@@ -734,6 +838,9 @@ export function accessService(db: Db) {
       return {
         member: archived,
         reassignedIssueCount: resetInProgress.length + reassigned.length,
+        reassignedRoutineCount,
+        pausedRoutineCount,
+        ownerActionRoutineCount,
       };
     });
   }

@@ -2852,6 +2852,76 @@ export function routineService(
       return createdRoutine;
     },
 
+    transferResponsibilityInTransaction: async (
+      executor: Db,
+      companyId: string,
+      routineId: string,
+      expectedResponsibleUserId: string,
+      nextResponsibleUserId: string,
+      actor: Actor,
+    ): Promise<Routine> => {
+      const [locked] = await executor
+        .select()
+        .from(routines)
+        .where(and(eq(routines.companyId, companyId), eq(routines.id, routineId)))
+        .for("update");
+      if (!locked || locked.responsibleUserId !== expectedResponsibleUserId || !["active", "paused"].includes(locked.status)) {
+        throw conflict("Routine responsibility changed before member removal; reload and retry");
+      }
+      if (locked.originKind === "conversation_draft") {
+        throw conflict("Private conversation routine responsibility cannot be transferred through member removal", {
+          code: "PRIVATE_ROUTINE_HANDOFF_UNSUPPORTED",
+        });
+      }
+      const [updated] = await executor
+        .update(routines)
+        .set({
+          responsibleUserId: nextResponsibleUserId,
+          updatedByAgentId: actor.agentId ?? null,
+          updatedByUserId: actor.userId ?? null,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(routines.companyId, companyId), eq(routines.id, locked.id)))
+        .returning();
+      if (!updated) throw conflict("Routine responsibility changed before member removal; reload and retry");
+      const appended = await appendRoutineRevision(executor, updated, actor, {
+        changeSummary: "Transferred routine responsibility during member removal",
+      });
+      return appended.routine;
+    },
+
+    pauseForResponsibleUserOffboardingInTransaction: async (
+      executor: Db,
+      companyId: string,
+      routineId: string,
+      expectedResponsibleUserId: string,
+      actor: Actor,
+    ): Promise<Routine> => {
+      const [locked] = await executor
+        .select()
+        .from(routines)
+        .where(and(eq(routines.companyId, companyId), eq(routines.id, routineId)))
+        .for("update");
+      if (!locked || locked.responsibleUserId !== expectedResponsibleUserId || locked.status !== "active") {
+        throw conflict("Routine state changed before access revocation; reload and retry");
+      }
+      const [updated] = await executor
+        .update(routines)
+        .set({
+          status: "paused",
+          updatedByAgentId: actor.agentId ?? null,
+          updatedByUserId: actor.userId ?? null,
+          updatedAt: new Date(),
+        })
+        .where(and(eq(routines.companyId, companyId), eq(routines.id, locked.id)))
+        .returning();
+      if (!updated) throw conflict("Routine state changed before access revocation; reload and retry");
+      const appended = await appendRoutineRevision(executor, updated, actor, {
+        changeSummary: "Paused because the responsible member's access was revoked",
+      });
+      return appended.routine;
+    },
+
     update: async (id: string, patch: UpdateRoutine, actor: Actor): Promise<Routine | null> => {
       const existing = await getRoutineById(id);
       if (!existing) return null;

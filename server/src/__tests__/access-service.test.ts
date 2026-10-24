@@ -3,6 +3,8 @@ import { and, eq, inArray, sql } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
   agents,
+  activityLog,
+  authUsers,
   companySecretBindings,
   companySecrets,
   companies,
@@ -14,6 +16,8 @@ import {
   instanceUserRoles,
   issues,
   principalPermissionGrants,
+  routines,
+  routineRevisions,
   toolAccessAuditEvents,
   toolApplications,
   toolConnections,
@@ -77,10 +81,14 @@ describeEmbeddedPostgres("access service", () => {
     await db.delete(companySecrets);
     await db.delete(userSecretDefinitions);
     await db.delete(issues);
+    await db.delete(activityLog);
+    await db.delete(routineRevisions);
+    await db.delete(routines);
     await db.delete(principalPermissionGrants);
     await db.delete(instanceUserRoles);
     await db.delete(agents);
     await db.delete(companyMemberships);
+    await db.delete(authUsers);
     await db.delete(companies);
   });
 
@@ -209,6 +217,103 @@ describeEmbeddedPostgres("access service", () => {
       .where(eq(issues.id, doneIssue.id))
       .then((rows) => rows[0]!);
     expect(historicalIssue.assigneeUserId).toBe(member.principalId);
+  });
+
+  it("archives without a routine replacement, pauses active work, and leaves an owner action", async () => {
+    const { company, owner } = await createCompanyWithOwner(db);
+    const member = await db.insert(companyMemberships).values({
+      companyId: company.id,
+      principalType: "user",
+      principalId: `member-${randomUUID()}`,
+      status: "active",
+      membershipRole: "operator",
+    }).returning().then((rows) => rows[0]!);
+    const routine = await db.insert(routines).values({
+      companyId: company.id,
+      title: "Member-owned routine",
+      status: "active",
+      responsibleUserId: member.principalId,
+    }).returning().then((rows) => rows[0]!);
+    const result = await accessService(db).archiveMember(company.id, member.id, {
+      routineResponsibleUserId: owner.principalId,
+    }, owner.principalId);
+    expect(result).toMatchObject({ reassignedRoutineCount: 0, pausedRoutineCount: 1, ownerActionRoutineCount: 1 });
+    expect((await accessService(db).getMemberById(company.id, member.id))?.status).toBe("archived");
+    const pausedRoutine = (await db.select().from(routines).where(eq(routines.id, routine.id)))[0]!;
+    expect(pausedRoutine).toMatchObject({ status: "paused", responsibleUserId: member.principalId });
+    const latestRevision = (await db.select().from(routineRevisions).where(eq(routineRevisions.id, pausedRoutine.latestRevisionId!)))[0]!;
+    expect(latestRevision).toMatchObject({ responsibleUserId: member.principalId, snapshot: { routine: { status: "paused", responsibleUserId: member.principalId } } });
+    expect(await db.select().from(activityLog).where(and(
+      eq(activityLog.entityType, "routine"),
+      eq(activityLog.entityId, routine.id),
+      eq(activityLog.action, "routine.paused_for_responsible_user_offboarding"),
+    ))).toMatchObject([{ actorId: owner.principalId, responsibleUserId: member.principalId }]);
+  });
+
+  it("transfers manual routine responsibility through the retained revision writer", async () => {
+    const { company, owner } = await createCompanyWithOwner(db);
+    const member = await db.insert(companyMemberships).values({
+      companyId: company.id,
+      principalType: "user",
+      principalId: `member-${randomUUID()}`,
+      status: "active",
+      membershipRole: "operator",
+    }).returning().then((rows) => rows[0]!);
+    const routine = await db.insert(routines).values({
+      companyId: company.id,
+      title: "Member-owned routine",
+      status: "paused",
+      responsibleUserId: member.principalId,
+    }).returning().then((rows) => rows[0]!);
+    const now = new Date();
+    await db.insert(authUsers).values({
+      id: owner.principalId,
+      name: "Routine replacement owner",
+      email: `${owner.principalId}@example.test`,
+      createdAt: now,
+      updatedAt: now,
+    });
+    const result = await accessService(db).archiveMember(company.id, member.id, {
+      routineResponsibleUserId: owner.principalId,
+    }, owner.principalId);
+    expect(result).toMatchObject({ reassignedRoutineCount: 1, pausedRoutineCount: 0, ownerActionRoutineCount: 0 });
+    const transferredRoutine = (await db.select().from(routines).where(eq(routines.id, routine.id)))[0]!;
+    expect(transferredRoutine).toMatchObject({ status: "paused", responsibleUserId: owner.principalId });
+    const latestRevision = (await db.select().from(routineRevisions).where(eq(routineRevisions.id, transferredRoutine.latestRevisionId!)))[0]!;
+    expect(latestRevision).toMatchObject({ responsibleUserId: owner.principalId, snapshot: { routine: { status: "paused", responsibleUserId: owner.principalId } } });
+    expect(await db.select().from(activityLog).where(and(
+      eq(activityLog.entityType, "routine"),
+      eq(activityLog.entityId, routine.id),
+      eq(activityLog.action, "routine.responsibility_transferred"),
+    ))).toMatchObject([{ actorId: owner.principalId, responsibleUserId: owner.principalId }]);
+  });
+
+  it("keeps a private conversation routine with its source owner and pauses it during archive", async () => {
+    const { company, owner } = await createCompanyWithOwner(db);
+    const member = await db.insert(companyMemberships).values({
+      companyId: company.id,
+      principalType: "user",
+      principalId: `member-${randomUUID()}`,
+      status: "active",
+      membershipRole: "operator",
+    }).returning().then((rows) => rows[0]!);
+    const originId = randomUUID();
+    const inserted = await db.insert(routines).values({
+      companyId: company.id,
+      title: "Private conversation routine",
+      status: "active",
+      originKind: "conversation_draft",
+      originId,
+      responsibleUserId: member.principalId,
+    }).returning().then((rows) => rows[0]!);
+
+    const result = await accessService(db).archiveMember(company.id, member.id, {}, owner.principalId);
+    expect(result).toMatchObject({ reassignedRoutineCount: 0, pausedRoutineCount: 1, ownerActionRoutineCount: 1 });
+    expect((await accessService(db).getMemberById(company.id, member.id))?.status).toBe("archived");
+    const privateRoutine = (await db.select().from(routines).where(eq(routines.id, inserted.id)))[0]!;
+    expect(privateRoutine).toMatchObject({ status: "paused", originKind: "conversation_draft", originId, responsibleUserId: member.principalId });
+    const latestRevision = (await db.select().from(routineRevisions).where(eq(routineRevisions.id, privateRoutine.latestRevisionId!)))[0]!;
+    expect(latestRevision).toMatchObject({ responsibleUserId: member.principalId, snapshot: { routine: { originKind: "conversation_draft", responsibleUserId: member.principalId, status: "paused" } } });
   });
 
   it("rejects instance-level company access removal for self and protected users", async () => {

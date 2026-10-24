@@ -1,3 +1,4 @@
+import { readRoutineResponsibilityAttention } from "./routine-responsibility-attention.js";
 import { readCoreMaintenance } from "./core-maintenance.js";
 import { readMemoryMaintenanceAttention } from "./memory-maintenance-attention.js";
 import { readConnectorRecovery } from "./connector-recovery.js";
@@ -478,9 +479,10 @@ export function experienceService(db: Db) {
                           },
                         }
                       : {}),
-                    needsYou: visible.map((item) =>
-                      attentionExperienceCard(item, feed.generatedAt),
-                    ),
+                    needsYou: [
+                      ...(await readRoutineResponsibilityAttention(db, actor, companyId, signal)).needsYou,
+                      ...visible.map((item) => attentionExperienceCard(item, feed.generatedAt)),
+                    ],
                   };
                 },
               },
@@ -659,6 +661,23 @@ export function experienceService(db: Db) {
                 (card) => card.source.domain !== "attention",
               ),
             ];
+          }
+          if (result.needsYou.some(card => card.source.domain === "routine")) {
+            try {
+              const current = await readRoutineResponsibilityAttention(db, actor, companyId, admittedSignal);
+              const cards = new Map(current.needsYou.map(card => [card.id, card]));
+              result.needsYou = result.needsYou.flatMap(card => {
+                if (card.source.domain !== "routine") return [card];
+                const fresh = cards.get(card.id);
+                if (fresh?.source.version === card.source.version) return [fresh];
+                markPartial("attention", "source_stale");
+                return [];
+              });
+            } catch {
+              admittedSignal.throwIfAborted();
+              result.needsYou = result.needsYou.filter(card => card.source.domain !== "routine");
+              markPartial("attention", "denied");
+            }
           }
           const isAutomaticPackageMaintenance = (card: ExperienceCard) => card.source.domain === "agent_package_installation" &&
             !card.evidence.includes("package_revalidation_required");

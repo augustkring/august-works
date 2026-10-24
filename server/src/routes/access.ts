@@ -4562,7 +4562,8 @@ export function accessRoutes(
 
       const result = await access.archiveMember(companyId, memberId, {
         reassignment: req.body.reassignment ?? null,
-      });
+        routineResponsibleUserId: req.body.routineResponsibleUserId ?? null,
+      }, req.actor.userId ?? "board");
       if (!result) throw notFound("Member not found");
 
       await logActivity(db, {
@@ -4575,6 +4576,10 @@ export function accessRoutes(
         details: {
           principalId: result.member.principalId,
           reassignedIssueCount: result.reassignedIssueCount,
+          reassignedRoutineCount: result.reassignedRoutineCount,
+          pausedRoutineCount: result.pausedRoutineCount,
+          ownerActionRoutineCount: result.ownerActionRoutineCount,
+          routineResponsibleUserId: req.body.routineResponsibleUserId ?? null,
           reassignment: req.body.reassignment ?? null,
         },
       });
@@ -4586,6 +4591,9 @@ export function accessRoutes(
       res.json({
         member,
         reassignedIssueCount: result.reassignedIssueCount,
+        reassignedRoutineCount: result.reassignedRoutineCount,
+        pausedRoutineCount: result.pausedRoutineCount,
+        ownerActionRoutineCount: result.ownerActionRoutineCount,
       });
     }
   );

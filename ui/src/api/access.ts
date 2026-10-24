@@ -364,6 +364,7 @@ export const accessApi = {
         assigneeAgentId?: string | null;
         assigneeUserId?: string | null;
       } | null;
+      routineResponsibleUserId?: string | null;
     } = {},
   ) => api.post<ArchiveCompanyMemberResponse>(`/companies/${companyId}/members/${memberId}/archive`, input),
 

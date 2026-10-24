@@ -27,6 +27,7 @@ const updateMemberMock = vi.hoisted(() => vi.fn());
 const archiveMemberMock = vi.hoisted(() => vi.fn());
 const listAgentsMock = vi.hoisted(() => vi.fn());
 const listIssuesMock = vi.hoisted(() => vi.fn());
+const listRoutinesMock = vi.hoisted(() => vi.fn());
 const mockUsePluginSlots = vi.hoisted(() => vi.fn());
 const mockNavigate = vi.hoisted(() => vi.fn());
 const listInvitesMock = vi.hoisted(() => vi.fn());
@@ -65,6 +66,10 @@ vi.mock("@/api/issues", () => ({
   issuesApi: {
     list: (companyId: string, filters: unknown) => listIssuesMock(companyId, filters),
   },
+}));
+
+vi.mock("@/api/routines", () => ({
+  routinesApi: { list: (companyId: string) => listRoutinesMock(companyId) },
 }));
 
 vi.mock("@/lib/router", () => ({
@@ -131,6 +136,7 @@ describe("CompanyAccess", () => {
     document.body.appendChild(container);
     mockSearchParamsState.current = new URLSearchParams();
     listInvitesMock.mockResolvedValue({ invites: [], nextOffset: null });
+    listRoutinesMock.mockResolvedValue([]);
     listMembersMock.mockResolvedValue({
       members: [
         {
@@ -338,6 +344,9 @@ describe("CompanyAccess", () => {
   });
 
   it("removes a member with an issue reassignment target", async () => {
+    listRoutinesMock.mockResolvedValue([
+      { id: "routine-1", title: "Owned routine", status: "active", responsibleUserId: "user-1" },
+    ]);
     const root = createRoot(container);
     const queryClient = new QueryClient({
       defaultOptions: { queries: { retry: false } },
@@ -366,11 +375,13 @@ describe("CompanyAccess", () => {
     expect(document.body.textContent).toContain("Remove member");
     expect(document.body.textContent).toContain("Assigned to removed user");
 
-    const reassignmentSelect = document.body.querySelector("select");
-    expect(reassignmentSelect).toBeTruthy();
+    const reassignmentSelects = document.body.querySelectorAll("select");
+    expect(reassignmentSelects).toHaveLength(2);
     await act(async () => {
-      reassignmentSelect!.value = "user:user-2";
-      reassignmentSelect!.dispatchEvent(new Event("change", { bubbles: true }));
+      reassignmentSelects[0]!.value = "user:user-2";
+      reassignmentSelects[0]!.dispatchEvent(new Event("change", { bubbles: true }));
+      reassignmentSelects[1]!.value = "user:user-2";
+      reassignmentSelects[1]!.dispatchEvent(new Event("change", { bubbles: true }));
     });
 
     const confirmButton = Array.from(document.body.querySelectorAll("button")).find(
@@ -385,6 +396,7 @@ describe("CompanyAccess", () => {
 
     expect(archiveMemberMock).toHaveBeenCalledWith("company-1", "member-1", {
       reassignment: { assigneeAgentId: null, assigneeUserId: "user-2" },
+      routineResponsibleUserId: "user-2",
     });
 
     await act(async () => {

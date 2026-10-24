@@ -1,9 +1,20 @@
 ---
 title: Importing & Exporting Companies
-summary: Export companies to portable packages and import them from local paths or GitHub
+summary: Preview, import, and recover a company package safely
+help_article_id: company-import-export
+audience: company-administrators
+product_capability_refs: [V10-021, V10-022, V10-023]
+screen_contract_refs: [CompanyImport]
+owner: augustkring/august-works
+maturity: preview
+applicable_product_versions: [V10]
+locale: en
+last_verified_at: 2026-10-24
+review_trigger: Import source, receipt, recovery, authorization, or retention behavior changes
+security_or_privacy_sensitive: true
 ---
 
-Paperclip companies can be exported to portable markdown packages and imported from local directories or GitHub repositories. This lets you share company configurations, duplicate setups, and version-control your agent teams.
+Blentera companies can be exported to portable markdown packages and imported from local directories or GitHub repositories. This lets you share company configurations, duplicate setups, and version-control your agent teams.
 
 ## Package Format
 
@@ -38,6 +49,23 @@ Both flows are also available in the web UI as company settings pages: **Export*
 The **Export** page lets you pick exactly which files go into the bundle before downloading it. Above the file tree it shows a **"Not included in this export"** panel — the export fidelity report — listing data the bundle will not carry (for example attachments, approvals, cost history, or activity log entries), with blocking issues highlighted.
 
 The **Import** page previews the package, lets you resolve name collisions and adapter assignments, and applies the import. A **"Start imported agents and routines paused"** checkbox (on by default) makes imported agents and routines land paused instead of live. After the import finishes, an **"Activate imported agents and routines"** panel lists everything that was imported paused so you can resume the agents and activate the routines you select — nothing starts running until you say so.
+
+## Confirm the reviewed package
+
+Preview the package before importing. The app checks the resolved files again before applying the import. If the files changed, open a new preview, review the changes, and confirm again. This also applies when a GitHub URL still has the same name but its branch contents changed.
+
+Keep **Start imported agents and routines paused** selected while reviewing a package. An import does not authorize imported credentials or scripts. Review each selected Co-worker and routine before activation.
+
+## Recover an interrupted import
+
+An accepted import has a saved operation ID. Reloading the page checks that operation instead of submitting the package again. Signing in as another user does not give access to the original user's import receipt.
+
+- **Running:** wait for the saved operation. Do not create a second import.
+- **Complete:** open the imported company. Detailed names may no longer be available, while the saved summary still identifies the completed operation where you retain access.
+- **Rejected before import:** follow the reason shown. For a changed package, preview the current files before confirming again.
+- **Outcome unknown:** some changes may already have been saved. Keep the operation ID and contact your administrator or [support](/help/index). Do not upload the package again to find out whether the first import worked.
+
+A server restart preserves the accepted operation. Automatic replay, cancellation of an import already applying changes, and self-service reconciliation of an unknown result are not available in this preview. The full-detail cache is temporary; its loss does not authorize another import.
 
 ## Exporting a Company
 

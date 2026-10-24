@@ -135,6 +135,7 @@ export const archiveCompanyMemberSchema = z.object({
     })
     .optional()
     .nullable(),
+  routineResponsibleUserId: z.string().trim().min(1).max(500).optional().nullable(),
 }).superRefine((value, ctx) => {
   if (value.reassignment?.assigneeAgentId && value.reassignment.assigneeUserId) {
     ctx.addIssue({

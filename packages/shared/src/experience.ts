@@ -80,6 +80,7 @@ export const canonicalExperienceSourceSchema = z
       "agent_package_installation",
       "runtime_cell",
       "memory_job",
+      "routine",
       "company_skill",
       "playbook",
     ]),

@@ -14,6 +14,7 @@ import { agentsApi } from "@/api/agents";
 import { ApiError } from "@/api/client";
 import { cloudApi } from "@/api/cloud";
 import { issuesApi } from "@/api/issues";
+import { routinesApi } from "@/api/routines";
 import { Button } from "@/components/ui/button";
 import {
   Dialog,
@@ -99,6 +100,7 @@ export function CompanyAccess() {
   const [editingMemberId, setEditingMemberId] = useState<string | null>(null);
   const [removingMemberId, setRemovingMemberId] = useState<string | null>(null);
   const [reassignmentTarget, setReassignmentTarget] = useState<string>("__unassigned");
+  const [routineResponsibleTarget, setRoutineResponsibleTarget] = useState<string>("__unassigned");
   const [draftRole, setDraftRole] = useState<CompanyMember["membershipRole"]>(null);
   const [draftStatus, setDraftStatus] = useState<EditableMemberStatus>("active");
 
@@ -229,9 +231,18 @@ export function CompanyAccess() {
       }),
     enabled: !!selectedCompanyId && !!removingMember,
   });
+  const routinesQuery = useQuery({
+    queryKey: ["company", selectedCompanyId ?? "", "member-routines", removingMember?.principalId ?? ""],
+    queryFn: () => routinesApi.list(selectedCompanyId!),
+    enabled: !!selectedCompanyId && !!removingMember,
+  });
+  const ownedRoutines = (routinesQuery.data ?? []).filter(
+    (routine) => ["active", "paused"].includes(routine.status) && routine.responsibleUserId === removingMember?.principalId,
+  );
+  const privateOwnedRoutineCount = ownedRoutines.filter((routine) => routine.originKind === "conversation_draft").length;
 
   const archiveMemberMutation = useMutation({
-    mutationFn: async (input: { receipt: ReturnType<typeof captureAccess>; memberId: string; target: string }) => {
+    mutationFn: async (input: { receipt: ReturnType<typeof captureAccess>; memberId: string; target: string; routineTarget: string }) => {
       if (!input.receipt.isCurrent()) throw new Error("Current account access changed");
       const reassignment =
         input.target.startsWith("agent:")
@@ -239,12 +250,18 @@ export function CompanyAccess() {
           : input.target.startsWith("user:")
             ? { assigneeAgentId: null, assigneeUserId: input.target.slice("user:".length) }
             : null;
-      return accessApi.archiveMember(input.receipt.companyId, input.memberId, { reassignment });
+      return accessApi.archiveMember(input.receipt.companyId, input.memberId, {
+        reassignment,
+        routineResponsibleUserId: input.routineTarget.startsWith("user:")
+          ? input.routineTarget.slice("user:".length)
+          : null,
+      });
     },
     onSuccess: async (result, { receipt }) => {
       if (!receipt.isCurrent()) return;
       setRemovingMemberId(null);
       setReassignmentTarget("__unassigned");
+      setRoutineResponsibleTarget("__unassigned");
       if (!await refreshAccessData(receipt)) return;
       for (const queryKey of [
         queryKeys.issues.list(receipt.companyId),
@@ -257,10 +274,12 @@ export function CompanyAccess() {
       if (!receipt.isCurrent()) return;
       pushToast({
         title: "Member removed",
-        body:
-          result.reassignedIssueCount > 0
-            ? `${result.reassignedIssueCount} assigned task${result.reassignedIssueCount === 1 ? "" : "s"} cleaned up.`
-            : undefined,
+        body: [
+          result.reassignedIssueCount > 0 ? `${result.reassignedIssueCount} assigned task${result.reassignedIssueCount === 1 ? "" : "s"} cleaned up.` : null,
+          result.reassignedRoutineCount > 0 ? `${result.reassignedRoutineCount} routine${result.reassignedRoutineCount === 1 ? "" : "s"} reassigned.` : null,
+          result.pausedRoutineCount > 0 ? `${result.pausedRoutineCount} active routine${result.pausedRoutineCount === 1 ? "" : "s"} paused.` : null,
+          result.ownerActionRoutineCount > 0 ? `${result.ownerActionRoutineCount} routine${result.ownerActionRoutineCount === 1 ? "" : "s"} need an authorized owner action.` : null,
+        ].filter(Boolean).join(" ") || undefined,
         tone: "success",
       });
     },
@@ -313,6 +332,7 @@ export function CompanyAccess() {
     (member) =>
       member.status === "active" &&
       member.principalType === "user" &&
+      member.user !== null &&
       member.id !== removingMemberId,
   );
   const activeReassignmentAgents = (agentsQuery.data ?? []).filter(isAssignableAgent);
@@ -455,7 +475,11 @@ export function CompanyAccess() {
                           <Button
                             size="sm"
                             variant="outline"
-                            onClick={() => setRemovingMemberId(member.id)}
+                            onClick={() => {
+                              setReassignmentTarget("__unassigned");
+                              setRoutineResponsibleTarget("__unassigned");
+                              setRemovingMemberId(member.id);
+                            }}
                             disabled={!canArchive}
                             title={!canArchive ? removalReason ?? undefined : undefined}
                           >
@@ -540,12 +564,18 @@ export function CompanyAccess() {
         </DialogContent>
       </Dialog>
 
-      <Dialog open={!!removingMember} onOpenChange={(open) => !open && setRemovingMemberId(null)}>
+      <Dialog open={!!removingMember} onOpenChange={(open) => {
+        if (!open) {
+          setRemovingMemberId(null);
+          setReassignmentTarget("__unassigned");
+          setRoutineResponsibleTarget("__unassigned");
+        }
+      }}>
         <DialogContent className="max-w-xl">
           <DialogHeader>
             <DialogTitle>Remove member</DialogTitle>
             <DialogDescription>
-              Archive {memberDisplayName(removingMember)} and move active assignments before hiding this user from assignment fields.
+              Archive {memberDisplayName(removingMember)} and revoke access. Active routines without a replacement will be paused and left for an authorized owner to resolve.
             </DialogDescription>
           </DialogHeader>
           {removingMember && (
@@ -603,10 +633,42 @@ export function CompanyAccess() {
                   </div>
                 </div>
               ) : null}
+              {ownedRoutines.length > 0 ? (
+                <div className="space-y-2">
+                  <div className="text-sm font-medium">Routine responsibility</div>
+                  <div className="text-sm text-muted-foreground">
+                    {ownedRoutines.length} active or paused routine{ownedRoutines.length === 1 ? "" : "s"} have this member as responsible user. Without a replacement, active routines will be paused and remain on the owner action list.
+                  </div>
+                  <select
+                    className="w-full rounded-md border border-border bg-background px-3 py-2 text-sm"
+                    value={routineResponsibleTarget}
+                    onChange={(event) => setRoutineResponsibleTarget(event.target.value)}
+                  >
+                    <option value="__unassigned">No replacement — pause and flag for owner action</option>
+                    {activeReassignmentUsers.map((member) => (
+                      <option key={member.id} value={`user:${member.principalId}`}>
+                        {memberDisplayName(member)}
+                      </option>
+                    ))}
+                  </select>
+                </div>
+              ) : null}
+              {privateOwnedRoutineCount > 0 ? (
+                <div className="text-sm text-destructive">
+                  {privateOwnedRoutineCount} private conversation routine{privateOwnedRoutineCount === 1 ? "" : "s"} will keep their original responsible user. Active private routines will be paused; resolve the owner action through a supported private handoff.
+                </div>
+              ) : null}
+              {routinesQuery.isError ? (
+                <div className="text-sm text-destructive">Could not verify routine responsibility. Retry before removing this member.</div>
+              ) : null}
             </div>
           )}
           <DialogFooter>
-            <Button variant="outline" onClick={() => setRemovingMemberId(null)}>
+            <Button variant="outline" onClick={() => {
+              setRemovingMemberId(null);
+              setReassignmentTarget("__unassigned");
+              setRoutineResponsibleTarget("__unassigned");
+            }}>
               Cancel
             </Button>
             <Button
@@ -617,9 +679,10 @@ export function CompanyAccess() {
                   receipt: captureAccess(),
                   memberId: removingMember.id,
                   target: reassignmentTarget,
+                  routineTarget: routineResponsibleTarget,
                 });
               }}
-              disabled={archiveMemberMutation.isPending || assignedIssuesQuery.isLoading}
+              disabled={archiveMemberMutation.isPending || assignedIssuesQuery.isLoading || routinesQuery.isLoading || routinesQuery.isError}
             >
               {archiveMemberMutation.isPending ? "Removing..." : "Remove member"}
             </Button>
