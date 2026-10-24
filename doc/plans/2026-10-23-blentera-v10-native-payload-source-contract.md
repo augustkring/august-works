@@ -520,3 +520,7 @@ V10/PR gates remain open. Evidence:
 
 Final selected5 identity/deletion/legacy compatibility cases and server
 compilation pass. The real typed-origin lifecycle baseline remains open.
+
+### 2026-10-24 — Typed Task origins after runtime recovery
+
+Migration0526 and the original Task owner preserve WorkflowRun/RoutineRun namespaces and exact retained revision ownership, without substituting a same-ID heartbeat. Actor runs remain heartbeat sources even when their UUID equals a typed execution UUID. Native Routine assignment now follows a committed received run/Task intent and retains uncertainty for bounded reconciliation. Final native tests88/88, additional pending-intent tests3/3, and server typechecks pass. Private typed source tests2/4 still fail at legitimate owner creation; private authoring/Memory sources remain closed. Current source pins, all intermediate failures and limits are in `../operations/aw-v10-evidence/typed-task-routine-recovery-2026-10-24/checkpoint.json`. No complete input receipt or protocol activation follows from empty stored source arrays or these structural queue acknowledgements.

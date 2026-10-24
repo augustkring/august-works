@@ -1262,3 +1262,11 @@ compilation pass. The real typed-origin lifecycle baseline remains open.
 ### 2026-10-24 — Recover after executor replacement
 
 The replacement executor contained the older V5 checkout, without the V10 worktree or its uncommitted typed-origin / Routine assignment changes. Re-fetched `codex/blentera-v10` at `2f221c4f5ccc1ffb1b637016ab0436590ac632fe` from GitHub into a new worktree. All committed V10 work is retained remotely. The final uncommitted slice and its local logs must be reconstructed and rerun; prior 74/74 Routine results describe the lost working tree and do not qualify this reconstructed tree. Small recovery commits are pushed as work proceeds. No merge, deployment, or PR-ready claim.
+
+### 2026-10-24 — Reconstructed typed Task origins and durable Routine assignment
+
+Generated migration0526 preserves native WorkflowRun/RoutineRun namespaces and every historical source edge. The original Task constructor validates the same-company retained execution revision and its actual Project/parent roots. Manual/public typed sources work; private authored sources remain denied until the native private graph is implemented.
+
+Routine dispatch now creates its Task inside the original run transaction and nested savepoint, commits the linked received intent, and calls the native assignment owner afterward. Queue uncertainty preserves the Task. A stable native receipt key, exact receipt tuple, try-advisory lock held across queueing, received/link conditional finalization, pending coalescing and bounded scheduler recovery protect retry behavior.
+
+Current reconstructed tests: 88/88 across three native suites, plus three scheduler/receipt/concurrency checks. The four private typed source tests retain two real owner-positive failures and two controls passing. Native SDK/runner prerequisites are rebuilt; final and expanded server typechecks pass. The missing-prerequisite attempts and initial four fixture failures are archived separately. Actual clock, original source capture and immutable revision guards were preserved; source receipt flags were not fabricated. Evidence: `doc/operations/aw-v10-evidence/typed-task-routine-recovery-2026-10-24/checkpoint.json`. These software queue fixtures do not qualify a physical process restart, provider execution, complete model inputs, full private/temporal source graph or PR readiness.
