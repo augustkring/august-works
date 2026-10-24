@@ -40,6 +40,9 @@ describe("Native Task derivatives retain their producer's selected private Memor
     await db.insert(heartbeatRuns).values({ id: runId, companyId, agentId, responsibleUserId: aliceId,
       nativeIssueId: sourceTaskId, contextSnapshot: { issueId: sourceTaskId }, runtimeMode: "native", status: "running" });
     await initializeRunIdentity(db, { companyId, runId, responsibleUserId: aliceId, issueId: sourceTaskId, cause: "dispatch" });
+    const publicBody = "Verified public original work";
+    await expect(issueService(db).update(sourceTaskId, { description: publicBody, actorAgentId: agentId, actorRunId: runId }))
+      .resolves.toMatchObject({ description: publicBody });
     const memory = memoryService(db);
     const alice = { principal: { type: "user" as const, userId: aliceId } };
     const producer: MemoryMutationActor = { principal: { type: "agent", agentId, responsibleUserId: aliceId }, runId };
@@ -114,6 +117,16 @@ describe("Native Task derivatives retain their producer's selected private Memor
       await expect(assertAnalyticalContextPayloadAccess(db, companyId, bob, { issueId: child.id }))
         .rejects.toMatchObject({ status: 403 });
     }
+    // Updating its original public Task must not bypass the selected private
+    // source boundary merely because a self-Run edge would form a cycle.
+    await expect(tasks.update(sourceTaskId, { description: canary, actorAgentId: agentId, actorRunId: runId }))
+      .rejects.toMatchObject({ status: 422 });
+    const [unchanged] = await db.select({ description: issues.description }).from(issues).where(eq(issues.id, sourceTaskId));
+    expect(unchanged?.description).toBe(publicBody);
+    await expect(tasks.update(sourceTaskId, { priority: "high", actorAgentId: agentId, actorRunId: runId }))
+      .resolves.toMatchObject({ priority: "high", description: publicBody });
+    expect(await canActorReadIssuePrivacy(db, bob, { companyId, id: sourceTaskId })).toBe(true);
+
     await memory.forget(companyId, source.record.id, producer);
     expect(await canActorReadIssuePrivacy(db, aliceReader, child)).toBe(false);
     expect(await canActorReadIssuePrivacy(db, aliceReader, { companyId, id: sourceTaskId })).toBe(true);

@@ -11601,7 +11601,8 @@ export function issueService(db: Db) {
         const retainedKeys = new Set(retainedBefore.map(source => `${source.sourceKind}:${source.sourceId}`));
         const privacyGraphChanged = privacy && (privacy.visibility !== receiptExisting.visibility || privacy.sources.some(source =>
           source.sourceId !== id && !retainedKeys.has(`${source.sourceKind}:${source.sourceId}`)));
-        if (receiptExisting.payloadSourceSnapshot !== null) {
+        const agentBodyActor = currentActor?.type === "agent" ? currentActor : null;
+        if (receiptExisting.payloadSourceSnapshot !== null || agentBodyActor) {
           // Compare the effective native row under its write lock. A body edit
           // makes its old capture unknown; operational edits keep the capture.
           // Keep the database's direct-write rejection and no-rebinding latch.
@@ -11616,7 +11617,15 @@ export function issueService(db: Db) {
             public.aw_native_payload_body_hash('issue', to_jsonb(jsonb_populate_record(
               ${issues}, to_jsonb(${issues}) || ${bodyPatch}))) as changed
             from ${issues} where ${idPredicate}`);
-          if (body?.changed) patch.payloadSourceSnapshot = null;
+          if (body?.changed) {
+            // A self-Run edge cannot retain a body's restricted source closure:
+            // it would form a cycle. Until exact payload sources are captured,
+            // keep the old body rather than copy private run input into it.
+            if (agentBodyActor && (!agentBodyActor.runId || !await canActorReadHeartbeatRunPrivacy(
+              tx, { type: "none" }, { companyId: receiptExisting.companyId, id: agentBodyActor.runId },
+            ))) throw unprocessable("Task body changes require retained access to the run's restricted sources");
+            patch.payloadSourceSnapshot = null;
+          }
         }
         const updated = await tx
           .update(issues)
