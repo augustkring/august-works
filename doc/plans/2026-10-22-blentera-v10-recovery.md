@@ -1287,3 +1287,10 @@ The original CompanyImport routes now retain admission/status in native PostgreS
 Final bounded ten-suite run183PASS; overlapping final six-case service run6PASS. A physical child SIGKILL follows a real native Agent-only import against actual PostgreSQL, before receipt settlement; restart retains unknown state and the single persisted Agent. Server/UI compilers and token gates pass at recorded checkpoints. Intermediate failures and exact source pins: `doc/operations/aw-v10-evidence/durable-import-2026-10-24/checkpoint.json`.
 
 This supersedes the earlier process-memory Map limitation. Source-byte/preview binding, per-effect mappings/checkpoints, all-effect current-authority checks, cancellation, authoritative reconciliation, safe resume and full retention lifecycle remain open. These tests do not qualify a hosted/provider import, complete CE-08/V10 or PR readiness.
+
+
+### 2026-10-24 — Bind Import to reviewed source files
+
+The native preview fingerprints its canonical resolved file map; the Import page passes that expected value for GitHub, ZIP and chunked inputs. The original owner rejects changed source before effects with a typed native proof; the original route records a known rejection and offers fresh preview rather than an unknown or a replay. Ordinary post-invocation exceptions remain unknown. Original actual import/SIGKILL and route/transfer/UI controls plus changed remote-file-map regression103PASS5suites. Full workspace typecheck returned0 at the recorded checkpoint, before later Help/continuity completion. All logs/source pins: `doc/operations/aw-v10-evidence/import-preview-binding-2026-10-24/checkpoint.json`.
+
+This is source-file consistency, not complete preview-plan/selection confirmation or source permission. Legacy callers may omit the fingerprint; immutable remote commit identity, native per-effect mappings/checkpoints, full current-authority, cancellation/reconciliation and final V10/workspace qualification stay open.

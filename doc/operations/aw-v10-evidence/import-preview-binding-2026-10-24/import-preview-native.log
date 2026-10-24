@@ -1,0 +1,55 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[20:44:40] [33mWARN[39m: [36mimport worker could not start; durable admission is retained[39m [90m{"operationId":"tenant-import-96306c07-467b-467f-a432-57d4adf9338d"}[39m
+[20:44:40] [33mWARN[39m: [36mimport worker could not start; durable admission is retained[39m [90m{"operationId":"tenant-import-414e5248-ebb6-4883-9147-3533dba43f13"}[39m
+[20:44:40] [33mWARN[39m: [36mimport worker could not start; durable admission is retained[39m [90m{"operationId":"tenant-import-194667da-a524-46bc-8914-e582d4794f3f"}[39m
+[20:44:41] [33mWARN[39m: [36mimport worker could not start; durable admission is retained[39m [90m{"operationId":"import-5562589f-f8cd-443b-99b2-14c2b5db7c3c"}[39m
+ ❯ |@paperclipai/server| src/__tests__/company-portability-routes.test.ts (45 tests | 1 failed) 22731ms
+     × retains a native pre-effect preview mismatch as known rejection rather than unknown effects 96ms
+[20:45:12] [33mWARN[39m: [36mfailed to delete import transfer spool after a successful apply[39m [90m{"transferId":"9f845dd5-161a-46d7-9634-7e12f19e43da"}[39m
+    err: {
+      "type": "Error",
+      "message": "EACCES: spool dir is busy",
+      "stack":
+          Error: EACCES: spool dir is busy
+              at /workspace/blentera-v10/server/src/__tests__/company-import-transfer-routes.test.ts:847:33
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[20:45:12] [33mWARN[39m: [36mfailed to attach the imported company to its transfer run[39m [90m{"transferId":"f5785002-d42e-4fa8-9806-b49b48204376"}[39m
+    err: {
+      "type": "Error",
+      "message": "registry write timed out",
+      "stack":
+          Error: registry write timed out
+              at /workspace/blentera-v10/server/src/__tests__/company-import-transfer-routes.test.ts:898:30
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[20:45:12] [33mWARN[39m: [36mimport outcome remains unconfirmed; retained apply claim is not released[39m [90m{"transferId":"73212b5d-0f8b-4007-be19-3643ea4528c3"}[39m
+[20:45:12] [33mWARN[39m: [36mimport outcome remains unconfirmed; retained apply claim is not released[39m [90m{"transferId":"73212b5d-0f8b-4007-be19-3643ea4528c3"}[39m
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-portability-routes.test.ts > company portability routes > retains a native pre-effect preview mismatch as known rejection rather than unknown effects
+TypeError: Cannot read properties of undefined (reading 'unknownOutcome')
+ ❯ src/__tests__/company-portability-routes.test.ts:1099:40
+    1097|     const rejected = await waitForImportJobStatus(app, accepted.body.s…
+    1098|     expect(rejected.body.job.status).toBe("failed");
+    1099|     expect(rejected.body.operation.unknownOutcome).toBe(false);
+       |                                        ^
+    1100|     expect(rejected.body.job.error.message).toBe("The package changed …
+    1101|     expect(mockLogActivity).not.toHaveBeenCalled();
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed | 3 passed (4)
+      Tests  1 failed | 101 passed (102)
+   Start at  20:44:01
+   Duration  71.15s (transform 25.27s, setup 361ms, import 22.11s, tests 46.89s, environment 1.06s)
+
