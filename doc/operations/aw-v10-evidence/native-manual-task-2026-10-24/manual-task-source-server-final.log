@@ -1,0 +1,90 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/issue-create-deduplication-routes.test.ts (9 tests | 1 failed) 10697ms
+     × records the mutation's project and status receipt for native projection without turning metadata edits into transitions 365ms
+[08:06:48] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[08:06:49] [34mDEBUG[39m: [36msafe authenticated GET observed[39m [90m{"event":"safe_get_request_observed","route":"GET /api/companies/:companyId/issues","companyId":"6fb09b1f-7c8a-4b38-a36c-a65745560fb4","actorType":"board","actorIdentityHash":"x_RYZFNHFA3BEjzR","clientHash":"tyW0XNaQNMuB9rot","cacheKeyHash":"397QfAtuZhUGpVMK","queryKeys":["excludeRoutineExecutions","includeBlockedBy","includeBlockedInboxAttention","includeLiveDescendantSummary","includePluginOperations","includeRoutineExecutions","limit","offset"],"requestCount":1,"durationMs":349,"statusCode":200,"responseBytes":2538,"compressedBytes":null,"contentEncoding":null,"cacheStatus":"miss","etagOutcome":"none","referer":null,"visibilityHint":null}[39m
+[08:06:49] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[08:06:49] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[08:06:49] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[08:06:50] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[08:06:50] [32mINFO[39m: [36mSetup-token login confidential transport startup assessment[39m [90m{"proxyForwardingEnabled":false,"reason":"no_proxy_allowlist_local_trusted_loopback_only","deploymentMode":"local_trusted"}[39m
+[08:07:10] [34mDEBUG[39m: [36msafe authenticated GET observed[39m [90m{"event":"safe_get_request_observed","route":"GET /api/companies/:companyId/issues","companyId":"0b630a79-7a6c-44b6-9205-303bd1eed8e1","actorType":"board","actorIdentityHash":"KOZuVfEFHxngl8nO","clientHash":"tyW0XNaQNMuB9rot","cacheKeyHash":"uqlVu-pBY-qkaBAG","queryKeys":["createdFromIssueId","excludeRoutineExecutions","includeBlockedBy","includeBlockedInboxAttention","includeLiveDescendantSummary","includePluginOperations","includeRoutineExecutions","limit","offset"],"requestCount":1,"durationMs":359,"statusCode":200,"responseBytes":7733,"compressedBytes":null,"contentEncoding":null,"cacheStatus":"miss","etagOutcome":"none","referer":null,"visibilityHint":null}[39m
+[08:07:10] [34mDEBUG[39m: [36msafe authenticated GET observed[39m [90m{"event":"safe_get_request_observed","route":"GET /api/companies/:companyId/issues","companyId":"0b630a79-7a6c-44b6-9205-303bd1eed8e1","actorType":"board","actorIdentityHash":"KOZuVfEFHxngl8nO","clientHash":"tyW0XNaQNMuB9rot","cacheKeyHash":"ih24TINXZrCLpVQz","queryKeys":["createdFromIssueId","excludeRoutineExecutions","includeBlockedBy","includeBlockedInboxAttention","includeLiveDescendantSummary","includePluginOperations","includeRoutineExecutions","limit","offset","sortDir","sortField"],"requestCount":1,"durationMs":101,"statusCode":200,"responseBytes":5134,"compressedBytes":null,"contentEncoding":null,"cacheStatus":"miss","etagOutcome":"none","referer":null,"visibilityHint":null}[39m
+[08:07:10] [34mDEBUG[39m: [36msafe authenticated GET observed[39m [90m{"event":"safe_get_request_observed","route":"GET /api/companies/:companyId/issues","companyId":"0b630a79-7a6c-44b6-9205-303bd1eed8e1","actorType":"board","actorIdentityHash":"KOZuVfEFHxngl8nO","clientHash":"tyW0XNaQNMuB9rot","cacheKeyHash":"pSwg4Yjw8jUGkw-W","queryKeys":["afterId","createdFromIssueId","excludeRoutineExecutions","includeBlockedBy","includeBlockedInboxAttention","includeLiveDescendantSummary","includePluginOperations","includeRoutineExecutions","limit","offset","sortDir","sortField"],"requestCount":1,"durationMs":120,"statusCode":200,"responseBytes":2602,"compressedBytes":null,"contentEncoding":null,"cacheStatus":"miss","etagOutcome":"none","referer":null,"visibilityHint":null}[39m
+[08:07:10] [34mDEBUG[39m: [36msafe authenticated GET observed[39m [90m{"event":"safe_get_request_observed","route":"GET /api/companies/:companyId/issues","companyId":"0b630a79-7a6c-44b6-9205-303bd1eed8e1","actorType":"board","actorIdentityHash":"KOZuVfEFHxngl8nO","clientHash":"tyW0XNaQNMuB9rot","cacheKeyHash":"DRKKE-DJ8L5OV_Qp","queryKeys":["createdFromIssueId","excludeRoutineExecutions","includeBlockedBy","includeBlockedInboxAttention","includeLiveDescendantSummary","includePluginOperations","includeRoutineExecutions","limit","offset"],"requestCount":1,"durationMs":33,"statusCode":200,"responseBytes":2,"compressedBytes":null,"contentEncoding":null,"cacheStatus":"miss","etagOutcome":"none","referer":null,"visibilityHint":null}[39m
+ ❯ |@paperclipai/server| src/__tests__/issue-created-from-routes.test.ts (6 tests | 2 failed) 9242ms
+     × returns both runners' created tasks, regardless of parent, project or completion 501ms
+     × keeps cursor pages complete when activity changes or an earlier task disappears 311ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 3 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-create-deduplication-routes.test.ts > issue create deduplication routes > records the mutation's project and status receipt for native projection without turning metadata edits into transitions
+Error: expected 201 "Created", got 404 "Not Found"
+ ❯ src/__tests__/issue-create-deduplication-routes.test.ts:97:142
+     95|     await db.insert(projects).values({id:projectId,companyId,name:"Rec…
+     96|     const app=createApp();
+     97|     const created=await request(app).post(`/api/companies/${companyId}…
+       |                                                                                                                                              ^
+     98|     await request(app).patch(`/api/issues/${created.body.id}`).send({s…
+     99|     await request(app).patch(`/api/issues/${created.body.id}`).send({t…
+ ❯ Test._assertStatus ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:309:14
+ ❯ ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:365:13
+ ❯ Test._assertFunction ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:342:13
+ ❯ Test.assert ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:195:23
+ ❯ localAssert ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:138:14
+ ❯ Server.<anonymous> ../node_modules/.pnpm/supertest@7.2.2/node_modules/supertest/lib/test.js:152:11
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-created-from-routes.test.ts > tasks created from an issue > returns both runners' created tasks, regardless of parent, project or completion
+AssertionError: expected Set{ …(3) } to deeply equal Set{ …(5) }
+
+- Expected
++ Received
+
+  Set {
+    "3dff12ac-3194-4166-bbe2-57287c3a5920",
+    "6ad70e5c-4ed8-4a8c-9dd6-cf3d0a936f42",
+-   "b951f876-84c0-420c-9fca-01df063cca29",
+-   "bdb97bf0-1579-4e2b-8e8c-3cbdd3bd1c14",
+    "d41e4ad3-a1eb-451c-9412-c25de6312063",
+  }
+
+ ❯ src/__tests__/issue-created-from-routes.test.ts:105:73
+    103|       const result = await request(app()).get(`/api/companies/${compan…
+    104|       expect(result.status, JSON.stringify(result.body)).toBe(200);
+    105|       expect(new Set(result.body.map((row: { id: string }) => row.id))…
+       |                                                                         ^
+    106|     }
+    107|   });
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/3]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/issue-created-from-routes.test.ts > tasks created from an issue > keeps cursor pages complete when activity changes or an earlier task disappears
+AssertionError: expected [ Array(1) ] to deeply equal [ …(3) ]
+
+- Expected
++ Received
+
+  [
+-   "b951f876-84c0-420c-9fca-01df063cca29",
+-   "bdb97bf0-1579-4e2b-8e8c-3cbdd3bd1c14",
+    "d41e4ad3-a1eb-451c-9412-c25de6312063",
+  ]
+
+ ❯ src/__tests__/issue-created-from-routes.test.ts:119:67
+
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[3/3]⎯
+
+
+ Test Files  2 failed | 2 passed (4)
+      Tests  3 failed | 30 passed (33)
+   Start at  08:05:24
+   Duration  106.72s (transform 23.16s, setup 539ms, import 61.27s, tests 42.60s, environment 1ms)
+

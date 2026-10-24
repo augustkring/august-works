@@ -172,3 +172,37 @@ PG controls first reproduced lease revival, private SQL error leakage and silent
 write suppression; final PG10 + executor mock471 + runner mock142 and targeted
 compilers/build pass. Evidence:
 `doc/operations/aw-v10-evidence/native-model-dispatch-2026-10-24/checkpoint.json`.
+
+## First native manual Task producer — 2026-10-24
+
+The original HTTP create owner now supplies its actual Board session actor to
+the existing Task transaction. Only an independent, open, manual backlog/todo
+Task with direct text and no related, assigned, generated or retained-workspace
+inputs uses this first producer. Native session/User and current non-viewer
+membership are pinned; the existing instance-role fallback additionally needs
+recent phishing-resistant native proof. Database wall time is checked again
+after intervening waits. Creator attribution alone cannot activate capture.
+
+The original insert selects protocol1, binds the actual stored body's canonical
+hash/digest, and persists the actual Human's source-capture audit in the same
+transaction. This constructor is now active only for that narrow manual input
+family. Empty upstream inputs record that admitted direct input; they are no
+grant to private sources. Historical/deduplicated/unsupported rows remain
+unknown, and no Native run input protocol is activated. Operational edits retain
+the binding; changed body content invalidates it irreversibly through the
+existing updater. No restamping operation is introduced.
+
+The first built-app check reproduced internal-proof leakage in the original
+create response. Create/dedup and Task update responses now use the existing
+public-row projection, including their known nested comment. Native PG covers
+stored-body binding, authority denials, real lock-wait expiry, audit-failure
+rollback, dedup, unsupported initial plans and update invalidation. The actual
+built cookie-session browser checks both the public response and private DB
+binding/audit, then completes its existing authenticator lifecycle.
+
+All other constructors, complete run receipts, canonical source-aware read
+families and the original three privacy/temporal failures remain open. Three
+broader legacy route failures also reproduce against the unchanged parent
+production files; their source contracts still need reconciliation. This is
+neither complete source support nor full V10/PR acceptance. Evidence:
+`doc/operations/aw-v10-evidence/native-manual-task-2026-10-24/checkpoint.json`.

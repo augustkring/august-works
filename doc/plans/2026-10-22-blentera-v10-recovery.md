@@ -898,3 +898,20 @@ still reproduce3 failures with the retained private-body control passing. Comple
 input receipts/constructors, typed origins, cross-owner reads and full V10/PR gates
 remain open. Evidence:
 `doc/operations/aw-v10-evidence/native-model-dispatch-2026-10-24/checkpoint.json`.
+
+### 2026-10-24 — first direct Human Task source constructor
+
+Only a narrow independent manual Task created through a current native Board
+session now binds its actual stored body and actual Human audit atomically.
+Session/User/membership pins, canonical mutation policy and final database-clock
+expiry checks protect admission; failed audit storage rolls the Task back.
+Historical attribution/dedup/derived inputs stay unknown. Actual operational
+updates preserve the binding while body changes invalidate it irreversibly.
+Original create/dedup/update responses strip private fields with the shared
+public projection; the first built browser check reproduced the create leak
+before that fix. Final native owner/public-projection checks pass19 cases in two
+suites, and the real built cookie-session/authenticator browser passes. Three
+additional legacy route failures reproduce against the parent production files
+and remain open. This first producer does not activate Native run protocols,
+complete payload reads, other constructors or full V10/PR admission. Evidence:
+`doc/operations/aw-v10-evidence/native-manual-task-2026-10-24/checkpoint.json`.

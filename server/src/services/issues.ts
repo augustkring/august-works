@@ -12,7 +12,8 @@ import { createHash, randomUUID } from "node:crypto";
 import { suppressAnalyticalSource } from "./analytical-privacy.js";
 import { forgetMemoryForDeletedIssue, lockMemoryPrivacy } from "./memory/memory-privacy.js";
 import { lockBusinessEventCompany, suppressBusinessEventsForObject } from "./business-event-privacy.js";
-import { authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, type AuthorizationActor } from "./authorization.js";
+import { authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, pinCurrentBoardActor, type AuthorizationActor } from "./authorization.js";
+import { assertHumanAuthentication } from "../auth/authenticator-assurance.js";
 import { resolveTaskWatchdogMutationScope, taskWatchdogScopeAllowsIssueMutation } from "./task-watchdog-scope.js";
 import {
   and,
@@ -112,6 +113,7 @@ import {
   issueCommentMetadataSchema,
   issueCommentPresentationSchema,
   isUuidLike,
+  nativePayloadSourceSnapshotSchema,
   normalizeIssueIdentifier as normalizeIssueReferenceIdentifier,
 } from "@paperclipai/shared";
 import { conflict, forbidden, HttpError, notFound, unprocessable } from "../errors.js";
@@ -2095,22 +2097,22 @@ async function assertIssuePrivacySourcesReadable(tx: DbTransaction, actor: Autho
   }
 }
 
-async function pinIssueMutationHuman(tx: DbTransaction, actor: AuthorizationActor, companyId: string) {
+async function pinIssueMutationHuman(tx: DbTransaction, actor: AuthorizationActor, companyId: string, noWait = false) {
   if (actor.type === "none" || actor.source === "local_implicit") return;
   const userId = actor.type === "agent" ? actor.onBehalfOfUserId : actor.userId;
   if (!userId) throw forbidden("Current organization access is required");
-  const [user] = await tx.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, userId)).for("share");
+  const [user] = await tx.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, userId)).for("share", noWait ? { noWait: true } : undefined);
   if (!user) throw forbidden("Current organization access is required");
   const [member] = await tx.select({ role: companyMemberships.membershipRole }).from(companyMemberships).where(and(
     eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
     eq(companyMemberships.principalId, userId), eq(companyMemberships.status, "active"),
-  )).for("share");
-  if (member && member.role !== "viewer") return;
+  )).for("share", noWait ? { noWait: true } : undefined);
+  if (member && member.role !== "viewer") return "member" as const;
   if (actor.type === "board") {
     const [role] = await tx.select({ id: instanceUserRoles.id }).from(instanceUserRoles).where(and(
       eq(instanceUserRoles.userId, userId), eq(instanceUserRoles.role, "instance_admin"),
-    )).for("share");
-    if (role) return;
+    )).for("share", noWait ? { noWait: true } : undefined);
+    if (role) return "instance_admin" as const;
   }
   throw forbidden("Current organization access is required");
 }
@@ -2159,6 +2161,61 @@ type IssueCreateInput = Omit<typeof issues.$inferInsert, "companyId"> & {
   allowDuplicate?: boolean;
   onDeduplicated?: (reason: "idempotency_key" | "recent_open_title") => void;
 };
+
+/** This first producer handles only direct text in an otherwise independent
+ * manual task. Related, generated and historical bodies remain unknown. */
+function isManualRootPayloadInput(data: IssueCreateInput) {
+  return (!data.originKind || data.originKind === "manual") &&
+    (!data.visibility || data.visibility === "open") &&
+    (!data.status || data.status === "backlog" || data.status === "todo") &&
+    !data.blockedByIssueIds?.length && !data.labelIds?.length &&
+    (data.payloadSourceProtocolVersion == null || data.payloadSourceProtocolVersion === 0) &&
+    !data.payloadSourceSnapshot && !data.payloadSourceSnapshotInvalidated &&
+    [data.parentId, data.projectId, data.privacyParentIssueId, data.privacyRootIssueId,
+      data.originId, data.originRunId, data.originFingerprint, data.originIdentityContextId,
+      data.continuationIdentityContextId, data.actorRunId, data.watchdogActorRunId,
+      data.createdByAgentId, data.assigneeAgentId, data.assigneeUserId, data.assigneeAdapterOverrides,
+      data.projectWorkspaceId, data.executionWorkspaceId, data.executionWorkspacePreference,
+      data.executionWorkspaceSettings, data.inheritExecutionWorkspaceFromIssueId,
+      data.conversationAgentId, data.conversationUserId, data.executionState, data.monitorNotes,
+      data.unblockDescriptor, data.forecastReason, data.initialPlan, data.watchdog, data.retireConversationId,
+    ].every(value => value == null);
+}
+
+async function assertManualInputCredentialCurrent(tx: DbTransaction, actor: AuthorizationActor, expiresAt: number) {
+  const [current] = await tx.execute<{ active: boolean }>(sql`select
+    ${expiresAt}::double precision>extract(epoch from clock_timestamp())*1000
+    and not exists(select 1 from account_deletion_operations where user_id=${actor.userId}) as active`);
+  if (!current?.active) throw forbidden("The current manual input session is unavailable");
+}
+
+async function bindManualTaskPayload(tx: DbTransaction, issue: typeof issues.$inferSelect,
+  actor: AuthorizationActor, publications: ActivityPublication[]) {
+  const decision = await authorizationService(tx).decide({ actor, action: "issue:mutate",
+    resource: { type: "issue", companyId: issue.companyId, issueId: issue.id,
+      status: issue.status, assigneeAgentId: issue.assigneeAgentId, assigneeUserId: issue.assigneeUserId },
+    enforceResponsibleUserIntersection: true });
+  if (!decision.allowed) throw forbidden("Current task write authority is required");
+  const [captured] = await tx.update(issues).set({ payloadSourceSnapshot: sql<NativePayloadSourceSnapshot>`(
+    with payload as (select jsonb_build_object('version',1,'owner',jsonb_build_object(
+      'kind','issue','companyId',${issues.companyId}::text,'id',${issues.id}::text,
+      'contentHash',public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))),
+      'policy',jsonb_build_object('issueIds','[]'::jsonb,'projectIds','[]'::jsonb,'runIds','[]'::jsonb,
+        'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as value)
+    select value || jsonb_build_object('digest',encode(sha256(convert_to(value::text,'UTF8')),'hex')) from payload
+  )` }).where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId),
+    eq(issues.createdByUserId, actor.userId!), eq(issues.payloadSourceProtocolVersion, 1),
+    isNull(issues.payloadSourceSnapshot), eq(issues.payloadSourceSnapshotInvalidated, false))).returning();
+  if (!captured?.payloadSourceSnapshot) throw conflict("Manual input source capture was not stored");
+  const snapshot = nativePayloadSourceSnapshotSchema.parse(captured.payloadSourceSnapshot);
+  const activity = await persistActivity(tx as unknown as Db, {
+    companyId: issue.companyId, actorType: "user", actorId: actor.userId!,
+    action: "issue.payload_source_captured", entityType: "issue", entityId: issue.id,
+    details: { producer: "direct_manual_input", contentHash: snapshot.owner.contentHash, digest: snapshot.digest },
+  });
+  publications.push(activity.publication);
+  return captured;
+}
 type IssueChildCreateInput = IssueCreateInput & {
   acceptanceCriteria?: string[];
   blockParentUntilDone?: boolean;
@@ -9982,9 +10039,19 @@ export function issueService(db: Db) {
       data: IssueCreateInput,
       dbOrTx: Db | DbTransaction = db,
       postCommitActivityPublications?: ActivityPublication[],
+      options: { manualInputActor?: AuthorizationActor } = {},
     ) => {
       const ownedPrivacyPublications: ActivityPublication[] = [];
       const privacyPublications = postCommitActivityPublications ?? ownedPrivacyPublications;
+      // This carrier is supplied by the original HTTP owner, never the DTO.
+      const manualActor = options.manualInputActor ? { ...options.manualInputActor } : null;
+      if (manualActor && (manualActor.type !== "board" || manualActor.source !== "session" ||
+          !manualActor.userId || !manualActor.sessionId || manualActor.runId ||
+          data.createdByUserId !== manualActor.userId || data.createdByAgentId))
+        throw forbidden("A current native manual input actor is required");
+      const captureManualInput = !!manualActor && isManualRootPayloadInput(data) &&
+        (!data.responsibleUserId || data.responsibleUserId === manualActor.userId) &&
+        (!data.actorResponsibleUserId || data.actorResponsibleUserId === manualActor.userId);
       const {
         privateWorkAdmission,
         initialPlan,
@@ -10030,6 +10097,17 @@ export function issueService(db: Db) {
         throw unprocessable("in_progress issues require an assignee");
       }
       const persist = async (tx: DbTransaction) => {
+        let manualExpiresAt: number | null = null;
+        let manualOperator = false;
+        if (captureManualInput && manualActor) {
+          const pinned = await pinCurrentBoardActor(tx, manualActor);
+          if (!pinned || pinned.credentialExpiresAt === null || !Number.isFinite(pinned.credentialExpiresAt))
+            throw forbidden("The current manual input session is unavailable");
+          manualExpiresAt = pinned.credentialExpiresAt;
+          manualOperator = await pinIssueMutationHuman(tx, manualActor, companyId, true) === "instance_admin";
+          if (manualOperator) await assertHumanAuthentication(tx, manualActor, { requireRecent: true, phishingResistant: true });
+          await assertManualInputCredentialCurrent(tx, manualActor, manualExpiresAt);
+        }
         await lockIssuePrivacyTree(tx, companyId);
         await assertExecutionTaskParent(tx as unknown as Db, companyId, issueData.parentId);
         if (issueData.conversationAgentId && issueData.conversationUserId) {
@@ -10451,7 +10529,10 @@ export function issueService(db: Db) {
           }),
         );
 
-        const [issue] = await tx.insert(issues).values(values).returning();
+        if (captureManualInput) Object.assign(values, {
+          payloadSourceProtocolVersion: 1, payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: false,
+        });
+        let [issue] = await tx.insert(issues).values(values).returning();
         await retainIssuePrivacySources(tx, issue, privacy.sources);
         if (issue.visibility === "private" && issue.createdByAgentId) {
           const [grant] = await tx.insert(issueAccessGrants).values({
@@ -10514,12 +10595,20 @@ export function issueService(db: Db) {
             createdByRunId: actorRunId,
           });
         }
+        if (captureManualInput && manualActor && manualExpiresAt !== null) {
+          issue = await bindManualTaskPayload(tx, issue,
+            { ...manualActor, isInstanceAdmin: false, ignoreInstanceAdmin: !manualOperator }, privacyPublications);
+        }
         const [enriched] = await withIssueLabels(tx, [issue]);
         const [withRelations] = await withIssueRelationSummaries(
           companyId,
           [enriched],
           tx,
         );
+        if (captureManualInput && manualActor && manualExpiresAt !== null) {
+          if (manualOperator) await assertHumanAuthentication(tx, manualActor, { requireRecent: true, phishingResistant: true });
+          await assertManualInputCredentialCurrent(tx, manualActor, manualExpiresAt);
+        }
         return withRelations;
       };
       if (dbOrTx === db) {

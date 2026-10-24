@@ -12250,7 +12250,10 @@ export function issueRoutes(
       };
       let issue: Awaited<ReturnType<typeof svc.create>>;
       try {
-        issue = await svc.create(companyId, createInput);
+        issue = req.actor.type === "board" && req.actor.source === "session" &&
+          req.actor.userId && req.actor.sessionId && !req.actor.runId
+          ? await svc.create(companyId, createInput, db, undefined, { manualInputActor: req.actor })
+          : await svc.create(companyId, createInput);
       } catch (error) {
         // Concurrent onboarding creates can both pass the zero-count fast path;
         // the issues_onboarding_first_task_uq index rejects the loser here. Fail
@@ -12267,7 +12270,7 @@ export function issueRoutes(
         const referenceSummary =
           await issueReferencesSvc.listIssueReferenceSummary(issue.id);
         res.status(200).json({
-          ...issue,
+          ...publicNativePayloadRow(issue),
           deduplicated: true,
           deduplicationReason,
           relatedWork: referenceSummary,
@@ -12452,7 +12455,7 @@ export function issueRoutes(
       await queueTaskWatchdogEvaluation(issue, actor.runId);
 
       res.status(201).json({
-        ...issue,
+        ...publicNativePayloadRow(issue),
         relatedWork: referenceSummary,
         referencedIssueIdentifiers: referenceSummary.outbound.map(
           (item) => item.issue.identifier ?? item.issue.id,
@@ -15383,6 +15386,7 @@ export function issueRoutes(
 
       await queueTaskWatchdogEvaluation(issue, actor.runId);
       const changes = issueResponse.changes ?? {};
+      const publicComment = comment ? publicNativePayloadRow(comment) : comment;
       if (prefersMinimalIssueUpdateResponse(req)) {
         res.setHeader("Preference-Applied", "return=minimal");
         res.json({
@@ -15390,11 +15394,11 @@ export function issueRoutes(
           identifier: issueResponse.identifier,
           updatedAt: issueResponse.updatedAt,
           changes,
-          comment,
+          comment: publicComment,
         });
         return;
       }
-      res.json({ ...issueResponse, changes, comment });
+      res.json({ ...publicNativePayloadRow(issueResponse), changes, comment: publicComment });
     },
   );
 
