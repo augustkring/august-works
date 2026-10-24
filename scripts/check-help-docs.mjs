@@ -15,6 +15,7 @@ const REQUIRED = [
   "last_verified_at",
   "review_trigger",
   "security_or_privacy_sensitive",
+  "linked_source_files",
 ];
 const MATURITIES = new Set(["internal", "experimental", "preview", "ga", "deprecated", "retired"]);
 
@@ -141,6 +142,10 @@ function validateMetadata(metadata, filename, { today, screenIds, capabilityIds 
       for (const id of metadata[key]) if (!capabilityIds.has(id)) errors.push(`${filename}: unknown product_capability_ref ${id}`);
     }
   }
+  if (!Array.isArray(metadata.linked_source_files) || metadata.linked_source_files.some(value =>
+    typeof value !== "string" || !/^(?!\/)(?!.*(?:^|\/)\.\.(?:\/|$))[A-Za-z0-9._/-]+$/.test(value))) {
+    errors.push(`${filename}: linked_source_files must be an inline list of repository-relative source paths`);
+  }
   if (Object.hasOwn(metadata, "maturity") && !MATURITIES.has(metadata.maturity)) {
     errors.push(`${filename}: maturity must be one of ${[...MATURITIES].join(", ")}`);
   }
@@ -188,6 +193,17 @@ export function validateHelpDocs({ root = process.cwd(), now = new Date() } = {}
     try { parsed = parseRestrictedFrontmatter(fs.readFileSync(filename, "utf8"), relative); }
     catch (error) { errors.push(error.message); continue; }
     errors.push(...validateMetadata(parsed.metadata, relative, { today, screenIds, capabilityIds }));
+    if (Array.isArray(parsed.metadata.linked_source_files)) {
+      const seenSources = new Set();
+      for (const source of parsed.metadata.linked_source_files) {
+        if (seenSources.has(source)) errors.push(`${relative}: duplicate linked source file ${source}`);
+        seenSources.add(source);
+        const filename = path.resolve(root, source);
+        if (!filename.startsWith(`${path.resolve(root)}${path.sep}`) || !fs.existsSync(filename) || !fs.statSync(filename).isFile()) {
+          errors.push(`${relative}: linked source file does not exist: ${source}`);
+        }
+      }
+    }
     const prior = seenIds.get(parsed.metadata.help_article_id);
     if (prior) errors.push(`${relative}: duplicate help_article_id ${parsed.metadata.help_article_id} (also ${prior})`);
     else if (typeof parsed.metadata.help_article_id === "string") seenIds.set(parsed.metadata.help_article_id, relative);
@@ -198,6 +214,14 @@ export function validateHelpDocs({ root = process.cwd(), now = new Date() } = {}
     if (!page) errors.push(`${relative}: navigation page is empty`);
   }
   return errors;
+}
+
+export function readHelpArticleSources(root = process.cwd()) {
+  return docsForHelpTab(root).map(({ filename }) => {
+    const relative = path.relative(root, filename).split(path.sep).join("/");
+    const { metadata } = parseRestrictedFrontmatter(fs.readFileSync(filename, "utf8"), relative);
+    return { articleId: metadata.help_article_id, filename: relative, sourceFiles: metadata.linked_source_files };
+  });
 }
 
 if (process.argv[1] && path.resolve(process.argv[1]) === fileURLToPath(import.meta.url)) {

@@ -50,7 +50,7 @@
     "check:module-boundaries": "node scripts/check-module-boundaries.mjs",
     "test:check-no-git-push": "node --test scripts/check-no-git-push.test.mjs",
     "check:help-docs": "node scripts/check-help-docs.mjs && node server/scripts/generate-company-search-help.mjs --check",
-    "test:help-docs": "node --test scripts/check-help-docs.test.mjs",
+    "test:help-docs": "node --test scripts/check-help-docs.test.mjs scripts/check-help-change-review.test.mjs",
     "test:install-sh-docker": "./scripts/test-install-sh-docker.sh",
     "test:hermes-gateway-smoke": "node --test scripts/smoke/hermes-gateway-smoke.test.mjs",
     "docs:dev": "cd docs && npx mintlify dev",
