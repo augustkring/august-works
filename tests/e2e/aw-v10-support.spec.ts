@@ -31,11 +31,20 @@ test("Help retains its originating view and reload recovers requests before and 
   await page.goto(`/${company.issuePrefix}/work`);
   const heading = await page.getByRole("heading", { level: 1, name: "Work", exact: true }).elementHandle();
   expect(heading).not.toBeNull();
-  const unsent = "Private unsent support draft retained only in this account's memory.";
-  for (const dismissal of ["close", "escape", "return"] as const) {
-    await page.locator("a[data-support-help-entry]").click();
+  const helpEntry = page.locator("#help-center-utility-entry");
+  const openHelp = async () => {
+    await helpEntry.click();
     await expect(page.getByRole("dialog")).toBeVisible();
     expect(await heading!.evaluate(node => node.isConnected)).toBe(true);
+  };
+  const openCases = async () => {
+    await page.getByRole("link", { name: "My support cases", exact: true }).click();
+    await expect(page.getByLabel("What do you need help with?", { exact: true })).toBeVisible();
+  };
+  const unsent = "Private unsent support draft retained only in this account's memory.";
+  for (const dismissal of ["close", "escape", "return"] as const) {
+    await openHelp();
+    await openCases();
     const description = page.getByLabel("What do you need help with?", { exact: true });
     if (dismissal !== "close") await expect(description).toHaveValue(unsent);
     await description.fill(unsent);
@@ -43,10 +52,11 @@ test("Help retains its originating view and reload recovers requests before and 
     else await page.getByRole(dismissal === "close" ? "button" : "link", { name: "Back to work", exact: true }).click();
     await expect(page.getByRole("dialog")).toHaveCount(0);
     expect(await heading!.evaluate(node => node.isConnected)).toBe(true);
-    await expect(page.locator("a[data-support-help-entry]")).toBeFocused();
+    await expect(helpEntry).toBeFocused();
     expect(await page.evaluate(() => document.body.style.pointerEvents)).not.toBe("none");
   }
-  await page.locator("a[data-support-help-entry]").click();
+  await openHelp();
+  await openCases();
   await expect(page.getByLabel("What do you need help with?", { exact: true })).toHaveValue(unsent);
   expect(await page.evaluate(text => JSON.stringify(history.state).includes(text), unsent)).toBe(false);
   expect(await page.evaluate(text => [...Object.values(sessionStorage), ...Object.values(localStorage)].some(value => value.includes(text)), unsent)).toBe(false);
@@ -84,7 +94,8 @@ test("Help retains its originating view and reload recovers requests before and 
   expect(await page.evaluate(text => [...Object.values(sessionStorage), ...Object.values(localStorage)].some(value => value.includes(text)), privateText)).toBe(false);
   await page.getByRole("button", { name: "Back to work", exact: true }).click();
   await expect(page.getByRole("dialog")).toHaveCount(0);
-  await page.locator("a[data-support-help-entry]").click();
+  await openHelp();
+  await openCases();
   await expect(page.getByLabel("What do you need help with?", { exact: true })).toHaveValue(privateText);
   await expect(page.getByRole("button", { name: "Retry the same request", exact: true })).toBeEnabled();
   expect(posts).toBe(1);

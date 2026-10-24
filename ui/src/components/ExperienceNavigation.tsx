@@ -20,6 +20,8 @@ import {
 import { useCompany } from "../context/CompanyContext";
 import { useExperience } from "../hooks/useExperience";
 import { SidebarNavItem } from "./SidebarNavItem";
+import { useLocation } from "../lib/router";
+import { HELP_CENTER_NAVIGATION_ENTRY_ID } from "../lib/help-navigation";
 import { Button } from "./ui/button";
 const icons = {
   home: Home,
@@ -32,6 +34,7 @@ const icons = {
 };
 export function ExperienceNavigation() {
   const { selectedCompanyId } = useCompany();
+  const location = useLocation();
   const { t } = useTranslation("experience");
   const { query, identity } = useExperience(selectedCompanyId);
   const client = useQueryClient(),
@@ -114,7 +117,15 @@ export function ExperienceNavigation() {
         </Button>
         <SidebarNavItem
           className="min-h-11"
-          to="/company/settings/support"
+          to="/company/help"
+          state={!identity.localImplicit && identity.userId && selectedCompanyId ? {
+            companyId: selectedCompanyId,
+            expectedUserId: identity.userId,
+            returnPathname: location.pathname,
+            backgroundKey: location.key,
+            returnFocusId: HELP_CENTER_NAVIGATION_ENTRY_ID,
+          } : undefined}
+          helpCenterEntryId={HELP_CENTER_NAVIGATION_ENTRY_ID}
           label={t("help")}
           icon={HelpCircle}
         />

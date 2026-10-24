@@ -24,6 +24,7 @@ import { useV9CurrentAccount, hasCurrentV9Session } from "../hooks/useV9CurrentA
 import { Link, useLocation, useNavigate } from "../lib/router";
 import { getCompanyPathSegments } from "../lib/shell-navigation";
 import { Button } from "../components/ui/button";
+import { isHelpCenterEntryId } from "../lib/help-navigation";
 
 type PendingSupportRequest = { key: string; kind: "create" | "reply" | "close"; caseId?: string };
 function pendingSupportRequest(value: unknown, companyId: string, principal: string): PendingSupportRequest | null {
@@ -59,7 +60,7 @@ function supportPath(companyId: string, suffix = "") {
   return `/companies/${encodeURIComponent(companyId)}/support${suffix}`;
 }
 
-export function CustomerSupportCases({ onReturn }: { onReturn?: () => void } = {}) {
+export function CustomerSupportCases({ onReturn, active = true }: { onReturn?: () => void; active?: boolean } = {}) {
   const { t } = useTranslation("experience");
   const { selectedCompanyId } = useCompany();
   const identity = useV9CurrentAccount();
@@ -73,6 +74,7 @@ export function CustomerSupportCases({ onReturn }: { onReturn?: () => void } = {
           companyId={selectedCompanyId}
           principal={principal}
           onReturn={onReturn}
+          active={active}
         />
       ) : (
         <p role="status">{t(selectedCompanyId ? "supportCases.signInRequired" : "selectCompany")}</p>
@@ -84,13 +86,13 @@ export function CustomerSupportCases({ onReturn }: { onReturn?: () => void } = {
   );
 }
 
-function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { companyId: string; principal: string; onReturn?: () => void }) {
+function CustomerSupportCasesForAccount({ companyId, principal, onReturn, active }: { companyId: string; principal: string; onReturn?: () => void; active: boolean }) {
   const { t, i18n } = useTranslation("experience");
   const client = useQueryClient();
   const identity = useV9CurrentAccount();
   const { selectedCompanyId, selectedCompany } = useCompany();
   const location = useLocation(), navigate = useNavigate();
-  const carried = location.state as { companyId?: unknown; expectedUserId?: unknown; returnPathname?: unknown } | null;
+  const carried = location.state as { companyId?: unknown; expectedUserId?: unknown; returnPathname?: unknown; returnFocusId?: unknown } | null;
   const candidate = carried?.companyId === companyId && carried.expectedUserId === principal ? carried.returnPathname : null;
   const returnPathname = typeof candidate === "string" && candidate.startsWith("/") && !candidate.startsWith("//") && !/[\\?#\s]/.test(candidate)
     && new URL(candidate, window.location.origin).origin === window.location.origin
@@ -99,7 +101,7 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
     ? candidate : "/work";
   const [composing, setComposing] = useState(true);
   const resumeDraftButton = useRef<HTMLButtonElement>(null), descriptionInput = useRef<HTMLTextAreaElement>(null);
-  useEffect(() => { (composing ? descriptionInput.current : resumeDraftButton.current)?.focus(); }, [composing]);
+  useEffect(() => { if (active) (composing ? descriptionInput.current : resumeDraftButton.current)?.focus(); }, [composing, active]);
   const selected = supportCaseDetailSchema.shape.id.safeParse(new URLSearchParams(location.search).get("case"));
   const selectedCaseId = selected.success ? selected.data : null;
   const activeCase = useRef(selectedCaseId);
@@ -118,6 +120,8 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
   const [caseUnavailable, setCaseUnavailable] = useState(false);
   const [submitting, setSubmitting] = useState(false), [replying, setReplying] = useState(false);
   const mounted = useRef(true), activeScope = useRef("");
+  const activeSurface = useRef(active);
+  activeSurface.current = active;
   const detailHeading = useRef<HTMLHeadingElement>(null);
   useEffect(() => { if (selectedCaseId) detailHeading.current?.focus(); }, [selectedCaseId]);
   const [description, setDescription] = useState("");
@@ -136,6 +140,8 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
     return { companyId, expectedUserId: principal, returnPathname,
       ...(carried?.companyId === companyId && carried.expectedUserId === principal && typeof (location.state as { backgroundKey?: unknown }).backgroundKey === "string"
         ? { backgroundKey: (location.state as { backgroundKey: string }).backgroundKey } : {}),
+      ...(carried?.companyId === companyId && carried.expectedUserId === principal && isHelpCenterEntryId(carried.returnFocusId)
+        ? { returnFocusId: carried.returnFocusId } : {}),
       ...(safeContext ? { safeContext } : {}), ...(request ? { supportRequest: request } : {}) };
   }
   function rememberRequest(request: PendingSupportRequest) {
@@ -145,7 +151,7 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
   }
   function forgetRequest() {
     setRestoredRequest(null);
-    navigate({ pathname: location.pathname, search: location.search, hash: location.hash }, { replace: true, state: null });
+    navigate({ pathname: location.pathname, search: location.search, hash: location.hash }, { replace: true, state: requestNavigation() });
   }
   function forgetRejectedRequest() {
     setRestoredRequest(null);
@@ -178,7 +184,7 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
   const scope = `${companyId}:${principal}:${identity.sessionId}:${identity.authorityEpoch}:${accessEpoch}`;
   activeScope.current = scope;
   const readKey = [...baseKey, identity.authorityEpoch, accessEpoch] as const;
-  function current() { return mounted.current && activeScope.current === scope && hasCurrentV9Session(client, principal, identity.sessionId); }
+  function current() { return activeSurface.current && mounted.current && activeScope.current === scope && hasCurrentV9Session(client, principal, identity.sessionId); }
   useEffect(() => {
     if (!ready || !current()) return;
     const pending: PendingSupportRequest | null = submission ? { key: submission.key, kind: "create" }
@@ -195,7 +201,7 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
     return params.toString();
   }
   const policyQuery = useQuery({
-    queryKey: [...readKey, "policy"], enabled: ready,
+    queryKey: [...readKey, "policy"], enabled: active && ready,
     queryFn: async ({ signal }) => {
       if (!current()) throw new Error("Account changed");
       const policy = supportCaseIntakePolicySchema.parse(await api.get(
@@ -207,7 +213,7 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
     staleTime: 0, gcTime: 0, retry: false, refetchOnWindowFocus: true,
   });
   const listQuery = useQuery({
-    queryKey: [...readKey, "list", listCursor], enabled: ready,
+    queryKey: [...readKey, "list", listCursor], enabled: active && ready,
     queryFn: async ({ signal }) => {
       if (!current()) throw new Error("Account changed");
       const list = supportCaseListSchema.parse(await api.get(
@@ -221,7 +227,7 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
     staleTime: 0, gcTime: 0, retry: false, refetchOnWindowFocus: true,
   });
   const detailQuery = useQuery({
-    queryKey: [...readKey, "detail", selectedCaseId, timelineCursor], enabled: ready && !!selectedCaseId,
+    queryKey: [...readKey, "detail", selectedCaseId, timelineCursor], enabled: active && ready && !!selectedCaseId,
     queryFn: async ({ signal }) => {
       if (!selectedCaseId || !current()) throw new Error("Account changed");
       const detail = safeDetail(await api.get(
@@ -236,7 +242,7 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
 
   const recoveryQuery = useQuery({
     queryKey: [...readKey, "request", restoredRequest?.key],
-    enabled: ready && !!restoredRequest && !submission && !replySubmission,
+    enabled: active && ready && !!restoredRequest && !submission && !replySubmission,
     queryFn: async ({ signal }) => {
       const pending = restoredRequest!;
       const found = await recoverRequest(pending.key, signal);
@@ -250,7 +256,7 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
   const recoveryBlocked = !!restoredRequest && (recoveryQuery.isFetching || !!recoveryQuery.data);
 
   useCompanyLiveEvent((event) => {
-    if (event.companyId !== companyId) return;
+    if (!active || event.companyId !== companyId) return;
     const action = typeof event.payload.action === "string" ? event.payload.action : "";
     const relevant = event.type === "analytical.context.access_lost" ||
       (event.type === "activity.logged" && (/support|permission|membership|privacy|erased|deleted|company/i.test(action) || event.payload.entityType === "company_membership"));
@@ -283,7 +289,7 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
     setAccessEpoch(value => value + 1);
   }
   useEffect(() => {
-    if (accessLost) return;
+    if (!active || accessLost) return;
     if ((policyQuery.error && hasSessionError(policyQuery.error)) || (listQuery.error && hasSessionError(listQuery.error)) ||
       hasAccountError(detailQuery.error) || hasAccountError(recoveryQuery.error)) {
       loseAccess();
@@ -296,8 +302,8 @@ function CustomerSupportCasesForAccount({ companyId, principal, onReturn }: { co
       client.removeQueries({ queryKey: [...readKey, "detail"] });
       void client.invalidateQueries({ queryKey: baseKey });
     }
-  }, [policyQuery.error, listQuery.error, detailQuery.error, recoveryQuery.error, client, baseKey, accessLost]);
-  useEffect(() => { if (detailQuery.data?.id) detailHeading.current?.focus(); }, [detailQuery.data?.id]);
+  }, [policyQuery.error, listQuery.error, detailQuery.error, recoveryQuery.error, client, baseKey, accessLost, active]);
+  useEffect(() => { if (active && detailQuery.data?.id) detailHeading.current?.focus(); }, [detailQuery.data?.id, active]);
 
   const isDanish = (i18n.resolvedLanguage ?? i18n.language).startsWith("da");
   const labels = isDanish ? SUPPORT_CASE_COPY.da : SUPPORT_CASE_COPY.en;

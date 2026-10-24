@@ -11,9 +11,10 @@
 import type { ReactNode } from "react";
 import { flushSync } from "react-dom";
 import { createRoot } from "react-dom/client";
-import { MemoryRouter } from "react-router-dom";
+import { Link, MemoryRouter, useLocation } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { App } from "./App";
+import { HELP_CENTER_NAVIGATION_ENTRY_ID, HELP_CENTER_UTILITY_ENTRY_ID } from "./lib/help-navigation";
 
 const routingIdentity = vi.hoisted(() => ({
   account: { userId: "routing-user", sessionId: "routing-session", localImplicit: false, settled: true },
@@ -132,6 +133,25 @@ vi.mock("./pages/CustomerSupportCases", async () => {
     </div>;
   } };
 });
+vi.mock("./pages/CustomerHelpCenter", () => ({
+  CustomerHelpCenter: () => {
+    const location = useLocation();
+    return <div data-testid="customer-help-center"><p>Help Center content</p>
+      <Link to="/PAP/company/support" state={location.state} replace data-support-help-entry>My support cases</Link>
+    </div>;
+  },
+}));
+
+function HelpCenterEntryForTest() {
+  const location = useLocation();
+  return <Link to="/PAP/company/help" id={HELP_CENTER_NAVIGATION_ENTRY_ID} data-help-center-entry state={{
+    companyId: routingIdentity.company.id,
+    expectedUserId: routingIdentity.account.userId,
+    returnPathname: location.pathname,
+    backgroundKey: location.key,
+    returnFocusId: HELP_CENTER_NAVIGATION_ENTRY_ID,
+  }}>Help Center</Link>;
+}
 
 async function renderAppAt(container: HTMLElement, path: string) {
   const root = createRoot(container);
@@ -198,6 +218,36 @@ describe("App Cases routing (PAP-13002)", () => {
     unmountApp(root);
   });
 
+  it.each(["navigation", "utility"] as const)("returns focus to the exact %s Help entry after opening support cases", async entry => {
+    const root = createRoot(container);
+    mountedRoot = root;
+    flushSync(() => root.render(<MemoryRouter initialEntries={["/PAP/work"]}>
+      <HelpCenterEntryForTest /><App />
+    </MemoryRouter>));
+    await vi.waitFor(() => expect(container.querySelector('textarea[aria-label="Unsent work"]')).toBeTruthy());
+    const helpEntry = container.querySelector<HTMLAnchorElement>(`#${entry === "navigation" ? HELP_CENTER_NAVIGATION_ENTRY_ID : HELP_CENTER_UTILITY_ENTRY_ID}`)!;
+    const work = container.querySelector<HTMLTextAreaElement>('textarea[aria-label="Unsent work"]')!;
+    flushSync(() => helpEntry.click());
+    await waitForPortal("Help Center content");
+    expect(document.querySelector('[role="dialog"]')).toBeTruthy();
+    expect(container.querySelector('textarea[aria-label="Unsent work"]')).toBe(work);
+    flushSync(() => document.querySelector<HTMLAnchorElement>('a[data-support-help-entry]')!.click());
+    await waitForPortal("Support overlay content");
+    expect(container.querySelector('textarea[aria-label="Unsent work"]')).toBe(work);
+    flushSync(() => document.querySelector<HTMLButtonElement>('[data-slot="dialog-close"]')!.click());
+    await vi.waitFor(() => expect(document.querySelector<HTMLElement>('[role="dialog"]')?.style.display).toBe("none"));
+    console.log("DEBUG after close", support.isConnected, document.querySelectorAll('textarea[aria-label="Unsent support"]').length);
+    await vi.waitFor(() => expect(document.activeElement).toBe(helpEntry));
+    unmountApp(root);
+  });
+
+  it("keeps a direct Help Center link standalone", async () => {
+    const root = await renderAppAt(container, "/PAP/company/help");
+    await waitForRoute(container, "Help Center content");
+    expect(document.querySelector('[role="dialog"]')).toBeNull();
+    unmountApp(root);
+  });
+
   it("redirects unprefixed /cases/:id to the company-prefixed detail page", async () => {
     const root = await renderAppAt(container, "/cases/PAP-C5");
     await waitForRoute(container, "CASE_DETAIL_PAGE");
@@ -216,20 +266,20 @@ describe("App Cases routing (PAP-13002)", () => {
     });
     // Use the actual ExperienceUtilities Link and router path, not a fabricated
     // support navigation state.
-    const help = container.querySelector<HTMLAnchorElement>('a[href="/PAP/company/support"]');
+    const help = container.querySelector<HTMLAnchorElement>('a[href="/PAP/company/help"]');
     expect(help).toBeTruthy();
     flushSync(() => help!.click());
-    await waitForPortal("Support overlay content");
+    await waitForPortal("Help Center content");
     await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeTruthy());
     expect(document.querySelector('[role="dialog"]')?.textContent).toContain("Language");
     expect(container.querySelector('textarea[aria-label="Unsent work"]')).toBe(draft);
     expect(draft.value).toBe("Private unsent work");
     expect(container.querySelector('[data-testid="work-location"]')?.textContent).toBe("/PAP/work?view=assigned#today");
-    flushSync(() => [...document.querySelectorAll<HTMLButtonElement>('button')].find(button => button.textContent === "Return from support")?.click());
+    flushSync(() => document.querySelector<HTMLButtonElement>('[data-slot="dialog-close"]')!.click());
     await vi.waitFor(() => expect(document.querySelector<HTMLElement>('[role="dialog"]')?.style.display).toBe("none"));
     expect(container.querySelector('textarea[aria-label="Unsent work"]')).toBe(draft);
     expect(draft.value).toBe("Private unsent work");
-    await vi.waitFor(() => expect(document.activeElement).toBe(container.querySelector('a[data-support-help-entry]')));
+    await vi.waitFor(() => expect(document.activeElement).toBe(container.querySelector('a[data-help-center-entry]')));
     unmountApp(root);
   });
 
@@ -237,8 +287,12 @@ describe("App Cases routing (PAP-13002)", () => {
     const root = await renderAppAt(container, "/PAP/work");
     await vi.waitFor(() => expect(container.querySelector('textarea[aria-label="Unsent work"]')).toBeTruthy());
     const work = container.querySelector<HTMLTextAreaElement>('textarea[aria-label="Unsent work"]')!;
-    const openHelp = () => flushSync(() => container.querySelector<HTMLAnchorElement>('a[data-support-help-entry]')!.click());
+    const openHelp = () => flushSync(() => container.querySelector<HTMLAnchorElement>('a[data-help-center-entry]')!.click());
+    const openCases = () => flushSync(() => document.querySelector<HTMLAnchorElement>('a[data-support-help-entry]')!.click());
     openHelp();
+    await waitForPortal("Help Center content");
+    console.log("DEBUG after help", support.isConnected, document.querySelectorAll('textarea[aria-label="Unsent support"]').length);
+    openCases();
     await waitForPortal("Support overlay content");
     const support = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Unsent support"]')!;
     flushSync(() => {
@@ -254,7 +308,10 @@ describe("App Cases routing (PAP-13002)", () => {
     flushSync(() => { work.focus(); work.click(); });
     expect(document.activeElement).toBe(work);
     openHelp();
+    await waitForPortal("Help Center content");
+    openCases();
     await vi.waitFor(() => expect(document.querySelector<HTMLElement>('[role="dialog"]')?.style.display).not.toBe("none"));
+    console.log("DEBUG after cases", support.isConnected, document.querySelectorAll('textarea[aria-label="Unsent support"]').length);
     expect(document.querySelector('textarea[aria-label="Unsent support"]')).toBe(support);
     expect(support.value).toBe("Private unsent support");
     unmountApp(root);
@@ -262,8 +319,10 @@ describe("App Cases routing (PAP-13002)", () => {
 
   it.each(["account", "session", "company"])("discards a hidden support draft after its %s changes", async change => {
     const root = await renderAppAt(container, "/PAP/work");
-    await vi.waitFor(() => expect(container.querySelector('a[data-support-help-entry]')).toBeTruthy());
-    flushSync(() => container.querySelector<HTMLAnchorElement>('a[data-support-help-entry]')!.click());
+    await vi.waitFor(() => expect(container.querySelector('a[data-help-center-entry]')).toBeTruthy());
+    flushSync(() => container.querySelector<HTMLAnchorElement>('a[data-help-center-entry]')!.click());
+    await waitForPortal("Help Center content");
+    flushSync(() => document.querySelector<HTMLAnchorElement>('a[data-support-help-entry]')!.click());
     await waitForPortal("Support overlay content");
     const support = document.querySelector<HTMLTextAreaElement>('textarea[aria-label="Unsent support"]')!;
     flushSync(() => {
@@ -292,8 +351,8 @@ describe("App Cases routing (PAP-13002)", () => {
       Object.getOwnPropertyDescriptor(HTMLTextAreaElement.prototype, "value")!.set!.call(draft, "Account-private draft");
       draft.dispatchEvent(new Event("input", { bubbles: true }));
     });
-    flushSync(() => container.querySelector<HTMLAnchorElement>('a[href="/PAP/company/support"]')!.click());
-    await waitForPortal("Support overlay content");
+    flushSync(() => container.querySelector<HTMLAnchorElement>('a[href="/PAP/company/help"]')!.click());
+    await waitForPortal("Help Center content");
 
     routingIdentity.account.settled = false;
     flushSync(() => root.render(<MemoryRouter initialEntries={["/PAP/work"]}><App /></MemoryRouter>));
@@ -319,8 +378,8 @@ describe("App Cases routing (PAP-13002)", () => {
   it("drops a background page when the selected company no longer matches it", async () => {
     const root = await renderAppAt(container, "/PAP/work");
     await vi.waitFor(() => expect(container.querySelector('textarea[aria-label="Unsent work"]')).toBeTruthy());
-    flushSync(() => container.querySelector<HTMLAnchorElement>('a[href="/PAP/company/support"]')!.click());
-    await waitForPortal("Support overlay content");
+    flushSync(() => container.querySelector<HTMLAnchorElement>('a[href="/PAP/company/help"]')!.click());
+    await waitForPortal("Help Center content");
     expect(document.querySelector('[role="dialog"]')).toBeTruthy();
 
     routingIdentity.company = { id: "company-2", name: "Other", issuePrefix: "OTH", status: "active" };

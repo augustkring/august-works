@@ -91,6 +91,17 @@
   "navigation": "Virksomhedens navigation",
   "navigationLimited": "Yderligere navigation kunne ikke hentes. Prøv Hjem igen.",
   "help": "Hjælp / Support",
+  "helpCenter": {
+    "title": "Hvordan kan vi hjælpe?",
+    "description": "Søg i produktvejledninger, se tjenestestatus, eller kontakt en person for at få hjælp.",
+    "browse": "Søg i og gennemse Hjælp",
+    "cases": "Mine supportsager",
+    "status": "Tjenestestatus",
+    "humanTitle": "Kontakt en person",
+    "humanDescription": "Du kan kontakte supportteamet direkte. Du behøver ikke først at bruge en assistent.",
+    "security": "Rapportér et sikkerhedsproblem",
+    "privacy": "Rapportér et privatlivsproblem"
+  },
   "domain": {
     "tasks": "Arbejde",
     "attention": "Kræver dig",

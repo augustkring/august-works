@@ -10,6 +10,7 @@ import { feedbackPageContext } from "../lib/feedback-safe-context";
 import { Button } from "./ui/button";
 import { CustomerFeedbackDialog } from "./CustomerFeedbackDialog";
 import { useSidebar } from "../context/SidebarContext";
+import { HELP_CENTER_UTILITY_ENTRY_ID } from "../lib/help-navigation";
 export function ExperienceUtilities({ safetyRecovery = false }: { safetyRecovery?: boolean }) {
   const { sidebarOpen, setSidebarOpen } = useSidebar();
   const { selectedCompanyId } = useCompany(), account = useV9CurrentAccount(), location = useLocation();
@@ -50,11 +51,13 @@ export function ExperienceUtilities({ safetyRecovery = false }: { safetyRecovery
       <CustomerFeedbackDialog />
       <Link
         className="inline-flex min-h-11 items-center rounded-md px-3 text-sm hover:bg-accent focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring"
-        to="/company/support"
-        data-support-help-entry
+        to="/company/help"
+        id={HELP_CENTER_UTILITY_ENTRY_ID}
+        data-help-center-entry
         state={!account.localImplicit && account.userId && selectedCompanyId
           ? { companyId: selectedCompanyId, expectedUserId: account.userId,
               returnPathname: location.pathname, backgroundKey: location.key,
+              returnFocusId: HELP_CENTER_UTILITY_ENTRY_ID,
               safeContext: { surface: feedbackPageContext(location.pathname).surfaceKey } }
           : undefined}
         onClick={() => setSidebarOpen(false)}
