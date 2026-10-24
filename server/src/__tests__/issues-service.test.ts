@@ -3,6 +3,11 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, asc, eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import { sql } from "drizzle-orm";
+import express from "express";
+import request from "supertest";
+import { actorMiddleware } from "../middleware/auth.js";
+import { errorHandler } from "../middleware/error-handler.js";
+import { projectRoutes } from "../routes/projects.js";
 import {
   activityLog,
   agents,
@@ -68,6 +73,20 @@ function deferred<T>() {
     reject = promiseReject;
   });
   return { promise, resolve, reject };
+}
+
+async function createCanonicalProject(
+  db: ReturnType<typeof createDb>,
+  companyId: string,
+  project: Record<string, unknown>,
+) {
+  const app = express();
+  app.use(express.json());
+  app.use(actorMiddleware(db, { deploymentMode: "local_trusted" }));
+  app.use("/api", projectRoutes(db));
+  app.use(errorHandler);
+  const response = await request(app).post(`/api/companies/${companyId}/projects`).send(project).expect(201);
+  return response.body.id as string;
 }
 
 describe("issue list limit helpers", () => {
@@ -523,6 +542,26 @@ describeEmbeddedPostgres("issueService.list participantAgentId", () => {
     return companyId;
   }
 
+  async function addVerifiedMember(companyId: string, userId = randomUUID()) {
+    const now = new Date();
+    await db.insert(authUsers).values({
+      id: userId,
+      name: "Issue service Human",
+      email: `${userId}@example.test`,
+      emailVerified: true,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(companyMemberships).values({
+      companyId,
+      principalType: "user",
+      principalId: userId,
+      status: "active",
+      membershipRole: "member",
+    });
+    return userId;
+  }
+
   it("does not treat passive issue activity as touching it, but includes real user mutations", async () => {
     const companyId = await seedAssignableAgentCompany();
     const issueId = randomUUID();
@@ -719,10 +758,10 @@ describeEmbeddedPostgres("issueService.list participantAgentId", () => {
     const companyId = await seedAssignableAgentCompany();
     const agentId = randomUUID();
     const userId = randomUUID();
+    const actorUserId = randomUUID();
     await db.insert(agents).values(agentRow(companyId, { id: agentId, name: "ConnectionRequester" }));
-    await db.insert(companyMemberships).values({
-      companyId, principalType: "user", principalId: userId, status: "active", membershipRole: "member",
-    });
+    await addVerifiedMember(companyId, userId);
+    await addVerifiedMember(companyId, actorUserId);
     const issue = await svc.create(companyId, {
       title: "Waiting for a connection", status: "in_review", priority: "medium", assigneeAgentId: agentId,
     });
@@ -735,7 +774,7 @@ describeEmbeddedPostgres("issueService.list participantAgentId", () => {
     }).returning();
     const [interaction] = await db.insert(issueThreadInteractions).values({
       companyId, issueId: issue.id, kind: "connection_intent", status: "pending",
-      createdByAgentId: agentId, addresseeUserId: "local-board",
+      createdByAgentId: agentId, addresseeUserId: actorUserId,
       payload: {
         version: 1, serviceSlug: "notion", serviceName: "Notion",
         requestingAgentId: agentId, requestingAgentName: "ConnectionRequester", phase: "authorizing",
@@ -745,12 +784,12 @@ describeEmbeddedPostgres("issueService.list participantAgentId", () => {
     await db.insert(toolOauthStates).values({
       state: oauthState, companyId, connectionId: connection!.id, issueId: issue.id,
       interactionId: interaction!.id, codeVerifier: "test-verifier",
-      createdByActorType: "user", createdByActorId: "local-board",
+      createdByActorType: "user", createdByActorId: actorUserId,
       expiresAt: new Date(Date.now() + 60_000),
     });
 
     const updated = await svc.update(issue.id, {
-      assigneeAgentId: null, assigneeUserId: userId, actorUserId: "local-board",
+      assigneeAgentId: null, assigneeUserId: userId, actorUserId,
     });
     expect(updated).toMatchObject({ status: "in_review", assigneeAgentId: null, assigneeUserId: userId });
     await expect(db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.id, interaction!.id)))
@@ -764,6 +803,7 @@ describeEmbeddedPostgres("issueService.list participantAgentId", () => {
 
   it("expires pending thread interactions on any service-level terminal transition", async () => {
     const companyId = await seedAssignableAgentCompany();
+    const actorUserId = await addVerifiedMember(companyId);
     const issue = await svc.create(companyId, {
       title: "Close me with a pending card",
       description: null,
@@ -791,7 +831,7 @@ describeEmbeddedPostgres("issueService.list participantAgentId", () => {
 
     // Direct service callers (tree control, recovery, pipelines, status cards)
     // never pass through the HTTP routes, so the expiry must fire here.
-    const updated = await svc.update(issue.id, { status: "cancelled", actorUserId: "local-board" });
+    const updated = await svc.update(issue.id, { status: "cancelled", actorUserId });
     expect(updated?.status).toBe("cancelled");
 
     const interaction = await db
@@ -801,7 +841,7 @@ describeEmbeddedPostgres("issueService.list participantAgentId", () => {
       .then((rows) => rows[0] ?? null);
     expect(interaction).toMatchObject({
       status: "expired",
-      resolvedByUserId: "local-board",
+      resolvedByUserId: actorUserId,
     });
     expect(interaction?.result).toMatchObject({ version: 1, outcome: "issue_closed" });
     expect(interaction?.resolvedAt).not.toBeNull();
@@ -3104,7 +3144,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("inherits the parent issue workspace linkage when child workspace fields are omitted", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const parentIssueId = randomUUID();
     const projectWorkspaceId = randomUUID();
     const executionWorkspaceId = randomUUID();
@@ -3117,9 +3157,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
     });
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       name: "Workspace project",
       status: "in_progress",
     });
@@ -3278,7 +3316,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("does not stamp the assignee default environment onto new issues", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const projectWorkspaceId = randomUUID();
     const assigneeEnvironmentId = randomUUID();
     const assigneeAgentId = randomUUID();
@@ -3315,9 +3353,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
       permissions: {},
     });
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       name: "Workspace project",
       status: "in_progress",
       executionWorkspacePolicy: {
@@ -3351,7 +3387,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("ignores legacy project environment selection when creating new issues", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const projectWorkspaceId = randomUUID();
     const projectEnvironmentId = randomUUID();
     const assigneeEnvironmentId = randomUUID();
@@ -3397,9 +3433,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
       permissions: {},
     });
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       name: "Workspace project",
       status: "in_progress",
       executionWorkspacePolicy: {
@@ -3432,7 +3466,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("does not rewrite execution workspace settings on reassignment", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const projectWorkspaceId = randomUUID();
     const firstEnvironmentId = randomUUID();
     const secondEnvironmentId = randomUUID();
@@ -3493,9 +3527,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
       },
     ]);
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       name: "Workspace project",
       status: "in_progress",
       executionWorkspacePolicy: {
@@ -3538,7 +3570,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("strips legacy environmentId values from execution workspace settings updates", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const projectWorkspaceId = randomUUID();
     const firstEnvironmentId = randomUUID();
     const secondEnvironmentId = randomUUID();
@@ -3573,8 +3605,8 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
       },
     ]);
 
-    await db.insert(projects).values({
-      id: projectId, companyId, name: "Workspace project", status: "in_progress",
+    projectId = await createCanonicalProject(db, companyId, {
+      name: "Workspace project", status: "in_progress",
       executionWorkspacePolicy: {
         enabled: true,
         defaultMode: "shared_workspace",
@@ -3615,7 +3647,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("keeps explicit workspace fields instead of inheriting the parent linkage", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const parentIssueId = randomUUID();
     const parentProjectWorkspaceId = randomUUID();
     const parentExecutionWorkspaceId = randomUUID();
@@ -3630,9 +3662,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
     });
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       name: "Workspace project",
       status: "in_progress",
     });
@@ -3714,7 +3744,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("inherits workspace linkage from an explicit source issue without creating a parent-child relationship", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const sourceIssueId = randomUUID();
     const projectWorkspaceId = randomUUID();
     const executionWorkspaceId = randomUUID();
@@ -3727,9 +3757,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
     });
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       name: "Workspace project",
       status: "in_progress",
     });
@@ -3785,7 +3813,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("createChild applies parent defaults, acceptance criteria, workspace inheritance, and optional parent blocker chaining", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const goalId = randomUUID();
     const parentIssueId = randomUUID();
     const projectWorkspaceId = randomUUID();
@@ -3807,9 +3835,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
       status: "active",
     });
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       goalId,
       name: "Workspace project",
       status: "in_progress",
@@ -3883,7 +3909,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("createChild preserves strategy-only workspace intent without realizing the parent workspace", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const parentIssueId = randomUUID();
     const projectWorkspaceId = randomUUID();
     const environmentId = randomUUID();
@@ -3896,9 +3922,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
     });
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       name: "Workspace project",
       status: "in_progress",
     });
@@ -3955,8 +3979,8 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("createChild targeting another project does not forward the parent project workspace", async () => {
     const companyId = randomUUID();
-    const parentProjectId = randomUUID();
-    const targetProjectId = randomUUID();
+    let parentProjectId: string;
+    let targetProjectId: string;
     const parentIssueId = randomUUID();
     const parentProjectWorkspaceId = randomUUID();
     const targetProjectWorkspaceId = randomUUID();
@@ -3969,10 +3993,8 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
     });
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
 
-    await db.insert(projects).values([
-      { id: parentProjectId, companyId, name: "Paperclip App", status: "in_progress" },
-      { id: targetProjectId, companyId, name: "Paperclip ID", status: "in_progress" },
-    ]);
+    parentProjectId = await createCanonicalProject(db, companyId, { name: "Paperclip App", status: "in_progress" });
+    targetProjectId = await createCanonicalProject(db, companyId, { name: "Paperclip ID", status: "in_progress" });
 
     await db.insert(projectWorkspaces).values([
       {
@@ -4020,7 +4042,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("clamps helper-created child requestDepth to the safe maximum", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const goalId = randomUUID();
     const parentIssueId = randomUUID();
 
@@ -4040,9 +4062,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
       status: "active",
     });
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       goalId,
       name: "Workspace project",
       status: "in_progress",
@@ -4103,7 +4123,7 @@ describeEmbeddedPostgres("issueService blockers and dependency wake readiness", 
   async function seedSharedWorkspaceDependency() {
     const companyId = randomUUID();
     const assigneeAgentId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const projectWorkspaceId = randomUUID();
     const executionWorkspaceId = randomUUID();
     const blockerId = randomUUID();
@@ -4127,9 +4147,7 @@ describeEmbeddedPostgres("issueService blockers and dependency wake readiness", 
       runtimeConfig: {},
       permissions: {},
     });
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       name: "Shared workspace project",
       status: "in_progress",
     });
@@ -4993,7 +5011,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("inherits the parent issue workspace linkage when child workspace fields are omitted", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const parentIssueId = randomUUID();
     const projectWorkspaceId = randomUUID();
     const executionWorkspaceId = randomUUID();
@@ -5006,9 +5024,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
     });
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       name: "Workspace project",
       status: "in_progress",
     });
@@ -5069,7 +5085,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("preserves the parent project when a generic child create inherits workspace linkage", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const parentIssueId = randomUUID();
     const projectWorkspaceId = randomUUID();
     const executionWorkspaceId = randomUUID();
@@ -5082,9 +5098,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
     });
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       name: "Workspace project",
       status: "in_progress",
     });
@@ -5137,8 +5151,8 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("uses the target project's own workspaces for a cross-project child instead of inheriting the parent's", async () => {
     const companyId = randomUUID();
-    const parentProjectId = randomUUID();
-    const targetProjectId = randomUUID();
+    let parentProjectId: string;
+    let targetProjectId: string;
     const parentIssueId = randomUUID();
     const parentProjectWorkspaceId = randomUUID();
     const targetProjectWorkspaceId = randomUUID();
@@ -5152,10 +5166,8 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
     });
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
 
-    await db.insert(projects).values([
-      { id: parentProjectId, companyId, name: "Paperclip App", status: "in_progress" },
-      { id: targetProjectId, companyId, name: "Paperclip ID", status: "in_progress" },
-    ]);
+    parentProjectId = await createCanonicalProject(db, companyId, { name: "Paperclip App", status: "in_progress" });
+    targetProjectId = await createCanonicalProject(db, companyId, { name: "Paperclip ID", status: "in_progress" });
 
     await db.insert(projectWorkspaces).values([
       {
@@ -5269,7 +5281,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("keeps explicit workspace fields instead of inheriting the parent linkage", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const parentIssueId = randomUUID();
     const parentProjectWorkspaceId = randomUUID();
     const parentExecutionWorkspaceId = randomUUID();
@@ -5284,9 +5296,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
     });
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       name: "Workspace project",
       status: "in_progress",
     });
@@ -5368,7 +5378,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("inherits workspace linkage from an explicit source issue without creating a parent-child relationship", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const sourceIssueId = randomUUID();
     const projectWorkspaceId = randomUUID();
     const executionWorkspaceId = randomUUID();
@@ -5381,9 +5391,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
     });
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       name: "Workspace project",
       status: "in_progress",
     });
@@ -5439,7 +5447,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("derives project identity when an update adds workspace linkage to a projectless issue", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const projectWorkspaceId = randomUUID();
     const issueId = randomUUID();
 
@@ -5451,9 +5459,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
     });
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       name: "Workspace project",
       status: "in_progress",
     });
@@ -5529,7 +5535,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
 
   it("syncs reused execution workspace config when issue workspace settings are updated", async () => {
     const companyId = randomUUID();
-    const projectId = randomUUID();
+    let projectId: string;
     const projectWorkspaceId = randomUUID();
     const executionWorkspaceId = randomUUID();
     const issueId = randomUUID();
@@ -5542,9 +5548,7 @@ describeEmbeddedPostgres("issueService.create workspace inheritance", () => {
     });
     await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: true });
 
-    await db.insert(projects).values({
-      id: projectId,
-      companyId,
+    projectId = await createCanonicalProject(db, companyId, {
       name: "Workspace project",
       status: "in_progress",
     });
