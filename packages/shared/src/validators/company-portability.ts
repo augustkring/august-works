@@ -349,6 +349,7 @@ export const portabilityAdapterOverrideSchema = z.object({
 });
 
 export const companyPortabilityImportSchema = companyPortabilityPreviewSchema.extend({
+  expectedSourceFingerprint: z.string().regex(/^[a-f0-9]{64}$/).optional(),
   adapterOverrides: z.record(z.string().min(1), portabilityAdapterOverrideSchema).optional(),
   secretValues: z.record(z.string().min(1), z.string()).optional(),
   pauseAutomations: z.boolean().optional(),

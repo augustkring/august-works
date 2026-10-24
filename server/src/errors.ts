@@ -44,3 +44,10 @@ export function unprocessable(message: string, details?: unknown) {
 export function tooManyRequests(message = "Too many requests", details?: unknown) {
   return new HttpError(429, message, details);
 }
+
+/** Only thrown by the native owner before any import effect. */
+export class ImportSourceChangedError extends HttpError {
+  constructor() {
+    super(409, "The package changed after preview. Preview it again before importing.", { code: "import_preview_source_changed" });
+  }
+}

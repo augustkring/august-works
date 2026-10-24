@@ -151,6 +151,7 @@ const previewFiles = {
 
 function buildPreviewResult(): CompanyPortabilityPreviewResult {
   return {
+    sourceFingerprint: "a".repeat(64),
     include: { company: true, agents: true, projects: true, issues: true },
     targetCompanyId: null,
     targetCompanyName: null,
@@ -378,7 +379,7 @@ describe("CompanyImport", () => {
     await renderPageAndImport();
 
     expect(mockCompaniesApi.importBundleAsync).toHaveBeenCalledWith(
-      expect.objectContaining({ pauseAutomations: true }),
+      expect.objectContaining({ pauseAutomations: true, expectedSourceFingerprint: "a".repeat(64) }),
     );
     // The page polls the job it was handed and runs the same activation path
     // the synchronous response used to drive.
@@ -548,7 +549,7 @@ describe("CompanyImport", () => {
     expect(mockCompaniesApi.importTransferUploadPart).toHaveBeenCalledTimes(2);
     expect(mockCompaniesApi.importTransferApply).toHaveBeenCalledWith(
       "transfer-1",
-      expect.objectContaining({ pauseAutomations: true }),
+      expect.objectContaining({ pauseAutomations: true, expectedSourceFingerprint: "a".repeat(64) }),
     );
     expect(mockCompaniesApi.importBundlePackageAsync).not.toHaveBeenCalled();
     expect(mockCompaniesApi.getImportJob).toHaveBeenCalledWith("job-1");

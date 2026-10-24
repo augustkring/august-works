@@ -385,6 +385,8 @@ export interface CompanyPortabilityPreviewIssuePlan {
 }
 
 export interface CompanyPortabilityPreviewResult {
+  /** Hash of the normalized resolved file map; consistency, never source authority. */
+  sourceFingerprint?: string;
   include: CompanyPortabilityInclude;
   targetCompanyId: string | null;
   targetCompanyName: string | null;
@@ -409,6 +411,7 @@ export interface CompanyPortabilityAdapterOverride {
 }
 
 export interface CompanyPortabilityImportRequest extends CompanyPortabilityPreviewRequest {
+  expectedSourceFingerprint?: string;
   adapterOverrides?: Record<string, CompanyPortabilityAdapterOverride>;
   secretValues?: Record<string, string>;
   pauseAutomations?: boolean;

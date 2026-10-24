@@ -39,7 +39,7 @@ import {
   type CompanyImportTransferPartUploadResult,
   type CompanyImportTransferStatus,
 } from "@paperclipai/shared/company-import-transfer";
-import { badRequest, conflict, forbidden, notFound, unprocessable } from "../errors.js";
+import { badRequest, conflict, forbidden, notFound, unprocessable, ImportSourceChangedError } from "../errors.js";
 import { PORTABLE_ZIP_UPLOAD_LIMIT_BYTES } from "../http/body-limits.js";
 import { logger } from "../middleware/logger.js";
 import { validate } from "../middleware/validate.js";
@@ -311,7 +311,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     } catch (error) {
       // This native callback knows whether it invoked portability. An error
       // after that boundary cannot establish that no domain write committed.
-      try { await importJobs.fail(job, domainInvoked()); }
+      try { await importJobs.fail(job, domainInvoked(), error instanceof ImportSourceChangedError ? "import_preview_source_changed" : "import_rejected"); }
       catch { logger.warn({ operationId: job.id }, "import outcome could not be saved; durable active operation is retained"); }
       if (domainInvoked()) throw conflict("The import outcome is unknown. Reconcile the existing import before trying again.",
         { code: "import_outcome_unknown", operationId: job.id });
@@ -326,7 +326,9 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
       ...(job.resultRef ? { result: job.resultRef } : {}),
       ...(job.errorCode ? { error: { message: job.errorCode === "import_outcome_unknown"
         ? "The import outcome is unknown. Reconcile the existing import before trying again."
-        : "The import request was rejected before import work started." } } : {}),
+        : job.errorCode === "import_preview_source_changed"
+          ? "The package changed after preview. Preview it again before importing."
+          : "The import request was rejected before import work started." } } : {}),
       ...(fullResult && !job.id.startsWith("tenant-import-") ? { fullResult } : {}),
     };
   }
@@ -706,6 +708,9 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
         }
         return result;
       } catch (error) {
+        // Only the native pre-effect proof can turn an invoked owner into a
+        // known rejection. Ordinary throws remain an unknown outcome.
+        if (error instanceof ImportSourceChangedError) domainInvoked = false;
         if (domainInvoked) await hooks?.onFailure?.(errorMessage(error));
         else await hooks?.onConflict?.();
         throw error;

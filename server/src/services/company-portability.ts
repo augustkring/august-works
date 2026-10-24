@@ -75,7 +75,7 @@ import {
   portabilityIssueManifestEntrySchema,
   portabilityProjectManifestEntrySchema,
 } from "@paperclipai/shared";
-import { sha256HexOfBytes } from "@paperclipai/shared/portability-hash";
+import { canonicalJson, sha256HexOfBytes } from "@paperclipai/shared/portability-hash";
 import {
   readPaperclipSkillSyncPreference,
   writePaperclipSkillSyncPreference,
@@ -83,7 +83,7 @@ import {
 import { requireOpenCodeModelId } from "@paperclipai/adapter-opencode-local/server";
 import { findServerAdapter } from "../adapters/index.js";
 import { formatAttachmentSize, MAX_ATTACHMENT_BYTES } from "../attachment-types.js";
-import { HttpError, forbidden, notFound, unprocessable } from "../errors.js";
+import { HttpError, ImportSourceChangedError, forbidden, notFound, unprocessable } from "../errors.js";
 import { ghFetch, gitHubApiBase, resolveRawGitHubUrl } from "./github-fetch.js";
 import type { StorageService } from "../storage/types.js";
 import { accessService } from "./access.js";
@@ -5392,6 +5392,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     }
 
     const preview: CompanyPortabilityPreviewResult = {
+      sourceFingerprint: createHash("sha256").update(canonicalJson(source.files)).digest("hex"),
       include,
       targetCompanyId,
       targetCompanyName,
@@ -5444,6 +5445,8 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     assertInlineSourceComplete(input.source);
     const mode = resolveImportMode(options);
     const plan = await buildPreview(input, options);
+    if (input.expectedSourceFingerprint && input.expectedSourceFingerprint !== plan.preview.sourceFingerprint)
+      throw new ImportSourceChangedError();
     if (plan.preview.errors.length > 0) {
       throw unprocessable(`Import preview has errors: ${plan.preview.errors.join("; ")}`);
     }

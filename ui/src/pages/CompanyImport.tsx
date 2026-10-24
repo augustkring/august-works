@@ -8,6 +8,7 @@ import type {
   CompanyPortabilitySource,
   CompanyPortabilityAdapterOverride,
 } from "@paperclipai/shared";
+import { PRODUCT_IDENTITY } from "@paperclipai/shared";
 import { useCompany } from "../context/CompanyContext";
 import { useBreadcrumbs } from "../context/BreadcrumbContext";
 import { useToastActions } from "../context/ToastContext";
@@ -1046,7 +1047,7 @@ export function CompanyImport() {
   );
 
   const localZipHelpText =
-    "Upload a .zip exported directly from Paperclip. Re-zipped archives created by Finder, Explorer, or other zip tools may not import correctly.";
+    `Upload a .zip exported directly from ${PRODUCT_IDENTITY.productName}. Re-zipped archives created by Finder, Explorer, or other zip tools may not import correctly.`;
 
   useEffect(() => {
     setBreadcrumbs([
@@ -1222,6 +1223,7 @@ export function CompanyImport() {
       }
       const meta = {
         ...buildImportMetaCommon(),
+        expectedSourceFingerprint: variables.previewForImport?.sourceFingerprint,
         nameOverrides: buildFinalNameOverrides(),
         selectedFiles: buildSelectedFiles(),
         adapterOverrides: buildFinalAdapterOverrides(),
@@ -1851,7 +1853,7 @@ export function CompanyImport() {
         <div>
           <h2 className="text-base font-semibold">Import source</h2>
           <p className="text-xs text-muted-foreground mt-1">
-            Choose a GitHub repo or upload a local Paperclip zip package.
+            Choose a GitHub repo or upload a local {PRODUCT_IDENTITY.productName} zip package.
           </p>
         </div>
 

@@ -20,6 +20,8 @@ import {
   principalPermissionGrants,
 } from "@paperclipai/db";
 import { grantsForHumanRole } from "../services/company-member-roles.js";
+import { companyPortabilityService } from "../services/company-portability.js";
+import { ImportSourceChangedError } from "../errors.js";
 import { companyImportJobService } from "../services/company-import-jobs.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 
@@ -93,7 +95,19 @@ describeEmbeddedPostgres("company import process recovery", () => {
     await db.insert(authSessions).values({ id: sessionId, userId, token: randomUUID(), createdAt: now,
       updatedAt: now, expiresAt: new Date(now.getTime() + 60 * 60_000) });
 
-    const body = buildImportBody(companyId);
+    const originalBody = buildImportBody(companyId);
+    const portability = companyPortabilityService(db);
+    const preview = await portability.previewImport(originalBody as Parameters<typeof portability.previewImport>[0]);
+    expect(preview.sourceFingerprint).toMatch(/^[a-f0-9]{64}$/);
+    const reordered = await portability.previewImport({ ...originalBody, source: { type: "inline",
+      files: Object.fromEntries(Object.entries(originalBody.source.files).reverse()) } } as Parameters<typeof portability.previewImport>[0]);
+    expect(reordered.sourceFingerprint).toBe(preview.sourceFingerprint);
+    const body = { ...originalBody, expectedSourceFingerprint: preview.sourceFingerprint };
+    const changed = { ...body, source: { ...body.source, files: { ...body.source.files,
+      "agents/worker/AGENTS.md": body.source.files["agents/worker/AGENTS.md"] + "Changed after preview\n" } } };
+    await expect(portability.importBundle(changed as Parameters<typeof portability.importBundle>[0], userId))
+      .rejects.toBeInstanceOf(ImportSourceChangedError);
+    expect(await db.select({ id: agents.id }).from(agents).where(eq(agents.companyId, companyId))).toHaveLength(0);
     const idempotencyKey = `process-recovery:${randomUUID()}`;
     const home = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-import-child-home-"));
     let child: ChildProcess | null = null;

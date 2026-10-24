@@ -1,4 +1,5 @@
 import express from "express";
+import { ImportSourceChangedError } from "../errors.js";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import { authUsers, companies, companyMemberships, createDb, customerOperations, instanceUserRoles } from "@paperclipai/db";
@@ -1085,6 +1086,19 @@ describe.sequential("company portability routes", () => {
     } finally {
       nowSpy.mockRestore();
     }
+  });
+
+  it.sequential("retains a native pre-effect preview mismatch as known rejection rather than unknown effects", async () => {
+    mockCompanyPortabilityService.importBundle.mockRejectedValueOnce(new ImportSourceChangedError());
+    const app = await createApp(cloudTenantActor());
+    const accepted = await request(app).post("/api/companies/import")
+      .set("x-paperclip-cloud-async-import", "1").set(cloudHeaders).send(importRequest);
+    expect(accepted.status).toBe(202);
+    const rejected = await waitForImportJobStatus(app, accepted.body.statusUrl, "failed");
+    expect(rejected.body.job.status).toBe("failed");
+    expect(rejected.body.operation.unknownOutcome).toBe(false);
+    expect(rejected.body.job.error.message).toBe("The package changed after preview. Preview it again before importing.");
+    expect(mockLogActivity).not.toHaveBeenCalled();
   });
 
   it.sequential("reports trusted Cloud async import job failures with the tenant error message", async () => {

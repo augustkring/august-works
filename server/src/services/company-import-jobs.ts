@@ -149,10 +149,10 @@ export function companyImportJobService(db: Db) {
       return settled ?? null;
     },
 
-    async fail(job: CompanyImportJob, unknownOutcome: boolean) {
+    async fail(job: CompanyImportJob, unknownOutcome: boolean, knownError: "import_rejected" | "import_preview_source_changed" = "import_rejected") {
       const [settled] = await db.update(customerOperations).set({ status: unknownOutcome ? "needs_reconciliation" : "failed",
         progressStage: unknownOutcome ? "needs_reconciliation" : "rejected_before_import",
-        errorCode: unknownOutcome ? "import_outcome_unknown" : "import_rejected",
+        errorCode: unknownOutcome ? "import_outcome_unknown" : knownError,
         completedAt: unknownOutcome ? null : sql`clock_timestamp()`, updatedAt: sql`clock_timestamp()`, progressAt: sql`clock_timestamp()`,
       }).where(and(eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
         eq(customerOperations.status, "running"))).returning();
