@@ -189,3 +189,22 @@ failure after native replacement creation, staged cookie and old-session deletio
 and an after-commit callback reading the committed replacement on an independent
 connection. Full MFA, passkey ceremony, enterprise recovery, operator admission and
 all V10 release gates remain separate unfinished work.
+
+
+### 2026-10-24 — typed native challenge lifetime
+
+Native migration 0520 now recognizes the maintained provider's registration and
+authentication JSON user identity without treating unrelated verification values
+as JSON contracts. It removes those values after credential-generation changes
+and native user deletion. The original irreversible erasure owner removes them
+when retaining its scrubbed principal. Before storing an owned challenge, a native
+trigger pins its actual live user and rejects canonical erasure markers, missing
+users or conflicting physical user locks. Anonymous discoverable authentication
+carries no user identity and remains available. Malformed and unrelated values
+cannot abort cleanup. This does not yet bind generation/session into registration
+or activate any factor endpoint.
+
+Three original-product regressions failed before the fix. The three complete
+PostgreSQL/HTTP suites now pass 37 cases; native migration checks and server
+compiler return zero. Exact evidence is retained under
+`native-challenge-lifetime-2026-10-24/checkpoint.json`.

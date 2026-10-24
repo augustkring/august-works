@@ -1,0 +1,4 @@
+No config path provided, using default 'drizzle.config.ts'
+Reading config file '/workspace/blentera-v10/packages/db/drizzle.config.ts'
+Prepared empty file for your custom SQL migration!
+[✓] Your SQL migration file ➜ src/migrations/0520_native_challenge_lifetime.sql 🚀

@@ -13,6 +13,7 @@ import {
   authSessions,
   authTwoFactors,
   authUsers,
+  authVerifications,
   billingAccounts,
   billingSubscriptions,
   boardApiKeys,
@@ -801,9 +802,15 @@ const support = await getEmbeddedPostgresTestSupport();
       }).returning();
       await expect(db.delete(authPasskeys).where(eq(authPasskeys.id, passkey.id)))
         .rejects.toMatchObject({ cause: { code: "23514" } });
+      const now = new Date();
+      const [challenge] = await db.insert(authVerifications).values({ id: randomUUID(), identifier: randomUUID(),
+        value: JSON.stringify({ type: "registration", expectedChallenge: randomUUID(),
+          userData: { id, name: "Private challenge name", displayName: "Private display name" }, context: null }),
+        expiresAt: new Date(now.getTime()+300_000), createdAt: now, updatedAt: now }).returning();
       const reauthKey = "password-reauth:" + createHash("sha256").update(id).digest("hex");
       await db.insert(authRateLimits).values({ id: randomUUID(), key: reauthKey, count: 3, lastRequest: 0 });
       await accountDeletionService(db, effects).request(id, input("native-authenticator-erasure-001"));
+      expect(await db.select().from(authVerifications).where(eq(authVerifications.id, challenge.id))).toEqual([]);
       expect(await db.select().from(authRateLimits).where(eq(authRateLimits.key, reauthKey))).toEqual([]);
       expect(await db.select().from(authTwoFactors).where(eq(authTwoFactors.userId, id))).toEqual([]);
       expect(await db.select().from(authPasskeys).where(eq(authPasskeys.userId, id))).toEqual([]);

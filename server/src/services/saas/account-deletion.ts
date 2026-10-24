@@ -308,7 +308,8 @@ export async function eraseAccountAccess(
   await tx.execute(sql`delete from passkey where user_id=${userId}`);
   await tx.execute(sql`delete from board_api_keys where user_id=${userId}`);
   await tx.execute(
-    sql`delete from verification where value=${userId} ${email ? sql`or identifier=${email}` : sql``}`,
+    sql`delete from verification where value=${userId}
+      or aw_native_verification_user_id(value)=${userId} ${email ? sql`or identifier=${email}` : sql``}`,
   );
   await tx.execute(
     sql`delete from company_memberships where principal_type='user' and principal_id=${userId}`,

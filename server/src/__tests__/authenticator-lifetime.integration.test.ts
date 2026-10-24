@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
+  accountDeletionOperations,
   authAccounts,
   authPasskeys,
   authSessions,
@@ -105,12 +106,12 @@ describeNative("native authenticator lifetime constraints", () => {
     });
   }
 
-  async function makeVerification(userId: string) {
+  async function makeVerification(userId: string, value = userId) {
     const now = new Date();
     const [verification] = await db.insert(authVerifications).values({
       id: randomUUID(),
       identifier: `native-factor-fixture-${randomUUID()}`,
-      value: userId,
+      value,
       expiresAt: new Date(now.getTime() + 10 * 60_000),
       createdAt: now,
       updatedAt: now,
@@ -295,6 +296,58 @@ describeNative("native authenticator lifetime constraints", () => {
 
     await expect(db.update(authUsers).set({ authenticatorVersion: before - 1 }).where(eq(authUsers.id, user.id)))
       .rejects.toMatchObject({ cause: { code: "23514" } });
+  });
+
+  it.each(["credential rotation", "factor activation", "user deletion"])(
+    "erases native JSON challenges on %s while preserving unrelated verification data", async operation => {
+      const user = await makeUser();
+      const credential = await makeCredentialAccount(user.id, user.email);
+      const other = await makeUser();
+      const owned = await Promise.all(["registration", "authentication"].map(type => makeVerification(user.id,
+        JSON.stringify({ type, expectedChallenge: randomUUID(),
+          userData: { id: user.id, name: user.email, displayName: "Native challenge fixture" }, context: null }))));
+      const unrelated = await Promise.all([
+        makeVerification(other.id, JSON.stringify({ type: "registration", expectedChallenge: randomUUID(),
+          userData: { id: other.id, name: other.email }, context: null })),
+        makeVerification(other.id, "not JSON {"),
+        makeVerification(other.id, JSON.stringify({ type: "other", userData: { id: user.id } })),
+        makeVerification(other.id, JSON.stringify({ type: "registration", userData: { id: [user.id] } })),
+      ]);
+      if (operation === "credential rotation") await db.update(authAccounts).set({ password: "fixture-new-password-hash" })
+        .where(eq(authAccounts.id, credential.id));
+      else if (operation === "factor activation") await db.update(authUsers).set({ twoFactorEnabled: true })
+        .where(eq(authUsers.id, user.id));
+      else await db.delete(authUsers).where(eq(authUsers.id, user.id));
+      for (const row of owned) expect(await db.select().from(authVerifications).where(eq(authVerifications.id, row.id))).toEqual([]);
+      for (const row of unrelated) expect(await db.select().from(authVerifications).where(eq(authVerifications.id, row.id))).toHaveLength(1);
+    });
+
+  it("fences native JSON challenge writes against absent or erased owners and physical user locks", async () => {
+    const user = await makeUser();
+    const value = JSON.stringify({ type: "registration", expectedChallenge: randomUUID(),
+      userData: { id: user.id, name: user.email }, context: null });
+    let release!: () => void;
+    let locked!: () => void;
+    const ready = new Promise<void>(resolve => { locked = resolve; });
+    const gate = new Promise<void>(resolve => { release = resolve; });
+    const holding = db.transaction(async tx => {
+      await tx.execute(sql`select id from "user" where id=${user.id} for update`);
+      locked(); await gate;
+    });
+    await ready;
+    try { await expect(makeVerification(user.id, value)).rejects.toMatchObject({ cause: { code: "55P03" } }); }
+    finally { release(); await holding; }
+    const live = await makeVerification(user.id, value);
+    await db.insert(accountDeletionOperations).values({ userId: user.id,
+      idempotencyKey: randomUUID(), status: "completed", completedAt: new Date() });
+    await expect(makeVerification(user.id, value)).rejects.toMatchObject({ cause: { code: "23503" } });
+    await db.delete(authUsers).where(eq(authUsers.id, user.id));
+    expect(await db.select().from(authVerifications).where(eq(authVerifications.id, live.id))).toEqual([]);
+    await expect(makeVerification(user.id, value)).rejects.toMatchObject({ cause: { code: "23503" } });
+    // Anonymous discoverable authentication carries no account identity yet.
+    const anonymous = await makeVerification("", JSON.stringify({ type: "authentication",
+      expectedChallenge: randomUUID(), userData: { id: "" } }));
+    expect(anonymous.value).toContain('"id":""');
   });
 
   it("cascades user deletion across native factor, passkey, session, and verification rows", async () => {
