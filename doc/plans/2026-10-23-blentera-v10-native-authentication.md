@@ -398,3 +398,55 @@ that support/feedback already repeat domain/user checks, but still lack a native
 session/MFA pin. Queue/provider effects must keep their existing operation and
 unknown-outcome owners while carrying genuine current authority; a stored
 operator ID or source snapshot is not a fresh permission grant.
+
+### 2026-10-24 — configured-operator native proof in domain transactions
+
+This bounded CE-03/CE-04 increment preserves V10-166 and the original instance
+settings, enterprise identity, execution sandbox and native support owners.
+`assertConfiguredOperatorAuthentication` composes the existing native proof
+kernel with configured operator membership and verified email. Its SQL pins the
+actual user/session, credential generation and database-clock proof lifetime;
+Board tokens, implicit actors, bare session labels and password-only sessions
+cannot substitute for passkey authentication. It grants no company permission,
+resource access or support approval.
+
+Enterprise qualification checks current recent proof inside its original policy
+transaction and repeats it after secret/key work before publication. Sandbox
+binding/qualification/reconciliation/policy transactions repeat the native
+operator check alongside their existing tenant and resource checks. Private
+sandbox configuration reads use actual transactions with current proof. The
+ordinary tenant posture projection remains separate. A real PostgreSQL row-lock
+wait test deletes the original session before binding creation resumes and
+proves that no binding commits.
+
+SaaS instance settings repeat recent proof before and after writes using the
+original transaction; general updates accept the same optional runner as the
+other settings writers. Operator settings/lifecycle/drain reads pin current
+proof through their original reads. Non-SaaS administrator behavior is preserved.
+Drain start/stop keep serialized audit-commit-before-process-state ordering.
+Their post-commit in-memory effect cannot be atomic with the database proof pin;
+durable drain-state ownership remains unresolved rather than claimed closed.
+
+Support status/backup/override/runtime/canary calls retain the actual actor from
+SaaS routes. The original support authorization owner checks that actor within
+the original transaction, then retains exact support session, scopes, approval
+expiry and current approving owner. Private reads require current passkey proof;
+mutation/request admission also requires recent proof. Checks repeat before
+commit, including idempotent returns. Support approval expiry uses database time,
+so a stale call-start timestamp cannot revive it. Owner-facing review, approval
+and revocation keep their separate authority and receipts.
+
+Compatibility: no migration or dependency is added. Internal support callers now
+pass an AuthorizationActor rather than a user ID. Native structural test rows
+exercise domain admission, not WebAuthn/cookie verification; the separate built
+browser checkpoint qualifies maintained ceremonies. Exact checks/source hashes
+are retained at
+`doc/operations/aw-v10-evidence/native-operator-admission-2026-10-24/checkpoint.json`.
+
+Remaining operator work includes actual host/provider dispatch and completion
+receipts, sandbox host-command requester provenance, runtime catalog/fleet/control,
+costs, agent packages, feedback/retention, all other internal reads, and bootstrap/
+break-glass qualification. A committed request or stored operator ID is not a
+fresh authority grant for a later effect. Enterprise recovery/SSO, other powerful
+actions, original source-privacy/typed-origin/portability failures and complete
+V10 acceptance/full workspace gates remain open. No PR-ready claim.

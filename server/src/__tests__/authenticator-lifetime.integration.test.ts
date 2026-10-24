@@ -12,7 +12,7 @@ import {
   createDb,
   EMBEDDED_POSTGRES_TEST_TIMEOUT_MS,
 } from "@paperclipai/db";
-import { assertHumanAuthentication } from "../auth/authenticator-assurance.js";
+import { assertConfiguredOperatorAuthentication, assertHumanAuthentication } from "../auth/authenticator-assurance.js";
 import type { AuthorizationActor } from "../services/authorization.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 
@@ -454,6 +454,36 @@ describeNative("native authenticator lifetime constraints", () => {
     await expect(assertHumanAuthentication(db, sessionActor(operator.id, operatorPasskey.id), {
       requireRecent: true, phishingResistant: false,
     })).resolves.toMatchObject({ method: "passkey" });
+  });
+
+  it("requires configured operators to present current verified native passkey proof", async () => {
+    const user = await makeUser();
+    await makeCredentialAccount(user.id, user.email);
+    await makePasskey(user.id);
+    const session = await makeSqlClockSession(user.id, "passkey");
+    const actor = sessionActor(user.id, session.id);
+    const allowlist = [user.id];
+    const check = (candidate = actor, recent = true) => db.transaction(tx =>
+      assertConfiguredOperatorAuthentication(tx, candidate, allowlist, { requireRecent: recent }));
+    await expect(check()).rejects.toMatchObject({ status: 403 });
+    await db.update(authUsers).set({ emailVerified: true }).where(eq(authUsers.id, user.id));
+    await expect(check()).resolves.toMatchObject({ method: "passkey" });
+    await expect(db.transaction(tx => assertConfiguredOperatorAuthentication(tx, actor, [])))
+      .rejects.toMatchObject({ status: 403 });
+    await expect(check({ ...actor, sessionId: undefined })).rejects.toMatchObject({ status: 403 });
+    await expect(check({ ...actor, source: "board_key" })).rejects.toMatchObject({ status: 403 });
+    await expect(check({ ...actor, source: "local_implicit" })).rejects.toMatchObject({ status: 403 });
+    const password = await makeSqlClockSession(user.id, "password");
+    await expect(check(sessionActor(user.id, password.id))).rejects.toMatchObject({ status: 403 });
+    const old = await makeSqlClockSession(user.id, "passkey", { ageSeconds: 301 });
+    await expect(check(sessionActor(user.id, old.id))).rejects.toMatchObject({ status: 403 });
+    await expect(check(sessionActor(user.id, old.id), false)).resolves.toMatchObject({ method: "passkey" });
+    const expired = await makeSqlClockSession(user.id, "passkey", { expiresInSeconds: -1 });
+    await expect(check(sessionActor(user.id, expired.id), false)).rejects.toMatchObject({ status: 403 });
+    const wrongGeneration = await makeSqlClockSession(user.id, "passkey", { versionOffset: 1 });
+    await expect(check(sessionActor(user.id, wrongGeneration.id))).rejects.toMatchObject({ status: 403 });
+    await db.delete(authSessions).where(eq(authSessions.id, session.id));
+    await expect(check()).rejects.toMatchObject({ status: 403 });
   });
 
   it("holds native session and user rows through assurance checks", async () => {

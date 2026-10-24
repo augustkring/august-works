@@ -1,3 +1,4 @@
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 import { constants, generateKeyPairSync, privateDecrypt } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq } from "drizzle-orm";
@@ -77,6 +78,7 @@ const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
         billing_usage_v6: true,
       });
       f = await seedV5Companies(db);
+      f.actor.sessionId = await seedNativePasskeySession(db, f.userId);
       [host] = (await db
         .insert(runtimeHosts)
         .values({
@@ -113,7 +115,7 @@ const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
           runtimeHostId: host.id,
         })
         .returning()) as [typeof cell];
-      const binding = await executionSandboxService(db).create(
+      const binding = await executionSandboxService(db, { operatorUserIds: [f.userId] }).create(
         f.actor,
         f.home,
         {
@@ -322,6 +324,7 @@ const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
     it("retains unsupported host qualification without treating configured image as physical preparation", async () => {
       const transport = nativeSandboxHostTransport(db);
       const service = executionSandboxService(db, {
+        operatorUserIds: [f.userId],
         backendFor: (_binding, actor) =>
           openShellBackend({
             identity: scope,

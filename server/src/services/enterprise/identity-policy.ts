@@ -34,6 +34,7 @@ import {
 } from "../v7-authorization.js";
 import { withV7ActivityTransaction, logActivity } from "../v7-mutations.js";
 import { conflict, forbidden, notFound } from "../../errors.js";
+import { assertConfiguredOperatorAuthentication } from "../../auth/authenticator-assurance.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 type Policy = typeof enterpriseIdentityPolicies.$inferSelect;
 export interface EnterprisePublisherOptions {
@@ -313,6 +314,12 @@ export function enterpriseIdentityPolicyService(
           "Current protected identity qualification evidence is required",
         );
       return withV7ActivityTransaction(db, async (tx, p) => {
+        await assertConfiguredOperatorAuthentication(
+          tx,
+          actor,
+          options.operatorUserIds,
+          { requireRecent: true },
+        );
         await enabled(tx);
         const [operator] = await tx
           .select()
@@ -408,6 +415,14 @@ export function enterpriseIdentityPolicyService(
           userId,
           organizationId: null,
         };
+        // Secret resolution and provider construction can take time. Recheck
+        // DB-clock recency immediately before the qualification write.
+        await assertConfiguredOperatorAuthentication(
+          tx,
+          actor,
+          options.operatorUserIds,
+          { requireRecent: true },
+        );
         await tx
           .insert(ssoProvider)
           .values({ id: randomUUID(), ...provider })

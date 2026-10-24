@@ -25,6 +25,8 @@ import { customerSupportRoutes } from "../routes/customer-support.js";
 import { errorHandler } from "../middleware/error-handler.js";
 import { companyExperience } from "../services/experience/company-navigation.js";
 import type { SaasPlatformConfig } from "../saas-platform-config.js";
+import type { AuthorizationActor } from "../services/authorization.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 const support = await getEmbeddedPostgresTestSupport();
 (support.supported ? describe.sequential : describe.skip)(
   "V9 native V6 support history",
@@ -32,6 +34,7 @@ const support = await getEmbeddedPostgresTestSupport();
     let fixture: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>,
       db: ReturnType<typeof createDb>,
       companyId: string;
+    let operatorActor: AuthorizationActor, otherActor: AuthorizationActor;
     let service: ReturnType<typeof saasSupportService>;
     const actor = {
       type: "board" as const,
@@ -52,6 +55,14 @@ const support = await getEmbeddedPostgresTestSupport();
           updatedAt: new Date(),
         })),
       );
+      operatorActor = {
+        type: "board", source: "session", userId: "operator",
+        sessionId: await seedNativePasskeySession(db, "operator"),
+      };
+      otherActor = {
+        type: "board", source: "session", userId: "other",
+        sessionId: await seedNativePasskeySession(db, "other"),
+      };
       companyId = (
         await saasOnboardingService(db).create("owner", {
           name: "Support source",
@@ -110,7 +121,7 @@ const support = await getEmbeddedPostgresTestSupport();
         )?.state,
       ).toBe("revoked");
       await expect(
-        service.status(session.id, "operator"),
+        service.status(session.id, operatorActor),
       ).rejects.toMatchObject({ status: 403 });
     });
     it("replays a committed Native revocation after lost acknowledgement without moving its original receipt", async () => {
@@ -158,7 +169,7 @@ const support = await getEmbeddedPostgresTestSupport();
           ),
       ).toHaveLength(1);
       await expect(
-        service.status(session.id, "operator"),
+        service.status(session.id, operatorActor),
       ).rejects.toMatchObject({ status: 403 });
     });
     it("serializes concurrent Native revocation and repeats current owner admission on replay", async () => {
@@ -254,7 +265,7 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(revoked.revokedAt).not.toBeNull();
       expect(revoked.createdAt).toEqual(original.createdAt);
       await expect(
-        service.status(original.id, "operator"),
+        service.status(original.id, operatorActor),
       ).rejects.toMatchObject({ status: 403 });
     });
     it("serializes concurrent original approvals and refuses every changed immutable field", async () => {
@@ -327,7 +338,7 @@ const support = await getEmbeddedPostgresTestSupport();
         original,
       );
       await expect(
-        service.status(original.id, "operator"),
+        service.status(original.id, operatorActor),
       ).rejects.toMatchObject({ status: 403 });
       const withdrawn = saasSupportService(db, {
         environment: "staging",
@@ -939,12 +950,12 @@ const support = await getEmbeddedPostgresTestSupport();
         )?.state,
       ).toBe("expired");
       await expect(
-        service.status(session.id, "operator"),
+        service.status(session.id, operatorActor),
       ).rejects.toMatchObject({ status: 403 });
     });
     it("retains Native operator/owner/scope admission independently of a recorded history row", async () => {
       const session = await approve();
-      await expect(service.status(session.id, "other")).rejects.toMatchObject({
+      await expect(service.status(session.id, otherActor)).rejects.toMatchObject({
         status: 403,
       });
       const removed = saasSupportService(db, {
@@ -952,7 +963,7 @@ const support = await getEmbeddedPostgresTestSupport();
         operatorUserIds: [],
       } as SaasPlatformConfig);
       await expect(
-        removed.status(session.id, "operator"),
+        removed.status(session.id, operatorActor),
       ).rejects.toMatchObject({ status: 403 });
       expect(
         (await readCustomerSupportHistory(db, actor, companyId)).entries.find(

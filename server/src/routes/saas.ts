@@ -497,27 +497,27 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
     },
   );
   router.get("/saas/internal/support/:sessionId/status", async (req, res) => {
-    const actor = await user(req);
+    await user(req);
     await gate("admin_support_v6");
     res
       .set("Cache-Control", "no-store")
       .json(
         publicJson(
-          await platform.support.status(String(req.params.sessionId), actor.id),
+          await platform.support.status(String(req.params.sessionId), req.actor),
         ),
       );
   });
   router.post(
     "/saas/internal/support/:sessionId/overrides",
     async (req, res) => {
-      const actor = await user(req);
+      await user(req);
       await gate("admin_support_v6");
       res
         .status(201)
         .json(
           await platform.support.override(
             String(req.params.sessionId),
-            actor.id,
+            req.actor,
             req.body,
           ),
         );
@@ -551,7 +551,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
   router.post(
     "/saas/internal/support/:sessionId/runtime-cells/:cellId/operations",
     async (req, res) => {
-      const actor = await user(req);
+      await user(req);
       await gate("admin_support_v6");
       const input = runtimeOperationSchema.parse(req.body);
       if (!["stop", "backup", "rotate_gateway"].includes(input.action))
@@ -562,7 +562,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
           publicJson(
             await platform.support.runtimeAction(
               String(req.params.sessionId),
-              actor.id,
+              req.actor,
               String(req.params.cellId),
               input,
             ),
@@ -573,7 +573,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
   router.get(
     "/saas/internal/support/:sessionId/runtime-cells/:cellId/backups",
     async (req, res) => {
-      const actor = await user(req);
+      await user(req);
       await gate("admin_support_v6");
       res
         .set("Cache-Control", "no-store")
@@ -581,7 +581,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
           publicJson(
             await platform.support.backupStatus(
               String(req.params.sessionId),
-              actor.id,
+              req.actor,
               String(req.params.cellId),
             ),
           ),
@@ -630,7 +630,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
   router.post(
     "/saas/internal/support/:sessionId/canary-runtime",
     async (req, res) => {
-      const actor = await user(req);
+      await user(req);
       await gate("admin_support_v6");
       await gate("hosted_openclaw_v6");
       const input = runtimeCellCreateSchema.parse(req.body);
@@ -640,7 +640,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
         await gate("runtime_dedicated_vm_v6");
       const result = await platform.support.canaryRuntime(
         String(req.params.sessionId),
-        actor.id,
+        req.actor,
         input,
       );
       res

@@ -27,6 +27,7 @@ import {
 import { environmentService } from "../services/environments.js";
 import { assertEnvironmentSelectionForCompany } from "./environment-selection.js";
 import { assertBoardOrgAccess, getActorInfo } from "./authz.js";
+import { assertConfiguredOperatorAuthentication } from "../auth/authenticator-assurance.js";
 
 function sameJsonValue(a: unknown, b: unknown): boolean {
   if (a === b) return true;
@@ -126,7 +127,7 @@ export function instanceSettingsRoutes(
   const svc = instanceSettingsService(db);
   const environments = environmentService(db);
   const heartbeat = heartbeatService(db);
-  async function assertCanManage(req: Request) {
+  async function assertCanManage(req: Request, requireRecent = true) {
     if (options?.deploymentProfile !== "saas") {
       assertCanManageInstanceSettings(req);
       return;
@@ -141,19 +142,41 @@ export function instanceSettingsRoutes(
       .where(eq(authUsers.id, req.actor.userId))
       .limit(1);
     if (!user?.verified) throw forbidden("Verified SaaS operator account required");
+    await assertConfiguredOperatorAuthentication(db, req.actor, options.operatorUserIds ?? [], { requireRecent });
+  }
+
+  async function pinSaasOperatorMutation(tx: Pick<Db, "execute">, req: Request) {
+    if (options?.deploymentProfile !== "saas") return;
+    await assertConfiguredOperatorAuthentication(
+      tx,
+      req.actor,
+      options.operatorUserIds ?? [],
+      { requireRecent: true },
+    );
   }
 
   async function assertCanRead(req: Request) {
     if (
       options?.deploymentProfile === "saas" && req.actor.type === "board" &&
       req.actor.userId && options.operatorUserIds?.includes(req.actor.userId)
-    ) return assertCanManage(req);
+    ) return assertCanManage(req, false);
     assertBoardOrgAccess(req);
+  }
+
+  async function withOperatorRead<T>(req: Request, read: (reader: Db) => T | Promise<T>): Promise<T> {
+    if (options?.deploymentProfile !== "saas" || !req.actor.userId ||
+        !options.operatorUserIds?.includes(req.actor.userId)) return read(db);
+    return db.transaction(async tx => {
+      await assertConfiguredOperatorAuthentication(tx, req.actor, options.operatorUserIds ?? [], { requireRecent: false });
+      const result = await read(tx as unknown as Db);
+      await assertConfiguredOperatorAuthentication(tx, req.actor, options.operatorUserIds ?? [], { requireRecent: false });
+      return result;
+    });
   }
 
   router.get("/instance/settings", async (req, res) => {
     await assertCanRead(req);
-    res.json(await svc.get());
+    res.json(await withOperatorRead(req, reader => instanceSettingsService(reader).get()));
   });
 
   router.patch(
@@ -182,11 +205,14 @@ export function instanceSettingsRoutes(
         ? await environments.findManagedSandboxEnvironment(undefined, { includeArchived: true })
         : null;
       const updated = await db.transaction(async (tx) => {
+        await pinSaasOperatorMutation(tx, req);
         if (managedSandbox?.metadata?.managedDefaultStamped === true) {
           const { managedDefaultStamped: _cleared, ...remainingMetadata } = managedSandbox.metadata;
           await environments.update(managedSandbox.id, { metadata: remainingMetadata }, { db: tx });
         }
-        return svc.update(req.body, { db: tx });
+        const settings = await svc.update(req.body, { db: tx });
+        await pinSaasOperatorMutation(tx, req);
+        return settings;
       });
       const actor = getActorInfo(req);
       const companyIds = await svc.listCompanyIds();
@@ -217,7 +243,7 @@ export function instanceSettingsRoutes(
     // General settings (e.g. feedbackDataSharingPreference) are readable by any
     // authenticated org member or instance admin. Only PATCH requires instance-admin.
     await assertCanRead(req);
-    res.json(await svc.getGeneral());
+    res.json(await withOperatorRead(req, reader => instanceSettingsService(reader).getGeneral()));
   });
 
   router.patch(
@@ -249,7 +275,12 @@ export function instanceSettingsRoutes(
         () => svc.getGeneral(),
         (field) => hidden.has(`instance.general.${field}`),
       );
-      const updated = await svc.updateGeneral(req.body);
+      const updated = options?.deploymentProfile === "saas" ? await db.transaction(async (tx) => {
+        await pinSaasOperatorMutation(tx, req);
+        const settings = await svc.updateGeneral(req.body, { db: tx });
+        await pinSaasOperatorMutation(tx, req);
+        return settings;
+      }) : await svc.updateGeneral(req.body);
       const actor = getActorInfo(req);
       const companyIds = await svc.listCompanyIds();
       await Promise.all(
@@ -280,7 +311,7 @@ export function instanceSettingsRoutes(
     // or instance admin. Updating them remains instance-admin only because
     // this payload includes instance-wide operational controls.
     await assertCanRead(req);
-    res.json(await svc.getExperimental());
+    res.json(await withOperatorRead(req, reader => instanceSettingsService(reader).getExperimental()));
   });
 
   router.patch(
@@ -301,6 +332,7 @@ export function instanceSettingsRoutes(
       const companyIds = await svc.listCompanyIds();
       const publications: ActivityPublication[] = [];
       const updated = await db.transaction(async (tx) => {
+        await pinSaasOperatorMutation(tx, req);
         const settings = await svc.updateExperimental(req.body, { db: tx });
         await Promise.all(companyIds.map((companyId) =>
           logActivity(tx as unknown as Db, {
@@ -319,6 +351,7 @@ export function instanceSettingsRoutes(
             },
           }, publications),
         ));
+        await pinSaasOperatorMutation(tx, req);
         return settings;
       });
       publishActivitiesBestEffort(publications, "instance.settings.experimental_updated");
@@ -328,7 +361,7 @@ export function instanceSettingsRoutes(
 
   router.get("/instance/task-drain", async (req, res) => {
     await assertCanRead(req);
-    res.json(heartbeat.getTaskDrainStatus());
+    res.json(await withOperatorRead(req, () => heartbeat.getTaskDrainStatus()));
   });
 
   router.post(
@@ -354,8 +387,9 @@ export function instanceSettingsRoutes(
         // this transaction commits, so a failed write leaves the live
         // drain untouched and there is no partial state to roll back.
         const postCommitActivityPublications: ActivityPublication[] = [];
-        await db.transaction((tx) =>
-          Promise.all(
+        await db.transaction(async (tx) => {
+          await pinSaasOperatorMutation(tx, req);
+          await Promise.all(
             companyIds.map((companyId) =>
               logActivity(tx as unknown as Db, {
                 companyId,
@@ -373,8 +407,12 @@ export function instanceSettingsRoutes(
                 },
               }, postCommitActivityPublications),
             ),
-          ),
-        );
+          );
+          await pinSaasOperatorMutation(tx, req);
+        });
+        // The authenticated operator is pinned through the durable audit
+        // commit. Applying process-local drain state is necessarily
+        // post-commit; it cannot be atomic with the database session lock.
         heartbeat.applyTaskDrain(computed);
         // The audit record already committed, so a failure to publish it
         // here is not a reason to undo the drain: reverting the in-memory
@@ -407,8 +445,9 @@ export function instanceSettingsRoutes(
       // See the POST handler above for why this is one transaction, and why
       // the drain mutation runs only after it commits.
       const postCommitActivityPublications: ActivityPublication[] = [];
-      await db.transaction((tx) =>
-        Promise.all(
+      await db.transaction(async (tx) => {
+        await pinSaasOperatorMutation(tx, req);
+        await Promise.all(
           companyIds.map((companyId) =>
             logActivity(tx as unknown as Db, {
               companyId,
@@ -425,8 +464,11 @@ export function instanceSettingsRoutes(
               },
             }, postCommitActivityPublications),
           ),
-        ),
-      );
+        );
+        await pinSaasOperatorMutation(tx, req);
+      });
+      // As on start, the audit commit is the durable authorization boundary;
+      // the in-memory state change follows it and cannot share the DB lock.
       heartbeat.stopTaskDrain();
       // See the POST handler above for why a publish failure here is
       // swallowed instead of failing the route: the audit record already
@@ -448,16 +490,16 @@ export function instanceSettingsRoutes(
   // on the instance, which a board member scoped to one company must not
   // be able to infer.
   router.get("/instance/lifecycle", async (req, res) => {
-    await assertCanManage(req);
+    await assertCanManage(req, false);
     const stackId = getCloudStackContext()?.stackId;
     if (!stackId) {
       res.status(404).json({ error: "not_cloud_managed" });
       return;
     }
     const primaryCompanyId = cloudTenantPrimaryCompanyId(stackId);
-    const rows = await db
+    const rows = await withOperatorRead(req, async reader => reader
       .select({ id: companies.id, status: companies.status })
-      .from(companies);
+      .from(companies));
     const primary = rows.find((row) => row.id === primaryCompanyId);
     res.json({
       primaryCompanyId,

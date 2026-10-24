@@ -22,7 +22,7 @@ export function isAuthenticationStateBusy(error: unknown): boolean {
 export async function assertHumanAuthentication(
   db: Pick<Db, "execute">,
   actor: AuthorizationActor,
-  options: { requireRecent: boolean; phishingResistant: boolean },
+  options: { requireRecent: boolean; phishingResistant: boolean; requireVerifiedEmail?: boolean },
 ): Promise<{ method: NativeAuthenticationMethod; authenticatedAt: Date; authenticatorVersion: number }> {
   const denied = () => forbidden("Authenticate again to continue", { code: "recent_authentication_required" });
   if (actor.type !== "board" || actor.source !== "session" || !actor.userId || !actor.sessionId) throw denied();
@@ -36,6 +36,7 @@ export async function assertHumanAuthentication(
       where s.id=${actor.sessionId} and u.id=${actor.userId}
         and s.expires_at>clock_timestamp()
         and s.authenticator_version=u.authenticator_version
+        and (${!options.requireVerifiedEmail} or u.email_verified)
         and not exists (select 1 from account_deletion_operations where user_id=u.id)
         and s.authenticated_at<=clock_timestamp()
         and ${options.requireRecent
@@ -59,4 +60,20 @@ export async function assertHumanAuthentication(
     if (isAuthenticationStateBusy(error)) throw conflict("Authentication state is changing; try again", { code: "authentication_state_busy" });
     throw error;
   }
+}
+
+/** Use in the original domain transaction; configured identity is never proof
+ * of a live phishing-resistant session or of company/resource permission. */
+export async function assertConfiguredOperatorAuthentication(
+  db: Pick<Db, "execute">,
+  actor: AuthorizationActor,
+  operatorUserIds: readonly string[],
+  options: { requireRecent: boolean } = { requireRecent: true },
+) {
+  if (actor.type !== "board" || !actor.userId || !operatorUserIds.includes(actor.userId)) {
+    throw forbidden("Configured platform operator required");
+  }
+  return assertHumanAuthentication(db, actor, {
+    ...options, phishingResistant: true, requireVerifiedEmail: true,
+  });
 }

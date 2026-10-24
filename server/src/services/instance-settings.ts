@@ -604,8 +604,11 @@ export function instanceSettingsService(db: Db, options: InstanceSettingsService
       return toExperimentalView(row.experimental);
     },
 
-    updateGeneral: async (patch: PatchInstanceGeneralSettings): Promise<InstanceSettings> => {
-      return db.transaction(async (tx) => {
+    updateGeneral: async (
+      patch: PatchInstanceGeneralSettings,
+      writeOptions?: { db?: InstanceSettingsWriteDb },
+    ): Promise<InstanceSettings> => {
+      const write = async (tx: InstanceSettingsWriteDb) => {
         const row = await getOrCreateRow(tx);
         // A feedback admission can set the irreversible privacy latch while
         // this ordinary settings write is in flight. Lock and reread before
@@ -632,7 +635,8 @@ export function instanceSettingsService(db: Db, options: InstanceSettingsService
           .where(eq(instanceSettings.id, current.id))
           .returning();
         return toInstanceSettings(updated ?? current);
-      });
+      };
+      return writeOptions?.db ? write(writeOptions.db) : db.transaction(write);
     },
 
     updateExperimental: async (

@@ -785,3 +785,18 @@ owner's effect transaction. Enterprise SSO/recovery, other sensitive actions,
 auth security audit completion, physical/deployed qualification, original payload
 source privacy/typed origins/portability regressions and the rest of V10 remain
 open. This is no PR-ready or release-admission claim.
+
+### 2026-10-24 — native operator proof at original domain admission
+
+Configured operators now require actual verified native passkey-session proof in
+enterprise qualification, execution sandbox configuration, SaaS instance settings
+and native support request transactions. Existing tenant permissions, scoped
+owner approvals and resource/version fences remain. Support approval expiry uses
+database time; proof and scope checks repeat before commit. Structural native
+proof fixtures and an actual PostgreSQL wait/revocation race qualify bounded
+domain behavior, separately from the real WebAuthn browser checkpoint.
+Evidence: `doc/operations/aw-v10-evidence/native-operator-admission-2026-10-24/checkpoint.json`.
+Async host dispatch/completion, process-local drain application after audit commit,
+remaining operator owners and bootstrap/break-glass remain open. CE-03/V10-166,
+original privacy/typed-origin/portability failures and full V10/PR gates are not
+closed by this increment.

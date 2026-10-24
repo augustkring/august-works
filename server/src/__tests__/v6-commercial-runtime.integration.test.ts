@@ -30,6 +30,8 @@ import { runtimeCommercialService } from "../services/runtime/commercial.js";
 import { runtimeControlService } from "../services/runtime/control.js";
 import { entitlementService } from "../services/billing/entitlements.js";
 import type { SaasPlatformConfig } from "../saas-platform-config.js";
+import type { AuthorizationActor } from "../services/authorization.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 
 const support = await getEmbeddedPostgresTestSupport();
 (support.supported ? describe : describe.skip)(
@@ -39,6 +41,7 @@ const support = await getEmbeddedPostgresTestSupport();
     let db: ReturnType<typeof createDb>;
     const now = new Date();
     let companyId: string, accountId: string, firstId: string, secondId: string;
+    let operatorActor: AuthorizationActor;
     beforeAll(async () => {
       vi.stubEnv("PAPERCLIP_SECRETS_MASTER_KEY", "a".repeat(64));
       database = await startEmbeddedPostgresTestDatabase("aw-v6-commercial-");
@@ -53,6 +56,14 @@ const support = await getEmbeddedPostgresTestSupport();
           createdAt: now,
           updatedAt: now,
         });
+      await db.insert(authUsers).values({
+        id: "operator", name: "Operator", email: "operator@example.test",
+        emailVerified: true, createdAt: now, updatedAt: now,
+      });
+      operatorActor = {
+        type: "board", source: "session", userId: "operator",
+        sessionId: await seedNativePasskeySession(db, "operator"),
+      };
       const run = await saasOnboardingService(db).create("owner", {
         name: "Commercial fixture",
         idempotencyKey: "commercial-company-001",
@@ -205,7 +216,7 @@ const support = await getEmbeddedPostgresTestSupport();
       await expect(
         support.runtimeAction(
           session.id,
-          "owner",
+          { type: "board", source: "session", userId: "owner" },
           firstId,
           { action: "stop", idempotencyKey: "support-stop-fixture-001" },
           now,
@@ -213,7 +224,7 @@ const support = await getEmbeddedPostgresTestSupport();
       ).rejects.toMatchObject({ status: 403 });
       const operation = await support.runtimeAction(
         session.id,
-        "operator",
+        operatorActor,
         firstId,
         { action: "stop", idempotencyKey: "support-stop-fixture-001" },
         now,
@@ -222,7 +233,7 @@ const support = await getEmbeddedPostgresTestSupport();
       await expect(
         support.runtimeAction(
           session.id,
-          "operator",
+          operatorActor,
           firstId,
           {
             action: "restore",
@@ -236,7 +247,7 @@ const support = await getEmbeddedPostgresTestSupport();
       await expect(
         support.runtimeAction(
           session.id,
-          "operator",
+          operatorActor,
           firstId,
           { action: "stop", idempotencyKey: "support-stop-fixture-001" },
           now,
@@ -444,14 +455,14 @@ const support = await getEmbeddedPostgresTestSupport();
         );
       const created = await support.canaryRuntime(
         grant.id,
-        "operator",
+        operatorActor,
         input,
         now,
       );
       expect(created.operation.desiredState.canaryOperatorId).toBe("operator");
       await support.revoke(companyId, "owner", grant.id, now);
       await expect(
-        support.canaryRuntime(grant.id, "operator", input, now),
+        support.canaryRuntime(grant.id, operatorActor, input, now),
       ).rejects.toMatchObject({ status: 403 });
       // Persisted rows exercise the approval predicate; these remain fixture evidence, not a live provider rehearsal.
       const restoreTime = new Date(now.getTime() + 3000000),
