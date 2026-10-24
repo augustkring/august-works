@@ -1,7 +1,7 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import { agentPackageVersions, companyAgentPackageInstallations, agents, issues, workflows, readinessAssessments, readinessRequirements, knowledgeQualityFindings } from "@paperclipai/db";
-import type { Request } from "express";
+import type { AuthorizationActor } from "../authorization.js";
 import type { AssessReadiness, CreateReadinessRequirement, EvidenceItem } from "@paperclipai/shared";
 import { createReadinessRequirementSchema, resolveReadinessFindingSchema, readinessCriterionSchema } from "@paperclipai/shared";
 import type { z } from "zod";
@@ -13,7 +13,7 @@ import { logActivity, publishActivity, type ActivityPublication } from "../activ
 import { logger } from "../../middleware/logger.js";
 import { evaluateReadiness, mandatoryReadinessPolicy, readinessHash, READINESS_POLICY_VERSION } from "./readiness-policy.js";
 
-type ReadinessActor = { actor: Request["actor"]; principalId: string; userId: string | null };
+type ReadinessActor = { actor: AuthorizationActor; principalId: string; userId: string | null };
 const FOUNDATION_DOMAINS: Record<string, string> = {
   company: "company_profile", business_model: "business_model", market_customer: "market_customer",
   products_services: "products_services", brand: "brand_positioning", strategy: "company_strategy",

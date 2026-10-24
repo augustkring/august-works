@@ -979,3 +979,27 @@ Evidence:
 `doc/operations/aw-v10-evidence/native-manual-project-2026-10-24/checkpoint.json`.
 All six typed/private source/temporal failures, other producers/mutations,
 complete Native input receipts/read lifetimes and full V10/PR gates remain open.
+
+### 2026-10-24 — retain native package activation custody
+
+A real package installation and a different currently authorized administrator
+reproduced substitution of the original installer's identity at the readiness
+boundary. That synthetic actor also discarded the incoming session/source facts.
+The existing native authority hash and execution SQL require the assessment's
+principal to match the retained installer. Changing the assessment owner alone
+would therefore report activation without satisfying its native execution gate.
+
+The shared review now requires that original accountable Human and passes the
+actual actor to readiness. Other authorized administrators retain suspension and
+uninstall; no ownership transfer is inferred or introduced. The readiness owner
+uses the existing AuthorizationActor type, preserving nullable native identity
+fields without coercing an authentication source to a session.
+
+The focused four-case native gate passes. Its new boundary control deliberately
+intercepts readiness and throws before assessment/admission: it proves identity
+transport, rejection before borrowed authority, rollback and the independent
+stop/uninstall paths, not successful Context/readiness or source qualification.
+The pre-run Context/accountable-run failure, historical assessment source-read
+checks and runtime source-currentness remain open. Evidence:
+`doc/operations/aw-v10-evidence/native-package-review-custody-2026-10-24/checkpoint.json`.
+Full V10/PR acceptance is still open.

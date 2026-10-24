@@ -1,0 +1,50 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/v7-agent-packages.integration.test.ts (115 tests | 1 failed | 114 skipped) 10217ms
+     × reviews package activation for the current Human without substituting its original installer 734ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/v7-agent-packages.integration.test.ts > V7 native internal package installation and activation > reviews package activation for the current Human without substituting its original installer
+AssertionError: expected { Object (actor, principalId, ...) } to deeply equal { Object (actor, principalId, ...) }
+
+- Expected
++ Received
+
+  {
+    "actor": {
+-     "companyIds": [
+-       "c99e2c95-4f26-4cc7-b2e0-2d6ccd70a099",
+-     ],
+-     "sessionId": "1a04fcf1-231a-4fbc-b869-47a3a3a4b9e9",
+      "source": "session",
+      "type": "board",
+-     "userId": "activator-404b62d7-99d4-49fc-8b10-bbe93d1db315",
++     "userId": "user-33772aa7-98f2-4881-8840-510cd09047e6",
+    },
+-   "principalId": "activator-404b62d7-99d4-49fc-8b10-bbe93d1db315",
+-   "userId": "activator-404b62d7-99d4-49fc-8b10-bbe93d1db315",
++   "principalId": "user-33772aa7-98f2-4881-8840-510cd09047e6",
++   "userId": "user-33772aa7-98f2-4881-8840-510cd09047e6",
+  }
+
+ ❯ src/__tests__/v7-agent-packages.integration.test.ts:340:31
+    338|           expectedVersion: installed.version, reason: "Current Human r…
+    339|         })).rejects.toBe(boundaryStop);
+    340|         expect(observedOwner).toEqual({ actor, principalId: userId, us…
+       |                               ^
+    341|         const [unchanged] = await db.select().from(companyAgentPackage…
+    342|           .where(eq(companyAgentPackageInstallations.id, installed.id)…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 114 skipped (115)
+   Start at  10:29:39
+   Duration  45.72s (transform 24.12s, setup 220ms, import 34.63s, tests 10.22s, environment 1ms)
+

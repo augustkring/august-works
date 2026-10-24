@@ -1,0 +1,53 @@
+{
+  "parentCommit": "307f7b9f0",
+  "sourcePinsFile": "source-pins.json",
+  "checks": {
+    "originalIdentitySubstitution": {
+      "exit": 1,
+      "failed": 1,
+      "unselected": 114,
+      "log": "native-package-review-principal-red.log"
+    },
+    "intermediateActorOnlyStage": {
+      "exit": 0,
+      "passed": 4,
+      "unselected": 111,
+      "log": "native-package-review-principal-checked.log",
+      "limit": "Superseded: actor-only transport did not enforce the retained accountable installer required by the execution gate."
+    },
+    "missingCustodyControl": {
+      "exit": 1,
+      "failed": 1,
+      "unselected": 114,
+      "log": "native-package-review-custody-red.log"
+    },
+    "finalFocusedNativeGate": {
+      "exit": 0,
+      "passed": 4,
+      "unselected": 111,
+      "log": "native-package-review-custody-checked.log"
+    },
+    "initialCompiler": {
+      "exit": 1,
+      "log": "native-package-review-custody-types.log",
+      "limit": "The readiness owner used the narrower Express actor type. It now accepts the native AuthorizationActor directly, preserving nullable native fields without casts."
+    },
+    "finalServerCompiler": {
+      "exit": 0,
+      "log": "native-package-review-custody-types-fixed.log"
+    }
+  },
+  "observations": [
+    "An actual native installed package and a second current company administrator reached review. The original code passed a synthesized session actor with the installer UID, dropping the actual caller SID and company facts. The original boundary control reproduced this substitution.",
+    "The existing native package authority hash and installation-current SQL retain installed_by_user_id, including current membership/grants and exact readiness principal identity. Passing another caller as assessment owner alone is not sufficient to satisfy this execution contract. The intermediate transport-only check is retained as a superseded stage, not final activation qualification.",
+    "The shared review owner now rejects a different accountable Human before release/readiness inspection. Preview constructs its synthetic installation with the actual caller, and activation uses the retained original installer. There is no existing ownership transfer operation or automatic/background review caller.",
+    "For the matching accountable Human, the actual incoming AuthorizationActor is passed unchanged to readiness, including source/session facts. Local implicit identity remains local and carries no fabricated user ID.",
+    "The new regression uses actual PostgreSQL company, User, native seeded session, current membership/grants and package installation. It intercepts only the package-to-readiness call and deliberately throws before any assessment or activation. It proves identity transport and pre-review custody rejection, verifies no changed installation/assessment, and exercises real suspension and uninstall by the other authorized administrator.",
+    "Three existing native controls also pass: retained receipt through withdrawal/uninstall with current authority, absent/foreign request and requester/Agent authority, and HTTP private/no-store projection. The final type-only readiness owner change follows those four passing runtime tests."
+  ],
+  "limits": [
+    "The intercepted readiness boundary is not a real Context/source decision, successful readiness assessment, activation, provider run or authentication ceremony. No fake accountable run, granted source permission or positive readiness result is supplied. Seeded native passkey sessions provide structural domain evidence only.",
+    "Full pre-run readiness still encounters the actual-accountable-run Context contract. Historical readiness references and package runtime source-currentness require further work. No ownership-transfer capability is introduced or claimed.",
+    "111 unselected package cases are not passes. The six typed/private source/temporal regressions and all other V10 gates remain open. No full V10/PR-ready, compliance, release, merge or deployment claim is made."
+  ]
+}

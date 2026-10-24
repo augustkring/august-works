@@ -68,6 +68,7 @@ import { workflows, routines, workflowRuns, routineRuns } from "@paperclipai/db"
 import { billingAccounts, billingAccountCompanies, billingSubscriptions, companyOnboardingRuns,
   documents, documentRevisions, issueDocuments } from "@paperclipai/db";
 import { readinessService } from "../services/readiness/readiness-service.js";
+import * as readinessOwnerBoundary from "../services/readiness/readiness-service.js";
 import { foundationService } from "../services/foundation/foundation-service.js";
 import { accessService } from "../services/access.js";
 import { foundationDocuments } from "@paperclipai/db";
@@ -310,6 +311,51 @@ const support = await getEmbeddedPostgresTestSupport();
         { key: "internal-role", resourceId: roleId, versionId: roleVersionId },
       ],
       acceptInternalEvaluation: true,
+    });
+    it("refuses package activation under another installer's identity and preserves its actual owner session", async () => {
+      const installed = await service.install(f.actor, f.home, installInput());
+      const userId = `activator-${randomUUID()}`, now = new Date();
+      await db.insert(authUsers).values({ id: userId, name: "Current package reviewer", email: `${userId}@test.invalid`,
+        emailVerified: true, createdAt: now, updatedAt: now });
+      await db.insert(companyMemberships).values({ companyId: f.home, principalType: "user", principalId: userId,
+        status: "active", membershipRole: "admin" });
+      await db.insert(principalPermissionGrants).values(grantsForHumanRole("admin").map(grant => ({
+        companyId: f.home, principalType: "user", principalId: userId, ...grant,
+      })));
+      const sessionId = await seedNativePasskeySession(db, userId);
+      const actor = { type: "board" as const, source: "session" as const, userId, sessionId, companyIds: [f.home] };
+      const boundaryStop = new Error("Stop before readiness admission; no assessment or activation is qualified");
+      let observedOwner: Parameters<ReturnType<typeof readinessService>["assess"]>[2] | undefined;
+      const nativeReadiness = readinessOwnerBoundary.readinessService;
+      // Inspect the actual package-to-readiness boundary, then abort. This does
+      // not fabricate a source decision, accountable run or successful review.
+      const spy = vi.spyOn(readinessOwnerBoundary, "readinessService").mockImplementation(tx => ({
+        ...nativeReadiness(tx),
+        assess: async (_companyId, _input, owner) => { observedOwner = owner; throw boundaryStop; },
+      }));
+      try {
+        await expect(service.decide(actor, f.home, installed.id, "activate", {
+          expectedVersion: installed.version, reason: "Current Human reviews an existing installation",
+        })).rejects.toMatchObject({ status: 403, details: { code: "package_accountable_human_required" } });
+        expect(observedOwner).toBeUndefined();
+        await expect(service.decide(f.actor, f.home, installed.id, "activate", {
+          expectedVersion: installed.version, reason: "Original accountable Human reviews the installation",
+        })).rejects.toBe(boundaryStop);
+        expect(observedOwner).toEqual({ actor: f.actor, principalId: f.userId, userId: f.userId });
+        const [unchanged] = await db.select().from(companyAgentPackageInstallations)
+          .where(eq(companyAgentPackageInstallations.id, installed.id));
+        expect(unchanged).toMatchObject({ status: "configuring", version: installed.version,
+          installedByUserId: f.userId, activationHash: null, readiness: null });
+        expect(await db.select().from(readinessAssessments).where(eq(readinessAssessments.companyId, f.home))).toHaveLength(0);
+        const suspended = await service.decide(actor, f.home, installed.id, "suspend", {
+          expectedVersion: installed.version, reason: "Current administrator can stop this installation",
+        });
+        expect(suspended.status).toBe("suspended");
+        const uninstalled = await service.decide(actor, f.home, installed.id, "uninstall", {
+          expectedVersion: suspended.version, reason: "Current administrator can retire this installation",
+        });
+        expect(uninstalled.status).toBe("uninstalled");
+      } finally { spy.mockRestore(); }
     });
     async function active() {
       const installed = await service.install(f.actor, f.home, installInput());

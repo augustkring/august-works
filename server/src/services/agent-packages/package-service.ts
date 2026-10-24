@@ -264,6 +264,12 @@ export function agentPackageService(
     row: Installation,
     parentPublications: Parameters<typeof logActivity>[2],
   ) {
+    // The native activation hash and execution gate retain this accountable
+    // Human. A different administrator cannot borrow their source authority.
+    if (v7HumanActorId(actor) !== row.installedByUserId)
+      throw forbidden("Package activation requires its accountable Human", {
+        code: "package_accountable_human_required",
+      });
     const published = await release(tx, row.installedVersionId, true);
     available(published);
     const reasons: string[] = [],
@@ -486,14 +492,9 @@ export function agentPackageService(
           query: published.version.release.manifest.purpose,
         },
         {
-          actor: {
-            type: "board",
-            source:
-              actor.source === "local_implicit" ? "local_implicit" : "session",
-            userId: row.installedByUserId,
-          },
-          principalId: row.installedByUserId,
-          userId: row.installedByUserId,
+          actor,
+          principalId: v7HumanActorId(actor),
+          userId: actor.source === "local_implicit" ? null : actor.userId ?? null,
         },
         parentPublications,
         row.installedVersionId,
