@@ -833,3 +833,13 @@ idempotent return paths. Original qualification, restore, coverage, estimate and
 audit owners remain intact. Evidence:
 `doc/operations/aw-v10-evidence/native-operator-catalog-costs-2026-10-24/checkpoint.json`.
 Fleet human requests and original async/source/V10 admission work remain open.
+
+### 2026-10-24 — fleet human proof and original scheduler authority
+
+Fleet human creation/drain/fence/retire requests retain actual actors and repeat
+recent native passkey proof inside their original transactions. Exact existing
+scheduler calls remain distinct from user-ID data, with original cost ceilings
+and provider outcome reconciliation preserved. Native suites pass14; this is
+software/provider-fixture evidence, not a live host or dispatch qualification.
+Evidence: `doc/operations/aw-v10-evidence/native-operator-fleet-2026-10-24/checkpoint.json`.
+Complete operation provenance and the remaining V10/PR gates stay open.

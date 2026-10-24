@@ -549,3 +549,31 @@ Evidence:
 Fleet human request admission, explicit scheduler provenance/dispatch outcome
 qualification, the original source-owner failures and complete V10/PR gates remain
 open. This is not provider/host or product release qualification.
+
+### 2026-10-24 — fleet human admission and explicit scheduler lane
+
+Human host creation, drain, fencing and retirement now receive the actual actor
+from SaaS routes, require configured recent native passkey proof before provider
+availability/details, and repeat it at entry and before every successful return
+of the original physical write transaction. Missing/password/Board-key/non-operator
+proof cannot create host/provider-operation rows. Existing native host state,
+provider ownership, storage-erasure checks, cost and audit owners remain intact.
+
+The existing exact server-side `runtime-scheduler` argument remains a distinct
+nonhuman lane for scale, liveness fencing and approved offboarding retirement.
+An actor object's user ID never selects it; drain remains human-only. Automatic
+creation retains the actual cost/inventory and EUR/max-host/hour limits. The
+provider workers retain original durable requests, attribution, ambiguous-create
+reconciliation and fencing/storage outcome handling. No session is introduced as
+continuing authority, no provider effect is claimed from request admission, and
+complete durable admission-provenance/dispatch qualification stays open.
+
+Native fleet/cost/operator suites pass14. These use actual migrated PostgreSQL
+and structural human proof with an owned provider fixture, not a physical host
+or live provider. No migration/dependency change. Internal human callers pass
+actors; the audited scheduler callers keep their exact existing argument.
+Evidence:
+`doc/operations/aw-v10-evidence/native-operator-fleet-2026-10-24/checkpoint.json`.
+Remaining sandbox host-command admission, runtime control/operation provenance,
+operator bootstrap/recovery, source-owner failures and full V10/PR gates remain
+open.

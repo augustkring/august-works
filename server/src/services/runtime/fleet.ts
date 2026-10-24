@@ -14,6 +14,8 @@ import {
 } from "@paperclipai/db";
 import { z } from "zod";
 import type { SaasPlatformConfig } from "../../saas-platform-config.js";
+import type { AuthorizationActor } from "../authorization.js";
+import { assertConfiguredOperatorAuthentication } from "../../auth/authenticator-assurance.js";
 import { conflict, forbidden } from "../../errors.js";
 import { runtimeHostAuth } from "./host-auth.js";
 import { runtimeHostCloudInit } from "./host-bootstrap.js";
@@ -39,7 +41,17 @@ export function runtimeFleetService(
   origin: string,
   provider?: RuntimeProvider,
 ) {
+  type FleetActor = AuthorizationActor | "runtime-scheduler";
   const auth = runtimeHostAuth(db);
+  async function authenticate(reader: Db, actor: FleetActor, allowScheduler = false) {
+    if (actor === "runtime-scheduler") {
+      if (!allowScheduler) throw forbidden();
+      return actor;
+    }
+    if (typeof actor === "string") throw forbidden();
+    await assertConfiguredOperatorAuthentication(reader, actor, config.operatorUserIds, { requireRecent: true });
+    return actor.userId!;
+  }
   function available() {
     if (!provider)
       throw new RuntimeProviderError("upcloud_credentials_missing");
@@ -61,17 +73,15 @@ export function runtimeFleetService(
   }
   async function requestHost(
     profileKey: string,
-    operatorId: string,
+    actor: FleetActor,
     dedicatedCompanyId?: string,
     now = new Date(),
   ) {
+    const operatorId = await authenticate(db, actor, true);
     available();
-    if (
-      !config.operatorUserIds.includes(operatorId) &&
-      operatorId !== "runtime-scheduler"
-    )
-      throw forbidden();
     return db.transaction(async (tx) => {
+      const reader = tx as unknown as Db;
+      await authenticate(reader, actor, true);
       await tx.execute(
         sql`select pg_advisory_xact_lock(hashtextextended(${"aw-fleet:" + config.environment},0))`,
       );
@@ -106,7 +116,7 @@ export function runtimeFleetService(
         recent.length >= config.runtime.maxCreatesPerHour
       )
         throw conflict("Fleet cost ceiling reached");
-      if (operatorId === "runtime-scheduler") {
+      if (actor === "runtime-scheduler") {
         const [record] = await tx
           .select({ data: platformAdminAudit.safeDetails })
           .from(platformAdminAudit)
@@ -220,6 +230,7 @@ export function runtimeFleetService(
           dedicatedCompanyId: dedicatedCompanyId ?? null,
         },
       });
+      await authenticate(reader, actor, true);
       return host!;
     });
   }
@@ -387,16 +398,14 @@ export function runtimeFleetService(
   }
   async function requestFence(
     hostId: string,
-    operatorId: string,
+    actor: FleetActor,
     now = new Date(),
   ) {
+    const operatorId = await authenticate(db, actor, true);
     available();
-    if (
-      operatorId !== "runtime-scheduler" &&
-      !config.operatorUserIds.includes(operatorId)
-    )
-      throw forbidden();
     return db.transaction(async (tx) => {
+      const reader = tx as unknown as Db;
+      await authenticate(reader, actor, true);
       const [host] = await tx
         .select()
         .from(runtimeHosts)
@@ -434,6 +443,7 @@ export function runtimeFleetService(
           action: "runtime.host_fence_requested",
           resourceId: hostId,
         });
+      await authenticate(reader, actor, true);
       return operation ?? null;
     });
   }
@@ -533,9 +543,11 @@ export function runtimeFleetService(
       });
     }
   }
-  async function drain(hostId: string, operatorId: string, now = new Date()) {
-    if (!config.operatorUserIds.includes(operatorId)) throw forbidden();
+  async function drain(hostId: string, actor: AuthorizationActor, now = new Date()) {
+    const operatorId = await authenticate(db, actor);
     return db.transaction(async (tx) => {
+      const reader = tx as unknown as Db;
+      await authenticate(reader, actor);
       const [host] = await tx
         .select()
         .from(runtimeHosts)
@@ -551,23 +563,22 @@ export function runtimeFleetService(
         action: "runtime.host_drain_requested",
         resourceId: hostId,
       });
+      await authenticate(reader, actor);
       return { id: hostId, status: "DRAINING" };
     });
   }
   async function requestRetire(
     hostId: string,
-    operatorId: string,
+    actor: FleetActor,
     now = new Date(),
   ) {
+    const operatorId = await authenticate(db, actor, true);
     const api = available();
     if (!api.storageAbsent)
       throw conflict("Provider storage erasure verification required");
-    if (
-      operatorId !== "runtime-scheduler" &&
-      !config.operatorUserIds.includes(operatorId)
-    )
-      throw forbidden();
     return db.transaction(async (tx) => {
+      const reader = tx as unknown as Db;
+      await authenticate(reader, actor, true);
       const [host] = await tx
         .select()
         .from(runtimeHosts)
@@ -612,6 +623,7 @@ export function runtimeFleetService(
           action: "runtime.host_retire_requested",
           resourceId: hostId,
         });
+      await authenticate(reader, actor, true);
       return operation ?? null;
     });
   }

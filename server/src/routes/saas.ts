@@ -831,7 +831,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
         publicJson(
           await platform.fleet.requestHost(
             input.profileKey,
-            actor.id,
+            req.actor,
             input.companyId,
           ),
         ),
@@ -841,7 +841,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
     const actor = await user(req);
     platform.support.operator(actor.id);
     await gate("runtime_host_agent_v6");
-    res.json(await platform.fleet.drain(String(req.params.hostId), actor.id));
+    res.json(await platform.fleet.drain(String(req.params.hostId), req.actor));
   });
   router.post("/saas/internal/fleet/hosts/:hostId/fence", async (req, res) => {
     const actor = await user(req);
@@ -850,7 +850,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
     res
       .status(202)
       .json(
-        await platform.fleet.requestFence(String(req.params.hostId), actor.id),
+        await platform.fleet.requestFence(String(req.params.hostId), req.actor),
       );
   });
   router.post("/saas/internal/fleet/hosts/:hostId/retire", async (req, res) => {
@@ -860,7 +860,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
     res
       .status(202)
       .json(
-        await platform.fleet.requestRetire(String(req.params.hostId), actor.id),
+        await platform.fleet.requestRetire(String(req.params.hostId), req.actor),
       );
   });
   router.get("/saas/account/sessions", async (req, res) => {
