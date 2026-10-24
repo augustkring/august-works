@@ -108,6 +108,48 @@ describeEmbeddedPostgres("issueThreadInteractionService", () => {
     return { companyId, goalId, issueId };
   }
 
+  it("rejects a Board creator mismatch before creating a child task", async () => {
+    const { companyId, issueId } = await seedConfirmationIssue();
+    await expect(issuesSvc.createChild(issueId, {
+      title: "Forged creator child",
+      createdByUserId: "different-user",
+    }, {
+      privacyActor: { type: "board", source: "session", userId: "current-user" },
+    })).rejects.toThrow("Task creator does not match the current native actor");
+
+    const tasks = await db.select({ id: issues.id, companyId: issues.companyId }).from(issues);
+    expect(tasks).toEqual([{ id: issueId, companyId }]);
+  });
+
+  it.each(["company", "run", "creator"] as const)(
+    "rejects an Agent %s mismatch before creating a child task",
+    async (mismatch) => {
+      const { companyId, issueId } = await seedConfirmationIssue();
+      const agentId = randomUUID();
+      const runId = randomUUID();
+      const actorCompanyId = mismatch === "company" ? randomUUID() : companyId;
+      const actorRunId = mismatch === "run" ? randomUUID() : runId;
+      const creatorAgentId = mismatch === "creator" ? randomUUID() : agentId;
+
+      await expect(issuesSvc.createChild(issueId, {
+        title: `Mismatched ${mismatch} child`,
+        createdByAgentId: creatorAgentId,
+        actorRunId: runId,
+      }, {
+        privacyActor: {
+          type: "agent",
+          source: "agent_jwt",
+          agentId,
+          companyId: actorCompanyId,
+          runId: actorRunId,
+        },
+      })).rejects.toThrow("Task creator does not match the current native actor");
+
+      const tasks = await db.select({ id: issues.id, companyId: issues.companyId }).from(issues);
+      expect(tasks).toEqual([{ id: issueId, companyId }]);
+    },
+  );
+
   function createProjectApp() {
     const app = express();
     app.use(express.json());

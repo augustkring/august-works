@@ -10146,19 +10146,16 @@ export function issueService(db: Db) {
         let manualExpiresAt: number | null = null;
         let manualOperator = false;
         let privacyActorExpiresAt: number | null = null;
+        let privacyActorPinned = false;
         let currentPrivacyActor = suppliedPrivacyActor;
         const finishManualInput = async <T>(result: T) => {
           if (captureManualInput && manualActor && manualExpiresAt !== null) {
             if (manualOperator) await assertHumanAuthentication(tx, manualActor, { requireRecent: true, phishingResistant: true });
             await assertManualInputCredentialCurrent(tx, manualActor, manualExpiresAt);
           }
-          if (privacyActorExpiresAt !== null) {
-            const humanId = currentPrivacyActor?.type === "board" ? currentPrivacyActor.userId : null;
-            const [credential] = await tx.execute(sql`select
-              (${privacyActorExpiresAt}::double precision>extract(epoch from clock_timestamp())*1000)
-              and not exists(select 1 from account_deletion_operations where user_id=${humanId ?? null}) as active`);
-            if (!credential?.active) throw forbidden("The authenticated task creator credential is unavailable");
-          }
+          if (privacyActorPinned && currentPrivacyActor)
+            await assertManualInputCredentialCurrent(tx, currentPrivacyActor, privacyActorExpiresAt,
+              "The authenticated task creator credential is unavailable");
           return result;
         };
         if (captureManualInput && manualActor) {
@@ -10180,6 +10177,7 @@ export function issueService(db: Db) {
             throw forbidden("The authenticated task creator credential is unavailable");
           currentPrivacyActor = pinned.actor;
           privacyActorExpiresAt = pinned.credentialExpiresAt;
+          privacyActorPinned = true;
           try {
             await pinIssueMutationHuman(tx, currentPrivacyActor, companyId, true);
           } catch (error) {
