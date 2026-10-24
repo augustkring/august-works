@@ -1,0 +1,42 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "cd26aaa07dbd343079650ddcfe9f7566316fea1c",
+  "meaning": "Remaining adapter/plugin/CLI projects, excluding compiled dist copies with the repository source-only filter:3187PASS/1FAIL/12SKIP,209files. CLI company import/export is a real unresolved failure. The initial accidental dist-inclusive attempt was interrupted and preserved separately. The source-only run started before concurrent bounded Help/import edits; these are scoped individual results, not an exact-current full-workspace or V10 pass. Pre-existing skipped tests remain unqualified.",
+  "logs": [
+    {
+      "name": "remaining-workspace-projects",
+      "exitCode": 130,
+      "rawSha256": "14883ddc94e2e549b71c64857d0d566bc7acfcae38062e4a7073eb36034678c3",
+      "sanitizedSha256": "14883ddc94e2e549b71c64857d0d566bc7acfcae38062e4a7073eb36034678c3",
+      "archiveSha256": "835856406a3fcd7624c08aee24b768847e4c60e31dd40aed78e0bb33985884be",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "remaining-workspace-source-projects",
+      "exitCode": 1,
+      "rawSha256": "7a267be1ec05aca08de34f8423e96dbeacddaa93724eb1ef1b6927ea8d749e2d",
+      "sanitizedSha256": "9a3debd16100f65ccb3c4e79315812e09c7ce0e90cef516e17f88bd621c383c5",
+      "archiveSha256": "7f615bb55894619d720901e8511180597e865a3bc068736538d9d8a48ccb064f",
+      "redactions": {
+        "ansi": 1077,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed | 206 passed | 2 skipped (209)",
+        "Tests  1 failed | 3187 passed | 12 skipped (3200)",
+        "Duration  733.60s (transform 19.77s, setup 0ms, import 120.16s, tests 588.20s, environment 17ms)"
+      ]
+    }
+  ]
+}
