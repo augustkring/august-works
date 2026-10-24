@@ -608,7 +608,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
       .status(201)
       .json(
         await platform.catalog.candidate(
-          actor.id,
+          req.actor,
           runtimeVersionCandidateSchema.parse(req.body),
         ),
       );
@@ -619,7 +619,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
     await gate("admin_support_v6");
     res.json(
       await platform.catalog.transition(
-        actor.id,
+        req.actor,
         runtimeVersionTransitionSchema.parse(req.body),
       ),
     );
@@ -633,7 +633,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
       .json(
         publicJson(
           await platform.catalog.qualifyCapacity(
-            actor.id,
+            req.actor,
             runtimeCapacityQualificationSchema.parse(req.body),
           ),
         ),
@@ -769,7 +769,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
     platform.support.operator(actor.id);
     await gate("admin_support_v6");
     await gate("billing_usage_v6");
-    res.status(201).json(await platform.costs.record(actor.id, req.body));
+    res.status(201).json(await platform.costs.record(req.actor, req.body));
   });
   router.get("/saas/internal/fleet", async (req, res) => {
     const actor = await user(req);

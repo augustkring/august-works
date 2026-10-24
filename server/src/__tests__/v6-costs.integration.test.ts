@@ -1,7 +1,12 @@
+import { eq } from "drizzle-orm";
+import type { AuthorizationActor } from "../services/authorization.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import {
   authUsers,
+  authAccounts,
+  authSessions,
   billingSubscriptions,
   createDb,
   runtimeCapacityProfiles,
@@ -42,6 +47,7 @@ const support = await getEmbeddedPostgresTestSupport();
       db: ReturnType<typeof createDb>,
       hostId: string,
       accountId: string;
+    let operatorActor: AuthorizationActor;
     const now = new Date(),
       config = {
         environment: "staging",
@@ -66,6 +72,11 @@ const support = await getEmbeddedPostgresTestSupport();
         createdAt: now,
         updatedAt: now,
       });
+      await db.insert(authUsers).values({ id: "operator", name: "Operator", email: "operator@example.test",
+        emailVerified: true, createdAt: now, updatedAt: now });
+      // Structural native proof for cost-domain tests, not a WebAuthn ceremony.
+      operatorActor = { type: "board", source: "session", userId: "operator",
+        sessionId: await seedNativePasskeySession(db, "operator") };
       const onboarding = saasOnboardingService(db),
         first = await onboarding.create("cost-owner", {
           name: "Cost A",
@@ -156,18 +167,18 @@ const support = await getEmbeddedPostgresTestSupport();
       const service = saasCostService(db, config);
       expect(await service.latest()).toBeNull();
       await expect(
-        service.record("ordinary", report(), now),
+        service.record({ type: "board", source: "session", userId: "ordinary" }, report(), now),
       ).rejects.toMatchObject({ status: 403 });
       await expect(
-        service.record("operator", { ...report(), hosts: [] }, now),
+        service.record(operatorActor, { ...report(), hosts: [] }, now),
       ).rejects.toMatchObject({ status: 409 });
       await expect(
-        service.record("operator", { ...report(), accountRevenue: [] }, now),
+        service.record(operatorActor, { ...report(), accountRevenue: [] }, now),
       ).rejects.toMatchObject({ status: 409 });
       const input = report(),
         results = await Promise.all([
-          service.record("operator", input, now),
-          service.record("operator", input, now),
+          service.record(operatorActor, input, now),
+          service.record(operatorActor, input, now),
         ]);
       expect(results[0]).toEqual(results[1]);
       expect(results[0]).toMatchObject({
@@ -184,11 +195,30 @@ const support = await getEmbeddedPostgresTestSupport();
       ).toEqual(["2500", "2500"]);
       await expect(
         service.record(
-          "operator",
+          operatorActor,
           { ...input, platformMonthlyMinor: "6000" },
           now,
         ),
       ).rejects.toMatchObject({ status: 409 });
+    });
+    it("refuses cost publication without current recent passkey proof, including a password session", async () => {
+      const service = saasCostService(db, config), input = report();
+      const before = await db.select().from(platformAdminAudit);
+      await expect(service.record({ ...operatorActor, sessionId: undefined }, input, now)).rejects.toMatchObject({ status: 403 });
+      await db.update(authSessions).set({ authenticatedAt: new Date(Date.now() - 301000) })
+        .where(eq(authSessions.id, operatorActor.sessionId!));
+      await expect(service.record(operatorActor, input, now)).rejects.toMatchObject({ status: 403 });
+      const createdAt = new Date();
+      await db.insert(authAccounts).values({ id: randomUUID(), userId: "operator", issuer: "local:credential",
+        accountId: "operator", providerId: "credential", password: "structural-fixture-not-a-password-hash",
+        createdAt, updatedAt: createdAt });
+      const [user] = await db.select({ version: authUsers.authenticatorVersion }).from(authUsers).where(eq(authUsers.id, "operator"));
+      const sessionId = randomUUID();
+      await db.insert(authSessions).values({ id: sessionId, userId: "operator", token: randomUUID(), createdAt,
+        updatedAt: createdAt, expiresAt: new Date(createdAt.getTime() + 3600000), authenticationMethod: "password",
+        authenticatedAt: createdAt, authenticatorVersion: user!.version });
+      await expect(service.record({ ...operatorActor, sessionId }, input, now)).rejects.toMatchObject({ status: 403 });
+      expect(await db.select().from(platformAdminAudit)).toEqual(before);
     });
     it("serializes automatic creation against a fresh cost envelope and closes admission without an explicit EUR ceiling", async () => {
       const provider = {

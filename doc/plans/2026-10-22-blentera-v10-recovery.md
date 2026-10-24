@@ -824,3 +824,12 @@ flows. Evidence:
 `doc/operations/aw-v10-evidence/native-operator-http-2026-10-24/checkpoint.json`.
 Catalog/fleet/cost effect transactions, async dispatch/reconciliation, original
 source failures and complete V10/PR admission remain open.
+
+### 2026-10-24 — catalog and cost-report native operator transactions
+
+Runtime catalog/capacity/status and cost reports now retain the actual actor and
+repeat native recent-passkey proof in their original write transactions, including
+idempotent return paths. Original qualification, restore, coverage, estimate and
+audit owners remain intact. Evidence:
+`doc/operations/aw-v10-evidence/native-operator-catalog-costs-2026-10-24/checkpoint.json`.
+Fleet human requests and original async/source/V10 admission work remain open.

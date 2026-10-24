@@ -16,6 +16,8 @@ import {
   runtimeVersionTransitionSchema,
 } from "@paperclipai/shared";
 import type { SaasPlatformConfig } from "../../saas-platform-config.js";
+import type { AuthorizationActor } from "../authorization.js";
+import { assertConfiguredOperatorAuthentication } from "../../auth/authenticator-assurance.js";
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 
 export function hostVersionMeetsMinimum(
@@ -53,15 +55,22 @@ export function assertRuntimeQualificationEvidenceCurrent(
 }
 
 export function runtimeCatalogService(db: Db, config: SaasPlatformConfig) {
-  function operator(id: string) {
-    if (!config.operatorUserIds.includes(id))
+  function operator(actor: AuthorizationActor) {
+    if (actor.type !== "board" || !actor.userId || !config.operatorUserIds.includes(actor.userId))
       throw forbidden("Internal operator access required");
+    return actor.userId;
   }
-  async function candidate(userId: string, raw: unknown, now = new Date()) {
-    operator(userId);
+  async function authenticate(reader: Db, actor: AuthorizationActor) {
+    await assertConfiguredOperatorAuthentication(reader, actor, config.operatorUserIds, { requireRecent: true });
+  }
+  async function candidate(actor: AuthorizationActor, raw: unknown, now = new Date()) {
+    const userId = operator(actor);
+    await authenticate(db, actor);
     const input = runtimeVersionCandidateSchema.parse(raw);
     assertRuntimeQualificationEvidenceCurrent(config, input.conformance, now);
     return db.transaction(async (tx) => {
+      const reader = tx as unknown as Db;
+      await authenticate(reader, actor);
       await tx.execute(
         sql`select pg_advisory_xact_lock(hashtextextended(${input.imageDigest},0))`,
       );
@@ -84,8 +93,10 @@ export function runtimeCatalogService(db: Db, config: SaasPlatformConfig) {
             input.conformance.reportSha256 &&
           existing.conformance.qualificationSourceSha ===
             input.conformance.qualificationSourceSha
-        )
+        ) {
+          await authenticate(reader, actor);
           return existing;
+        }
         if (!["candidate", "halted"].includes(existing.status))
           throw conflict(
             "Halt admission before recording new qualification evidence",
@@ -107,6 +118,7 @@ export function runtimeCatalogService(db: Db, config: SaasPlatformConfig) {
               sourceSha: input.conformance.qualificationSourceSha,
             },
           });
+        await authenticate(reader, actor);
         return updated!;
       }
       const [version] = await tx
@@ -124,15 +136,17 @@ export function runtimeCatalogService(db: Db, config: SaasPlatformConfig) {
             sourceSha: input.conformance.qualificationSourceSha,
           },
         });
+      await authenticate(reader, actor);
       return version!;
     });
   }
   async function qualifyCapacity(
-    userId: string,
+    actor: AuthorizationActor,
     raw: unknown,
     now = new Date(),
   ) {
-    operator(userId);
+    const userId = operator(actor);
+    await authenticate(db, actor);
     const input = runtimeCapacityQualificationSchema.parse(raw);
     assertRuntimeQualificationEvidenceCurrent(config, input.benchmarkEvidence, now);
     const benchmark = input.benchmarkEvidence;
@@ -147,6 +161,8 @@ export function runtimeCatalogService(db: Db, config: SaasPlatformConfig) {
         "Capacity does not fit the qualified host and operating reserve",
       );
     return db.transaction(async (tx) => {
+      const reader = tx as unknown as Db;
+      await authenticate(reader, actor);
       await tx.execute(
         sql`select pg_advisory_xact_lock(hashtextextended(${"aw-profile:" + input.key},0))`,
       );
@@ -167,7 +183,10 @@ export function runtimeCatalogService(db: Db, config: SaasPlatformConfig) {
           throw conflict(
             "Use a new capacity key for a changed resource contract or benchmark",
           );
-        if (existing.qualified) return existing;
+        if (existing.qualified) {
+          await authenticate(reader, actor);
+          return existing;
+        }
       }
       const values = {
         ...input,
@@ -194,13 +213,17 @@ export function runtimeCatalogService(db: Db, config: SaasPlatformConfig) {
             commercialProductKey: input.commercialProductKey,
           },
         });
+      await authenticate(reader, actor);
       return profile!;
     });
   }
-  async function transition(userId: string, raw: unknown, now = new Date()) {
-    operator(userId);
+  async function transition(actor: AuthorizationActor, raw: unknown, now = new Date()) {
+    const userId = operator(actor);
+    await authenticate(db, actor);
     const input = runtimeVersionTransitionSchema.parse(raw);
     return db.transaction(async (tx) => {
+      const reader = tx as unknown as Db;
+      await authenticate(reader, actor);
       const [version] = await tx
         .select()
         .from(runtimeVersionCatalog)
@@ -393,6 +416,7 @@ export function runtimeCatalogService(db: Db, config: SaasPlatformConfig) {
           resourceId: version.imageDigest,
           safeDetails: { from: version.status, reason: input.reason },
         });
+      await authenticate(reader, actor);
       return updated!;
     });
   }

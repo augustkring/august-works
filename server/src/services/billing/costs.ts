@@ -12,8 +12,10 @@ import {
   saasCostReportSchema,
   type SaasCostSnapshot,
 } from "@paperclipai/shared";
-import { conflict, forbidden } from "../../errors.js";
+import { conflict } from "../../errors.js";
 import type { SaasPlatformConfig } from "../../saas-platform-config.js";
+import type { AuthorizationActor } from "../authorization.js";
+import { assertConfiguredOperatorAuthentication } from "../../auth/authenticator-assurance.js";
 import { sha256 } from "../saas/crypto.js";
 
 /** Current CPU reservation allocation, explicitly an estimate rather than an invoice ledger. */
@@ -62,8 +64,9 @@ export function saasCostService(db: Db, config: SaasPlatformConfig) {
       (row?.data?.snapshot as unknown as SaasCostSnapshot | undefined) ?? null
     );
   }
-  async function record(operator: string, raw: unknown, now = new Date()) {
-    if (!config.operatorUserIds.includes(operator)) throw forbidden();
+  async function record(actor: AuthorizationActor, raw: unknown, now = new Date()) {
+    await assertConfiguredOperatorAuthentication(db, actor, config.operatorUserIds);
+    const operator = actor.userId!;
     const input = saasCostReportSchema.parse(raw),
       url = new URL(input.reportUri);
     if (
@@ -89,6 +92,7 @@ export function saasCostService(db: Db, config: SaasPlatformConfig) {
       );
     const payloadHash = sha256(JSON.stringify(input));
     return db.transaction(async (tx) => {
+      await assertConfiguredOperatorAuthentication(tx, actor, config.operatorUserIds);
       await tx.execute(
         sql`select pg_advisory_xact_lock(hashtextextended(${"aw-cost-report:" + input.idempotencyKey},0))`,
       );
@@ -105,6 +109,7 @@ export function saasCostService(db: Db, config: SaasPlatformConfig) {
       if (receipt) {
         if (receipt.safeDetails?.payloadHash !== payloadHash)
           throw conflict("Cost report retry differs from its original input");
+        await assertConfiguredOperatorAuthentication(tx, actor, config.operatorUserIds);
         return receipt.safeDetails!.snapshot as unknown as SaasCostSnapshot;
       }
       const hosts = input.hosts.length
@@ -278,6 +283,7 @@ export function saasCostService(db: Db, config: SaasPlatformConfig) {
           safeDetails: { snapshot },
         },
       ]);
+      await assertConfiguredOperatorAuthentication(tx, actor, config.operatorUserIds);
       return snapshot;
     });
   }

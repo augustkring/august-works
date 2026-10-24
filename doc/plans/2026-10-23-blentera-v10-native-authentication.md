@@ -523,3 +523,29 @@ No migration/dependency change. Mutation middleware is preflight only: catalog,
 fleet/control and cost request effect transactions still need their actual actor,
 and later provider effects need original durable-operation authority and outcome
 reconciliation. Remaining V10 and full workspace/PR gates stay open.
+
+### 2026-10-24 — runtime catalog and cost-report effect transactions
+
+Runtime version candidate/requalification, capacity qualification, version
+transition and cost-report publication now retain the actual AuthorizationActor
+from the SaaS routes. Their original configured-role and qualification/resource
+contracts remain, with actual recent native passkey proof checked at preflight,
+inside the original physical transaction and before every successful return,
+including unchanged/idempotent receipts. Lock waits and calculation cannot carry
+an expired proof into a committed publication. Existing canary, backup, restore,
+source revision, coverage, cost-allocation, immutable-input and audit rules remain
+unchanged. The scheduler's existing host-spend admission keeps its own explicit
+lane and ceilings; the catalog and cost publisher do not manufacture a human
+session for it.
+
+Native fixtures use current structural passkey sessions and genuine credential-
+backed password-proof rows for refusal controls. Missing, stale and password-only
+proof cannot publish new catalog/cost state; ordinary actors remain unauthorized.
+Business qualification dates in existing domain fixtures are separate from native
+MFA's actual database clock. There is no new migration or dependency; internal
+publisher callers pass an actor instead of a bare user ID.
+Evidence:
+`doc/operations/aw-v10-evidence/native-operator-catalog-costs-2026-10-24/checkpoint.json`.
+Fleet human request admission, explicit scheduler provenance/dispatch outcome
+qualification, the original source-owner failures and complete V10/PR gates remain
+open. This is not provider/host or product release qualification.
