@@ -128,11 +128,21 @@ export function companyImportJobService(db: Db) {
         if (!decision.allowed) throw forbidden("Current company access is required");
         const requester = input.requestedByUserId === null
           ? isNull(customerOperations.requestedByUserId) : eq(customerOperations.requestedByUserId, input.requestedByUserId);
+        // New-company jobs are discoverable from an authorized company history
+        // only while the original requester has no confirmed target yet. Their
+        // original key, Human and explicit new_company scope must all match;
+        // an unbound existing-company request is never adopted as this receipt.
+        const unboundNewCompany = input.requestedByUserId === null ? undefined : and(
+          isNull(customerOperations.companyId), isNull(customerOperations.resultRef),
+          eq(customerOperations.scopeKey, "new_company"),
+          eq(customerOperations.requestedByUserId, input.requestedByUserId),
+          inArray(customerOperations.status, ["running", "needs_reconciliation"]),
+        );
         const rows = await tx.select({ job: customerOperations,
           cursorCreatedAt: sql<string>`to_char(${customerOperations.createdAt} at time zone 'UTC', 'YYYY-MM-DD"T"HH24:MI:SS.US"Z"')`,
         }).from(customerOperations).where(and(
           eq(customerOperations.requesterKeyHash, hash(input.actorKey)), eq(customerOperations.operationType, "company_import"),
-          eq(customerOperations.companyId, input.companyId), requester,
+          or(and(eq(customerOperations.companyId, input.companyId), requester), unboundNewCompany),
           input.before ? or(sql`${customerOperations.createdAt} < ${input.before.createdAt}::timestamptz`, and(
             sql`${customerOperations.createdAt} = ${input.before.createdAt}::timestamptz`, lt(customerOperations.id, input.before.id))) : undefined,
         )).orderBy(desc(customerOperations.createdAt), desc(customerOperations.id)).limit(limit + 1);
