@@ -9555,7 +9555,11 @@ export function issueService(db: Db) {
       };
     },
 
-    createChild: async (parentIssueId: string, data: IssueChildCreateInput) => {
+    createChild: async (
+      parentIssueId: string,
+      data: IssueChildCreateInput,
+      options: { privacyActor?: AuthorizationActor } = {},
+    ) => {
       const parent = await db
         .select()
         .from(issues)
@@ -9671,7 +9675,7 @@ export function issueService(db: Db) {
         ...(inheritStrategyOnly
           ? { skipExecutionWorkspaceInheritance: true }
           : { inheritExecutionWorkspaceFromIssueId: parent.id }),
-      });
+      }, db, undefined, { privacyActor: options.privacyActor });
 
       if (blockParentUntilDone) {
         const existingBlockers = await db
@@ -10071,16 +10075,26 @@ export function issueService(db: Db) {
       data: IssueCreateInput,
       dbOrTx: Db | DbTransaction = db,
       postCommitActivityPublications?: ActivityPublication[],
-      options: { manualInputActor?: AuthorizationActor } = {},
+      options: { manualInputActor?: AuthorizationActor; privacyActor?: AuthorizationActor } = {},
     ) => {
       const ownedPrivacyPublications: ActivityPublication[] = [];
       const privacyPublications = postCommitActivityPublications ?? ownedPrivacyPublications;
       // This carrier is supplied by the original HTTP owner, never the DTO.
       const manualActor = options.manualInputActor ? { ...options.manualInputActor } : null;
+      const suppliedPrivacyActor = options.privacyActor ? { ...options.privacyActor } : null;
       if (manualActor && (manualActor.type !== "board" || manualActor.source !== "session" ||
           !manualActor.userId || !manualActor.sessionId || manualActor.runId ||
           data.createdByUserId !== manualActor.userId || data.createdByAgentId))
         throw forbidden("A current native manual input actor is required");
+      if (suppliedPrivacyActor && (
+        suppliedPrivacyActor.type === "none" ||
+        (suppliedPrivacyActor.type === "board" && suppliedPrivacyActor.source === "local_implicit" && data.createdByAgentId) ||
+        (suppliedPrivacyActor.type === "board" && suppliedPrivacyActor.source !== "local_implicit" &&
+          (!suppliedPrivacyActor.userId || suppliedPrivacyActor.userId !== data.createdByUserId || data.createdByAgentId)) ||
+        (suppliedPrivacyActor.type === "agent" &&
+          (suppliedPrivacyActor.agentId !== data.createdByAgentId || suppliedPrivacyActor.companyId !== companyId ||
+            data.createdByUserId != null || (suppliedPrivacyActor.runId ?? null) !== (data.actorRunId ?? null)))
+      )) throw forbidden("Task creator does not match the current native actor");
       const captureManualInput = !!manualActor && isManualRootPayloadInput(data) &&
         (!data.responsibleUserId || data.responsibleUserId === manualActor.userId) &&
         (!data.actorResponsibleUserId || data.actorResponsibleUserId === manualActor.userId);
@@ -10131,10 +10145,19 @@ export function issueService(db: Db) {
       const persist = async (tx: DbTransaction) => {
         let manualExpiresAt: number | null = null;
         let manualOperator = false;
+        let privacyActorExpiresAt: number | null = null;
+        let currentPrivacyActor = suppliedPrivacyActor;
         const finishManualInput = async <T>(result: T) => {
           if (captureManualInput && manualActor && manualExpiresAt !== null) {
             if (manualOperator) await assertHumanAuthentication(tx, manualActor, { requireRecent: true, phishingResistant: true });
             await assertManualInputCredentialCurrent(tx, manualActor, manualExpiresAt);
+          }
+          if (privacyActorExpiresAt !== null) {
+            const humanId = currentPrivacyActor?.type === "board" ? currentPrivacyActor.userId : null;
+            const [credential] = await tx.execute(sql`select
+              (${privacyActorExpiresAt}::double precision>extract(epoch from clock_timestamp())*1000)
+              and not exists(select 1 from account_deletion_operations where user_id=${humanId ?? null}) as active`);
+            if (!credential?.active) throw forbidden("The authenticated task creator credential is unavailable");
           }
           return result;
         };
@@ -10146,6 +10169,24 @@ export function issueService(db: Db) {
           manualOperator = await pinIssueMutationHuman(tx, manualActor, companyId, true) === "instance_admin";
           if (manualOperator) await assertHumanAuthentication(tx, manualActor, { requireRecent: true, phishingResistant: true });
           await assertManualInputCredentialCurrent(tx, manualActor, manualExpiresAt);
+        }
+        if (currentPrivacyActor?.type === "board" && currentPrivacyActor.source !== "local_implicit") {
+          const pinned = await pinCurrentBoardActor(tx, currentPrivacyActor).catch(error => {
+            if (isAuthenticationStateBusy(error))
+              throw conflict("Authentication state is changing; try again", { code: "authentication_state_busy" });
+            throw error;
+          });
+          if (!pinned || (pinned.credentialExpiresAt !== null && !Number.isFinite(pinned.credentialExpiresAt)))
+            throw forbidden("The authenticated task creator credential is unavailable");
+          currentPrivacyActor = pinned.actor;
+          privacyActorExpiresAt = pinned.credentialExpiresAt;
+          try {
+            await pinIssueMutationHuman(tx, currentPrivacyActor, companyId, true);
+          } catch (error) {
+            if (isAuthenticationStateBusy(error))
+              throw conflict("Authentication state is changing; try again", { code: "authentication_state_busy" });
+            throw error;
+          }
         }
         await lockIssuePrivacyTree(tx, companyId);
         await assertExecutionTaskParent(tx as unknown as Db, companyId, issueData.parentId);
@@ -10516,10 +10557,10 @@ export function issueService(db: Db) {
           workspaceInheritanceIssueId ? [workspaceInheritanceIssueId] : []);
         if (privateWorkAdmission === "closed" && privacy.visibility === "private") throw unprocessable("Private tasks are not available");
         if (privacy.visibility === "private" && !responsibleUserId) throw unprocessable("Private tasks require a responsible user");
-        const creatorActor: AuthorizationActor = issueData.createdByAgentId
+        const creatorActor: AuthorizationActor = currentPrivacyActor ?? (issueData.createdByAgentId
           ? { type: "agent", agentId: issueData.createdByAgentId, companyId, runId: actorRunId ?? undefined,
               onBehalfOfUserId: responsibleUserId ?? undefined }
-          : issueData.createdByUserId ? { type: "board", userId: issueData.createdByUserId, source: "session" } : { type: "none" };
+          : issueData.createdByUserId ? { type: "board", userId: issueData.createdByUserId, source: "session" } : { type: "none" });
         await assertIssuePrivacySourcesReadable(tx, creatorActor, companyId, privacy.sources);
         if (privacy.visibility === "private") await pinIssueMutationHuman(tx, creatorActor, companyId);
         const values = {
