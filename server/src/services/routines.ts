@@ -12,6 +12,7 @@ import { and, asc, desc, eq, gt, inArray, isNotNull, isNull, lte, ne, not, or, s
 import type { Db } from "@paperclipai/db";
 import {
   agents,
+  agentWakeupRequests,
   activityLog,
   companies,
   companyMemberships,
@@ -1739,6 +1740,17 @@ export function routineService(
     const fingerprintCondition = routineExecutionFingerprintCondition(dispatchFingerprint);
     const originKind = origin?.kind ?? "routine_execution";
     const originId = origin?.id ?? routine.id;
+    const pendingIntent = await executor.select({ issue: issues })
+      .from(routineRuns)
+      .innerJoin(issues, and(eq(issues.companyId, routineRuns.companyId), eq(issues.id, routineRuns.linkedIssueId), eq(issues.originRunId, routineRuns.id)))
+      .innerJoin(routineRevisions, and(eq(routineRevisions.id, routineRuns.routineRevisionId), eq(routineRevisions.companyId, routineRuns.companyId), eq(routineRevisions.routineId, routineRuns.routineId)))
+      .where(and(
+        eq(routineRuns.companyId, routine.companyId), eq(routineRuns.routineId, routine.id),
+        eq(routineRuns.status, "received"), eq(issues.originKind, originKind), eq(issues.originId, originId),
+        inArray(issues.status, OPEN_ISSUE_STATUSES),
+        ...(fingerprintCondition ? [fingerprintCondition] : []),
+      )).orderBy(desc(routineRuns.createdAt)).limit(1).then((rows) => rows[0]?.issue ?? null);
+    if (pendingIntent) return pendingIntent;
     const executionBoundIssue = await executor
       .select()
       .from(issues)
@@ -1966,6 +1978,79 @@ export function routineService(
       );
   }
 
+  // The linked received RoutineRun is the durable assignment intent. Keep the
+  // advisory lock across the original queue owner, without holding Task rows.
+  async function finishRoutineIssueIntent(companyId: string, runId: string) {
+    return db.transaction(async rawTx => {
+      const tx = rawTx as unknown as Db;
+      const [lock] = await tx.execute<{ acquired: boolean }>(sql`select pg_try_advisory_xact_lock(
+        hashtextextended(${`routine-assignment:${companyId}:${runId}`}, 0)) as acquired`);
+      const [intent] = await tx.select().from(routineRuns).where(and(
+        eq(routineRuns.companyId, companyId), eq(routineRuns.id, runId),
+      )).limit(1);
+      if (!lock?.acquired || !intent || intent.status !== "received" || !intent.linkedIssueId) return intent ?? null;
+      const [task] = await tx.select({ id: issues.id, status: issues.status, assigneeAgentId: issues.assigneeAgentId,
+        originRunId: issues.originRunId, completedAt: issues.completedAt }).from(issues).where(and(
+        eq(issues.companyId, companyId), eq(issues.id, intent.linkedIssueId),
+      )).limit(1);
+      if (!task || task.originRunId?.toLowerCase() !== intent.id.toLowerCase())
+        throw conflict("Routine assignment no longer matches its retained Task");
+      const idempotencyKey = `routine-assignment:${intent.id}`;
+      const [receipt] = await tx.select({ source: agentWakeupRequests.source, agentId: agentWakeupRequests.agentId,
+        payload: agentWakeupRequests.payload }).from(agentWakeupRequests).where(and(
+        eq(agentWakeupRequests.companyId, companyId), eq(agentWakeupRequests.idempotencyKey, idempotencyKey),
+      )).limit(1);
+      if (receipt) {
+        const [agent] = await tx.select({ id: agents.id }).from(agents).where(and(
+          eq(agents.companyId, companyId), eq(agents.id, receipt.agentId),
+        )).limit(1);
+        if (!agent || receipt.source !== "assignment" || receipt.payload?.issueId !== task.id)
+          throw conflict("Routine assignment receipt does not match its retained Task");
+      }
+      let withdrawn = false;
+      const stopped = task.status === "done" || task.status === "cancelled" || task.status === "blocked";
+      if (!receipt && !stopped && task.status !== "backlog" && task.assigneeAgentId) {
+        const [routine] = await tx.select({ id: routines.id, companyId: routines.companyId, status: routines.status,
+          originKind: routines.originKind, originId: routines.originId, createdByAgentId: routines.createdByAgentId,
+          responsibleUserId: routines.responsibleUserId }).from(routines).where(and(
+          eq(routines.companyId, companyId), eq(routines.id, intent.routineId),
+        )).limit(1);
+        if (!routine) throw conflict("Routine assignment source is unavailable");
+        if (intent.source === "schedule" || intent.source === "webhook") {
+          const [trigger] = intent.triggerId ? await tx.select({ enabled: routineTriggers.enabled,
+            archived: routineTriggers.archived, setupPending: routineTriggers.setupPending }).from(routineTriggers).where(and(
+            eq(routineTriggers.companyId, companyId), eq(routineTriggers.id, intent.triggerId),
+            eq(routineTriggers.routineId, intent.routineId),
+          )).limit(1) : [];
+          withdrawn = routine.status !== "active" || !trigger || !trigger.enabled || trigger.archived || trigger.setupPending;
+        }
+        if (!withdrawn) {
+          await assertRoutineSourceAccess(tx, routine, deps.sourceActor);
+          await queueIssueAssignmentWakeup({ heartbeat, issue: task, reason: "issue_assigned", mutation: "create",
+            contextSource: "routine.dispatch", requestedByActorType: intent.source === "schedule" ? "system" : undefined,
+            idempotencyKey, rethrowOnError: true });
+        }
+      }
+      const failure = task.status === "cancelled" || task.status === "blocked";
+      const status = task.status === "done" ? "completed" : failure ? "failed" : "issue_created";
+      const reason = task.status === "cancelled" || task.status === "blocked"
+        ? executionIssueTransientFailureReason(task.status) : withdrawn ? "assignment_withdrawn" : null;
+      const [updated] = await tx.update(routineRuns).set({ status, failureReason: reason,
+        completedAt: stopped ? task.completedAt ?? new Date() : null, updatedAt: new Date(),
+        ...(failure ? { triggerPayload: { ...(intent.triggerPayload ?? {}), transientFailure: {
+          code: EXECUTION_ISSUE_TRANSIENT_FAILURE_CODE, status: task.status, reason, recordedAt: new Date().toISOString(),
+        } } } : {}),
+      }).where(and(eq(routineRuns.companyId, companyId), eq(routineRuns.id, intent.id),
+        eq(routineRuns.status, "received"), eq(routineRuns.linkedIssueId, task.id))).returning();
+      if (!updated) return await tx.select().from(routineRuns).where(and(
+        eq(routineRuns.companyId, companyId), eq(routineRuns.id, intent.id),
+      )).limit(1).then(rows => rows[0] ?? null);
+      await updateRoutineTouchedState({ routineId: intent.routineId, triggerId: intent.triggerId,
+        triggeredAt: intent.triggeredAt, status, issueId: task.id }, tx);
+      return updated;
+    });
+  }
+
   async function dispatchRoutineRun(input: {
     routine: typeof routines.$inferSelect;
     trigger: typeof routineTriggers.$inferSelect | null;
@@ -2068,7 +2153,7 @@ export function routineService(
     const workflowPublications: ActivityPublication[] = [];
     let queuedWorkflowRunId: string | null = null;
     let queuedWorkflowActor: WorkflowRunActor | null = null;
-    const run = await db.transaction(async (tx) => {
+    let run = await db.transaction(async (tx) => {
       const txDb = tx as unknown as Db;
       if (executionTarget.kind === "workflow") { await lockAnalyticalCompany(txDb, input.routine.companyId); await lockMemoryPrivacy(txDb, input.routine.companyId); }
       await tx.execute(
@@ -2296,8 +2381,10 @@ export function routineService(
           return updated ?? createdRun;
         }
 
+        const issuePublicationStart = workflowPublications.length;
         try {
-          createdIssue = await issueSvc.create(input.routine.companyId, {
+          // A savepoint preserves the dispatch transaction on a native Task conflict.
+          createdIssue = await txDb.transaction(async taskTx => issueSvc.create(input.routine.companyId, {
             projectId,
             projectWorkspaceId,
             goalId: input.routine.goalId,
@@ -2319,8 +2406,9 @@ export function routineService(
             executionWorkspaceId: input.executionWorkspaceId ?? null,
             executionWorkspacePreference: input.executionWorkspacePreference ?? null,
             executionWorkspaceSettings: input.executionWorkspaceSettings ?? null,
-          });
+          }, taskTx, workflowPublications));
         } catch (error) {
+          workflowPublications.length = issuePublicationStart;
           const isOpenExecutionConflict =
             !!error &&
             typeof error === "object" &&
@@ -2363,18 +2451,8 @@ export function routineService(
           return updated ?? createdRun;
         }
 
-        // Keep the dispatch lock until the issue is linked to a queued heartbeat run.
-        await queueIssueAssignmentWakeup({
-          heartbeat,
-          issue: createdIssue,
-          reason: "issue_assigned",
-          mutation: "create",
-          contextSource: "routine.dispatch",
-          requestedByActorType: input.source === "schedule" ? "system" : undefined,
-          rethrowOnError: true,
-        });
         const updated = await finalizeRun(createdRun.id, {
-          status: "issue_created",
+          status: "received",
           linkedIssueId: createdIssue.id,
         }, txDb);
         await updateRoutineTouchedState({
@@ -2389,6 +2467,7 @@ export function routineService(
       } catch (error) {
         if (createdIssue) {
           await txDb.delete(issues).where(eq(issues.id, createdIssue.id));
+          workflowPublications.length = 0;
         }
         const failureReason = error instanceof Error ? error.message : String(error);
         const failed = await finalizeRun(createdRun.id, {
@@ -2406,6 +2485,17 @@ export function routineService(
         return failed ?? createdRun;
       }
     });
+
+    if (run.status === "received" && run.linkedIssueId) {
+      try { run = await finishRoutineIssueIntent(input.routine.companyId, run.id) ?? run; }
+      catch {
+        logger.warn({ routineRunId: run.id }, "routine Task dispatch remains pending");
+        const [pending] = await db.update(routineRuns).set({ failureReason: "assignment_queue_pending", updatedAt: new Date() })
+          .where(and(eq(routineRuns.companyId, input.routine.companyId), eq(routineRuns.id, run.id), eq(routineRuns.status, "received")))
+          .returning();
+        run = pending ?? run;
+      }
+    }
 
     for (const publication of workflowPublications) {
       publishActivity(publication);
@@ -3760,6 +3850,17 @@ export function routineService(
     },
 
     tickScheduledTriggers: async (now: Date = new Date()) => {
+      const pending = await db.select({ id: routineRuns.id, companyId: routineRuns.companyId })
+        .from(routineRuns)
+        .innerJoin(issues, and(eq(issues.companyId, routineRuns.companyId), eq(issues.id, routineRuns.linkedIssueId),
+          eq(issues.originRunId, routineRuns.id)))
+        .innerJoin(routines, and(eq(routines.companyId, routineRuns.companyId), eq(routines.id, routineRuns.routineId)))
+        .where(and(eq(routineRuns.status, "received"), isNotNull(routineRuns.linkedIssueId)))
+        .orderBy(asc(routineRuns.triggeredAt), asc(routineRuns.id)).limit(100);
+      for (const item of pending) {
+        try { await finishRoutineIssueIntent(item.companyId, item.id); }
+        catch { logger.warn({ routineRunId: item.id }, "routine assignment intent remains pending"); }
+      }
       const worktreeActivation = isTruthyRuntimeEnvValue(runtimeEnv.PAPERCLIP_IN_WORKTREE)
         ? await resolveWorktreeRunExecutionActivationState({
           getExperimental: instanceSettings.getExperimental,

@@ -12,7 +12,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { suppressAnalyticalSource } from "./analytical-privacy.js";
 import { forgetMemoryForDeletedIssue, lockMemoryPrivacy } from "./memory/memory-privacy.js";
 import { lockBusinessEventCompany, suppressBusinessEventsForObject } from "./business-event-privacy.js";
-import { authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, pinCurrentBoardActor, type AuthorizationActor } from "./authorization.js";
+import { authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, canActorReadTypedTaskSourcePrivacy, pinCurrentBoardActor, type AuthorizationActor } from "./authorization.js";
 import { assertHumanAuthentication, isAuthenticationStateBusy } from "../auth/authenticator-assurance.js";
 import { directHumanPayloadSnapshotSql, assertDirectInputSessionCurrent as assertManualInputCredentialCurrent } from "./native-direct-input.js";
 import { resolveTaskWatchdogMutationScope, taskWatchdogScopeAllowsIssueMutation } from "./task-watchdog-scope.js";
@@ -58,7 +58,12 @@ import {
   documents,
   goals,
   heartbeatRuns,
+  workflowRuns,
+  workflowRevisions,
+  workflows,
   routineRuns,
+  routineRevisions,
+  routines,
   executionWorkspaces,
   issueApprovals,
   issueAccessGrants,
@@ -116,6 +121,7 @@ import {
   isUuidLike,
   nativePayloadSourceSnapshotSchema,
   normalizeIssueIdentifier as normalizeIssueReferenceIdentifier,
+  routineRevisionSnapshotV1Schema,
 } from "@paperclipai/shared";
 import { conflict, forbidden, HttpError, notFound, unprocessable } from "../errors.js";
 import { isForeignKeyViolation } from "../db-errors.js";
@@ -2026,8 +2032,8 @@ export async function ensureAssignmentIssueAccessGrant(
 }
 
 async function retainIssuePrivacySources(tx: DbTransaction, issue: typeof issues.$inferSelect,
-  sources: Array<{ sourceKind: "issue" | "project" | "run"; sourceId: string | null | undefined }>) {
-  const rows = sources.filter((source): source is { sourceKind: "issue" | "project" | "run"; sourceId: string } => Boolean(source.sourceId))
+  sources: Array<{ sourceKind: "issue" | "project" | "run" | "workflow_run" | "routine_run"; sourceId: string | null | undefined }>) {
+  const rows = sources.filter((source): source is { sourceKind: "issue" | "project" | "run" | "workflow_run" | "routine_run"; sourceId: string } => Boolean(source.sourceId))
     .filter(source => source.sourceKind !== "issue" || source.sourceId !== issue.id)
     .map(source => ({ companyId: issue.companyId, issueId: issue.id, ...source }));
   if (rows.some(source => !isUuidLike(source.sourceId))) throw unprocessable("Task privacy source identity is invalid");
@@ -2042,7 +2048,7 @@ async function resolveIssuePrivacy(
   actorRunId?: string | null,
   additionalIssueSources: string[] = [],
 ) {
-  const sources: Array<{ sourceKind: "issue" | "project" | "run"; sourceId: string }> = [];
+  const sources: Array<{ sourceKind: "issue" | "project" | "run" | "workflow_run" | "routine_run"; sourceId: string }> = [];
   const parents = new Set([...additionalIssueSources, previous?.privacyParentIssueId, previous?.parentId, next.privacyParentIssueId,
     next.privacyRootIssueId !== next.id ? next.privacyRootIssueId : null, next.parentId].filter((id): id is string => Boolean(id)));
   const projectIds = new Set([previous?.projectId, next.projectId].filter((id): id is string => Boolean(id)));
@@ -2052,7 +2058,43 @@ async function resolveIssuePrivacy(
   if (previous?.visibility === "private" && next.visibility === "open") {
     throw unprocessable("Publishing private source content requires an authorized publication operation");
   }
-  for (const runId of new Set([previous?.originRunId, next.originRunId, actorRunId].filter((id): id is string => Boolean(id)))) {
+  const typedOrigins = [previous, next].filter((row): row is NonNullable<typeof row> & { originRunId: string; originId: string } =>
+    Boolean(row && (row.originKind === "workflow_task" || row.originKind === "routine_execution")));
+  for (const origin of typedOrigins) {
+    if (!origin.originRunId || !isUuidLike(origin.originRunId) || !origin.originId || !isUuidLike(origin.originId))
+      throw unprocessable("Task typed source identity is invalid");
+    if (origin.originKind === "workflow_task") {
+      const [run] = await tx.select({ workflowId: workflowRuns.workflowId, workflowRevisionId: workflowRuns.workflowRevisionId })
+        .from(workflowRuns).where(and(eq(workflowRuns.id, origin.originRunId), eq(workflowRuns.companyId, companyId)));
+      const [workflow] = run && run.workflowId.toLowerCase() === origin.originId.toLowerCase()
+        ? await tx.select({ id: workflows.id, projectId: workflows.projectId }).from(workflows).where(and(eq(workflows.id, origin.originId), eq(workflows.companyId, companyId))) : [];
+      const [revision] = run ? await tx.select({ id: workflowRevisions.id }).from(workflowRevisions).where(and(
+        eq(workflowRevisions.id, run.workflowRevisionId), eq(workflowRevisions.workflowId, origin.originId), eq(workflowRevisions.companyId, companyId))) : [];
+      if (!run || !workflow || !revision) throw notFound("Task typed source is unavailable");
+      sources.push({ sourceKind: "workflow_run", sourceId: origin.originRunId });
+      if (workflow.projectId) projectIds.add(workflow.projectId);
+      if (!(await canActorReadTypedTaskSourcePrivacy(tx, { type: "none" }, { sourceKind: "workflow_run", id: origin.originRunId, companyId }))) visibility = "private";
+    } else {
+      const [run] = await tx.select({ routineId: routineRuns.routineId, routineRevisionId: routineRuns.routineRevisionId })
+        .from(routineRuns).where(and(eq(routineRuns.id, origin.originRunId), eq(routineRuns.companyId, companyId)));
+      const [routine] = run && run.routineId.toLowerCase() === origin.originId.toLowerCase()
+        ? await tx.select({ id: routines.id, projectId: routines.projectId }).from(routines).where(and(eq(routines.id, origin.originId), eq(routines.companyId, companyId))) : [];
+      const [revision] = run?.routineRevisionId ? await tx.select({ id: routineRevisions.id, snapshot: routineRevisions.snapshot }).from(routineRevisions).where(and(
+        eq(routineRevisions.id, run.routineRevisionId), eq(routineRevisions.routineId, origin.originId), eq(routineRevisions.companyId, companyId))) : [];
+      if (!run || !routine || !revision) throw notFound("Task typed source is unavailable");
+      const snapshot = routineRevisionSnapshotV1Schema.safeParse(revision.snapshot);
+      if (!snapshot.success || snapshot.data.routine.id.toLowerCase() !== routine.id.toLowerCase() ||
+        snapshot.data.routine.companyId.toLowerCase() !== companyId.toLowerCase()) throw notFound("Task typed source is unavailable");
+      sources.push({ sourceKind: "routine_run", sourceId: origin.originRunId });
+      if (routine.projectId) projectIds.add(routine.projectId);
+      if (snapshot.data.routine.projectId) projectIds.add(snapshot.data.routine.projectId);
+      if (snapshot.data.routine.parentIssueId) parents.add(snapshot.data.routine.parentIssueId);
+      if (!(await canActorReadTypedTaskSourcePrivacy(tx, { type: "none" }, { sourceKind: "routine_run", id: origin.originRunId, companyId }))) visibility = "private";
+    }
+  }
+  const heartbeatRunIds = new Set([actorRunId, previous?.originRunId && !typedOrigins.some(origin => origin === previous) ? previous.originRunId : null,
+    next.originRunId && !typedOrigins.some(origin => origin === next) ? next.originRunId : null].filter((id): id is string => Boolean(id)));
+  for (const runId of heartbeatRunIds) {
     if (!isUuidLike(runId)) throw unprocessable("Task privacy source run is invalid");
     const [run] = await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.id, runId), eq(heartbeatRuns.companyId, companyId)));
     if (!run) throw notFound("Task privacy source is unavailable");
@@ -2087,10 +2129,12 @@ async function resolveIssuePrivacy(
 }
 
 async function assertIssuePrivacySourcesReadable(tx: DbTransaction, actor: AuthorizationActor,
-  companyId: string, sources: Array<{ sourceKind: "issue" | "project" | "run"; sourceId: string }>) {
+  companyId: string, sources: Array<{ sourceKind: "issue" | "project" | "run" | "workflow_run" | "routine_run"; sourceId: string }>) {
   for (const source of sources) {
     const readable = source.sourceKind === "run"
       ? await canActorReadHeartbeatRunPrivacy(tx, actor, { id: source.sourceId, companyId })
+      : source.sourceKind === "workflow_run" || source.sourceKind === "routine_run"
+      ? await canActorReadTypedTaskSourcePrivacy(tx, actor, { sourceKind: source.sourceKind, id: source.sourceId, companyId })
       : source.sourceKind === "issue"
       ? await canActorReadIssuePrivacy(tx, actor, { id: source.sourceId, companyId })
       : await canActorReadProjectPrivacy(tx, actor, { id: source.sourceId, companyId });
@@ -10640,7 +10684,7 @@ export function issueService(db: Db) {
       if (rows.length === 0) return;
       for (const row of rows) {
         if (!["open", "private"].includes(row.visibility) || !Array.isArray(row.privacySources)
-          || row.privacySources.some(source => !["issue", "project", "run"].includes(source.sourceKind) || !isUuidLike(source.sourceId))
+          || row.privacySources.some(source => !["issue", "project", "run", "workflow_run", "routine_run"].includes(source.sourceKind) || !isUuidLike(source.sourceId))
           || [row.privacyRootIssueId, row.privacyParentIssueId].some(id => id !== null && !isUuidLike(id))) {
           throw unprocessable("Imported task privacy provenance is required");
         }
@@ -10884,7 +10928,7 @@ export function issueService(db: Db) {
           { sourceKind: "issue" as const, sourceId: row.privacyRootIssueId },
           { sourceKind: "issue" as const, sourceId: row.parentId },
           { sourceKind: "project" as const, sourceId: row.projectId },
-        ].filter((source): source is { sourceKind: "issue" | "project" | "run"; sourceId: string } =>
+        ].filter((source): source is { sourceKind: "issue" | "project" | "run" | "workflow_run" | "routine_run"; sourceId: string } =>
           Boolean(source.sourceId) && !(source.sourceKind === "issue" && source.sourceId === row.id))
           .map(source => ({ companyId, issueId: row.id, ...source })));
         for (let offset = 0; offset < retainedRows.length; offset += DEFAULT_INSERT_CHUNK_ROWS) {
@@ -10897,7 +10941,7 @@ export function issueService(db: Db) {
             inArray(issues.id, rows.slice(offset, offset + DEFAULT_INSERT_CHUNK_ROWS).map(row => row.id))));
           for (const issue of stored) {
             const original = originals.get(issue.id)!;
-            const sources: Array<{ sourceKind: "issue" | "project" | "run"; sourceId: string | null | undefined }> = [...original.privacySources,
+            const sources: Array<{ sourceKind: "issue" | "project" | "run" | "workflow_run" | "routine_run"; sourceId: string | null | undefined }> = [...original.privacySources,
               { sourceKind: "issue", sourceId: original.privacyParentIssueId },
               { sourceKind: "issue", sourceId: original.privacyRootIssueId },
               { sourceKind: "issue", sourceId: original.parentId },
@@ -10907,12 +10951,13 @@ export function issueService(db: Db) {
               if (!source.sourceId) continue;
               const key = `${source.sourceKind}:${source.sourceId}`;
               if (checkedSources.has(key)) continue;
-              const table = source.sourceKind === "issue" ? issues : source.sourceKind === "project" ? projects : heartbeatRuns;
+              const table = source.sourceKind === "issue" ? issues : source.sourceKind === "project" ? projects
+                : source.sourceKind === "workflow_run" ? workflowRuns : source.sourceKind === "routine_run" ? routineRuns : heartbeatRuns;
               const [current] = await tx.select({ companyId: table.companyId }).from(table).where(eq(table.id, source.sourceId));
               if (current && current.companyId !== companyId) throw unprocessable("Imported task privacy source belongs to another organization");
               checkedSources.add(key);
             }
-            const readableSources = sources.filter((source): source is { sourceKind: "issue" | "project" | "run"; sourceId: string } => Boolean(source.sourceId));
+            const readableSources = sources.filter((source): source is { sourceKind: "issue" | "project" | "run" | "workflow_run" | "routine_run"; sourceId: string } => Boolean(source.sourceId));
             if (options.actor) await assertIssuePrivacySourcesReadable(tx, options.actor, companyId, readableSources);
             if (issue.visibility === "open" && !(await canActorReadIssuePrivacy(tx, { type: "none" }, issue))) {
               throw unprocessable("Imported task source content is private or unavailable");

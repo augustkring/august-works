@@ -17,6 +17,12 @@ import {
   issueAccessGrants,
   issuePrivacySources,
   issues,
+  workflowRuns,
+  workflowRevisions,
+  workflows,
+  routineRuns,
+  routineRevisions,
+  routines,
   principalPermissionGrants,
   projects,
   projectAccessMembers,
@@ -617,8 +623,11 @@ function heartbeatRunTaskBindingCondition(row: SQL): SQL<boolean> {
   ))`;
 }
 
-/** One native Task/Project source graph; this never authorizes a company action. */
-function taskSourcePrivacySqlCondition(kind: "issue" | "project" | "run", id: SQL, company: SQL, actor: AuthorizationActor): SQL<boolean> {
+/** One native Task/Project source graph; this never authorizes a company action.
+ * Typed private authoring/Memory sources remain closed until their native
+ * readers join this graph. Empty stored arrays are relational facts only,
+ * never complete-input receipts or publication authority. */
+function taskSourcePrivacySqlCondition(kind: "issue" | "project" | "run" | "workflow_run" | "routine_run", id: SQL, company: SQL, actor: AuthorizationActor): SQL<boolean> {
   const contextRoots = sql`
     select 'issue'::text as kind,case when c.agent_id=r.agent_id then c.issue_id end as id
       where c.issue_id is not null or c.agent_id<>r.agent_id
@@ -636,10 +645,32 @@ function taskSourcePrivacySqlCondition(kind: "issue" | "project" | "run", id: SQ
           where n.kind='issue' and i.id=n.id and i.company_id=${company} and i.privacy_root_issue_id is not null and i.privacy_root_issue_id<>i.id
         union all select 'project',i.project_id from issues i
           where n.kind='issue' and i.id=n.id and i.company_id=${company} and i.project_id is not null
-        union all select 'run',case when i.origin_run_id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then i.origin_run_id::uuid end
-          from issues i where n.kind='issue' and i.id=n.id and i.company_id=${company} and i.origin_run_id is not null
-            and not exists(select 1 from ${heartbeatRuns} own_run where own_run.company_id=i.company_id
-              and own_run.id::text=i.origin_run_id and coalesce(own_run.issue_id,own_run.native_issue_id)=i.id)
+        union all select case i.origin_kind when 'workflow_task' then 'workflow_run'
+            when 'routine_execution' then 'routine_run' else 'run' end,
+          case when i.origin_run_id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+            and (i.origin_kind not in ('workflow_task','routine_execution') or
+              (i.origin_id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' and case i.origin_kind
+                when 'workflow_task' then exists(select 1 from workflow_runs wr where wr.company_id=i.company_id
+                  and wr.id=case when i.origin_run_id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then i.origin_run_id::uuid end
+                  and wr.workflow_id=case when i.origin_id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then i.origin_id::uuid end)
+                else exists(select 1 from routine_runs rr where rr.company_id=i.company_id
+                  and rr.id=case when i.origin_run_id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then i.origin_run_id::uuid end
+                  and rr.routine_id=case when i.origin_id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then i.origin_id::uuid end) end))
+            then i.origin_run_id::uuid end
+          from issues i where n.kind='issue' and i.id=n.id and i.company_id=${company}
+            and (i.origin_run_id is not null or i.origin_kind in ('workflow_task','routine_execution'))
+            and (i.origin_kind in ('workflow_task','routine_execution') or not exists(
+              select 1 from ${heartbeatRuns} own_run where own_run.company_id=i.company_id
+                and own_run.id::text=i.origin_run_id and coalesce(own_run.issue_id,own_run.native_issue_id)=i.id))
+        union all select 'project',w.project_id from workflow_runs wr
+          join workflows w on w.id=wr.workflow_id and w.company_id=wr.company_id
+          where n.kind='workflow_run' and wr.id=n.id and wr.company_id=${company} and w.project_id is not null
+        union all select ref.kind,case when ref.id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$' then ref.id::uuid end
+          from routine_runs rr join routine_revisions v on v.id=rr.routine_revision_id
+            and v.routine_id=rr.routine_id and v.company_id=rr.company_id
+          cross join lateral (values ('project',v.snapshot->'routine'->>'projectId'),
+            ('issue',v.snapshot->'routine'->>'parentIssueId')) ref(kind,id)
+          where n.kind='routine_run' and rr.id=n.id and rr.company_id=${company} and ref.id is not null
         union all select 'issue',source.id from projects p cross join lateral unnest(p.source_issue_ids) source(id)
           where n.kind='project' and p.id=n.id and p.company_id=${company}
         union all select 'project',source.id from projects p cross join lateral unnest(p.source_project_ids) source(id)
@@ -685,7 +716,8 @@ function taskSourcePrivacySqlCondition(kind: "issue" | "project" | "run", id: SQ
       select 1 from reachable where kind=source_kind and id=source_id
       union all
       select 1 from bounded n where
-        (n.kind='issue' and not exists(select 1 from issues i where i.id=n.id and i.company_id=${company}
+        n.kind not in ('issue','project','run','workflow_run','routine_run')
+        or (n.kind='issue' and not exists(select 1 from issues i where i.id=n.id and i.company_id=${company}
           and i.conversation_retired_at is null and ((i.conversation_agent_id is null and i.conversation_user_id is null)
             or ${conversationIdentity})
           and (i.visibility='open' or ${issuePrincipalAccess(actor, sql`i.id`, sql`${company}`)})))
@@ -693,12 +725,39 @@ function taskSourcePrivacySqlCondition(kind: "issue" | "project" | "run", id: SQ
           and p.source_provenance_qualified and (p.visibility='open' or ${projectPrincipalAccess(actor, sql`p.id`, sql`${company}`)})))
         or (n.kind='run' and not exists(select 1 from ${heartbeatRuns} r where r.id=n.id and r.company_id=${company}
           and ${heartbeatRunTaskBindingCondition(sql`r`)}))
+        or (n.kind='workflow_run' and not exists(select 1 from workflow_runs wr
+          join workflows w on w.id=wr.workflow_id and w.company_id=wr.company_id
+          join workflow_revisions v on v.id=wr.workflow_revision_id and v.workflow_id=wr.workflow_id and v.company_id=wr.company_id
+          where wr.id=n.id and wr.company_id=${company}
+            and w.authoring_source_run_ids='[]'::jsonb and wr.authoring_source_workflow_ids='[]'::jsonb
+            and wr.memory_record_ids='[]'::jsonb and not exists(select 1 from workflow_step_runs step
+              where step.company_id=wr.company_id and step.workflow_run_id=wr.id and step.memory_record_ids is distinct from '[]'::jsonb)
+            and not aw_workflow_authoring_source_erased(w.company_id,w.id)
+            and not aw_workflow_run_authoring_source_erased(wr.company_id,wr.id)))
+        or (n.kind='routine_run' and not exists(select 1 from routine_runs rr
+          join routines p on p.id=rr.routine_id and p.company_id=rr.company_id
+          join routine_revisions v on v.id=rr.routine_revision_id and v.routine_id=rr.routine_id and v.company_id=rr.company_id
+          where rr.id=n.id and rr.company_id=${company} and p.origin_kind='manual'
+            and v.snapshot->'version'='1'::jsonb
+            and lower(v.snapshot->'routine'->>'id')=rr.routine_id::text
+            and lower(v.snapshot->'routine'->>'companyId')=rr.company_id::text
+            and v.snapshot->'routine' ? 'projectId' and v.snapshot->'routine' ? 'parentIssueId'
+            and not aw_conversation_routine_source_erased(p.company_id,p.id)))
     ) end
   )`;
 }
 
 export async function canActorReadIssuePrivacy(db: Db | DbTransaction, actor: AuthorizationActor, issue: IssuePrivacyRow) {
   return (await db.select({ id: issues.id }).from(issues).where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId), await issueReadSqlCondition(db, actor))).limit(1)).length > 0;
+}
+/** Typed Task execution owners are distinct namespaces from heartbeat runs.
+ * Until the native authoring ACL graph is projected here, only un-erased,
+ * manually authored sources can contribute readable Task content. */
+export async function canActorReadTypedTaskSourcePrivacy(db: Db | DbTransaction, actor: AuthorizationActor,
+  source: { sourceKind: "workflow_run" | "routine_run"; id: string; companyId: string }): Promise<boolean> {
+  const table = source.sourceKind === "workflow_run" ? workflowRuns : routineRuns;
+  return (await db.select({ id: table.id }).from(table).where(and(eq(table.id, source.id), eq(table.companyId, source.companyId),
+    await taskSourcePrivacySqlCondition(source.sourceKind, sql`${table.id}`, sql`${table.companyId}`, actor))).limit(1)).length > 0;
 }
 export async function canActorReadProjectPrivacy(db: Db | DbTransaction, actor: AuthorizationActor, project: ProjectPrivacyRow) {
   return (await db.select({ id: projects.id }).from(projects).where(and(eq(projects.id, project.id), eq(projects.companyId, project.companyId), await projectReadSqlCondition(db, actor))).limit(1)).length > 0;
