@@ -1,0 +1,128 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "b4cdc372ba97ff3adb3e2b51b99fa68d84642093",
+  "meaning": "Original portability resolves one GitHub commit/tree before package bytes, verifies nontruncated tree and immutable requested revision, fetches every package file at that SHA, and binds GitHub preview fingerprint to files plus commit. Native PostgreSQL importer tests use a structural HTTP transport mock; they do not qualify real hosted GitHub/provider access, source permission, full effect checkpoints/reconciliation or complete CE-08/V10. Inline fingerprint behavior remains unchanged. Initial and expanded test receipts retained separately.",
+  "logs": [
+    {
+      "name": "github-import-pin-test",
+      "exitCode": 0,
+      "rawSha256": "ead720fa25d21cb6f0cb9429b83ba1bcaa1b587b327169b8e44f9bb47e12b653",
+      "sanitizedSha256": "ead720fa25d21cb6f0cb9429b83ba1bcaa1b587b327169b8e44f9bb47e12b653",
+      "archiveSha256": "bff7880fd4468e306070e3f820217851e35780b6cb7abcbd12244a0e9fc03d86",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  8 passed (8)",
+        "Duration  16.39s (transform 9.05s, setup 67ms, import 12.31s, tests 3.91s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "github-import-pin-expanded-test",
+      "exitCode": 0,
+      "rawSha256": "5fca306b200cb30e765aa86825800803c9e1e229d86eb90b043c9fc8f7bfbd15",
+      "sanitizedSha256": "5fca306b200cb30e765aa86825800803c9e1e229d86eb90b043c9fc8f7bfbd15",
+      "archiveSha256": "7db384fcf7f53fb193052ef5fea56d9377df897dad63c9b5c850d9c94b4a2b89",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  11 passed (11)",
+        "Duration  20.55s (transform 11.67s, setup 77ms, import 15.67s, tests 4.66s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "github-import-pin-ui-test",
+      "exitCode": 0,
+      "rawSha256": "33c018680165e5f17dd460906618281a46bdc24da4a4438879d749ba9bc0c82a",
+      "sanitizedSha256": "33c018680165e5f17dd460906618281a46bdc24da4a4438879d749ba9bc0c82a",
+      "archiveSha256": "fb7079939fb96260e20c80a082a4835cdd521c8faee007e105db33266d819ad5",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  29 passed (29)",
+        "Duration  8.72s (transform 3.41s, setup 18ms, import 5.27s, tests 2.71s, environment 575ms)"
+      ]
+    },
+    {
+      "name": "github-import-pin-expanded-ui-test",
+      "exitCode": 0,
+      "rawSha256": "0c81bc1596868b293f82da4d234137c8fea229e97e4124ed692892221e51dac5",
+      "sanitizedSha256": "0c81bc1596868b293f82da4d234137c8fea229e97e4124ed692892221e51dac5",
+      "archiveSha256": "6ac12d707b78d1dc325000a5fcddf16a1866f7fcd318edd40e03ffa2e784634f",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  29 passed (29)",
+        "Duration  8.51s (transform 3.37s, setup 38ms, import 5.11s, tests 2.66s, environment 578ms)"
+      ]
+    },
+    {
+      "name": "github-import-pin-server-typecheck",
+      "exitCode": 0,
+      "rawSha256": "1569a5e00a30eb14cfbe4e89d92322c1618f271613b2c2f1abb759552bb361ed",
+      "sanitizedSha256": "1569a5e00a30eb14cfbe4e89d92322c1618f271613b2c2f1abb759552bb361ed",
+      "archiveSha256": "a383d410dc1ba1230b231df597d57593c817fbed6b13ca5a2989abe4b4c8f2c5",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "github-import-pin-ui-typecheck",
+      "exitCode": 0,
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "github-import-pin-token-gates",
+      "exitCode": 0,
+      "rawSha256": "e593d94fd920c3403cbfc7b0a549ae3b06c78d6ec0d2be065e5e056d2f309d11",
+      "sanitizedSha256": "e593d94fd920c3403cbfc7b0a549ae3b06c78d6ec0d2be065e5e056d2f309d11",
+      "archiveSha256": "b2acf30d7116322e944203f8bc1d232e1bfdc22cab71a2fe1f8c2a38f13664e2",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    }
+  ]
+}
