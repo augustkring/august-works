@@ -497,7 +497,8 @@ function matchesHelpArticleQuery(row: SimpleSearchRow, normalizedQuery: string, 
   if (normalizedQuery.includes(" ") && haystack.includes(normalizedQuery)) return true;
   return tokens.length > 0 && tokens.every((token) => {
     const escaped = token.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
-    return new RegExp(`(^|[^\\p{L}\\p{N}_])${escaped}(?=$|[^\\p{L}\\p{N}_])`, "u").test(haystack);
+    const suffix = token.length >= 3 ? "[\\p{L}\\p{N}_]*" : "";
+    return new RegExp(`(^|[^\\p{L}\\p{N}_])${escaped}${suffix}(?=$|[^\\p{L}\\p{N}_])`, "u").test(haystack);
   });
 }
 
@@ -574,7 +575,8 @@ export function companySearchService(db: Db) {
       const sort = query.sort;
       const limit = query.limit;
       const offset = query.offset;
-      const helpRows = hasSearchText && scopeIncludesHelp(scope)
+      const hasIssueOnlyFilters = issueOnlyFiltersActive(query);
+      const helpRows = hasSearchText && !hasIssueOnlyFilters && scopeIncludesHelp(scope)
         ? COMPANY_SEARCH_HELP_ARTICLES.flatMap((article) => {
           const href = companySearchHelpHref(article.slug);
           if (!href) return [];
@@ -622,7 +624,6 @@ export function companySearchService(db: Db) {
 
       const issueFilters = issueFilterConditions(companyId, query);
       if (issueReadCondition) issueFilters.push(issueReadCondition);
-      const hasIssueOnlyFilters = issueOnlyFiltersActive(query);
 
       // Scope conditions over precomputed flag columns (alias-qualified).
       function flagTextMatch(alias: string) {
