@@ -288,7 +288,7 @@ import {
   lockIssuePrivacyTree,
   type IssuePostCommitAction,
 } from "../services/issues.js";
-import { authorizationDeniedDetails, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, issueReadSqlCondition, projectReadSqlCondition } from "../services/authorization.js";
+import { authorizationDeniedDetails, authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, issueReadSqlCondition, projectReadSqlCondition } from "../services/authorization.js";
 import { persistActivity } from "../services/activity-log.js";
 import { stalledReviewDecisionService } from "../services/stalled-review-decisions.js";
 import { environmentService } from "../services/environments.js";
@@ -485,6 +485,7 @@ type CompanySearchService = {
     options?: { issueReadCondition?: SQL<boolean>; projectReadCondition?: SQL<boolean> },
   ): Promise<CompanySearchResponse>;
 };
+type CompanySearchServiceFactory = (queryDb: Db) => CompanySearchService;
 type ActivityIssueRelationSummary = {
   id: string;
   identifier: string | null;
@@ -3488,7 +3489,7 @@ export function issueRoutes(
         now?: Date;
       }): Promise<unknown>;
     };
-    searchService?: CompanySearchService;
+    searchService?: CompanySearchService | CompanySearchServiceFactory;
     searchRateLimiter?: CompanySearchRateLimiter;
     pluginWorkerManager?: PluginWorkerManager;
     taskWatchdogEnqueueWakeup?: TaskWatchdogServiceDeps["enqueueWakeup"] | null;
@@ -3596,13 +3597,32 @@ export function issueRoutes(
     opts.recoveryActionEnqueueWakeup ?? heartbeat.wakeup;
   const feedback = feedbackService(db);
   const companiesSvc = companyService(db);
-  let searchSvc = opts.searchService ?? null;
-  const getSearchService = () => {
-    searchSvc ??= companySearchService(db);
-    return searchSvc;
-  };
+  const getSearchService = (queryDb: Db = db): CompanySearchService =>
+    typeof opts.searchService === "function" ? opts.searchService(queryDb)
+      : opts.searchService ?? companySearchService(queryDb);
   const searchRateLimiter =
     opts.searchRateLimiter ?? defaultCompanySearchRateLimiter;
+  async function runCompanySearchRead<T>(req: Request, companyId: string,
+    read: (queryDb: Db, search: CompanySearchService) => Promise<T>): Promise<T> {
+    // Isolated route tests inject a service and deliberately omit a database.
+    // This path preserves that service seam without claiming native authority.
+    if (typeof (db as { transaction?: unknown }).transaction !== "function") {
+      return read(db, getSearchService(db));
+    }
+    return db.transaction(async rawTx => {
+      const tx = rawTx as unknown as Db;
+      return authorizationService(tx).withReadCompany(companyId, async owner => {
+        const decision = await owner.decide({
+          actor: req.actor,
+          action: "company_scope:read",
+          resource: { type: "company", companyId },
+        });
+        if (!decision.allowed) throw forbidden("Company search is outside this actor's authorization boundary",
+          authorizationDeniedDetails(decision));
+        return read(tx, getSearchService(tx));
+      });
+    });
+  }
   const instanceSettings = instanceSettingsService(db);
   const agentsSvc = agentService(db);
   const projectsSvc = projectService(db);
@@ -8031,11 +8051,11 @@ export function issueRoutes(
       });
       return;
     }
-    const result = await getSearchService().extract(
+    const result = await runCompanySearchRead(req, companyId, async (queryDb, search) => search.extract(
       companyId,
       parsedQuery.data,
-      { issueReadCondition: await issueReadSqlCondition(db, req.actor) },
-    );
+      { issueReadCondition: await issueReadSqlCondition(queryDb, req.actor) },
+    ));
     res.json(result);
   });
 
@@ -8083,10 +8103,10 @@ export function issueRoutes(
       });
       return;
     }
-    const result = await getSearchService().search(companyId, query, {
-      issueReadCondition: await issueReadSqlCondition(db, req.actor),
-      projectReadCondition: await projectReadSqlCondition(db, req.actor),
-    });
+    const result = await runCompanySearchRead(req, companyId, async (queryDb, search) => search.search(companyId, query, {
+      issueReadCondition: await issueReadSqlCondition(queryDb, req.actor),
+      projectReadCondition: await projectReadSqlCondition(queryDb, req.actor),
+    }));
     res.json(result);
   });
 

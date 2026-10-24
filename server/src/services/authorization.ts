@@ -10,6 +10,7 @@ import {
   authUsers,
   authSessions,
   boardApiKeys,
+  accountDeletionOperations,
   companyMemberships,
   heartbeatRuns,
   instanceUserRoles,
@@ -840,12 +841,15 @@ type ReadSourceDecisionInput = {
   enforceResponsibleUserIntersection?: boolean;
 };
 type ReadSourceOwner = { decide(input: ReadSourceDecisionInput): Promise<AuthorizationDecision> };
+type ReadScopePurpose = "task_sources" | "company_search";
 type ReadSourceRows = {
   companyId: string;
   issues: Map<string, IssueAuthorizationRow | null>;
   projects: Map<string, ProjectAuthorizationRow | null>;
   active: boolean;
   credentialExpiresAt: number | null;
+  credentialUserId: string | null;
+  purpose: ReadScopePurpose;
 };
 const issueReadColumns = {
   id: issues.id, companyId: issues.companyId, projectId: issues.projectId, parentId: issues.parentId,
@@ -887,7 +891,8 @@ export async function pinCurrentBoardActor(db: Db | DbTransaction, actor: Author
 // Only this native owner can construct the private row context. Caller DTOs
 // cannot supply row facts, policies, authorization results or a read capability.
 function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSourceRows, sourceAuthorityPins = false) {
-  async function withReadSources<T>(companyId: string, issueIds: string[], projectIds: string[], read: (owner: ReadSourceOwner) => Promise<T>): Promise<T> {
+  async function withReadScope<T>(companyId: string, issueIds: string[], projectIds: string[], purpose: ReadScopePurpose,
+    read: (owner: ReadSourceOwner) => Promise<T>): Promise<T> {
     const locked = is(db, PgTransaction);
     const requestedIssues = [...new Set(issueIds)], requestedProjects = [...new Set(projectIds)];
     if (requestedIssues.length + requestedProjects.length > 20065) throw new Error("Native Source row transport exceeds its complete-population bound");
@@ -898,7 +903,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     const projectRows = locked && projectRefs.length ? await db.select(projectReadColumns).from(projects)
       .where(and(eq(projects.companyId, companyId), inArray(projects.id, projectRefs))).for("share") : [];
     const context: ReadSourceRows = {
-      companyId, active: true, credentialExpiresAt: null,
+      companyId, active: true, credentialExpiresAt: null, credentialUserId: null, purpose,
       // Outside a real transaction, keep the original per-call reads. An
       // autocommit FOR SHARE cannot qualify reusable current Source facts.
       issues: new Map((locked ? requestedIssues : []).map(id => [id, null])),
@@ -909,12 +914,25 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     const owner = createAuthorizationService(db, context);
     try {
       const result = await read({ decide: owner.decide });
-      if (context.credentialExpiresAt !== null && context.credentialExpiresAt <= Date.now()) {
-        throw forbidden("Native Source credential is no longer available.");
+        if (context.credentialUserId) {
+          const [{ current }] = await db.execute<{ current: boolean }>(sql`
+            select (${context.credentialExpiresAt === null
+              ? sql`true`
+              : sql`clock_timestamp() < to_timestamp(${context.credentialExpiresAt} / 1000.0)`}
+              and not exists(select 1 from ${accountDeletionOperations} where user_id=${context.credentialUserId})) as current
+          `);
+          if (!current) throw forbidden("Native Source credential is no longer available.");
       }
       return result;
     }
     finally { context.active = false; }
+  }
+  async function withReadSources<T>(companyId: string, issueIds: string[], projectIds: string[], read: (owner: ReadSourceOwner) => Promise<T>) {
+    return withReadScope(companyId, issueIds, projectIds, "task_sources", read);
+  }
+  async function withReadCompany<T>(companyId: string, read: (owner: ReadSourceOwner) => Promise<T>) {
+    if (!is(db, PgTransaction)) throw forbidden("Company search requires a native read transaction.");
+    return withReadScope(companyId, [], [], "company_search", read);
   }
   function prepareSourceInstanceAdminRead() {
     return db.select({ id: instanceUserRoles.id }).from(instanceUserRoles).where(and(
@@ -2875,7 +2893,10 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       if (!readSources.active) throw new Error("Native Source read scope has ended");
       const foundationRead = input.action === "foundation:read" && input.resource.type === "company" && is(db, PgTransaction)
         && (!input.scope || Object.keys(input.scope).length === 0);
-      if (companyIdForResource(input.resource) !== readSources.companyId || (!["issue:read", "project:read"].includes(input.action) && !foundationRead)) {
+      const companySearchRead = readSources.purpose === "company_search" && input.action === "company_scope:read"
+        && input.resource.type === "company" && (!input.scope || Object.keys(input.scope).length === 0);
+      if (companyIdForResource(input.resource) !== readSources.companyId || (readSources.purpose === "company_search"
+        ? !companySearchRead : (![ "issue:read", "project:read" ].includes(input.action) && !foundationRead))) {
         return deny({ action: input.action, reason: "deny_scope", explanation: "This native Source row scope admits same-company reads only." });
       }
     }
@@ -2906,9 +2927,11 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       // A source label alone does not prove an HTTP credential was verified.
       const credential = input.actor.keyId != null || input.actor.authenticatedKeyHash != null
         || input.actor.authenticatedCredentialExpiresAt != null || input.actor.sessionId != null || input.actor.source === "board_key";
-      if (input.action === "foundation:read" || credential) {
+      if (input.action === "foundation:read" || readSources.purpose === "company_search" || credential) {
         const actor = await pinReadSourceActor(input.actor, readSources.companyId);
         if (!actor) return deny({ action: input.action, reason: "deny_unauthenticated", explanation: "Current native Source principal is unavailable." });
+        readSources.credentialUserId = actor.type === "board" ? actor.userId ?? null
+          : actor.type === "agent" ? actor.onBehalfOfUserId ?? null : null;
         input = { ...input, actor, enforceResponsibleUserIntersection: true };
       }
     }
@@ -2944,5 +2967,6 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     decide,
     decidePrincipalGrant,
     withReadSources,
+    withReadCompany,
   };
 }
