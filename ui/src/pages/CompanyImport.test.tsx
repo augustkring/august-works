@@ -10,6 +10,7 @@ import { ApiError } from "../api/client";
 import type { CompanyImportJobAccepted } from "../api/companies";
 import { CompanyImport } from "./CompanyImport";
 import { readStoredImportJob } from "../lib/import-job-watch";
+import { i18n } from "../i18n";
 
 // jsdom's crypto has no SubtleCrypto; the chunked transfer path hashes parts
 // with WebCrypto, so back the global with Node's implementation.
@@ -302,6 +303,7 @@ describe("CompanyImport", () => {
     container.remove();
     document.body.innerHTML = "";
     sessionStorage.clear();
+    await i18n.changeLanguage("en");
     vi.clearAllMocks();
   });
 
@@ -396,6 +398,19 @@ describe("CompanyImport", () => {
     expect(container.textContent).toContain("activated");
     expect(container.textContent).not.toContain("failed:");
     expect(findButton((text) => text === "Go to dashboard")).toBeTruthy();
+  });
+
+  it("shows the resolved GitHub commit in English and Danish", async () => {
+    const preview = buildPreviewResult();
+    preview.sourceRevision = "f".repeat(40);
+    mockCompaniesApi.importPreview.mockResolvedValue(preview);
+    await i18n.changeLanguage("en");
+    await renderPage();
+    await enterGithubUrl();
+    await clickButton((text) => text === "Preview import");
+    expect(container.textContent).toContain(`GitHub source commit: ${preview.sourceRevision}`);
+    await i18n.changeLanguage("da");
+    expect(container.textContent).toContain(`GitHub-kildecommit: ${preview.sourceRevision}`);
   });
 
   it("keeps activating remaining items and surfaces per-item failures", async () => {

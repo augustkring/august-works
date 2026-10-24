@@ -696,6 +696,7 @@ type ResolvedSource = {
   manifest: CompanyPortabilityManifest;
   files: Record<string, CompanyPortabilityFileEntry>;
   warnings: string[];
+  sourceRevision?: string;
 };
 
 type MarkdownDoc = {
@@ -3894,37 +3895,58 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     const companyRelativePath = parsed.companyPath === "COMPANY.md"
       ? [parsed.basePath, "COMPANY.md"].filter(Boolean).join("/")
       : parsed.companyPath;
-    let companyMarkdown: string | null = null;
-    try {
-      companyMarkdown = await fetchOptionalText(
-        resolveRawGitHubUrl(parsed.hostname, parsed.owner, parsed.repo, ref, companyRelativePath),
-      );
-    } catch (err) {
-      if (ref === "main") {
-        ref = "master";
-        warnings.push("GitHub ref main not found; falling back to master.");
-        companyMarkdown = await fetchOptionalText(
-          resolveRawGitHubUrl(parsed.hostname, parsed.owner, parsed.repo, ref, companyRelativePath),
-        );
-      } else {
-        throw err;
+    const apiBase = gitHubApiBase(parsed.hostname);
+    const repository = await fetchJson<{ id?: unknown }>(`${apiBase}/repos/${parsed.owner}/${parsed.repo}`);
+    if (typeof repository.id !== "number") throw unprocessable("GitHub repository identity is unavailable");
+    const resolveCommit = async (candidateRef: string) => {
+      const response = await ghFetch(`${apiBase}/repos/${parsed.owner}/${parsed.repo}/commits/${encodeURIComponent(candidateRef)}`, {
+        headers: { accept: "application/vnd.github+json" },
+      });
+      if (response.status === 404) return null;
+      if (!response.ok) throw unprocessable(`Failed to resolve GitHub ref ${candidateRef}: ${response.status}`);
+      const commit = await response.json() as { sha?: unknown; commit?: { tree?: { sha?: unknown } } };
+      if (typeof commit.sha !== "string" || !/^[a-f0-9]{40}$/i.test(commit.sha) ||
+        typeof commit.commit?.tree?.sha !== "string" || !/^[a-f0-9]{40}$/i.test(commit.commit.tree.sha)) {
+        throw unprocessable("GitHub returned an invalid commit identity");
       }
+      if (/^[a-f0-9]{40}$/i.test(candidateRef) && commit.sha.toLowerCase() !== candidateRef.toLowerCase()) {
+        throw unprocessable("GitHub resolved a different commit than the requested source revision");
+      }
+      return { sha: commit.sha.toLowerCase(), treeSha: commit.commit.tree.sha.toLowerCase() };
+    };
+    let resolvedCommit = await resolveCommit(ref);
+    if (!resolvedCommit && ref === "main") {
+      ref = "master";
+      resolvedCommit = await resolveCommit(ref);
+      if (resolvedCommit) warnings.push("GitHub ref main not found; falling back to master.");
     }
-    if (!companyMarkdown) {
-      throw unprocessable("GitHub company package is missing COMPANY.md");
-    }
+    if (!resolvedCommit) throw unprocessable(`GitHub ref ${ref} was not found`);
 
+    // Resolve the mutable name once; every package byte below is read from this commit.
+    const pinnedRef = resolvedCommit.sha;
     const companyPath = parsed.companyPath === "COMPANY.md"
       ? "COMPANY.md"
       : normalizePortablePath(path.posix.relative(parsed.basePath || ".", parsed.companyPath));
+    const basePrefix = parsed.basePath ? `${parsed.basePath.replace(/^\/+|\/+$/g, "")}/` : "";
+    const tree = await fetchJson<{ sha?: string; truncated?: boolean; tree?: Array<{ path?: string; type?: string }> }>(
+      `${apiBase}/repos/${parsed.owner}/${parsed.repo}/git/trees/${pinnedRef}?recursive=1`,
+    );
+    if (tree.sha?.toLowerCase() !== resolvedCommit.treeSha || tree.truncated !== false || !Array.isArray(tree.tree) ||
+      tree.tree.some(entry => typeof entry.path !== "string" || (entry.type !== "blob" && entry.type !== "tree" && entry.type !== "commit"))) {
+      throw unprocessable("GitHub returned an incomplete or mismatched package tree");
+    }
+    if (tree.tree.some(entry => entry.type === "commit" && (!basePrefix || entry.path!.startsWith(basePrefix)))) {
+      throw unprocessable("GitHub package contains an unsupported submodule source");
+    }
+    const companyMarkdown = await fetchOptionalText(
+      resolveRawGitHubUrl(parsed.hostname, parsed.owner, parsed.repo, pinnedRef, companyRelativePath),
+    );
+    if (!companyMarkdown) {
+      throw unprocessable("GitHub company package is missing COMPANY.md");
+    }
     const files: Record<string, CompanyPortabilityFileEntry> = {
       [companyPath]: companyMarkdown,
     };
-    const apiBase = gitHubApiBase(parsed.hostname);
-    const tree = await fetchJson<{ tree?: Array<{ path: string; type: string }> }>(
-      `${apiBase}/repos/${parsed.owner}/${parsed.repo}/git/trees/${ref}?recursive=1`,
-    ).catch(() => ({ tree: [] }));
-    const basePrefix = parsed.basePath ? `${parsed.basePath.replace(/^\/+|\/+$/g, "")}/` : "";
     const candidatePaths = (tree.tree ?? [])
       .filter((entry) => entry.type === "blob")
       .map((entry) => entry.path)
@@ -3943,7 +3965,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       const relativePath = basePrefix ? repoPath.slice(basePrefix.length) : repoPath;
       if (files[relativePath] !== undefined) continue;
       files[normalizePortablePath(relativePath)] = await fetchText(
-        resolveRawGitHubUrl(parsed.hostname, parsed.owner, parsed.repo, ref, repoPath),
+        resolveRawGitHubUrl(parsed.hostname, parsed.owner, parsed.repo, pinnedRef, repoPath),
       );
     }
     const companyDoc = parseFrontmatterMarkdown(companyMarkdown);
@@ -3954,7 +3976,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       if (files[relativePath] !== undefined) continue;
       if (!(repoPath.endsWith(".md") || repoPath.endsWith(".yaml") || repoPath.endsWith(".yml"))) continue;
       files[relativePath] = await fetchText(
-        resolveRawGitHubUrl(parsed.hostname, parsed.owner, parsed.repo, ref, repoPath),
+        resolveRawGitHubUrl(parsed.hostname, parsed.owner, parsed.repo, pinnedRef, repoPath),
       );
     }
 
@@ -3964,7 +3986,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       const repoPath = [parsed.basePath, companyLogoPath].filter(Boolean).join("/");
       try {
         const binary = await fetchBinary(
-          resolveRawGitHubUrl(parsed.hostname, parsed.owner, parsed.repo, ref, repoPath),
+          resolveRawGitHubUrl(parsed.hostname, parsed.owner, parsed.repo, pinnedRef, repoPath),
         );
         resolved.files[companyLogoPath] = bufferToPortableBinaryFile(binary, inferContentTypeFromPath(companyLogoPath));
       } catch (err) {
@@ -3972,6 +3994,7 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       }
     }
     resolved.warnings.unshift(...warnings);
+    resolved.sourceRevision = pinnedRef;
     return resolved;
   }
 
@@ -5392,7 +5415,10 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     }
 
     const preview: CompanyPortabilityPreviewResult = {
-      sourceFingerprint: createHash("sha256").update(canonicalJson(source.files)).digest("hex"),
+      sourceFingerprint: createHash("sha256").update(canonicalJson(source.sourceRevision
+        ? { files: source.files, sourceRevision: source.sourceRevision }
+        : source.files)).digest("hex"),
+      sourceRevision: source.sourceRevision ?? null,
       include,
       targetCompanyId,
       targetCompanyName,

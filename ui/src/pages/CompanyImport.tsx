@@ -39,6 +39,7 @@ import { GithubIcon } from "../components/icons/github-icon";
 import { Field, adapterLabels } from "../components/agent-config-primitives";
 import { getAdapterLabel } from "../adapters/adapter-display-registry";
 import { defaultCreateValues } from "../components/agent-config-defaults";
+import { useTranslation } from "../i18n";
 import { getUIAdapter, listUIAdapters } from "../adapters";
 import type { CreateConfigValues } from "@paperclipai/adapter-utils";
 import {
@@ -850,6 +851,7 @@ async function watchImportJob(
 // ── Main page ─────────────────────────────────────────────────────────
 
 export function CompanyImport() {
+  const { t } = useTranslation("experience");
   const {
     selectedCompanyId,
     selectedCompany,
@@ -2141,6 +2143,11 @@ export function CompanyImport() {
           )}
 
           {/* Warnings */}
+          {importPreview.sourceRevision && (
+            <div className="mx-5 mt-3 text-xs text-muted-foreground">
+              {t("companyImport.sourceCommit", { sha: importPreview.sourceRevision })}
+            </div>
+          )}
           {importPreview.warnings.length > 0 && (
             <div className="mx-5 mt-3 rounded-md border border-amber-500/30 bg-amber-500/5 px-4 py-3">
               {importPreview.warnings.map((w) => (

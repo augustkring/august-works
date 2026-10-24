@@ -3201,6 +3201,9 @@
     "continue": "Continue",
     "firstAgentDefault": "Chief of staff"
   },
+  "companyImport": {
+    "sourceCommit": "GitHub source commit: {{sha}}"
+  },
   "supportCases": {
     "exportInclude": "Include support cases you can currently view, with their full customer-visible history. Internal notes, credentials and support-access grants are excluded. This archive cannot restore live cases.",
     "exportAccountChanged": "Your account changed. Reload the export page.",

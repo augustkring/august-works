@@ -3201,6 +3201,9 @@
     "continue": "Fortsæt",
     "firstAgentDefault": "Stabschef"
   },
+  "companyImport": {
+    "sourceCommit": "GitHub-kildecommit: {{sha}}"
+  },
   "supportCases": {
     "exportInclude": "Medtag supportsager, du har adgang til nu, med hele den kundevendte historik. Interne noter, legitimationsoplysninger og supportadgang er udeladt. Arkivet kan ikke genskabe aktive sager.",
     "exportAccountChanged": "Din konto er ændret. Genindlæs eksportsiden.",

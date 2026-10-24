@@ -385,8 +385,10 @@ export interface CompanyPortabilityPreviewIssuePlan {
 }
 
 export interface CompanyPortabilityPreviewResult {
-  /** Hash of the normalized resolved file map; consistency, never source authority. */
+  /** Hash of normalized files and, for GitHub, the resolved immutable commit. */
   sourceFingerprint?: string;
+  /** Verified GitHub commit SHA used to resolve this preview. */
+  sourceRevision?: string | null;
   include: CompanyPortabilityInclude;
   targetCompanyId: string | null;
   targetCompanyName: string | null;
