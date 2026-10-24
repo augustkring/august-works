@@ -1,17 +1,21 @@
 /**
  * The `account.issuer` backfill has to be total. The column lands NOT NULL, so
  * a row the UPDATE misses aborts the whole migration and leaves an upgraded
- * install with no working auth at all. This suite rewinds the migration,
- * seeds the pre-upgrade rows an existing deployment would have, and re-applies
- * it — a backfill narrowed to one provider fails here.
+ * install with no working auth at all. This suite builds the pre-upgrade
+ * schema, seeds existing deployment rows, and applies the current migrations;
+ * a backfill narrowed to one provider fails here.
  */
 
-import { createHash, randomUUID } from "node:crypto";
+import { randomUUID } from "node:crypto";
 import fs from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { getTableConfig } from "drizzle-orm/pg-core";
+import { drizzle } from "drizzle-orm/postgres-js";
+import { migrate } from "drizzle-orm/postgres-js/migrator";
 import postgres from "postgres";
 import { afterEach, describe, expect, it } from "vitest";
-import { applyPendingMigrations } from "./client.js";
+import { inspectMigrations } from "./client.js";
 import { authAccounts } from "./schema/auth.js";
 import {
   getEmbeddedPostgresTestSupport,
@@ -31,14 +35,6 @@ const OAUTH_ISSUER_PREFIX = "local:oauth:";
 const cleanups: Array<() => Promise<void>> = [];
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
-
-async function migrationHash() {
-  const content = await fs.promises.readFile(
-    new URL(`./migrations/${MIGRATION_FILE}`, import.meta.url),
-    "utf8",
-  );
-  return createHash("sha256").update(content).digest("hex");
-}
 
 describe("account issuer schema", () => {
   it("declares the column Better Auth requires and the key it indexes on", () => {
@@ -70,29 +66,40 @@ describeEmbeddedPostgres("account issuer migration", () => {
   });
 
   it("backfills every pre-upgrade row before the column goes NOT NULL", async () => {
-    const database = await startEmbeddedPostgresTestDatabase("paperclip-account-issuer-");
-    cleanups.push(database.cleanup);
-    const sql = postgres(database.connectionString, { max: 1 });
-    cleanups.push(async () => sql.end());
-
-    // Rewind to the pre-upgrade shape: no issuer column, no unique index.
-    await sql`DELETE FROM "drizzle"."__drizzle_migrations" WHERE "hash" = ${await migrationHash()}`;
-    await sql`DROP INDEX IF EXISTS ${sql(UNIQUE_INDEX)}`;
-    await sql`ALTER TABLE "account" DROP COLUMN IF EXISTS "issuer"`;
-
     const credentialUserId = `user-${randomUUID()}`;
     const socialUserId = `user-${randomUUID()}`;
     const credentialAccountId = `account-${randomUUID()}`;
     const githubAccountId = `account-${randomUUID()}`;
     const googleAccountId = `account-${randomUUID()}`;
-
-    await sql`
+    // Seed the real pre-upgrade schema. Later immutable account guards depend
+    // on issuer, so dropping it from the latest schema is not an old install.
+    const folder = await fs.promises.mkdtemp(join(tmpdir(), "paperclip-issuer-history-"));
+    cleanups.push(() => fs.promises.rm(folder, { recursive: true, force: true }));
+    const journal = JSON.parse(await fs.promises.readFile(new URL("./migrations/meta/_journal.json", import.meta.url), "utf8"));
+    const target = journal.entries.findIndex((entry: { tag: string }) => `${entry.tag}.sql` === MIGRATION_FILE);
+    expect(target).toBeGreaterThan(0);
+    const entries = journal.entries.slice(0, target) as Array<{ tag: string }>;
+    await fs.promises.mkdir(join(folder, "meta"));
+    await fs.promises.writeFile(join(folder, "meta", "_journal.json"), JSON.stringify({ ...journal, entries }));
+    for (const entry of entries) await fs.promises.copyFile(
+      new URL(`./migrations/${entry.tag}.sql`, import.meta.url), join(folder, `${entry.tag}.sql`));
+    const database = await startEmbeddedPostgresTestDatabase("paperclip-account-issuer-", {
+      beforeMigrations: async connectionString => {
+        const historical = postgres(connectionString, { max: 1 });
+        try { await migrate(drizzle(historical), { migrationsFolder: folder }); }
+        finally { await historical.end(); }
+        const sql = postgres(connectionString, { max: 1 });
+        try {
+          const [column] = await sql<{ count: number }[]>`SELECT count(*)::int AS count FROM information_schema.columns
+            WHERE table_schema='public' AND table_name='account' AND column_name='issuer'`;
+          expect(column?.count).toBe(0);
+          await sql`
       INSERT INTO "user" ("id", "name", "email", "created_at", "updated_at")
       VALUES
         (${credentialUserId}, 'Credential User', 'credential@example.com', now(), now()),
         (${socialUserId}, 'Social User', 'social@example.com', now(), now())
     `;
-    await sql`
+          await sql`
       INSERT INTO "account"
         ("id", "account_id", "provider_id", "user_id", "password", "created_at", "updated_at")
       VALUES
@@ -101,7 +108,13 @@ describeEmbeddedPostgres("account issuer migration", () => {
         (${googleAccountId}, 'google-subject-1', 'google', ${socialUserId}, NULL, now(), now())
     `;
 
-    await applyPendingMigrations(database.connectionString);
+        } finally { await sql.end(); }
+      },
+    });
+    cleanups.push(database.cleanup);
+    const sql = postgres(database.connectionString, { max: 1 });
+    cleanups.push(async () => sql.end());
+    expect((await inspectMigrations(database.connectionString)).status).toBe("upToDate");
 
     const rows = await sql<{ id: string; issuer: string }[]>`
       SELECT "id", "issuer" FROM "account" ORDER BY "id"
