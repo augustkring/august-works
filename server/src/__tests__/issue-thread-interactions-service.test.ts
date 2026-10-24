@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import express from "express";
+import request from "supertest";
 import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
 import {
@@ -30,9 +32,13 @@ import { instanceSettingsService } from "../services/instance-settings.js";
 import { issueService } from "../services/issues.js";
 import { issueThreadInteractionService } from "../services/issue-thread-interactions.js";
 import { agentService } from "../services/agents.js";
+import { actorMiddleware } from "../middleware/auth.js";
+import { errorHandler } from "../middleware/index.js";
+import { projectRoutes } from "../routes/projects.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
+const localBoardRequestActor = { type: "board" as const, source: "local_implicit" as const };
 
 describeEmbeddedPostgres("issueThreadInteractionService", () => {
   let db!: ReturnType<typeof createDb>;
@@ -100,6 +106,15 @@ describeEmbeddedPostgres("issueThreadInteractionService", () => {
     });
 
     return { companyId, goalId, issueId };
+  }
+
+  function createProjectApp() {
+    const app = express();
+    app.use(express.json());
+    app.use(actorMiddleware(db, { deploymentMode: "local_trusted" }));
+    app.use("/api", projectRoutes(db));
+    app.use(errorHandler);
+    return app;
   }
 
   it("creates an explicitly reviewed backlog suggestion only once and preserves legacy todo defaults", async () => {
@@ -1980,6 +1995,7 @@ describeEmbeddedPostgres("issueThreadInteractionService", () => {
       },
       {
         userId: "local-board",
+        requestActor: localBoardRequestActor,
       },
     );
 
@@ -2673,6 +2689,7 @@ describeEmbeddedPostgres("issueThreadInteractionService", () => {
       projectId: null,
     }, created.id, {}, {
       userId: "local-board",
+      requestActor: localBoardRequestActor,
     });
 
     expect(accepted.continuationIssue).toEqual({
@@ -2720,6 +2737,7 @@ describeEmbeddedPostgres("issueThreadInteractionService", () => {
       projectId: null,
     }, agentOwnedConfirmation.id, {}, {
       userId: "local-board",
+      requestActor: localBoardRequestActor,
     });
 
     expect(resumed.continuationIssue).toEqual({
@@ -2763,6 +2781,7 @@ describeEmbeddedPostgres("issueThreadInteractionService", () => {
       projectId: null,
     }, activeConfirmation.id, {}, {
       userId: "local-board",
+      requestActor: localBoardRequestActor,
     });
 
     expect(acceptedWhileActive.continuationIssue).toBeNull();
@@ -2806,7 +2825,7 @@ describeEmbeddedPostgres("issueThreadInteractionService", () => {
       companyId,
       goalId,
       projectId: null,
-    }, created.id, {}, { userId: "local-board" });
+    }, created.id, {}, { userId: "local-board", requestActor: localBoardRequestActor });
 
     expect(accepted.interaction).toMatchObject({
       id: created.id,
@@ -2854,6 +2873,7 @@ describeEmbeddedPostgres("issueThreadInteractionService", () => {
     }, { agentId });
     await interactionsSvc.acceptInteraction({ id: issueId, companyId, goalId, projectId: null }, nonPlan.id, {}, {
       userId: "local-board",
+      requestActor: localBoardRequestActor,
     });
     await expect(db.select().from(issues).where(eq(issues.id, issueId)).then((rows) => rows[0]?.workMode))
       .resolves.toBe("planning");
@@ -2871,7 +2891,7 @@ describeEmbeddedPostgres("issueThreadInteractionService", () => {
     }, { agentId });
     await interactionsSvc.acceptInteraction({ id: issueId, companyId, goalId, projectId: null }, checkbox.id, {
       selectedOptionIds: ["phase-1"],
-    }, { userId: "local-board" });
+    }, { userId: "local-board", requestActor: localBoardRequestActor });
     await expect(db.select().from(issues).where(eq(issues.id, issueId)).then((rows) => rows[0]?.workMode))
       .resolves.toBe("planning");
   });
@@ -3573,6 +3593,7 @@ describeEmbeddedPostgres("issueThreadInteractionService", () => {
       projectId: null,
     }, created.id, {}, {
       userId: "local-board",
+      requestActor: localBoardRequestActor,
     })).resolves.toMatchObject({
       interaction: { status: "accepted" },
       continuationIssue: { id: issueId },
@@ -3740,7 +3761,6 @@ describeEmbeddedPostgres("issueThreadInteractionService", () => {
       sourceRunStatus?: string;
     }) {
       const companyId = randomUUID();
-      const projectId = randomUUID();
       const projectWorkspaceId = randomUUID();
       const executionWorkspaceId = randomUUID();
       const issueId = randomUUID();
@@ -3758,12 +3778,11 @@ describeEmbeddedPostgres("issueThreadInteractionService", () => {
         requireBoardApprovalForNewAgents: false,
       });
       await instanceSettingsService(db).updateExperimental({ enableIsolatedWorkspaces: false });
-      await db.insert(projects).values({
-        id: projectId,
-        companyId,
-        name: "Project",
-        status: "in_progress",
-      });
+      const { body: createdProject } = await request(createProjectApp())
+        .post(`/api/companies/${companyId}/projects`)
+        .send({ name: "Project", status: "in_progress" })
+        .expect(201);
+      const projectId = createdProject.id as string;
       await db.insert(projectWorkspaces).values({
         id: projectWorkspaceId,
         companyId,
@@ -4253,7 +4272,7 @@ describeEmbeddedPostgres("issueThreadInteractionService", () => {
         { id: issueId, companyId, goalId, projectId: null },
         created.id,
         {},
-        { userId: "local-board" },
+        { userId: "local-board", requestActor: localBoardRequestActor },
       );
 
       expect(accepted.interaction).toMatchObject({

@@ -3953,13 +3953,14 @@ export function issueThreadInteractionService(
             createdByUserId: actor.userId ?? null,
             originIdentityContextId: interaction.sourceIdentityContextId ?? null,
             originRunId: interaction.sourceRunId ?? null,
+            actorRunId: actor.runId ?? null,
             actorAgentId: actor.agentId ?? null,
             actorUserId: actor.userId ?? null,
           } as Parameters<ReturnType<typeof issueService>["createChild"]>[1];
           const owner = issueService(tx as unknown as Db);
           const createdIssue = task.placement === "company_backlog"
-            ? await owner.create(issue.companyId, { ...createInput, allowDuplicate: true, originKind: "manual", originId: `paperclip-suggested-task:${interaction.id}` })
-            : (await owner.createChild(parentIssueId, createInput)).issue;
+            ? await owner.create(issue.companyId, { ...createInput, allowDuplicate: true, originKind: "manual", originId: `paperclip-suggested-task:${interaction.id}` }, undefined, undefined, { privacyActor: actor.requestActor })
+            : (await owner.createChild(parentIssueId, createInput, { privacyActor: actor.requestActor })).issue;
           if (task.placement === "company_backlog") {
             if (createdIssue.id !== separateTaskIds.get(task.clientKey))
               throw conflict("The proposal's Original task identity changed");
