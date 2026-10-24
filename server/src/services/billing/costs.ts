@@ -46,8 +46,8 @@ export function allocateHostCost(
   return { accounts, allocated, unallocated: monthly - allocated, reserved };
 }
 export function saasCostService(db: Db, config: SaasPlatformConfig) {
-  async function latest() {
-    const [row] = await db
+  async function latest(reader: Pick<Db, "select"> = db) {
+    const [row] = await reader
       .select({ data: platformAdminAudit.safeDetails })
       .from(platformAdminAudit)
       .where(

@@ -934,6 +934,23 @@ const support = await getEmbeddedPostgresTestSupport();
         .expect(409);
       expect(changed.headers["cache-control"]).toBe("private, no-store");
     });
+    it("admits internal support status only through the current native operator session", async () => {
+      const grant = await approve();
+      let currentActor: AuthorizationActor = operatorActor;
+      const app = express();
+      app.use((req, _res, next) => { req.actor = currentActor; next(); });
+      const platform = {
+        config: { environment: "staging", operatorUserIds: ["operator"] },
+        support: service,
+        enabled: async () => true,
+      } as unknown as SaasPlatform;
+      app.use("/api", saasRoutes(db, platform));
+      app.use(errorHandler);
+      const path = `/api/saas/internal/support/${grant.id}/status`;
+      expect((await request(app).get(path)).status).toBe(200);
+      currentActor = { ...operatorActor, sessionId: undefined };
+      expect((await request(app).get(path)).status).toBe(403);
+    });
     it("reads an expired native approval as a historical limit, without claiming an active access decision", async () => {
       // The real bounded history returns ten newest approvals. Keep this older
       // receipt in its own real company so other cases cannot page it out.

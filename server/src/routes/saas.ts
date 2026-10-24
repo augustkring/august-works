@@ -43,6 +43,7 @@ import { logActivity } from "../services/activity-log.js";
 import type { SaasPlatform } from "../services/saas/platform.js";
 import { assertCompanyAccess } from "./authz.js";
 import { publicJson } from "../services/saas/crypto.js";
+import { assertConfiguredOperatorAuthentication } from "../auth/authenticator-assurance.js";
 
 export function saasRoutes(db: Db, platform: SaasPlatform) {
   const router = Router();
@@ -67,6 +68,14 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
         code: "ACCOUNT_CHANGED",
       });
     return row;
+  }
+  async function operatorRead<T>(req: Request, read: (reader: Db) => Promise<T>): Promise<T> {
+    return db.transaction(async tx => {
+      await assertConfiguredOperatorAuthentication(tx, req.actor, platform.config.operatorUserIds, { requireRecent: false });
+      const result = await read(tx as unknown as Db);
+      await assertConfiguredOperatorAuthentication(tx, req.actor, platform.config.operatorUserIds, { requireRecent: false });
+      return result;
+    });
   }
   async function company(
     req: Request,
@@ -107,6 +116,9 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
     platform.support.operator(actor.id);
     if (!actor.emailVerified)
       throw forbidden("Verified operator account required");
+    await assertConfiguredOperatorAuthentication(db, req.actor, platform.config.operatorUserIds, {
+      requireRecent: req.method !== "GET" && req.method !== "HEAD",
+    });
     next();
   });
   router.get("/saas/capabilities", async (_req, res) => {
@@ -654,86 +666,86 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
     const actor = await user(req);
     platform.support.operator(actor.id);
     await gate("admin_support_v6");
-    const [jobs, hosts, profiles, versions, support, deployments, queues] =
-      await Promise.all([
-        db
-          .select({
-            jobKey: platformSchedulerLeases.jobKey,
-            leaseUntil: platformSchedulerLeases.leaseUntil,
-            lastSuccessAt: platformSchedulerLeases.lastSuccessAt,
-            lastErrorCode: platformSchedulerLeases.lastErrorCode,
-          })
-          .from(platformSchedulerLeases)
-          .limit(100),
-        db
-          .select({
-            id: runtimeHosts.id,
-            status: runtimeHosts.status,
-            region: runtimeHosts.region,
-            lastHeartbeatAt: runtimeHosts.lastHeartbeatAt,
-            fencedAt: runtimeHosts.fencedAt,
-            cpuTotalMillis: runtimeHosts.cpuTotalMillis,
-            cpuReservedMillis: runtimeHosts.cpuReservedMillis,
-          })
-          .from(runtimeHosts)
-          .orderBy(desc(runtimeHosts.createdAt))
-          .limit(200),
-        db
-          .select({
-            key: runtimeCapacityProfiles.key,
-            commercialProductKey: runtimeCapacityProfiles.commercialProductKey,
-            cpuMillis: runtimeCapacityProfiles.cpuMillis,
-            memoryBytes: runtimeCapacityProfiles.memoryBytes,
-            diskBytes: runtimeCapacityProfiles.diskBytes,
-            qualified: runtimeCapacityProfiles.qualified,
-          })
-          .from(runtimeCapacityProfiles)
-          .limit(100),
-        db
-          .select({
-            imageDigest: runtimeVersionCatalog.imageDigest,
-            providerVersion: runtimeVersionCatalog.providerVersion,
-            stateFormat: runtimeVersionCatalog.stateFormat,
-            status: runtimeVersionCatalog.status,
-            approvedAt: runtimeVersionCatalog.approvedAt,
-          })
-          .from(runtimeVersionCatalog)
-          .orderBy(desc(runtimeVersionCatalog.createdAt))
-          .limit(100),
-        db
-          .select({
-            id: supportSessions.id,
-            companyId: supportSessions.companyId,
-            scopes: supportSessions.scopes,
-            expiresAt: supportSessions.expiresAt,
-          })
-          .from(supportSessions)
-          .where(
-            and(
-              eq(supportSessions.operatorUserId, actor.id),
-              isNull(supportSessions.revokedAt),
-              gt(supportSessions.expiresAt, new Date()),
-            ),
-          )
-          .limit(100),
-        db
-          .select({
-            sourceSha: deploymentRecords.sourceSha,
-            imageDigest: deploymentRecords.imageDigest,
-            schemaVersion: deploymentRecords.schemaVersion,
-            environment: deploymentRecords.environment,
-            verificationResult: deploymentRecords.verificationResult,
-            deployedAt: deploymentRecords.deployedAt,
-          })
-          .from(deploymentRecords)
-          .orderBy(desc(deploymentRecords.deployedAt))
-          .limit(10),
-        db.execute<{ domain: string; status: string; count: string }>(
-          sql`select 'email' as domain,status,count(*)::text as count from email_deliveries group by status union all select 'billing_webhook',status,count(*)::text from billing_webhook_events group by status union all select 'checkout',status,count(*)::text from billing_checkout_intents group by status union all select 'runtime_operation',status,count(*)::text from runtime_operations group by status union all select 'provider_operation',status,count(*)::text from runtime_host_provider_operations group by status union all select 'deletion',status,count(*)::text from company_deletion_operations group by status union all select 'account_deletion',status,count(*)::text from account_deletion_operations group by status`,
-        ),
-      ]);
-    res.set("Cache-Control", "no-store").json(
-      publicJson({
+    const snapshot = await operatorRead(req, async reader => {
+      const [jobs, hosts, profiles, versions, support, deployments, queues] =
+        await Promise.all([
+          reader
+            .select({
+              jobKey: platformSchedulerLeases.jobKey,
+              leaseUntil: platformSchedulerLeases.leaseUntil,
+              lastSuccessAt: platformSchedulerLeases.lastSuccessAt,
+              lastErrorCode: platformSchedulerLeases.lastErrorCode,
+            })
+            .from(platformSchedulerLeases)
+            .limit(100),
+          reader
+            .select({
+              id: runtimeHosts.id,
+              status: runtimeHosts.status,
+              region: runtimeHosts.region,
+              lastHeartbeatAt: runtimeHosts.lastHeartbeatAt,
+              fencedAt: runtimeHosts.fencedAt,
+              cpuTotalMillis: runtimeHosts.cpuTotalMillis,
+              cpuReservedMillis: runtimeHosts.cpuReservedMillis,
+            })
+            .from(runtimeHosts)
+            .orderBy(desc(runtimeHosts.createdAt))
+            .limit(200),
+          reader
+            .select({
+              key: runtimeCapacityProfiles.key,
+              commercialProductKey: runtimeCapacityProfiles.commercialProductKey,
+              cpuMillis: runtimeCapacityProfiles.cpuMillis,
+              memoryBytes: runtimeCapacityProfiles.memoryBytes,
+              diskBytes: runtimeCapacityProfiles.diskBytes,
+              qualified: runtimeCapacityProfiles.qualified,
+            })
+            .from(runtimeCapacityProfiles)
+            .limit(100),
+          reader
+            .select({
+              imageDigest: runtimeVersionCatalog.imageDigest,
+              providerVersion: runtimeVersionCatalog.providerVersion,
+              stateFormat: runtimeVersionCatalog.stateFormat,
+              status: runtimeVersionCatalog.status,
+              approvedAt: runtimeVersionCatalog.approvedAt,
+            })
+            .from(runtimeVersionCatalog)
+            .orderBy(desc(runtimeVersionCatalog.createdAt))
+            .limit(100),
+          reader
+            .select({
+              id: supportSessions.id,
+              companyId: supportSessions.companyId,
+              scopes: supportSessions.scopes,
+              expiresAt: supportSessions.expiresAt,
+            })
+            .from(supportSessions)
+            .where(
+              and(
+                eq(supportSessions.operatorUserId, actor.id),
+                isNull(supportSessions.revokedAt),
+                gt(supportSessions.expiresAt, new Date()),
+              ),
+            )
+            .limit(100),
+          reader
+            .select({
+              sourceSha: deploymentRecords.sourceSha,
+              imageDigest: deploymentRecords.imageDigest,
+              schemaVersion: deploymentRecords.schemaVersion,
+              environment: deploymentRecords.environment,
+              verificationResult: deploymentRecords.verificationResult,
+              deployedAt: deploymentRecords.deployedAt,
+            })
+            .from(deploymentRecords)
+            .orderBy(desc(deploymentRecords.deployedAt))
+            .limit(10),
+          reader.execute<{ domain: string; status: string; count: string }>(
+            sql`select 'email' as domain,status,count(*)::text as count from email_deliveries group by status union all select 'billing_webhook',status,count(*)::text from billing_webhook_events group by status union all select 'checkout',status,count(*)::text from billing_checkout_intents group by status union all select 'runtime_operation',status,count(*)::text from runtime_operations group by status union all select 'provider_operation',status,count(*)::text from runtime_host_provider_operations group by status union all select 'deletion',status,count(*)::text from company_deletion_operations group by status union all select 'account_deletion',status,count(*)::text from account_deletion_operations group by status`,
+          ),
+        ]);
+      return publicJson({
         environment: platform.config.environment,
         jobs,
         hosts,
@@ -742,14 +754,15 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
         support,
         deployments,
         queues: Array.from(queues),
-      }),
-    );
+      });
+    });
+    res.set("Cache-Control", "no-store").json(snapshot);
   });
   router.get("/saas/internal/costs", async (req, res) => {
     const actor = await user(req);
     platform.support.operator(actor.id);
     await gate("admin_support_v6");
-    res.set("Cache-Control", "no-store").json(await platform.costs.latest());
+    res.set("Cache-Control", "no-store").json(await operatorRead(req, async reader => platform.costs.latest(reader)));
   });
   router.post("/saas/internal/costs", async (req, res) => {
     const actor = await user(req);
@@ -763,8 +776,8 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
     platform.support.operator(actor.id);
     await gate("runtime_host_agent_v6");
     res.set("Cache-Control", "no-store").json(
-      publicJson({
-        hosts: await db
+      await operatorRead(req, async reader => publicJson({
+        hosts: await reader
           .select({
             id: runtimeHosts.id,
             status: runtimeHosts.status,
@@ -777,15 +790,15 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
           })
           .from(runtimeHosts)
           .limit(200),
-        versions: await db.select().from(runtimeVersionCatalog).limit(100),
-      }),
+        versions: await reader.select().from(runtimeVersionCatalog).limit(100),
+      })),
     );
   });
   router.get("/saas/internal/fleet/inventory", async (req, res) => {
     const actor = await user(req);
     platform.support.operator(actor.id);
     await gate("admin_support_v6");
-    const [report] = await db
+    const [report] = await operatorRead(req, async reader => reader
       .select({
         observedAt: platformAdminAudit.createdAt,
         report: platformAdminAudit.safeDetails,
@@ -798,7 +811,7 @@ export function saasRoutes(db: Db, platform: SaasPlatform) {
         ),
       )
       .orderBy(desc(platformAdminAudit.createdAt))
-      .limit(1);
+      .limit(1));
     res.set("Cache-Control", "no-store").json(report ?? null);
   });
   router.post("/saas/internal/fleet/hosts", async (req, res) => {

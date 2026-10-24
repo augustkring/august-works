@@ -497,3 +497,29 @@ Exact passing, failing, baseline and compiler results are retained at
 No new schema migration or dependency is introduced. The remaining operator,
 SSO/recovery, source privacy, typed origins, portability, complete V10 and full
 workspace/PR gates stay open.
+
+### 2026-10-24 — internal SaaS HTTP and metadata reads
+
+All human `/saas/internal/*` routes now require the configured verified native
+operator's actual current passkey session before their controllers. GET/HEAD
+allow current proof without a new recent event; mutations require recent proof.
+The existing role, verified-email, account-intent and commercial/domain admission
+remain. Board credentials and local/session labels do not replace native proof.
+Host authentication and explicit scheduler/worker services remain separate lanes.
+
+Operations, fleet, inventory and cost metadata snapshots now execute inside a
+route-owned transaction with current operator proof pinned before and after the
+read. The cost service's existing `latest` query accepts the original reader;
+report calculation/publication is unchanged in this increment. Support reads
+retain their original scoped service transactions and customer-owner approval.
+
+Native fixtures exercise current, missing, password-only, Board-key, stale and
+deleted proof, metadata limits, actual private support status and the original
+role/email/customer-scope boundaries. Fixture actor carriers are not cookie or
+WebAuthn qualification; those remain covered by the separate native browser.
+Evidence:
+`doc/operations/aw-v10-evidence/native-operator-http-2026-10-24/checkpoint.json`.
+No migration/dependency change. Mutation middleware is preflight only: catalog,
+fleet/control and cost request effect transactions still need their actual actor,
+and later provider effects need original durable-operation authority and outcome
+reconciliation. Remaining V10 and full workspace/PR gates stay open.

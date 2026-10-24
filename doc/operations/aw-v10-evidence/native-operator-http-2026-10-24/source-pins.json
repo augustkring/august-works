@@ -1,0 +1,6 @@
+{
+  "server/src/__tests__/v6-operator-access.integration.test.ts": "d92db377369525d7e96e1d1e731a3ab334b589c1518a04150efc82e95bdf6c84",
+  "server/src/__tests__/v9-customer-support.integration.test.ts": "7fd60855ca7f1ab953aa2c4c3a3f6e4c17e44ccd6fdaa633cc9674dac9a15666",
+  "server/src/routes/saas.ts": "0411ac35318a6a5ddb620017f7eb22982a8fc53525b373743768cdd04b1044be",
+  "server/src/services/billing/costs.ts": "f683c81a5949b1c1c52ff8d1afad77882861023cbf996691b3f2ef01d5003a8a"
+}

@@ -812,3 +812,15 @@ feedback/image/retention/restore suites pass73. The broad package Context/Memory
 failures remain open and representative old-owner controls reproduce them;
 manifest/source admission is not relaxed. Detailed bounded evidence:
 `doc/operations/aw-v10-evidence/native-operator-feedback-2026-10-24/checkpoint.json`.
+
+### 2026-10-24 — internal SaaS HTTP and private metadata admission
+
+The complete internal human HTTP namespace now requires verified current native
+operator passkey proof, recent for mutations. Operations/fleet/inventory/cost
+snapshots hold that proof across their original reads in actual transactions;
+scoped support keeps its original approval owner. Native HTTP/domain suites pass41
+with weak/missing/Board-key/stale/deleted proof cases and unchanged tenant/account
+flows. Evidence:
+`doc/operations/aw-v10-evidence/native-operator-http-2026-10-24/checkpoint.json`.
+Catalog/fleet/cost effect transactions, async dispatch/reconciliation, original
+source failures and complete V10/PR admission remain open.
