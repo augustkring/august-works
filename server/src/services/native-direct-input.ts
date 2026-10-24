@@ -27,9 +27,16 @@ export function directHumanPayloadSnapshotSql(kind: "issue" | "project" | "comme
 }
 
 /** The caller retains its actual native User/session pins until commit. */
-export async function assertDirectInputSessionCurrent(tx: Transaction, actor: AuthorizationActor, expiresAt: number) {
+export async function assertDirectInputSessionCurrent(
+  tx: Transaction,
+  actor: AuthorizationActor,
+  expiresAt: number | null,
+  unavailableMessage = "The current manual input session is unavailable",
+) {
+  if (actor.type !== "board" || !actor.userId || (expiresAt !== null && !Number.isFinite(expiresAt)))
+    throw forbidden(unavailableMessage);
   const [current] = await tx.execute<{ active: boolean }>(sql`select
-    ${expiresAt}::double precision>extract(epoch from clock_timestamp())*1000
+    (${expiresAt}::double precision is null or ${expiresAt}::double precision>extract(epoch from clock_timestamp())*1000)
     and not exists(select 1 from account_deletion_operations where user_id=${actor.userId}) as active`);
-  if (!current?.active) throw forbidden("The current manual input session is unavailable");
+  if (!current?.active) throw forbidden(unavailableMessage);
 }
