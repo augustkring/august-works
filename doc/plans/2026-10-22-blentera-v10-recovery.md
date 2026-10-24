@@ -933,3 +933,28 @@ unchanged private-Memory/temporal cases, the focused remaining source gate is
 six failures/five passes in three suites. This checkpoint does not admit private
 work, complete input receipts, typed origins or full V10/PR acceptance. Evidence:
 `doc/operations/aw-v10-evidence/native-run-binding-2026-10-24/checkpoint.json`.
+
+### 2026-10-24 — protected authentication effect deadlines
+
+A native real-crypto password-change request first reproduced a stale-MFA
+effect: its proof was current at admission, expired during an observed actual
+credential UPDATE lock wait, yet the original handler committed successfully.
+The shared native proof now carries its actual source-session expiry. Protected
+password/factor/passkey owners check that original expiry and original recent
+authentication event against database wall time after their effects, before
+commit. Session rotation or intentional revocation cannot renew the source's
+authority; principal/generation/credential/factor verification still belongs to
+the original pinned transaction. New authentication ceremonies keep their
+existing separate verifier semantics.
+
+Final48 native cases in three suites pass. Four real lock-wait controls cover
+MFA and session expiry during password change, recovery-code rotation and MFA
+disable, preserving credential/factor bytes, original proof time/expiry, User
+generation and the exact incoming session cookie on rejection. Expired session
+lookup uses the maintained native `200/null` contract; standard refresh/cache
+query controls prevent the fixture from silently renewing its test deadline.
+Initial failed fixture expectations are retained as such. Remaining typed and
+private-source/temporal failures, complete Native input receipts, enterprise
+recovery/remaining sensitive actions and full V10/PR admission remain open.
+Evidence:
+`doc/operations/aw-v10-evidence/native-protected-auth-deadlines-2026-10-24/checkpoint.json`.

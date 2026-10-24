@@ -6,7 +6,7 @@ import { deleteSessionCookie, expireCookie, setSessionCookie } from "better-auth
 import { twoFactor } from "better-auth/plugins";
 import { parseUserOutput } from "better-auth/db";
 import { authRateLimits, type Db } from "@paperclipai/db";
-import { assertHumanAuthentication, isAuthenticationStateBusy } from "./authenticator-assurance.js";
+import { assertHumanAuthentication, assertPinnedAuthenticationDeadline, isAuthenticationStateBusy } from "./authenticator-assurance.js";
 import { assertExpectedAuthenticationSession, assertExpectedAuthenticationUser, withNativeAuthenticationTransaction, type NativeAuthenticationSchema } from "./native-authentication-transaction.js";
 
 type NativeEndpoint = ReturnType<typeof twoFactor>["endpoints"][
@@ -160,8 +160,10 @@ export function nativeTwoFactorPlugin(db: Db, schema: NativeAuthenticationSchema
           const updated = await rotate(ctx, tx, owner, owner.version + 1, {
             authenticationMethod: proof.method, authenticatedAt: proof.authenticatedAt,
           });
+          await assertPinnedAuthenticationDeadline(tx, proof);
           return { ...response, sessionId: updated.id };
         }
+        await assertPinnedAuthenticationDeadline(tx, proof);
         return response;
       }).catch(nativeFailure);
 
@@ -252,7 +254,10 @@ export function nativeTwoFactorPlugin(db: Db, schema: NativeAuthenticationSchema
         if (owner.enabled || owner.verified) throw new APIError("CONFLICT", {
           code: "FACTOR_ALREADY_ENABLED", message: "Use the enabled authenticator settings",
         });
-        if (!owner.factorId) return ctx.json({ status: true });
+        if (!owner.factorId) {
+          await assertPinnedAuthenticationDeadline(tx, proof);
+          return ctx.json({ status: true });
+        }
         const [pending] = await tx.execute<{ id: string }>(sql`select id from two_factor
           where id=${owner.factorId} and user_id=${owner.userId} and not verified for update nowait`);
         if (!pending) deny();
@@ -260,6 +265,7 @@ export function nativeTwoFactorPlugin(db: Db, schema: NativeAuthenticationSchema
         await rotate(ctx, tx, owner, owner.version+1, {
           authenticationMethod: proof.method, authenticatedAt: proof.authenticatedAt,
         });
+        await assertPinnedAuthenticationDeadline(tx, proof);
         return ctx.json({ status: true });
       }).catch(nativeFailure);
     }),
@@ -268,9 +274,9 @@ export function nativeTwoFactorPlugin(db: Db, schema: NativeAuthenticationSchema
       assertExpectedAuthenticationUser(ctx, active.user.id);
       assertExpectedAuthenticationSession(ctx, active.session.id);
       return withNativeAuthenticationTransaction(db, ctx, schema, async tx => {
-        const [current] = await tx.execute<FactorSnapshot>(sql`select u.id as "userId",
+        const [current] = await tx.execute<FactorSnapshot & { credentialExpiresAt: Date | string }>(sql`select u.id as "userId",
           u.authenticator_version as version,u.two_factor_enabled as enabled,
-          u.phishing_resistant_required as "phishingResistantRequired"
+          u.phishing_resistant_required as "phishingResistantRequired",s.expires_at as "credentialExpiresAt"
           from "user" u join "session" s on s.user_id=u.id
           where u.id=${active.user.id} and s.id=${active.session.id} and s.expires_at>clock_timestamp()
             and not exists(select 1 from account_deletion_operations where user_id=u.id)
@@ -284,6 +290,9 @@ export function nativeTwoFactorPlugin(db: Db, schema: NativeAuthenticationSchema
         const [clock] = await tx.execute<{ at: Date | string }>(sql`select clock_timestamp() as at`);
         const session = await rotate(ctx, tx, { ...current, sessionToken: active.session.token }, current.version+1, {
           authenticationMethod: proof?.method ?? "password", authenticatedAt: proof?.authenticatedAt ?? new Date(clock!.at),
+        });
+        await assertPinnedAuthenticationDeadline(tx, proof ?? {
+          authenticatedAt: new Date(clock!.at), credentialExpiresAt: new Date(current.credentialExpiresAt),
         });
         return { ...response, sessionId: session.id, token: session.token, user: parseUserOutput(ctx.context.options, ctx.context.session!.user) };
       }).catch(nativeFailure);

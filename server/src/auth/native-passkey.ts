@@ -7,7 +7,7 @@ import { deleteSessionCookie, setSessionCookie } from "better-auth/cookies";
 import { passkey } from "@better-auth/passkey";
 import { authPasskeys, authRateLimits, type Db } from "@paperclipai/db";
 import { nativePasskeySchema } from "@paperclipai/shared";
-import { assertHumanAuthentication, isAuthenticationStateBusy } from "./authenticator-assurance.js";
+import { assertHumanAuthentication, assertPinnedAuthenticationDeadline, isAuthenticationStateBusy } from "./authenticator-assurance.js";
 import { assertExpectedAuthenticationSession, assertExpectedAuthenticationUser,
   withNativeAuthenticationTransaction, type NativeAuthenticationSchema } from "./native-authentication-transaction.js";
 
@@ -149,12 +149,14 @@ export function nativePasskeyPlugin(db: Db, schema: NativeAuthenticationSchema, 
       native.endpoints.generatePasskeyRegistrationOptions.options, async ctx => {
         const source = await owner(ctx);
         return withNativeAuthenticationTransaction(db, ctx, schema, async tx => {
-          await pin(tx, source, ctx); await recent(tx, source);
+          await pin(tx, source, ctx); const proof = await recent(tx, source);
           const [{ count }] = await tx.execute<{ count: number }>(sql`select count(*)::integer as count from passkey where user_id=${source.userId}`);
           if (count >= 16) throw new APIError("BAD_REQUEST", { code: "PASSKEY_LIMIT", message: "Remove an unused passkey first" });
           ctx.query = { ...ctx.query, name: undefined, context: JSON.stringify({ sessionId: source.sessionId, version: source.version }) };
           ctx.setHeader("Cache-Control", "no-store");
-          return invoke(ctx, native.endpoints.generatePasskeyRegistrationOptions);
+          const response = await invoke(ctx, native.endpoints.generatePasskeyRegistrationOptions);
+          await assertPinnedAuthenticationDeadline(tx, proof);
+          return response;
         }).catch(failure);
       }),
     verifyPasskeyRegistration: createAuthEndpoint(native.endpoints.verifyPasskeyRegistration.path,
@@ -174,6 +176,7 @@ export function nativePasskeyPlugin(db: Db, schema: NativeAuthenticationSchema, 
             const [current] = await tx.execute(sql`select id from "user" where id=${source.userId} and authenticator_version=${source.version+1}`);
             if (!current) deny();
             const session = await replacement(ctx, source, source.version+1, { authenticationMethod: proof.method, authenticatedAt: proof.authenticatedAt });
+            await assertPinnedAuthenticationDeadline(tx, proof);
             return { ...passkeySummary(result), sessionId: session.id };
           }));
         } catch (error) { await consumeAfterRejection(ctx, pending.nonce); return failure(error); }
@@ -250,7 +253,7 @@ export function nativePasskeyPlugin(db: Db, schema: NativeAuthenticationSchema, 
       return [operation, createAuthEndpoint(endpoint.path, endpoint.options, async ctx => {
         const source = await owner(ctx);
         return withNativeAuthenticationTransaction(db, ctx, schema, async tx => {
-          await pin(tx, source, ctx); await recent(tx, source);
+          await pin(tx, source, ctx); const proof = await recent(tx, source);
           const [key] = await tx.execute(sql`select id from passkey where id=${ctx.body.id} and user_id=${source.userId} for update nowait`);
           if (!key || "name" in ctx.body && (typeof ctx.body.name !== "string" || ctx.body.name.length>120)) deny();
           if (operation === "deletePasskey") {
@@ -260,6 +263,7 @@ export function nativePasskeyPlugin(db: Db, schema: NativeAuthenticationSchema, 
             if (!retained?.allowed) throw new APIError("CONFLICT", { code: "PASSKEY_REQUIRED", message: "Add a replacement passkey before removing this one" });
           }
           const result = await invoke(ctx, endpoint);
+          await assertPinnedAuthenticationDeadline(tx, proof);
           if (operation === "deletePasskey") { ctx.context.setNewSession(null); (ctx as GenericEndpointContext).context.session=null; deleteSessionCookie(ctx); return { status: true }; }
           return { passkey: passkeySummary(result.passkey as Record<string, unknown>) };
         }).catch(failure);

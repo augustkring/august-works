@@ -5,6 +5,12 @@ import type { AuthorizationActor } from "../services/authorization.js";
 
 export const RECENT_AUTHENTICATION_SECONDS = 300;
 export type NativeAuthenticationMethod = "password" | "totp" | "backup_code" | "passkey";
+type NativeAuthenticationProof = {
+  method: NativeAuthenticationMethod;
+  authenticatedAt: Date;
+  authenticatorVersion: number;
+  credentialExpiresAt: Date;
+};
 
 export function isAuthenticationStateBusy(error: unknown): boolean {
   let cause = error;
@@ -23,15 +29,16 @@ export async function assertHumanAuthentication(
   db: Pick<Db, "execute">,
   actor: AuthorizationActor,
   options: { requireRecent: boolean; phishingResistant: boolean; requireVerifiedEmail?: boolean },
-): Promise<{ method: NativeAuthenticationMethod; authenticatedAt: Date; authenticatorVersion: number }> {
+): Promise<NativeAuthenticationProof> {
   const denied = () => forbidden("Authenticate again to continue", { code: "recent_authentication_required" });
   if (actor.type !== "board" || actor.source !== "session" || !actor.userId || !actor.sessionId) throw denied();
   try {
     const [proof] = await db.execute<{
       method: NativeAuthenticationMethod; authenticatedAt: Date | string; authenticatorVersion: number;
+      credentialExpiresAt: Date | string;
     }>(sql`
       select s.authentication_method as method, s.authenticated_at as "authenticatedAt",
-        s.authenticator_version as "authenticatorVersion"
+        s.authenticator_version as "authenticatorVersion",s.expires_at as "credentialExpiresAt"
       from "session" s join "user" u on u.id=s.user_id
       where s.id=${actor.sessionId} and u.id=${actor.userId}
         and s.expires_at>clock_timestamp()
@@ -55,11 +62,28 @@ export async function assertHumanAuthentication(
       for share of s,u nowait
     `);
     if (!proof) throw denied();
-    return { ...proof, authenticatedAt: new Date(proof.authenticatedAt) };
+    const authenticatedAt = new Date(proof.authenticatedAt), credentialExpiresAt = new Date(proof.credentialExpiresAt);
+    if (!Number.isFinite(authenticatedAt.getTime()) || !Number.isFinite(credentialExpiresAt.getTime())) throw denied();
+    return { ...proof, authenticatedAt, credentialExpiresAt };
   } catch (error) {
     if (isAuthenticationStateBusy(error)) throw conflict("Authentication state is changing; try again", { code: "authentication_state_busy" });
     throw error;
   }
+}
+
+/** Finish a protected native effect on the same transaction that pinned its
+ * source principal. Rotation/revocation cannot extend that source's deadline. */
+export async function assertPinnedAuthenticationDeadline(db: Pick<Db, "execute">,
+  proof: Pick<NativeAuthenticationProof, "authenticatedAt" | "credentialExpiresAt">) {
+  const authenticatedAt = proof.authenticatedAt.getTime(), expiresAt = proof.credentialExpiresAt.getTime();
+  const denied = () => forbidden("Authenticate again to continue", { code: "recent_authentication_required" });
+  if (!Number.isFinite(authenticatedAt) || !Number.isFinite(expiresAt)) throw denied();
+  const [current] = await db.execute<{ active: boolean }>(sql`select
+    ${expiresAt}::double precision>extract(epoch from clock_timestamp())*1000
+    and ${authenticatedAt}::double precision between
+      (extract(epoch from clock_timestamp())-${RECENT_AUTHENTICATION_SECONDS})*1000
+      and extract(epoch from clock_timestamp())*1000 as active`);
+  if (!current?.active) throw denied();
 }
 
 /** Use in the original domain transaction; configured identity is never proof

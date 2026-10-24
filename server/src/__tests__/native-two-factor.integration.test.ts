@@ -218,6 +218,84 @@ describe("maintained native TOTP and recovery lifecycle", () => {
     expect(replay.status).toBe(401); expect(replay.body.code).toBe("OTP_ALREADY_USED");
   }, 60_000);
 
+  it.each([
+    { operation: "change-password", deadline: "mfa", mfa: true },
+    { operation: "change-password", deadline: "session", mfa: false },
+    { operation: "two-factor/generate-backup-codes", deadline: "mfa", mfa: true },
+    { operation: "two-factor/disable", deadline: "session", mfa: true },
+  ])("rolls back a protected native effect $operation after its $deadline deadline expires", async ({ operation, deadline: expiry, mfa }) => {
+    const fixture = mfa ? await enrolled() : await signup();
+    const [credential] = await db.select().from(authAccounts).where(eq(authAccounts.userId, fixture.userId));
+    const [original] = await db.select().from(authSessions).where(eq(authSessions.userId, fixture.userId));
+    const [factor] = await db.select().from(authTwoFactors).where(eq(authTwoFactors.userId, fixture.userId));
+    if (expiry === "mfa") await db.execute(sql`update "session" set authenticated_at=clock_timestamp()-interval '295 seconds'
+      where id=${original.id}`);
+    else await db.execute(sql`update "session" set expires_at=clock_timestamp()+interval '5 seconds' where id=${original.id}`);
+    const [admitted] = await db.execute<{ recent: boolean; at: Date | string; expiresAt: Date | string }>(sql`select
+      authenticated_at as at,expires_at as "expiresAt",
+      authenticated_at>clock_timestamp()-interval '5 minutes' and expires_at>clock_timestamp() as recent
+      from "session" where id=${original.id}`);
+    expect(admitted.recent).toBe(true);
+    let release!: () => void, locked!: () => void;
+    const released = new Promise<void>(resolve => { release = resolve; });
+    const ready = new Promise<void>(resolve => { locked = resolve; });
+    const holder = db.transaction(async tx => {
+      if (operation === "change-password")
+        await tx.select({ id: authAccounts.id }).from(authAccounts).where(eq(authAccounts.id, credential.id)).for("update");
+      else await tx.select({ id: authTwoFactors.id }).from(authTwoFactors).where(eq(authTwoFactors.id, factor.id)).for("update");
+      locked(); await released;
+    });
+    await ready;
+    const changing = post(operation, fixture.cookie).query({ disableRefresh: true }).send(operation === "change-password" ? { currentPassword: PASSWORD,
+      newPassword: "An uncommitted replacement after expired MFA 2026", revokeOtherSessions: false } : { password: PASSWORD })
+      .then(response => response);
+    const targetTable = operation === "change-password" ? "%account%" : "%two_factor%";
+    let blocked = false, expired = false;
+    try {
+      const deadline = Date.now()+10_000;
+      while (Date.now()<deadline) {
+        const [waiter] = await db.execute<{ waiting: boolean }>(sql`select exists(select 1 from pg_stat_activity
+          where datname=current_database() and pid<>pg_backend_pid() and wait_event_type='Lock'
+            and query ilike ${targetTable} and (query ilike '%update%' or query ilike '%delete%')) as waiting`);
+        if (waiter.waiting) { blocked = true; break; }
+        await new Promise(resolve => setTimeout(resolve, 25));
+      }
+      if (blocked) {
+        await db.execute(sql`select pg_sleep(5.3)`);
+        const [proof] = await db.execute<{ expired: boolean }>(sql`select
+          ${expiry === "mfa" ? sql`authenticated_at<clock_timestamp()-interval '5 minutes'` : sql`expires_at<clock_timestamp()`}
+          as expired from "session" where id=${original.id}`);
+        expired = proof.expired;
+      }
+    } finally { release(); await holder; }
+    const response = await changing;
+    expect(blocked).toBe(true); expect(expired).toBe(true);
+    expect(response.status).toBe(403);
+    expect(response.body.code).toBe("recent_authentication_required");
+    for (const field of ["backupCodes", "token", "sessionId"]) expect(response.body).not.toHaveProperty(field);
+    expect((await db.select().from(authAccounts).where(eq(authAccounts.id, credential.id)))[0].password).toBe(credential.password);
+    const sessions = await db.select().from(authSessions).where(eq(authSessions.userId, fixture.userId));
+    expect(sessions).toHaveLength(1);
+    expect(sessions[0]).toMatchObject({ id: original.id, authenticatorVersion: original.authenticatorVersion,
+      authenticationMethod: original.authenticationMethod, authenticatedAt: new Date(admitted.at),
+      expiresAt: new Date(admitted.expiresAt) });
+    expect((await db.select().from(authUsers).where(eq(authUsers.id, fixture.userId)))[0].authenticatorVersion)
+      .toBe(original.authenticatorVersion);
+    if (factor) expect((await db.select().from(authTwoFactors).where(eq(authTwoFactors.id, factor.id)))[0])
+      .toMatchObject({ secret: factor.secret, backupCodes: factor.backupCodes, verified: factor.verified });
+    const returnedCookies = cookies(fixture.cookie, response);
+    const sourceCookie = fixture.cookie.split(";").map(value => value.trim())
+      .find(value => value.split("=", 1)[0].endsWith("session_token"));
+    expect(sourceCookie).toBeTruthy();
+    expect(returnedCookies.split(";").map(value => value.trim())
+      .find(value => value.split("=", 1)[0].endsWith("session_token"))).toBe(sourceCookie);
+    const current = await request(app).get("/api/auth/get-session")
+      .query({ disableCookieCache: true, disableRefresh: true }).set("Cookie", returnedCookies);
+    expect(current.status).toBe(200);
+    if (expiry === "mfa") expect(current.body.session.id).toBe(original.id);
+    else expect(current.body).toBeNull();
+  }, 60_000);
+
   it("requires a current recent factor session for irreversible account exit", async () => {
     const fixture = await enrolled();
     // Mail delivery/verification is qualified separately. This fixture starts

@@ -1,0 +1,43 @@
+{
+  "parentCommit": "1ece5ad6f46c766a4a4b419463e4f568bacf04a3",
+  "requirements": [
+    "KRN-01"
+  ],
+  "sourcePinsFile": "source-pins.json",
+  "checks": {
+    "originalMfaExpiryControl": {
+      "exit": 1,
+      "failed": 1,
+      "unselected": 17,
+      "observed": "actual MFA proof expired during an observed credential UPDATE lock wait, but password change returned200"
+    },
+    "nativeAuthentication": {
+      "exit": 0,
+      "passed": 48,
+      "suites": 3,
+      "actualEffectWaitControls": 4
+    },
+    "builtCookieAndAuthenticatorBrowser": {
+      "exit": 0,
+      "passed": 1,
+      "suites": 1
+    },
+    "serverCompiler": {
+      "exit": 0
+    }
+  },
+  "observations": [
+    "The original maintained crypto/password-change path admitted actual TOTP proof and then waited on the real credential row. DB wall time proved the proof expired before the wait released. The unfixed action still returned200. No clocks, verification result or authorization metadata were mocked.",
+    "The existing native assurance kernel now returns finite actual source-session expiry with the original method/time/generation. A shared final deadline check narrows protected effects on their original physical native authentication transaction. It cannot grant identity, factor proof or resource authority.",
+    "Password change, TOTP configuration/recovery-code operations, enrollment cancellation and passkey registration/options/rename/removal check the original source expiry and recent event after their awaited effects, before commit. Intentional session rotation/revocation does not extend the original source deadline. The maintained verifier, source principal/generation pins and separate one-use consumption owners remain intact.",
+    "Four native lock-wait cases exercise MFA expiry on password change and recovery-code rotation, and source-session expiry on ordinary password change and MFA disable. Rejection preserves actual credential/factor bytes, prior proof method/time/expiry, User generation, exact source session cookie, and avoids new token/session/code acknowledgements.",
+    "The initial session-expiry fixture allowed the maintained SDK to refresh its deadline before admission. Standard native disableRefresh query behavior now narrows that request; uncached/no-refresh session lookup checks actual DB state. The direct maintained endpoint correctly returns200/null for an expired session, rather than the fixture initial401 assumption. These failed fixture checks are retained and are not represented as production cache failures.",
+    "The real built localhost cookie-session, maintained TOTP/recovery and software virtual-UV passkey lifecycle passes after the server changes. It also retains the existing real CLI-consent and manual Task source checks. Physical keys, providers, enterprise IdP, hosts and all auth journeys are not implied."
+  ],
+  "limits": [
+    "The four expiry races are native password/factor effects. Passkey protected owners reuse the same final helper and their real happy/negative browser/native lifecycle passes; no separate expired physical-passkey race is claimed.",
+    "This does not redefine authentication completion semantics, mint MFA from rotation/settings, authorize service tokens, or replace company/resource/current Human permissions. It changes no schema or dependency.",
+    "Complete enterprise recovery/remaining sensitive actions and audit/lifetime delivery paths remain open. Six typed/private-Memory/temporal regressions, complete input receipts/read families, portability/Context/readiness and full V10 gates remain open.",
+    "No full V10, SaaS/release/compliance/PR-ready acceptance is claimed. No PR, merge or deployment occurred."
+  ]
+}
