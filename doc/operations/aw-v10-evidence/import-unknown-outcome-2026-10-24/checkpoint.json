@@ -1,0 +1,79 @@
+{
+  "parentCommit": "54fad1e0f",
+  "implementationCommit": "ecbed5ee7",
+  "recordedAt": "2026-10-24T19:38:55.248131+00:00",
+  "requirements": [
+    "CE-08",
+    "V10-021",
+    "V10-022",
+    "V10-023"
+  ],
+  "checks": {
+    "red": {
+      "exit": 1,
+      "log": "red.log"
+    },
+    "owned": {
+      "exit": 1,
+      "log": "owned.log"
+    },
+    "shared": {
+      "exit": 0,
+      "log": "shared.log"
+    },
+    "expanded": {
+      "exit": 1,
+      "log": "expanded.log"
+    },
+    "ui": {
+      "exit": 1,
+      "log": "ui.log"
+    },
+    "final": {
+      "exit": 1,
+      "log": "final.log"
+    },
+    "checked": {
+      "exit": 0,
+      "log": "checked.log"
+    },
+    "expanded-final": {
+      "exit": 0,
+      "log": "expanded-final.log"
+    },
+    "late-writers": {
+      "exit": 0,
+      "log": "late-writers.log"
+    },
+    "adjacent": {
+      "exit": 0,
+      "log": "adjacent.log"
+    },
+    "server-types": {
+      "exit": 0,
+      "log": "server-types.log"
+    },
+    "ui-types": {
+      "exit": 0,
+      "log": "ui-types.log"
+    },
+    "tokens": {
+      "exit": 0,
+      "log": "tokens.log"
+    },
+    "types-final": {
+      "exit": 0,
+      "log": "types-final.log"
+    }
+  },
+  "observations": [
+    "Actual PostgreSQL regression: a stranded applying transfer became retryable failed after startup recovery. Two counterexamples failed against the original service; eight prior controls passed. A native project row represents a committed effect, and a fresh Db connection exercises actual recovery; no physical process-kill qualification is claimed.",
+    "Native existing transfer ledger now retains needs_reconciliation and returns the same run for the same actor/content. New claims, generic start/fail/cancel, part writes, preview and apply cannot reopen an uncertain effect. Known pre-dispatch refusal still releases for retry. Actual native completion can settle a known result.",
+    "Once importBundle is invoked, its exception does not establish non-application: uncertainty is retained. Failure of the uncertainty UPDATE itself also never releases an applying claim. The response contains a stable safe error category.",
+    "Async projection and existing Import page distinguish unknown outcome, preserve original stored job identity, block automatic resubmit/activation, and refuse adopting unrelated job IDs on an unknown-outcome 409.",
+    "Expanded native routes/service/UI:65 passes in3 suites. Additional final late-writer ledger cases:10 passes (overlap, not75 distinct). Adjacent cloud/portability route controls:52 passes in2 suites. Server and UI typechecks and token gates pass. Earlier fixture assertion/storage-key errors are preserved separately.",
+    "No DDL change: existing unconstrained text status gains an explicit shared/native state; schema comment only changes.",
+    "Full company import job status still has a process-local Map. This slice does not complete CustomerOperation persistence, canonical preview/input binding, native per-effect ID mapping/checkpoints, cancellation/fencing/reconciliation tools, physical process-kill tests or CE-08/V10 release acceptance. Unknown states require native authoritative reconciliation; no retry/resume is fabricated.",
+    "UI evidence is component/unit evidence, not a new built browser or representative Human accessibility qualification. No deployment or merge."
+  ]
+}

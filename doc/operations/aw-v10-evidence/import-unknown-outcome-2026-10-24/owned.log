@@ -1,0 +1,36 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/company-transfer-runs.test.ts (10 tests | 1 failed) 3824ms
+     × grants the apply claim to exactly one concurrent caller 14ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 1 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/company-transfer-runs.test.ts > companyTransferRunService > grants the apply claim to exactly one concurrent caller
+AssertionError: expected false to be true // Object.is equality
+
+- Expected
++ Received
+
+- true
++ false
+
+ ❯ src/__tests__/company-transfer-runs.test.ts:203:68
+    201|     // A failed apply releases the claim: the run is retryable again.
+    202|     await companyTransferRunService.fail(db, run.id, "import blew up");
+    203|     expect(await companyTransferRunService.claimApply(db, run.id)).toB…
+       |                                                                    ^
+    204|     await companyTransferRunService.complete(db, run.id);
+    205|     expect((await companyTransferRunService.getRun(db, run.id))!.statu…
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/1]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  1 failed | 9 passed (10)
+   Start at  19:30:04
+   Duration  8.22s (transform 2.29s, setup 77ms, import 4.17s, tests 3.82s, environment 0ms)
+

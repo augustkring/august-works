@@ -341,6 +341,12 @@ describeEmbeddedPostgres("companyTransferRunService", () => {
       expect(recovered).toContain(created.run.id);
       const uncertain = (await companyTransferRunService.getRun(restarted, created.run.id))!;
       expect(uncertain.status).toBe("needs_reconciliation");
+      // Late generic upload/failure/cancellation paths cannot make an
+      // uncertain non-idempotent effect eligible to execute again.
+      await companyTransferRunService.start(restarted, created.run.id);
+      await companyTransferRunService.fail(restarted, created.run.id, "late upload error");
+      await companyTransferRunService.cancel(restarted, created.run.id);
+      expect((await companyTransferRunService.getRun(restarted, created.run.id))!.status).toBe("needs_reconciliation");
       expect(await companyTransferRunService.claimApply(restarted, created.run.id)).toBe(false);
 
       const resumed = await companyTransferRunService.resumeOrCreate(restarted, input);

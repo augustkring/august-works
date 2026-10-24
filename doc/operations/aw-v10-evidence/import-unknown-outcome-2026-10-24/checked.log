@@ -1,0 +1,32 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[19:34:05] [33mWARN[39m: [36mfailed to delete import transfer spool after a successful apply[39m [90m{"transferId":"ca955076-33b2-4410-a4a3-03bac621c754"}[39m
+    err: {
+      "type": "Error",
+      "message": "EACCES: spool dir is busy",
+      "stack":
+          Error: EACCES: spool dir is busy
+              at /workspace/blentera-v10/server/src/__tests__/company-import-transfer-routes.test.ts:771:33
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+[19:34:05] [33mWARN[39m: [36mfailed to attach the imported company to its transfer run[39m [90m{"transferId":"8528db96-fff9-4095-a8ac-8370dc17dbb3"}[39m
+    err: {
+      "type": "Error",
+      "message": "registry write timed out",
+      "stack":
+          Error: registry write timed out
+              at /workspace/blentera-v10/server/src/__tests__/company-import-transfer-routes.test.ts:822:30
+              at processTicksAndRejections (node:internal/process/task_queues:104:5)
+              at file:///workspace/blentera-v10/node_modules/.pnpm/@vitest+runner@4.1.11/node_modules/@vitest/runner/dist/chunk-artifact.js:1903:20
+    }
+
+ Test Files  3 passed (3)
+      Tests  64 passed (64)
+   Start at  19:33:50
+   Duration  21.26s (transform 5.41s, setup 124ms, import 9.79s, tests 10.45s, environment 561ms)
+
