@@ -1692,8 +1692,6 @@ describeEmbeddedPostgres("pipelineService", () => {
       actor: userActor,
     });
 
-    console.log("PIPELINE FAILURE DEBUG", moved.automationExecution,
-      await db.select().from(routineRuns), await db.select().from(routineRevisions));
     expect(moved.automationExecution.status).toBe("succeeded");
     const executionIssueId = moved.automationExecution.status === "succeeded"
       ? moved.automationExecution.execution.executionIssueId
