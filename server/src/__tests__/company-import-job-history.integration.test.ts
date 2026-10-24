@@ -139,6 +139,11 @@ const support = await getEmbeddedPostgresTestSupport();
       .query({ expectedUserId: bob.userId }).expect(200);
     expect(bobList.body.jobs.map((entry: { job: { id: string } }) => entry.job.id)).toEqual([bobJob.id]);
     expect(JSON.stringify(bobList.body)).not.toContain(aliceNew.id);
+    // A cursor from another requester only narrows this requester's rows; it
+    // neither adopts the other requester's receipts nor grants their scope.
+    await request(app(bob.actor)).get(`/api/companies/${companyId}/import/jobs`)
+      .query({ expectedUserId: bob.userId, cursor: second.body.nextCursor }).expect(200)
+      .expect(response => expect(response.body.jobs).toEqual([]));
     await request(app(alice.actor)).get(`/api/companies/${companyId}/import/jobs`)
       .query({ expectedUserId: alice.userId, cursor: Buffer.from(JSON.stringify({ createdAt: "2026-01-01T00:00:00.000001Z",
         id: "forged-cursor-id" })).toString("base64url") }).expect(400);
