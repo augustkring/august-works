@@ -2839,7 +2839,11 @@ export function routineService(
     },
 
     create: async (companyId: string, input: CreateRoutine, actor: Actor,
-      options: { idOverride?: string; conversationDraftRunId?: string } = {}): Promise<Routine> => {
+      options: { idOverride?: string; conversationDraftRunId?: string; builtInBundleOriginId?: string } = {}): Promise<Routine> => {
+      if (options.builtInBundleOriginId !== undefined && (
+        actor.userId !== "built-in-bundles" || actor.agentId || options.conversationDraftRunId ||
+        !/^[a-z0-9-]+:[a-z0-9-]+$/.test(options.builtInBundleOriginId)
+      )) throw forbidden("Built-in routine identity requires its native bundle owner");
       const authoringContext = options.conversationDraftRunId ? {
         companyId, agentId: actor.agentId ?? "", runId: options.conversationDraftRunId,
       } : null;
@@ -2887,6 +2891,7 @@ export function routineService(
           .values({
             ...(options.idOverride ? { id: options.idOverride } : {}),
             companyId,
+            ...(options.builtInBundleOriginId ? { originKind: "built_in_agent_bundle", originId: options.builtInBundleOriginId } : {}),
             ...(authoringContext ? { originKind: "conversation_draft", originId: authoringContext.runId } : {}),
             projectId: input.projectId ?? null,
             folderId: input.folderId ?? null,
