@@ -663,10 +663,14 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
       requestedByUserId: req.actor.userId ?? null, limit: query.limit, before }, req.actor);
     const jobs = page.jobs.map(job => {
       const record = importJobRecord(job);
+      const unconfirmedNewCompany = job.companyId === null && job.scopeKey === "new_company" &&
+        (job.status === "running" || job.status === "needs_reconciliation");
       return { job: {
         id: record.id, status: record.status, createdAt: record.createdAt, updatedAt: record.updatedAt,
         ...(record.completedAt ? { completedAt: record.completedAt } : {}),
-        ...(record.result ? { result: record.result } : {}), ...(record.error ? { error: record.error } : {}),
+        ...(unconfirmedNewCompany ? { target: { mode: "new_company" as const, result: "not_confirmed" as const } }
+          : record.result ? { result: record.result } : {}),
+        ...(!unconfirmedNewCompany && record.error ? { error: record.error } : {}),
       }, operation: companyImportOperationReceipt(job) };
     });
     const nextCursor = page.nextCursor ? Buffer.from(JSON.stringify({ createdAt: page.nextCursor.createdAt,

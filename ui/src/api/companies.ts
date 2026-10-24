@@ -60,6 +60,8 @@ export interface CompanyImportJobStatus {
   job: {
     id: string;
     status: CompanyImportJobState;
+    /** An unbound new-company receipt is not evidence that a company was created. */
+    target?: { mode: "new_company"; result: "not_confirmed" };
     createdAt?: string;
     updatedAt?: string;
     completedAt?: string;

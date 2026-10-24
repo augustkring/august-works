@@ -1,10 +1,15 @@
 import { useInfiniteQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
-import { companiesApi } from "../api/companies";
+import { companiesApi, type CompanyImportJobStatus } from "../api/companies";
 import { useCompany } from "../context/CompanyContext";
 import { hasCurrentV9Session, useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
 import { Button } from "../components/ui/button";
 import { Link } from "../lib/router";
+
+function isUnconfirmedNewCompany(job: CompanyImportJobStatus["job"]) {
+  return job.target?.mode === "new_company" && job.target.result === "not_confirmed" &&
+    (job.status === "running" || job.status === "needs_reconciliation") && !job.result && !job.importResult;
+}
 
 /** Saved receipts only. Reading this page never dispatches or retries an import. */
 export function CompanyImportHistory({ active = true }: { active?: boolean } = {}) {
@@ -34,6 +39,7 @@ export function CompanyImportHistory({ active = true }: { active?: boolean } = {
   } : {
     running: "Import in progress", succeeded: "Import complete", failed: "Rejected before import", needs_reconciliation: "Outcome not confirmed",
   };
+  const newCompanyNotConfirmed = da ? "Ny virksomhed, resultatet er endnu ikke bekræftet" : "New company, result not yet confirmed";
   const jobs = current() ? query.data?.pages.flatMap(page => page.jobs) ?? [] : [];
 
   return <section className="space-y-6">
@@ -47,7 +53,9 @@ export function CompanyImportHistory({ active = true }: { active?: boolean } = {
       {query.isError && <p role="alert">{da ? "Importstatus kunne ikke hentes. Prøv at opdatere status." : "Import status could not be loaded. Try refreshing status."}</p>}
       {!query.isPending && !query.isError && jobs.length === 0 && <p>{da ? "Ingen gemte importer for denne konto og dette firma." : "No saved imports for this account and company."}</p>}
       <ul className="space-y-4">{jobs.map(({ job }) => <li key={job.id} className="space-y-2 rounded-lg border border-border p-4">
-        <h2 className="font-medium">{labels[job.status]}</h2>
+        {isUnconfirmedNewCompany(job)
+          ? <><h2 className="font-medium">{newCompanyNotConfirmed}</h2><p className="text-sm">{labels[job.status]}</p></>
+          : <h2 className="font-medium">{labels[job.status]}</h2>}
         {job.createdAt && <time className="text-sm text-muted-foreground" dateTime={job.createdAt}>{new Date(job.createdAt).toLocaleString(da ? "da-DK" : "en-US", { dateStyle: "medium", timeStyle: "short" })}</time>}
         <p className="break-all text-sm">{da ? "Kvittering" : "Receipt"}: {job.id}</p>
         {job.error && <p className="text-sm">{job.error.message}</p>}

@@ -102,7 +102,7 @@
       "source": "ui/src/App.tsx",
       "articleId": "company-import-export",
       "sourceSha256": "a18f03eba75b3cd5837cc27e83577a941324f1a2aadd7cb8452a0bb54db0deb8",
-      "articleSha256": "7e952dd93c4dee8907629442d6b370af4f9dfa55d7f12624a42813bd7aced91f",
+      "articleSha256": "2cbe5b01f43f6bf2778fc5053696411d74ecfd8a51e12b91d9f373e006aa4d1c",
       "decision": "no_change",
       "rationale": "Reviewed App.tsx: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
@@ -110,39 +110,39 @@
       "source": "ui/src/pages/CompanyImport.tsx",
       "articleId": "company-import-export",
       "sourceSha256": "6288b954c6dc4fb181800961fd0ed05419ebfbdfd5fc2a600769dbdabfa738f6",
-      "articleSha256": "7e952dd93c4dee8907629442d6b370af4f9dfa55d7f12624a42813bd7aced91f",
+      "articleSha256": "2cbe5b01f43f6bf2778fc5053696411d74ecfd8a51e12b91d9f373e006aa4d1c",
       "decision": "no_change",
       "rationale": "Reviewed CompanyImport.tsx: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
     {
       "source": "ui/src/pages/CompanyImportHistory.tsx",
       "articleId": "company-import-export",
-      "sourceSha256": "57579d1e9045ead26f485200293a8df6078f0fea1029b607d07de09239495357",
-      "articleSha256": "7e952dd93c4dee8907629442d6b370af4f9dfa55d7f12624a42813bd7aced91f",
-      "decision": "no_change",
-      "rationale": "Reviewed CompanyImportHistory.tsx: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
+      "sourceSha256": "848676297a26bb77b3f53b31256f8bbfcfb296421cc5ce1c0d4dc61827fda7fa",
+      "articleSha256": "2cbe5b01f43f6bf2778fc5053696411d74ecfd8a51e12b91d9f373e006aa4d1c",
+      "decision": "updated",
+      "rationale": "Extended authorized Import history to find the original requester’s unbound new-company receipt; the article now states the honest target label and its limits."
     },
     {
       "source": "server/src/routes/companies.ts",
       "articleId": "company-import-export",
-      "sourceSha256": "29c1bc30c35a2d8486a8f7bfb162ee23430a190a46265c62fb3bbe78a148c9a8",
-      "articleSha256": "7e952dd93c4dee8907629442d6b370af4f9dfa55d7f12624a42813bd7aced91f",
-      "decision": "no_change",
-      "rationale": "Reviewed companies.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
+      "sourceSha256": "3f771cf957af2ebccf0852eeb300b60ce68aa6ad5d639a50166be417cb7b4775",
+      "articleSha256": "2cbe5b01f43f6bf2778fc5053696411d74ecfd8a51e12b91d9f373e006aa4d1c",
+      "decision": "updated",
+      "rationale": "Extended authorized Import history to find the original requester’s unbound new-company receipt; the article now states the honest target label and its limits."
     },
     {
       "source": "server/src/services/company-import-jobs.ts",
       "articleId": "company-import-export",
-      "sourceSha256": "c81b1bb0acceffe0c02086272daf2ba42077c65a06e0fc7f3009fe0d0bb41361",
-      "articleSha256": "7e952dd93c4dee8907629442d6b370af4f9dfa55d7f12624a42813bd7aced91f",
-      "decision": "no_change",
-      "rationale": "Reviewed company-import-jobs.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
+      "sourceSha256": "37682d39ad51f1ade89469c8812bf9347138d5115db026d1e273dbcc7d2e33e3",
+      "articleSha256": "2cbe5b01f43f6bf2778fc5053696411d74ecfd8a51e12b91d9f373e006aa4d1c",
+      "decision": "updated",
+      "rationale": "Extended authorized Import history to find the original requester’s unbound new-company receipt; the article now states the honest target label and its limits."
     },
     {
       "source": "server/src/services/company-import-transfers.ts",
       "articleId": "company-import-export",
       "sourceSha256": "30e1043a913d7960b2d6a4338c69ea766066c8a41ac2778e007b0743b8be52e2",
-      "articleSha256": "7e952dd93c4dee8907629442d6b370af4f9dfa55d7f12624a42813bd7aced91f",
+      "articleSha256": "2cbe5b01f43f6bf2778fc5053696411d74ecfd8a51e12b91d9f373e006aa4d1c",
       "decision": "no_change",
       "rationale": "Reviewed company-import-transfers.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
@@ -150,7 +150,7 @@
       "source": "server/src/services/company-portability.ts",
       "articleId": "company-import-export",
       "sourceSha256": "fc3b794f29637b03b2861998c06bc908ee49337ad783e81c6212923c5076dbe2",
-      "articleSha256": "7e952dd93c4dee8907629442d6b370af4f9dfa55d7f12624a42813bd7aced91f",
+      "articleSha256": "2cbe5b01f43f6bf2778fc5053696411d74ecfd8a51e12b91d9f373e006aa4d1c",
       "decision": "no_change",
       "rationale": "Reviewed company-portability.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
@@ -158,7 +158,7 @@
       "source": "server/src/services/company-export-readme.ts",
       "articleId": "company-import-export",
       "sourceSha256": "7cb1334151504af8c56bdfb906bbae318eb468b18268cd24a85f5721f9f1a481",
-      "articleSha256": "7e952dd93c4dee8907629442d6b370af4f9dfa55d7f12624a42813bd7aced91f",
+      "articleSha256": "2cbe5b01f43f6bf2778fc5053696411d74ecfd8a51e12b91d9f373e006aa4d1c",
       "decision": "no_change",
       "rationale": "Reviewed company-export-readme.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
@@ -166,7 +166,7 @@
       "source": "packages/shared/src/customer-operations.ts",
       "articleId": "company-import-export",
       "sourceSha256": "04380661ffda0dc43419e19c1f8ba7a7247a09c30d9cd4cc90fd03155e9d0bfd",
-      "articleSha256": "7e952dd93c4dee8907629442d6b370af4f9dfa55d7f12624a42813bd7aced91f",
+      "articleSha256": "2cbe5b01f43f6bf2778fc5053696411d74ecfd8a51e12b91d9f373e006aa4d1c",
       "decision": "no_change",
       "rationale": "Reviewed customer-operations.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
@@ -174,7 +174,7 @@
       "source": "packages/shared/src/company-import-transfer.ts",
       "articleId": "company-import-export",
       "sourceSha256": "dbeeea0632b22d2bf0cd4b7e6ae7eded1883ed930a10ed48483f8c6c6576c370",
-      "articleSha256": "7e952dd93c4dee8907629442d6b370af4f9dfa55d7f12624a42813bd7aced91f",
+      "articleSha256": "2cbe5b01f43f6bf2778fc5053696411d74ecfd8a51e12b91d9f373e006aa4d1c",
       "decision": "no_change",
       "rationale": "Reviewed company-import-transfer.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
@@ -182,7 +182,7 @@
       "source": "cli/src/commands/client/company.ts",
       "articleId": "company-import-export",
       "sourceSha256": "2a859ee4e334ddfbdb76d32e511a76cb665fd4f46b7a8d1e689ee1e7996225d6",
-      "articleSha256": "7e952dd93c4dee8907629442d6b370af4f9dfa55d7f12624a42813bd7aced91f",
+      "articleSha256": "2cbe5b01f43f6bf2778fc5053696411d74ecfd8a51e12b91d9f373e006aa4d1c",
       "decision": "no_change",
       "rationale": "Reviewed company.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     }

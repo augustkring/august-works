@@ -61,6 +61,8 @@ Keep **Start imported agents and routines paused** selected while reviewing a pa
 
 An accepted import has a saved operation ID. Reloading the page checks that operation instead of submitting the package again. Signing in as another user does not give access to the original user's import receipt.
 
+If a new-company import is still running or its result is unknown before a target company is confirmed, its original requester can find the operation in the Import history for a company they can currently access. The entry says **New company, result not yet confirmed**. It does not identify or prove that a company was created. Once the target is confirmed, the operation appears in that company's history when you have current access.
+
 - **Running:** wait for the saved operation. Do not create a second import.
 - **Complete:** open the imported company. Detailed names may no longer be available, while the saved summary still identifies the completed operation where you retain access.
 - **Rejected before import:** follow the reason shown. For a changed package, preview the current files before confirming again.
