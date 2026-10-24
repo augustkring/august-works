@@ -6,7 +6,7 @@ import { fileURLToPath } from "node:url";
 import { readHelpArticleSources } from "./check-help-docs.mjs";
 
 const REVIEW_FILE = "docs/help/change-review.json";
-const COVERED_ARTICLES = new Set(["help-and-human-support", "company-import-export"]);
+const REQUIRED_ARTICLES = new Set(["help-and-human-support", "company-import-export"]);
 const SHA = /^[0-9a-f]{40}$/;
 const DIGEST = /^[0-9a-f]{64}$/;
 
@@ -38,12 +38,13 @@ export function validateHelpChangeReview({ articles, reviews, changedPaths, hash
       errors.push(`${article.filename}: linked_source_files must be a list`);
       continue;
     }
+    if (!article.sourceFiles.length) errors.push(`${article.filename}: add at least one linked source file`);
     for (const source of article.sourceFiles) {
       if (!expectedPairs.has(source)) expectedPairs.set(source, []);
       expectedPairs.get(source).push(article);
     }
   }
-  if (!Array.isArray(reviews)) return [...errors, `${REVIEW_FILE}: reviews must be an array`];
+  if (!Array.isArray(reviews)) return { errors: [...errors, `${REVIEW_FILE}: reviews must be an array`], evidence: [] };
   const byPair = new Map();
   for (const review of reviews) {
     if (!review || typeof review.source !== "string" || typeof review.articleId !== "string") {
@@ -103,10 +104,8 @@ export function checkHelpChangeReview({ root = process.cwd(), base, head, eviden
   if (!SHA.test(snapshot)) throw new Error("The checked out source snapshot is not a full commit SHA");
   const articles = readHelpArticleSources(root);
   const foundArticles = new Set(articles.map(article => article.articleId));
-  for (const articleId of COVERED_ARTICLES) if (!foundArticles.has(articleId))
+  for (const articleId of REQUIRED_ARTICLES) if (!foundArticles.has(articleId))
     throw new Error(`The bounded Help review map is missing current article ${articleId}`);
-  for (const articleId of foundArticles) if (!COVERED_ARTICLES.has(articleId))
-    throw new Error(`Help article ${articleId} is outside this bounded review map; add explicit source links before extending coverage`);
   const reviewFile = readReviewFile(root);
   if (reviewFile.schemaVersion !== 1) throw new Error(`${REVIEW_FILE}: expected schemaVersion 1`);
   if (typeof reviewFile.coverage !== "string" || reviewFile.coverage.trim().length < 20)
@@ -124,7 +123,8 @@ export function checkHelpChangeReview({ root = process.cwd(), base, head, eviden
     if (changedArticleFiles.has(entry.article)) continue;
     if (entry.decision !== "no_change") errors.push(`${REVIEW_FILE}: ${entry.source} has no article change; ${entry.articleId} requires no_change`);
   }
-  if (evidenceOut) fs.writeFileSync(evidenceOut, `${JSON.stringify({ schemaVersion: 1, base, head, snapshot, coverage: reviewFile.coverage, reviewed: current.evidence }, null, 2)}\n`);
+  if (evidenceOut) fs.writeFileSync(evidenceOut, `${JSON.stringify({ schemaVersion: 1, status: errors.length ? "failed" : "passed", base, head, snapshot,
+    coverage: reviewFile.coverage, errors, reviewed: current.evidence }, null, 2)}\n`);
   return { errors, evidence: current.evidence, changedPaths, snapshot };
 }
 
