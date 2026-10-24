@@ -50,13 +50,29 @@ jobs:
           print("BLENTERA_PREVIEW_URL="+url)
           PY
 
+      - name: Verify that the publicly served HTML matches the new preview
+        shell: bash
+        run: |
+          set -euo pipefail
+          url="$(cat previews/blentera-sharehtml-link.txt)"
+          slug="${url#https://sharehtml.zhenjia.dev/v/}"
+          slug="${slug%/}"
+          test -n "$slug"
+          curl --fail-with-body --silent --show-error --location --retry 2 --max-time 30 \
+            "https://share-html.zhenjiazhou0127.workers.dev/v/${slug}/" \
+            -o "$RUNNER_TEMP/served.html"
+          grep -Fq "AI is getting smarter. Is your company?" "$RUNNER_TEMP/served.html"
+          grep -Fq "BLENTERA brings your AI tools" "$RUNNER_TEMP/served.html"
+          grep -Fq "Join waitlist" "$RUNNER_TEMP/served.html"
+          echo "Verified the public preview contains the intended branding, copy and form."
+
       - name: Save public preview URL in this preview branch
         shell: bash
         run: |
           set -euo pipefail
           git config user.name "github-actions[bot]"
           git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
-          git add previews/blentera-sharehtml-link.txt
+          git add --sparse previews/blentera-sharehtml-link.txt
           if ! git diff --cached --quiet; then
             git commit -m "docs(preview): record working ShareHTML URL"
             git push origin HEAD:preview/blentera-sharehtml
