@@ -27,6 +27,7 @@ import { instanceSettingsService } from "../services/instance-settings.js";
 import { eraseAccountAccess } from "../services/saas/account-deletion.js";
 import { assertDatabaseRestoreAdmission } from "../services/saas/database-admission.js";
 import { errorHandler } from "../middleware/error-handler.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -42,6 +43,7 @@ const support = await getEmbeddedPostgresTestSupport();
       userId: string,
       otherUser: string,
       operatorId: string;
+    let operatorSessionId: string;
     beforeAll(async () => {
       database = await startEmbeddedPostgresTestDatabase("aw-v9-feedback-");
       db = createDb(database.connectionString);
@@ -69,6 +71,7 @@ const support = await getEmbeddedPostgresTestSupport();
         createdAt: new Date(),
         updatedAt: new Date(),
       });
+      operatorSessionId = await seedNativePasskeySession(db, operatorId);
       for (const principalId of [userId, otherUser])
         await db.insert(companyMemberships).values({
           companyId,
@@ -84,18 +87,19 @@ const support = await getEmbeddedPostgresTestSupport();
         home_v9: false,
       });
     });
-    const actor = (principal = userId) => ({
+    const actor = (principal = userId, includeOperatorSession = true) => ({
       type: "board" as const,
       source: "session" as const,
       userId: principal,
+      ...(principal === operatorId && includeOperatorSession ? { sessionId: operatorSessionId } : {}),
       companyIds: [companyId],
       memberships: [{ companyId, membershipRole: "viewer", status: "active" }],
     });
-    function app(principal = userId) {
+    function app(principal = userId, includeOperatorSession = true) {
       const application = express();
       application.use(express.json());
       application.use((req, _res, next) => {
-        req.actor = actor(principal);
+        req.actor = actor(principal, includeOperatorSession);
         next();
       });
       application.use(
@@ -450,6 +454,16 @@ const support = await getEmbeddedPostgresTestSupport();
         .set({ emailVerified: false })
         .where(eq(authUsers.id, operatorId));
       await request(app(operatorId)).get(url).expect(403);
+    });
+    it("requires a native operator session before exposing internal feedback or accepting triage", async () => {
+      const submitted = await request(app()).post(`/api/companies/${companyId}/customer-feedback`).send(input()).expect(201);
+      const queue = `/api/internal/customer-feedback/${companyId}`;
+      const triage = `${queue}/${submitted.body.id}/triage`;
+      await request(app(operatorId, false)).get(queue).expect(403);
+      await request(app(operatorId, false)).post(triage).send({ idempotencyKey: randomUUID(), expectedVersion: 0, internalState: "NEEDS_INFO", customerMessage: "Which browser?" }).expect(403);
+      const [unchanged] = await db.select().from(customerFeedback).where(eq(customerFeedback.id, submitted.body.id));
+      expect(unchanged!.status).toBe("RECEIVED");
+      expect(unchanged!.version).toBe(0);
     });
     it("separates verified platform triage and customer messages, uses version fences and appends follow-ups", async () => {
       const response = await request(app())

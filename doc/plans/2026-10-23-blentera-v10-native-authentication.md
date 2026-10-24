@@ -450,3 +450,50 @@ break-glass qualification. A committed request or stored operator ID is not a
 fresh authority grant for a later effect. Enterprise recovery/SSO, other powerful
 actions, original source-privacy/typed-origin/portability failures and complete
 V10 acceptance/full workspace gates remain open. No PR-ready claim.
+
+### 2026-10-24 — feedback/retention and package operator admission
+
+The same CE-03/CE-04 native operator proof now covers the original feedback and
+package publishers. Feedback internal list/detail and their private audit write
+run in one native transaction with current verified passkey proof checked before
+and after assembly. The original retention owner checks that proof around every
+callback; pure private image/review/receipt reads need current proof, while
+triage, legal hold/extension changes and initial erasure admission also require
+recent proof. Native scope, version, confirmation/hash, actual object ownership,
+privacy receipts and erasure triggers remain intact. Already-approved erasure
+work keeps its explicit original worker and exact objects; it does not impersonate
+an erased operator or choose new content for erasure.
+
+Package publication checks actual proof before feature/evidence preparation and
+again inside the original write transaction; publication and revocation repeat
+recent proof after their package/audit writes before commit. Original first-party
+allowlist, release hashes, qualification evidence and tenant install/activation
+checks remain separate. Structural native sessions qualify these domain checks;
+maintained WebAuthn/browser verification is qualified by its separate checkpoint.
+
+The first wider run exposes an invalid new NEEDS_INFO negative-test request
+(missing the required customer question), and an older account-erasure fixture
+without the now-required current native session. Both fixtures are corrected
+without relaxing production admission. The prior-schema restore test also used
+today's User model before its locale/authenticator migrations, which fails before
+operator admission. It now inserts an explicitly historical approved-receipt
+representation through the prior schema's original pending/delete/complete SQL
+constraints, then runs the actual migration and verifies minimal immutable
+identities. It qualifies migration backfill, not historical/current MFA or C3
+application admission; current C3 service and replay behavior stay in the full
+native retention suite.
+
+The broader package suite still fails in readiness Context retention without an
+actual accountable run, and in Learning's derived Memory source closure. A
+representative control using the previous package service reproduces both error
+groups without the new publisher guard. Do not weaken the manifest/source guard
+or invent a run. A readiness preview needs a separately qualified non-retaining
+source path and must account for any resulting persisted assessment metadata;
+full native execution still needs its real constructor and immutable input
+receipt. This remains original source-owner work, not proof of a ready package.
+
+Exact passing, failing, baseline and compiler results are retained at
+`doc/operations/aw-v10-evidence/native-operator-feedback-2026-10-24/checkpoint.json`.
+No new schema migration or dependency is introduced. The remaining operator,
+SSO/recovery, source privacy, typed origins, portability, complete V10 and full
+workspace/PR gates stay open.

@@ -61,6 +61,7 @@ import { instanceSettingsService } from "../instance-settings.js";
 import { lockMemoryPrivacy } from "../memory/memory-privacy.js";
 import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
+import { assertConfiguredOperatorAuthentication } from "../../auth/authenticator-assurance.js";
 import { agentProviderBindingService } from "../agent-provider-bindings.js";
 import { readinessService } from "../readiness/readiness-service.js";
 import { rolePackService } from "../role-packs.js";
@@ -1271,6 +1272,7 @@ export function agentPackageService(
         throw forbidden(
           "A configured first-party package publisher is required",
         );
+      await assertConfiguredOperatorAuthentication(db, actor, options.operatorUserIds);
       await assertV7Enabled(db, "agent_packages_v7");
       const input = packageReleaseSchema.parse(raw),
         blockers = packageReleaseBlockers(input);
@@ -1290,6 +1292,12 @@ export function agentPackageService(
           );
       }
       return db.transaction(async (tx) => {
+        await assertConfiguredOperatorAuthentication(
+          tx,
+          actor,
+          options.operatorUserIds ?? [],
+          { requireRecent: true },
+        );
         await tx.execute(
           sql`select pg_advisory_xact_lock(hashtextextended(${`package:${input.packageKey}`},0))`,
         );
@@ -1350,6 +1358,14 @@ export function agentPackageService(
             audience: input.manifest.audience,
           },
         });
+        // Keep DB-clock recency valid through publication after lock waits
+        // and the component/audit writes in this transaction.
+        await assertConfiguredOperatorAuthentication(
+          tx,
+          actor,
+          options.operatorUserIds ?? [],
+          { requireRecent: true },
+        );
         return published!;
       });
     },
@@ -1358,6 +1374,12 @@ export function agentPackageService(
       if (!options.operatorUserIds?.includes(userId))
         throw forbidden("Configured publisher required");
       return db.transaction(async (tx) => {
+        await assertConfiguredOperatorAuthentication(
+          tx,
+          actor,
+          options.operatorUserIds ?? [],
+          { requireRecent: true },
+        );
         const row = await release(tx as unknown as Db, versionId, true);
         const [v] = await tx
           .update(agentPackageVersions)
@@ -1385,6 +1407,12 @@ export function agentPackageService(
           action: "agent_package.version_revoked",
           resourceId: versionId,
         });
+        await assertConfiguredOperatorAuthentication(
+          tx,
+          actor,
+          options.operatorUserIds ?? [],
+          { requireRecent: true },
+        );
         return v;
       });
     },

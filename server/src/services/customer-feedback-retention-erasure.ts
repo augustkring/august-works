@@ -156,7 +156,7 @@ export function customerFeedbackRetentionErasureService(db: Db, storage: Storage
         await reader.insert(activityLog).values({ companyId, actorType: "user", actorId: principal,
           action: "customer_feedback.retention_erasure_requested", entityType: "customer_feedback_access", entityId: randomUUID(), details: null });
         return row!;
-      });
+      }, true);
       if (operation.status === "completed") return publicReceipt(operation);
       // Exact approved object IDs only. Provider calls hold no DB locks. An
       // unknown DELETE/HEAD keeps the original durable receipt pending.

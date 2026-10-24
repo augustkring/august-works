@@ -11,7 +11,7 @@ import request from "supertest";
 import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { companies, companyMemberships, authUsers, createDb, closeRegisteredClients, customerFeedback,
   customerFeedbackImages, feedbackImageDeletions, customerFeedbackRetention, customerFeedbackRetentionChanges,
-  customerFeedbackAccess, authAccounts, accountDeletionOperations, activityLog, authRateLimits, companyDeletionOperations } from "@paperclipai/db";
+  customerFeedbackAccess, authAccounts, authSessions, accountDeletionOperations, activityLog, authRateLimits, companyDeletionOperations } from "@paperclipai/db";
 import { customerFeedbackService } from "../services/customer-feedback.js";
 import { companyService } from "../services/companies.js";
 import { customerFeedbackImageService, processFeedbackImageDeletion } from "../services/customer-feedback-images.js";
@@ -28,10 +28,11 @@ import { accountDeletionService, eraseAccountAccess } from "../services/saas/acc
 import { customerFeedbackRoutes } from "../routes/customer-feedback.js";
 import { errorHandler } from "../middleware/error-handler.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 
 describe("native selected feedback images with owned scanner-wire and filesystem fixtures", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>;
-  let companyId: string, userId: string, otherUser: string, feedbackId: string, directory: string,
+  let companyId: string, userId: string, otherUser: string, otherUserSessionId: string, feedbackId: string, directory: string,
     server: Server, scanner: NonNullable<ReturnType<typeof configuredFeedbackImageScanner>>,
     storage: ReturnType<typeof createStorageService>, service: ReturnType<typeof customerFeedbackImageService>;
   let scanned: Buffer[], sockets: Set<Socket>, alwaysClean: boolean;
@@ -40,8 +41,8 @@ describe("native selected feedback images with owned scanner-wire and filesystem
     database = await startEmbeddedPostgresTestDatabase("aw-v9-feedback-images-"); db = createDb(database.connectionString);
   }, 60000);
   afterAll(async () => { if (database) { await closeRegisteredClients(database.connectionString); await database.cleanup(); } }, 30000);
-  const actor = (principal = userId) => ({ type: "board" as const, source: "session" as const,
-    userId: principal, companyIds: [companyId] });
+  const actor = (principal = userId, includeOperatorSession = true) => ({ type: "board" as const, source: "session" as const,
+    userId: principal, ...(principal === otherUser && includeOperatorSession ? { sessionId: otherUserSessionId } : {}), companyIds: [companyId] });
   beforeEach(async () => {
     companyId = randomUUID(); userId = randomUUID(); otherUser = randomUUID(); scanned = []; sockets = new Set(); alwaysClean = false;
     await db.insert(companies).values({ id: companyId, name: "Owned image fixture", issuePrefix: `I${companyId.slice(0, 7)}` });
@@ -50,6 +51,7 @@ describe("native selected feedback images with owned scanner-wire and filesystem
         createdAt: new Date(), updatedAt: new Date() });
       await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: id, status: "active", membershipRole: "viewer" });
     }
+    otherUserSessionId = await seedNativePasskeySession(db, otherUser);
     await instanceSettingsService(db).updateExperimental({ customer_feedback_v9: true });
     const receipt = await customerFeedbackService(db).create(actor(), companyId, { idempotencyKey: randomUUID(), category: "BUG",
       body: "Owned feedback fixture", omitName: true, context: { surfaceKey: "home", locale: "en", timezone: "UTC", viewportClass: "wide" } });
@@ -312,7 +314,15 @@ describe("native selected feedback images with owned scanner-wire and filesystem
     await db.insert(authAccounts).values({ id: randomUUID(), issuer: "local:credential", accountId: userId,
       providerId: "credential", userId, password: await hashPassword(password), createdAt: now, updatedAt: now });
     const account = accountDeletionService(db, { removeSecret: async () => {}, cancelRun: async () => {} });
-    const operation = await account.request(userId, { confirmation: "DELETE MY ACCOUNT", password, acknowledgeExport: true, idempotencyKey: randomUUID() });
+    // Structural native session admission plus the maintained password verifier;
+    // this fixture does not claim an HTTP sign-in ceremony.
+    const sessionId = randomUUID();
+    const [nativeUser] = await db.select({ version: authUsers.authenticatorVersion }).from(authUsers).where(eq(authUsers.id, userId));
+    await db.insert(authSessions).values({ id: sessionId, userId, token: randomUUID(), createdAt: now, updatedAt: now,
+      expiresAt: new Date(now.getTime() + 3600000), authenticationMethod: "password", authenticatedAt: now,
+      authenticatorVersion: nativeUser!.version });
+    const operation = await account.request(userId, { confirmation: "DELETE MY ACCOUNT", password, acknowledgeExport: true, idempotencyKey: randomUUID() },
+      now, { ...actor(), sessionId });
     expect(await db.select().from(customerFeedbackAccess).where(eq(customerFeedbackAccess.feedbackId, feedbackId))).toHaveLength(1);
     const [preserved] = await db.select().from(customerFeedback).where(eq(customerFeedback.id, feedbackId));
     expect(preserved).toMatchObject({ body: "Named held fixture", submittedByUserId: null, omitName: false });
@@ -433,9 +443,9 @@ describe("native selected feedback images with owned scanner-wire and filesystem
     expect(await rows()).toHaveLength(1);
     expect((await request(application).get("/api/customer-feedback/policy")).body.attachments.enabled).toBe(false);
   });
-  function imageApplication(principal = userId, scan = true, selectedStorage = storage) {
+  function imageApplication(principal = userId, scan = true, selectedStorage = storage, includeOperatorSession = true) {
     const application = express(); application.use(express.json());
-    application.use((req, _res, next) => { req.actor = actor(principal); next(); });
+    application.use((req, _res, next) => { req.actor = actor(principal, includeOperatorSession); next(); });
     application.use("/api", customerFeedbackRoutes(db, { storage: selectedStorage, operatorUserIds: [otherUser], runtimeEnv: scan ? {
       AW_FEEDBACK_CLAMD_SOCKET: join(directory, "scanner.sock"), AW_FEEDBACK_CLAMD_UID: String(process.getuid?.()),
     } : {} })); application.use(errorHandler); return application;
@@ -517,6 +527,7 @@ describe("native selected feedback images with owned scanner-wire and filesystem
     const image = await upload();
     await request(imageApplication(otherUser)).get(imageBase() + "/" + image.id).expect(404);
     const internal = `/api/internal/customer-feedback/${companyId}/${feedbackId}/images`;
+    await request(imageApplication(otherUser, true, storage, false)).get(internal).expect(403);
     await request(imageApplication(userId)).get(internal).expect(403);
     const listed = await request(imageApplication(otherUser)).get(internal).expect(200);
     expect(listed.body).toEqual([image]);

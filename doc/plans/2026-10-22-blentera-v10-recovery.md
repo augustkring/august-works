@@ -800,3 +800,15 @@ Async host dispatch/completion, process-local drain application after audit comm
 remaining operator owners and bootstrap/break-glass remain open. CE-03/V10-166,
 original privacy/typed-origin/portability failures and full V10/PR gates are not
 closed by this increment.
+
+### 2026-10-24 — feedback/retention and package native operator checks
+
+Feedback private reads/audits now share native operator-proof transactions;
+triage, retention changes and new erasure commands require recent passkey proof.
+Package publication/revocation use the original transactions and repeat actual
+proof before commit. Historical restore fixtures keep old-schema SQL guards
+rather than invoking modern auth services before their schema exists. Full native
+feedback/image/retention/restore suites pass73. The broad package Context/Memory
+failures remain open and representative old-owner controls reproduce them;
+manifest/source admission is not relaxed. Detailed bounded evidence:
+`doc/operations/aw-v10-evidence/native-operator-feedback-2026-10-24/checkpoint.json`.

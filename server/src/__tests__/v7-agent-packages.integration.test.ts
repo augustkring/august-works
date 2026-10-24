@@ -14,6 +14,7 @@ import { readPackageMaintenanceAttention } from "../services/experience/maintena
 import { readCoreMaintenance } from "../services/experience/core-maintenance.js";
 import * as coreMaintenance from "../services/experience/core-maintenance.js";
 import { agentPackageRoutes } from "../routes/agent-packages.js";
+import { seedNativePasskeySession } from "./helpers/native-authentication-fixtures.js";
 import { experienceService } from "../services/experience/service.js";
 import express from "express";
 import request from "supertest";
@@ -33,6 +34,8 @@ import {
 import { evaluateSpecialistPackage } from "../services/agent-packages/specialist-evaluation.js";
 import {
   authUsers,
+  authAccounts,
+  authSessions,
   readinessAssessments,
   knowledgeQualityFindings,
   companyMemberships,
@@ -171,6 +174,9 @@ const support = await getEmbeddedPostgresTestSupport();
         maintenance_autopilot_v9: false,
       });
       f = await seedV5Presences(db);
+      // Structural passkey/session proof for the native package-domain suite;
+      // this is not a WebAuthn ceremony or a browser authentication claim.
+      f.actor.sessionId = await seedNativePasskeySession(db, f.userId);
       service = agentPackageService(db, {
         operatorUserIds: [f.userId],
         protectedEvidenceOrigin: "https://qualification.test.invalid",
@@ -1276,6 +1282,44 @@ const support = await getEmbeddedPostgresTestSupport();
       await expect(
         agentPackageService(db).publish(f.actor, input),
       ).rejects.toThrow(/publisher/);
+    });
+    it("requires a current passkey proof for package publication and revocation", async () => {
+      const noSession = { ...f.actor, sessionId: undefined };
+      await expect(service.publish(noSession, {
+        ...input,
+        packageKey: `missing-session-${randomUUID()}`,
+      })).rejects.toMatchObject({ status: 403 });
+      await expect(service.revoke(noSession, versionId)).rejects.toMatchObject({ status: 403 });
+
+      const now = new Date();
+      await db.insert(authAccounts).values({
+        id: randomUUID(), issuer: "local:credential", accountId: f.userId,
+        providerId: "credential", userId: f.userId,
+        password: "structural-fixture-not-a-password-hash",
+        createdAt: now, updatedAt: now,
+      });
+      const [user] = await db.select({ version: authUsers.authenticatorVersion })
+        .from(authUsers).where(eq(authUsers.id, f.userId));
+      const passwordSessionId = randomUUID();
+      await db.insert(authSessions).values({
+        id: passwordSessionId, userId: f.userId, token: randomUUID(),
+        createdAt: now, updatedAt: now, expiresAt: new Date(now.getTime() + 3600000),
+        authenticationMethod: "password", authenticatedAt: now,
+        authenticatorVersion: user!.version,
+      });
+      await expect(service.revoke({ ...f.actor, sessionId: passwordSessionId }, versionId))
+        .rejects.toMatchObject({ status: 403 });
+      const [unchanged] = await db.select({ state: agentPackageVersions.state })
+        .from(agentPackageVersions).where(eq(agentPackageVersions.id, versionId));
+      expect(unchanged?.state).toBe("published");
+    });
+    it("revokes a published package with current native passkey proof and refuses a deleted session", async () => {
+      await service.revoke(f.actor, versionId);
+      const [version] = await db.select({ state: agentPackageVersions.state }).from(agentPackageVersions)
+        .where(eq(agentPackageVersions.id, versionId));
+      expect(version?.state).toBe("revoked");
+      await db.delete(authSessions).where(eq(authSessions.id, f.actor.sessionId!));
+      await expect(service.revoke(f.actor, versionId)).rejects.toMatchObject({ status: 403 });
     });
     it("retains immutable release and component hashes after publication", async () => {
       await expect(

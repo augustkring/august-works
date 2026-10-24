@@ -30,6 +30,7 @@ import { assertV5Authorization, v5HumanActorId } from "./v5-authorization.js";
 import type { AuthorizationActor } from "./authorization.js";
 import { serverVersion } from "../version.js";
 import { readBuildCommit } from "../build-commit.js";
+import { assertConfiguredOperatorAuthentication } from "../auth/authenticator-assurance.js";
 import { awOutputFeedbackIsLocal } from "./customer-feedback-privacy.js";
 
 const digest = (value: unknown) =>
@@ -196,16 +197,9 @@ export function customerFeedbackService(
       details: null,
     });
   }
-  async function operator(reader: Db, actor: AuthorizationActor) {
-    const principal = v5HumanActorId(actor);
-    if (!options.operatorUserIds?.includes(principal))
-      throw forbidden("Internal feedback operator required");
-    const [user] = await reader
-      .select({ verified: authUsers.emailVerified })
-      .from(authUsers)
-      .where(eq(authUsers.id, principal));
-    if (!user?.verified) throw forbidden("Verified operator account required");
-    return principal;
+  async function operator(reader: Db, actor: AuthorizationActor, requireRecent = false) {
+    await assertConfiguredOperatorAuthentication(reader, actor, options.operatorUserIds ?? [], { requireRecent });
+    return v5HumanActorId(actor);
   }
   async function notify(reader: Db, row: FeedbackRow) {
     const recipients = await reader
@@ -246,12 +240,12 @@ export function customerFeedbackService(
   }
   type RetentionOwner = Pick<FeedbackRow, "id" | "createdAt" | "closedAt" | "status" | "version">;
   async function withRetentionOwner<T>(actor: AuthorizationActor, companyId: string, id: string | null,
-    operation: (reader: Db, principal: string, row: RetentionOwner | null) => Promise<T>): Promise<T> {
+    operation: (reader: Db, principal: string, row: RetentionOwner | null) => Promise<T>, requireRecent = false): Promise<T> {
       if (actor.source === "local_implicit") throw forbidden("A verified operator session is required for retention controls");
       return db.transaction(async tx => {
         await tx.execute(sql`set local statement_timeout='5s'`);
         await tx.execute(sql`set local lock_timeout='1s'`);
-        const reader = tx as unknown as Db, principal = await operator(reader, actor);
+        const reader = tx as unknown as Db, principal = await operator(reader, actor, requireRecent);
         await tx.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, principal)).for("share");
         const [company] = await tx.select({ id: companies.id, status: companies.status }).from(companies)
           .where(eq(companies.id, companyId)).for("update");
@@ -260,7 +254,7 @@ export function customerFeedbackService(
           closedAt: customerFeedback.closedAt, status: customerFeedback.status, version: customerFeedback.version }).from(customerFeedback)
           .where(and(eq(customerFeedback.companyId, companyId), eq(customerFeedback.id, id))).for("update");
         const result = await operation(reader, principal, row ?? null);
-        await operator(reader, actor);
+        await operator(reader, actor, requireRecent);
         return result;
       });
   }
@@ -279,11 +273,11 @@ export function customerFeedbackService(
       if (row!.count > 20) throw tooManyRequests("Feedback request limit reached. Try again later.");
     },
     async withInternalRetention<T>(actor: AuthorizationActor, companyId: string, id: string,
-      operation: (reader: Db, principal: string, row: RetentionOwner) => Promise<T>): Promise<T> {
+      operation: (reader: Db, principal: string, row: RetentionOwner) => Promise<T>, requireRecent = false): Promise<T> {
       return withRetentionOwner(actor, companyId, id, (reader, principal, row) => {
         if (!row) throw notFound("Feedback not found");
         return operation(reader, principal, row);
-      });
+      }, requireRecent);
     },
     /** Same original verified operator admission and company lock. Only minimal
      * erasure receipts may be read/replayed after their feedback parent is gone. */
@@ -318,56 +312,59 @@ export function customerFeedbackService(
       companyId: string,
       beforeId?: string,
     ) {
-      await operator(db, actor);
-      const [company] = await db
-        .select({ id: companies.id })
-        .from(companies)
-        .where(eq(companies.id, companyId));
-      if (!company) throw notFound("Company not found");
-      const [boundary] = beforeId
-        ? await db
-            .select()
-            .from(customerFeedback)
-            .where(
-              and(
-                eq(customerFeedback.companyId, companyId),
-                eq(customerFeedback.id, beforeId),
-              ),
-            )
-            .limit(1)
-        : [];
-      if (beforeId && !boundary) throw notFound("Feedback not found");
-      const rows = await db
-        .select()
-        .from(customerFeedback)
-        .where(
-          and(
-            eq(customerFeedback.companyId, companyId),
-            boundary
-              ? sql`(${customerFeedback.createdAt},${customerFeedback.id}) < (select created_at, id from customer_feedback where company_id = ${companyId}::uuid and id = ${boundary.id}::uuid)`
-              : undefined,
-          ),
-        )
-        .orderBy(desc(customerFeedback.createdAt), desc(customerFeedback.id))
-        .limit(25);
-      await audit(
-        db,
-        companyId,
-        v5HumanActorId(actor),
-        "customer_feedback.internal_read",
-        randomUUID(),
-      );
-      await operator(db, actor);
-      return rows.map((row) => ({
-        id: row.id,
-        feedbackId: "AWF-" + row.id.replaceAll("-", "").toUpperCase(),
-        category: row.category,
-        body: row.body,
-        goal: row.goal,
-        internalState: row.internalState,
-        version: row.version,
-        createdAt: row.createdAt.toISOString(),
-      }));
+      return db.transaction(async tx => {
+        const reader = tx as unknown as Db;
+        await operator(reader, actor);
+        const [company] = await reader
+          .select({ id: companies.id })
+          .from(companies)
+          .where(eq(companies.id, companyId));
+        if (!company) throw notFound("Company not found");
+        const [boundary] = beforeId
+          ? await reader
+              .select()
+              .from(customerFeedback)
+              .where(
+                and(
+                  eq(customerFeedback.companyId, companyId),
+                  eq(customerFeedback.id, beforeId),
+                ),
+              )
+              .limit(1)
+          : [];
+        if (beforeId && !boundary) throw notFound("Feedback not found");
+        const rows = await reader
+          .select()
+          .from(customerFeedback)
+          .where(
+            and(
+              eq(customerFeedback.companyId, companyId),
+              boundary
+                ? sql`(${customerFeedback.createdAt},${customerFeedback.id}) < (select created_at, id from customer_feedback where company_id = ${companyId}::uuid and id = ${boundary.id}::uuid)`
+                : undefined,
+            ),
+          )
+          .orderBy(desc(customerFeedback.createdAt), desc(customerFeedback.id))
+          .limit(25);
+        await audit(
+          reader,
+          companyId,
+          v5HumanActorId(actor),
+          "customer_feedback.internal_read",
+          randomUUID(),
+        );
+        await operator(reader, actor);
+        return rows.map((row) => ({
+          id: row.id,
+          feedbackId: "AWF-" + row.id.replaceAll("-", "").toUpperCase(),
+          category: row.category,
+          body: row.body,
+          goal: row.goal,
+          internalState: row.internalState,
+          version: row.version,
+          createdAt: row.createdAt.toISOString(),
+        }));
+      });
     },
     async internalGet(
       actor: AuthorizationActor,
@@ -375,81 +372,84 @@ export function customerFeedbackService(
       id: string,
       beforeEventId?: string,
     ) {
-      await operator(db, actor);
-      const [row] = await db
-        .select()
-        .from(customerFeedback)
-        .where(
-          and(
-            eq(customerFeedback.companyId, companyId),
-            eq(customerFeedback.id, id),
-          ),
+      return db.transaction(async tx => {
+        const reader = tx as unknown as Db;
+        await operator(reader, actor);
+        const [row] = await reader
+          .select()
+          .from(customerFeedback)
+          .where(
+            and(
+              eq(customerFeedback.companyId, companyId),
+              eq(customerFeedback.id, id),
+            ),
+          );
+        if (!row) throw notFound("Feedback not found");
+        const [boundary] = beforeEventId
+          ? await reader
+              .select()
+              .from(customerFeedbackEvents)
+              .where(
+                and(
+                  eq(customerFeedbackEvents.companyId, companyId),
+                  eq(customerFeedbackEvents.feedbackId, id),
+                  eq(customerFeedbackEvents.id, beforeEventId),
+                ),
+              )
+              .limit(1)
+          : [];
+        if (beforeEventId && !boundary)
+          throw notFound("Feedback event not found");
+        const events = await reader
+          .select({
+            id: customerFeedbackEvents.id,
+            kind: customerFeedbackEvents.kind,
+            body: customerFeedbackEvents.body,
+            internalNote: customerFeedbackEvents.internalNote,
+            linkType: customerFeedbackEvents.linkType,
+            linkId: customerFeedbackEvents.linkId,
+            createdAt: customerFeedbackEvents.createdAt,
+          })
+          .from(customerFeedbackEvents)
+          .where(
+            and(
+              eq(customerFeedbackEvents.companyId, companyId),
+              eq(customerFeedbackEvents.feedbackId, id),
+              boundary
+                ? sql`(${customerFeedbackEvents.createdAt},${customerFeedbackEvents.id}) < (select created_at, id from customer_feedback_events where company_id = ${companyId}::uuid and feedback_id = ${id}::uuid and id = ${boundary.id}::uuid)`
+                : undefined,
+            ),
+          )
+          .orderBy(
+            desc(customerFeedbackEvents.createdAt),
+            desc(customerFeedbackEvents.id),
+          )
+          .limit(101);
+        await audit(
+          reader,
+          companyId,
+          v5HumanActorId(actor),
+          "customer_feedback.internal_read",
+          randomUUID(),
         );
-      if (!row) throw notFound("Feedback not found");
-      const [boundary] = beforeEventId
-        ? await db
-            .select()
-            .from(customerFeedbackEvents)
-            .where(
-              and(
-                eq(customerFeedbackEvents.companyId, companyId),
-                eq(customerFeedbackEvents.feedbackId, id),
-                eq(customerFeedbackEvents.id, beforeEventId),
-              ),
-            )
-            .limit(1)
-        : [];
-      if (beforeEventId && !boundary)
-        throw notFound("Feedback event not found");
-      const events = await db
-        .select({
-          id: customerFeedbackEvents.id,
-          kind: customerFeedbackEvents.kind,
-          body: customerFeedbackEvents.body,
-          internalNote: customerFeedbackEvents.internalNote,
-          linkType: customerFeedbackEvents.linkType,
-          linkId: customerFeedbackEvents.linkId,
-          createdAt: customerFeedbackEvents.createdAt,
-        })
-        .from(customerFeedbackEvents)
-        .where(
-          and(
-            eq(customerFeedbackEvents.companyId, companyId),
-            eq(customerFeedbackEvents.feedbackId, id),
-            boundary
-              ? sql`(${customerFeedbackEvents.createdAt},${customerFeedbackEvents.id}) < (select created_at, id from customer_feedback_events where company_id = ${companyId}::uuid and feedback_id = ${id}::uuid and id = ${boundary.id}::uuid)`
-              : undefined,
-          ),
-        )
-        .orderBy(
-          desc(customerFeedbackEvents.createdAt),
-          desc(customerFeedbackEvents.id),
-        )
-        .limit(101);
-      await audit(
-        db,
-        companyId,
-        v5HumanActorId(actor),
-        "customer_feedback.internal_read",
-        randomUUID(),
-      );
-      const page = events.slice(0, 100);
-      const result = feedbackInternalDetailSchema.parse({
-        ...(await receipt(db, row)),
-        internalState: row.internalState,
-        ...(!row.omitName && row.submittedByUserId
-          ? { submittedByUserId: row.submittedByUserId }
-          : {}),
-        context: row.context,
-        diagnostics: row.diagnostics,
-        events: page.reverse().map((event) => ({
-          ...event,
-          createdAt: event.createdAt.toISOString(),
-        })),
-        nextEventCursor: events.length > 100 ? events[99]!.id : null,
+        const page = events.slice(0, 100);
+        const result = feedbackInternalDetailSchema.parse({
+          ...(await receipt(reader, row)),
+          internalState: row.internalState,
+          ...(!row.omitName && row.submittedByUserId
+            ? { submittedByUserId: row.submittedByUserId }
+            : {}),
+          context: row.context,
+          diagnostics: row.diagnostics,
+          events: page.reverse().map((event) => ({
+            ...event,
+            createdAt: event.createdAt.toISOString(),
+          })),
+          nextEventCursor: events.length > 100 ? events[99]!.id : null,
+        });
+        await operator(reader, actor);
+        return result;
       });
-      await operator(db, actor);
-      return result;
     },
     async create(actor: AuthorizationActor, companyId: string, raw: unknown) {
       await enabled();
@@ -675,7 +675,7 @@ export function customerFeedbackService(
       const input = feedbackTriageSchema.parse(raw);
       return db.transaction(async (tx) => {
         const reader = tx as unknown as Db,
-          principal = await operator(reader, actor);
+          principal = await operator(reader, actor, true);
         const [company] = await tx
           .select()
           .from(companies)
@@ -722,7 +722,9 @@ export function customerFeedbackService(
         if (prior) {
           if (prior.requestHash !== hash || prior.kind !== "product_message")
             throw conflict("Request key already used");
-          return receipt(reader, row);
+          const result = await receipt(reader, row);
+          await operator(reader, actor, true);
+          return result;
         }
         if (row.version !== input.expectedVersion)
           throw conflict("Feedback changed; refresh before triage");
@@ -763,7 +765,9 @@ export function customerFeedbackService(
           randomUUID(),
         );
         if (input.customerMessage) await notify(reader, updated);
-        return receipt(reader, updated);
+        const result = await receipt(reader, updated);
+        await operator(reader, actor, true);
+        return result;
       });
     },
   };
