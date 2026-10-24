@@ -45,7 +45,8 @@ function importPackageForm(file: File, meta: CompanyPortabilityPreviewMeta | Com
   return form;
 }
 
-export type CompanyImportJobState = "running" | "succeeded" | "failed" | "needs_reconciliation";
+export type { CompanyImportJobState } from "@paperclipai/shared/customer-operations";
+import type { CompanyImportJobState } from "@paperclipai/shared/customer-operations";
 
 /** 202 body from the async opt-in on POST /companies/import (and the 409 body when a job is already running). */
 export interface CompanyImportJobAccepted {

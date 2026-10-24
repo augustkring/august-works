@@ -1,11 +1,12 @@
-import { createHash } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
 import os from "node:os";
 import path from "node:path";
 import express from "express";
 import request from "supertest";
 import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
-import { companies, createDb } from "@paperclipai/db";
+import { authSessions, authUsers, companies, companyMemberships, createDb } from "@paperclipai/db";
+import type { CompanyPortabilityImportResult } from "@paperclipai/shared";
 import {
   getEmbeddedPostgresTestSupport,
   startEmbeddedPostgresTestDatabase,
@@ -94,17 +95,35 @@ const describeEmbeddedPostgres = embeddedPostgresSupport.supported
 
 const companyId = "11111111-1111-4111-8111-111111111111";
 const TEST_USER_HEADER = "x-test-user-id";
+const OTHER_USER_ID = "board-user-b";
+let defaultActorUserId = "";
+let defaultActorSessionId = "";
+let otherActorSessionId = "";
 
 function boardActor(userId: string) {
+  const isCompanyOwner = userId === defaultActorUserId;
   return {
     type: "board",
     userId,
     userName: "Board User",
     userEmail: `${userId}@example.com`,
-    companyIds: [companyId],
-    memberships: [{ companyId, membershipRole: "owner", status: "active" }],
-    isInstanceAdmin: true,
+    companyIds: isCompanyOwner ? [companyId] : [],
+    memberships: isCompanyOwner ? [{ companyId, membershipRole: "owner", status: "active" }] : [],
+    isInstanceAdmin: false,
     source: "session",
+    sessionId: isCompanyOwner ? defaultActorSessionId : otherActorSessionId,
+  };
+}
+
+function completedImportResult(): CompanyPortabilityImportResult {
+  return {
+    company: { id: companyId, name: "Chunked Import Target", action: "updated" },
+    agents: [{ slug: "ceo", id: "agent-1", action: "updated", name: "CEO", reason: null }],
+    skills: [],
+    projects: [],
+    routines: [],
+    envInputs: [],
+    warnings: [],
   };
 }
 
@@ -240,7 +259,9 @@ describeEmbeddedPostgres("company import transfer routes", () => {
     built.use(express.json());
     built.use((req, _res, next) => {
       const header = req.headers[TEST_USER_HEADER];
-      const userId = typeof header === "string" && header.length > 0 ? header : "board-user-a";
+      const userId = typeof header === "string" && header.length > 0 ? header : defaultActorUserId;
+      // Structural post-auth carrier only: each actor resolves to a real
+      // native user/session row, and the owner also has an active membership.
       (req as any).actor = boardActor(userId);
       next();
     });
@@ -255,6 +276,12 @@ describeEmbeddedPostgres("company import transfer routes", () => {
     // The mocked import result points at this company; the ledger's
     // company_id foreign key needs the row to exist.
     await db.insert(companies).values({ id: companyId, name: "Chunked Import Target" });
+    const now = new Date();
+    otherActorSessionId = randomUUID();
+    await db.insert(authUsers).values({ id: OTHER_USER_ID, name: "Other board user",
+      email: `${OTHER_USER_ID}@example.com`, createdAt: now, updatedAt: now });
+    await db.insert(authSessions).values({ id: otherActorSessionId, userId: OTHER_USER_ID,
+      token: randomUUID(), createdAt: now, updatedAt: now, expiresAt: new Date(now.getTime() + 60 * 60_000) });
     spoolRoot = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-import-transfer-spool-"));
     app = await createApp();
   });
@@ -264,15 +291,20 @@ describeEmbeddedPostgres("company import transfer routes", () => {
     await fs.rm(spoolRoot, { recursive: true, force: true });
   });
 
-  beforeEach(() => {
+  beforeEach(async () => {
     vi.clearAllMocks();
     spoolRemovalFailure.error = null;
     assemblyFailure.error = null;
-    mockCompanyPortabilityService.importBundle.mockResolvedValue({
-      company: { id: companyId, action: "updated" },
-      agents: [{ id: "agent-1" }],
-      warnings: [],
-    });
+    defaultActorUserId = randomUUID();
+    defaultActorSessionId = randomUUID();
+    const now = new Date();
+    await db.insert(authUsers).values({ id: defaultActorUserId, name: "Import owner",
+      email: `${defaultActorUserId}@example.com`, createdAt: now, updatedAt: now });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: defaultActorUserId,
+      membershipRole: "owner", status: "active" });
+    await db.insert(authSessions).values({ id: defaultActorSessionId, userId: defaultActorUserId,
+      token: randomUUID(), createdAt: now, updatedAt: now, expiresAt: new Date(now.getTime() + 60 * 60_000) });
+    mockCompanyPortabilityService.importBundle.mockResolvedValue(completedImportResult());
   });
 
   function putPart(transferId: string, index: number, bytes: Buffer, userId?: string) {
@@ -312,7 +344,7 @@ describeEmbeddedPostgres("company import transfer routes", () => {
       .post(`/api/companies/import/transfers/${transferId}/apply`)
       .send(importMeta);
     expect(applied.status).toBe(200);
-    expect(applied.body.company).toEqual({ id: companyId, action: "updated" });
+    expect(applied.body.company).toEqual({ id: companyId, name: "Chunked Import Target", action: "updated" });
 
     // The assembled zip fed the existing import pipeline unchanged.
     expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledTimes(1);
@@ -523,6 +555,7 @@ describeEmbeddedPostgres("company import transfer routes", () => {
     let job: Record<string, any> | undefined;
     for (let attempt = 0; attempt < 30; attempt += 1) {
       const polled = await request(app).get(statusUrl);
+      expect(polled.status, JSON.stringify(polled.body)).toBe(200);
       job = polled.body.job;
       if (job?.status === "succeeded" || job?.status === "failed") break;
       await new Promise((resolve) => setTimeout(resolve, 10));
@@ -561,11 +594,7 @@ describeEmbeddedPostgres("company import transfer routes", () => {
         await new Promise<void>((resolve) => {
           releaseImport = resolve;
         });
-        return {
-          company: { id: companyId, action: "updated" },
-          agents: [{ id: "agent-1" }],
-          warnings: [],
-        };
+        return completedImportResult();
       },
     );
     const accepted = await request(app)
@@ -979,7 +1008,7 @@ describeEmbeddedPostgres("company import transfer routes", () => {
     // claim while the winner is still importing.
     mockCompanyPortabilityService.importBundle.mockImplementation(async () => {
       await new Promise((resolve) => setTimeout(resolve, 100));
-      return { company: { id: companyId, action: "updated" }, agents: [], warnings: [] };
+      return completedImportResult();
     });
 
     const [first, second] = await Promise.all([

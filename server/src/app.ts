@@ -1,3 +1,4 @@
+import { companyImportJobService } from "./services/company-import-jobs.js";
 import { purgeExpiredNotificationChannelCommands } from "./services/notifications/channel-retention.js";
 import { customerSupportRoutes } from "./routes/customer-support.js";
 import { maintenanceHistoryRoutes } from "./routes/maintenance-history.js";
@@ -1369,6 +1370,9 @@ export async function createApp(
   importTransferSweepTimer.unref?.();
   // A startup cannot prove whether an interrupted apply wrote domain data.
   // Preserve its durable identity and block replay pending reconciliation.
+  void companyImportJobService(db).recoverInterrupted().catch(() => {
+    logger.error("interrupted durable import status could not be reconciled");
+  });
   void companyTransferRunService
     .recoverStrandedApplyingRuns(db)
     .then((recovered) => {

@@ -2,7 +2,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { customerOperations, companyTransferRuns, type Db } from "@paperclipai/db";
 import type { CompanyPortabilityImportResult, CustomerOperationReceipt } from "@paperclipai/shared";
-import { conflict } from "../errors.js";
+import { conflict, forbidden } from "../errors.js";
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 export type CompanyImportJob = typeof customerOperations.$inferSelect;
@@ -15,12 +15,19 @@ export function companyImportJobService(db: Db) {
       inputHash: string; scopeKey: string; companyId: string | null; idempotencyKey?: string;
       transferId?: string | null }) {
       const requesterKeyHash = hash(input.actorKey);
-      const key = input.idempotencyKey ?? `input:${input.inputHash}`;
-      if (!key || key.length > 256) throw conflict("Import request key is invalid");
+      const rawKey = input.idempotencyKey ?? `input:${input.inputHash}`;
+      if (!rawKey || rawKey.length > 256) throw conflict("Import request key is invalid");
+      const key = hash(rawKey);
       return db.transaction(async tx => {
         // Preserve the original one-active-import-per-requester boundary across
         // replicas. Unknown effects also block another admission.
         await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`company-import:${requesterKeyHash}`},0))`);
+        if (input.actorKind === "board" && input.userId) {
+          // Match the native account-erasure principal lock. An authenticated
+          // account deleted while waiting cannot create a new durable job.
+          const users = await tx.execute(sql`select id from "user" where id=${input.userId} for key share`);
+          if (!users.length) throw forbidden("The current import requester is unavailable");
+        }
         const [existing] = await tx.select().from(customerOperations).where(and(
           eq(customerOperations.requesterKeyHash, requesterKeyHash), eq(customerOperations.operationType, "company_import"),
           eq(customerOperations.scopeKey, input.scopeKey), eq(customerOperations.idempotencyKey, key),
@@ -108,7 +115,8 @@ export function companyImportJobService(db: Db) {
 
 export function companyImportOperationReceipt(job: CompanyImportJob): CustomerOperationReceipt {
   return { id: job.id, operationType: "company_import", domain: "company_portability", domainOperationRef: job.domainOperationRef,
-    status: job.status === "needs_reconciliation" ? "inconclusive" : job.status,
+    status: job.status === "needs_reconciliation" ? "inconclusive"
+      : job.status === "running" && job.progressStage === "admitted" ? "admitted" : job.status,
     progressStage: job.progressStage, attempt: job.attempt, unknownOutcome: job.status === "needs_reconciliation",
     createdAt: job.createdAt.toISOString(), updatedAt: job.updatedAt.toISOString(), completedAt: job.completedAt?.toISOString() ?? null };
 }

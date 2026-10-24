@@ -277,6 +277,9 @@ export async function eraseAccountAccess(
   // Native intake takes the principal before the content root. Support roots
   // precede feedback roots, matching company purge's ordering.
   await tx.execute(sql`select id from "user" where id=${userId} for update`);
+  // Operation metadata contains no bundle/credential/body. Remove the
+  // principal's private receipts under the same native erasure fence.
+  await tx.execute(sql`delete from customer_operations where requested_by_user_id=${userId}`);
   await tx.execute(sql`select c.id from support_cases c where c.id in (
       select own.id from support_cases own where own.opened_by_user_id=${userId}
       union select e.case_id from support_case_events e where e.author_user_id=${userId}
