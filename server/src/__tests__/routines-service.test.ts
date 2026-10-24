@@ -996,12 +996,15 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
 
   it("defaults activity gates when restoring a legacy routine revision snapshot", async () => {
     const { routine, svc } = await seedFixture();
-    const revision1Id = routine.latestRevisionId!;
-    const [revision1] = await db.select().from(routineRevisions).where(eq(routineRevisions.id, revision1Id));
-    const legacySnapshot = structuredClone(revision1!.snapshot) as { routine: Record<string, unknown> };
-    delete legacySnapshot.routine.activityGatePolicy;
-    delete legacySnapshot.routine.activityGateScope;
-    await db.update(routineRevisions).set({ snapshot: legacySnapshot }).where(eq(routineRevisions.id, revision1Id));
+    const [revision1] = await db.select().from(routineRevisions).where(eq(routineRevisions.id, routine.latestRevisionId!));
+    const legacySnapshot = structuredClone(revision1!.snapshot);
+    Reflect.deleteProperty(legacySnapshot.routine, "activityGatePolicy");
+    Reflect.deleteProperty(legacySnapshot.routine, "activityGateScope");
+    // Seed historical bytes on INSERT; retained revision bodies are immutable.
+    const revision1Id = randomUUID();
+    await db.insert(routineRevisions).values({ ...revision1!, id: revision1Id, revisionNumber: 2,
+      restoredFromRevisionId: revision1!.id, snapshot: legacySnapshot });
+    await db.update(routines).set({ latestRevisionId: revision1Id, latestRevisionNumber: 2 }).where(eq(routines.id, routine.id));
     await svc.update(routine.id, {
       activityGatePolicy: "require_external_activity",
       activityGateScope: "project",

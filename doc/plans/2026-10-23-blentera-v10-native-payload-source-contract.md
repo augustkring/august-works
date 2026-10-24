@@ -488,3 +488,35 @@ remain open. Evidence:
 Server compilation and the built native cookie/authenticator browser pass.
 The browser includes a real authenticated Task PATCH and verifies unchanged
 source hashes/audits afterward; its virtual authenticator is no hardware proof.
+
+### 2026-10-24 — Routine retained source identity and revision immutability
+
+Parent PostgreSQL counterexamples allow cross-company/wrong-parent Routine run
+bindings and revision body edits. The real service runRoutine control and the
+three existing typed Task tests also reproduce the separate known Task-origin
+failure. A further real conversation-authoring regression reproduces a source
+reclassification bypass: changing conversation_draft to manual skips the
+existing private reader/erasure boundary. No legitimate native writer changes
+those origin fields after creation.
+
+Generated custom migration0525 validates same-company Routine/revision parents
+and snapshot owner on INSERT, preserves immutable origin/run/revision identity
+and revision bodies, and permits only actual FK deletion nulling or the exact
+existing source-erasure projection. Existing history is neither repaired nor
+upgraded into qualified inputs. All24 native conversation-authoring/erasure
+cases pass, including the new origin bypass rejection. Run/revision wrong-owner
+and body-edit probes pass. All actual revision/run/Agent FK nulling controls also
+pass; the added direct company deletion fixture was corrected to use the
+original companyService.remove dependency owner.
+
+The existing legacy-format compatibility fixture initially edited a retained
+revision. It now constructs historical bytes on INSERT and retains the actual
+restore/default checks. The actual runRoutine lifecycle assertion remains
+unchanged and failing on the separately reproduced typed Task-origin baseline;
+it is not skipped, relabelled as provider success or hidden behind a substitute
+heartbeat. Typed Task/private-Memory/temporal sources, complete inputs and full
+V10/PR gates remain open. Evidence:
+`doc/operations/aw-v10-evidence/routine-source-identity-2026-10-24/checkpoint.json`.
+
+Final selected5 identity/deletion/legacy compatibility cases and server
+compilation pass. The real typed-origin lifecycle baseline remains open.

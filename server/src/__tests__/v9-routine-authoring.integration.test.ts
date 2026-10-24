@@ -70,6 +70,17 @@ describe("Conversation routine drafts use the Original owner without execution a
     await expect(create()).rejects.toMatchObject({ status: 403 });
     expect(await db.select().from(routines).where(eq(routines.companyId, f.home))).toEqual([]);
   });
+  it("rejects reclassifying the actual private conversation source as manual or another origin", async () => {
+    const saved = await create();
+    for (const patch of [{ originKind: "manual" }, { originId: randomUUID() },
+      { originKind: "manual", originId: null }]) {
+      await expect(db.update(routines).set(patch).where(eq(routines.id, saved.routineId)))
+        .rejects.toMatchObject({ cause: { code: "23514" } });
+    }
+    expect(await db.select().from(routines).where(eq(routines.id, saved.routineId))).toEqual([
+      expect.objectContaining({ originKind: "conversation_draft", originId: runId, description: input().description }),
+    ]);
+  });
   it("withdraws ordinary reads, list entries and execution after erasing the actual authoring source", async () => {
     const saved = await create(), owner = routineService(db, { sourceActor: f.actor });
     expect(await owner.get(saved.routineId)).toMatchObject({ id: saved.routineId, title: input().title });
