@@ -44,6 +44,21 @@ test("Help retains its originating view and reload recovers requests before and 
     await expect(page.getByLabel("What do you need help with?", { exact: true })).toBeVisible();
   };
   await openHelp();
+  const helpDialog = page.getByRole("dialog");
+  await helpDialog.getByRole("searchbox", { name: "Search Help", exact: true }).fill("imports");
+  const helpResponse = page.waitForResponse(response => {
+    const url = new URL(response.url());
+    return url.pathname === `/api/companies/${company.id}/search` && url.searchParams.get("scope") === "help";
+  });
+  await helpDialog.getByRole("button", { name: "Search help", exact: true }).click();
+  const helpSearch = await json(await helpResponse);
+  expect(helpSearch.scope).toBe("help");
+  const importArticle = helpSearch.results.find((result: { helpArticle?: { articleId: string } }) =>
+    result.helpArticle?.articleId === "company-import-export");
+  expect(importArticle).toBeDefined();
+  await expect(helpDialog.getByRole("link", { name: importArticle.title, exact: true })).toHaveAttribute("href", importArticle.href);
+  await expect(page).toHaveURL(new RegExp(`/${company.issuePrefix}/company/help$`));
+  expect(await heading!.evaluate(node => node.isConnected)).toBe(true);
   await page.getByRole("link", { name: "Import history", exact: true }).click();
   await expect(page.getByRole("heading", { level: 1, name: "Import history", exact: true })).toBeVisible();
   await expect(page.getByText("No saved imports for this account and company.", { exact: true })).toBeVisible();
