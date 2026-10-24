@@ -484,7 +484,7 @@ export class PaperclipRunnerToolAuthority {
           connectionGuidance: CONNECTION_INTENT_AGENT_GUIDANCE,
           acceptedPlan: await this.#acceptedPlan(context.run.contextSnapshot),
           sourcePlanApproval: await handoffPlanContext(this.db, context.issue),
-          childReviewOutcomes: await childReviewOutcomes(this.db, this.binding.companyId, this.binding.issueId),
+          childReviewOutcomes: await childReviewOutcomes(this.db, this.binding.companyId, this.binding.issueId, reader),
           ...(this.binding.nativeReview ? {
             assignedReview: (await getNativeReviewAssignment(this.db, {
               ...this.binding, contextSnapshot: this.binding.nativeReview,

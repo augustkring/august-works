@@ -1140,3 +1140,28 @@ still needs source privacy at both tool and continuation callers. The six
 typed/private-Memory/temporal cases, complete run receipts and full V10/PR gates
 remain open. Evidence:
 `doc/operations/aw-v10-evidence/native-tool-task-privacy-2026-10-24/checkpoint.json`.
+
+### 2026-10-24 — shared child review-outcome privacy
+
+Original PostgreSQL counterexamples reproduce private child review identity
+disclosure through both native tool and continuation callers. The shared owner
+now applies canonical child/source-run/reviewer-run privacy before its50-row
+limit and checks corresponding company/Task/Agent bindings. The tool supplies
+its actual bound reader. Continuation uses only an actual matching readable
+running receiver from the server-supplied run ID and its current DB Human;
+preflight/missing identity remains public-only. Context claims and saved owners
+never supply private authority. No fake run or new grant was introduced.
+
+Final56 cases across three relevant suites and server compilation pass. Native
+controls include real sharing/revocation, forged no-run context hints, wrong
+reviewer Task and wrong source Agent. Fixture payload type failure is retained
+and corrected to the existing version1/prompt contract. These are native
+consumer projection fixtures, not provider/result/input-completeness evidence.
+
+Broader tests reproduce five older failures against parent production: one
+immutable nativeIssueId fixture edit, two interaction updates missing actual
+run/Human context, and two blocking-intent fixtures with no actual operator
+account/membership. All five remain explicit next work. The six typed/private-
+Memory/temporal cases, source/action/erasure/lifetime and full V10/PR gates remain
+open. Evidence:
+`doc/operations/aw-v10-evidence/native-child-review-privacy-2026-10-24/checkpoint.json`.
