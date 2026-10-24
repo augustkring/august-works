@@ -1,0 +1,63 @@
+name: Publish BLENTERA Coming Soon Preview
+on:
+  push:
+    branches:
+      - preview/blentera-sharehtml
+    paths:
+      - previews/blentera-coming-soon.html
+      - .github/workflows/publish-blentera-preview.yml
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  publish-preview:
+    runs-on: ubuntu-latest
+    timeout-minutes: 8
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          sparse-checkout: |
+            previews/blentera-coming-soon.html
+            .github/workflows/publish-blentera-preview.yml
+          sparse-checkout-cone-mode: false
+
+      - name: Publish preview on ShareHTML
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl --fail-with-body --silent --show-error --max-time 60 --retry 2 \
+            -X POST \
+            -F "file=@previews/blentera-coming-soon.html;type=text/html" \
+            -F "title=BLENTERA Coming Soon" \
+            -F "visibility=public_unlisted" \
+            https://share-html.zhenjiazhou0127.workers.dev/api/shares > "$RUNNER_TEMP/result.json"
+
+          python3 - "$RUNNER_TEMP/result.json" <<'PY'
+          import json
+          import os
+          import pathlib
+          import sys
+
+          data=json.loads(pathlib.Path(sys.argv[1]).read_text())
+          share=data.get("share") or {}
+          url=share.get("preview_url")
+          if not isinstance(url,str) or not url.startswith("https://sharehtml.zhenjia.dev/v/"):
+              raise SystemExit("ShareHTML did not provide a public preview URL")
+          pathlib.Path("previews/blentera-sharehtml-link.txt").write_text(url+"\n")
+          pathlib.Path(os.environ["GITHUB_STEP_SUMMARY"]).open("a").write("Published: "+url+"\n")
+          print("BLENTERA_PREVIEW_URL="+url)
+          PY
+
+      - name: Save public preview URL in this preview branch
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name "github-actions[bot]"
+          git config user.email "41898282+github-actions[bot]@users.noreply.github.com"
+          git add previews/blentera-sharehtml-link.txt
+          if ! git diff --cached --quiet; then
+            git commit -m "docs(preview): record working ShareHTML URL"
+            git push origin HEAD:preview/blentera-sharehtml
+          fi
