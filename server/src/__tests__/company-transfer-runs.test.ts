@@ -1,5 +1,7 @@
+import { randomUUID } from "node:crypto";
+import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { createDb } from "@paperclipai/db";
+import { companies, createDb, projects } from "@paperclipai/db";
 import { sha256HexOfBytes } from "@paperclipai/shared/portability-hash";
 import {
   getEmbeddedPostgresTestSupport,
@@ -196,8 +198,8 @@ describeEmbeddedPostgres("companyTransferRunService", () => {
     await companyTransferRunService.start(db, run.id);
     expect((await companyTransferRunService.getRun(db, run.id))!.status).toBe("applying");
 
-    // A failed apply releases the claim: the run is retryable again.
-    await companyTransferRunService.fail(db, run.id, "import blew up");
+    // A known pre-effect refusal explicitly releases the claim for retry.
+    expect(await companyTransferRunService.releaseApplyClaim(db, run.id, "refused before domain dispatch")).toBe(true);
     expect(await companyTransferRunService.claimApply(db, run.id)).toBe(true);
     await companyTransferRunService.complete(db, run.id);
     expect((await companyTransferRunService.getRun(db, run.id))!.status).toBe("completed");
@@ -297,18 +299,59 @@ describeEmbeddedPostgres("companyTransferRunService", () => {
     });
     await companyTransferRunService.start(db, open.id);
 
-    // The process "restarted": the in-memory apply for the claimed run is
-    // gone, so startup recovery fails it and makes it claimable again.
+    // The process "restarted": whether the external effect committed is
+    // unknowable, so recovery must fence another apply pending reconciliation.
     const recovered = await companyTransferRunService.recoverStrandedApplyingRuns(db);
     expect(recovered).toContain(stranded.id);
     expect(recovered).not.toContain(open.id);
-    const failed = (await companyTransferRunService.getRun(db, stranded.id))!;
-    expect(failed.status).toBe("failed");
-    expect(failed.error).toBe("apply interrupted by a restart — verify whether the import completed before retrying");
-    expect(await companyTransferRunService.claimApply(db, stranded.id)).toBe(true);
+    const recoveredRun = (await companyTransferRunService.getRun(db, stranded.id))!;
+    expect(recoveredRun.status).toBe("needs_reconciliation");
+    expect(recoveredRun.error).toMatch(/unknown|reconcil/i);
+    expect(await companyTransferRunService.claimApply(db, stranded.id)).toBe(false);
 
     // Runs that were merely uploading are untouched.
     expect((await companyTransferRunService.getRun(db, open.id))!.status).toBe("running");
+  });
+
+  it("fences a possibly committed import effect after restart and resumes its same run", async () => {
+    const companyId = randomUUID();
+    const projectId = randomUUID();
+    const manifest = demoManifest();
+    await db.insert(companies).values({ id: companyId, name: "Import target",
+      issuePrefix: `TR${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}` });
+    const input = {
+      direction: "import" as const,
+      actorKey: "user:unknown-outcome",
+      idempotencyKey: manifest.idempotencyKey,
+      containerRef: { kind: "zip-upload" },
+      companyId,
+    };
+    const created = await companyTransferRunService.resumeOrCreate(db, input);
+    await companyTransferRunService.start(db, created.run.id);
+    expect(await companyTransferRunService.claimApply(db, created.run.id)).toBe(true);
+
+    // This native project insert stands in for the committed import effect;
+    // the process dies before it can settle the durable apply claim.
+    await db.insert(projects).values({ id: projectId, companyId, name: "Committed imported project",
+      status: "in_progress" });
+
+    const restarted = createDb(tempDb!.connectionString);
+    try {
+      const recovered = await companyTransferRunService.recoverStrandedApplyingRuns(restarted);
+      expect(recovered).toContain(created.run.id);
+      const uncertain = (await companyTransferRunService.getRun(restarted, created.run.id))!;
+      expect(uncertain.status).toBe("needs_reconciliation");
+      expect(await companyTransferRunService.claimApply(restarted, created.run.id)).toBe(false);
+
+      const resumed = await companyTransferRunService.resumeOrCreate(restarted, input);
+      expect(resumed.run.id).toBe(created.run.id);
+      expect(resumed.run.status).toBe("needs_reconciliation");
+      expect(resumed.resumed).toBe(true);
+      expect(await restarted.select({ id: projects.id }).from(projects).where(eq(projects.id, projectId)))
+        .toHaveLength(1);
+    } finally {
+      await restarted.$client.end();
+    }
   });
 
   it("does not restart a cancelled run", async () => {

@@ -992,4 +992,87 @@ describeEmbeddedPostgres("company import transfer routes", () => {
     expect((await companyTransferRunService.getRun(db, transferId))!.status).toBe("completed");
     await expect(fs.stat(path.join(spoolRoot, transferId))).rejects.toThrow();
   });
+
+  it("keeps an apply with unknown outcome inspectable and blocks every same-content retry", async () => {
+    const zip = buildFixtureZip();
+    const { body, slices } = declareTransfer(zip, Math.ceil(zip.length / 2));
+    const created = await request(app).post("/api/companies/import/transfers").send(body);
+    expect(created.status).toBe(200);
+    const transferId = created.body.transferId as string;
+    for (const [index, slice] of slices.entries()) expect((await putPart(transferId, index, slice)).status).toBe(200);
+
+    expect(await companyTransferRunService.claimApply(db, transferId)).toBe(true);
+    await companyTransferRunService.markApplyOutcomeUnknown(db, transferId);
+
+    const status = await request(app).get(`/api/companies/import/transfers/${transferId}`);
+    expect(status.status).toBe(200);
+    expect(status.body).toMatchObject({ transferId, status: "needs_reconciliation", missingParts: [] });
+    expect((await companyTransferRunService.getRun(db, transferId))!.status).toBe("needs_reconciliation");
+
+    const redeclared = await request(app).post("/api/companies/import/transfers").send(body);
+    expect(redeclared.status).toBe(409);
+    expect(redeclared.body.code).toBe("import_outcome_unknown");
+    expect(redeclared.body.details.transferId).toBe(transferId);
+
+    const part = await putPart(transferId, 0, slices[0]!);
+    expect(part.status).toBe(409);
+    expect(part.body.code).toBe("import_outcome_unknown");
+    const preview = await request(app).post(`/api/companies/import/transfers/${transferId}/preview`).send(importMeta);
+    expect(preview.status).toBe(409);
+    expect(preview.body.code).toBe("import_outcome_unknown");
+    const apply = await request(app).post(`/api/companies/import/transfers/${transferId}/apply`).send(importMeta);
+    expect(apply.status).toBe(409);
+    expect(apply.body.code).toBe("import_outcome_unknown");
+    expect(mockCompanyPortabilityService.previewImport).not.toHaveBeenCalled();
+    expect(mockCompanyPortabilityService.importBundle).not.toHaveBeenCalled();
+    expect((await companyTransferRunService.getRun(db, transferId))!.status).toBe("needs_reconciliation");
+  });
+
+  it("marks an invoked import with a lost response unknown and refuses a second import", async () => {
+    const zip = buildFixtureZip();
+    const { body, slices } = declareTransfer(zip, Math.ceil(zip.length / 2));
+    const created = await request(app).post("/api/companies/import/transfers").send(body);
+    const transferId = created.body.transferId as string;
+    for (const [index, slice] of slices.entries()) expect((await putPart(transferId, index, slice)).status).toBe(200);
+
+    mockCompanyPortabilityService.importBundle.mockRejectedValueOnce(new Error("simulated import response loss"));
+    const attempted = await request(app).post(`/api/companies/import/transfers/${transferId}/apply`).send(importMeta);
+    expect(attempted.status).toBe(409);
+    expect(attempted.body.code).toBe("import_outcome_unknown");
+    expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledTimes(1);
+    expect((await companyTransferRunService.getRun(db, transferId))!.status).toBe("needs_reconciliation");
+
+    const retry = await request(app).post(`/api/companies/import/transfers/${transferId}/apply`).send(importMeta);
+    expect(retry.status).toBe(409);
+    expect(retry.body.code).toBe("import_outcome_unknown");
+    expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledTimes(1);
+    expect((await companyTransferRunService.getRun(db, transferId))!.status).toBe("needs_reconciliation");
+  });
+
+  it("keeps the apply claim fenced when persisting an unknown outcome also fails", async () => {
+    const zip = buildFixtureZip();
+    const { body, slices } = declareTransfer(zip, Math.ceil(zip.length / 2));
+    const created = await request(app).post("/api/companies/import/transfers").send(body);
+    const transferId = created.body.transferId as string;
+    for (const [index, slice] of slices.entries()) expect((await putPart(transferId, index, slice)).status).toBe(200);
+
+    mockCompanyPortabilityService.importBundle.mockRejectedValueOnce(new Error("domain invocation response lost"));
+    const unknownWrite = vi.spyOn(companyTransferRunService, "markApplyOutcomeUnknown")
+      .mockRejectedValue(new Error("database unavailable while recording uncertain outcome"));
+    try {
+      const attempted = await request(app).post(`/api/companies/import/transfers/${transferId}/apply`).send(importMeta);
+      expect(attempted.status).toBe(409);
+      expect(attempted.body.code).toBe("import_outcome_unknown");
+      expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledTimes(1);
+      expect((await companyTransferRunService.getRun(db, transferId))!.status).toBe("applying");
+      expect(await companyTransferRunService.claimApply(db, transferId)).toBe(false);
+
+      const retry = await request(app).post(`/api/companies/import/transfers/${transferId}/apply`).send(importMeta);
+      expect(retry.status).toBe(409);
+      expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledTimes(1);
+      expect((await companyTransferRunService.getRun(db, transferId))!.status).toBe("applying");
+    } finally {
+      unknownWrite.mockRestore();
+    }
+  });
 });

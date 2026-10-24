@@ -9,6 +9,7 @@ import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { ApiError } from "../api/client";
 import type { CompanyImportJobAccepted } from "../api/companies";
 import { CompanyImport } from "./CompanyImport";
+import { readStoredImportJob } from "../lib/import-job-watch";
 
 // jsdom's crypto has no SubtleCrypto; the chunked transfer path hashes parts
 // with WebCrypto, so back the global with Node's implementation.
@@ -871,6 +872,50 @@ describe("CompanyImport", () => {
 
     expect(container.textContent).toContain("Import failed: blob mismatch");
     expect(mockPushToast).toHaveBeenCalledWith(expect.objectContaining({ tone: "error" }));
+  });
+
+  it("keeps a reconciliable import job stored and never treats it as completed", async () => {
+    mockCompaniesApi.getImportJob.mockResolvedValue({
+      job: { id: "job-1", status: "needs_reconciliation", error: { code: "import_outcome_unknown" } },
+    });
+
+    await renderPageAndImport();
+
+    expect(container.textContent).toContain("Import outcome unknown");
+    expect(container.textContent).not.toContain("Import failed:");
+    expect(container.textContent).not.toContain("Import complete");
+    expect(mockCompaniesApi.importBundleAsync).toHaveBeenCalledTimes(1);
+    expect(mockAgentsApi.resume).not.toHaveBeenCalled();
+    expect(mockRoutinesApi.update).not.toHaveBeenCalled();
+    expect(findButton((text) => text.startsWith("Import 3 file"))?.disabled).toBe(true);
+    expect(readStoredImportJob("company-1"))
+      .toMatchObject({ jobId: "job-1", pauseAutomations: true });
+  });
+
+  it("does not adopt an unrelated job from an unknown-outcome 409", async () => {
+    mockCompaniesApi.importBundleAsync.mockRejectedValueOnce(
+      new ApiError("Import outcome unknown", 409, {
+        code: "import_outcome_unknown",
+        transferId: "transfer-committed",
+        job: { id: "unrelated-job", status: "running" },
+        statusUrl: "/companies/import/jobs/unrelated-job",
+      }),
+    );
+    mockCompaniesApi.getImportJob.mockResolvedValue(buildSucceededJob("unrelated-job"));
+
+    await renderPage();
+    await enterGithubUrl();
+    await clickButton((text) => text === "Preview import");
+    await clickButton((text) => text.startsWith("Import 3 file"));
+    await settle();
+
+    expect(container.textContent).toContain("Import outcome unknown");
+    expect(container.textContent).not.toContain("Import complete");
+    expect(mockCompaniesApi.getImportJob).not.toHaveBeenCalled();
+    expect(mockCompaniesApi.importBundleAsync).toHaveBeenCalledTimes(1);
+    expect(mockAgentsApi.resume).not.toHaveBeenCalled();
+    expect(mockRoutinesApi.update).not.toHaveBeenCalled();
+    expect(findButton((text) => text.startsWith("Import 3 file"))?.disabled).toBe(true);
   });
 
   it("terminates the import when polling hits a permanent auth error", async () => {

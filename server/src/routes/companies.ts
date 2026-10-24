@@ -35,7 +35,7 @@ import {
   type CompanyImportTransferPartUploadResult,
   type CompanyImportTransferStatus,
 } from "@paperclipai/shared/company-import-transfer";
-import { badRequest, conflict, forbidden, notFound, unprocessable } from "../errors.js";
+import { HttpError, badRequest, conflict, forbidden, notFound, unprocessable } from "../errors.js";
 import { PORTABLE_ZIP_UPLOAD_LIMIT_BYTES } from "../http/body-limits.js";
 import { logger } from "../middleware/logger.js";
 import { validate } from "../middleware/validate.js";
@@ -813,6 +813,11 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
       idempotencyKey,
       containerRef: { kind: "chunked_zip_upload" },
     });
+    if (run.status === "needs_reconciliation") {
+      throw conflict("The previous import outcome is unknown. Reconcile this transfer before importing the package again.",
+        { code: "import_outcome_unknown", transferId: run.id });
+    }
+    if (run.status === "applying") throw conflict("Import transfer apply is in progress; retry after it settles");
     if (alreadyCompleted) {
       // Tell the caller WHERE the prior apply landed. companyId on the run is
       // written best-effort after apply and the company may have been deleted
@@ -865,6 +870,9 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
       if (run.status === "completed") {
         throw conflict("Import transfer has already been applied");
       }
+      if (run.status === "needs_reconciliation") throw conflict(
+        "The previous import outcome is unknown. Reconcile this transfer before changing its parts or applying it again.",
+        { code: "import_outcome_unknown", transferId: run.id });
       if (run.status === "applying") {
         // An apply is assembling the spool right now; accepting writes would
         // let a retried upload race the files being read. Parts are frozen
@@ -964,6 +972,9 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     if (run.status === "completed") {
       throw conflict("Import transfer has already been applied");
     }
+    if (run.status === "needs_reconciliation") throw conflict(
+      "The previous import outcome is unknown. Reconcile this transfer before applying it again.",
+      { code: "import_outcome_unknown", transferId: run.id });
     if (run.status === "applying") {
       // An apply holds the claim right now: its assembly is reading the spool
       // and its success deletes it, so neither a preview nor a second apply
@@ -1067,7 +1078,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
           // claim on an already-committed import. complete() gets one retry;
           // if both attempts fail the run is left "applying" (unclaimable, so
           // no duplicate import) and logged for the operator; a restart's
-          // stranded-run recovery then makes it inspectable as failed.
+          // stranded-run recovery preserves it as needs_reconciliation.
           try {
             await companyTransferRunService.complete(db, run.id);
           } catch {
@@ -1103,13 +1114,13 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
             );
           }
         },
-        onFailure: async (message) => {
-          // Parts remain spooled: the failure is in the import itself, not
-          // the upload, so a retry of apply can reuse the verified parts.
-          // Guarded release, not a blind fail: this hook also fires when an
-          // error escapes onSuccess above, i.e. possibly after complete(),
-          // and a completed run must never be flipped back to claimable.
-          await companyTransferRunService.releaseApplyClaim(db, run.id, message);
+        onFailure: async () => {
+          // importBundle owns multiple domain writes. A thrown error cannot
+          // establish that none committed; preserve the claim for reconciliation.
+          try { await companyTransferRunService.markApplyOutcomeUnknown(db, run.id); }
+          catch { logger.warn({ transferId: run.id }, "import outcome remains unconfirmed; retained apply claim is not released"); }
+          throw conflict("The import outcome is unknown. Reconcile this transfer before importing the package again.",
+            { code: "import_outcome_unknown", transferId: run.id });
         },
         onConflict: async () => {
           // The request was refused before any import work (another import is
@@ -1123,12 +1134,10 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
         },
       });
     } catch (error) {
-      // Whatever escapes here (bad meta, an import error rethrown after
-      // onFailure) must not leave the run parked in "applying": release the
-      // claim, which keeps the run retryable. The release is guarded on
-      // "applying", so a run that already settled — failed by onFailure, or
-      // completed before a late error — keeps its terminal state.
-      await companyTransferRunService.releaseApplyClaim(db, run.id, errorMessage(error));
+      // Dispatch or settlement may have written even if the unknown-state
+      // UPDATE failed. Never turn that uncertainty back into a retryable run.
+      try { await companyTransferRunService.markApplyOutcomeUnknown(db, run.id); }
+      catch { logger.warn({ transferId: run.id }, "import outcome remains unconfirmed; retained apply claim is not released"); }
       throw error;
     }
   });
@@ -1414,7 +1423,7 @@ interface ImportJobRecord {
    * adopting an unrelated job (and its target). Board jobs only.
    */
   signature?: string;
-  status: "running" | "succeeded" | "failed";
+  status: "running" | "succeeded" | "failed" | "needs_reconciliation";
   createdAt: string;
   updatedAt: string;
   completedAt?: string;
@@ -1520,7 +1529,9 @@ async function runImportJob(
     }
   } catch (error) {
     const now = new Date().toISOString();
-    job.status = "failed";
+    job.status = error instanceof HttpError && error.status === 409
+      && (error.details as { code?: unknown } | undefined)?.code === "import_outcome_unknown"
+      ? "needs_reconciliation" : "failed";
     job.updatedAt = now;
     job.completedAt = now;
     job.error = { message: errorMessage(error) };
@@ -1603,7 +1614,7 @@ function importJobConflictResponse(job: ImportJobRecord) {
 }
 
 function importJobResponse(job: ImportJobRecord) {
-  const isTerminal = job.status === "succeeded" || job.status === "failed";
+  const isTerminal = job.status !== "running";
   const response: Record<string, unknown> = {
     job: {
       id: job.id,

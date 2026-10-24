@@ -1367,18 +1367,15 @@ export async function createApp(
       IMPORT_TRANSFER_SPOOL_SWEEP_INTERVAL_MS,
     );
   importTransferSweepTimer.unref?.();
-  // Startup only (never on the hourly interval — that would kill live
-  // applies): apply jobs are in-memory in this single process, so any run
-  // still "applying" now was interrupted by the previous shutdown and would
-  // otherwise 409 every retry forever. Fail those stranded runs — their
-  // spooled parts stay reusable — then run the normal sweep once.
+  // A startup cannot prove whether an interrupted apply wrote domain data.
+  // Preserve its durable identity and block replay pending reconciliation.
   void companyTransferRunService
     .recoverStrandedApplyingRuns(db)
     .then((recovered) => {
       if (recovered.length > 0) {
         logger.warn(
           { count: recovered.length, runIds: recovered },
-          "failed company transfer runs stranded in applying by a restart",
+          "company transfer apply outcomes require reconciliation",
         );
       }
     })

@@ -753,7 +753,7 @@ function formatTransferProgress(progress: ImportTransferProgress): string {
 
 /** A 409 on submit means this user's previous import is still running; adopt it instead of importing twice. */
 function runningImportJobFromError(err: unknown): CompanyImportJobAccepted | null {
-  if (!(err instanceof ApiError) || err.status !== 409) return null;
+  if (!(err instanceof ApiError) || err.status !== 409 || importOutcomeIsUnknown(err)) return null;
   const body = err.body as { job?: { id?: unknown }; statusUrl?: unknown } | null;
   const jobId = body?.job?.id;
   if (typeof jobId !== "string" || jobId.length === 0) return null;
@@ -777,6 +777,13 @@ function runningImportJobFromError(err: unknown): CompanyImportJobAccepted | nul
 type CompanyImportWatchOutcome =
   | { status: "completed"; result: CompanyPortabilityImportResult }
   | { status: "completed-expired"; companyId: string | null };
+
+class ImportOutcomeUnknownError extends Error {}
+
+function importOutcomeIsUnknown(error: unknown): boolean {
+  return error instanceof ImportOutcomeUnknownError || (error instanceof ApiError && error.status === 409
+    && (error.body as { code?: unknown } | null)?.code === "import_outcome_unknown");
+}
 
 /** Poll a job to a terminal state; resolves with the outcome or throws the job's error. */
 async function watchImportJob(
@@ -833,6 +840,11 @@ async function watchImportJob(
         };
       }
       return { status: "completed", result: job.importResult };
+    }
+    if (job?.status === "needs_reconciliation") {
+      // Keep the original job identity for a later read. Uncertainty is never
+      // a reason to resubmit a non-idempotent import or activate its contents.
+      throw new ImportOutcomeUnknownError(job.error?.message ?? "The import outcome is unknown. Reconcile the existing import before trying again.");
     }
     if (job?.status === "failed") {
       clearStoredImportJob(storageKey);
@@ -1322,7 +1334,7 @@ export function CompanyImport() {
       setResumedWatchJobId(null);
       pushToast({
         tone: "error",
-        title: "Import failed",
+        title: importOutcomeIsUnknown(err) ? "Import outcome unknown" : "Import failed",
         body: err instanceof Error ? err.message : "Failed to apply import.",
       });
     },
@@ -2102,7 +2114,7 @@ export function CompanyImport() {
             <Button
               size="sm"
               onClick={() => importMutation.mutate({ previewForImport: importPreview, pauseAutomations })}
-              disabled={importMutation.isPending || hasErrors || selectedCount === 0}
+              disabled={importMutation.isPending || importOutcomeIsUnknown(importMutation.error) || hasErrors || selectedCount === 0}
             >
               <Download className="mr-1.5 h-3.5 w-3.5" />
               {importMutation.isPending
@@ -2123,12 +2135,13 @@ export function CompanyImport() {
           {importMutation.isError && !importMutation.isPending && (
             <div className="mx-5 mt-3 rounded-md border border-destructive/40 bg-destructive/5 px-3 py-2.5">
               <p className="text-xs text-destructive">
-                Import failed:{" "}
+                {importOutcomeIsUnknown(importMutation.error) ? "Import outcome unknown:" : "Import failed:"}{" "}
                 {importMutation.error instanceof Error
                   ? importMutation.error.message
                   : "the request did not complete."}{" "}
-                Nothing may have been created, or the import stopped partway — check the target company
-                before retrying.
+                {importOutcomeIsUnknown(importMutation.error)
+                  ? "Reconcile the existing import before trying again. Some changes may already exist."
+                  : "Nothing may have been created, or the import stopped partway — check the target company before retrying."}
               </p>
             </div>
           )}
