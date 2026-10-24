@@ -1091,6 +1091,7 @@ export async function createApp(
       bindHost: opts.bindHost,
       allowedHostnames: opts.allowedHostnames,
       authPublicBaseUrl: opts.authPublicBaseUrl,
+      operatorUserIds: opts.saasPlatform?.config.operatorUserIds,
       saasInviteRecipient:opts.saasPlatform?(invite,userId)=>opts.saasPlatform!.invitations.assertRecipient(invite,userId):undefined,
     }),
   );

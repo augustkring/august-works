@@ -1,5 +1,6 @@
 import { Command } from "commander";
 import { createAgentKeySchema, createBoardApiKeySchema, type Agent } from "@paperclipai/shared";
+import { loginBoardCli } from "../../client/board-auth.js";
 import {
   addCommonClientOptions,
   apiPath,
@@ -7,6 +8,7 @@ import {
   handleCommandError,
   printOutput,
   resolveCommandContext,
+  resolveApiBase,
   type BaseClientOptions,
 } from "./common.js";
 
@@ -37,16 +39,6 @@ interface AgentKeyRow {
   createdAt: string;
   lastUsedAt?: string | null;
   revokedAt?: string | null;
-}
-
-interface CreatedBoardKey {
-  id: string;
-  name: string;
-  token: string;
-  createdAt: string;
-  lastUsedAt: string | null;
-  revokedAt: string | null;
-  expiresAt: string | null;
 }
 
 interface BoardKeyRow {
@@ -143,7 +135,7 @@ export function registerTokenCommands(program: Command): void {
   addCommonClientOptions(
     board
       .command("create")
-      .description("Create a named board API key")
+      .description("Create a named board API key through browser approval")
       .option("-C, --company-id <id>", "Company ID used for audit context")
       .option("--name <name>", "API key label", "cli-board")
       .option("--expires-at <iso8601>", "Expiration timestamp")
@@ -153,13 +145,20 @@ export function registerTokenCommands(program: Command): void {
         try {
           const ctx = resolveCommandContext(opts);
           const expiresAt = resolveBoardKeyExpiresAt(opts);
-          const payload = createBoardApiKeySchema.parse({
-            name: opts.name,
-            requestedCompanyId: opts.companyId ?? ctx.companyId ?? null,
-            expiresAt,
+          const requested = createBoardApiKeySchema.parse({ name: opts.name,
+            requestedCompanyId: opts.companyId ?? ctx.companyId ?? null, expiresAt });
+          const login = await loginBoardCli({
+            apiBase: resolveApiBase(opts, ctx.profile),
+            requestedAccess: "board",
+            requestedCompanyId: requested.requestedCompanyId,
+            clientName: "paperclipai token board create",
+            command: "paperclipai token board create",
+            keyName: requested.name,
+            keyExpiresAt: requested.expiresAt,
+            includeKeyMetadata: true,
           });
-          const key = await ctx.api.post<CreatedBoardKey>("/api/board-api-keys", payload);
-          if (!key) throw new Error("Failed to create board API key");
+          const key = login.key;
+          if (!key) throw new Error("The approved board key metadata could not be read.");
           printOutput({ key }, { json: ctx.json });
         } catch (err) {
           handleCommandError(err);

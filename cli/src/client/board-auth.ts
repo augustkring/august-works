@@ -29,6 +29,8 @@ interface CreateChallengeResponse {
   pollPath: string;
   expiresAt: string;
   suggestedPollIntervalMs: number;
+  keyName?: string;
+  keyExpiresAt?: string | null;
 }
 
 interface ChallengeStatusResponse {
@@ -43,6 +45,18 @@ interface ChallengeStatusResponse {
   cancelledAt: string | null;
   expiresAt: string;
   approvedByUser: { id: string; name: string; email: string } | null;
+  keyName?: string;
+  keyExpiresAt?: string | null;
+}
+
+export interface ApprovedBoardKeyMetadata {
+  id: string;
+  name: string;
+  createdAt: string;
+  lastUsedAt: string | null;
+  revokedAt: string | null;
+  expiresAt: string | null;
+  token: string;
 }
 
 function defaultBoardAuthStore(): BoardAuthStore {
@@ -215,7 +229,10 @@ export async function loginBoardCli(params: {
   print?: boolean;
   openBrowser?: boolean;
   publicBaseUrl?: string;
-}): Promise<{ token: string; approvalUrl: string; userId?: string | null }> {
+  keyName?: string;
+  keyExpiresAt?: Date | null;
+  includeKeyMetadata?: boolean;
+}): Promise<{ token: string; approvalUrl: string; userId?: string | null; key?: ApprovedBoardKeyMetadata }> {
   const apiBase = normalizeApiBase(params.apiBase);
   const createUrl = `${apiBase}/api/cli-auth/challenges`;
   const command = params.command?.trim() || buildCliCommandLabel();
@@ -227,8 +244,22 @@ export async function loginBoardCli(params: {
       clientName: params.clientName?.trim() || "paperclipai cli",
       requestedAccess: params.requestedAccess,
       requestedCompanyId: params.requestedCompanyId?.trim() || null,
+      ...(params.keyName?.trim() ? { keyName: params.keyName.trim() } : {}),
+      ...(params.keyExpiresAt !== undefined
+        ? { keyExpiresAt: params.keyExpiresAt === null ? null : params.keyExpiresAt.toISOString() }
+        : {}),
     }),
   });
+  const expectedKeyName = params.keyName?.trim() || undefined;
+  const expectedKeyExpiresAt = params.keyExpiresAt === undefined
+    ? undefined
+    : params.keyExpiresAt === null ? null : params.keyExpiresAt.toISOString();
+  if (expectedKeyName !== undefined && challenge.keyName !== expectedKeyName) {
+    throw new Error("CLI auth challenge did not preserve the requested key name.");
+  }
+  if (expectedKeyExpiresAt !== undefined && challenge.keyExpiresAt !== expectedKeyExpiresAt) {
+    throw new Error("CLI auth challenge did not preserve the requested key expiration.");
+  }
 
   const publicBase = params.publicBaseUrl?.trim() || process.env.PAPERCLIP_PUBLIC_URL?.trim();
   const approvalUrl = publicBase
@@ -270,7 +301,7 @@ export async function loginBoardCli(params: {
     }
 
     if (status.status === "approved") {
-      const me = await requestJson<{ userId: string; user?: { id: string } | null }>(
+      const me = await requestJson<{ userId: string; keyId?: string | null; user?: { id: string } | null }>(
         `${apiBase}/api/cli-auth/me`,
         {
           headers: {
@@ -278,6 +309,23 @@ export async function loginBoardCli(params: {
           },
         },
       );
+      let key: ApprovedBoardKeyMetadata | undefined;
+      if (params.includeKeyMetadata) {
+        if (!me.keyId) throw new Error("Approved CLI key metadata is unavailable.");
+        const keys = await requestJson<Array<Omit<ApprovedBoardKeyMetadata, "token">>>(
+          `${apiBase}/api/board-api-keys`,
+          { headers: { authorization: `Bearer ${challenge.boardApiToken}` } },
+        );
+        const approvedKey = keys.find((row) => row.id === me.keyId);
+        if (!approvedKey) throw new Error("Approved CLI key metadata is unavailable.");
+        if (expectedKeyName !== undefined && approvedKey.name !== expectedKeyName) {
+          throw new Error("Approved CLI key name did not match the requested name.");
+        }
+        if (expectedKeyExpiresAt !== undefined && approvedKey.expiresAt !== expectedKeyExpiresAt) {
+          throw new Error("Approved CLI key expiration did not match the requested expiration.");
+        }
+        key = { ...approvedKey, token: challenge.boardApiToken };
+      }
       setStoredBoardCredential({
         apiBase,
         token: challenge.boardApiToken,
@@ -288,6 +336,7 @@ export async function loginBoardCli(params: {
         token: challenge.boardApiToken,
         approvalUrl,
         userId: me.userId ?? me.user?.id ?? null,
+        ...(key ? { key } : {}),
       };
     }
 

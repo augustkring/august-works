@@ -606,3 +606,49 @@ Evidence:
 `doc/operations/aw-v10-evidence/native-operator-host-queue-2026-10-24/checkpoint.json`.
 Powerful Board/CLI credential creation, enterprise recovery/SSO, other sensitive
 owners, native input/source construction and full V10/PR gates remain open.
+
+
+### 2026-10-24 — powerful Board/CLI credentials and native confirmation receipts
+
+Board key creation and CLI approval now receive the actual Actor and check
+recent native proof inside their original transactions, including final success
+and same-owner replay. Configured operators additionally need verified email
+and passkey proof. Explicit local-trusted implicit authority stays a separate
+local mode; it cannot satisfy configured operator authentication. Revocation
+and cancellation remain available without a new factor ceremony.
+
+Password confirmation now returns its actual replacement native session ID.
+The original settings component validates that receipt against the canonical
+account/session before starting factor enrollment or acknowledging confirmation.
+Its confirmation-only view is reused on the CLI consent page without listing,
+enrolling, renaming or removing keys. A fresh explicit approval follows the
+native ceremony and current challenge read; it is never replayed automatically.
+Expected user/session headers narrow the original cookie actor on the server.
+
+The same-account background-read regression was reproduced before correction:
+a freshness recheck could hide the recent-authentication guidance permanently.
+Only that guidance now follows the selected account/challenge across the read;
+private results, native proof and subsequent approval keep their session fences.
+Account/challenge changes discard late confirmation. Raw failed and final checks
+are retained in the evidence checkpoint below.
+
+CLI `connect` now uses the exact approved key. Named key creation uses a fresh
+browser consent, preserving the requested label and explicit/default expiry.
+Generated migration0524 retains that expiry on the original challenge; the
+browser shows it before consent, and the original approval owner checks its
+current database-clock deadline. The CLI rejects missing/mismatched requested
+settings and metadata, rather than silently accepting an older server's defaults.
+
+Evidence: `doc/operations/aw-v10-evidence/native-powerful-credentials-2026-10-24/checkpoint.json`.
+Other password/email/destructive-action owners, operator bootstrap/break-glass,
+enterprise SSO/recovery, native input/source closure, physical/provider and
+mixed-version deployment qualification, and complete V10/PR gates remain open.
+
+The final native checkpoint passes84 backend cases in four suites,84 client
+cases in six suites, server/UI/CLI compilation and token gates. The real built
+Chromium lifecycle passes after all three controlled race regressions first
+failed and were corrected. The ceremony remains mounted but hidden through its
+own session recheck; acknowledgement is bound to the verifier's actual SID.
+Challenge reads detach from an older account's in-flight HTTP request. Software
+virtual-authenticator/fixture evidence does not qualify enterprise recovery,
+physical hosts/keys, mixed-version deployment or complete V10/PR admission.

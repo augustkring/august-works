@@ -146,6 +146,28 @@ describe("authApi two-factor sign-in", () => {
   });
 });
 
+describe("authApi password confirmation receipt", () => {
+  it("requires the native response to name the replacement session", async () => {
+    const fetchMock = vi.fn()
+      .mockResolvedValueOnce(new Response(JSON.stringify({ sessionId: "session-human" }), {
+        status: 200, headers: { "Content-Type": "application/json" },
+      }))
+      .mockResolvedValueOnce(new Response(JSON.stringify({}), {
+        status: 200, headers: { "Content-Type": "application/json" },
+      }));
+    vi.stubGlobal("fetch", fetchMock);
+    await expect(authApi.reauthenticatePassword("secret", "human", "before-human"))
+      .resolves.toEqual({ sessionId: "session-human" });
+    expect(fetchMock.mock.calls[0]).toMatchObject(["/api/auth/reauthenticate/password", expect.objectContaining({
+      headers: expect.objectContaining({
+        "X-Blentera-Expected-User": "human",
+        "X-Blentera-Expected-Session": "before-human",
+      }),
+    })]);
+    await expect(authApi.reauthenticatePassword("secret", "human", "before-human")).rejects.toThrow();
+  });
+});
+
 describe("native security account binding", () => {
   it("reads uncached status with cancellation and refuses another principal in its response", async () => {
     const controller = new AbortController();

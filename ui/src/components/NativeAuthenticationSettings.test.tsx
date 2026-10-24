@@ -20,9 +20,9 @@ function SessionObserver() {
   return null;
 }
 let root: Root, host: HTMLDivElement, client: QueryClient;
-async function render(principal = "owner") {
+async function render(principal = "owner", settingsProps: { confirmationOnly?: boolean; onConfirmed?: (receipt: { userId: string; sessionId: string }) => void } = {}) {
   await act(async () => root.render(<QueryClientProvider client={client}>
-    <SessionObserver /><NativeAuthenticationSettings principal={principal} />
+    <SessionObserver /><NativeAuthenticationSettings principal={principal} {...settingsProps} />
   </QueryClientProvider>));
 }
 async function mount() {
@@ -51,7 +51,7 @@ function button(label: string) {
 
 it("reveals the setup key and one-time recovery codes only after current-account confirmation", async () => {
   let status = { userId: "owner", hasPassword: true, twoFactorEnabled: false, phishingResistantRequired: false };
-  vi.spyOn(authApi, "reauthenticatePassword").mockResolvedValue(undefined);
+  vi.spyOn(authApi, "reauthenticatePassword").mockResolvedValue({ sessionId: "session-owner" });
   vi.spyOn(authApi, "enableTwoFactor").mockResolvedValue({
     sessionId: "session-owner", totpURI: "otpauth://totp/Blentera%3Aowner?secret=JBSWY3DPEHPK3PXP&issuer=Blentera",
     backupCodes: ["RECOVERY-ONE-TIME-01", "RECOVERY-ONE-TIME-02"],
@@ -94,7 +94,7 @@ it("reveals the setup key and one-time recovery codes only after current-account
 it("discards a late enrollment response after the authenticated account changes", async () => {
   await mount();
   const pending = deferred<{ sessionId: string; totpURI: string; backupCodes: string[] }>();
-  vi.spyOn(authApi, "reauthenticatePassword").mockResolvedValue(undefined);
+  vi.spyOn(authApi, "reauthenticatePassword").mockResolvedValue({ sessionId: "session-owner" });
   vi.spyOn(authApi, "enableTwoFactor").mockReturnValue(pending.promise);
   await act(async () => {
     setInput(host.querySelector<HTMLInputElement>("#native-authenticator-password")!, "CURRENT-PRIVATE-PASSWORD");
@@ -119,7 +119,7 @@ it("discards a late enrollment response after the authenticated account changes"
 
 it("removes pending setup through the native cancellation owner and clears its visible key", async () => {
   await mount();
-  vi.spyOn(authApi, "reauthenticatePassword").mockResolvedValue(undefined);
+  vi.spyOn(authApi, "reauthenticatePassword").mockResolvedValue({ sessionId: "session-owner" });
   vi.spyOn(authApi, "enableTwoFactor").mockResolvedValue({
     sessionId: "session-owner", totpURI: "otpauth://totp/Blentera?secret=JBSWY3DPEHPK3PXP&issuer=Blentera", backupCodes: ["CANCELLED-RECOVERY-CANARY"],
   });
@@ -137,7 +137,7 @@ it("removes pending setup through the native cancellation owner and clears its v
 
 it("withholds an enrollment response whose issued session is not the current session", async () => {
   await mount();
-  vi.spyOn(authApi, "reauthenticatePassword").mockResolvedValue(undefined);
+  vi.spyOn(authApi, "reauthenticatePassword").mockResolvedValue({ sessionId: "session-owner" });
   vi.spyOn(authApi, "enableTwoFactor").mockResolvedValue({ sessionId: "different-session",
     totpURI: "otpauth://totp/Blentera?secret=JBSWY3DPEHPK3PXP&issuer=Blentera", backupCodes: ["WRONG-SESSION-RECOVERY-CANARY"] });
   await act(async () => {
@@ -151,7 +151,7 @@ it("withholds an enrollment response whose issued session is not the current ses
 
 it("retries an uncertain cancellation with its original session reference", async () => {
   await mount();
-  vi.spyOn(authApi, "reauthenticatePassword").mockResolvedValue(undefined);
+  vi.spyOn(authApi, "reauthenticatePassword").mockResolvedValue({ sessionId: "session-owner" });
   vi.spyOn(authApi, "enableTwoFactor").mockResolvedValue({ sessionId: "session-owner",
     totpURI: "otpauth://totp/Blentera?secret=JBSWY3DPEHPK3PXP&issuer=Blentera", backupCodes: ["UNCERTAIN-CANCELLATION-CANARY"] });
   const cancel = vi.spyOn(authApi, "cancelTwoFactorEnrollment").mockRejectedValueOnce(new TypeError("response lost"))
@@ -185,7 +185,7 @@ async function showPasskeySettings() {
 it("registers a passkey for the current principal and session, then reads that session's list", async () => {
   await mount();
   await showPasskeySettings();
-  vi.spyOn(authApi, "reauthenticatePassword").mockResolvedValue(undefined);
+  vi.spyOn(authApi, "reauthenticatePassword").mockResolvedValue({ sessionId: "session-owner" });
   let added = false;
   vi.mocked(authApi.listPasskeys).mockImplementation(async () => added ? [
     { id: "native-key-1", name: "Work laptop", createdAt: "2026-10-24T12:00:00.000Z" },
@@ -210,7 +210,7 @@ it("registers a passkey for the current principal and session, then reads that s
 it("withholds a passkey registration acknowledgement from a different native session", async () => {
   await mount();
   await showPasskeySettings();
-  vi.spyOn(authApi, "reauthenticatePassword").mockResolvedValue(undefined);
+  vi.spyOn(authApi, "reauthenticatePassword").mockResolvedValue({ sessionId: "session-owner" });
   vi.spyOn(authApi, "addPasskey").mockResolvedValue({
     id: "wrong-session-key", name: "Wrong session key", createdAt: "2026-10-24T12:00:00.000Z", sessionId: "session-other",
   });
@@ -229,19 +229,67 @@ it("withholds a passkey registration acknowledgement from a different native ses
 
 it("holds background native status reads while the current session is being rotated", async () => {
   const enrollment = deferred<Awaited<ReturnType<typeof authApi.enableTwoFactor>>>();
-  vi.spyOn(authApi, "reauthenticatePassword").mockResolvedValue(undefined);
+  vi.spyOn(authApi, "reauthenticatePassword").mockResolvedValue({ sessionId: "session-owner" });
   vi.spyOn(authApi, "enableTwoFactor").mockReturnValue(enrollment.promise);
   await mount();
-  const readsBefore = vi.mocked(authApi.securityStatus).mock.calls.length;
   await act(async () => {
     setInput(host.querySelector<HTMLInputElement>("#native-authenticator-password")!, "CURRENT-PRIVATE-PASSWORD");
     button("Set up an authenticator").click();
   });
   await vi.waitFor(() => expect(authApi.enableTwoFactor).toHaveBeenCalled());
+  const readsBefore = vi.mocked(authApi.securityStatus).mock.calls.length;
   await act(async () => { await client.invalidateQueries({ queryKey: ["native-authenticator-status", "owner"] }); });
   expect(authApi.securityStatus).toHaveBeenCalledTimes(readsBefore);
   await act(async () => enrollment.resolve({ sessionId: "session-owner",
     totpURI: "otpauth://totp/Blentera%3Aowner?secret=JBSWY3DPEHPK3PXP&issuer=Blentera", backupCodes: ["RECOVERY-FENCED"] }));
   await vi.waitFor(() => expect(host.querySelector("#native-authenticator-setup-key")).not.toBeNull());
   expect(authApi.securityStatus).toHaveBeenCalledWith("owner", undefined, "session-owner");
+});
+
+it("returns a password confirmation only when its replacement session matches the canonical account", async () => {
+  await mount();
+  const onConfirmed = vi.fn();
+  vi.spyOn(authApi, "reauthenticatePassword").mockResolvedValue({ sessionId: "session-owner" });
+  await render("owner", { confirmationOnly: true, onConfirmed });
+  const confirmLabel = i18n.t("account.authenticator.confirmIdentity", { ns: "experience" });
+  await vi.waitFor(() => expect(button(confirmLabel)).toBeTruthy());
+  expect(button(i18n.t("account.authenticator.enable", { ns: "experience" }))).toBeUndefined();
+  await act(async () => {
+    setInput(host.querySelector<HTMLInputElement>("input[type=password]")!, "CURRENT-PRIVATE-PASSWORD");
+    button(confirmLabel).click();
+  });
+  await vi.waitFor(() => expect(onConfirmed).toHaveBeenCalledWith({ userId: "owner", sessionId: "session-owner" }));
+  expect(authApi.reauthenticatePassword).toHaveBeenCalledWith("CURRENT-PRIVATE-PASSWORD", "owner", "session-owner");
+});
+
+it("withholds password confirmation when the returned session differs from the canonical session", async () => {
+  await mount();
+  const onConfirmed = vi.fn();
+  vi.spyOn(authApi, "reauthenticatePassword").mockResolvedValue({ sessionId: "session-replaced-elsewhere" });
+  await render("owner", { confirmationOnly: true, onConfirmed });
+  const confirmLabel = i18n.t("account.authenticator.confirmIdentity", { ns: "experience" });
+  await vi.waitFor(() => expect(button(confirmLabel)).toBeTruthy());
+  await act(async () => {
+    setInput(host.querySelector<HTMLInputElement>("input[type=password]")!, "CURRENT-PRIVATE-PASSWORD");
+    button(confirmLabel).click();
+  });
+  await act(async () => Promise.resolve());
+  expect(onConfirmed).not.toHaveBeenCalled();
+});
+
+it("uses the current native passkey session for configured confirmation without listing keys", async () => {
+  await mount();
+  vi.spyOn(authApi, "listPasskeys").mockResolvedValue([]);
+  vi.mocked(authApi.securityStatus).mockResolvedValue({ userId: "owner", hasPassword: false,
+    twoFactorEnabled: false, phishingResistantRequired: true, passkeysAvailable: true });
+  const onConfirmed = vi.fn();
+  vi.spyOn(authApi, "authenticatePasskey").mockResolvedValue({ userId: "owner", sessionId: "session-owner" });
+  await render("owner", { confirmationOnly: true, onConfirmed });
+  await act(async () => { await client.invalidateQueries({ queryKey: ["native-authenticator-status", "owner"] }); });
+  const passkeyLabel = i18n.t("account.passkeys.confirm", { ns: "experience" });
+  await vi.waitFor(() => expect(button(passkeyLabel)).toBeTruthy());
+  await act(async () => button(passkeyLabel).click());
+  await vi.waitFor(() => expect(onConfirmed).toHaveBeenCalledWith({ userId: "owner", sessionId: "session-owner" }));
+  expect(authApi.authenticatePasskey).toHaveBeenCalledWith("owner", "session-owner");
+  expect(authApi.listPasskeys).not.toHaveBeenCalled();
 });

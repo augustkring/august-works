@@ -11,7 +11,9 @@ import {
   companyMemberships,
   instanceUserRoles,
 } from "@paperclipai/db";
-import { conflict, forbidden, notFound } from "../errors.js";
+import { badRequest, conflict, forbidden, notFound } from "../errors.js";
+import type { AuthorizationActor } from "./authorization.js";
+import { assertConfiguredOperatorAuthentication, assertHumanAuthentication } from "../auth/authenticator-assurance.js";
 import { logActivity, publishActivity, type ActivityPublication } from "./activity-log.js";
 import { logger } from "../middleware/logger.js";
 
@@ -56,7 +58,32 @@ function challengeStatusForRow(row: typeof cliAuthChallenges.$inferSelect): CliA
   return "pending";
 }
 
-export function boardAuthService(db: Db) {
+export function boardAuthService(
+  db: Db,
+  options: { allowLocalImplicit?: boolean; operatorUserIds?: readonly string[] } = {},
+) {
+  const operatorUserIds = options.operatorUserIds ?? [];
+  const isTrustedLocalImplicit = (actor: AuthorizationActor) =>
+    options.allowLocalImplicit === true &&
+    actor.type === "board" &&
+    actor.source === "local_implicit" &&
+    (!actor.userId || actor.userId === "local-board") &&
+    !operatorUserIds.includes(actor.userId ?? "local-board");
+  const actorUserId = (actor: AuthorizationActor) =>
+    actor.type !== "board"
+      ? undefined
+      : isTrustedLocalImplicit(actor)
+        ? actor.userId ?? "local-board"
+        : actor.userId ?? undefined;
+  async function assertPowerfulCredential(tx: Db, actor: AuthorizationActor) {
+    const configuredOperator = Boolean(actor.userId && operatorUserIds.includes(actor.userId));
+    if (isTrustedLocalImplicit(actor)) return;
+    if (configuredOperator) {
+      await assertConfiguredOperatorAuthentication(tx, actor, operatorUserIds, { requireRecent: true });
+      return;
+    }
+    await assertHumanAuthentication(tx, actor, { requireRecent: true, phishingResistant: false });
+  }
   const touchedBoardApiKeys = new Map<string, { completedAt: number | null; inFlight: Promise<void> | null }>();
 
   function pruneTouchedBoardApiKeys(nowMs: number) {
@@ -225,15 +252,18 @@ export function boardAuthService(db: Db) {
   }
 
   async function createNamedBoardApiKey(input: {
-    userId: string;
+    actor: AuthorizationActor;
     name: string;
     expiresAt?: Date | null;
     requestedCompanyId?: string | null;
   }) {
+    const userId = actorUserId(input.actor);
+    if (!userId) throw forbidden("Board user required");
     const token = createBoardApiToken();
     const publications: ActivityPublication[] = [];
     const created = await db.transaction(async tx => {
-      const access = await resolveBoardAccess(input.userId, tx);
+      await assertPowerfulCredential(tx as unknown as Db, input.actor);
+      const access = await resolveBoardAccess(userId, tx);
       if (!access.user) throw forbidden("Board user required");
       if (input.requestedCompanyId && !access.isInstanceAdmin && !access.companyIds.includes(input.requestedCompanyId)) {
         throw forbidden("Access to the requested organization is required");
@@ -241,7 +271,7 @@ export function boardAuthService(db: Db) {
       const key = await tx
       .insert(boardApiKeys)
       .values({
-        userId: input.userId,
+        userId,
         name: input.name.trim(),
         keyHash: hashBearerToken(token),
         expiresAt: input.expiresAt === undefined ? boardApiKeyExpiresAt() : input.expiresAt,
@@ -250,17 +280,18 @@ export function boardAuthService(db: Db) {
       .then((rows) => rows[0]);
       const now = new Date();
       await tx.insert(authSecurityEvents).values({
-        userId: input.userId, boardApiKeyId: key.id, action: "board_api_key_created",
+        userId, boardApiKeyId: key.id, action: "board_api_key_created",
         createdAt: now, expiresAt: new Date(now.getTime() + 90 * 86_400_000),
       });
       for (const companyId of await activityCompanyIdsForAccess(access, input.requestedCompanyId, tx)) {
         await logActivity(tx as unknown as Db, {
-          companyId, actorType: "user", actorId: input.userId,
+          companyId, actorType: "user", actorId: userId,
           action: "board_api_key.created", entityType: "board_api_key", entityId: key.id,
           details: { boardApiKeyId: key.id, name: key.name, requestedCompanyId: input.requestedCompanyId ?? null,
             expiresAt: key.expiresAt?.toISOString() ?? null },
         }, publications);
       }
+      await assertPowerfulCredential(tx as unknown as Db, input.actor);
       return key;
     });
     for (const publication of publications) {
@@ -325,6 +356,8 @@ export function boardAuthService(db: Db) {
   }
 
   async function createCliAuthChallenge(input: {
+    keyName?: string;
+    keyExpiresAt?: Date | null;
     command: string;
     clientName?: string | null;
     requestedAccess: "board" | "instance_admin_required";
@@ -334,10 +367,13 @@ export function boardAuthService(db: Db) {
     const pendingBoardToken = createBoardApiToken();
     const expiresAt = cliAuthChallengeExpiresAt();
     const labelBase = input.clientName?.trim() || "paperclipai cli";
-    const pendingKeyName =
+    const pendingKeyName = input.keyName?.trim() ?? (
       input.requestedAccess === "instance_admin_required"
         ? `${labelBase} (instance admin)`
-        : `${labelBase} (board)`;
+        : `${labelBase} (board)`);
+    const pendingKeyExpiresAt = input.keyExpiresAt === undefined ? boardApiKeyExpiresAt() : input.keyExpiresAt;
+    if (pendingKeyExpiresAt !== null && (!Number.isFinite(pendingKeyExpiresAt.getTime()) || pendingKeyExpiresAt.getTime() <= Date.now()))
+      throw badRequest("Credential expiry must be in the future");
 
     const created = await db
       .insert(cliAuthChallenges)
@@ -349,6 +385,7 @@ export function boardAuthService(db: Db) {
         requestedCompanyId: input.requestedCompanyId?.trim() || null,
         pendingKeyHash: hashBearerToken(pendingBoardToken),
         pendingKeyName,
+        pendingKeyExpiresAt,
         expiresAt,
       })
       .returning()
@@ -393,6 +430,8 @@ export function boardAuthService(db: Db) {
       status: challengeStatusForRow(challenge),
       command: challenge.command,
       clientName: challenge.clientName ?? null,
+      keyName: challenge.pendingKeyName,
+      keyExpiresAt: challenge.pendingKeyExpiresAt?.toISOString() ?? null,
       requestedAccess: challenge.requestedAccess as "board" | "instance_admin_required",
       requestedCompanyId: challenge.requestedCompanyId ?? null,
       requestedCompanyName: company?.name ?? null,
@@ -403,9 +442,18 @@ export function boardAuthService(db: Db) {
     };
   }
 
-  async function approveCliAuthChallenge(id: string, token: string, userId: string) {
+  async function assertPendingKeyExpiry(tx: Pick<Db, "execute">, expiresAt: Date | null) {
+    if (!expiresAt) return;
+    const [state] = await tx.execute<{ unexpired: boolean }>(sql`select ${expiresAt.toISOString()}::timestamptz>clock_timestamp() as unexpired`);
+    if (!state?.unexpired) throw conflict("Requested credential expiry has passed; start a new request");
+  }
+
+  async function approveCliAuthChallenge(id: string, token: string, actor: AuthorizationActor) {
+    const userId = actorUserId(actor);
+    if (!userId) throw forbidden("Board user required");
     const publications: ActivityPublication[] = [];
     const result = await db.transaction(async (tx) => {
+      await assertPowerfulCredential(tx as unknown as Db, actor);
       await tx.execute(
         sql`select ${cliAuthChallenges.id} from ${cliAuthChallenges} where ${cliAuthChallenges.id} = ${id} for update`,
       );
@@ -443,6 +491,7 @@ export function boardAuthService(db: Db) {
       if (challenge.requestedAccess === "instance_admin_required" && !access.isInstanceAdmin) {
         throw forbidden("Instance admin required");
       }
+      await assertPendingKeyExpiry(tx, challenge.pendingKeyExpiresAt);
       if (challenge.expiresAt.getTime() <= Date.now()) return { status: "expired" as const, challenge };
 
       if (status === "approved") {
@@ -452,6 +501,8 @@ export function boardAuthService(db: Db) {
         ));
         if (!key) throw conflict("Approved Board API key is no longer active");
         if (challenge.expiresAt.getTime() <= Date.now()) return { status: "expired" as const, challenge };
+        await assertPendingKeyExpiry(tx, challenge.pendingKeyExpiresAt);
+        await assertPowerfulCredential(tx as unknown as Db, actor);
         return { status, challenge, created: false };
       }
 
@@ -463,7 +514,7 @@ export function boardAuthService(db: Db) {
             userId,
             name: challenge.pendingKeyName,
             keyHash: challenge.pendingKeyHash,
-            expiresAt: boardApiKeyExpiresAt(),
+            expiresAt: challenge.pendingKeyExpiresAt,
           })
           .returning()
           .then((rows) => rows[0]);
@@ -500,6 +551,8 @@ export function boardAuthService(db: Db) {
           },
         }, publications);
       }
+      await assertPendingKeyExpiry(tx, challenge.pendingKeyExpiresAt);
+      await assertPowerfulCredential(tx as unknown as Db, actor);
       return { status: "approved" as const, challenge: updated, created: true };
     });
     for (const publication of publications) {

@@ -33,7 +33,14 @@
     "cancelling": "Cancelling...",
     "cancel": "Cancel",
     "accessChanged": "Current account access changed. Review this request again.",
-    "expires": "This credential expires after 30 days. Revoke it from your developer settings or with paperclipai auth logout."
+    "expires": "This credential expires after 30 days. Revoke it from your developer settings or with paperclipai auth logout.",
+    "confirmIdentityRequired": "Confirm your identity before approving this access.",
+    "confirmationHelp": "This does not approve access. Review the request again after confirming.",
+    "identityConfirmedReview": "Identity confirmed. Review the request, then approve if you want to continue.",
+    "keyName": "Credential name",
+    "keyExpires": "Credential expires",
+    "neverExpires": "This credential does not expire. Revoke it when you no longer need it.",
+    "revokeHelp": "Revoke this credential from developer settings or with paperclipai auth logout."
   },
   "passwordReset": {
     "setTitle": "Set a new password",
@@ -1297,7 +1304,8 @@
       "codeAlreadyUsed": "That code has already been used. Wait for a new code in your authenticator app, or use a recovery code.",
       "cancelUnconfirmed": "Setup cancellation has not been confirmed. Retry for this setup, or sign in again if your session ended.",
       "retryCancellation": "Retry cancellation",
-      "reloadSettings": "Reload settings"
+      "reloadSettings": "Reload settings",
+      "confirmationUnavailable": "Identity confirmation for this sign-in method is not available here yet."
     },
     "deletionStatus": {
       "requested": "Requested",

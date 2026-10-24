@@ -1,0 +1,5 @@
+src/app.ts(1094,7): error TS2353: Object literal may only specify known properties, and 'operatorUserIds' does not exist in type '{ deploymentMode: "authenticated" | "local_trusted"; deploymentExposure: "private" | "public"; bindHost: string; allowedHostnames: string[]; inviteResolutionNetwork?: Partial<InviteResolutionNetwork> | undefined; ... 4 more ...; saasInviteRecipient?: ((invite: { ...; }, userId: string) => Promise<...>) | undefined; }'.
+src/routes/access.ts(2659,27): error TS2339: Property 'operatorUserIds' does not exist on type '{ deploymentMode: "authenticated" | "local_trusted"; deploymentExposure: "private" | "public"; bindHost: string; allowedHostnames: string[]; inviteResolutionNetwork?: Partial<InviteResolutionNetwork> | undefined; ... 4 more ...; saasInviteRecipient?: ((invite: { ...; }, userId: string) => Promise<...>) | undefined; }'.
+undefined
+/workspace/blentera-v10/server:
+ ERR_PNPM_RECURSIVE_EXEC_FIRST_FAIL  Command failed with exit code 1: tsc --noEmit --singleThreaded --incremental --tsBuildInfoFile /workspace/v10-preparation/v10-server-check.tsbuildinfo

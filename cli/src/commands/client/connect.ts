@@ -2,7 +2,7 @@ import { Command } from "commander";
 import * as p from "@clack/prompts";
 import pc from "picocolors";
 import type { Agent, Company } from "@paperclipai/shared";
-import { createAgentKeySchema, createBoardApiKeySchema } from "@paperclipai/shared";
+import { createAgentKeySchema } from "@paperclipai/shared";
 import { loginBoardCli } from "../../client/board-auth.js";
 import { PaperclipApiClient } from "../../client/http.js";
 import { resolveProfile, readContext, setCurrentProfile, upsertProfile } from "../../client/context.js";
@@ -77,7 +77,10 @@ async function connectWizard(opts: ConnectOptions) {
     apiBase,
     requestedAccess: "board",
     requestedCompanyId: opts.companyId ?? resolvedProfile.profile.companyId ?? null,
+    clientName: "paperclipai connect",
     command: "paperclipai connect",
+    ...(opts.tokenName?.trim() ? { keyName: opts.tokenName.trim() } : {}),
+    includeKeyMetadata: true,
   });
   const boardApi = new PaperclipApiClient({ apiBase, apiKey: boardLogin.token });
   const companies = (await boardApi.get<Company[]>("/api/companies")) ?? [];
@@ -90,12 +93,8 @@ async function connectWizard(opts: ConnectOptions) {
     const company = await chooseCompany(companies, opts.companyId ?? resolvedProfile.profile.companyId, {
       optional: true,
     });
-    const tokenName = opts.tokenName?.trim() || `cli-board-${new Date().toISOString()}`;
-    const key = await boardApi.post<CreatedBoardKey>("/api/board-api-keys", createBoardApiKeySchema.parse({
-      name: tokenName,
-      requestedCompanyId: company?.id ?? null,
-    }));
-    if (!key) throw new Error("Failed to create board token");
+    const key = boardLogin.key;
+    if (!key) throw new Error("The approved board key metadata could not be read.");
     upsertProfile(profileName, {
       apiBase,
       companyId: company?.id,

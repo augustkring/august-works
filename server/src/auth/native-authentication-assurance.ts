@@ -112,7 +112,7 @@ export function nativeAuthenticationAssurancePlugin(db: Db, schema: NativeAuthen
           code: "REAUTHENTICATION_RATE_LIMITED", message: "Too many confirmation attempts; try again later",
         });
         await ctx.context.password.checkPassword(user.id, ctx);
-        await withNativeAuthenticationTransaction(db, ctx, schema, async tx => {
+        const completed = await withNativeAuthenticationTransaction(db, ctx, schema, async tx => {
           // Lock the old session exclusively so concurrent confirmations cannot
           // both rotate it. Pin the pre-verification credential generation.
           const [current] = await tx.execute<{ id: string }>(sql`
@@ -134,8 +134,9 @@ export function nativeAuthenticationAssurancePlugin(db: Db, schema: NativeAuthen
           await setSessionCookie(ctx, { session: freshSession, user: freshUser }, dontRemember);
           await ctx.context.internalAdapter.deleteSession(session.token);
           ctx.context.session = { session: freshSession, user: freshUser };
+          return { sessionId: freshSession.id };
         }).catch(rethrowAuthenticationFailure);
-        return ctx.json({ status: true });
+        return ctx.json({ status: true, ...completed });
       }),
     },
     rateLimit: [{ pathMatcher: (path) => path === "/reauthenticate/password", window: 60, max: 5 }],

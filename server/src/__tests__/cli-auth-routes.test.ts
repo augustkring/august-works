@@ -1,7 +1,7 @@
 import express from "express";
 import request from "supertest";
 import { createInviteRateLimiter, type InviteRateLimiter } from "../services/invite-rate-limit.js";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 
 const mockAccessService = vi.hoisted(() => ({
   isInstanceAdmin: vi.fn(),
@@ -93,6 +93,10 @@ async function createApp(actor: any, db: any = {} as any, options: { cliAuthCrea
 }
 
 describe.sequential("cli auth routes", () => {
+  beforeAll(async () => {
+    await createApp({ type: "none", source: "none" });
+  }, 120_000);
+
   beforeEach(() => {
     vi.resetModules();
     vi.doUnmock("../services/index.js");
@@ -334,6 +338,25 @@ describe.sequential("cli auth routes", () => {
     expect(mockBoardAuthService.cancelCliAuthChallenge).toHaveBeenCalledWith(id, "pcp_cli_auth_secret");
   });
 
+  it.each([
+    ["X-Blentera-Expected-User", "other-user", "ACCOUNT_CHANGED"],
+    ["X-Blentera-Expected-Session", "old-session", "AUTHENTICATION_STATE_CHANGED"],
+  ])("rejects stale consent %s before issuing credentials", async (header, value, code) => {
+    const app = await createApp({ type: "board", userId: "user-1", sessionId: "current-session", source: "session" });
+    const approval = await request(app)
+      .post("/api/cli-auth/challenges/12345678-1234-4123-8123-123456789abc/approve")
+      .set(header, value).send({ token: "pcp_cli_auth_secret" });
+    const creation = await request(app).post("/api/board-api-keys")
+      .set(header, value).send({ name: "Review-bound key" });
+    for (const response of [approval, creation]) {
+      expect(response.status).toBe(409);
+      expect(response.body.details.code).toBe(code);
+    }
+    expect(mockBoardAuthService.approveCliAuthChallenge).not.toHaveBeenCalled();
+    expect(mockBoardAuthService.createNamedBoardApiKey).not.toHaveBeenCalled();
+    expect(mockLogActivity).not.toHaveBeenCalled();
+  });
+
   it.sequential("approves a CLI auth challenge for a signed-in board user", async () => {
     mockBoardAuthService.approveCliAuthChallenge.mockResolvedValue({
       status: "approved",
@@ -367,7 +390,14 @@ describe.sequential("cli auth routes", () => {
     expect(mockBoardAuthService.approveCliAuthChallenge).toHaveBeenCalledWith(
       "12345678-1234-4123-8123-123456789abc",
       "pcp_cli_auth_secret",
-      "user-1",
+      {
+        type: "board",
+        userId: "user-1",
+        source: "session",
+        isInstanceAdmin: false,
+        companyIds: ["company-1"],
+        memberships: undefined,
+      },
     );
     expect(mockBoardAuthService.resolveBoardActivityCompanyIds).not.toHaveBeenCalled();
     expect(mockLogActivity).not.toHaveBeenCalled();
@@ -398,7 +428,9 @@ describe.sequential("cli auth routes", () => {
       .send({ token: "pcp_cli_auth_secret" });
 
     expect(res.status).toBe(200);
-    expect(mockBoardAuthService.approveCliAuthChallenge).toHaveBeenCalledWith("12345678-1234-4123-8123-123456789def", "pcp_cli_auth_secret", "admin-1");
+    expect(mockBoardAuthService.approveCliAuthChallenge).toHaveBeenCalledWith("12345678-1234-4123-8123-123456789def", "pcp_cli_auth_secret", {
+      type: "board", userId: "admin-1", source: "session", isInstanceAdmin: true, companyIds: [], memberships: undefined,
+    });
     expect(mockLogActivity).not.toHaveBeenCalled();
   });
 
@@ -459,7 +491,14 @@ describe.sequential("cli auth routes", () => {
       expiresAt: "2026-06-23T12:00:00.000Z",
     });
     expect(mockBoardAuthService.createNamedBoardApiKey).toHaveBeenCalledWith({
-      userId: "user-1",
+      actor: {
+        type: "board",
+        userId: "user-1",
+        source: "board_key",
+        isInstanceAdmin: false,
+        companyIds: ["11111111-1111-4111-8111-111111111111"],
+        memberships: undefined,
+      },
       name: "external-admin",
       expiresAt: new Date("2026-06-23T12:00:00.000Z"),
       requestedCompanyId: "11111111-1111-4111-8111-111111111111",

@@ -33,7 +33,14 @@
     "cancelling": "Annullerer...",
     "cancel": "Annuller",
     "accessChanged": "Adgangen for den aktuelle konto er ændret. Gennemgå anmodningen igen.",
-    "expires": "Denne adgang udløber efter 30 dage. Tilbagekald den i udviklerindstillingerne eller med paperclipai auth logout."
+    "expires": "Denne adgang udløber efter 30 dage. Tilbagekald den i udviklerindstillingerne eller med paperclipai auth logout.",
+    "confirmIdentityRequired": "Bekræft din identitet, før du godkender denne adgang.",
+    "confirmationHelp": "Dette godkender ikke adgangen. Gennemgå anmodningen igen efter bekræftelsen.",
+    "identityConfirmedReview": "Identiteten er bekræftet. Gennemgå anmodningen, og godkend den, hvis du vil fortsætte.",
+    "keyName": "Navn på adgangsnøgle",
+    "keyExpires": "Adgangsnøglen udløber",
+    "neverExpires": "Denne adgangsnøgle udløber ikke. Tilbagekald den, når du ikke længere har brug for den.",
+    "revokeHelp": "Tilbagekald adgangsnøglen i udviklerindstillingerne eller med paperclipai auth logout."
   },
   "passwordReset": {
     "setTitle": "Vælg en ny adgangskode",
@@ -1297,7 +1304,8 @@
       "codeAlreadyUsed": "Den kode er allerede brugt. Vent på en ny kode i din godkendelsesapp, eller brug en gendannelseskode.",
       "cancelUnconfirmed": "Annullering af opsætningen er ikke bekræftet. Prøv igen for denne opsætning, eller log ind igen, hvis din session sluttede.",
       "retryCancellation": "Prøv annullering igen",
-      "reloadSettings": "Genindlæs indstillinger"
+      "reloadSettings": "Genindlæs indstillinger",
+      "confirmationUnavailable": "Bekræftelse af identitet for denne loginmetode er endnu ikke tilgængelig her."
     },
     "deletionStatus": {
       "requested": "Anmodet",

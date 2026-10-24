@@ -1,11 +1,12 @@
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { randomUUID } from "node:crypto";
 import { eq, sql } from "drizzle-orm";
-import { activityLog, authSecurityEvents, authUsers, boardApiKeys, cliAuthChallenges, companies, companyMemberships, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, getEmbeddedPostgresTestSupport, instanceUserRoles, startEmbeddedPostgresTestDatabase } from "@paperclipai/db";
+import { activityLog, authAccounts, authSecurityEvents, authSessions, authUsers, boardApiKeys, cliAuthChallenges, companies, companyMemberships, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, getEmbeddedPostgresTestSupport, instanceUserRoles, startEmbeddedPostgresTestDatabase } from "@paperclipai/db";
 import { subscribeCompanyLiveEvents } from "./live-events.js";
 import type { Db } from "@paperclipai/db";
 import { boardAuthService } from "./board-auth.js";
 import { pruneExpiredAuthSecurityEvents } from "./saas/auth-delivery.js";
+import { seedNativePasskeySession } from "../__tests__/helpers/native-authentication-fixtures.js";
 
 describe("boardAuthService touchBoardApiKey", () => {
   it("retries the audit write after a transient failure", async () => {
@@ -72,9 +73,11 @@ databaseSuite("CLI challenge authority and transitions (real PostgreSQL)", () =>
     await db.insert(companyMemberships).values([userId, otherUserId].map(principalId => ({
       companyId, principalType: "user", principalId, status: "active", membershipRole: "owner",
     })));
+    const userActor = { type: "board" as const, source: "session" as const, userId, sessionId: await seedNativePasskeySession(db, userId) };
+    const otherActor = { type: "board" as const, source: "session" as const, userId: otherUserId, sessionId: await seedNativePasskeySession(db, otherUserId) };
     const service = boardAuthService(db);
     const created = await service.createCliAuthChallenge({ command: "paperclipai auth login", requestedAccess: "board", requestedCompanyId: companyId });
-    return { companyId, userId, otherUserId, service, ...created };
+    return { companyId, userId, otherUserId, userActor, otherActor, service, ...created };
   }
 
   async function waitForChallengeLock() {
@@ -114,15 +117,129 @@ databaseSuite("CLI challenge authority and transitions (real PostgreSQL)", () =>
     expect(await f.service.findBoardApiKeyByToken(f.pendingBoardToken)).toBeNull();
     expect(await f.service.getCliAuthChallengeBySecret(f.challenge.id, "wrong-secret")).toBeNull();
     await db.update(cliAuthChallenges).set({ expiresAt: new Date(Date.now() - 1) }).where(eq(cliAuthChallenges.id, f.challenge.id));
-    expect((await f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userId)).status).toBe("expired");
+    expect((await f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userActor)).status).toBe("expired");
     expect(await f.service.findBoardApiKeyByToken(f.pendingBoardToken)).toBeNull();
+  });
+
+  it.each(["dated", "unlimited"] as const)("binds the %s credential label and lifetime to the reviewed challenge", async kind => {
+    const f = await fixture();
+    const keyExpiresAt = kind === "dated" ? new Date(Date.now() + 86_400_000) : null;
+    const request = await f.service.createCliAuthChallenge({ command: "paperclipai token board create",
+      requestedAccess: "board", requestedCompanyId: f.companyId, keyName: "Reviewed developer key", keyExpiresAt });
+    const described = await f.service.describeCliAuthChallenge(request.challenge.id, request.challengeSecret, { viewerUserId: f.userId });
+    expect(described).toMatchObject({ keyName: "Reviewed developer key", keyExpiresAt: keyExpiresAt?.toISOString() ?? null });
+    const approved = await f.service.approveCliAuthChallenge(request.challenge.id, request.challengeSecret, f.userActor);
+    const [key] = await db.select().from(boardApiKeys).where(eq(boardApiKeys.id, approved.challenge.boardApiKeyId!));
+    expect(key).toMatchObject({ name: "Reviewed developer key", expiresAt: keyExpiresAt });
+    expect(await f.service.findBoardApiKeyByToken(request.pendingBoardToken)).toMatchObject({ id: key.id, userId: f.userId });
+  });
+
+  it("refuses an expired requested lifetime without creating a key or an approval", async () => {
+    const f = await fixture();
+    await expect(f.service.createCliAuthChallenge({ command: "paperclipai token board create", requestedAccess: "board",
+      keyExpiresAt: new Date(Date.now() - 1) })).rejects.toMatchObject({ status: 400 });
+    await db.update(cliAuthChallenges).set({ pendingKeyExpiresAt: new Date(Date.now() - 1) })
+      .where(eq(cliAuthChallenges.id, f.challenge.id));
+    await expect(f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userActor))
+      .rejects.toMatchObject({ status: 409 });
+    expect(await f.service.findBoardApiKeyByToken(f.pendingBoardToken)).toBeNull();
+    expect((await f.service.getCliAuthChallengeBySecret(f.challenge.id, f.challengeSecret))?.approvedAt).toBeNull();
+  });
+
+  it("requires a current recent human proof before creating or approving a Board key", async () => {
+    const f = await fixture();
+    const service = f.service;
+    const missingSession = { ...f.userActor, sessionId: undefined };
+    const boardKeyActor = { ...f.userActor, source: "board_key" as const, sessionId: undefined };
+    await db.update(authSessions).set({ authenticatedAt: new Date(Date.now() - 301_000) })
+      .where(eq(authSessions.id, f.userActor.sessionId!));
+    const staleActor = f.userActor;
+
+    await expect(service.createNamedBoardApiKey({ actor: missingSession, name: "missing" })).rejects.toMatchObject({ status: 403 });
+    await expect(service.createNamedBoardApiKey({ actor: boardKeyActor, name: "board-key" })).rejects.toMatchObject({ status: 403 });
+    await expect(service.createNamedBoardApiKey({ actor: staleActor, name: "stale" })).rejects.toMatchObject({ status: 403 });
+    await expect(service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, missingSession)).rejects.toMatchObject({ status: 403 });
+    await expect(service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, staleActor)).rejects.toMatchObject({ status: 403 });
+    expect(await db.select().from(boardApiKeys).where(eq(boardApiKeys.userId, f.userId))).toHaveLength(0);
+    expect(await service.getCliAuthChallengeBySecret(f.challenge.id, f.challengeSecret)).toMatchObject({ approvedAt: null, boardApiKeyId: null });
+  });
+
+  it("requires verified email and a recent passkey for configured operators", async () => {
+    const f = await fixture();
+    const service = boardAuthService(db, { operatorUserIds: [f.userId] });
+    await expect(service.createNamedBoardApiKey({ actor: f.userActor, name: "unverified" }))
+      .rejects.toMatchObject({ status: 403 });
+    await db.update(authUsers).set({ emailVerified: true }).where(eq(authUsers.id, f.userId));
+    const key = await service.createNamedBoardApiKey({ actor: f.userActor, name: "verified passkey" });
+    expect(await service.findBoardApiKeyByToken(key.token)).toMatchObject({ userId: f.userId });
+    await db.update(authSessions).set({ authenticatedAt: new Date(Date.now() - 301_000) })
+      .where(eq(authSessions.id, f.userActor.sessionId!));
+    await expect(service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userActor))
+      .rejects.toMatchObject({ status: 403 });
+    expect((await service.getCliAuthChallengeBySecret(f.challenge.id, f.challengeSecret))?.approvedAt).toBeNull();
+    expect(await db.select().from(boardApiKeys).where(eq(boardApiKeys.userId, f.userId))).toHaveLength(1);
+  });
+
+  it("keeps local implicit authority behind its explicit local-trusted service option", async () => {
+    const f = await fixture();
+    const now = new Date();
+    await db.insert(authUsers).values({ id: "local-board", name: "Local Board", email: "local-board@example.invalid", createdAt: now, updatedAt: now });
+    await db.insert(instanceUserRoles).values({ userId: "local-board", role: "instance_admin" });
+    const localActor = { type: "board" as const, source: "local_implicit" as const, userId: "local-board" };
+    const legacyLocalActor = { type: "board" as const, source: "local_implicit" as const };
+    await expect(boardAuthService(db).createNamedBoardApiKey({ actor: localActor, name: "disabled-local" })).rejects.toMatchObject({ status: 403 });
+    const key = await boardAuthService(db, { allowLocalImplicit: true }).createNamedBoardApiKey({ actor: legacyLocalActor, name: "local key" });
+    expect(await boardAuthService(db).findBoardApiKeyByToken(key.token)).toMatchObject({ userId: "local-board" });
+    await expect(boardAuthService(db, { allowLocalImplicit: true, operatorUserIds: ["local-board"] })
+      .createNamedBoardApiKey({ actor: localActor, name: "configured local operator" })).rejects.toMatchObject({ status: 403 });
+  });
+
+  it("accepts an actual current password-proof session for ordinary human key creation", async () => {
+    const f = await fixture();
+    const now = new Date();
+    await db.insert(authAccounts).values({
+      id: randomUUID(), issuer: "local:credential", accountId: f.userId,
+      providerId: "credential", userId: f.userId,
+      password: "structural-native-password-proof", createdAt: now, updatedAt: now,
+    });
+    const [user] = await db.select({ version: authUsers.authenticatorVersion }).from(authUsers).where(eq(authUsers.id, f.userId));
+    const sessionId = randomUUID();
+    await db.insert(authSessions).values({
+      id: sessionId, userId: f.userId, token: randomUUID(), createdAt: now, updatedAt: now,
+      expiresAt: new Date(now.getTime() + 3_600_000), authenticationMethod: "password",
+      authenticatedAt: now, authenticatorVersion: user!.version,
+    });
+    const passwordActor = { ...f.userActor, sessionId };
+    const key = await f.service.createNamedBoardApiKey({ actor: passwordActor, name: "password-confirmed" });
+    expect(await f.service.findBoardApiKeyByToken(key.token)).toMatchObject({ userId: f.userId });
+  });
+
+  it("rejects password-only proof when the user's second factor is enabled", async () => {
+    const f = await fixture();
+    const now = new Date();
+    await db.insert(authAccounts).values({
+      id: randomUUID(), issuer: "local:credential", accountId: f.userId,
+      providerId: "credential", userId: f.userId,
+      password: "structural-native-password-proof", createdAt: now, updatedAt: now,
+    });
+    await db.update(authUsers).set({ twoFactorEnabled: true }).where(eq(authUsers.id, f.userId));
+    const [user] = await db.select({ version: authUsers.authenticatorVersion }).from(authUsers).where(eq(authUsers.id, f.userId));
+    const sessionId = randomUUID();
+    await db.insert(authSessions).values({
+      id: sessionId, userId: f.userId, token: randomUUID(), createdAt: now, updatedAt: now,
+      expiresAt: new Date(now.getTime() + 3_600_000), authenticationMethod: "password",
+      authenticatedAt: now, authenticatorVersion: user!.version,
+    });
+    await expect(f.service.createNamedBoardApiKey({ actor: { ...f.userActor, sessionId }, name: "password-only" }))
+      .rejects.toMatchObject({ status: 403 });
+    expect(await db.select().from(boardApiKeys).where(eq(boardApiKeys.userId, f.userId))).toHaveLength(0);
   });
 
   it("retains the first key owner and approver on same-user and competing-user replay", async () => {
     const f = await fixture();
-    const first = await f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userId);
-    await expect(f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.otherUserId)).rejects.toThrow("another user");
-    const repeat = await f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userId);
+    const first = await f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userActor);
+    await expect(f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.otherActor)).rejects.toThrow("another user");
+    const repeat = await f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userActor);
     expect(repeat.challenge).toEqual(first.challenge);
     const [stored] = await db.select().from(cliAuthChallenges).where(eq(cliAuthChallenges.id, f.challenge.id));
     expect(stored).toEqual(first.challenge);
@@ -135,7 +252,7 @@ databaseSuite("CLI challenge authority and transitions (real PostgreSQL)", () =>
   it("denies an inaccessible requested company before key creation or audit fallback", async () => {
     const f = await fixture();
     await db.delete(companyMemberships).where(eq(companyMemberships.principalId, f.otherUserId));
-    await expect(f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.otherUserId)).rejects.toThrow("requested organization");
+    await expect(f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.otherActor)).rejects.toThrow("requested organization");
     expect(await f.service.findBoardApiKeyByToken(f.pendingBoardToken)).toBeNull();
     expect(await f.service.resolveBoardActivityCompanyIds({ userId: f.otherUserId, requestedCompanyId: f.companyId })).toEqual([]);
   });
@@ -150,7 +267,7 @@ databaseSuite("CLI challenge authority and transitions (real PostgreSQL)", () =>
       locked(); await unlock;
     });
     await held;
-    const approval = f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userId);
+    const approval = f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userActor);
     const outcome = approval.then(value => ({ value }), error => ({ error }));
     try {
       await waitForChallengeLock();
@@ -168,7 +285,7 @@ databaseSuite("CLI challenge authority and transitions (real PostgreSQL)", () =>
       await db.insert(instanceUserRoles).values({ userId: f.userId, role: "instance_admin" });
       await db.update(cliAuthChallenges).set({ requestedAccess: "instance_admin_required" }).where(eq(cliAuthChallenges.id, f.challenge.id));
     }
-    const approved = await f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userId);
+    const approved = await f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userActor);
     const keyId = approved.challenge.boardApiKeyId!;
     let release!: () => void, locked!: (pid: number) => void;
     const held = new Promise<number>(resolve => { locked = resolve; });
@@ -179,7 +296,7 @@ databaseSuite("CLI challenge authority and transitions (real PostgreSQL)", () =>
       locked(backend.pid); await unlock;
     });
     const blockingPid = await held;
-    const replay = f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userId)
+    const replay = f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userActor)
       .then(value => ({ value }), error => ({ error }));
     try {
       await waitForReplayKeyLock(blockingPid);
@@ -210,7 +327,7 @@ databaseSuite("CLI challenge authority and transitions (real PostgreSQL)", () =>
       prepared(); await unlock;
       return result;
     })) as Db["transaction"];
-    const approval = boardAuthService(gated).approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userId);
+    const approval = boardAuthService(gated).approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userActor);
     await ready;
     const cancellation = f.service.cancelCliAuthChallenge(f.challenge.id, f.challengeSecret);
     const outcome = cancellation.then(value => ({ value }), error => ({ error }));
@@ -238,7 +355,7 @@ databaseSuite("CLI challenge authority and transitions (real PostgreSQL)", () =>
       const result = await callback(tx); prepared(); await unlock; return result;
     })) as Db["transaction"];
     const service = boardAuthService(gated);
-    const approval = service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userId);
+    const approval = service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userActor);
     try {
       await ready;
       expect(events).toEqual([]);
@@ -247,7 +364,7 @@ databaseSuite("CLI challenge authority and transitions (real PostgreSQL)", () =>
       release(); await approval;
       expect(events).toEqual([f.userId]);
       expect(await db.select().from(activityLog).where(eq(activityLog.actorId, f.userId))).toHaveLength(1);
-      await service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userId);
+      await service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userActor);
       expect(events).toEqual([f.userId]);
     } finally { release(); await approval; unsubscribe(); }
   });
@@ -256,7 +373,7 @@ databaseSuite("CLI challenge authority and transitions (real PostgreSQL)", () =>
     const f = await fixture();
     const first = await f.service.cancelCliAuthChallenge(f.challenge.id, f.challengeSecret);
     expect((await f.service.cancelCliAuthChallenge(f.challenge.id, f.challengeSecret)).challenge).toEqual(first.challenge);
-    expect((await f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userId)).status).toBe("cancelled");
+    expect((await f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userActor)).status).toBe("cancelled");
     expect(await f.service.findBoardApiKeyByToken(f.pendingBoardToken)).toBeNull();
   });
 
@@ -274,8 +391,8 @@ databaseSuite("CLI challenge authority and transitions (real PostgreSQL)", () =>
     await db.delete(companyMemberships).where(eq(companyMemberships.principalId, f.userId));
     await db.insert(instanceUserRoles).values({ userId: f.userId, role: "instance_admin" });
     const created = await f.service.createCliAuthChallenge({ command: "paperclipai auth login", requestedAccess: "instance_admin_required", requestedCompanyId: f.companyId });
-    await expect(f.service.approveCliAuthChallenge(created.challenge.id, created.challengeSecret, f.otherUserId)).rejects.toThrow("Instance admin required");
-    const approved = await f.service.approveCliAuthChallenge(created.challenge.id, created.challengeSecret, f.userId);
+    await expect(f.service.approveCliAuthChallenge(created.challenge.id, created.challengeSecret, f.otherActor)).rejects.toThrow("Instance admin required");
+    const approved = await f.service.approveCliAuthChallenge(created.challenge.id, created.challengeSecret, f.userActor);
     expect(approved.status).toBe("approved");
     expect(await f.service.findBoardApiKeyByToken(created.pendingBoardToken)).toMatchObject({ userId: f.userId });
     expect((await f.service.resolveBoardAccess(f.userId)).isInstanceAdmin).toBe(true);
@@ -284,12 +401,12 @@ databaseSuite("CLI challenge authority and transitions (real PostgreSQL)", () =>
 
   it("rechecks current membership and key authority on same-owner replay", async () => {
     const f = await fixture();
-    const approved = await f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userId);
+    const approved = await f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userActor);
     await db.update(companyMemberships).set({ status: "suspended" }).where(eq(companyMemberships.principalId, f.userId));
-    await expect(f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userId)).rejects.toThrow("requested organization");
+    await expect(f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userActor)).rejects.toThrow("requested organization");
     await db.update(companyMemberships).set({ status: "active" }).where(eq(companyMemberships.principalId, f.userId));
     await f.service.revokeBoardApiKey(approved.challenge.boardApiKeyId!, { userId: f.userId, revokedVia: "cli_auth_logout" });
-    await expect(f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userId)).rejects.toThrow("no longer active");
+    await expect(f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userActor)).rejects.toThrow("no longer active");
     expect(await db.select().from(boardApiKeys).where(eq(boardApiKeys.keyHash, f.challenge.pendingKeyHash))).toHaveLength(1);
   });
 
@@ -297,7 +414,7 @@ databaseSuite("CLI challenge authority and transitions (real PostgreSQL)", () =>
     const f = await fixture();
     await db.execute(sql.raw(`alter table activity_log add constraint board_cli_approval_failure check (action != 'board_api_key.created' or company_id != '${f.companyId}')`));
     try {
-      await expect(f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userId)).rejects.toThrow();
+      await expect(f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userActor)).rejects.toThrow();
       expect(await f.service.findBoardApiKeyByToken(f.pendingBoardToken)).toBeNull();
       const [pending] = await db.select().from(cliAuthChallenges).where(eq(cliAuthChallenges.id, f.challenge.id));
       expect(pending.approvedAt).toBeNull();
@@ -306,7 +423,7 @@ databaseSuite("CLI challenge authority and transitions (real PostgreSQL)", () =>
     } finally {
       await db.execute(sql`alter table activity_log drop constraint board_cli_approval_failure`);
     }
-    await f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userId);
+    await f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userActor);
     expect(await db.select().from(activityLog).where(eq(activityLog.actorId, f.userId))).toHaveLength(1);
   });
 
@@ -316,9 +433,9 @@ databaseSuite("CLI challenge authority and transitions (real PostgreSQL)", () =>
       if (event.payload.action === "board_api_key.created") throw new Error("Injected publication failure");
     });
     try {
-      const approved = await f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userId);
+      const approved = await f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userActor);
       expect(approved.status).toBe("approved");
-      expect((await f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userId)).challenge).toEqual(approved.challenge);
+      expect((await f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userActor)).challenge).toEqual(approved.challenge);
       expect(await f.service.findBoardApiKeyByToken(f.pendingBoardToken)).toMatchObject({ userId: f.userId });
       expect(await db.select().from(activityLog).where(eq(activityLog.actorId, f.userId))).toHaveLength(1);
     } finally {
@@ -328,7 +445,7 @@ databaseSuite("CLI challenge authority and transitions (real PostgreSQL)", () =>
 
   it("keeps owner-bound revocation atomic after membership loss and concurrent retries", async () => {
     const f = await fixture();
-    const approved = await f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userId);
+    const approved = await f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userActor);
     const keyId = approved.challenge.boardApiKeyId!;
     await db.update(companyMemberships).set({ status: "suspended" }).where(eq(companyMemberships.principalId, f.userId));
     expect(await f.service.revokeBoardApiKey(keyId, { userId: f.otherUserId, revokedVia: "board_api_key_lifecycle" })).toBeNull();
@@ -353,7 +470,7 @@ databaseSuite("CLI challenge authority and transitions (real PostgreSQL)", () =>
     const app = express();
     app.use(express.json());
     app.use(actorMiddleware(db, { deploymentMode: "authenticated", resolveSession: async req => (req.header("X-Test-Session") === f.userId || req.header("X-Test-Session") === f.otherUserId)
-      ? { session: { id: "isolated-cli-session" }, user: { id: req.header("X-Test-Session"), name: "CLI approver", email: "synthetic-session@example.invalid" } } as any
+      ? { session: { id: req.header("X-Test-Session") === f.userId ? f.userActor.sessionId : f.otherActor.sessionId }, user: { id: req.header("X-Test-Session"), name: "CLI approver", email: "synthetic-session@example.invalid" } } as any
       : null }));
     app.use("/api", accessRoutes(db, { deploymentMode: "authenticated", deploymentExposure: "private", bindHost: "127.0.0.1", allowedHostnames: [] }));
     app.use(errorHandler);
@@ -374,6 +491,13 @@ databaseSuite("CLI challenge authority and transitions (real PostgreSQL)", () =>
     expect(await db.select().from(activityLog).where(eq(activityLog.actorId, f.otherUserId))).toHaveLength(0);
     const browser = await request(app).get(`/api/cli-auth/challenges/${id}?token=${token}`).set("X-Test-Session", f.userId);
     expect(browser.body).toMatchObject({ canApprove: true, requestedCompanyName: "Private CLI organization" });
+    for (const [header, value] of [["X-Blentera-Expected-User", f.otherUserId], ["X-Blentera-Expected-Session", f.otherActor.sessionId]]) {
+      const refused = await request(app).post(`/api/cli-auth/challenges/${id}/approve`)
+        .set("X-Test-Session", f.userId).set(header!, value!).send({ token });
+      expect(refused.status).toBe(409);
+      expect(await f.service.findBoardApiKeyByToken(boardApiToken)).toBeNull();
+      expect((await f.service.getCliAuthChallengeBySecret(id, token))?.approvedAt).toBeNull();
+    }
     await db.execute(sql.raw(`alter table activity_log add constraint board_cli_audit_failure check (action != 'board_api_key.created' or company_id != '${secondCompanyId}')`));
     try {
       const failed = await request(app).post(`/api/cli-auth/challenges/${id}/approve`).set("X-Test-Session", f.userId).send({ token });
@@ -414,12 +538,12 @@ databaseSuite("CLI challenge authority and transitions (real PostgreSQL)", () =>
     const f = await fixture();
     await db.execute(sql.raw(`alter table activity_log add constraint board_cli_manual_key_failure check (action != 'board_api_key.created' or company_id != '${f.companyId}')`));
     try {
-      await expect(f.service.createNamedBoardApiKey({ userId: f.userId, name: "Manual developer key", requestedCompanyId: f.companyId })).rejects.toThrow();
+      await expect(f.service.createNamedBoardApiKey({ actor: f.userActor, name: "Manual developer key", requestedCompanyId: f.companyId })).rejects.toThrow();
       expect(await db.select().from(boardApiKeys).where(eq(boardApiKeys.userId, f.userId))).toHaveLength(0);
     } finally {
       await db.execute(sql`alter table activity_log drop constraint board_cli_manual_key_failure`);
     }
-    const key = await f.service.createNamedBoardApiKey({ userId: f.userId, name: "Manual developer key", requestedCompanyId: f.companyId });
+    const key = await f.service.createNamedBoardApiKey({ actor: f.userActor, name: "Manual developer key", requestedCompanyId: f.companyId });
     expect(await f.service.findBoardApiKeyByToken(key.token)).toMatchObject({ userId: f.userId });
     const audit = await db.select().from(activityLog).where(eq(activityLog.actorId, f.userId));
     expect(audit).toHaveLength(1);
@@ -436,7 +560,7 @@ databaseSuite("CLI challenge authority and transitions (real PostgreSQL)", () =>
   it("retains an atomic global receipt for own-key revocation without any company authority or history", async () => {
     const f = await fixture();
     await db.delete(companyMemberships).where(eq(companyMemberships.principalId, f.userId));
-    const key = await f.service.createNamedBoardApiKey({ userId: f.userId, name: "private-name-canary" });
+    const key = await f.service.createNamedBoardApiKey({ actor: f.userActor, name: "private-name-canary" });
     const events = () => db.select().from(authSecurityEvents).where(eq(authSecurityEvents.userId, f.userId));
     expect(await db.select().from(activityLog).where(eq(activityLog.actorId, f.userId))).toHaveLength(0);
     const created = await events();
@@ -469,14 +593,14 @@ databaseSuite("CLI challenge authority and transitions (real PostgreSQL)", () =>
     const pending = await f.service.createCliAuthChallenge({ command: "paperclipai", requestedAccess: "board" });
     await db.execute(sql.raw(`alter table auth_security_events add constraint board_global_create_failure check (user_id != '${f.userId}' or action != 'board_api_key_created')`));
     try {
-      await expect(f.service.createNamedBoardApiKey({ userId: f.userId, name: "rolled-back" })).rejects.toThrow();
-      await expect(f.service.approveCliAuthChallenge(pending.challenge.id, pending.challengeSecret, f.userId)).rejects.toThrow();
+      await expect(f.service.createNamedBoardApiKey({ actor: f.userActor, name: "rolled-back" })).rejects.toThrow();
+      await expect(f.service.approveCliAuthChallenge(pending.challenge.id, pending.challengeSecret, f.userActor)).rejects.toThrow();
       expect(await db.select().from(boardApiKeys).where(eq(boardApiKeys.userId, f.userId))).toHaveLength(0);
       expect(await db.select().from(authSecurityEvents).where(eq(authSecurityEvents.userId, f.userId))).toHaveLength(0);
       expect(await f.service.getCliAuthChallengeBySecret(pending.challenge.id, pending.challengeSecret)).toMatchObject({ approvedAt: null, boardApiKeyId: null });
     } finally { await db.execute(sql`alter table auth_security_events drop constraint board_global_create_failure`); }
-    const approved = await f.service.approveCliAuthChallenge(pending.challenge.id, pending.challengeSecret, f.userId);
-    expect(await f.service.approveCliAuthChallenge(pending.challenge.id, pending.challengeSecret, f.userId)).toMatchObject({ created: false });
+    const approved = await f.service.approveCliAuthChallenge(pending.challenge.id, pending.challengeSecret, f.userActor);
+    expect(await f.service.approveCliAuthChallenge(pending.challenge.id, pending.challengeSecret, f.userActor)).toMatchObject({ created: false });
     const receipts = await db.select().from(authSecurityEvents).where(eq(authSecurityEvents.userId, f.userId));
     expect(receipts).toHaveLength(1);
     expect(receipts[0]).toMatchObject({ action: "board_api_key_created", boardApiKeyId: approved.challenge.boardApiKeyId, companyId: null });
@@ -505,14 +629,14 @@ databaseSuite("CLI challenge authority and transitions (real PostgreSQL)", () =>
 
   it("keeps consent terminal after physical key deletion and never reassigns its pending token", async () => {
     const f = await fixture();
-    const approved = await f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userId);
+    const approved = await f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userActor);
     await db.delete(boardApiKeys).where(eq(boardApiKeys.id, approved.challenge.boardApiKeyId!));
     const [retained] = await db.select().from(cliAuthChallenges).where(eq(cliAuthChallenges.id, f.challenge.id));
     expect(retained.boardApiKeyId).toBeNull();
     expect(retained.approvedAt).not.toBeNull();
     expect(await f.service.describeCliAuthChallenge(f.challenge.id, f.challengeSecret)).toMatchObject({ status: "approved" });
-    await expect(f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userId)).rejects.toThrow("no longer active");
-    await expect(f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.otherUserId)).rejects.toThrow("another user");
+    await expect(f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.userActor)).rejects.toThrow("no longer active");
+    await expect(f.service.approveCliAuthChallenge(f.challenge.id, f.challengeSecret, f.otherActor)).rejects.toThrow("another user");
     expect(await f.service.findBoardApiKeyByToken(f.pendingBoardToken)).toBeNull();
     expect(await db.select().from(boardApiKeys).where(eq(boardApiKeys.keyHash, f.challenge.pendingKeyHash))).toHaveLength(0);
     expect((await f.service.cancelCliAuthChallenge(f.challenge.id, f.challengeSecret)).status).toBe("approved");

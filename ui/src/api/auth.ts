@@ -258,9 +258,8 @@ export const authApi = {
   verifyTotp: async (code: string, expectedUserId?: string, expectedSessionId?: string) =>
     nativeAuthenticationConfirmationSchema.parse(await authPost("/two-factor/verify-totp", { code }, expectedUserId, expectedSessionId)),
 
-  reauthenticatePassword: async (password: string, expectedUserId?: string, expectedSessionId?: string): Promise<void> => {
-    await authPost("/reauthenticate/password", { password }, expectedUserId, expectedSessionId);
-  },
+  reauthenticatePassword: async (password: string, expectedUserId?: string, expectedSessionId?: string) =>
+    nativeAuthenticationConfirmationSchema.parse(await authPost("/reauthenticate/password", { password }, expectedUserId, expectedSessionId)),
 
   verifyBackupCode: async (code: string, expectedUserId?: string, expectedSessionId?: string) =>
     nativeAuthenticationConfirmationSchema.parse(await authPost("/two-factor/verify-backup-code", { code }, expectedUserId, expectedSessionId)),

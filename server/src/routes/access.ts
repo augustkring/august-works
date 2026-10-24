@@ -1735,6 +1735,7 @@ function buildInviteOnboardingManifest(
     bindHost: string;
     allowedHostnames: string[];
     authPublicBaseUrl?: string;
+    operatorUserIds?: readonly string[];
     saasInviteRecipient?: (invite:typeof invites.$inferSelect,userId:string)=>Promise<void>;
   }
 ) {
@@ -2639,6 +2640,7 @@ async function probeInviteResolutionTarget(
 export function accessRoutes(
   db: Db,
   opts: {
+    operatorUserIds?: readonly string[];
     deploymentMode: DeploymentMode;
     deploymentExposure: DeploymentExposure;
     bindHost: string;
@@ -2653,7 +2655,19 @@ export function accessRoutes(
 ) {
   const router = Router();
   const access = accessService(db);
-  const boardAuth = boardAuthService(db);
+  const boardAuth = boardAuthService(db, {
+    allowLocalImplicit: opts.deploymentMode === "local_trusted",
+    operatorUserIds: opts.operatorUserIds,
+  });
+  function assertExpectedBoardActor(req: Request) {
+    const expectedUser = req.get("X-Blentera-Expected-User");
+    const expectedSession = req.get("X-Blentera-Expected-Session");
+    const actualUser = req.actor.userId ?? (isLocalImplicit(req) ? "local-board" : undefined);
+    if (expectedUser !== undefined && expectedUser !== actualUser)
+      throw conflict("Account changed; review this request again", { code: "ACCOUNT_CHANGED" });
+    if (expectedSession !== undefined && expectedSession !== req.actor.sessionId)
+      throw conflict("Sign-in changed; review this request again", { code: "AUTHENTICATION_STATE_CHANGED" });
+  }
   const agents = agentService(db);
   const routeInviteResolutionNetwork = opts.inviteResolutionNetwork
     ? { ...defaultInviteResolutionNetwork, ...opts.inviteResolutionNetwork }
@@ -2808,6 +2822,8 @@ export function accessRoutes(
         approvalUrl: baseUrl ? `${baseUrl}${approvalPath}` : null,
         pollPath: `/cli-auth/challenges/${created.challenge.id}`,
         expiresAt: created.challenge.expiresAt.toISOString(),
+        keyName: created.challenge.pendingKeyName,
+        keyExpiresAt: created.challenge.pendingKeyExpiresAt?.toISOString() ?? null,
         suggestedPollIntervalMs: 1000,
       });
     },
@@ -2858,11 +2874,12 @@ export function accessRoutes(
       }
       if (!isUuidLike(id)) throw badRequest("Invalid CLI auth challenge ID");
 
+      assertExpectedBoardActor(req);
       const userId = req.actor.userId ?? "local-board";
       const approved = await boardAuth.approveCliAuthChallenge(
         id,
         req.body.token,
-        userId,
+        req.actor,
       );
 
       res.json({
@@ -2927,8 +2944,9 @@ export function accessRoutes(
         assertCompanyAccess(req, req.body.requestedCompanyId);
       }
 
+      assertExpectedBoardActor(req);
       const key = await boardAuth.createNamedBoardApiKey({
-        userId: req.actor.userId,
+        actor: req.actor,
         name: req.body.name,
         expiresAt: req.body.expiresAt === undefined ? undefined : req.body.expiresAt,
         requestedCompanyId: req.body.requestedCompanyId ?? null,

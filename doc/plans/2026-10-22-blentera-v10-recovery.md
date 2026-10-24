@@ -854,3 +854,31 @@ signature, lease, epoch and outcome checks remain. Native suites pass32 and serv
 compilation passes; physical dispatch/host qualification stays open. Evidence:
 `doc/operations/aw-v10-evidence/native-operator-host-queue-2026-10-24/checkpoint.json`.
 Powerful credential/enterprise/input-source and complete V10/PR work remain open.
+
+
+### 2026-10-24 — native powerful credential issuance and explicit CLI consent
+
+Original Board/CLI creation and replay now require actual recent native human
+proof in their physical transactions, with verified-email/passkey requirements
+for configured operators. Native password confirmation returns the actual
+replacement session; the reused confirmation UI checks it against the canonical
+session before acknowledgement. CLI approval follows a fresh review and a
+separate explicit click, with expected-user/session headers checked server-side.
+
+The CLI no longer mints another Board key from an approved bearer. Its existing
+browser challenge retains the exact requested key label/lifetime (migration0524),
+shows these before consent and returns metadata for that exact approved key.
+A controlled same-session refresh initially reproduced lost confirmation guidance;
+the selection-bound guidance correction preserves all effect/session fences.
+Evidence: `doc/operations/aw-v10-evidence/native-powerful-credentials-2026-10-24/checkpoint.json`.
+Enterprise/recovery/remaining sensitive actions, original source/typed-origin/
+portability/input-receipt failures and full V10/PR admission remain open.
+
+The final native checkpoint passes84 backend cases in four suites,84 client
+cases in six suites, server/UI/CLI compilation and token gates. The real built
+Chromium lifecycle passes after all three controlled race regressions first
+failed and were corrected. The ceremony remains mounted but hidden through its
+own session recheck; acknowledgement is bound to the verifier's actual SID.
+Challenge reads detach from an older account's in-flight HTTP request. Software
+virtual-authenticator/fixture evidence does not qualify enterprise recovery,
+physical hosts/keys, mixed-version deployment or complete V10/PR admission.

@@ -3655,6 +3655,13 @@
       "when": 1792805697750,
       "tag": "0523_crazy_lake",
       "breakpoints": true
+    },
+    {
+      "idx": 524,
+      "version": "7",
+      "when": 1792822658052,
+      "tag": "0524_mute_doctor_octopus",
+      "breakpoints": true
     }
   ]
 }

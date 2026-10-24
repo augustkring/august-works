@@ -304,16 +304,18 @@ describeEmbeddedPostgres("Better Auth credential sign-up against the real schema
     expect((await request(app).get("/api/auth/list-sessions").set("Cookie", fixture.cookie)).status).toBe(403);
     const accepted = await confirm(PASSWORD);
     expect(accepted.status).toBe(200);
-    expect(accepted.body).toEqual({ status: true });
+    expect(accepted.body).toEqual({ status: true, sessionId: expect.any(String) });
     const sessions = await db.select().from(authSessions).where(eq(authSessions.userId, fixture.userId));
     expect(sessions).toHaveLength(1);
     expect(sessions[0].id).not.toBe(fixture.sessionId);
+    expect(accepted.body.sessionId).toBe(sessions[0].id);
     expect(sessions[0].authenticationMethod).toBe("password");
     await expect(assertHumanAuthentication(db, actor, { requireRecent: true, phishingResistant: false }))
       .rejects.toMatchObject({ status: 403 });
     const cookie = sessionCookies(accepted).map(value => value.split(";", 1)[0]).join("; ");
     expect((await request(app).get("/api/auth/list-sessions").set("Cookie", cookie)).status).toBe(200);
     const visible = await request(app).get("/api/auth/get-session").set("Cookie", cookie);
+    expect(visible.body.session.id).toBe(accepted.body.sessionId);
     expect(visible.body.session).not.toHaveProperty("authenticatedAt");
     await expect(db.transaction(tx => assertHumanAuthentication(tx, { ...actor, sessionId: sessions[0].id }, {
       requireRecent: true, phishingResistant: false,

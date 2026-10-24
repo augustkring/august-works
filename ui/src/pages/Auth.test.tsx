@@ -1,13 +1,13 @@
 // @vitest-environment jsdom
 
 import { flushSync } from "react-dom";
-import { act as reactAct } from "react";
+import { act as reactAct, useEffect } from "react";
 import { CliAuthPage } from "./CliAuth";
 import { ApiError } from "../api/client";
 import { v9SessionFixture } from "../hooks/v9-session.test-support";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
-import { MemoryRouter, Route, Routes } from "react-router-dom";
+import { MemoryRouter, Route, Routes, useNavigate } from "react-router-dom";
 import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
 import { queryKeys } from "../lib/queryKeys";
 import { AuthPage } from "./Auth";
@@ -19,8 +19,15 @@ const signInEmailMock = vi.hoisted(() => vi.fn());
 const signUpEmailMock = vi.hoisted(() => vi.fn());
 const verifyTotpMock = vi.hoisted(() => vi.fn());
 const verifyBackupCodeMock = vi.hoisted(() => vi.fn());
+const reauthenticatePasswordMock = vi.hoisted(() => vi.fn());
+const securityStatusMock = vi.hoisted(() => vi.fn());
+const authenticatePasskeyMock = vi.hoisted(() => vi.fn());
+const listPasskeysMock = vi.hoisted(() => vi.fn());
 
-vi.mock("../api/auth", () => ({
+vi.mock("../api/auth", async () => {
+  const actual = await vi.importActual<typeof import("../api/auth")>("../api/auth");
+  return {
+  ...actual,
   authApi: {
     authenticationMethods: async () => ({ passkey: false }),
     getSession: () => getSessionMock(),
@@ -28,6 +35,10 @@ vi.mock("../api/auth", () => ({
     signUpEmail: (input: unknown) => signUpEmailMock(input),
     verifyTotp: (code: string, userId: string) => verifyTotpMock(code, userId),
     verifyBackupCode: (code: string, userId: string) => verifyBackupCodeMock(code, userId),
+    reauthenticatePassword: (...args: unknown[]) => reauthenticatePasswordMock(...args),
+    securityStatus: (...args: unknown[]) => securityStatusMock(...args),
+    authenticatePasskey: (...args: unknown[]) => authenticatePasskeyMock(...args),
+    listPasskeys: (...args: unknown[]) => listPasskeysMock(...args),
   },
   parseTwoFactorSignInChallenge: (value: unknown) => {
     if (!value || typeof value !== "object") return null;
@@ -36,7 +47,8 @@ vi.mock("../api/auth", () => ({
       ? candidate
       : null;
   },
-}));
+  };
+});
 
 // The ASCII art animation drives a canvas/requestAnimationFrame loop that adds
 // nothing to these assertions, so stub it out.
@@ -97,6 +109,13 @@ function renderAuthPage(container: HTMLElement) {
   return { root, queryClient };
 }
 
+let cliNavigate: ReturnType<typeof useNavigate> | undefined;
+function CaptureCliNavigate() {
+  const navigate = useNavigate();
+  useEffect(() => { cliNavigate = navigate; }, [navigate]);
+  return null;
+}
+
 describe("AuthPage", () => {
   let container: HTMLDivElement;
 
@@ -109,6 +128,10 @@ describe("AuthPage", () => {
     signUpEmailMock.mockResolvedValue(undefined);
     verifyTotpMock.mockResolvedValue({ sessionId: "session-jane" });
     verifyBackupCodeMock.mockResolvedValue({ sessionId: "session-jane" });
+    reauthenticatePasswordMock.mockResolvedValue({ sessionId: "session-operator" });
+    securityStatusMock.mockResolvedValue({ userId: "operator", hasPassword: true, twoFactorEnabled: false, phishingResistantRequired: false });
+    authenticatePasskeyMock.mockResolvedValue({ userId: "operator", sessionId: "session-operator" });
+    listPasskeysMock.mockResolvedValue([]);
   });
 
   afterEach(async () => {
@@ -431,6 +454,20 @@ describe("CliAuthPage rate-limit recovery", () => {
     return new Response(JSON.stringify(body), { status, headers: { "content-type": "application/json" } });
   }
 
+  function button(label: string) {
+    return [...cliContainer.querySelectorAll("button")].find(candidate => candidate.textContent?.trim() === label);
+  }
+
+  async function enterCurrentPassword(value: string) {
+    const input = cliContainer.querySelector<HTMLInputElement>('input[autocomplete="current-password"]');
+    if (!input) throw new Error("Inline native confirmation password field is unavailable");
+    const setter = Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!;
+    await reactAct(async () => {
+      setter.call(input, value);
+      input.dispatchEvent(new Event("input", { bubbles: true }));
+    });
+  }
+
   function pending(expiresAt = new Date(Date.now() + 10 * 60_000).toISOString()) {
     return { id: challengeId, status: "pending", command: "paperclipai auth login", clientName: "paperclipai cli",
       requestedAccess: "board", requestedCompanyId: null, requestedCompanyName: null, approvedAt: null,
@@ -448,7 +485,7 @@ describe("CliAuthPage rate-limit recovery", () => {
     cliRoot = createRoot(cliContainer);
     await reactAct(async () => {
       cliRoot!.render(<MemoryRouter initialEntries={[`/cli-auth/${challengeId}?token=${challengeToken}`]}>
-        <QueryClientProvider client={cliClient!}><Routes>
+        <QueryClientProvider client={cliClient!}><CaptureCliNavigate /><Routes>
           <Route path="/cli-auth/:id" element={<CliAuthPage />} />
         </Routes></QueryClientProvider>
       </MemoryRouter>);
@@ -461,7 +498,11 @@ describe("CliAuthPage rate-limit recovery", () => {
     vi.setSystemTime(new Date("2026-10-15T20:00:00Z"));
     fetchCli.mockReset();
     vi.stubGlobal("fetch", fetchCli);
-    getSessionMock.mockResolvedValue(v9SessionFixture("operator"));
+    getSessionMock.mockReset().mockResolvedValue(v9SessionFixture("operator"));
+    reauthenticatePasswordMock.mockReset().mockResolvedValue({ sessionId: "session-operator" });
+    securityStatusMock.mockReset().mockResolvedValue({ userId: "operator", hasPassword: true, twoFactorEnabled: false, phishingResistantRequired: false });
+    authenticatePasskeyMock.mockReset().mockResolvedValue({ userId: "operator", sessionId: "session-operator" });
+    listPasskeysMock.mockReset().mockResolvedValue([]);
     void i18n.changeLanguage("en");
     cliContainer = document.createElement("div");
     document.body.appendChild(cliContainer);
@@ -473,6 +514,7 @@ describe("CliAuthPage rate-limit recovery", () => {
     cliRoot = undefined;
     cliClient = undefined;
     cliContainer.remove();
+    cliNavigate = undefined;
     vi.useRealTimers();
     vi.unstubAllGlobals();
     vi.clearAllMocks();
@@ -610,6 +652,45 @@ describe("CliAuthPage rate-limit recovery", () => {
     expect(cliContainer.textContent).not.toContain("Current account access changed");
   });
 
+  it("keeps recent-auth guidance when a same-session refresh overlaps the rejected approval", async () => {
+    let rejectApproval!: (value: Response) => void;
+    fetchCli.mockImplementation(async (_url, init) => init?.method === "POST"
+      ? new Promise<Response>(resolve => { rejectApproval = resolve; })
+      : response(pending()));
+    await mountCli();
+    await advance(0);
+
+    await reactAct(async () => { button("Approve CLI access")!.click(); });
+    await advance(0);
+    expect(fetchCli.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+
+    let finishSession!: (value: ReturnType<typeof v9SessionFixture>) => void;
+    getSessionMock.mockReturnValueOnce(new Promise(resolve => { finishSession = resolve; }));
+    let refresh!: Promise<void>;
+    await reactAct(async () => {
+      refresh = cliClient!.refetchQueries({ queryKey: queryKeys.auth.session, exact: true, type: "active" },
+        { cancelRefetch: false, throwOnError: true });
+      void refresh.catch(() => {}); // The owner below still awaits and asserts it.
+    });
+    await advance(0);
+    expect(getSessionMock).toHaveBeenCalled();
+
+    await reactAct(async () => {
+      rejectApproval(response({ error: "Recent authentication required", details: { code: "recent_authentication_required" } }, 403));
+    });
+    await advance(0);
+    const hiddenConfirmation = cliContainer.querySelector('[role="region"]');
+    expect(hiddenConfirmation).not.toBeNull();
+    expect(hiddenConfirmation!.closest(".hidden")).not.toBeNull();
+
+    await reactAct(async () => { finishSession(v9SessionFixture("operator")); await refresh; });
+    await advance(0);
+    expect(cliContainer.textContent).toContain("Confirm your identity before approving");
+    expect(button("Confirm my identity")).toBeDefined();
+    expect(fetchCli.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+    expect(reauthenticatePasswordMock).not.toHaveBeenCalled();
+  });
+
   it.each(["success", "failure"])("suppresses late consent %s after the current Human changes", async outcome => {
     let finish!: () => void;
     fetchCli.mockImplementation(async (_url, init) => init?.method === "POST"
@@ -645,6 +726,41 @@ describe("CliAuthPage rate-limit recovery", () => {
     expect(cliContainer.textContent).not.toContain("Private previous organization");
   });
 
+  it("detaches an unresolved challenge GET when the Human changes on the same capability", async () => {
+    let finishOldHuman!: (value: Response) => void;
+    let finishNewHuman!: (value: Response) => void;
+    let reads = 0;
+    fetchCli.mockImplementation(async (_url, init) => {
+      if (init?.method === "POST") return response({ approved: true });
+      reads += 1;
+      if (reads === 1) return new Promise<Response>(resolve => { finishOldHuman = resolve; });
+      if (reads === 2) return new Promise<Response>(resolve => { finishNewHuman = resolve; });
+      throw new Error("Unexpected additional challenge read");
+    });
+    await mountCli();
+    await advance(1);
+    expect(reads).toBe(1);
+
+    cliClient!.setQueryData(queryKeys.auth.session, v9SessionFixture("other-human"));
+    await advance(2);
+    expect(reads).toBe(2);
+
+    await reactAct(async () => {
+      finishNewHuman(response({ ...pending(), requestedCompanyName: null, currentUserId: "other-human" }));
+    });
+    await advance(1);
+    expect(cliContainer.textContent).toContain("Approve Blentera CLI access");
+    expect(cliContainer.textContent).not.toContain("Private previous organization");
+
+    await reactAct(async () => {
+      finishOldHuman(response({ ...pending(), requestedCompanyName: "Private previous organization", currentUserId: "operator" }));
+    });
+    await advance(1);
+    expect(cliContainer.textContent).not.toContain("Private previous organization");
+    expect(reads).toBe(2);
+    expect(fetchCli.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
+  });
+
   it("explains full cross-organization developer authority, expiry and Co-worker exclusion in Danish", async () => {
     await i18n.changeLanguage("da");
     fetchCli.mockResolvedValue(response(pending()));
@@ -656,5 +772,146 @@ describe("CliAuthPage rate-limit recovery", () => {
     expect(cliContainer.textContent).toContain("Godkendelsesanmodningen udløber");
     expect(document.head.querySelector('meta[name="referrer"]')?.getAttribute("content")).toBe("no-referrer");
     expect(fetchCli.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
+  });
+
+  it("shows an explicitly non-expiring credential before consent without the default lifetime claim", async () => {
+    fetchCli.mockResolvedValue(response({ ...pending(), keyName: "Reviewed permanent key", keyExpiresAt: null }));
+    await mountCli();
+    await advance(1);
+    expect(cliContainer.textContent).toContain("Credential name: Reviewed permanent key");
+    expect(cliContainer.textContent).toContain("This credential does not expire");
+    expect(cliContainer.textContent).not.toContain("expires after 30 days");
+    expect(fetchCli.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(0);
+  });
+
+  it("confirms fresh identity, reviews the challenge again, and requires a separate explicit approval", async () => {
+    let activeSession = v9SessionFixture("operator");
+    getSessionMock.mockImplementation(async () => activeSession);
+    reauthenticatePasswordMock.mockImplementation(async (password: string, userId: string, sessionId: string) => {
+      expect([password, userId, sessionId]).toEqual(["CURRENT-PRIVATE-PASSWORD", "operator", "session-operator"]);
+      activeSession = { ...activeSession, session: { ...activeSession.session, id: "session-confirmed" } };
+      return { sessionId: "session-confirmed" };
+    });
+    let approvals = 0;
+    fetchCli.mockImplementation(async (_url, init) => {
+      if (init?.method === "POST") {
+        approvals += 1;
+        if (approvals === 1) return response({ error: "Recent authentication required", details: { code: "recent_authentication_required" } }, 403);
+        return response({ approved: true, status: "approved", userId: "operator", keyId: null, expiresAt: pending().expiresAt });
+      }
+      return response(approvals >= 2 ? { ...pending(), status: "approved" } : pending());
+    });
+
+    await mountCli();
+    await advance(1);
+    await reactAct(async () => { button("Approve CLI access")!.click(); });
+    await advance(1);
+    expect(approvals).toBe(1);
+    expect(cliContainer.textContent).toContain("Confirm your identity before approving");
+    expect(cliContainer.textContent).not.toContain("pcp_board_");
+    const readsBeforeConfirmation = fetchCli.mock.calls.filter(([, init]) => init?.method !== "POST").length;
+
+    await enterCurrentPassword("CURRENT-PRIVATE-PASSWORD");
+    await reactAct(async () => { button("Confirm my identity")!.click(); });
+    await advance(2);
+    expect(reauthenticatePasswordMock).toHaveBeenCalledWith("CURRENT-PRIVATE-PASSWORD", "operator", "session-operator");
+    expect(approvals).toBe(1);
+    expect(cliContainer.querySelector('input[autocomplete="current-password"]')).toBeNull();
+    expect(fetchCli.mock.calls.filter(([, init]) => init?.method !== "POST").length).toBeGreaterThan(readsBeforeConfirmation);
+    expect(button("Approve CLI access")?.disabled).toBe(false);
+
+    await reactAct(async () => { button("Approve CLI access")!.click(); });
+    await advance(2);
+    expect(approvals).toBe(2);
+    expect(cliContainer.textContent).toContain("CLI access approved");
+    const approveCalls = fetchCli.mock.calls.filter(([url, init]) => String(url).includes("/approve") && init?.method === "POST");
+    expect(approveCalls).toHaveLength(2);
+    expect(new Headers(approveCalls[0]?.[1]?.headers).get("X-Blentera-Expected-User")).toBe("operator");
+    expect(new Headers(approveCalls[0]?.[1]?.headers).get("X-Blentera-Expected-Session")).toBe("session-operator");
+    expect(new Headers(approveCalls[1]?.[1]?.headers).get("X-Blentera-Expected-Session")).toBe("session-confirmed");
+    expect(approveCalls.every(([, init]) => JSON.parse(String(init?.body)).token === challengeToken)).toBe(true);
+    expect(cliContainer.textContent).not.toContain("pcp_board_");
+  });
+
+  it("retains confirmation when a same-account session refresh overlaps native confirmation", async () => {
+    let finishProof!: (receipt: { sessionId: string }) => void;
+    let finishStatus!: (value: { userId: string; hasPassword: boolean; twoFactorEnabled: boolean; phishingResistantRequired: boolean }) => void;
+    let finishSessionRead!: (value: ReturnType<typeof v9SessionFixture>) => void;
+    reauthenticatePasswordMock.mockReturnValueOnce(new Promise<{ sessionId: string }>(resolve => { finishProof = resolve; }));
+    fetchCli.mockImplementation(async (_url, init) => init?.method === "POST"
+      ? response({ error: "Recent authentication required", details: { code: "recent_authentication_required" } }, 403)
+      : response(pending()));
+    const nextSession = { ...v9SessionFixture("operator"), session: { ...v9SessionFixture("operator").session, id: "session-confirmed" } };
+    getSessionMock.mockResolvedValue(nextSession);
+    securityStatusMock.mockImplementation(async (_principal: string, _signal?: AbortSignal, expectedSessionId?: string) =>
+      expectedSessionId === "session-confirmed"
+        ? new Promise(resolve => { finishStatus = resolve; })
+        : { userId: "operator", hasPassword: true, twoFactorEnabled: false, phishingResistantRequired: false });
+
+    await mountCli();
+    await advance(1);
+    await reactAct(async () => { button("Approve CLI access")!.click(); });
+    await advance(1);
+    expect(cliContainer.textContent).toContain("Confirm your identity before approving");
+
+    await enterCurrentPassword("CURRENT-PRIVATE-PASSWORD");
+    await reactAct(async () => { button("Confirm my identity")!.click(); });
+    await advance(1);
+    expect(reauthenticatePasswordMock).toHaveBeenCalledOnce();
+
+    await reactAct(async () => { finishProof({ sessionId: "session-confirmed" }); });
+    await advance(1);
+    expect(securityStatusMock).toHaveBeenCalledWith("operator", undefined, "session-confirmed");
+
+    getSessionMock.mockReturnValueOnce(new Promise(resolve => { finishSessionRead = resolve; }));
+    let sessionRefresh!: Promise<void>;
+    await reactAct(async () => {
+      sessionRefresh = cliClient!.refetchQueries({ queryKey: queryKeys.auth.session, exact: true, type: "active" },
+        { cancelRefetch: false, throwOnError: true });
+      void sessionRefresh.catch(() => {});
+    });
+    await advance(0);
+    expect(getSessionMock).toHaveBeenCalled();
+
+    await reactAct(async () => {
+      finishStatus({ userId: "operator", hasPassword: true, twoFactorEnabled: false, phishingResistantRequired: false });
+    });
+    await advance(0);
+    await reactAct(async () => { finishSessionRead(nextSession); await sessionRefresh; });
+    await advance(1);
+
+    expect(cliContainer.textContent).toContain("Identity confirmed. Review the request, then approve if you want to continue.");
+    expect(button("Approve CLI access")?.disabled).toBe(false);
+    expect(fetchCli.mock.calls.filter(([, init]) => init?.method === "POST")).toHaveLength(1);
+  });
+
+  it.each(["account", "challenge"] as const)("refuses a late confirmation after the %s changes", async change => {
+    let finishProof!: (receipt: { sessionId: string }) => void;
+    reauthenticatePasswordMock.mockReturnValueOnce(new Promise<{ sessionId: string }>(resolve => { finishProof = resolve; }));
+    fetchCli.mockImplementation(async (_url, init) => init?.method === "POST"
+      ? response({ error: "Recent authentication required", details: { code: "recent_authentication_required" } }, 403)
+      : response(pending()));
+    await mountCli();
+    await advance(1);
+    await reactAct(async () => { button("Approve CLI access")!.click(); });
+    await advance(1);
+    await enterCurrentPassword("CURRENT-PRIVATE-PASSWORD");
+    await reactAct(async () => { button("Confirm my identity")!.click(); });
+    await advance(1);
+    expect(reauthenticatePasswordMock).toHaveBeenCalledOnce();
+
+    if (change === "account") {
+      const other = v9SessionFixture("other-operator");
+      getSessionMock.mockResolvedValue(other);
+      cliClient!.setQueryData(queryKeys.auth.session, other);
+    } else {
+      await reactAct(async () => { cliNavigate!(`/cli-auth/00000000-0000-4000-8000-000000000777?token=other-challenge-capability`); });
+    }
+    await advance(2);
+    await reactAct(async () => { finishProof({ sessionId: "session-confirmed" }); });
+    await advance(2);
+    expect(fetchCli.mock.calls.filter(([url, init]) => String(url).includes("/approve") && init?.method === "POST")).toHaveLength(1);
+    expect(cliContainer.textContent).not.toContain("identity confirmed");
+    expect(cliContainer.textContent).not.toContain("pcp_board_");
   });
 });

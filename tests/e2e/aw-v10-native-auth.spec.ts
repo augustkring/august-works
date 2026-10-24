@@ -19,7 +19,7 @@ async function json(response: APIResponse) {
 // Built application, native bootstrap/company owners, real HTTP-only cookies,
 // maintained OTP generation/verification and migrated PostgreSQL. The disposable
 // private profile does not qualify SaaS mail, external IdP, physical authenticators or hosts.
-test("native account settings complete and cancel real authenticator lifecycles", async ({ page, baseURL, context }) => {
+test("native CLI consent and account settings use real session and authenticator lifecycles", async ({ page, baseURL, context }) => {
   const cdp = await context.newCDPSession(page);
   await cdp.send("WebAuthn.enable");
   let { authenticatorId } = await cdp.send("WebAuthn.addVirtualAuthenticator", { options: {
@@ -40,6 +40,7 @@ test("native account settings complete and cancel real authenticator lifecycles"
   await json(await page.request.post(`/api/invites/${token}/accept`, { data: { requestType: "human" } }));
   const company = await json(await page.request.post("/api/companies", { data: { name: "Disposable native authentication company" } }));
   const accountPath = `/${company.issuePrefix}/company/settings/security`;
+  await confirmCliConsent(page, config, signup.user.id, company.id, password);
   await page.goto(accountPath);
   const card = page.locator("section", { has: page.locator("#native-authenticator-heading") }).last();
   await expect(page.locator("#native-authenticator-heading")).toBeVisible();
@@ -172,13 +173,7 @@ async function unverifiedPasskey(page: Page, operation: "authentication" | "regi
 
 async function failedNativeSessionWrite(page: Page, cdp: import("@playwright/test").CDPSession,
   authenticatorId: string, configPath: string, userId: string, password: string) {
-  expect(configPath.startsWith(path.join(tmpdir(), "paperclip-e2e-home-"))).toBe(true);
-  const config = JSON.parse(await readFile(configPath, "utf8"));
-  expect(path.resolve(config.database.embeddedPostgresDataDir)).toBe(path.join(path.dirname(configPath), "db"));
-  const pid = await readFile(path.join(config.database.embeddedPostgresDataDir, "postmaster.pid"), "utf8");
-  const port = Number(pid.split("\n")[3]);
-  expect(Number.isInteger(port) && port>0 && port<65536).toBe(true);
-  const url = `postgres://paperclip:paperclip@127.0.0.1:${port}/paperclip`, db = createDb(url);
+  const { url, db } = await fixtureDatabase(configPath);
   try {
     const [{ version }] = await db.execute<{ version: number }>(sql`select authenticator_version as version from "user" where id=${userId}`);
     await db.execute(sql`create table aw_e2e_passkey_failure_owner (user_id text primary key, generation integer not null)`);
@@ -226,4 +221,65 @@ async function failedNativeSessionWrite(page: Page, cdp: import("@playwright/tes
     await db.execute(sql`drop table if exists aw_e2e_passkey_failure_owner`);
     await closeRegisteredClients(url);
   }
+}
+
+async function fixtureDatabase(configPath: string) {
+  expect(configPath.startsWith(path.join(tmpdir(), "paperclip-e2e-home-"))).toBe(true);
+  const config = JSON.parse(await readFile(configPath, "utf8"));
+  expect(path.resolve(config.database.embeddedPostgresDataDir)).toBe(path.join(path.dirname(configPath), "db"));
+  const pid = await readFile(path.join(config.database.embeddedPostgresDataDir, "postmaster.pid"), "utf8");
+  const port = Number(pid.split("\n")[3]);
+  expect(Number.isInteger(port) && port>0 && port<65536).toBe(true);
+  const url = `postgres://paperclip:paperclip@127.0.0.1:${port}/paperclip`, db = createDb(url);
+  return { url, db };
+}
+
+async function confirmCliConsent(page: Page, configPath: string, userId: string, companyId: string, password: string) {
+  const { url, db } = await fixtureDatabase(configPath);
+  try {
+    const before = await json(await page.request.get("/api/auth/get-session"));
+    await db.execute(sql`update "session" set authenticated_at=clock_timestamp()-interval '6 minutes'
+      where id=${before.session.id} and user_id=${userId}`);
+    const challenge = await json(await page.request.post("/api/cli-auth/challenges", { data: {
+      command: "paperclipai auth login", requestedAccess: "board", requestedCompanyId: companyId,
+      keyName: "Reviewed browser CLI key", keyExpiresAt: new Date(Date.now() + 2 * 86400_000).toISOString(),
+    } }));
+    const status = () => page.request.get(`/api/cli-auth/challenges/${challenge.id}?token=${encodeURIComponent(challenge.token)}`).then(json);
+    await page.goto(`/cli-auth/${challenge.id}?token=${encodeURIComponent(challenge.token)}`);
+    await expect(page.getByText("Credential name: Reviewed browser CLI key", { exact: true })).toBeVisible();
+    await expect(page.getByText("Credential expires:", { exact: false })).toBeVisible();
+    const approve = page.getByRole("button", { name: "Approve CLI access", exact: true });
+    const refused = page.waitForResponse(response => response.url().endsWith(`/cli-auth/challenges/${challenge.id}/approve`));
+    await approve.click();
+    const refusal = await refused;
+    expect(refusal.status()).toBe(403);
+    expect(await refusal.json()).toMatchObject({ code: "recent_authentication_required", details: { code: "recent_authentication_required" } });
+    const confirmation = page.getByRole("region", { name: "Confirm your identity before approving this access.", exact: true });
+    await expect(confirmation).toBeVisible();
+    await expect(approve).toBeDisabled();
+    expect((await status()).status).toBe("pending");
+    await confirmation.locator("input[type=password]").fill(password);
+    const receiptReply = page.waitForResponse(response => response.url().endsWith("/api/auth/reauthenticate/password"));
+    await confirmation.getByRole("button", { name: "Confirm my identity", exact: true }).click();
+    const receipt = await json(await receiptReply);
+    expect(receipt.sessionId).not.toBe(before.session.id);
+    expect((await json(await page.request.get("/api/auth/get-session"))).session.id).toBe(receipt.sessionId);
+    await expect(confirmation).toHaveCount(0);
+    await expect(approve).toBeEnabled();
+    await expect(approve).toBeFocused();
+    expect((await status()).status).toBe("pending");
+    expect((await page.request.get("/api/cli-auth/me", { headers: { Authorization: `Bearer ${challenge.boardApiToken}` } })).status()).toBe(401);
+    const sent = page.waitForRequest(request => request.url().endsWith(`/cli-auth/challenges/${challenge.id}/approve`));
+    const approved = page.waitForResponse(response => response.url().endsWith(`/cli-auth/challenges/${challenge.id}/approve`));
+    await approve.click();
+    const headers = await (await sent).allHeaders();
+    expect(headers["x-blentera-expected-user"]).toBe(userId);
+    expect(headers["x-blentera-expected-session"]).toBe(receipt.sessionId);
+    expect((await approved).status()).toBe(200);
+    expect((await status()).status).toBe("approved");
+    expect((await page.request.get("/api/cli-auth/me", { headers: { Authorization: `Bearer ${challenge.boardApiToken}` } })).status()).toBe(200);
+    expect(await page.locator("body").textContent()).not.toContain(challenge.boardApiToken);
+    expect(await page.evaluate(secrets => [...Object.values(localStorage), ...Object.values(sessionStorage), JSON.stringify(history.state)]
+      .some(value => secrets.some(secret => value.includes(secret))), [password, challenge.boardApiToken])).toBe(false);
+  } finally { await closeRegisteredClients(url); }
 }

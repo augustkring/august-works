@@ -1,10 +1,11 @@
-import { useEffect, useMemo, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { useTranslation } from "@/i18n";
 import { useV9CurrentAccount } from "@/hooks/useV9CurrentAccount";
 import { useV9PrivateReadAuthority } from "@/hooks/useV9PrivateReadAuthority";
 import { useMutation, useQuery, useQueryClient } from "@tanstack/react-query";
 import { Link, useParams, useSearchParams } from "@/lib/router";
 import { Button } from "@/components/ui/button";
+import { NativeAuthenticationSettings } from "../components/NativeAuthenticationSettings";
 import { Card } from "@/components/ui/card";
 import { accessApi } from "../api/access";
 import { ApiError } from "../api/client";
@@ -22,6 +23,11 @@ function cliAuthRetryDelay(error: unknown): number {
 
 function isCliAuthRateLimit(error: unknown): error is ApiError {
   return error instanceof ApiError && error.status === 429;
+}
+
+function needsIdentityConfirmation(error: unknown): boolean {
+  return error instanceof ApiError && error.status === 403 &&
+    (error.body as { details?: { code?: unknown } } | null)?.details?.code === "recent_authentication_required";
 }
 
 export function CliAuthPage() {
@@ -51,13 +57,26 @@ export function CliAuthPage() {
   const identity = useV9CurrentAccount();
   const principal = identity.localImplicit ? "local-board" : identity.userId ?? "";
   const authority = useV9PrivateReadAuthority(principal, true);
+  const selection = useRef({ principal, challengeId, token, epoch: 0 });
+  if (selection.current.principal !== principal || selection.current.challengeId !== challengeId || selection.current.token !== token)
+    selection.current = { principal, challengeId, token, epoch: selection.current.epoch + 1 };
+  const selectionEpoch = selection.current.epoch;
+  const [confirmationNeeded, setConfirmationNeeded] = useState<number | null>(null);
+  const [confirmedReceipt, setConfirmedReceipt] = useState<{ userId: string; sessionId: string; selectionEpoch: number } | null>(null);
+  const approveButton = useRef<HTMLButtonElement>(null);
+  const confirmationRegion = useRef<HTMLDivElement>(null);
+  const focusedReceipt = useRef<string | null>(null);
+  const confirmationRequired = confirmationNeeded === selectionEpoch;
+  useEffect(() => { setConfirmationNeeded(null); setConfirmedReceipt(null); }, [selectionEpoch]);
+  useEffect(() => { if (confirmationRequired) confirmationRegion.current?.focus(); }, [confirmationRequired]);
   const scope = useRef({ challengeId, token, accountEpoch: authority.epoch, epoch: 0 });
   if (scope.current.challengeId !== challengeId || scope.current.token !== token || scope.current.accountEpoch !== authority.epoch) {
     scope.current = { challengeId, token, accountEpoch: authority.epoch, epoch: scope.current.epoch + 1 };
   }
   const captureConsent = () => {
     const epoch = scope.current.epoch;
-    return { challengeId, token, isCurrent: () => epoch === scope.current.epoch && authority.canRead() };
+    return { challengeId, token, userId: principal, sessionId: identity.localImplicit ? undefined : identity.sessionId ?? undefined,
+      selectionEpoch, isCurrent: () => epoch === scope.current.epoch && authority.canRead() };
   };
   const challengeQueryKey = useMemo(() => ["cli-auth-challenge", challengeId, token, principal, identity.sessionId, identity.authorityEpoch] as const,
     [challengeId, token, principal, identity.sessionId, identity.authorityEpoch]);
@@ -66,6 +85,9 @@ export function CliAuthPage() {
     queryKey: challengeQueryKey,
     queryFn: () => accessApi.getCliAuthChallenge(challengeId, token),
     enabled: challengeId.length > 0 && token.length > 0 && identity.settled,
+    // Keep the same user's consent panel mounted during its own native session
+    // rotation. Approval stays disabled until confirmation and the fresh read.
+    placeholderData: previous => confirmationRequired ? previous : undefined,
     retry: (failureCount, error) => {
       if (!isCliAuthRateLimit(error) || failureCount >= 3) return false;
       const knownChallenge = queryClient.getQueryData<{ expiresAt: string }>(challengeQueryKey);
@@ -80,10 +102,20 @@ export function CliAuthPage() {
     retry: false,
     mutationFn: (receipt: ReturnType<typeof captureConsent>) => {
       if (!receipt.isCurrent()) throw new Error(t("cliAuth.accessChanged"));
-      return accessApi.approveCliAuthChallenge(receipt.challengeId, receipt.token);
+      return accessApi.approveCliAuthChallenge(receipt.challengeId, receipt.token, receipt.userId, receipt.sessionId);
     },
     onSuccess: async (_result, receipt) => {
       if (receipt.isCurrent()) await challengeQuery.refetch();
+    },
+    onError: (error, receipt) => {
+      // Guidance survives a same-account freshness recheck. It grants no
+      // authority: native confirmation and the next explicit approval bind the
+      // actual current session separately. Account/challenge changes discard it.
+      if (selection.current.epoch === receipt.selectionEpoch && selection.current.principal === receipt.userId &&
+          needsIdentityConfirmation(error)) {
+        setConfirmationNeeded(receipt.selectionEpoch);
+        setConfirmedReceipt(null);
+      }
     },
   });
 
@@ -98,6 +130,17 @@ export function CliAuthPage() {
     },
   });
   const mutationError = [approveMutation, cancelMutation].find(mutation => mutation.error && mutation.variables?.isCurrent())?.error;
+
+  const confirmationCurrent = confirmedReceipt?.selectionEpoch === selectionEpoch && confirmedReceipt.userId === principal &&
+    confirmedReceipt.sessionId === identity.sessionId && authority.canRead();
+  useEffect(() => {
+    const button = approveButton.current;
+    if (confirmationCurrent && challengeQuery.isSuccess && !challengeQuery.isFetching && !challengeQuery.isPlaceholderData &&
+        button && !button.disabled && focusedReceipt.current !== confirmedReceipt?.sessionId) {
+      button.focus();
+      focusedReceipt.current = confirmedReceipt?.sessionId ?? null;
+    }
+  }, [confirmationCurrent, confirmedReceipt?.sessionId, challengeQuery.isSuccess, challengeQuery.isFetching, challengeQuery.isPlaceholderData]);
 
   if (!challengeId || !token) {
     return <div className="mx-auto max-w-xl py-10 text-sm text-destructive">{t("cliAuth.invalidUrl")}</div>;
@@ -114,7 +157,7 @@ export function CliAuthPage() {
   }
 
   const waitingForRateLimit = isCliAuthRateLimit(challengeQuery.failureReason) && challengeQuery.isFetching;
-  if (!identity.settled || sessionQuery.isLoading || challengeQuery.isLoading || waitingForRateLimit) {
+  if ((!identity.settled || sessionQuery.isLoading) && !confirmationRequired || challengeQuery.isLoading || waitingForRateLimit) {
     return <div role="status" className="mx-auto max-w-xl py-10 text-sm text-muted-foreground">
       {waitingForRateLimit ? t("cliAuth.rateWait") : t("cliAuth.loading")}
     </div>;
@@ -187,13 +230,19 @@ export function CliAuthPage() {
 
   return (
     <div className="mx-auto max-w-xl py-10">
-      <Card className="block p-6">
+      {!identity.settled && <p role="status" className="text-sm text-muted-foreground">{t("cliAuth.loading")}</p>}
+      {/* Keep the native ceremony alive through its own session recheck, while
+          hiding consent and private context until current identity is settled. */}
+      <Card className={identity.settled ? "block p-6" : "hidden"}>
         <h1 className="text-xl font-semibold">{t("cliAuth.approveTitle")}</h1>
         <p className="mt-2 text-sm text-muted-foreground">
           {t("cliAuth.scope")}
         </p>
 
-        <p className="mt-2 text-sm text-muted-foreground">{t("cliAuth.expires")}</p>
+        <p className="mt-2 text-sm text-muted-foreground">{t("cliAuth.revokeHelp")}</p>
+        {challenge.keyName && <p className="mt-2 text-sm">{t("cliAuth.keyName")}: {challenge.keyName}</p>}
+        <p className="mt-2 text-sm text-muted-foreground">{challenge.keyExpiresAt === null ? t("cliAuth.neverExpires") :
+          challenge.keyExpiresAt ? <>{t("cliAuth.keyExpires")}: <time dateTime={challenge.keyExpiresAt}>{new Date(challenge.keyExpiresAt).toLocaleString(i18n.language)}</time></> : t("cliAuth.expires")}</p>
         <p className="mt-2 text-sm text-muted-foreground">{t("cliAuth.requestExpires")}: <time dateTime={challenge.expiresAt}>{new Date(challenge.expiresAt).toLocaleString(i18n.language)}</time></p>
         <div className="mt-5 space-y-3 text-sm">
           <div>
@@ -218,7 +267,19 @@ export function CliAuthPage() {
           )}
         </div>
 
-        {mutationError && (
+        {confirmationRequired && <div ref={confirmationRegion} tabIndex={-1} role="region" aria-label={t("cliAuth.confirmIdentityRequired")} className="mt-4">
+          <p className="text-sm text-muted-foreground">{t("cliAuth.confirmIdentityRequired")}</p>
+          <p className="mt-2 text-sm text-muted-foreground">{t("cliAuth.confirmationHelp")}</p>
+          <NativeAuthenticationSettings key={selectionEpoch} principal={principal} confirmationOnly onConfirmed={receipt => {
+            if (selection.current.epoch !== selectionEpoch || receipt.userId !== principal) return;
+            setConfirmedReceipt({ ...receipt, selectionEpoch });
+            setConfirmationNeeded(null);
+            approveMutation.reset();
+            void queryClient.invalidateQueries({ queryKey: ["cli-auth-challenge", challengeId] });
+          }} />
+        </div>}
+        {confirmationCurrent && <p role="status" className="mt-4 text-sm text-muted-foreground">{t("cliAuth.identityConfirmedReview")}</p>}
+        {mutationError && !confirmationRequired && (
           <p className="mt-4 text-sm text-destructive">
             {mutationError instanceof Error
               ? (mutationError as Error).message
@@ -234,20 +295,15 @@ export function CliAuthPage() {
           </p>
         )}
 
-        <div className="mt-5 flex gap-3">
-          <Button
-            onClick={() => approveMutation.mutate(captureConsent())}
-            disabled={!challenge.canApprove || approveMutation.isPending || cancelMutation.isPending}
-          >
-            {approveMutation.isPending ? t("cliAuth.approving") : t("cliAuth.approve")}
-          </Button>
-          <Button
-            type="button"
-            variant="outline"
+        <div className="mt-5 flex items-center justify-between gap-3">
+          <Button type="button" variant="outline"
             onClick={() => cancelMutation.mutate(captureConsent())}
-            disabled={approveMutation.isPending || cancelMutation.isPending}
-          >
+            disabled={approveMutation.isPending || cancelMutation.isPending}>
             {cancelMutation.isPending ? t("cliAuth.cancelling") : t("cliAuth.cancel")}
+          </Button>
+          <Button ref={approveButton} onClick={() => approveMutation.mutate(captureConsent())}
+            disabled={confirmationRequired || challengeQuery.isFetching || challengeQuery.isPlaceholderData || !authority.canRead() || !challenge.canApprove || approveMutation.isPending || cancelMutation.isPending}>
+            {approveMutation.isPending ? t("cliAuth.approving") : t("cliAuth.approve")}
           </Button>
         </div>
       </Card>

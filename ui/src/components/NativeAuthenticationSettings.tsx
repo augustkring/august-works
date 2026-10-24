@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useId, useRef, useState } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import { authApi, AuthApiError } from "../api/auth";
@@ -30,7 +30,13 @@ function clearSecretValues(value: SecretView | null) {
   value.backupCodes.fill("");
 }
 
-export function NativeAuthenticationSettings({ principal }: { principal: string }) {
+export function NativeAuthenticationSettings({ principal, confirmationOnly = false, onConfirmed }: {
+  principal: string;
+  confirmationOnly?: boolean;
+  onConfirmed?: (receipt: { userId: string; sessionId: string }) => void;
+}) {
+  const confirmationId = useId();
+  const headingId = confirmationOnly ? `${confirmationId}-heading` : "native-authenticator-heading";
   const { t } = useTranslation("experience");
   const client = useQueryClient();
   const identity = useV9CurrentAccount();
@@ -45,7 +51,7 @@ export function NativeAuthenticationSettings({ principal }: { principal: string 
   const [cancellationSession, setCancellationSession] = useState<string | null>(null);
   const [focusTarget, setFocusTarget] = useState<string | null>(null);
   const lastFocus = useRef<string | null>(null);
-  const [confirmed, setConfirmed] = useState(false);
+  const [confirmed, setConfirmed] = useState<string | null>(null);
   const [passkeyName, setPasskeyName] = useState("");
   const [busy, setBusy] = useState(false);
   const busyRef = useRef(false);
@@ -80,11 +86,11 @@ export function NativeAuthenticationSettings({ principal }: { principal: string 
   const currentStatus = statusCurrent ? status.data : null;
 
   const passkeysKey = ["native-passkeys", principal, identity.authorityEpoch] as const;
-  const passkeys = useQuery({ queryKey: passkeysKey, enabled: !busy && statusCurrent && currentStatus?.passkeysAvailable === true,
+  const passkeys = useQuery({ queryKey: passkeysKey, enabled: !confirmationOnly && !busy && statusCurrent && currentStatus?.passkeysAvailable === true,
     queryFn: ({ signal }) => authApi.listPasskeys(principal, currentSessionId(), signal), staleTime: 0, gcTime: 0, retry: false });
   const passkeysCurrent = statusCurrent && ownsCurrentSession() && passkeys.isSuccess && !passkeys.isFetching &&
     !client.getQueryState(passkeysKey)?.isInvalidated;
-  const canUsePasskey = passkeysCurrent && passkeys.data.length>0;
+  const canUsePasskey = confirmationOnly ? currentStatus?.passkeysAvailable === true : passkeysCurrent && passkeys.data.length>0;
 
   useEffect(() => {
     aliveRef.current = true;
@@ -100,10 +106,10 @@ export function NativeAuthenticationSettings({ principal }: { principal: string 
     if (!statusCurrent || busy || !ownsCurrentSession()) return;
     const target = focusTarget ?? (document.activeElement === document.body ? lastFocus.current : null);
     if (target) {
-      (document.getElementById(target) ?? document.getElementById("native-authenticator-heading"))?.focus();
+      (document.getElementById(target) ?? document.getElementById(headingId))?.focus();
       setFocusTarget(null);
     }
-  }, [statusCurrent, busy, focusTarget]);
+  }, [statusCurrent, busy, focusTarget, headingId]);
 
   function publishSecretView(value: SecretView | null) {
     if (!aliveRef.current || !belongsToPrincipal()) {
@@ -135,14 +141,14 @@ export function NativeAuthenticationSettings({ principal }: { principal: string 
     busyRef.current = true;
     setBusy(true);
     setError(null);
-    setConfirmed(false);
+    setConfirmed(null);
     try {
       // An old native session read can expire its cookie after a successful
       // rotation. Stop background status reads until the new session is pinned.
       await client.cancelQueries({ queryKey: ["native-authenticator-status", principal] });
       await client.cancelQueries({ queryKey: ["native-passkeys", principal] });
       await action();
-      if (aliveRef.current && belongsToPrincipal()) setFocusTarget("native-authenticator-heading");
+      if (aliveRef.current && belongsToPrincipal()) setFocusTarget(headingId);
     } catch (failure) {
       if (aliveRef.current && belongsToPrincipal()) {
         setError(failure instanceof AuthApiError && failure.code === "OTP_ALREADY_USED"
@@ -172,8 +178,8 @@ export function NativeAuthenticationSettings({ principal }: { principal: string 
       return;
     }
     await runAction(async () => {
-      await authApi.reauthenticatePassword(password, principal, currentSessionId());
-      await refreshNativeSessionAndStatus();
+      const receipt = await authApi.reauthenticatePassword(password, principal, currentSessionId());
+      await refreshNativeSessionAndStatus(receipt.sessionId);
       const result = await authApi.enableTwoFactor(password, principal, currentSessionId());
       const totpSecret = parseTotpSecret(result.totpURI);
       if (!totpSecret || !Array.isArray(result.backupCodes) || result.backupCodes.length === 0) {
@@ -218,8 +224,8 @@ export function NativeAuthenticationSettings({ principal }: { principal: string 
     if (currentStatus?.phishingResistantRequired || canUsePasskey && !totpCode && !recoveryCode) return confirmPasskey();
     if (currentStatus?.twoFactorEnabled) return confirmFreshFactor();
     if (!currentStatus?.hasPassword || !password) throw new Error("Confirm your identity first");
-    await authApi.reauthenticatePassword(password, principal, currentSessionId());
-    await refreshNativeSessionAndStatus();
+    const receipt = await authApi.reauthenticatePassword(password, principal, currentSessionId());
+    await refreshNativeSessionAndStatus(receipt.sessionId);
     return currentSessionId();
   }
   async function addKey() {
@@ -246,14 +252,24 @@ export function NativeAuthenticationSettings({ principal }: { principal: string 
     });
   }
 
+  function announceConfirmation(sessionId: string) {
+    if (!aliveRef.current || !belongsToPrincipal()) return;
+    if (currentSessionId() !== sessionId) throw sourceChanged();
+    setConfirmed(sessionId);
+    onConfirmed?.({ userId: principal, sessionId });
+  }
+
   async function confirmIdentity() {
     await runAction(async () => {
-      if (currentStatus?.twoFactorEnabled) await confirmFreshFactor();
+      let sessionId: string;
+      if (currentStatus?.phishingResistantRequired) sessionId = await confirmPasskey();
+      else if (currentStatus?.twoFactorEnabled) sessionId = await confirmFreshFactor();
       else {
-        await authApi.reauthenticatePassword(password, principal, currentSessionId());
-        await refreshNativeSessionAndStatus();
+        const receipt = await authApi.reauthenticatePassword(password, principal, currentSessionId());
+        await refreshNativeSessionAndStatus(receipt.sessionId);
+        sessionId = receipt.sessionId;
       }
-      if (aliveRef.current && belongsToPrincipal()) setConfirmed(true);
+      announceConfirmation(sessionId);
     });
   }
 
@@ -318,6 +334,42 @@ export function NativeAuthenticationSettings({ principal }: { principal: string 
   }
 
   const hiddenForAuthority = !ownsCurrentSession() || !!secretView && secretView.sessionId !== currentSessionId();
+  if (confirmationOnly) return <section className="saas-section" aria-labelledby={headingId}
+    onFocusCapture={event => { if (event.target instanceof HTMLElement && event.target.id) lastFocus.current = event.target.id; }}>
+    <h2 className="saas-subtitle" id={headingId} tabIndex={-1}>{t("account.authenticator.confirmIdentity")}</h2>
+    {!statusCurrent && <div role={status.isError ? "alert" : "status"}>
+      <p className="saas-muted">{t(status.isError ? "account.authenticator.statusFailed" : "account.authenticator.checking")}</p>
+      {status.isError && <Button variant="outline" onClick={() => void refreshNativeSessionAndStatus().catch(() => {})}>{t("account.retry")}</Button>}
+    </div>}
+    {statusCurrent && currentStatus && <>
+      {currentStatus.phishingResistantRequired ? <p className="saas-muted">{t("account.authenticator.phishingResistantRequired")}</p> : <>
+        {currentStatus.twoFactorEnabled ? <>
+          <label className="saas-label" htmlFor={`${confirmationId}-totp`}>{t("account.authenticator.totpCode")}
+            <input id={`${confirmationId}-totp`} className="saas-input" inputMode="numeric" autoComplete="one-time-code" maxLength={6}
+              value={totpCode} onChange={event => { setTotpCode(event.target.value); setRecoveryCode(""); }} disabled={busy} />
+          </label>
+          <label className="saas-label" htmlFor={`${confirmationId}-recovery`}>{t("account.authenticator.recoveryCode")}
+            <input id={`${confirmationId}-recovery`} className="saas-input" autoComplete="off" maxLength={128}
+              value={recoveryCode} onChange={event => { setRecoveryCode(event.target.value); setTotpCode(""); }} disabled={busy} />
+          </label>
+        </> : currentStatus.hasPassword && <label className="saas-label" htmlFor={`${confirmationId}-password`}>{t("account.authenticator.currentPassword")}
+          <input id={`${confirmationId}-password`} className="saas-input" type="password" autoComplete="current-password" maxLength={LOCAL_PASSWORD_MAX_UTF16_LENGTH}
+            value={password} onChange={event => setPassword(event.target.value)} disabled={busy} />
+        </label>}
+        {(currentStatus.twoFactorEnabled || currentStatus.hasPassword) && <Button variant="outline" className="min-h-11"
+          disabled={busy || (currentStatus.twoFactorEnabled ? !totpCode && !recoveryCode : !password)}
+          onClick={() => void confirmIdentity()}>{t("account.authenticator.confirmIdentity")}</Button>}
+      </>}
+      {canUsePasskey && <Button variant="outline" className="min-h-11" disabled={busy} onClick={() => void runAction(async () => {
+        announceConfirmation(await confirmPasskey());
+      })}>{t("account.passkeys.confirm")}</Button>}
+      {!canUsePasskey && (currentStatus.phishingResistantRequired || !currentStatus.hasPassword && !currentStatus.twoFactorEnabled) &&
+        <p role="status" className="saas-muted">{t("account.authenticator.confirmationUnavailable")}</p>}
+    </>}
+    {error && statusCurrent && <p role="alert" className="saas-error">{t(error)}</p>}
+    {confirmed === identity.sessionId && statusCurrent && <p role="status" className="saas-muted">{t("account.authenticator.identityConfirmed")}</p>}
+    {busy && <p role="status" className="saas-muted">{t("account.authenticator.working")}</p>}
+  </section>;
   return <section className="saas-section" aria-labelledby="native-authenticator-heading"
     onFocusCapture={event => { if (event.target instanceof HTMLElement && event.target.id) lastFocus.current = event.target.id; }}>
     <h2 className="saas-subtitle" id="native-authenticator-heading" tabIndex={-1}>{t("account.authenticator.heading")}</h2>
@@ -367,7 +419,7 @@ export function NativeAuthenticationSettings({ principal }: { principal: string 
         {passkeysCurrent && <>
           {passkeys.data.length===0 && <p className="saas-muted">{t("account.passkeys.empty")}</p>}
           {canUsePasskey && <Button variant="outline" className="min-h-11" disabled={busy} onClick={() => void runAction(async () => {
-            await confirmPasskey(); setConfirmed(true);
+            announceConfirmation(await confirmPasskey());
           })}>{t("account.passkeys.confirm")}</Button>}
           <label className="saas-label" htmlFor="native-passkey-name">{t("account.passkeys.newName")}
             <input className="saas-input" id="native-passkey-name" autoComplete="off" maxLength={120} value={passkeyName} disabled={busy}
@@ -432,7 +484,7 @@ export function NativeAuthenticationSettings({ principal }: { principal: string 
       </div>}
     </>}
     {error && statusCurrent && <p role="alert" className="saas-error">{t(error)}</p>}
-    {confirmed && statusCurrent && <p role="status" className="saas-muted">{t("account.authenticator.identityConfirmed")}</p>}
+    {confirmed === identity.sessionId && statusCurrent && <p role="status" className="saas-muted">{t("account.authenticator.identityConfirmed")}</p>}
     {busy && <p role="status" className="saas-muted">{t("account.authenticator.working")}</p>}
   </section>;
 }

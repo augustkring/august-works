@@ -1,5 +1,5 @@
 import type { AgentAdapterType, JoinRequest, PermissionKey } from "@paperclipai/shared";
-import { api } from "./client";
+import { api, detachInflightGet } from "./client";
 
 export type HumanCompanyRole = "owner" | "admin" | "operator" | "viewer";
 
@@ -73,6 +73,8 @@ type BoardClaimStatus = {
 };
 
 type CliAuthChallengeStatus = {
+  keyName?: string;
+  keyExpiresAt?: string | null;
   id: string;
   status: "pending" | "approved" | "cancelled" | "expired";
   command: string;
@@ -386,13 +388,22 @@ export const accessApi = {
   claimBootstrapAdmin: () =>
     api.post<{ claimed: true; userId: string }>("/bootstrap/claim", {}),
 
-  getCliAuthChallenge: (id: string, token: string) =>
-    api.get<CliAuthChallengeStatus>(`/cli-auth/challenges/${id}?token=${encodeURIComponent(token)}`),
+  getCliAuthChallenge: (id: string, token: string) => {
+    const path = `/cli-auth/challenges/${id}?token=${encodeURIComponent(token)}`;
+    // React Query deduplicates within the current account/session. A new key
+    // must not join a request issued under a previous cookie identity.
+    detachInflightGet(path);
+    return api.get<CliAuthChallengeStatus>(path, { cache: "no-store" });
+  },
 
-  approveCliAuthChallenge: (id: string, token: string) =>
+  approveCliAuthChallenge: (id: string, token: string, expectedUserId?: string, expectedSessionId?: string) =>
     api.post<{ approved: boolean; status: string; userId: string; keyId: string | null; expiresAt: string }>(
       `/cli-auth/challenges/${id}/approve`,
       { token },
+      { headers: {
+        ...(expectedUserId ? { "X-Blentera-Expected-User": expectedUserId } : {}),
+        ...(expectedSessionId ? { "X-Blentera-Expected-Session": expectedSessionId } : {}),
+      } },
     ),
 
   cancelCliAuthChallenge: (id: string, token: string) =>

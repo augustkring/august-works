@@ -17,6 +17,13 @@ Login creates a ten-minute challenge and prints its browser approval link.
 Sign in, review the client and full Board authority, and approve only a request
 you started in your own terminal. The pending token cannot authenticate before
 approval. The CLI verifies its current identity before storing the credential.
+If your current sign-in needs confirmation, the approval page asks for your
+password, authenticator/recovery code or passkey as required by your account.
+Confirmation rotates the native session and returns you to review; it does not
+approve the request. Platform operators require a recent passkey and verified
+email. A Board token cannot substitute for this human proof or mint another
+Board token.
+
 The default key expires after thirty days; logout attempts server revocation
 and removes the local credential. Check the reported `revoked` result.
 
@@ -654,6 +661,12 @@ npx paperclipai token agent revoke --company-id <company-id> --agent <agent-id-o
 ```
 
 Named board API keys use the board authorization model, support revocation and expiration metadata, and are audited server-side.
+
+`token board create` opens a new browser consent flow even when the CLI already
+has a Board token. Review the requested name and expiry, including an explicit
+non-expiring request, before approving. `connect` uses the exact key approved in
+its browser flow. Neither command creates a second key from the approved token.
+A server that cannot preserve requested key settings is rejected before approval.
 
 ```sh
 npx paperclipai token board create --company-id <company-id> --name external-admin

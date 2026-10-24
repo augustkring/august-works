@@ -71,6 +71,8 @@ export const boardCliAuthAccessLevelSchema = z.enum([
 export type BoardCliAuthAccessLevel = z.infer<typeof boardCliAuthAccessLevelSchema>;
 
 export const createCliAuthChallengeSchema = z.object({
+  keyName: z.string().trim().min(1).max(120).optional(),
+  keyExpiresAt: z.coerce.date().nullable().optional(),
   command: z.string().min(1).max(240),
   clientName: z.string().max(120).optional().nullable(),
   requestedAccess: boardCliAuthAccessLevelSchema.default("board"),
