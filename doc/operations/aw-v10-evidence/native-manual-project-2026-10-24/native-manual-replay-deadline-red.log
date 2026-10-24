@@ -1,0 +1,222 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+ ❯ |@paperclipai/server| src/__tests__/manual-task-replay-deadline.integration.test.ts (2 tests | 2 failed) 17321ms
+     × denies an active member's old Task replay when the native session expires during the actual privacy-lock wait 2267ms
+     × denies an operator's old Task replay after recent passkey proof ages out during the actual privacy-lock wait 5554ms
+
+⎯⎯⎯⎯⎯⎯⎯ Failed Tests 2 ⎯⎯⎯⎯⎯⎯⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/manual-task-replay-deadline.integration.test.ts > manual Task idempotent replay keeps its original credential deadline > denies an active member's old Task replay when the native session expires during the actual privacy-lock wait
+AssertionError: promise resolved "{ …(81) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "assigneeAdapterOverrides": null,
++   "assigneeAgentId": null,
++   "assigneeUserId": null,
++   "billingCode": null,
++   "blockedBy": [],
++   "blockedOwnerNotifiedAt": null,
++   "blockedTransitionAt": null,
++   "blocks": [],
++   "cancelledAt": null,
++   "checkoutRunId": null,
++   "companyId": "91715a5a-3dc9-4032-91c7-7256f73f3e1c",
++   "completedAt": null,
++   "continuationIdentityContextId": null,
++   "conversationAgentId": null,
++   "conversationBoundaryCommentId": null,
++   "conversationRetiredAt": null,
++   "conversationSessionGeneration": 0,
++   "conversationState": null,
++   "conversationUserId": null,
++   "createdAt": 2026-10-24T09:52:16.857Z,
++   "createdByAgentId": null,
++   "createdByUserId": "ae11819c-bb00-4732-95ed-0c545babf9a6",
++   "description": "Existing unqualified request",
++   "estimatedEffortMinutes": null,
++   "executionAgentNameKey": null,
++   "executionLockedAt": null,
++   "executionPolicy": null,
++   "executionRunId": null,
++   "executionState": null,
++   "executionWorkspaceId": null,
++   "executionWorkspacePreference": null,
++   "executionWorkspaceSettings": null,
++   "forecastConfidence": null,
++   "forecastEndAt": null,
++   "forecastReason": null,
++   "forecastStartAt": null,
++   "goalId": null,
++   "harnessKind": null,
++   "hiddenAt": null,
++   "id": "6a6ecf00-ba92-4b27-992e-27005a956c2a",
++   "identifier": "RD91715-1",
++   "issueNumber": 1,
++   "labelIds": [],
++   "labels": [],
++   "lastStatusDecisionId": null,
++   "milestoneId": null,
++   "monitorAttemptCount": 0,
++   "monitorLastTriggeredAt": null,
++   "monitorNextCheckAt": null,
++   "monitorNotes": null,
++   "monitorScheduledBy": null,
++   "monitorWakeRequestedAt": null,
++   "originFingerprint": "default",
++   "originId": null,
++   "originIdentityContextId": null,
++   "originKind": "manual",
++   "originRunId": null,
++   "parentId": null,
++   "payloadSourceProtocolVersion": 0,
++   "payloadSourceSnapshot": null,
++   "payloadSourceSnapshotInvalidated": false,
++   "plannedEndAt": null,
++   "plannedStartAt": null,
++   "priority": "medium",
++   "privacyParentIssueId": null,
++   "privacyRootIssueId": null,
++   "projectId": null,
++   "projectWorkspaceId": null,
++   "requestDepth": 0,
++   "responsibleUserId": "ae11819c-bb00-4732-95ed-0c545babf9a6",
++   "reviewPolicy": null,
++   "sourceTrust": null,
++   "startedAt": null,
++   "status": "backlog",
++   "statusVersion": 0,
++   "title": "Replay 4193ac22-b417-4e69-80dc-a787ac4046e1",
++   "unblockDescriptor": null,
++   "updatedAt": 2026-10-24T09:52:16.857Z,
++   "visibility": "open",
++   "watchdog": null,
++   "workMode": "standard",
+  }
+
+ ❯ src/__tests__/manual-task-replay-deadline.integration.test.ts:131:25
+    129|     await holder;
+    130|     expect(blocked).toBe(true);
+    131|     await expect(replay).rejects.toMatchObject({ status: 403 });
+       |                         ^
+    132|     await assertReplayStayedUnknown(f.companyId, original.issueId, key…
+    133|   }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[1/2]⎯
+
+ FAIL  |@paperclipai/server| src/__tests__/manual-task-replay-deadline.integration.test.ts > manual Task idempotent replay keeps its original credential deadline > denies an operator's old Task replay after recent passkey proof ages out during the actual privacy-lock wait
+AssertionError: promise resolved "{ …(81) }" instead of rejecting
+
+- Expected
++ Received
+
+- Error {
+-   "message": "rejected promise",
++ {
++   "assigneeAdapterOverrides": null,
++   "assigneeAgentId": null,
++   "assigneeUserId": null,
++   "billingCode": null,
++   "blockedBy": [],
++   "blockedOwnerNotifiedAt": null,
++   "blockedTransitionAt": null,
++   "blocks": [],
++   "cancelledAt": null,
++   "checkoutRunId": null,
++   "companyId": "66ffe908-d112-4309-8886-b2bac4d78d17",
++   "completedAt": null,
++   "continuationIdentityContextId": null,
++   "conversationAgentId": null,
++   "conversationBoundaryCommentId": null,
++   "conversationRetiredAt": null,
++   "conversationSessionGeneration": 0,
++   "conversationState": null,
++   "conversationUserId": null,
++   "createdAt": 2026-10-24T09:52:19.053Z,
++   "createdByAgentId": null,
++   "createdByUserId": "cec2da4c-9d80-4a73-b95f-6cf7092c4f02",
++   "description": "Existing unqualified request",
++   "estimatedEffortMinutes": null,
++   "executionAgentNameKey": null,
++   "executionLockedAt": null,
++   "executionPolicy": null,
++   "executionRunId": null,
++   "executionState": null,
++   "executionWorkspaceId": null,
++   "executionWorkspacePreference": null,
++   "executionWorkspaceSettings": null,
++   "forecastConfidence": null,
++   "forecastEndAt": null,
++   "forecastReason": null,
++   "forecastStartAt": null,
++   "goalId": null,
++   "harnessKind": null,
++   "hiddenAt": null,
++   "id": "fc11fd32-dabf-47b5-9730-1df8080f861d",
++   "identifier": "RD66ffe-1",
++   "issueNumber": 1,
++   "labelIds": [],
++   "labels": [],
++   "lastStatusDecisionId": null,
++   "milestoneId": null,
++   "monitorAttemptCount": 0,
++   "monitorLastTriggeredAt": null,
++   "monitorNextCheckAt": null,
++   "monitorNotes": null,
++   "monitorScheduledBy": null,
++   "monitorWakeRequestedAt": null,
++   "originFingerprint": "default",
++   "originId": null,
++   "originIdentityContextId": null,
++   "originKind": "manual",
++   "originRunId": null,
++   "parentId": null,
++   "payloadSourceProtocolVersion": 0,
++   "payloadSourceSnapshot": null,
++   "payloadSourceSnapshotInvalidated": false,
++   "plannedEndAt": null,
++   "plannedStartAt": null,
++   "priority": "medium",
++   "privacyParentIssueId": null,
++   "privacyRootIssueId": null,
++   "projectId": null,
++   "projectWorkspaceId": null,
++   "requestDepth": 0,
++   "responsibleUserId": "cec2da4c-9d80-4a73-b95f-6cf7092c4f02",
++   "reviewPolicy": null,
++   "sourceTrust": null,
++   "startedAt": null,
++   "status": "backlog",
++   "statusVersion": 0,
++   "title": "Replay c3338418-de35-4a84-9ee4-3cddcbbf7ee6",
++   "unblockDescriptor": null,
++   "updatedAt": 2026-10-24T09:52:19.053Z,
++   "visibility": "open",
++   "watchdog": null,
++   "workMode": "standard",
+  }
+
+ ❯ src/__tests__/manual-task-replay-deadline.integration.test.ts:172:25
+    170|     await holder;
+    171|     expect(blocked).toBe(true);
+    172|     await expect(replay).rejects.toMatchObject({ status: 403 });
+       |                         ^
+    173|     await assertReplayStayedUnknown(f.companyId, original.issueId, key…
+    174|   }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
+
+⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯⎯[2/2]⎯
+
+
+ Test Files  1 failed (1)
+      Tests  2 failed (2)
+   Start at  09:51:36
+   Duration  48.01s (transform 20.67s, setup 148ms, import 30.21s, tests 17.32s, environment 0ms)
+

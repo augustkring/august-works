@@ -14,6 +14,7 @@ import { forgetMemoryForDeletedIssue, lockMemoryPrivacy } from "./memory/memory-
 import { lockBusinessEventCompany, suppressBusinessEventsForObject } from "./business-event-privacy.js";
 import { authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, pinCurrentBoardActor, type AuthorizationActor } from "./authorization.js";
 import { assertHumanAuthentication } from "../auth/authenticator-assurance.js";
+import { directHumanPayloadSnapshotSql, assertDirectInputSessionCurrent as assertManualInputCredentialCurrent } from "./native-direct-input.js";
 import { resolveTaskWatchdogMutationScope, taskWatchdogScopeAllowsIssueMutation } from "./task-watchdog-scope.js";
 import {
   and,
@@ -2182,13 +2183,6 @@ function isManualRootPayloadInput(data: IssueCreateInput) {
     ].every(value => value == null);
 }
 
-async function assertManualInputCredentialCurrent(tx: DbTransaction, actor: AuthorizationActor, expiresAt: number) {
-  const [current] = await tx.execute<{ active: boolean }>(sql`select
-    ${expiresAt}::double precision>extract(epoch from clock_timestamp())*1000
-    and not exists(select 1 from account_deletion_operations where user_id=${actor.userId}) as active`);
-  if (!current?.active) throw forbidden("The current manual input session is unavailable");
-}
-
 async function bindManualTaskPayload(tx: DbTransaction, issue: typeof issues.$inferSelect,
   actor: AuthorizationActor, publications: ActivityPublication[]) {
   const decision = await authorizationService(tx).decide({ actor, action: "issue:mutate",
@@ -2196,14 +2190,8 @@ async function bindManualTaskPayload(tx: DbTransaction, issue: typeof issues.$in
       status: issue.status, assigneeAgentId: issue.assigneeAgentId, assigneeUserId: issue.assigneeUserId },
     enforceResponsibleUserIntersection: true });
   if (!decision.allowed) throw forbidden("Current task write authority is required");
-  const [captured] = await tx.update(issues).set({ payloadSourceSnapshot: sql<NativePayloadSourceSnapshot>`(
-    with payload as (select jsonb_build_object('version',1,'owner',jsonb_build_object(
-      'kind','issue','companyId',${issues.companyId}::text,'id',${issues.id}::text,
-      'contentHash',public.aw_native_payload_body_hash('issue',to_jsonb(${issues}))),
-      'policy',jsonb_build_object('issueIds','[]'::jsonb,'projectIds','[]'::jsonb,'runIds','[]'::jsonb,
-        'memoryIds','[]'::jsonb,'foundationRevisionIds','[]'::jsonb),'inputs','[]'::jsonb) as value)
-    select value || jsonb_build_object('digest',encode(sha256(convert_to(value::text,'UTF8')),'hex')) from payload
-  )` }).where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId),
+  const [captured] = await tx.update(issues).set({ payloadSourceSnapshot: directHumanPayloadSnapshotSql("issue") })
+    .where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId),
     eq(issues.createdByUserId, actor.userId!), eq(issues.payloadSourceProtocolVersion, 1),
     isNull(issues.payloadSourceSnapshot), eq(issues.payloadSourceSnapshotInvalidated, false))).returning();
   if (!captured?.payloadSourceSnapshot) throw conflict("Manual input source capture was not stored");
@@ -10099,6 +10087,13 @@ export function issueService(db: Db) {
       const persist = async (tx: DbTransaction) => {
         let manualExpiresAt: number | null = null;
         let manualOperator = false;
+        const finishManualInput = async <T>(result: T) => {
+          if (captureManualInput && manualActor && manualExpiresAt !== null) {
+            if (manualOperator) await assertHumanAuthentication(tx, manualActor, { requireRecent: true, phishingResistant: true });
+            await assertManualInputCredentialCurrent(tx, manualActor, manualExpiresAt);
+          }
+          return result;
+        };
         if (captureManualInput && manualActor) {
           const pinned = await pinCurrentBoardActor(tx, manualActor);
           if (!pinned || pinned.credentialExpiresAt === null || !Number.isFinite(pinned.credentialExpiresAt))
@@ -10122,7 +10117,7 @@ export function issueService(db: Db) {
             if (!source?.erased && retireConversationId !== existing.id) {
               const [enriched] = await withIssueLabels(tx, [existing]);
               const [withRelations] = await withIssueRelationSummaries(companyId, [enriched], tx);
-              return withRelations;
+              return finishManualInput(withRelations);
             }
             const {eraseAnalyticalConversationRootsUnderMemory} = await import("./analytical-context-privacy.js");
             await eraseAnalyticalConversationRootsUnderMemory(tx as unknown as Db,companyId,existing.id);
@@ -10229,7 +10224,7 @@ export function issueService(db: Db) {
             [enriched],
             tx,
           );
-          return withRelations;
+          return finishManualInput(withRelations);
         }
 
         const defaultCompanyGoal = await getDefaultCompanyGoal(tx, companyId);
@@ -10605,11 +10600,7 @@ export function issueService(db: Db) {
           [enriched],
           tx,
         );
-        if (captureManualInput && manualActor && manualExpiresAt !== null) {
-          if (manualOperator) await assertHumanAuthentication(tx, manualActor, { requireRecent: true, phishingResistant: true });
-          await assertManualInputCredentialCurrent(tx, manualActor, manualExpiresAt);
-        }
-        return withRelations;
+        return finishManualInput(withRelations);
       };
       if (dbOrTx === db) {
         const created = await db.transaction(persist);

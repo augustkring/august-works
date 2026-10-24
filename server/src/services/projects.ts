@@ -46,22 +46,22 @@ import { resolveManagedProjectWorkspaceDir } from "../home-paths.js";
 type ProjectRow = typeof projects.$inferSelect;
 type DbTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
-async function pinProjectMutationHuman(tx: DbTransaction, actor: AuthorizationActor, companyId: string) {
+export async function pinProjectMutationHuman(tx: DbTransaction, actor: AuthorizationActor, companyId: string, noWait = false) {
   if (actor.source === "local_implicit") return;
   const userId = actor.type === "agent" ? actor.onBehalfOfUserId : actor.userId;
   if (!userId) throw forbidden("Current organization access is required");
-  const [user] = await tx.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, userId)).for("share");
+  const [user] = await tx.select({ id: authUsers.id }).from(authUsers).where(eq(authUsers.id, userId)).for("share", noWait ? { noWait: true } : undefined);
   if (!user) throw forbidden("Current organization access is required");
   const [member] = await tx.select({ role: companyMemberships.membershipRole }).from(companyMemberships).where(and(
     eq(companyMemberships.companyId, companyId), eq(companyMemberships.principalType, "user"),
     eq(companyMemberships.principalId, userId), eq(companyMemberships.status, "active"),
-  )).for("share");
-  if (member && member.role !== "viewer") return;
+  )).for("share", noWait ? { noWait: true } : undefined);
+  if (member && member.role !== "viewer") return "member" as const;
   if (actor.type === "board") {
     const [role] = await tx.select({ id: instanceUserRoles.id }).from(instanceUserRoles).where(and(
       eq(instanceUserRoles.userId, userId), eq(instanceUserRoles.role, "instance_admin"),
-    )).for("share");
-    if (role) return;
+    )).for("share", noWait ? { noWait: true } : undefined);
+    if (role) return "instance_admin" as const;
   }
   throw forbidden("Project mutation is outside the current actor authority");
 }

@@ -958,3 +958,24 @@ private-source/temporal failures, complete Native input receipts, enterprise
 recovery/remaining sensitive actions and full V10/PR admission remain open.
 Evidence:
 `doc/operations/aw-v10-evidence/native-protected-auth-deadlines-2026-10-24/checkpoint.json`.
+
+### 2026-10-24 — direct Human Project capture and successful replay checks
+
+An independent open Project created through the original HTTP owner now binds
+its direct Human body on the same pinned native transaction as its actual Human
+capture audit. Related/generated/workspace/environment/policy inputs, service
+attribution, Board keys, missing sessions and old receipts remain unknown. The
+small stored-body SQL expression and final session check are shared with Task.
+Existing operational updates preserve proof; changed body fields invalidate it.
+
+Actual lock waits additionally reproduced expired member-session and stale
+operator-proof Task dedup success. All Task successful returns now share the
+final deadline guard; Project replay also checks operator recency. Current32
+owner/public cases and two isolated replay controls pass. The earlier59-case
+body-binding check remains bounded to its source stage; an intervening DB setup
+timeout/exit130 is preserved as interrupted, without counting skipped cases.
+The built real cookie/authenticator browser checks both Source bindings/audits.
+Evidence:
+`doc/operations/aw-v10-evidence/native-manual-project-2026-10-24/checkpoint.json`.
+All six typed/private source/temporal failures, other producers/mutations,
+complete Native input receipts/read lifetimes and full V10/PR gates remain open.

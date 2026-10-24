@@ -1,9 +1,9 @@
 import { publicNativePayloadRow } from "../services/native-payload-public.js";
 import { createHash } from "node:crypto";
-import { and, eq, sql } from "drizzle-orm";
+import { and, eq, isNull, sql } from "drizzle-orm";
 import { activityLog, agents, authUsers, companyMemberships, projectAccessMembers, projects } from "@paperclipai/db";
 import { projectToolContext } from "../services/project-tool-context.js";
-import { persistActivity, publishActivity } from "../services/activity-log.js";
+import { persistActivity, publishActivity, type ActivityPublication } from "../services/activity-log.js";
 import { z } from "zod";
 import { normalizeProjectRepositoryUrl, resolveProjectRepositorySelection } from "../services/project-repositories.js";
 import { toolAccessService } from "../services/tool-access.js";
@@ -11,6 +11,7 @@ import { Router, type Request, type Response } from "express";
 import type { Db } from "@paperclipai/db";
 import {
   createProjectSchema,
+  nativePayloadSourceSnapshotSchema,
   addProjectAccessMemberSchema,
   experienceProjectReceiptSchema,
   v9FeatureEnabled,
@@ -48,9 +49,12 @@ import { appendWithCap } from "../adapters/utils.js";
 import { assertEnvironmentSelectionForCompany } from "./environment-selection.js";
 import { environmentService } from "../services/environments.js";
 import { secretService } from "../services/secrets.js";
-import { canActorReadIssuePrivacy, canActorReadProjectPrivacy, issueReadSqlCondition, projectReadSqlCondition } from "../services/authorization.js";
-import { ensureProjectAccessMember } from "../services/projects.js";
+import { authorizationService, canActorReadIssuePrivacy, canActorReadProjectPrivacy, issueReadSqlCondition, projectReadSqlCondition, pinCurrentBoardActor } from "../services/authorization.js";
+import { ensureProjectAccessMember, pinProjectMutationHuman } from "../services/projects.js";
 import { lockIssuePrivacyTree } from "../services/issues.js";
+import { assertHumanAuthentication } from "../auth/authenticator-assurance.js";
+import { assertDirectInputSessionCurrent, directHumanPayloadSnapshotSql } from "../services/native-direct-input.js";
+import { logger } from "../middleware/logger.js";
 
 const WORKSPACE_CONTROL_OUTPUT_MAX_CHARS = 256 * 1024;
 const SHARED_WORKSPACE_STOP_AND_RESTART_ACTIONS = new Set(["stop", "restart"]);
@@ -357,7 +361,24 @@ export function projectRoutes(db: Db) {
     const actor = getActorInfo(req);
     const fingerprint = createHash("sha256").update(JSON.stringify({ projectData, workspace, repositoryIds, repositoryUrls })).digest("hex");
     const receiptKey = idempotencyKey ? `project:${companyId}:${actor.actorId}:${runContext?.issue.id ?? "board"}:${idempotencyKey}` : null;
+    const directActor = req.actor.type === "board" && req.actor.source === "session" &&
+      req.actor.userId && req.actor.sessionId && !req.actor.runId ? { ...req.actor } : null;
+    const captureDirectInput = !!directActor && (!projectData.visibility || projectData.visibility === "open") &&
+      !workspace && !repositoryIds?.length && !repositoryUrls?.length && !projectData.goalIds?.length &&
+      !projectData.sourceIssueIds?.length && !projectData.sourceProjectIds?.length &&
+      [projectData.goalId, projectData.personalOwnerUserId, projectData.env, projectData.roadmapPolicy,
+        projectData.executionWorkspacePolicy, projectData.pauseReason].every(value => value == null);
     const result = await db.transaction(async (tx) => {
+      let sourceExpiresAt: number | null = null, sourceOperator = false;
+      if (captureDirectInput && directActor) {
+        const pinned = await pinCurrentBoardActor(tx, directActor);
+        if (!pinned || pinned.credentialExpiresAt === null || !Number.isFinite(pinned.credentialExpiresAt))
+          throw forbidden("The current manual input session is unavailable");
+        sourceExpiresAt = pinned.credentialExpiresAt;
+        sourceOperator = await pinProjectMutationHuman(tx, directActor, companyId, true) === "instance_admin";
+        if (sourceOperator) await assertHumanAuthentication(tx, directActor, { requireRecent: true, phishingResistant: true });
+        await assertDirectInputSessionCurrent(tx, directActor, sourceExpiresAt);
+      }
       await lockIssuePrivacyTree(tx, companyId);
       if (receiptKey) {
         await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${receiptKey}, 0))`);
@@ -370,11 +391,18 @@ export function projectRoutes(db: Db) {
           const project = await projectService(tx as unknown as Db).getById(prior.entityId);
           if (!project) throw conflict("Previously created project is no longer available");
           if (!(await canActorReadProjectPrivacy(tx, req.actor, project))) throw notFound("Project not found");
-          return { project, publication: null, duplicate: true };
+          if (captureDirectInput && directActor && sourceExpiresAt !== null) {
+            if (sourceOperator) await assertHumanAuthentication(tx, directActor, { requireRecent: true, phishingResistant: true });
+            await assertDirectInputSessionCurrent(tx, directActor, sourceExpiresAt);
+          }
+          return { project, publication: null, sourcePublication: null, duplicate: true };
         }
       }
       const currentContext = runContext ? await projectToolContext(tx as unknown as Db, req.actor, true) : null;
       const durableProjectData = { ...projectData };
+      if (captureDirectInput) Object.assign(durableProjectData, {
+        payloadSourceProtocolVersion: 1, payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: false,
+      });
       if (currentContext) {
         if (currentContext.issue.id !== runContext!.issue.id || !(await canActorReadIssuePrivacy(tx, req.actor, currentContext.issue))) {
           throw notFound("Project source is unavailable");
@@ -400,7 +428,7 @@ export function projectRoutes(db: Db) {
       }
       const createdWorkspace = workspace ? await service.createWorkspace(project.id, workspace) : null;
       if (workspace && !createdWorkspace) throw unprocessable("Invalid project workspace payload");
-      const hydrated = await service.getById(project.id);
+      let hydrated = await service.getById(project.id);
       if (!(await canActorReadProjectPrivacy(tx, req.actor, project))) throw notFound("Project not found");
       const activity = await persistActivity(tx as unknown as Db, {
         companyId, actorType: actor.actorType, actorId: actor.actorId, agentId: actor.agentId,
@@ -417,9 +445,39 @@ export function projectRoutes(db: Db) {
           ...(receiptKey ? { idempotencyKey: receiptKey, fingerprint } : {}),
         },
       });
-      return { project: hydrated ?? project, publication: activity.publication, duplicate: false };
+      let sourcePublication: ActivityPublication | null = null;
+      if (captureDirectInput && directActor && sourceExpiresAt !== null) {
+        const decision = await authorizationService(tx).decide({
+          actor: { ...directActor, isInstanceAdmin: false, ignoreInstanceAdmin: !sourceOperator },
+          action: "project:read", resource: { type: "project", companyId, projectId: project.id },
+          enforceResponsibleUserIntersection: true,
+        });
+        if (!decision.allowed) throw forbidden("Current project authority is required");
+        const [captured] = await tx.update(projects).set({ payloadSourceSnapshot: directHumanPayloadSnapshotSql("project") })
+          .where(and(eq(projects.id, project.id), eq(projects.companyId, companyId),
+            eq(projects.privacyOwnerUserId, directActor.userId!), eq(projects.payloadSourceProtocolVersion, 1),
+            isNull(projects.payloadSourceSnapshot), eq(projects.payloadSourceSnapshotInvalidated, false))).returning();
+        if (!captured?.payloadSourceSnapshot) throw conflict("Manual input source capture was not stored");
+        const snapshot = nativePayloadSourceSnapshotSchema.parse(captured.payloadSourceSnapshot);
+        const source = await persistActivity(tx as unknown as Db, {
+          companyId, actorType: "user", actorId: directActor.userId!, action: "project.payload_source_captured",
+          entityType: "project", entityId: project.id,
+          details: { producer: "direct_manual_input", contentHash: snapshot.owner.contentHash, digest: snapshot.digest },
+        });
+        sourcePublication = source.publication;
+        hydrated = { ...(hydrated ?? project), payloadSourceProtocolVersion: captured.payloadSourceProtocolVersion,
+          payloadSourceSnapshot: captured.payloadSourceSnapshot,
+          payloadSourceSnapshotInvalidated: captured.payloadSourceSnapshotInvalidated, updatedAt: captured.updatedAt };
+        if (sourceOperator) await assertHumanAuthentication(tx, directActor, { requireRecent: true, phishingResistant: true });
+        await assertDirectInputSessionCurrent(tx, directActor, sourceExpiresAt);
+      }
+      return { project: hydrated ?? project, publication: activity.publication, sourcePublication, duplicate: false };
     });
     if (result.publication) publishActivity(result.publication);
+    if (result.sourcePublication) {
+      try { publishActivity(result.sourcePublication); }
+      catch (err) { logger.warn({ err }, "Failed to publish committed project source activity"); }
+    }
     if (result.project.env) await secretsSvc.syncEnvBindingsForTarget?.(companyId, { targetType: "project", targetId: result.project.id }, result.project.env);
     if (!(await assertProjectReadAllowed(req, res, result.project))) return;
     if (result.duplicate) { res.status(200).json(publicNativePayloadRow(result.project)); return; }

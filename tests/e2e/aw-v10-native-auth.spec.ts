@@ -39,27 +39,37 @@ test("native CLI consent and account settings use real session and authenticator
   const token = new URL(invitation).pathname.split("/").at(-1);
   await json(await page.request.post(`/api/invites/${token}/accept`, { data: { requestType: "human" } }));
   const company = await json(await page.request.post("/api/companies", { data: { name: "Disposable native authentication company" } }));
+  const manualProject = await json(await page.request.post(`/api/companies/${company.id}/projects`, { data: {
+    name: "Direct Human project source", description: "An independent manual project.",
+  } }));
   const manualTask = await json(await page.request.post(`/api/companies/${company.id}/issues`, { data: {
     title: "Direct Human source binding", description: "An independent manual request.", status: "todo",
   } }));
-  for (const field of ["payloadSourceProtocolVersion", "payloadSourceSnapshot", "payloadSourceSnapshotInvalidated"])
+  for (const field of ["payloadSourceProtocolVersion", "payloadSourceSnapshot", "payloadSourceSnapshotInvalidated"]) {
     expect(manualTask).not.toHaveProperty(field);
+    expect(manualProject).not.toHaveProperty(field);
+  }
   const sourceFixture = await fixtureDatabase(config);
   try {
-    const [stored] = await sourceFixture.db.execute(sql`select i.payload_source_protocol_version as protocol,
-      i.payload_source_snapshot as snapshot,
-      public.aw_native_payload_body_hash('issue',to_jsonb(i)) as hash,
-      (i.payload_source_snapshot->>'digest')=encode(sha256(convert_to((i.payload_source_snapshot-'digest')::text,'UTF8')),'hex') as valid
-      from issues i where i.id=${manualTask.id}::uuid and i.company_id=${company.id}::uuid`);
-    expect(stored?.protocol).toBe(1);
-    expect(stored?.valid).toBe(true);
-    expect(stored?.snapshot).toMatchObject({ owner: {
-      kind: "issue", companyId: company.id, id: manualTask.id, contentHash: stored?.hash,
-    }, inputs: [] });
-    const audit = await sourceFixture.db.execute(sql`select actor_type,actor_id from activity_log
-      where company_id=${company.id}::uuid and entity_id=${manualTask.id} and action='issue.payload_source_captured'`);
-    expect(audit).toHaveLength(1);
-    expect(audit[0]).toMatchObject({ actor_type: "user", actor_id: signup.user.id });
+    for (const owner of [
+      { kind: "issue", table: "issues", id: manualTask.id, action: "issue.payload_source_captured" },
+      { kind: "project", table: "projects", id: manualProject.id, action: "project.payload_source_captured" },
+    ]) {
+      const [stored] = await sourceFixture.db.execute(sql`select t.payload_source_protocol_version as protocol,
+        t.payload_source_snapshot as snapshot,
+        public.aw_native_payload_body_hash(${owner.kind}::text,to_jsonb(t)) as hash,
+        (t.payload_source_snapshot->>'digest')=encode(sha256(convert_to((t.payload_source_snapshot-'digest')::text,'UTF8')),'hex') as valid
+        from ${sql.identifier(owner.table)} t where t.id=${owner.id}::uuid and t.company_id=${company.id}::uuid`);
+      expect(stored?.protocol).toBe(1);
+      expect(stored?.valid).toBe(true);
+      expect(stored?.snapshot).toMatchObject({ owner: {
+        kind: owner.kind, companyId: company.id, id: owner.id, contentHash: stored?.hash,
+      }, inputs: [] });
+      const audit = await sourceFixture.db.execute(sql`select actor_type,actor_id from activity_log
+        where company_id=${company.id}::uuid and entity_id=${owner.id} and action=${owner.action}`);
+      expect(audit).toHaveLength(1);
+      expect(audit[0]).toMatchObject({ actor_type: "user", actor_id: signup.user.id });
+    }
   } finally { await closeRegisteredClients(sourceFixture.url); }
   const accountPath = `/${company.issuePrefix}/company/settings/security`;
   await confirmCliConsent(page, config, signup.user.id, company.id, password);

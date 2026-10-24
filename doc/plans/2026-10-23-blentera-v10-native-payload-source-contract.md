@@ -235,3 +235,43 @@ retention triggers, canonical read semantics and exact revision ownership must
 be fixed together; no generic UUID fallback, provenance flag or private-source
 grant is introduced by this checkpoint. Evidence:
 `doc/operations/aw-v10-evidence/native-run-binding-2026-10-24/checkpoint.json`.
+
+## Direct Human Project producer and replay lifetime — 2026-10-24
+
+The original Project HTTP transaction now admits the second narrow direct
+Human producer: an independent open Project with direct name/description/icon/
+color and no related goals, sources, repositories, workspace, environment or
+policy input. Its actual native User/session and current member/operator path
+are pinned before the privacy locks. The original insert selects protocol1;
+the actual stored body is bound and its Human capture audit persists on the same
+transaction. Operator fallback additionally requires recent native passkey
+proof. Historical, service-only, key-authenticated and unsupported inputs remain
+unknown; idempotent replay never upgrades the original row.
+
+Task and Project reuse the original DB body-hash/digest contract through one
+small SQL expression and the same final native-session wall-clock check.
+Existing Project operational edits preserve proof; body edits and the existing
+budget/policy/environment/reset owners invalidate changed proof. A real source
+audit write failure rolls creation back. Internal fields remain absent from
+public responses. No Agent/generated constructor or run protocol is activated.
+
+Two additional real-lock controls reproduced Task dedup returning an old body
+after its member session expired or its instance-admin passkey event aged out.
+Task creation/reuse/dedup now shares one successful-return finalizer; Project
+replay also rechecks operator proof. The original unknown Task and receipt stay
+unchanged. The member test uses native DB session rows; the operator test uses
+the explicit structural passkey fixture, not a claimed crypto ceremony.
+
+Current owner/public-projection checks pass32 cases in three suites; the two
+isolated replay controls pass. The earlier four-suite body-binding checkpoint
+passed59 cases before the final replay change. A later combined run timed out
+in native DB setup and was interrupted with exit130; its skipped cases are no
+pass qualification. Smaller current checks complete without extending their
+timeouts. The real built cookie/authenticator browser checks both actual stored
+Task and Project bindings/audits. Exact inputs, raw failed gates and current
+source pins are retained in:
+`doc/operations/aw-v10-evidence/native-manual-project-2026-10-24/checkpoint.json`.
+
+The six typed/private-Memory/temporal failures, remaining producers/mutations,
+complete input receipts and read families, portability/Context/readiness and
+full V10/PR admission remain open.
