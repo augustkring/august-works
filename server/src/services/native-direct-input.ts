@@ -1,5 +1,5 @@
 import { sql } from "drizzle-orm";
-import { issues, projects, issueComments, documentRevisions, issueDocuments, type Db } from "@paperclipai/db";
+import { issues, projects, issueComments, documentRevisions, issueDocuments, issueAttachments, type Db } from "@paperclipai/db";
 import type { NativePayloadSourceSnapshot } from "@paperclipai/shared";
 import { forbidden } from "../errors.js";
 import type { AuthorizationActor } from "./authorization.js";
@@ -8,9 +8,11 @@ type Transaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
 /** Used only after the original owner admits an independent direct Human
  * input. This expression binds bytes; it supplies no permission or completeness. */
-export function directHumanPayloadSnapshotSql(kind: "issue" | "project" | "comment" | "document_revision") {
-  const table = kind === "issue" ? issues : kind === "project" ? projects : kind === "comment" ? issueComments : documentRevisions;
+export function directHumanPayloadSnapshotSql(kind: "issue" | "project" | "comment" | "document_revision" | "attachment") {
+  const table = kind === "issue" ? issues : kind === "project" ? projects : kind === "comment" ? issueComments
+    : kind === "attachment" ? issueAttachments : documentRevisions;
   const issuePolicy = kind === "comment" ? sql`jsonb_build_array(${issueComments.issueId}::text)`
+    : kind === "attachment" ? sql`jsonb_build_array(${issueAttachments.issueId}::text)`
     : kind === "document_revision" ? sql`jsonb_build_array((select d.issue_id::text from ${issueDocuments} d
         where d.company_id=${documentRevisions.companyId} and d.document_id=${documentRevisions.documentId}))`
     : sql`'[]'::jsonb`;

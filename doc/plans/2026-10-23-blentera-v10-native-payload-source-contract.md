@@ -331,3 +331,28 @@ cookie/authenticator browser and compiler pass. Complete run receipts, all six
 remaining typed/private-Memory/temporal cases, other producers and read lifetime
 closure remain open; no run protocol/private-work/PR admission is activated.
 Evidence: `doc/operations/aw-v10-evidence/native-manual-document-2026-10-24/checkpoint.json`.
+
+### 2026-10-24 — original literal Human attachment upload
+
+The original multipart route now carries its actual bytes and Board/session
+actor into the existing attachment owner. Byte length and SHA-256 must match
+storage metadata. The transaction pins native User/session/current write
+membership or recent native passkey operator proof before privacy/Task locks,
+then requires current canonical Task mutation and privacy access. Original
+credential expiry and operator recency are checked after waits and effects.
+
+Only that direct producer chooses protocol1 on its fresh attachment INSERT.
+The final stored attachment/asset body is bound in the same transaction with
+the parent Task policy anchor and actual Human audit. Notifications follow
+commit. Existing asset/body/link invalidation remains authoritative. Public
+DTOs omit private proof. Attribution, Agent/model writes and historical rows
+remain unknown. Storage still precedes registration; existing known4xx cleanup
+and ambiguous-failure retention do not qualify a durable upload intent.
+
+All80 cases across four relevant suites, the extended built cookie/authenticator
+browser and server compilation pass. Four initial legacy route failures also
+reproduce against parent production; isolated fixture setup/mocks were repaired
+without changing production permission or response requirements. Failed stages
+are retained. The six typed/private-Memory/temporal cases, complete run receipts
+and broader read-lifetime/V10/PR gates remain open. Evidence:
+`doc/operations/aw-v10-evidence/native-manual-upload-2026-10-24/checkpoint.json`.

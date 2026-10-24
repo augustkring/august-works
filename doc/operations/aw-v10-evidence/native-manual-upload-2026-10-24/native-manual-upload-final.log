@@ -1,0 +1,16 @@
+(!) Your Vite config uses features that are unsupported by `configLoader: 'native'`, which is planned to become the default in a future major version of Vite:
+  - `__dirname` (vitest.config.ts:7:25). Use `import.meta.dirname` instead
+Set `VITE_CONFIG_NATIVE_IGNORE_WARNING=true` to suppress this warning.
+
+ RUN  v4.1.11 /workspace/blentera-v10
+
+[13:02:24] [33mWARN[39m: [36missue update rejected with 422[39m [90m{"issueId":"504bf795-6fc4-45a8-8102-7dce02e0afc6","companyId":"aa70b7e5-5532-4493-b32e-edf02a511950","assigneePatch":{"assigneeAgentId":"950234c1-afe2-42cc-a1c8-cb7513e66f5b","assigneeUserId":"__omitted__"},"currentAssignee":{"assigneeAgentId":"62a65da3-03f8-4e70-bca1-b47a69d48f4c","assigneeUserId":null}}[39m
+    error: "Comment attachments must belong to the same task and company"
+[13:02:25] [33mWARN[39m: [36missue update rejected with 422[39m [90m{"issueId":"9d7f218f-8582-42fe-b19d-4648d94f2358","companyId":"92ce4d2b-499a-48af-abe5-0681b3a1ca1d","assigneePatch":{"assigneeAgentId":"ccafdf4a-6409-4846-a9e6-2bee659738c0","assigneeUserId":"__omitted__"},"currentAssignee":{"assigneeAgentId":"7e58c36a-9eab-4724-93f4-cbb46b10a949","assigneeUserId":null}}[39m
+    error: "Comment attachments must belong to the same task and company"
+
+ Test Files  4 passed (4)
+      Tests  80 passed (80)
+   Start at  12:59:41
+   Duration  188.58s (transform 36.43s, setup 739ms, import 28.65s, tests 157.22s, environment 1ms)
+

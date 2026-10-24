@@ -13398,7 +13398,14 @@ export function issueService(db: Db) {
       createdByAgentId?: string | null;
       createdByUserId?: string | null;
       createdByRunId?: string | null;
-    }) => {
+    }, directUpload?: { actor: AuthorizationActor; bytes: Buffer }) => {
+      const candidate = directUpload?.actor;
+      const manualActor = candidate?.type === "board" && candidate.source === "session" && candidate.userId && candidate.sessionId &&
+        candidate.userId === input.createdByUserId && !candidate.runId && !input.createdByAgentId && !input.createdByRunId &&
+        Buffer.isBuffer(directUpload?.bytes) ? { ...candidate } : null;
+      if (manualActor && (!directUpload!.bytes.length || input.byteSize !== directUpload!.bytes.length ||
+        createHash("sha256").update(directUpload!.bytes).digest("hex") !== input.sha256))
+        throw unprocessable("The uploaded file could not be verified. Try uploading it again.", { code: "attachment_upload_integrity_mismatch" });
       const issue = await db
         .select({ id: issues.id, companyId: issues.companyId })
         .from(issues)
@@ -13406,7 +13413,35 @@ export function issueService(db: Db) {
         .then((rows) => rows[0] ?? null);
       if (!issue) throw notFound("Issue not found");
 
-      return db.transaction(async (tx) => {
+      let sourcePublication: ActivityPublication | null = null;
+      const result = await db.transaction(async (tx) => {
+        let sourceExpiresAt: number | null = null, sourceOperator = false;
+        const finishManualInput = async () => {
+          if (manualActor && sourceExpiresAt !== null) {
+            if (sourceOperator) await assertHumanAuthentication(tx, manualActor, { requireRecent: true, phishingResistant: true });
+            await assertManualInputCredentialCurrent(tx, manualActor, sourceExpiresAt);
+          }
+        };
+        if (manualActor) {
+          const pinned = await pinCurrentBoardActor(tx, manualActor);
+          if (!pinned || pinned.credentialExpiresAt === null || !Number.isFinite(pinned.credentialExpiresAt))
+            throw forbidden("The current manual input session is unavailable");
+          sourceExpiresAt = pinned.credentialExpiresAt;
+          sourceOperator = await pinIssueMutationHuman(tx, manualActor, issue.companyId, true) === "instance_admin";
+          await finishManualInput();
+          await lockIssuePrivacyTree(tx, issue.companyId);
+          const [current] = await tx.select({ id: issues.id, companyId: issues.companyId, status: issues.status,
+            assigneeAgentId: issues.assigneeAgentId, assigneeUserId: issues.assigneeUserId }).from(issues)
+            .where(and(eq(issues.id, issue.id), eq(issues.companyId, issue.companyId))).for("update");
+          if (!current) throw notFound("Issue not found");
+          await finishManualInput();
+          const actor = { ...manualActor, isInstanceAdmin: false, ignoreInstanceAdmin: !sourceOperator };
+          const decision = await authorizationService(tx).decide({ actor, action: "issue:mutate",
+            resource: { type: "issue", companyId: issue.companyId, issueId: issue.id, status: current.status,
+              assigneeAgentId: current.assigneeAgentId, assigneeUserId: current.assigneeUserId }, enforceResponsibleUserIntersection: true });
+          if (!decision.allowed || !await canActorReadIssuePrivacy(tx, actor, current))
+            throw forbidden("Current attachment write authority is required");
+        }
         if (input.createdByAgentId && input.issueCommentId) {
           const [lockedIssue] = await tx
             .select({ id: issues.id })
@@ -13539,6 +13574,7 @@ export function issueService(db: Db) {
             assetId: asset.id,
             issueCommentId: input.issueCommentId ?? null,
             originatingRunId: registeredRunId,
+            ...(manualActor ? { payloadSourceProtocolVersion: 1 } : {}),
           })
           .returning();
         const contentPath = `/api/attachments/${attachment.id}/content`;
@@ -13607,6 +13643,22 @@ export function issueService(db: Db) {
           }
         }
 
+        if (manualActor) {
+          const [captured] = await tx.update(issueAttachments)
+            .set({ payloadSourceSnapshot: directHumanPayloadSnapshotSql("attachment") })
+            .where(and(eq(issueAttachments.id, attachment.id), eq(issueAttachments.companyId, issue.companyId),
+              eq(issueAttachments.issueId, issue.id), eq(issueAttachments.assetId, asset.id),
+              eq(issueAttachments.payloadSourceProtocolVersion, 1), isNull(issueAttachments.payloadSourceSnapshot),
+              eq(issueAttachments.payloadSourceSnapshotInvalidated, false))).returning();
+          if (!captured?.payloadSourceSnapshot) throw conflict("Manual upload source capture was not stored");
+          const snapshot = nativePayloadSourceSnapshotSchema.parse(captured.payloadSourceSnapshot);
+          const source = await persistActivity(tx as unknown as Db, { companyId: issue.companyId, actorType: "user",
+            actorId: manualActor.userId!, action: "attachment.payload_source_captured", entityType: "issue", entityId: issue.id,
+            details: { attachmentId: attachment.id, assetId: asset.id, producer: "direct_manual_upload",
+              contentHash: snapshot.owner.contentHash, digest: snapshot.digest } });
+          sourcePublication = source.publication;
+          await finishManualInput();
+        }
         return {
           id: attachment.id,
           companyId: attachment.companyId,
@@ -13627,6 +13679,11 @@ export function issueService(db: Db) {
           artifactWorkProductId: artifactWorkProduct?.id ?? null,
         };
       });
+      if (sourcePublication) {
+        try { publishActivity(sourcePublication); }
+        catch (err) { logger.warn({ err }, "Failed to publish committed upload source activity"); }
+      }
+      return result;
     },
 
     listAttachments: async (issueId: string) =>

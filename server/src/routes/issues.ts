@@ -18966,7 +18966,7 @@ export function issueRoutes(
 
       let attachment: Awaited<ReturnType<typeof svc.createAttachment>>;
       try {
-        attachment = await svc.createAttachment({
+        const uploadInput = {
           issueId,
           issueCommentId: parsedMeta.data.issueCommentId ?? null,
           provider: stored.provider,
@@ -18978,7 +18978,10 @@ export function issueRoutes(
           createdByAgentId: actor.agentId,
           createdByUserId: actor.actorType === "user" ? actor.actorId : null,
           createdByRunId: actor.runId,
-        });
+        };
+        attachment = req.actor.type === "board" && req.actor.source === "session" && req.actor.userId && req.actor.sessionId
+          ? await svc.createAttachment(uploadInput, { actor: { ...req.actor }, bytes: file.buffer })
+          : await svc.createAttachment(uploadInput);
       } catch (err) {
         // A known 4xx means the registration transaction definitely rejected
         // the request, so the just-written object is orphaned and safe to
