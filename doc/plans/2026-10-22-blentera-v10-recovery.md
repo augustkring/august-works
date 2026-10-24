@@ -1120,3 +1120,23 @@ or migration and does not activate run protocol1, complete source receipts or
 private work. The six typed/private-Memory/temporal cases and other read/action
 and lifetime closures remain open. Evidence:
 `doc/operations/aw-v10-evidence/native-document-tool-source-2026-10-24/checkpoint.json`.
+
+### 2026-10-24 — native child and search Task privacy narrowing
+
+Two actual native counterexamples reproduce private Task disclosure from
+`search_tasks` and private children displacing older public children in
+`get_task_context`. Both original queries now use the existing canonical Task
+privacy SQL with the bound run/Agent and current DB responsible Human. Filtering
+precedes the child limit/truncation and the search text/result selection.
+
+The original two cases fail. The28-case native/existing authority suites pass
+after the fix; final three native controls also verify real explicit sharing
+and subsequent revocation through both tools, with public/owner controls and
+102 denied children. Server compilation passes. No new grant, schema or public
+DTO was introduced. This is privacy narrowing, not full action/lifetime closure.
+
+Other projection fields remain separate: the shared child review-outcome helper
+still needs source privacy at both tool and continuation callers. The six
+typed/private-Memory/temporal cases, complete run receipts and full V10/PR gates
+remain open. Evidence:
+`doc/operations/aw-v10-evidence/native-tool-task-privacy-2026-10-24/checkpoint.json`.

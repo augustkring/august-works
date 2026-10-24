@@ -6,7 +6,7 @@ import { lockAnalyticalCompany } from "../analytical-privacy.js";
 import { withOrchestrationNativeTool, lockNativeToolPlan, assertNativeToolPlanCurrent } from "../orchestration/native-tool-boundary.js";
 import type { createAssignedMcpTools } from "./assigned-mcp-tools.js";
 import { assertAssignableAgent } from "../agent-assignability.js";
-import { authorizationService } from "../authorization.js";
+import { authorizationService, issueReadSqlCondition, type AuthorizationActor } from "../authorization.js";
 import { handoffPlanContext } from "./handoff-plan-context.js";
 import { callCreateSkillTool } from "../skill-tools.js";
 import { callProjectTool } from "../project-tools.js";
@@ -353,6 +353,8 @@ export class PaperclipRunnerToolAuthority {
       throw new Error("paperclip_runner_tool_not_advertised");
     }
     const context = await this.#boundContext();
+    const reader: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: this.binding.companyId,
+      agentId: this.binding.agentId, runId: this.binding.runId, onBehalfOfUserId: context.run.responsibleUserId };
     if(isManagementAnalyticalTool(call.tool))return executeManagementAnalyticalTool(this.db,this.binding.companyId,{type:"agent",source:"agent_jwt",companyId:this.binding.companyId,agentId:this.binding.agentId,runId:this.binding.runId,onBehalfOfUserId:context.run.responsibleUserId},call.tool,call.arguments);
     const input = record(call.arguments);
     if (call.tool === READ_CHAT_ATTACHMENT_TOOL_NAME) {
@@ -463,6 +465,7 @@ export class PaperclipRunnerToolAuthority {
             eq(issues.companyId, this.binding.companyId),
             eq(issues.parentId, this.binding.issueId),
             isNull(issues.hiddenAt),
+            await issueReadSqlCondition(this.db, reader),
           ))
           .orderBy(desc(issues.createdAt), desc(issues.id))
           .limit(101);
@@ -509,7 +512,9 @@ export class PaperclipRunnerToolAuthority {
         return { comments: comments.reverse() };
       }
       case "search_tasks": {
-        const tasks = await issueService(this.db).list(this.binding.companyId);
+        const tasks = await issueService(this.db).list(this.binding.companyId, {
+          readCondition: await issueReadSqlCondition(this.db, reader),
+        });
         const query = typeof input.query === "string" ? input.query.toLowerCase() : "";
         const statuses = Array.isArray(input.statuses) ? new Set(input.statuses.filter((value): value is string => typeof value === "string")) : null;
         return { tasks: tasks.filter((task) =>
