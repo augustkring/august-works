@@ -7,6 +7,7 @@ import {
   agents,
   agentRuntimeState,
   authUsers,
+  companyMemberships,
   agentWakeupRequests,
   activityLog,
   companies,
@@ -151,6 +152,7 @@ describeEmbeddedPostgres("issue recovery actions", () => {
     await db.delete(issues);
     await db.delete(agentRuntimeState);
     await db.delete(agents);
+    await db.delete(companyMemberships);
     await db.delete(companies);
     await db.delete(authUsers);
   });
@@ -1996,6 +1998,58 @@ describeEmbeddedPostgres("issue recovery actions", () => {
     expect(activityRows.map((row) => row.action)).toEqual(
       expect.arrayContaining(["issue.updated", "issue.recovery_action_resolved"]),
     );
+  });
+
+  it("preserves the authenticated board member when resolving a recovery action", async () => {
+    const { companyId, managerId, sourceIssueId } = await seedCompany();
+    const userId = randomUUID();
+    const now = new Date();
+    await db.insert(authUsers).values({
+      id: userId,
+      name: "Recovery Operator",
+      email: `${userId}@example.test`,
+      createdAt: now,
+      updatedAt: now,
+    });
+    await db.insert(companyMemberships).values({
+      companyId,
+      principalType: "user",
+      principalId: userId,
+      status: "active",
+      membershipRole: "member",
+    });
+    const action = await issueRecoveryActionService(db).upsertSourceScoped({
+      companyId,
+      sourceIssueId,
+      kind: "issue_graph_liveness",
+      ownerType: "agent",
+      ownerAgentId: managerId,
+      cause: "issue_graph_liveness",
+      fingerprint: "graph-liveness:session-board-resolution",
+      nextAction: "Restore a live execution path.",
+      wakePolicy: { type: "manual" },
+    });
+    const app = createApp({
+      type: "board",
+      source: "session",
+      userId,
+      companyIds: [companyId],
+    });
+
+    const resolved = await request(app)
+      .post(`/api/issues/${sourceIssueId}/recovery-actions/resolve`)
+      .send({ actionId: action.id, outcome: "restored", sourceIssueStatus: "done" })
+      .expect(200);
+
+    expect(resolved.body.issue.status).toBe("done");
+    const [resolutionActivity] = await db
+      .select()
+      .from(activityLog)
+      .where(and(
+        eq(activityLog.entityId, sourceIssueId),
+        eq(activityLog.action, "issue.recovery_action_resolved"),
+      ));
+    expect(resolutionActivity?.actorId).toBe(userId);
   });
 
   it.each(["ask_user_questions", "request_confirmation"] as const)("does not retry past a new pending %s", async (kind) => {

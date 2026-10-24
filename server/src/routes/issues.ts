@@ -9871,6 +9871,7 @@ export function issueRoutes(
             ...updateFields,
             actorAgentId: actor.agentId ?? null,
             actorUserId: actor.actorType === "user" ? actor.actorId : null,
+            privacyActor: req.actor,
           };
           const updatedIssue =
             sourceIssueStatus === "done" || sourceIssueStatus === "cancelled"
