@@ -726,6 +726,19 @@ function taskSourcePrivacySqlCondition(kind: "issue" | "project" | "run" | "work
           and p.source_provenance_qualified and (p.visibility='open' or ${projectPrincipalAccess(actor, sql`p.id`, sql`${company}`)})))
         or (n.kind='run' and not exists(select 1 from ${heartbeatRuns} r where r.id=n.id and r.company_id=${company}
           and ${heartbeatRunTaskBindingCondition(sql`r`)}))
+        -- Selected private Memory can narrow a derivative's audience, even when
+        -- the producer's original Task is public. This is a necessary denial,
+        -- not a complete Memory provenance receipt or a positive access grant.
+        or (n.kind='run' and exists(select 1 from context_manifests c
+          join context_manifest_memory_roots root on root.company_id=c.company_id and root.manifest_id=c.id
+          left join memory_records m on m.company_id=root.company_id and m.id=root.memory_record_id
+          where c.company_id=${company} and c.run_id=n.id and (m.id is null
+            or (m.scope_type='agent' and m.private_owner_user_id is null)
+            or (m.private_owner_user_id is not null and
+              (m.private_owner_user_id is distinct from ${humanId ?? null} or not ${privatePrincipalCurrent(actor, company)}))
+            or (m.scope_type='agent' and ${actor.type === "agent"
+              ? sql`(m.owner_agent_id::text is distinct from ${actor.agentId ?? null} or m.scope_id is distinct from ${actor.agentId ?? null})`
+              : sql`false`}))))
         or (n.kind='workflow_run' and not exists(select 1 from workflow_runs wr
           join workflows w on w.id=wr.workflow_id and w.company_id=wr.company_id
           join workflow_revisions v on v.id=wr.workflow_revision_id and v.workflow_id=wr.workflow_id and v.company_id=wr.company_id

@@ -78,6 +78,13 @@ describe("Native Task derivatives retain their producer's selected private Memor
       eq(issuePrivacySources.companyId, companyId), eq(issuePrivacySources.issueId, child.id)));
     expect(child.originRunId).toBe(runId);
     expect(retained).toEqual(expect.arrayContaining([expect.objectContaining({ sourceKind: "run", sourceId: runId })]));
+    const aliceReader = { type: "board" as const, source: "session" as const, userId: aliceId };
+    expect(await canActorReadIssuePrivacy(db, aliceReader, child)).toBe(true);
+    const ownerSearch = await companySearchService(db).search(companyId,
+      companySearchQuerySchema.parse({ q: "privatememorycopy", scope: "issues" }),
+      { issueReadCondition: await issueReadSqlCondition(db, aliceReader) });
+    expect(ownerSearch.results.map(row => row.id)).toContain(child.id);
+    expect(JSON.stringify(ownerSearch.results)).toContain(canary);
 
     // Qualify actual native provenance before asserting any read leak. No client
     // metadata, guessed privacy label, or fabricated retained edge supplies it.
@@ -85,7 +92,9 @@ describe("Native Task derivatives retain their producer's selected private Memor
     const listed = await tasks.list(companyId, { readCondition });
     const count = await tasks.count(companyId, { readCondition });
     const search = await companySearchService(db).search(companyId,
-      companySearchQuerySchema.parse({ q: canary, scope: "issues" }), { issueReadCondition: readCondition,
+      // Search for the public prefix, so the full secret cannot appear merely
+      // because the response echoes the caller's own query.
+      companySearchQuerySchema.parse({ q: "privatememorycopy", scope: "issues" }), { issueReadCondition: readCondition,
         projectReadCondition: await projectReadSqlCondition(db, bob) });
     const extracted = await companySearchExtractService(db).extract(companyId,
       companySearchExtractQuerySchema.parse({ contains: canary }), { issueReadCondition: readCondition });
@@ -99,6 +108,7 @@ describe("Native Task derivatives retain their producer's selected private Memor
     expect.soft(extracted.hasMore).toBe(false);
     const detailAllowed = (await authorizationService(db).decide({ actor: bob, action: "issue:read",
       resource: { type: "issue", companyId, issueId: child.id }, enforceResponsibleUserIntersection: true })).allowed;
+    expect.soft(detailAllowed).toBe(false);
     if (detailAllowed) {
       // This is the original detail payload owner, not an HTTP status assertion.
       await expect(assertAnalyticalContextPayloadAccess(db, companyId, bob, { issueId: child.id }))
