@@ -4,9 +4,10 @@
   "server/src/app.ts": "59e4926423962e88981f9592ea95653cc970ec3405fc907dd0c06d24f81fd1e0",
   "server/src/routes/companies.ts": "d78955c4eec44699bed753b33d276f7cda400339750867ff0e0f10b83ad6536f",
   "server/src/services/company-transfer-runs.ts": "914af1a806bed070422317a50078d8064a57ba70c6fe2a203951596b7e271fa4",
-  "server/src/__tests__/company-transfer-runs.test.ts": "2bb9605793cb3aa8989a27ec7d47638f12b1fca878694e045ecac3953bd2cf51",
+  "server/src/__tests__/company-transfer-runs.test.ts": "5dd870b91ef3e2146334fb9ae83f5f16097effd8c9f40e9141ac264e108da46f",
   "server/src/__tests__/company-import-transfer-routes.test.ts": "bc36137c55d523beea9c627216610ed34e2e5afe54c519ee550ac65a4ee3a6e5",
   "ui/src/api/companies.ts": "3bde33f7e646da0423e9fd731722b4aad4833b616706bb1d4fbde2032fb93ed2",
   "ui/src/pages/CompanyImport.tsx": "4826695d8060e366aa69682c5499ee0108a8b5a3c4295a0b4820ec721505f89d",
-  "ui/src/pages/CompanyImport.test.tsx": "40a4fe83d6e5145b4139f1a18c9e4cb77ebb4eabff3678765404c21efed32053"
+  "ui/src/pages/CompanyImport.test.tsx": "40a4fe83d6e5145b4139f1a18c9e4cb77ebb4eabff3678765404c21efed32053",
+  "packages/db/src/migrations/0527_retain_uncertain_import_history.sql": "d25971a0b34eee9e9097b413c6ecc47d9aeb12230b3646044e8e6e7181f7dcc2"
 }

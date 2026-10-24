@@ -1,4 +1,5 @@
 import { randomUUID } from "node:crypto";
+import { readFile } from "node:fs/promises";
 import { eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import { companies, createDb, projects } from "@paperclipai/db";
@@ -358,6 +359,26 @@ describeEmbeddedPostgres("companyTransferRunService", () => {
     } finally {
       await restarted.$client.end();
     }
+  });
+
+  it("keeps legacy failed imports unclaimable when the retained-history migration runs", async () => {
+    // Structural pre-upgrade rows: the old failed label cannot prove whether
+    // domain effects committed. No receipt or successful import is inferred.
+    const oldImport = await companyTransferRunService.resumeOrCreate(db, {
+      direction: "import", actorKey: "user:legacy-failure", idempotencyKey: randomUUID(), containerRef: { kind: "zip-upload" },
+    });
+    const exportRun = await companyTransferRunService.resumeOrCreate(db, {
+      direction: "export", actorKey: "user:legacy-failure", idempotencyKey: randomUUID(), containerRef: { kind: "zip-upload" },
+    });
+    await companyTransferRunService.fail(db, oldImport.run.id, "legacy unspecified failure");
+    await companyTransferRunService.fail(db, exportRun.run.id, "export upload failure");
+    const migration = await readFile(new URL("../../../packages/db/src/migrations/0527_retain_uncertain_import_history.sql", import.meta.url), "utf8");
+    await db.$client.unsafe(migration);
+    await db.$client.unsafe(migration); // Safe journal repair/reapplication.
+    expect((await companyTransferRunService.getRun(db, oldImport.run.id))!.status).toBe("needs_reconciliation");
+    expect(await companyTransferRunService.claimApply(db, oldImport.run.id)).toBe(false);
+    expect((await companyTransferRunService.getRun(db, exportRun.run.id))!.status).toBe("failed");
+    expect(await companyTransferRunService.claimApply(db, exportRun.run.id)).toBe(true);
   });
 
   it("does not restart a cancelled run", async () => {

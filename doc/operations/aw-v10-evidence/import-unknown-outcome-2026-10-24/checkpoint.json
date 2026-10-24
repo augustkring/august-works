@@ -75,5 +75,12 @@
     "No DDL change: existing unconstrained text status gains an explicit shared/native state; schema comment only changes.",
     "Full company import job status still has a process-local Map. This slice does not complete CustomerOperation persistence, canonical preview/input binding, native per-effect ID mapping/checkpoints, cancellation/fencing/reconciliation tools, physical process-kill tests or CE-08/V10 release acceptance. Unknown states require native authoritative reconciliation; no retry/resume is fabricated.",
     "UI evidence is component/unit evidence, not a new built browser or representative Human accessibility qualification. No deployment or merge."
-  ]
+  ],
+  "followUp": {
+    "migration": "0527_retain_uncertain_import_history.sql",
+    "migrationSafetyAndDbBuildExit": 0,
+    "nativeHistoryTests": 11,
+    "nativeHistoryExit": 0,
+    "notes": "Pre-existing failed import rows have no proof of non-application. 0527 conservatively retains needs_reconciliation. Reapplication does not reopen them; exports are unchanged. Native current pre-dispatch failures retain their guarded retry path. This supersedes the earlier no-DDL note only by adding a normally journaled custom data migration; there is no new column or domain execution engine."
+  }
 }
