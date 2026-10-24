@@ -1027,3 +1027,26 @@ Company HTTP activity/audit source-aware pre-limit reads and lifetimes remain
 open, along with the six typed/private source/temporal failures, other producers
 and complete Native input receipts. This is no full V10/PR admission. Evidence:
 `doc/operations/aw-v10-evidence/native-manual-comment-2026-10-24/checkpoint.json`.
+
+### 2026-10-24 — native activity privacy before pagination/export
+
+Three actual current-member HTTP controls reproduced private Task metadata
+exposure in company activity, unified audit and CSV. A shared native source
+SQL predicate now narrows the base row queries before limits, audit cursors
+and enrichment; CSV uses the same authorized pages. Actual Task, Project,
+comment/document Task owner and run references resolve in their own company,
+including an independent activity run ID. The direct run reader and new SQL
+projection reuse the same original persisted-binding graph.
+
+Final10 native controls, ten existing activity-route controls, nineteen existing
+service/audit controls and server compilation pass across the recorded stages.
+The four initial route failures were exact mock arguments missing the actual
+reader, not permission/response changes; the native three-case RED is retained.
+The final source test also rejects a query-supplied reader and malformed, missing
+or foreign native owners without consuming the next authorized row.
+
+This does not close other activity families, per-resource agent scopes, physical
+source/auth lifetimes through enrichment/export, issue-specific projections,
+the six typed/private-Memory/temporal cases or complete run receipts. No full
+V10/PR admission is claimed. Evidence:
+`doc/operations/aw-v10-evidence/native-activity-source-privacy-2026-10-24/checkpoint.json`.

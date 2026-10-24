@@ -709,8 +709,13 @@ export async function canActorReadProjectPrivacy(db: Db | DbTransaction, actor: 
 export async function canActorReadHeartbeatRunPrivacy(db: Db | DbTransaction, actor: AuthorizationActor, source: { id: string; companyId: string }): Promise<boolean> {
   return (await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
     eq(heartbeatRuns.id, source.id), eq(heartbeatRuns.companyId, source.companyId),
-    taskSourcePrivacySqlCondition("run", sql`${heartbeatRuns.id}`, sql`${heartbeatRuns.companyId}`, actor),
+    await heartbeatRunReadSqlCondition(db, actor),
   )).limit(1)).length > 0;
+}
+
+/** Same persisted native run closure for pre-limit projections and direct reads. */
+export async function heartbeatRunReadSqlCondition(_db: Db | DbTransaction, actor: AuthorizationActor): Promise<SQL<boolean>> {
+  return taskSourcePrivacySqlCondition("run", sql`${heartbeatRuns.id}`, sql`${heartbeatRuns.companyId}`, actor);
 }
 
 export function responsibleUserAuthzShadowMode() {
