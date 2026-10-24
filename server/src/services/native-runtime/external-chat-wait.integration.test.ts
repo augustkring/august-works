@@ -2128,11 +2128,42 @@ describe("native external-chat response wait", () => {
           .update(agentWakeupRequests)
           .set({ requestedByActorId: "another-user" })
           .where(eq(agentWakeupRequests.id, parent.wakeId));
-      if (kind === "different_parent_issue")
-        await db
-          .update(heartbeatRuns)
-          .set({ nativeIssueId: fixture.sourceRunId })
-          .where(eq(heartbeatRuns.id, parent.runId));
+      if (kind === "different_parent_issue") {
+        const foreignIssueId = randomUUID();
+        const foreignRunId = randomUUID();
+        await db.insert(issues).values({
+          id: foreignIssueId,
+          companyId: fixture.companyId,
+          issueNumber: 2,
+          identifier: `W${fixture.companyId.replaceAll("-", "").toUpperCase()}-2`,
+          title: "Separate task for the foreign question source",
+          status: "in_progress",
+          workMode: "standard",
+          assigneeAgentId: fixture.agentId,
+        });
+        await db.insert(heartbeatRuns).values({
+          id: foreignRunId,
+          companyId: fixture.companyId,
+          agentId: fixture.agentId,
+          status: "succeeded",
+          runtimeMode: "native",
+          nativeIssueId: foreignIssueId,
+          contextSnapshot: { source: "chat:telegram", issueId: foreignIssueId, taskId: foreignIssueId },
+        });
+        // Keep every child reference internally consistent while making its
+        // answer depend on a native parent run owned by a different Task.
+        const childContext = { ...fixture.context, sourceRunId: foreignRunId };
+        await db.update(heartbeatRuns).set({ contextSnapshot: childContext }).where(eq(heartbeatRuns.id, fixture.runId));
+        await db.update(issueThreadInteractions).set({ sourceRunId: foreignRunId })
+          .where(eq(issueThreadInteractions.id, fixture.interactionId));
+        await db.update(issueQuestionResponseDeliveries).set({ sourceRunId: foreignRunId })
+          .where(eq(issueQuestionResponseDeliveries.id, fixture.responseDeliveryId));
+        const [wake] = await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.id, fixture.wakeId));
+        await db.update(agentWakeupRequests).set({ payload: { ...wake!.payload, sourceRunId: foreignRunId } })
+          .where(eq(agentWakeupRequests.id, fixture.wakeId));
+        fixture.context.sourceRunId = foreignRunId;
+        fixture.sourceRunId = foreignRunId;
+      }
       if (kind === "source_cycle") {
         const [wake] = await db
           .select()

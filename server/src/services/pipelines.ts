@@ -6,6 +6,7 @@ import { alias } from "drizzle-orm/pg-core";
 import type { Db } from "@paperclipai/db";
 import {
   agents,
+  companies,
   documents,
   documentRevisions,
   heartbeatRuns,
@@ -2977,7 +2978,8 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
       : null;
     const canReusePrevious =
       previousRoutine &&
-      (previousRoutine.originKind === "pipeline_automation" || previousRoutine.originKind === "manual");
+      previousRoutine.originKind === "pipeline_automation" &&
+      previousRoutine.originId === input.pipelineId;
     const title = resolvePipelineAutomationTitleTemplate({
       requestedTitleTemplate: input.titleTemplate,
       previousRoutine: canReusePrevious ? previousRoutine : null,
@@ -2999,8 +3001,6 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
           executionTargetKind: "agent_task",
           executionTargetRef: input.assigneeAgentId,
           status: "active",
-          originKind: "pipeline_automation",
-          originId: input.pipelineId,
           variables,
           updatedByAgentId: actorPatch.agentId,
           updatedByUserId: actorPatch.userId,
@@ -3025,6 +3025,13 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
     }
 
     const now = nowDate();
+    const responsibleUserId = input.actor.type === "user"
+      ? input.actor.userId
+      : await dbOrTx
+          .select({ responsibleUserId: companies.defaultResponsibleUserId })
+          .from(companies)
+          .where(eq(companies.id, input.companyId))
+          .then((rows) => rows[0]?.responsibleUserId ?? null);
     const [created] = await dbOrTx
       .insert(routines)
       .values({
@@ -3038,6 +3045,7 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
         priority: "medium",
         concurrencyPolicy: "coalesce_if_active",
         catchUpPolicy: "skip_missed",
+        responsibleUserId,
         originKind: "pipeline_automation",
         originId: input.pipelineId,
         variables,
@@ -3063,91 +3071,6 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
         ...input.executionContext,
       },
     };
-  }
-
-  async function stampPipelineAutomationRoutine(
-    dbOrTx: PipelineDb,
-    input: { companyId: string; pipelineId: string; routineId: string; actor: PipelineActor },
-  ) {
-    const updated = await dbOrTx
-      .update(routines)
-      .set({ originKind: "pipeline_automation", originId: input.pipelineId, updatedAt: nowDate() })
-      .where(and(
-        eq(routines.id, input.routineId),
-        eq(routines.companyId, input.companyId),
-        eq(routines.originKind, "manual"),
-      ))
-      .returning({ id: routines.id });
-    if (updated.length === 0) return;
-    const actorPatch = activityActorPatch(input.actor);
-    await logActivity(dbOrTx as Db, {
-      companyId: input.companyId,
-      ...actorPatch,
-      action: "routine.origin_stamped",
-      entityType: "routine",
-      entityId: input.routineId,
-      details: {
-        originKind: "pipeline_automation",
-        originId: input.pipelineId,
-      },
-    });
-  }
-
-  async function routineStillReferencedByAnyPipeline(
-    dbOrTx: PipelineDb,
-    input: { companyId: string; routineId: string; exceptStageId?: string | null },
-  ) {
-    const referencing = await dbOrTx
-      .select({ id: pipelineStages.id })
-      .from(pipelineStages)
-      .innerJoin(pipelines, eq(pipelineStages.pipelineId, pipelines.id))
-      .where(and(
-        eq(pipelines.companyId, input.companyId),
-        or(
-          and(
-            sql`${pipelineStages.config}->'onEnter'->>'type' = 'run_routine'`,
-            sql`${pipelineStages.config}->'onEnter'->>'routineId' = ${input.routineId}`,
-          ),
-          and(
-            sql`${pipelineStages.config}->'onEnter'->>'type' = 'run_target'`,
-            sql`${pipelineStages.config}->'onEnter'->'target'->>'kind' = 'routine'`,
-            sql`${pipelineStages.config}->'onEnter'->'target'->>'routineId' = ${input.routineId}`,
-          ),
-        ),
-        input.exceptStageId ? ne(pipelineStages.id, input.exceptStageId) : undefined,
-      ))
-      .limit(1);
-    return referencing.length > 0;
-  }
-
-  async function clearPipelineAutomationRoutineIfUnreferenced(
-    dbOrTx: PipelineDb,
-    input: { companyId: string; pipelineId: string; routineId: string; exceptStageId?: string | null; actor: PipelineActor },
-  ) {
-    const stillReferenced = await routineStillReferencedByAnyPipeline(dbOrTx, input);
-    if (stillReferenced) return;
-    const updated = await dbOrTx
-      .update(routines)
-      .set({ originKind: "manual", originId: null, updatedAt: nowDate() })
-      .where(and(
-        eq(routines.id, input.routineId),
-        eq(routines.companyId, input.companyId),
-        eq(routines.originKind, "pipeline_automation"),
-      ))
-      .returning({ id: routines.id, originId: routines.originId });
-    if (updated.length === 0) return;
-    const actorPatch = activityActorPatch(input.actor);
-    await logActivity(dbOrTx as Db, {
-      companyId: input.companyId,
-      ...actorPatch,
-      action: "routine.origin_cleared",
-      entityType: "routine",
-      entityId: input.routineId,
-      details: {
-        previousOriginKind: "pipeline_automation",
-        previousOriginId: updated[0]?.originId ?? null,
-      },
-    });
   }
 
   async function validateStageTargets(companyId: string, pipelineId: string, kind: PipelineStageKind | string, config: PipelineStageConfig) {
@@ -3916,18 +3839,6 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
               ? await workflowDelegationForActor(tx as unknown as Db, input.companyId, documentActorFields(input.actor)) : null,
           }))))
           .returning();
-        for (const stage of insertedStages) {
-          const routineId = stageAutomationRoutineIdFromConfig((stage.config ?? {}) as PipelineStageConfig);
-          if (routineId) {
-            await stampPipelineAutomationRoutine(tx, {
-              companyId: input.companyId,
-              pipelineId: pipeline!.id,
-              routineId,
-              actor: input.actor,
-            });
-          }
-        }
-
         if (!insertedStages.some((stage) => stage.kind === "done") || !insertedStages.some((stage) => stage.kind === "cancelled")) {
           throw unprocessable("Pipeline must include at least one done stage and one cancelled stage", { code: "validation" });
         }
@@ -4015,15 +3926,6 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
               ? await workflowDelegationForActor(tx as unknown as Db, input.companyId, documentActorFields(input.actor ?? { type: "system" })) : null,
           })
           .returning();
-        const routineId = stageAutomationRoutineIdFromConfig(nextConfig);
-        if (routineId) {
-          await stampPipelineAutomationRoutine(tx, {
-            companyId: input.companyId,
-            pipelineId: input.pipelineId,
-            routineId,
-            actor: input.actor ?? { type: "system" },
-          });
-        }
         return stage!;
       });
     },
@@ -4083,7 +3985,6 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
                   actor: input.actor ?? { type: "system" },
                 })
               : config;
-        const nextRoutineId = stageAutomationRoutineIdFromConfig(nextConfig);
         const [updated] = await tx
           .update(pipelineStages)
           .set({
@@ -4098,23 +3999,6 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
           .where(and(eq(pipelineStages.id, input.stageId), eq(pipelineStages.pipelineId, input.pipelineId)))
           .returning();
         if (!updated) throw notFound("Pipeline stage not found");
-        if (nextRoutineId) {
-          await stampPipelineAutomationRoutine(tx, {
-            companyId: input.companyId,
-            pipelineId: input.pipelineId,
-            routineId: nextRoutineId,
-            actor: input.actor ?? { type: "system" },
-          });
-        }
-        if (previousRoutineId && previousRoutineId !== nextRoutineId) {
-          await clearPipelineAutomationRoutineIfUnreferenced(tx, {
-            companyId: input.companyId,
-            pipelineId: input.pipelineId,
-            routineId: previousRoutineId,
-            exceptStageId: input.stageId,
-            actor: input.actor ?? { type: "system" },
-          });
-        }
         return updated;
       });
     },
@@ -4279,16 +4163,6 @@ export function pipelineService(db: Db, deps: { heartbeat?: IssueAssignmentWakeu
         }
         await tx.delete(pipelineTransitions).where(or(eq(pipelineTransitions.fromStageId, stage.id), eq(pipelineTransitions.toStageId, stage.id)));
         await tx.delete(pipelineStages).where(eq(pipelineStages.id, stage.id));
-        const routineId = stageAutomationRoutineIdFromConfig(stageConfig(stage));
-        if (routineId) {
-          await clearPipelineAutomationRoutineIfUnreferenced(tx, {
-            companyId: input.companyId,
-            pipelineId: input.pipelineId,
-            routineId,
-            exceptStageId: stage.id,
-            actor: input.actor ?? { type: "system" },
-          });
-        }
         return { deleted: true };
       });
     },
