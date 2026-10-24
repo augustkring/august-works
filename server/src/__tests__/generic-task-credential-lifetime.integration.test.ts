@@ -128,6 +128,56 @@ describe("generic Task mutation credential lifetime", () => {
     expect(saved?.priority).toBe("high");
   }, 90_000);
 
+  it("creates a Task with the original pinned Board key when that key has no expiry", async () => {
+    const f = await seed();
+    const keyHash = randomUUID();
+    const [key] = await db.insert(boardApiKeys).values({ userId: f.userId, name: "Non-expiring fixture key",
+      keyHash, expiresAt: null }).returning();
+    const actor: AuthorizationActor = { type: "board", source: "board_key", userId: f.userId,
+      keyId: key!.id, authenticatedKeyHash: keyHash, authenticatedCredentialExpiresAt: null,
+      companyIds: [f.companyId] };
+    await expect(issueService(db).create(f.companyId, { title: "Reviewed creation", createdByUserId: f.userId },
+      db, undefined, { privacyActor: actor })).resolves.toMatchObject({ title: "Reviewed creation", createdByUserId: f.userId });
+  });
+
+  it("rolls back Task creation if its pinned session expires during an observed company-counter wait", async () => {
+    const f = await seed();
+    const sessionId = randomUUID();
+    const expiresAt = new Date(Date.now() + 2_000);
+    await db.insert(authSessions).values({ id: sessionId, userId: f.userId, token: randomUUID(),
+      createdAt: new Date(), updatedAt: new Date(), expiresAt });
+    let release!: () => void;
+    let acquired!: () => void;
+    const released = new Promise<void>(resolve => { release = resolve; });
+    const locked = new Promise<void>(resolve => { acquired = resolve; });
+    let holderPid = 0;
+    const holder = db.transaction(async tx => {
+      const [identity] = await tx.execute<{ pid: number }>(sql`select pg_backend_pid() as pid`);
+      holderPid = identity!.pid;
+      await tx.select({ id: companies.id }).from(companies).where(eq(companies.id, f.companyId)).for("update");
+      acquired();
+      await released;
+    });
+    await locked;
+    const actor: AuthorizationActor = { type: "board", source: "session", userId: f.userId,
+      sessionId, authenticatedCredentialExpiresAt: expiresAt.getTime(), companyIds: [f.companyId] };
+    const id = randomUUID();
+    const creation = issueService(db).create(f.companyId, { id, title: "Must roll back", createdByUserId: f.userId },
+      db, undefined, { privacyActor: actor }).then(value => ({ ok: true, value }), error => ({ ok: false, error }));
+    try {
+      await waitForTaskLockWait(holderPid);
+      await db.execute(sql`select pg_sleep(2.2)`);
+    } finally {
+      release();
+      await holder;
+      await creation;
+    }
+    expect(await creation).toMatchObject({ ok: false, error: expect.objectContaining({ status: 403 }) });
+    expect(await db.select({ id: issues.id }).from(issues).where(eq(issues.id, id))).toEqual([]);
+    const [company] = await db.select({ counter: companies.issueCounter }).from(companies).where(eq(companies.id, f.companyId));
+    expect(company?.counter).toBe(0);
+  }, 90_000);
+
   it("returns the credential-busy response when the actual session row is already locked", async () => {
     const f = await seed();
     const sessionId = randomUUID();
