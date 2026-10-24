@@ -1,8 +1,9 @@
 import { createHash, randomUUID } from "node:crypto";
-import { eq } from "drizzle-orm";
+import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
-import { authUsers, companies, createDb, customerOperations, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, projects } from "@paperclipai/db";
+import { authSessions, authUsers, companies, companyMemberships, createDb, customerOperations, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS, projects } from "@paperclipai/db";
 import type { CompanyPortabilityImportResult } from "@paperclipai/shared";
+import type { AuthorizationActor } from "../services/authorization.js";
 import { companyImportJobService } from "../services/company-import-jobs.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 
@@ -20,14 +21,23 @@ describeEmbeddedPostgres("native company import job ledger", () => {
 
   afterAll(async () => { await database?.cleanup(); }, 30_000);
 
-  async function seedAuthority() {
+  async function seedAuthority(withSession = false) {
     const userId = `user-${randomUUID()}`;
     const companyId = randomUUID();
     const now = new Date();
     await db.insert(authUsers).values({ id: userId, name: "Import job operator", email: `${userId}@test.invalid`,
       createdAt: now, updatedAt: now });
     await db.insert(companies).values({ id: companyId, name: "Import target", issuePrefix: `IJ${companyId.slice(0, 6)}` });
-    return { userId, companyId, actorKey: `board:${userId}` };
+    if (!withSession) return { userId, companyId, actorKey: `board:${userId}` };
+    const sessionId = randomUUID();
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId,
+      membershipRole: "owner", status: "active" });
+    await db.insert(authSessions).values({ id: sessionId, userId, token: randomUUID(), createdAt: now,
+      updatedAt: now, expiresAt: new Date(now.getTime() + 60 * 60_000) });
+    const actor: AuthorizationActor = { type: "board", source: "session", userId, sessionId,
+      companyIds: [companyId], memberships: [{ companyId, membershipRole: "owner", status: "active" }],
+      isInstanceAdmin: false };
+    return { userId, companyId, actorKey: `board:${userId}`, actor, sessionId };
   }
 
   function admission(authority: Awaited<ReturnType<typeof seedAuthority>>, changes: Partial<{
@@ -124,5 +134,67 @@ describeEmbeddedPostgres("native company import job ledger", () => {
       "SENTINEL_ENV_KEY", "SENTINEL_ENV_DESCRIPTION", "SENTINEL_SECRET_DEFAULT"]) {
       expect(persisted).not.toContain(secret);
     }
+  }, 90_000);
+
+  it("rechecks the original session and active membership before starting an admitted import", async () => {
+    const revoked = await seedAuthority(true);
+    const revokedActor = revoked.actor!;
+    const service = companyImportJobService(db);
+    const admitted = await service.admit(admission(revoked), revokedActor);
+    expect(admitted.job.progressStage).toBe("admitted");
+    await db.delete(authSessions).where(eq(authSessions.id, revoked.sessionId));
+    await expect(service.start(admitted.job, revokedActor)).rejects.toMatchObject({ status: 403 });
+    expect(await service.get(admitted.job.id, revoked.actorKey)).toMatchObject({ status: "running", progressStage: "admitted" });
+
+    const current = await seedAuthority(true);
+    const currentActor = current.actor!;
+    const currentService = companyImportJobService(db);
+    const currentJob = await currentService.admit(admission(current), currentActor);
+    expect(await currentService.start(currentJob.job, currentActor)).toBe(true);
+
+    const withdrawn = await seedAuthority(true);
+    const withdrawnActor = withdrawn.actor!;
+    const withdrawnJob = await service.admit(admission(withdrawn), withdrawnActor);
+    await db.delete(companyMemberships).where(and(
+      eq(companyMemberships.companyId, withdrawn.companyId),
+      eq(companyMemberships.principalId, withdrawn.userId),
+    ));
+    await expect(service.start(withdrawnJob.job, withdrawnActor)).rejects.toMatchObject({ status: 403 });
+    expect(await service.get(withdrawnJob.job.id, withdrawn.actorKey)).toMatchObject({ status: "running", progressStage: "admitted" });
+  }, 90_000);
+
+  it("retries the same operation only after a known pre-domain rejection and fences old attempts", async () => {
+    const authority = await seedAuthority(true);
+    const actor = authority.actor!;
+    const sourceBody = "NATIVE_IMPORT_INPUT_SENTINEL";
+    const input = admission(authority, {
+      inputHash: createHash("sha256").update(sourceBody).digest("hex"),
+    });
+    const service = companyImportJobService(db);
+    const first = await service.admit(input, actor);
+    expect(await service.start(first.job, actor)).toBe(true);
+    await service.fail(first.job, false);
+    expect(await service.get(first.job.id, authority.actorKey)).toMatchObject({
+      status: "failed", progressStage: "rejected_before_import", attempt: first.job.attempt,
+    });
+
+    const retry = await companyImportJobService(db).admit(input, actor);
+    expect(retry.replay).toBe(false);
+    expect(retry.job.id).toBe(first.job.id);
+    expect(retry.job.attempt).toBe(first.job.attempt + 1);
+    expect(retry.job.attemptId).not.toBe(first.job.attemptId);
+    expect(await service.start(first.job, actor)).toBe(false);
+    const result: CompanyPortabilityImportResult = {
+      company: { id: authority.companyId, name: "Import target", action: "updated" },
+      agents: [], skills: [], projects: [], routines: [], envInputs: [], warnings: [],
+    };
+    expect(await service.succeed(first.job, result)).toBeNull();
+
+    const retryService = companyImportJobService(db);
+    expect(await retryService.start(retry.job, actor)).toBe(true);
+    const running = await retryService.get(retry.job.id, authority.actorKey);
+    expect(running).toMatchObject({ id: first.job.id, status: "running", progressStage: "importing",
+      attempt: retry.job.attempt, attemptId: retry.job.attemptId, inputHash: input.inputHash, domainOperationRef: null });
+    expect(JSON.stringify(running)).not.toContain(sourceBody);
   }, 90_000);
 });

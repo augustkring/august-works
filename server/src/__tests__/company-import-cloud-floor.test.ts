@@ -1,6 +1,12 @@
 import express from "express";
 import request from "supertest";
-import { afterEach, beforeEach, describe, expect, it, vi } from "vitest";
+import { randomUUID } from "node:crypto";
+import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { authSessions, authUsers, companies, companyMemberships, createDb, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS } from "@paperclipai/db";
+import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
+
+const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
+const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
 
 const mockPortabilityService = vi.hoisted(() => ({
   previewExport: vi.fn(),
@@ -38,6 +44,7 @@ vi.mock("../services/company-transfer-runs.js", () => ({
 }));
 
 const TRANSFER_ID = "6e0a4f6e-6f7d-4a37-9a83-0b8f2f9f2b11";
+const COMPANY_ID = "11111111-2222-4333-8444-555555555555";
 
 /**
  * Every route in the company-import surface. The floor must answer all of
@@ -53,11 +60,11 @@ const IMPORT_ROUTES: Array<{ method: "get" | "post" | "put"; path: string }> = [
   { method: "get", path: `/api/companies/import/transfers/${TRANSFER_ID}` },
   { method: "post", path: `/api/companies/import/transfers/${TRANSFER_ID}/preview` },
   { method: "post", path: `/api/companies/import/transfers/${TRANSFER_ID}/apply` },
-  { method: "post", path: "/api/companies/11111111-2222-4333-8444-555555555555/imports/preview" },
-  { method: "post", path: "/api/companies/11111111-2222-4333-8444-555555555555/imports/apply" },
+  { method: "post", path: `/api/companies/${COMPANY_ID}/imports/preview` },
+  { method: "post", path: `/api/companies/${COMPANY_ID}/imports/apply` },
 ];
 
-async function createApp(actor: Record<string, unknown>) {
+async function createApp(db: ReturnType<typeof createDb>, actor: Record<string, unknown>) {
   const [{ companyRoutes }, { errorHandler }] = await Promise.all([
     import("../routes/companies.js"),
     import("../middleware/index.js"),
@@ -68,17 +75,10 @@ async function createApp(actor: Record<string, unknown>) {
     (req as any).actor = actor;
     next();
   });
-  app.use("/api/companies", companyRoutes({} as any));
+  app.use("/api/companies", companyRoutes(db));
   app.use(errorHandler);
   return app;
 }
-
-const boardAdmin = {
-  type: "board",
-  source: "local_implicit",
-  userId: "local-user",
-  isInstanceAdmin: true,
-};
 
 function expectNoImportWork() {
   expect(mockPortabilityService.previewImport).not.toHaveBeenCalled();
@@ -87,9 +87,36 @@ function expectNoImportWork() {
   expect(mockTransferRunService.getRunForActor).not.toHaveBeenCalled();
 }
 
-describe("company import Cloud floor", () => {
+describeEmbeddedPostgres("company import Cloud floor", () => {
+  let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
+  let db: ReturnType<typeof createDb>;
+  let boardAdmin: Record<string, unknown>;
+
+  beforeAll(async () => {
+    database = await startEmbeddedPostgresTestDatabase("company-import-cloud-floor-");
+    db = createDb(database.connectionString, { maxConnections: 4 });
+    const userId = "company-import-floor-user";
+    const sessionId = "company-import-floor-session";
+    const now = new Date();
+    await db.insert(companies).values({ id: COMPANY_ID, name: "Import floor target", issuePrefix: "IFLR" });
+    await db.insert(authUsers).values({ id: userId, name: "Import floor Board user", email: `${userId}@test.invalid`,
+      createdAt: now, updatedAt: now });
+    await db.insert(companyMemberships).values({ companyId: COMPANY_ID, principalType: "user", principalId: userId,
+      membershipRole: "owner", status: "active" });
+    await db.insert(authSessions).values({ id: sessionId, userId, token: randomUUID(), createdAt: now,
+      updatedAt: now, expiresAt: new Date(now.getTime() + 60 * 60_000) });
+    boardAdmin = { type: "board", source: "session", userId, sessionId, companyIds: [COMPANY_ID],
+      memberships: [{ companyId: COMPANY_ID, membershipRole: "owner", status: "active" }], isInstanceAdmin: true };
+  }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
+
+  afterAll(async () => { await database?.cleanup(); }, 30_000);
+
   beforeEach(() => {
     vi.clearAllMocks();
+    mockPortabilityService.importBundle.mockResolvedValue({
+      company: { id: COMPANY_ID, name: "Imported target", action: "updated" },
+      agents: [], skills: [], projects: [], routines: [], envInputs: [], warnings: [],
+    });
     delete process.env.PAPERCLIP_CLOUD_TENANT_SERVER_TOKEN;
     delete process.env.PAPERCLIP_MANAGED_CONFIG;
     delete process.env.PAPERCLIP_HIDDEN_SETTINGS;
@@ -103,7 +130,7 @@ describe("company import Cloud floor", () => {
 
   it("returns 403 cloud_managed on every import route on a cloud-managed instance", async () => {
     process.env.PAPERCLIP_CLOUD_TENANT_SERVER_TOKEN = "tenant-secret";
-    const app = await createApp(boardAdmin);
+    const app = await createApp(db, boardAdmin);
 
     for (const route of IMPORT_ROUTES) {
       const res = await request(app)[route.method](route.path).send({});
@@ -117,7 +144,7 @@ describe("company import Cloud floor", () => {
 
   it("floors on the managed-config signal alone", async () => {
     process.env.PAPERCLIP_MANAGED_CONFIG = JSON.stringify({ v: 1, mode: "cloud" });
-    const app = await createApp(boardAdmin);
+    const app = await createApp(db, boardAdmin);
 
     const res = await request(app).post("/api/companies/import").send({});
 
@@ -131,7 +158,7 @@ describe("company import Cloud floor", () => {
     // An agent actor never passes the import routes' own assertBoard, and the
     // body is not schema-valid either — the floor must still answer first so a
     // Cloud caller sees one consistent refusal.
-    const app = await createApp({ type: "agent", agentId: "agent-1", companyId: "company-1" });
+    const app = await createApp(db, { type: "agent", agentId: "agent-1", companyId: COMPANY_ID });
 
     const res = await request(app)
       .post("/api/companies/import/transfers")
@@ -144,7 +171,7 @@ describe("company import Cloud floor", () => {
 
   it("floors every import route with settings_operator_managed when company.import is hidden", async () => {
     process.env.PAPERCLIP_HIDDEN_SETTINGS = "company.import";
-    const app = await createApp(boardAdmin);
+    const app = await createApp(db, boardAdmin);
 
     for (const route of IMPORT_ROUTES) {
       const res = await request(app)[route.method](route.path).send({});
@@ -158,7 +185,7 @@ describe("company import Cloud floor", () => {
 
   it("keeps import open when only other company pages are hidden", async () => {
     process.env.PAPERCLIP_HIDDEN_SETTINGS = "company.secrets,company.members";
-    const app = await createApp(boardAdmin);
+    const app = await createApp(db, boardAdmin);
 
     const res = await request(app).get("/api/companies/import/jobs/unknown-job");
 
@@ -169,10 +196,10 @@ describe("company import Cloud floor", () => {
   it("keeps company export open on a cloud-managed instance", async () => {
     process.env.PAPERCLIP_CLOUD_TENANT_SERVER_TOKEN = "tenant-secret";
     mockPortabilityService.exportBundle.mockResolvedValue({ ok: true });
-    const app = await createApp(boardAdmin);
+    const app = await createApp(db, boardAdmin);
 
     const res = await request(app)
-      .post("/api/companies/11111111-2222-4333-8444-555555555555/exports")
+      .post(`/api/companies/${COMPANY_ID}/exports`)
       .send({});
 
     expect(res.status).toBe(200);
@@ -181,7 +208,7 @@ describe("company import Cloud floor", () => {
 
   it("preserves self-hosted import preview", async () => {
     mockPortabilityService.previewImport.mockResolvedValue({ companies: [] });
-    const app = await createApp(boardAdmin);
+    const app = await createApp(db, boardAdmin);
 
     const res = await request(app)
       .post("/api/companies/import/preview")
@@ -195,7 +222,7 @@ describe("company import Cloud floor", () => {
   });
 
   it("preserves self-hosted import job polling", async () => {
-    const app = await createApp(boardAdmin);
+    const app = await createApp(db, boardAdmin);
 
     const res = await request(app).get("/api/companies/import/jobs/unknown-job");
 

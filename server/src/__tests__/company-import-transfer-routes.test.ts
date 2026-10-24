@@ -568,6 +568,53 @@ describeEmbeddedPostgres("company import transfer routes", () => {
     await expect(fs.stat(path.join(spoolRoot, transferId))).rejects.toThrow();
   });
 
+  it("reads async import status from durable admission across fresh route instances", async () => {
+    const rawBody = {
+      ...importMeta,
+      source: { type: "inline" as const, rootPath: "durable-job-fixture",
+        files: { "COMPANY.md": "---\nname: Durable Job Fixture\n---\n" } },
+    };
+    let finishImport!: (result: CompanyPortabilityImportResult) => void;
+    mockCompanyPortabilityService.importBundle.mockImplementationOnce(() =>
+      new Promise((resolve) => { finishImport = resolve; }));
+
+    try {
+      const accepted = await request(app).post("/api/companies/import?async=1").send(rawBody);
+      expect(accepted.status).toBe(202);
+      await vi.waitFor(() => expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledTimes(1));
+
+      // A fresh router has an empty process-local detail cache but shares the
+      // original native database and the same current authenticated owner.
+      const restartedRouteApp = await createApp();
+      const duplicate = await request(restartedRouteApp)
+        .post("/api/companies/import?async=1")
+        .send(rawBody);
+      expect(duplicate.status).toBe(409);
+      expect(duplicate.body.job.id).toBe(accepted.body.job.id);
+      expect(duplicate.body.statusUrl).toBe(accepted.body.statusUrl);
+      expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledTimes(1);
+
+      finishImport(completedImportResult());
+      let polled: request.Response | null = null;
+      for (let attempt = 0; attempt < 30; attempt += 1) {
+        polled = await request(restartedRouteApp).get(accepted.body.statusUrl);
+        if (polled.body.job?.status === "succeeded") break;
+        await new Promise((resolve) => setTimeout(resolve, 10));
+      }
+      expect(polled?.status, JSON.stringify(polled?.body)).toBe(200);
+      expect(polled?.body.job).toMatchObject({ status: "succeeded", result: { companyId } });
+      expect(polled?.body.job).not.toHaveProperty("importResult");
+      expect(polled?.body.operation).toMatchObject({ id: accepted.body.job.id, status: "succeeded" });
+
+      const otherUser = await request(restartedRouteApp)
+        .get(accepted.body.statusUrl)
+        .set(TEST_USER_HEADER, OTHER_USER_ID);
+      expect(otherUser.status).toBe(404);
+    } finally {
+      finishImport?.(completedImportResult());
+    }
+  });
+
   it("releases the claim when an async apply is refused by a running import", async () => {
     // Two complete transfers for the same board actor. The first async apply
     // parks a live job; the second transfer's async apply is refused by the
@@ -803,7 +850,7 @@ describeEmbeddedPostgres("company import transfer routes", () => {
         .post(`/api/companies/import/transfers/${transferId}/apply`)
         .send(importMeta);
       expect(applied.status).toBe(200);
-      expect(applied.body.company).toEqual({ id: companyId, action: "updated" });
+      expect(applied.body.company).toEqual({ id: companyId, name: "Chunked Import Target", action: "updated" });
     } finally {
       spoolRemovalFailure.error = null;
     }

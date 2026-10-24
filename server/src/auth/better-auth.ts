@@ -44,7 +44,7 @@ export type BetterAuthSessionUser = {
 };
 
 export type BetterAuthSessionResult = {
-  session: { id: string; userId: string } | null;
+  session: { id: string; userId: string; expiresAt?: Date } | null;
   user: BetterAuthSessionUser | null;
 };
 
@@ -452,11 +452,15 @@ export async function resolveBetterAuthSessionFromHeaders(
   if (!sessionValue || typeof sessionValue !== "object") return null;
 
   const value = sessionValue as {
-    session?: { id?: string; userId?: string } | null;
+    session?: { id?: string; userId?: string; expiresAt?: unknown } | null;
     user?: { id?: string; email?: string | null; name?: string | null } | null;
   };
+  const rawExpiry = value.session?.expiresAt;
+  const expiresAt = rawExpiry instanceof Date ? rawExpiry
+    : typeof rawExpiry === "string" ? new Date(rawExpiry) : undefined;
+  if (rawExpiry !== undefined && (!expiresAt || !Number.isFinite(expiresAt.getTime()) || expiresAt.getTime() <= 0)) return null;
   const session = value.session?.id && value.session.userId
-    ? { id: value.session.id, userId: value.session.userId }
+    ? { id: value.session.id, userId: value.session.userId, ...(expiresAt ? { expiresAt } : {}) }
     : null;
   const user = value.user?.id
     ? {
@@ -466,7 +470,7 @@ export async function resolveBetterAuthSessionFromHeaders(
       }
     : null;
 
-  if (!session || !user) return null;
+  if (!session || !user || session.userId !== user.id) return null;
   return { session, user };
 }
 

@@ -1,0 +1,2 @@
+ALTER TABLE "customer_operations" DROP CONSTRAINT "customer_operations_attempt_check";--> statement-breakpoint
+ALTER TABLE "customer_operations" ADD CONSTRAINT "customer_operations_attempt_check" CHECK ("customer_operations"."attempt">=1);

@@ -300,11 +300,13 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
   }
 
   async function runImportJob(job: CompanyImportJob, operation: () => Promise<CompanyPortabilityImportResult>,
-    domainInvoked: () => boolean) {
-    if (!(await importJobs.start(job))) return;
+    domainInvoked: () => boolean, sourceActor: Request["actor"]) {
     try {
+      if (!(await importJobs.start(job, sourceActor))) return;
       const result = await operation();
-      if (await importJobs.succeed(job, result)) importResultCache.set(job.id, { result, expiresAt: Date.now() + 60 * 60_000 });
+      const settled = await importJobs.succeed(job, result);
+      if (!settled) throw conflict("The original import operation is unavailable", { code: "import_outcome_unknown" });
+      importResultCache.set(job.id, { result, expiresAt: Date.now() + 60 * 60_000 });
       return result;
     } catch (error) {
       // This native callback knows whether it invoked portability. An error
@@ -631,7 +633,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     assertBoard(req);
     const job = await importJobs.get(req.params.jobId as string, importJobActorKey(req));
     if (!job) { res.status(404).json({ error: "Import job not found" }); return; }
-    let result = cachedImportResult(job.id);
+    let result = job.id.startsWith("tenant-import-") ? undefined : cachedImportResult(job.id);
     let canReadCompany = !job.resultRef;
     if (job.resultRef) {
       const decision = await authorizationService(db).decide({ actor: req.actor, action: "company_scope:read",
@@ -642,12 +644,12 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     // Cached names/titles are still source-dependent output, not a grant from
     // an old receipt. Withhold details when current native sources are lost.
     if (result) {
-      for (const project of result.projects) if (project.id && !(await canActorReadProjectPrivacy(db, req.actor,
-        { companyId: result.company.id, id: project.id }))) { result = undefined; break; }
+      for (const project of result.projects) if (project.id && (!z.uuid().safeParse(project.id).success || !(await canActorReadProjectPrivacy(db, req.actor,
+        { companyId: result.company.id, id: project.id })))) { result = undefined; break; }
     }
     if (result) {
       const reader = routineService(db, { sourceActor: req.actor });
-      try { for (const routine of result.routines) if (!(await reader.getDetail(routine.id))) { result = undefined; break; } }
+      try { for (const routine of result.routines) if (!routine.id || !z.uuid().safeParse(routine.id).success || !(await reader.getDetail(routine.id))) { result = undefined; break; } }
       catch { result = undefined; }
     }
     const record = importJobRecord(job, result);
@@ -715,13 +717,14 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
         ? (rawImportBody as { target?: { mode?: unknown; companyId?: unknown } }).target : undefined;
       const companyId = rawTarget?.mode === "existing_company" && typeof rawTarget.companyId === "string"
         && z.uuid().safeParse(rawTarget.companyId).success ? rawTarget.companyId : null;
+      if (companyId) assertImportTargetAccess(req, { mode: "existing_company", companyId });
       const signature = importRequestSignature(rawImportBody);
       let admitted: Awaited<ReturnType<typeof importJobs.admit>>;
       try {
         admitted = await importJobs.admit({ actorKey, userId: boardUserId ?? null,
           actorKind: req.actor.source === "cloud_tenant" ? "cloud_tenant" : "board",
           inputHash: signature, scopeKey: companyId ?? "new_company", companyId,
-          idempotencyKey: req.header("idempotency-key") ?? undefined, transferId: hooks?.transferId ?? null });
+          idempotencyKey: req.header("idempotency-key") ?? undefined, transferId: hooks?.transferId ?? null }, req.actor);
       } catch (error) { await hooks?.onConflict?.(); throw error; }
       const record = importJobRecord(admitted.job);
       if (admitted.replay) await hooks?.onConflict?.();
@@ -733,14 +736,14 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
         if (admitted.replay) throw conflict("This import already has a recorded outcome. Read its existing operation before starting another.",
           { code: admitted.job.status === "succeeded" ? "import_already_completed" : "import_already_recorded",
             operationId: admitted.job.id, statusUrl: importJobStatusUrl(record) });
-        const result = await runImportJob(admitted.job, operation, () => domainInvoked);
+        const result = await runImportJob(admitted.job, operation, () => domainInvoked, req.actor);
         if (!result) throw conflict("The original import attempt is no longer available for dispatch", { code: "import_outcome_unknown", operationId: admitted.job.id });
         res.json(result);
         return;
       }
       res.status(202).json(importJobAcceptedResponse(record));
       if (!admitted.replay) setImmediate(() => {
-        void runImportJob(admitted.job, operation, () => domainInvoked)
+        void runImportJob(admitted.job, operation, () => domainInvoked, req.actor)
           .catch(() => logger.warn({ operationId: admitted.job.id }, "import worker could not start; durable admission is retained"));
       });
       return;

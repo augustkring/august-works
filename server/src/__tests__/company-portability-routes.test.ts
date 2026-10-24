@@ -1,6 +1,8 @@
 import express from "express";
 import request from "supertest";
-import { beforeEach, describe, expect, it, vi } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
+import { authUsers, companies, companyMemberships, createDb, customerOperations, instanceUserRoles } from "@paperclipai/db";
+import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 
 const mockCompanyService = vi.hoisted(() => ({
   list: vi.fn(),
@@ -119,13 +121,15 @@ async function createApp(actor: Record<string, unknown>) {
     (req as any).actor = actor;
     next();
   });
-  app.use("/api/companies", companyRoutes({} as any));
+  app.use("/api/companies", companyRoutes(db));
   app.use(errorHandler);
   return app;
 }
 
 const companyId = "11111111-1111-4111-8111-111111111111";
 const otherCompanyId = "22222222-2222-4222-8222-222222222222";
+let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
+let db: ReturnType<typeof createDb>;
 const ceoAgentId = "ceo-agent";
 const engineerAgentId = "engineer-agent";
 
@@ -180,8 +184,12 @@ function cloudTenantActor() {
 
 function createImportResult(action = "updated") {
   return {
-    company: { id: companyId, action },
-    agents: [{ id: "agent-1" }],
+    company: { id: companyId, name: "Test Company", action },
+    agents: [{ slug: "agent-1", id: "agent-1", action: "created", name: "Agent One", reason: null }],
+    skills: [],
+    projects: [],
+    routines: [],
+    envInputs: [],
     warnings: [],
   };
 }
@@ -240,7 +248,7 @@ async function createBoardApp() {
     (req as any).actor = boardActor(userId);
     next();
   });
-  app.use("/api/companies", companyRoutes({} as any));
+  app.use("/api/companies", companyRoutes(db));
   app.use(errorHandler);
   return app;
 }
@@ -335,7 +343,26 @@ const importMeta = {
 };
 
 describe.sequential("company portability routes", () => {
-  beforeEach(() => {
+  beforeAll(async () => {
+    database = await startEmbeddedPostgresTestDatabase("company-portability-routes-");
+    db = createDb(database.connectionString, { maxConnections: 8 });
+    await db.insert(companies).values([
+      { id: companyId, name: "Portability Route Company", issuePrefix: "CPRTA" },
+      { id: otherCompanyId, name: "Portability Route Other Company", issuePrefix: "CPRTB" },
+    ]);
+    const userIds = ["cloud-user-1", "user-1", "company-admin", "instance-admin", "board-user-a", "board-user-b"];
+    const now = new Date();
+    await db.insert(authUsers).values(userIds.map((id) => ({ id, name: id, email: `${id}@example.test`,
+      emailVerified: true, createdAt: now, updatedAt: now })));
+    await db.insert(companyMemberships).values(userIds.map((principalId) => ({ companyId,
+      principalType: "user", principalId, membershipRole: "owner", status: "active" })));
+    await db.insert(instanceUserRoles).values({ userId: "instance-admin", role: "instance_admin" });
+  }, 90_000);
+
+  afterAll(async () => { await database?.cleanup(); }, 30_000);
+
+  beforeEach(async () => {
+    await db.delete(customerOperations);
     vi.clearAllMocks();
     mockAgentService.getById.mockImplementation(async (id: string) => ({
       id,
@@ -354,11 +381,7 @@ describe.sequential("company portability routes", () => {
       paperclipExtensionPath: ".paperclip.yaml",
     });
     mockCompanyPortabilityService.previewImport.mockResolvedValue({ ok: true });
-    mockCompanyPortabilityService.importBundle.mockResolvedValue({
-      company: { id: companyId, action: "created" },
-      agents: [],
-      warnings: [],
-    });
+    mockCompanyPortabilityService.importBundle.mockResolvedValue(createImportResult("created"));
   });
 
   it.sequential("rejects non-CEO agents from CEO-safe export preview routes", async () => {
@@ -1038,8 +1061,7 @@ describe.sequential("company portability routes", () => {
 
     const completedAtMs = Date.parse(succeeded.body.job.completedAt);
 
-    // A completed job stays resolvable well past the old 5-minute retention so a
-    // user who steps away during a long import never polls into a false 404.
+    // The in-memory detail cache may expire while the durable receipt remains.
     const withinWindow = vi.spyOn(Date, "now").mockReturnValue(completedAtMs + (5 * 60 * 1000) + 1);
     try {
       const stillThere = await request(app).get(accepted.body.statusUrl).set(cloudHeaders);
@@ -1050,13 +1072,13 @@ describe.sequential("company portability routes", () => {
       withinWindow.mockRestore();
     }
 
-    // Only past the extended 60-minute window is the in-memory record finally
-    // dropped, and only then does the status route report the job as gone.
+    // Once the optional detail cache expires, the durable cloud summary still
+    // reports the same successful operation.
     const nowSpy = vi.spyOn(Date, "now").mockReturnValue(completedAtMs + (60 * 60 * 1000) + 1);
     try {
-      const expired = await request(app).get(accepted.body.statusUrl).set(cloudHeaders);
-      expect(expired.status).toBe(404);
-      expect(expired.body.error).toBe("Import job not found");
+      const retained = await request(app).get(accepted.body.statusUrl).set(cloudHeaders);
+      expect(retained.status).toBe(200);
+      expect(retained.body.job).toMatchObject({ id: succeeded.body.job.id, status: "succeeded", result: { companyId } });
     } finally {
       nowSpy.mockRestore();
     }
@@ -1073,13 +1095,13 @@ describe.sequential("company portability routes", () => {
       .send(importRequest);
 
     expect(accepted.status).toBe(202);
-    const failed = await waitForImportJobStatus(app, accepted.body.statusUrl, "failed");
+    const failed = await waitForImportJobStatus(app, accepted.body.statusUrl, "needs_reconciliation");
 
     expect(failed.status).toBe(200);
-    expect(failed.body.job.status).toBe("failed");
-    expect(failed.body.job.error.message).toBe("tenant import exploded");
+    expect(failed.body.job.status).toBe("needs_reconciliation");
+    expect(failed.body.job.error.message).toBe("The import outcome is unknown. Reconcile the existing import before trying again.");
     expect(failed.body.retryAfterMs).toBeUndefined();
-    expect(failed.body.message).toBe("tenant import exploded");
+    expect(failed.body.message).toBe("The import outcome is unknown. Reconcile the existing import before trying again.");
     expect(mockLogActivity).not.toHaveBeenCalled();
   });
 
@@ -1288,13 +1310,13 @@ describe.sequential("company portability routes", () => {
 
     expect(accepted.status).toBe(202);
 
-    const failed = await waitForImportJobStatusAs(app, accepted.body.statusUrl, "failed", {
+    const failed = await waitForImportJobStatusAs(app, accepted.body.statusUrl, "needs_reconciliation", {
       [TEST_USER_HEADER]: "board-user-a",
     });
 
     expect(failed.status).toBe(200);
-    expect(failed.body.job.status).toBe("failed");
-    expect(failed.body.job.error.message).toBe("import payload is incomplete");
+    expect(failed.body.job.status).toBe("needs_reconciliation");
+    expect(failed.body.job.error.message).toBe("The import outcome is unknown. Reconcile the existing import before trying again.");
     expect(failed.body.job.importResult).toBeUndefined();
     // A resubmit is allowed once the job is terminal.
     expect(mockLogActivity).not.toHaveBeenCalled();
@@ -1441,6 +1463,7 @@ describe.sequential("company portability routes", () => {
     expect(accepted.status).toBe(202);
     expect(accepted.body.job.status).toBe("running");
     expect(accepted.body.statusUrl).toMatch(/^\/api\/companies\/import\/jobs\/import-/);
+    await waitForCondition(() => mockCompanyPortabilityService.importBundle.mock.calls.length === 1, "board async import start");
   });
 
   it.sequential("keeps a board import synchronous when neither async signal is present", async () => {
@@ -1467,6 +1490,7 @@ describe.sequential("company portability routes", () => {
 
     expect(accepted.status).toBe(202);
     expect(accepted.body.statusUrl).toMatch(/^\/api\/companies\/import\/jobs\/tenant-import-/);
+    await waitForCondition(() => mockCompanyPortabilityService.importBundle.mock.calls.length === 1, "cloud async import start");
   });
 
   it.sequential("rejects a truncated zip upload without importing anything", async () => {

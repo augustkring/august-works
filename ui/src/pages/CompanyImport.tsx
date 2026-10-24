@@ -748,8 +748,8 @@ function formatTransferProgress(progress: ImportTransferProgress): string {
 // the page polls the status route until the job settles. The connection is
 // no longer load-bearing — a proxy timeout, network blip, or page reload
 // cannot kill the import, and the stored job id lets the page resume
-// watching. Jobs are held in server memory only, so an id the server no
-// longer knows (restart, retention expiry) polls as 404.
+// watching. PostgreSQL owns job identity and status. Optional result detail
+// may leave the process cache; the durable compact receipt still survives.
 
 /** A 409 on submit means this user's previous import is still running; adopt it instead of importing twice. */
 function runningImportJobFromError(err: unknown): CompanyImportJobAccepted | null {
@@ -796,17 +796,9 @@ async function watchImportJob(
       job = (await companiesApi.getImportJob(jobId)).job;
     } catch (err) {
       if (err instanceof ApiError && err.status === 404) {
-        // The server has no record of this job. The retention sweep only drops
-        // jobs that have already *settled* (a running job is never removed), so
-        // a 404 while we are still watching means the in-memory record was lost
-        // to a restart mid-import — the import never reached a confirmed
-        // `succeeded` state and may not have finished. Report that honestly
-        // rather than masking a possibly-incomplete import as a success; the
-        // refreshed company list lets the user confirm what actually landed.
-        clearStoredImportJob(storageKey);
-        throw new Error(
-          "The server no longer reports this import job — it may have restarted while the import ran.",
-        );
+        // Missing or withdrawn status is no proof of non-application. Retain
+        // the original accepted ID for reconciliation; never resubmit it.
+        throw new ImportOutcomeUnknownError("The import status is no longer available. Its outcome is unconfirmed; reconcile the original import before trying again.");
       }
       if (
         err instanceof ApiError

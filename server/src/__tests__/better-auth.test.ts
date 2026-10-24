@@ -254,3 +254,15 @@ it("does not forward native token/driver details from a failed session resolutio
   expect(error.stack).not.toContain("CANARY");
   expect(error.cause).toBeUndefined();
 });
+
+
+it("retains the verified native session deadline and refuses contradictory identity or malformed expiry", async () => {
+  const deadline = new Date("2030-01-01T00:00:00.000Z");
+  const resolve = (session: Record<string, unknown>, userId = "original-user") => resolveBetterAuthSessionFromHeaders({
+    api: { getSession: async () => ({ session, user: { id: userId } }) },
+  }, new Headers());
+  expect((await resolve({ id: "original-session", userId: "original-user", expiresAt: deadline }))?.session?.expiresAt).toEqual(deadline);
+  expect((await resolve({ id: "original-session", userId: "original-user", expiresAt: deadline.toISOString() }))?.session?.expiresAt).toEqual(deadline);
+  expect(await resolve({ id: "original-session", userId: "other-user", expiresAt: deadline })).toBeNull();
+  expect(await resolve({ id: "original-session", userId: "original-user", expiresAt: "invalid" })).toBeNull();
+});

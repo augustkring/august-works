@@ -5,9 +5,9 @@
  * so a dropped connection or a page reload must not lose track of a running
  * import. The job id is mirrored into `sessionStorage` (keyed per company and
  * package) when a job is accepted and removed once it reaches a terminal
- * state, letting the page resume watching after a reload. Jobs live in server
- * memory only: a stored id the server no longer knows (restart, retention
- * expiry) surfaces as a 404 and the stored entry is discarded.
+ * state, letting the page resume watching after a reload. PostgreSQL owns job
+ * status. Unknown or withdrawn outcomes retain their original ID for review;
+ * they never authorize another import.
  */
 
 export const IMPORT_JOB_POLL_INTERVAL_MS = 3000;

@@ -311,6 +311,9 @@ export function actorMiddleware(db: Db, opts: ActorMiddlewareOptions): RequestHa
             type: "board",
             userId,
             sessionId: session.session.id,
+            // Retain the verifier's original deadline. A later session renewal
+            // cannot extend this already-authenticated request while it waits.
+            ...(session.session.expiresAt ? { authenticatedCredentialExpiresAt: session.session.expiresAt.getTime() } : {}),
             userName: session.user.name ?? null,
             userEmail: session.user.email ?? null,
             companyIds: memberships.map((row) => row.companyId),
@@ -349,6 +352,7 @@ export function actorMiddleware(db: Db, opts: ActorMiddlewareOptions): RequestHa
           isInstanceAdmin: access.isInstanceAdmin,
           keyId: boardKey.id,
           authenticatedKeyHash: boardKey.keyHash,
+          ...(boardKey.expiresAt ? { authenticatedCredentialExpiresAt: boardKey.expiresAt.getTime() } : {}),
           runId: runIdHeader || undefined,
           source: "board_key",
         };

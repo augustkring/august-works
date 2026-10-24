@@ -1000,9 +1000,9 @@ describe("CompanyImport", () => {
     expect(container.querySelector('[data-testid="import-expired-open-company"]')).toBeNull();
   });
 
-  it("surfaces a first-poll 404 as an error because the job never existed", async () => {
-    // A 404 on the very first poll — before the client ever saw the job
-    // running — means the id never existed. That stays a hard error.
+  it("preserves an accepted job with missing first status as an unknown outcome", async () => {
+    // An accepted operation can be withdrawn or come from an older server.
+    // A missing status does not prove that its import effects never ran.
     mockCompaniesApi.getImportJob.mockRejectedValue(
       new ApiError("Import job not found", 404, { error: "Import job not found" }),
     );
@@ -1013,18 +1013,17 @@ describe("CompanyImport", () => {
     await clickButton((text) => text.startsWith("Import 3 file"));
     await settle();
 
-    expect(container.textContent).toContain("Import failed:");
-    expect(container.textContent).toContain("it may have restarted while the import ran");
+    expect(container.textContent).toContain("Import outcome unknown:");
+    expect(container.textContent).toContain("Its outcome is unconfirmed");
     expect(container.textContent).not.toContain("Import completed");
+    expect(findButton((text) => text.startsWith("Import 3 file"))?.disabled).toBe(true);
+    expect(readStoredImportJob("company-1")).toMatchObject({ jobId: "job-1" });
     expect(mockPushToast).toHaveBeenCalledWith(expect.objectContaining({ tone: "error" }));
   });
 
-  it("surfaces a running-then-gone job as an error because the server restarted mid-import", async () => {
-    // The first poll finds the job running; the next poll 404s. A running job is
-    // never dropped by the retention sweep (only settled jobs age out), so its
-    // disappearance means the server restarted mid-import — the import never
-    // reached a confirmed success and may not have finished. Report that
-    // honestly instead of masking a possibly-incomplete import as completed.
+  it("retains a disappeared running job as unknown without another import", async () => {
+    // Loss of a previously readable operation is unconfirmed, never a
+    // completed import or permission to repeat a possibly committed effect.
     mockCompaniesApi.getImportJob
       .mockResolvedValueOnce({ job: { id: "job-1", status: "running" } })
       .mockRejectedValue(new ApiError("Import job not found", 404, { error: "Import job not found" }));
@@ -1035,9 +1034,11 @@ describe("CompanyImport", () => {
     await clickButton((text) => text.startsWith("Import 3 file"));
     await settle();
 
-    expect(container.textContent).toContain("Import failed:");
-    expect(container.textContent).toContain("it may have restarted while the import ran");
+    expect(container.textContent).toContain("Import outcome unknown:");
+    expect(container.textContent).toContain("Its outcome is unconfirmed");
     expect(container.textContent).not.toContain("Import completed");
+    expect(findButton((text) => text.startsWith("Import 3 file"))?.disabled).toBe(true);
+    expect(readStoredImportJob("company-1")).toMatchObject({ jobId: "job-1" });
     expect(mockPushToast).toHaveBeenCalledWith(expect.objectContaining({ tone: "error" }));
   });
 

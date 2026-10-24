@@ -3690,6 +3690,13 @@
       "when": 1792871190150,
       "tag": "0528_lying_black_bolt",
       "breakpoints": true
+    },
+    {
+      "idx": 529,
+      "version": "7",
+      "when": 1792873014720,
+      "tag": "0529_left_wilson_fisk",
+      "breakpoints": true
     }
   ]
 }

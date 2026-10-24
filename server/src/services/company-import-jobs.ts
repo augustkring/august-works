@@ -3,9 +3,36 @@ import { and, desc, eq, inArray, ne, sql } from "drizzle-orm";
 import { customerOperations, companyTransferRuns, type Db } from "@paperclipai/db";
 import type { CompanyPortabilityImportResult, CustomerOperationReceipt } from "@paperclipai/shared";
 import { conflict, forbidden } from "../errors.js";
+import { pinCurrentBoardActor, authorizationService, hasCurrentInstanceAdminRole, type AuthorizationActor } from "./authorization.js";
+import { isAuthenticationStateBusy } from "../auth/authenticator-assurance.js";
 
 const hash = (value: string) => createHash("sha256").update(value).digest("hex");
 export type CompanyImportJob = typeof customerOperations.$inferSelect;
+
+type JobTransaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+async function pinImportCredential(tx: JobTransaction, actor?: AuthorizationActor) {
+  if (!actor || actor.source === "local_implicit") return null;
+  if (actor.type !== "board") throw forbidden("The original import requester is required");
+  if (actor.authenticatedCredentialExpiresAt != null && !Number.isFinite(actor.authenticatedCredentialExpiresAt))
+    throw forbidden("The original import credential is unavailable");
+  if (actor.source === "cloud_tenant") return { actor, credentialExpiresAt: actor.authenticatedCredentialExpiresAt ?? null };
+  if (actor.sessionId == null && actor.keyId == null && actor.authenticatedCredentialExpiresAt == null && actor.source !== "board_key") return null;
+  const pinned = await pinCurrentBoardActor(tx, actor).catch(error => {
+    if (isAuthenticationStateBusy(error)) throw conflict("Authentication state is changing; try again", { code: "authentication_state_busy" });
+    throw error;
+  });
+  if (!pinned) throw forbidden("The original import credential is unavailable");
+  return pinned;
+}
+
+async function finishImportCredential(tx: JobTransaction, pinned: Awaited<ReturnType<typeof pinImportCredential>>) {
+  if (!pinned) return;
+  const [current] = await tx.execute<{ active: boolean }>(sql`select
+    not exists(select 1 from account_deletion_operations where user_id=${pinned.actor.userId})
+    and ${pinned.credentialExpiresAt === null ? sql`true` : sql`${pinned.credentialExpiresAt}::double precision > extract(epoch from clock_timestamp())*1000`} as active`);
+  if (!current?.active) throw forbidden("The original import credential is unavailable");
+}
 
 /** Durable status only. The original portability owner performs the import;
  * this service neither stores executable input nor retries business effects. */
@@ -13,12 +40,13 @@ export function companyImportJobService(db: Db) {
   return {
     async admit(input: { actorKey: string; userId: string | null; actorKind: "board" | "cloud_tenant";
       inputHash: string; scopeKey: string; companyId: string | null; idempotencyKey?: string;
-      transferId?: string | null }) {
+      transferId?: string | null }, actor?: AuthorizationActor) {
       const requesterKeyHash = hash(input.actorKey);
       const rawKey = input.idempotencyKey ?? `input:${input.inputHash}`;
       if (!rawKey || rawKey.length > 256) throw conflict("Import request key is invalid");
       const key = hash(rawKey);
       return db.transaction(async tx => {
+        if (actor && (actor.type !== "board" || (actor.userId ?? null) !== input.userId)) throw forbidden("The original import requester changed");
         // Preserve the original one-active-import-per-requester boundary across
         // replicas. Unknown effects also block another admission.
         await tx.execute(sql`select pg_advisory_xact_lock(hashtextextended(${`company-import:${requesterKeyHash}`},0))`);
@@ -26,17 +54,32 @@ export function companyImportJobService(db: Db) {
           // Match the native account-erasure principal lock. An authenticated
           // account deleted while waiting cannot create a new durable job.
           const users = await tx.execute(sql`select id from "user" where id=${input.userId} for key share`);
-          if (!users.length) throw forbidden("The current import requester is unavailable");
+          const erased = await tx.execute(sql`select id from account_deletion_operations where user_id=${input.userId} limit 1`);
+          if (!users.length || erased.length) throw forbidden("The current import requester is unavailable");
         }
+        const pinned = await pinImportCredential(tx, actor);
+        const finish = async <T>(result: T) => { await finishImportCredential(tx, pinned); return result; };
         const [existing] = await tx.select().from(customerOperations).where(and(
           eq(customerOperations.requesterKeyHash, requesterKeyHash), eq(customerOperations.operationType, "company_import"),
           eq(customerOperations.scopeKey, input.scopeKey), eq(customerOperations.idempotencyKey, key),
         )).limit(1);
         if (existing) {
           if (existing.inputHash !== input.inputHash) throw conflict("Import request key already refers to different input", { code: "import_request_changed" });
+          if (existing.status === "failed" && existing.progressStage === "rejected_before_import") {
+            // Only the original owner's pre-domain failure can resume. The
+            // request is unchanged and this admission has a current requester;
+            // an old callback cannot settle the new fenced attempt.
+            const [resumed] = await tx.update(customerOperations).set({ status: "running", progressStage: "admitted",
+              attempt: sql`${customerOperations.attempt} + 1`, attemptId: randomUUID(), errorCode: null,
+              startedAt: null, completedAt: null, resultRef: null, domainOperationRef: input.transferId ?? null,
+              updatedAt: sql`clock_timestamp()`, progressAt: sql`clock_timestamp()` })
+              .where(and(eq(customerOperations.id, existing.id), eq(customerOperations.attemptId, existing.attemptId)))
+              .returning();
+            return finish({ job: resumed!, replay: false });
+          }
           if (existing.status === "needs_reconciliation") throw conflict("The import outcome is unknown. Reconcile the existing import before trying again.",
             { code: "import_outcome_unknown", operationId: existing.id });
-          return { job: existing, replay: true };
+          return finish({ job: existing, replay: true });
         }
         const [uncertainTransfer] = await tx.select({ id: companyTransferRuns.id }).from(companyTransferRuns).where(and(
           eq(companyTransferRuns.actorKey, input.actorKey), eq(companyTransferRuns.direction, "import"),
@@ -59,7 +102,7 @@ export function companyImportJobService(db: Db) {
           requesterKeyHash, requestedByUserId: input.userId, scopeKey: input.scopeKey,
           idempotencyKey: key, inputHash: input.inputHash, companyId: input.companyId,
         }).returning();
-        return { job: job!, replay: false };
+        return finish({ job: job!, replay: false });
       });
     },
 
@@ -69,13 +112,27 @@ export function companyImportJobService(db: Db) {
         .limit(1).then(rows => rows[0] ?? null);
     },
 
-    async start(job: CompanyImportJob) {
-      const rows = await db.update(customerOperations).set({ progressStage: "importing", startedAt: sql`clock_timestamp()`,
-        progressAt: sql`clock_timestamp()`, updatedAt: sql`clock_timestamp()` }).where(and(
-        eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
-        eq(customerOperations.status, "running"), eq(customerOperations.progressStage, "admitted"),
-      )).returning({ id: customerOperations.id });
-      return rows.length === 1;
+    async start(job: CompanyImportJob, actor?: AuthorizationActor) {
+      return db.transaction(async tx => {
+        if (actor && (actor.type !== "board" || (actor.userId ?? null) !== job.requestedByUserId)) throw forbidden("The original import requester changed");
+        const pinned = await pinImportCredential(tx, actor);
+        const currentActor = pinned?.actor ?? actor;
+        if (currentActor && job.companyId) {
+          const decision = await authorizationService(tx).decide({ actor: currentActor, action: "company_scope:read",
+            resource: { type: "company", companyId: job.companyId }, enforceResponsibleUserIntersection: true });
+          if (!decision.allowed) throw forbidden("The current import target is unavailable");
+        }
+        if (currentActor && job.scopeKey === "new_company" && currentActor.source !== "local_implicit"
+          && currentActor.source !== "cloud_tenant" && !(await hasCurrentInstanceAdminRole(tx, currentActor.userId)))
+          throw forbidden("The current import operator is unavailable");
+        const rows = await tx.update(customerOperations).set({ progressStage: "importing", startedAt: sql`clock_timestamp()`,
+          progressAt: sql`clock_timestamp()`, updatedAt: sql`clock_timestamp()` }).where(and(
+          eq(customerOperations.id, job.id), eq(customerOperations.attemptId, job.attemptId),
+          eq(customerOperations.status, "running"), eq(customerOperations.progressStage, "admitted"),
+        )).returning({ id: customerOperations.id });
+        await finishImportCredential(tx, pinned);
+        return rows.length === 1;
+      });
     },
 
     async succeed(job: CompanyImportJob, result: CompanyPortabilityImportResult) {
