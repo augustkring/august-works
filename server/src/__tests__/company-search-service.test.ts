@@ -22,6 +22,7 @@ import {
 import {
   COMPANY_SEARCH_BRANCH_FETCH_LIMIT,
   companySearchBranchFetchLimit,
+  companySearchHelpHref,
   companySearchService,
 } from "../services/company-search.js";
 import { issueReadSqlCondition, projectReadSqlCondition } from "../services/authorization.js";
@@ -36,6 +37,16 @@ if (!embeddedPostgresSupport.supported) {
 }
 
 describe("company search query validation", () => {
+  it("accepts Help as a first-class search scope", () => {
+    expect(companySearchQuerySchema.parse({ q: "imports", scope: "help" }).scope).toBe("help");
+    expect(companySearchHelpHref("guides/board-operator/importing-and-exporting")).toBe(
+      "https://docs.blentera.com/guides/board-operator/importing-and-exporting",
+    );
+    for (const unsafe of ["https://evil.example/page", "//evil.example/page", "../private", "guides/../private"]) {
+      expect(companySearchHelpHref(unsafe)).toBeNull();
+    }
+  });
+
   it("truncates long text queries but rejects invalid filters, sort, and pagination", () => {
     const parsed = companySearchQuerySchema.parse({
       q: "x".repeat(COMPANY_SEARCH_MAX_QUERY_LENGTH + 50),
@@ -345,7 +356,7 @@ describeEmbeddedPostgres("companySearchService", () => {
       }),
     });
     expect(result.results[0]?.snippet).toMatch(/comet tail/i);
-    expect(result.countsByType).toEqual({ issue: 0, comment: 0, document: 0, artifact: 1, agent: 0, project: 0 });
+    expect(result.countsByType).toEqual({ issue: 0, comment: 0, document: 0, artifact: 1, agent: 0, project: 0, help: 0 });
   });
 
   it("does not pass high-offset search fetch windows through to artifact query validation", async () => {
@@ -705,7 +716,7 @@ describeEmbeddedPostgres("companySearchService", () => {
     const result = await svc.search(companyId, companySearchQuerySchema.parse({ q: "needle", limit: "2", offset: "2" }));
 
     expect(result.results.map((row) => row.id)).toEqual([agentIds[2], projectIds[0]]);
-    expect(result.countsByType).toEqual({ issue: 0, comment: 0, document: 0, artifact: 0, agent: 3, project: 3 });
+    expect(result.countsByType).toEqual({ issue: 0, comment: 0, document: 0, artifact: 0, agent: 3, project: 3, help: 0 });
     expect(result.hasMore).toBe(true);
   });
 
@@ -733,7 +744,7 @@ describeEmbeddedPostgres("companySearchService", () => {
     const target = await createIssue(companyId, { title: "Improve mobile UI" });
     await createIssue(companyId, { title: "Build billing reports" });
     const result = await svc.search(companyId, companySearchQuerySchema.parse({ q: "UI" }));
-    expect(result.results.map((row) => row.id)).toEqual([target]);
+    expect(result.results.map((row) => row.id)).toEqual([target, "company-import-export"]);
   });
 
   it("keeps typo fallback inside the requested filters", async () => {
@@ -845,5 +856,42 @@ describeEmbeddedPostgres("companySearchService", () => {
       expect(ids, `query=${query}`).toContain(expectedId);
       expect(ids, `query=${query} should not match unrelated issue`).not.toContain(rejected);
     }
+  });
+
+  it("searches checked V10 Help articles with maturity labels, scope counts, pagination, and issue-filter isolation", async () => {
+    const companyId = await createCompany();
+    await createIssue(companyId, { title: "Company search control" });
+    const makeQuery = (scope: "help" | "all", offset = "0", extra: Record<string, string> = {}) =>
+      companySearchQuerySchema.parse({ q: "company", scope, limit: "1", offset, ...extra });
+    const first = await svc.search(companyId, makeQuery("help"));
+    const second = await svc.search(companyId, makeQuery("help", "1"));
+
+    expect(first.countsByType.help).toBe(2);
+    expect(first.results).toHaveLength(1);
+    expect(first.results[0]).toMatchObject({
+      type: "help",
+      href: expect.stringMatching(/^https:\/\/docs\.blentera\.com\//),
+      sourceLabel: "Help · Preview",
+      helpArticle: {
+        maturity: "preview",
+        applicableProductVersions: ["V10"],
+        source: "mintlify",
+      },
+    });
+    expect(first.hasMore).toBe(true);
+    expect(second.hasMore).toBe(false);
+    expect(second.results[0]?.id).not.toBe(first.results[0]?.id);
+
+    const all = await svc.search(companyId, makeQuery("all"));
+    expect(all.countsByType.help).toBe(first.countsByType.help);
+    expect(all.countsByType.help).toBeGreaterThan(0);
+    const allRows = await svc.search(companyId, companySearchQuerySchema.parse({ q: "company", scope: "all", limit: "10" }));
+    expect(allRows.countsByType.issue).toBe(1);
+    expect(allRows.results.map((row) => row.type)).toContain("issue");
+    expect(allRows.results.map((row) => row.type)).toContain("help");
+    const filtered = await svc.search(companyId, companySearchQuerySchema.parse({ q: "company", scope: "all", status: "blocked" }));
+    expect(filtered.results[0]?.type).toBe("help");
+    expect(filtered.countsByType.help).toBe(first.countsByType.help);
+    expect(filtered.countsByType.issue).toBe(0);
   });
 });

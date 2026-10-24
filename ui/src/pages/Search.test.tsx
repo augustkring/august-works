@@ -190,7 +190,7 @@ describe("Search page", () => {
       limit: 20,
       offset: 0,
       sort: "relevance",
-      countsByType: { issue: 1, comment: 0, document: 0, artifact: 0, agent: 0, project: 0 },
+      countsByType: { issue: 1, comment: 0, document: 0, artifact: 0, agent: 0, project: 0, help: 0 },
       filterOptionCounts: {
         status: {},
         priority: {},
@@ -263,6 +263,53 @@ describe("Search page", () => {
     });
   });
 
+  it("renders Help articles as explicitly preview-scoped Mintlify links", async () => {
+    searchApiMock.search.mockResolvedValue({
+      query: "imports",
+      normalizedQuery: "imports",
+      scope: "help",
+      limit: 20,
+      offset: 0,
+      sort: "relevance",
+      countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0, help: 1 },
+      filterOptionCounts: { status: {}, priority: {}, assigneeAgentId: {}, assigneeUserId: {}, projectId: {}, labelId: {}, updatedWithin: {} },
+      zeroResults: null,
+      hasMore: false,
+      results: [{
+        id: "company-import-export",
+        type: "help",
+        score: 100,
+        title: "Importing & Exporting Companies",
+        href: "https://docs.blentera.com/guides/board-operator/importing-and-exporting",
+        matchedFields: ["title"],
+        sourceLabel: "Help · Preview",
+        snippet: "Preview, import, and recover a company package safely",
+        snippets: [],
+        helpArticle: {
+          articleId: "company-import-export",
+          audience: "company-administrators",
+          maturity: "preview",
+          applicableProductVersions: ["V10"],
+          locale: "en",
+          lastVerifiedAt: "2026-10-24",
+          source: "mintlify",
+        },
+        updatedAt: null,
+        previewImageUrl: null,
+      }],
+    });
+    const { root } = renderSearch("/search?q=imports&scope=help", container);
+
+    await waitForAssertion(() => {
+      const link = container.querySelector<HTMLAnchorElement>('[data-result-type="help"]');
+      expect(link?.href).toBe("https://docs.blentera.com/guides/board-operator/importing-and-exporting");
+      expect(link?.target).toBe("_blank");
+      expect(link?.rel).toContain("noreferrer");
+      expect(link?.textContent).toContain("Preview · V10");
+    });
+    flushSync(() => root.unmount());
+  });
+
   it.each(["relevance", "updated"])("preserves server %s order across result sources", async (sort) => {
     const results = ["document", "title", "comment"].map((field, index) => ({
       id: `rank-${index}`, type: "issue", score: 300 - index,
@@ -276,7 +323,7 @@ describe("Search page", () => {
     }));
     searchApiMock.search.mockResolvedValue({ query: "rank", normalizedQuery: "rank", scope: "all",
       sort, limit: 20, offset: 0, hasMore: false, zeroResults: null, results,
-      countsByType: { issue: 1, comment: 1, document: 1, artifact: 0, agent: 0, project: 0 },
+      countsByType: { issue: 1, comment: 1, document: 1, artifact: 0, agent: 0, project: 0, help: 0 },
       filterOptionCounts: { status: {}, priority: {}, assigneeAgentId: {}, assigneeUserId: {}, projectId: {}, labelId: {}, updatedWithin: {} },
     });
     const { root } = renderSearch(`/search?q=rank&sort=${sort}`, container);
@@ -295,7 +342,7 @@ describe("Search page", () => {
       limit: 20,
       offset: 0,
       sort: "relevance",
-      countsByType: { issue: 0, comment: 0, document: 0, artifact: 1, agent: 0, project: 0 },
+      countsByType: { issue: 0, comment: 0, document: 0, artifact: 1, agent: 0, project: 0, help: 0 },
       filterOptionCounts: {
         status: {},
         priority: {},
@@ -371,7 +418,7 @@ describe("Search page", () => {
       limit: 20,
       offset: 0,
       sort: "relevance",
-      countsByType: { issue: 0, comment: 1, document: 1, artifact: 0, agent: 0, project: 0 },
+      countsByType: { issue: 0, comment: 1, document: 1, artifact: 0, agent: 0, project: 0, help: 0 },
       filterOptionCounts: {
         status: {},
         priority: {},
@@ -503,7 +550,7 @@ describe("Search page", () => {
       limit: 20,
       offset: 0,
       sort: "relevance",
-      countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0 },
+      countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0, help: 0 },
       filterOptionCounts: {
         status: {},
         priority: {},
@@ -558,7 +605,7 @@ describe("Search page", () => {
       limit: 20,
       offset: 0,
       sort: "relevance",
-      countsByType: { issue: 1, comment: 0, document: 0, artifact: 0, agent: 0, project: 0 },
+      countsByType: { issue: 1, comment: 0, document: 0, artifact: 0, agent: 0, project: 0, help: 0 },
       filterOptionCounts: {
         status: {},
         priority: {},
@@ -623,7 +670,7 @@ describe("Search page", () => {
       limit: 20,
       offset: 0,
       sort: "relevance",
-      countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0 },
+      countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0, help: 0 },
       filterOptionCounts: {
         status: {},
         priority: {},
@@ -659,7 +706,7 @@ describe("Search page", () => {
       limit: 20,
       offset: 0,
       sort: "relevance",
-      countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0 },
+      countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0, help: 0 },
       filterOptionCounts: {
         status: {},
         priority: {},
@@ -704,7 +751,7 @@ describe("Search page", () => {
       limit: 20,
       offset: 0,
       sort: "relevance",
-      countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0 },
+      countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0, help: 0 },
       filterOptionCounts: {
         status: {},
         priority: {},
@@ -843,7 +890,7 @@ describe("Search page", () => {
       limit: 20,
       offset: 0,
       sort: "relevance",
-      countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0 },
+      countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0, help: 0 },
       filterOptionCounts: {
         status: {},
         priority: {},
@@ -902,7 +949,7 @@ describe("Search page", () => {
       limit: 20,
       offset: 0,
       sort: "relevance",
-      countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0 },
+      countsByType: { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0, help: 0 },
       filterOptionCounts: {
         status: {},
         priority: {},
