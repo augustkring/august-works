@@ -27,13 +27,65 @@
           {
             "group": "Getting started",
             "pages": [
+              "guides/board-operator/creating-a-company"
+            ]
+          },
+          {
+            "group": "Working with Co-workers",
+            "pages": [
+              "guides/board-operator/managing-agents"
+            ]
+          },
+          {
+            "group": "Work and workflows",
+            "pages": [
+              "guides/board-operator/managing-tasks",
+              "help/workflows-preview"
+            ]
+          },
+          {
+            "group": "Apps and connections",
+            "pages": [
+              "help/apps-and-connections"
+            ]
+          },
+          {
+            "group": "Company and people",
+            "pages": [
+              "guides/board-operator/org-structure",
+              "guides/board-operator/importing-and-exporting"
+            ]
+          },
+          {
+            "group": "Governance, security, and privacy",
+            "pages": [
+              "guides/board-operator/approvals",
+              "help/export-and-delete"
+            ]
+          },
+          {
+            "group": "Billing and capacity",
+            "pages": [
+              "guides/board-operator/costs-and-budgets"
+            ]
+          },
+          {
+            "group": "Troubleshooting",
+            "pages": [
+              "help/recovering-work",
               "help/index"
             ]
           },
           {
-            "group": "Company and data",
+            "group": "Releases and deprecations",
             "pages": [
-              "guides/board-operator/importing-and-exporting"
+              "guides/board-operator/experimental-features"
+            ]
+          },
+          {
+            "group": "Developer and advanced",
+            "pages": [
+              "help/developer-and-advanced"
             ]
           }
         ]

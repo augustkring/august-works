@@ -1,6 +1,6 @@
 {
   "schemaVersion": 1,
-  "coverage": "All articles in the docs.json Help Center navigation, currently two; this review map does not claim coverage of the broader documentation catalog.",
+  "coverage": "Ten customer Help Center groups with twelve source-linked V10 preview articles covering the documented current flows; this map does not claim independent human review or GA readiness.",
   "reviews": [
     {
       "source": "ui/src/App.tsx",
@@ -102,63 +102,63 @@
       "source": "ui/src/App.tsx",
       "articleId": "company-import-export",
       "sourceSha256": "a18f03eba75b3cd5837cc27e83577a941324f1a2aadd7cb8452a0bb54db0deb8",
-      "articleSha256": "2cbe5b01f43f6bf2778fc5053696411d74ecfd8a51e12b91d9f373e006aa4d1c",
+      "articleSha256": "bba7e82b758b0d9127e9c8b37831d15ed33ac86208f0c1823826e2186c767816",
       "decision": "no_change",
       "rationale": "Reviewed App.tsx: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
     {
       "source": "ui/src/pages/CompanyImport.tsx",
       "articleId": "company-import-export",
-      "sourceSha256": "6288b954c6dc4fb181800961fd0ed05419ebfbdfd5fc2a600769dbdabfa738f6",
-      "articleSha256": "2cbe5b01f43f6bf2778fc5053696411d74ecfd8a51e12b91d9f373e006aa4d1c",
-      "decision": "no_change",
-      "rationale": "Reviewed CompanyImport.tsx: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
+      "sourceSha256": "e035bd1c6197d83465c8c0584be3931c15a6cd96199ae089eaf3d7ecc76c67ed",
+      "articleSha256": "bba7e82b758b0d9127e9c8b37831d15ed33ac86208f0c1823826e2186c767816",
+      "decision": "updated",
+      "rationale": "Reviewed the original GitHub resolver and Import preview: the guide now explains the displayed immutable commit, changed-revision confirmation, complete tree checks and unsupported selected submodules."
     },
     {
       "source": "ui/src/pages/CompanyImportHistory.tsx",
       "articleId": "company-import-export",
       "sourceSha256": "848676297a26bb77b3f53b31256f8bbfcfb296421cc5ce1c0d4dc61827fda7fa",
-      "articleSha256": "2cbe5b01f43f6bf2778fc5053696411d74ecfd8a51e12b91d9f373e006aa4d1c",
+      "articleSha256": "bba7e82b758b0d9127e9c8b37831d15ed33ac86208f0c1823826e2186c767816",
       "decision": "updated",
-      "rationale": "Extended authorized Import history to find the original requester\u2019s unbound new-company receipt; the article now states the honest target label and its limits."
+      "rationale": "Extended authorized Import history to find the original requester’s unbound new-company receipt; the article now states the honest target label and its limits."
     },
     {
       "source": "server/src/routes/companies.ts",
       "articleId": "company-import-export",
       "sourceSha256": "3f771cf957af2ebccf0852eeb300b60ce68aa6ad5d639a50166be417cb7b4775",
-      "articleSha256": "2cbe5b01f43f6bf2778fc5053696411d74ecfd8a51e12b91d9f373e006aa4d1c",
+      "articleSha256": "bba7e82b758b0d9127e9c8b37831d15ed33ac86208f0c1823826e2186c767816",
       "decision": "updated",
-      "rationale": "Extended authorized Import history to find the original requester\u2019s unbound new-company receipt; the article now states the honest target label and its limits."
+      "rationale": "Extended authorized Import history to find the original requester’s unbound new-company receipt; the article now states the honest target label and its limits."
     },
     {
       "source": "server/src/services/company-import-jobs.ts",
       "articleId": "company-import-export",
       "sourceSha256": "37682d39ad51f1ade89469c8812bf9347138d5115db026d1e273dbcc7d2e33e3",
-      "articleSha256": "2cbe5b01f43f6bf2778fc5053696411d74ecfd8a51e12b91d9f373e006aa4d1c",
+      "articleSha256": "bba7e82b758b0d9127e9c8b37831d15ed33ac86208f0c1823826e2186c767816",
       "decision": "updated",
-      "rationale": "Extended authorized Import history to find the original requester\u2019s unbound new-company receipt; the article now states the honest target label and its limits."
+      "rationale": "Extended authorized Import history to find the original requester’s unbound new-company receipt; the article now states the honest target label and its limits."
     },
     {
       "source": "server/src/services/company-import-transfers.ts",
       "articleId": "company-import-export",
       "sourceSha256": "30e1043a913d7960b2d6a4338c69ea766066c8a41ac2778e007b0743b8be52e2",
-      "articleSha256": "2cbe5b01f43f6bf2778fc5053696411d74ecfd8a51e12b91d9f373e006aa4d1c",
+      "articleSha256": "bba7e82b758b0d9127e9c8b37831d15ed33ac86208f0c1823826e2186c767816",
       "decision": "no_change",
       "rationale": "Reviewed company-import-transfers.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
     {
       "source": "server/src/services/company-portability.ts",
       "articleId": "company-import-export",
-      "sourceSha256": "fc3b794f29637b03b2861998c06bc908ee49337ad783e81c6212923c5076dbe2",
-      "articleSha256": "2cbe5b01f43f6bf2778fc5053696411d74ecfd8a51e12b91d9f373e006aa4d1c",
-      "decision": "no_change",
-      "rationale": "Reviewed company-portability.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
+      "sourceSha256": "5c2ae9123409dbb7e8e24d656fb3c3fc75da81b3b03c2f42f10876e0d0bb7834",
+      "articleSha256": "bba7e82b758b0d9127e9c8b37831d15ed33ac86208f0c1823826e2186c767816",
+      "decision": "updated",
+      "rationale": "Reviewed the original GitHub resolver and Import preview: the guide now explains the displayed immutable commit, changed-revision confirmation, complete tree checks and unsupported selected submodules."
     },
     {
       "source": "server/src/services/company-export-readme.ts",
       "articleId": "company-import-export",
       "sourceSha256": "7cb1334151504af8c56bdfb906bbae318eb468b18268cd24a85f5721f9f1a481",
-      "articleSha256": "2cbe5b01f43f6bf2778fc5053696411d74ecfd8a51e12b91d9f373e006aa4d1c",
+      "articleSha256": "bba7e82b758b0d9127e9c8b37831d15ed33ac86208f0c1823826e2186c767816",
       "decision": "no_change",
       "rationale": "Reviewed company-export-readme.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
@@ -166,7 +166,7 @@
       "source": "packages/shared/src/customer-operations.ts",
       "articleId": "company-import-export",
       "sourceSha256": "04380661ffda0dc43419e19c1f8ba7a7247a09c30d9cd4cc90fd03155e9d0bfd",
-      "articleSha256": "2cbe5b01f43f6bf2778fc5053696411d74ecfd8a51e12b91d9f373e006aa4d1c",
+      "articleSha256": "bba7e82b758b0d9127e9c8b37831d15ed33ac86208f0c1823826e2186c767816",
       "decision": "no_change",
       "rationale": "Reviewed customer-operations.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
@@ -174,7 +174,7 @@
       "source": "packages/shared/src/company-import-transfer.ts",
       "articleId": "company-import-export",
       "sourceSha256": "dbeeea0632b22d2bf0cd4b7e6ae7eded1883ed930a10ed48483f8c6c6576c370",
-      "articleSha256": "2cbe5b01f43f6bf2778fc5053696411d74ecfd8a51e12b91d9f373e006aa4d1c",
+      "articleSha256": "bba7e82b758b0d9127e9c8b37831d15ed33ac86208f0c1823826e2186c767816",
       "decision": "no_change",
       "rationale": "Reviewed company-import-transfer.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
@@ -182,7 +182,7 @@
       "source": "cli/src/commands/client/company.ts",
       "articleId": "company-import-export",
       "sourceSha256": "2a859ee4e334ddfbdb76d32e511a76cb665fd4f46b7a8d1e689ee1e7996225d6",
-      "articleSha256": "2cbe5b01f43f6bf2778fc5053696411d74ecfd8a51e12b91d9f373e006aa4d1c",
+      "articleSha256": "bba7e82b758b0d9127e9c8b37831d15ed33ac86208f0c1823826e2186c767816",
       "decision": "no_change",
       "rationale": "Reviewed company.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
@@ -205,10 +205,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "9ebfd1ef540feb983110c183ea4be2c43154e247feaf6324754231d8f4676953",
+      "sourceSha256": "2ab4044eae3654822b93a4d26016163832b7b8309f053405c283e0b1e8218fb6",
       "articleSha256": "4fdd98fe9f0506dd6b2edaf37da1ba07f7342ec707d5314fe03139cb9cc13783",
       "decision": "no_change",
-      "rationale": "Reviewed the current company search route: native company authorization, Help scope and bounded responses match the documented in-place search."
+      "rationale": "Reviewed native search and extraction transaction/credential lifetime changes: Help still uses the same scoped search and links while returning no results after the verified credential expires; current customer guidance remains accurate."
     },
     {
       "source": "packages/shared/src/types/search.ts",
@@ -217,6 +217,398 @@
       "articleSha256": "4fdd98fe9f0506dd6b2edaf37da1ba07f7342ec707d5314fe03139cb9cc13783",
       "decision": "no_change",
       "rationale": "Reviewed the shared Help result contract: article identity, preview maturity, version, locale and verification date match the guidance."
+    },
+    {
+      "source": "ui/src/pages/Activation.tsx",
+      "articleId": "start-and-first-result",
+      "sourceSha256": "e62bddf303170a0d7f9cc21f4973eaff934e97b91afa7f26e5f2dbeeef57fb52",
+      "articleSha256": "7a0f6911e596e02e212fae1d400a07d178380163dbf8be42eb4c221e0a655613",
+      "decision": "updated",
+      "rationale": "Replaced the old autonomous-company tutorial with bounded steps grounded in guided activation, first Co-worker setup, first-task start, and result review."
+    },
+    {
+      "source": "ui/src/components/ActivationFirstAgent.tsx",
+      "articleId": "start-and-first-result",
+      "sourceSha256": "2c3021537ff41c34c768f667ab3b5fb84f7dd17c426ed0d962134cc4625f145b",
+      "articleSha256": "7a0f6911e596e02e212fae1d400a07d178380163dbf8be42eb4c221e0a655613",
+      "decision": "updated",
+      "rationale": "Replaced the old autonomous-company tutorial with bounded steps grounded in guided activation, first Co-worker setup, first-task start, and result review."
+    },
+    {
+      "source": "ui/src/components/ActivationFirstTask.tsx",
+      "articleId": "start-and-first-result",
+      "sourceSha256": "77378b0d163ba49751303048d08ba0d90c02cb22d5c069dc16e6784a22b003cc",
+      "articleSha256": "7a0f6911e596e02e212fae1d400a07d178380163dbf8be42eb4c221e0a655613",
+      "decision": "updated",
+      "rationale": "Replaced the old autonomous-company tutorial with bounded steps grounded in guided activation, first Co-worker setup, first-task start, and result review."
+    },
+    {
+      "source": "ui/src/components/ActivationFirstValue.tsx",
+      "articleId": "start-and-first-result",
+      "sourceSha256": "001389f8ee0d2fbb7ae9fcfaa9cb65158ba82a9a72b167b5a56dc28a85700ab4",
+      "articleSha256": "7a0f6911e596e02e212fae1d400a07d178380163dbf8be42eb4c221e0a655613",
+      "decision": "updated",
+      "rationale": "Replaced the old autonomous-company tutorial with bounded steps grounded in guided activation, first Co-worker setup, first-task start, and result review."
+    },
+    {
+      "source": "server/src/services/saas/activation.ts",
+      "articleId": "start-and-first-result",
+      "sourceSha256": "4dbe56416e4ee80b9e8abb4a426cb994f05f97e54101bee4fb609fd0585730a7",
+      "articleSha256": "7a0f6911e596e02e212fae1d400a07d178380163dbf8be42eb4c221e0a655613",
+      "decision": "updated",
+      "rationale": "Replaced the old autonomous-company tutorial with bounded steps grounded in guided activation, first Co-worker setup, first-task start, and result review."
+    },
+    {
+      "source": "server/src/services/saas/activation-first-task.ts",
+      "articleId": "start-and-first-result",
+      "sourceSha256": "10f163c87fe7c72d05a645fa3efa022de196d75c9a65ebb31ea43a1b18baeea7",
+      "articleSha256": "7a0f6911e596e02e212fae1d400a07d178380163dbf8be42eb4c221e0a655613",
+      "decision": "updated",
+      "rationale": "Replaced the old autonomous-company tutorial with bounded steps grounded in guided activation, first Co-worker setup, first-task start, and result review."
+    },
+    {
+      "source": "ui/src/pages/Agents.tsx",
+      "articleId": "working-with-coworkers",
+      "sourceSha256": "3620788f6668d38467f000226187bf194d4a5ebc0218f32bee563a7ded8c3a14",
+      "articleSha256": "787c7cb3216491261ed93602bafca0548f622e6379b2621b9810ef998b69f2c4",
+      "decision": "updated",
+      "rationale": "Replaced stale agent lifecycle claims with current Co-worker setup, detail, status, and pause guidance from the company UI."
+    },
+    {
+      "source": "ui/src/pages/AgentDetail.tsx",
+      "articleId": "working-with-coworkers",
+      "sourceSha256": "65606d1813fe03c6dff9bd8d23716da2eb346cfbea3dfbfe6414d95fb2caf254",
+      "articleSha256": "787c7cb3216491261ed93602bafca0548f622e6379b2621b9810ef998b69f2c4",
+      "decision": "updated",
+      "rationale": "Replaced stale agent lifecycle claims with current Co-worker setup, detail, status, and pause guidance from the company UI."
+    },
+    {
+      "source": "server/src/services/agents.ts",
+      "articleId": "working-with-coworkers",
+      "sourceSha256": "cb3b5f7c500e3531215ef20358a3be7321a3fa61a36396aa4d48eb4b490efc60",
+      "articleSha256": "787c7cb3216491261ed93602bafca0548f622e6379b2621b9810ef998b69f2c4",
+      "decision": "updated",
+      "rationale": "Replaced stale agent lifecycle claims with current Co-worker setup, detail, status, and pause guidance from the company UI."
+    },
+    {
+      "source": "ui/src/pages/ExperienceWork.tsx",
+      "articleId": "create-and-track-work",
+      "sourceSha256": "d87cfcb81d4b35461797d9dceb1df9b7f57601f1be9a5769e04e7e13a6cb553d",
+      "articleSha256": "621f7f4b0f0fca8fb5cd77f10b7570671d91af1e41247565a3c94adb4b3e32e8",
+      "decision": "updated",
+      "rationale": "Replaced endpoint-oriented task prose with current Work and task-detail guidance; status and result claims stay tied to the UI."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "articleId": "create-and-track-work",
+      "sourceSha256": "8be44f0a61787fe84a5d049ccdcbc2d40ca7fd0626f8f4ef2d062fcd32914af5",
+      "articleSha256": "621f7f4b0f0fca8fb5cd77f10b7570671d91af1e41247565a3c94adb4b3e32e8",
+      "decision": "updated",
+      "rationale": "Replaced endpoint-oriented task prose with current Work and task-detail guidance; status and result claims stay tied to the UI."
+    },
+    {
+      "source": "ui/src/pages/Workflows.tsx",
+      "articleId": "workflows-preview",
+      "sourceSha256": "ea58e8e84c102e15e2c85a59406b78b7b40949e9c2afc2f0547c4b484118e152",
+      "articleSha256": "93759d2a40ad3b6d5ab738f00aa85907a1d162fd20cfaba8bbabfa483ea9106b",
+      "decision": "updated",
+      "rationale": "Added current draft, test, publish, run, and capability-limit guidance from the Workflow UI and node registry."
+    },
+    {
+      "source": "ui/src/pages/WorkflowDescribe.tsx",
+      "articleId": "workflows-preview",
+      "sourceSha256": "f2cb06f632c77fbdd7c7e436961dc2fbf68e861bc51df8830f4359be377fc4c8",
+      "articleSha256": "93759d2a40ad3b6d5ab738f00aa85907a1d162fd20cfaba8bbabfa483ea9106b",
+      "decision": "updated",
+      "rationale": "Added current draft, test, publish, run, and capability-limit guidance from the Workflow UI and node registry."
+    },
+    {
+      "source": "ui/src/pages/WorkflowBuilder.tsx",
+      "articleId": "workflows-preview",
+      "sourceSha256": "08f70fe47782a89f13a940fd8be0e42ba3466b599ed02d190a963ab9869286f8",
+      "articleSha256": "93759d2a40ad3b6d5ab738f00aa85907a1d162fd20cfaba8bbabfa483ea9106b",
+      "decision": "updated",
+      "rationale": "Added current draft, test, publish, run, and capability-limit guidance from the Workflow UI and node registry."
+    },
+    {
+      "source": "ui/src/pages/WorkflowReview.tsx",
+      "articleId": "workflows-preview",
+      "sourceSha256": "95e074af2312083633592f05f620bff8dea0e161affb3fbd4887819b9cd7bd26",
+      "articleSha256": "93759d2a40ad3b6d5ab738f00aa85907a1d162fd20cfaba8bbabfa483ea9106b",
+      "decision": "updated",
+      "rationale": "Added current draft, test, publish, run, and capability-limit guidance from the Workflow UI and node registry."
+    },
+    {
+      "source": "server/src/routes/workflows.ts",
+      "articleId": "workflows-preview",
+      "sourceSha256": "600940c55f08673bf6bbd21c2b74469ce3d478a23295fee99503a99639d27562",
+      "articleSha256": "93759d2a40ad3b6d5ab738f00aa85907a1d162fd20cfaba8bbabfa483ea9106b",
+      "decision": "updated",
+      "rationale": "Added current draft, test, publish, run, and capability-limit guidance from the Workflow UI and node registry."
+    },
+    {
+      "source": "server/src/services/workflows/workflow-node-registry.ts",
+      "articleId": "workflows-preview",
+      "sourceSha256": "61e539092415a43b35269f0b9ef89d8de8fad020009b9491f55e5bb1ece36754",
+      "articleSha256": "93759d2a40ad3b6d5ab738f00aa85907a1d162fd20cfaba8bbabfa483ea9106b",
+      "decision": "updated",
+      "rationale": "Added current draft, test, publish, run, and capability-limit guidance from the Workflow UI and node registry."
+    },
+    {
+      "source": "server/src/services/workflows/workflow-service.ts",
+      "articleId": "workflows-preview",
+      "sourceSha256": "2ab524459e1dc376bd12399607f6e8c2ee7f900ce9220c81b2822f7731024b5a",
+      "articleSha256": "93759d2a40ad3b6d5ab738f00aa85907a1d162fd20cfaba8bbabfa483ea9106b",
+      "decision": "updated",
+      "rationale": "Added current draft, test, publish, run, and capability-limit guidance from the Workflow UI and node registry."
+    },
+    {
+      "source": "ui/src/pages/apps/Connections.tsx",
+      "articleId": "apps-and-connections",
+      "sourceSha256": "219334acc72099017f5ab01e9a7ee4011186aa8a0afd8dece89af23bc0f2ccbe",
+      "articleSha256": "824d808b56a4085ee73eb6408e758c7a9c4ce06040dbeb7e97d65e35018bb4c0",
+      "decision": "updated",
+      "rationale": "Added current connect, permission review, status, and reconnect guidance from app connection screens."
+    },
+    {
+      "source": "ui/src/pages/apps/AppNotConnected.tsx",
+      "articleId": "apps-and-connections",
+      "sourceSha256": "218b58f14a1feb713347afaf7760ac3549ccf20bb0be5259073015376c0ecd3b",
+      "articleSha256": "824d808b56a4085ee73eb6408e758c7a9c4ce06040dbeb7e97d65e35018bb4c0",
+      "decision": "updated",
+      "rationale": "Added current connect, permission review, status, and reconnect guidance from app connection screens."
+    },
+    {
+      "source": "ui/src/pages/apps/AppDetail.tsx",
+      "articleId": "apps-and-connections",
+      "sourceSha256": "2c5de01bbf0adc3eb74f4d8678055cf8b15a5fe69946453ffcb4bdc2f4746608",
+      "articleSha256": "824d808b56a4085ee73eb6408e758c7a9c4ce06040dbeb7e97d65e35018bb4c0",
+      "decision": "updated",
+      "rationale": "Added current connect, permission review, status, and reconnect guidance from app connection screens."
+    },
+    {
+      "source": "ui/src/pages/apps/app-detail/PermissionsPanel.tsx",
+      "articleId": "apps-and-connections",
+      "sourceSha256": "6bd3df903c2b8b91aaaf964a0c3c7ca6a07b842359b6d68242464a946527fb44",
+      "articleSha256": "824d808b56a4085ee73eb6408e758c7a9c4ce06040dbeb7e97d65e35018bb4c0",
+      "decision": "updated",
+      "rationale": "Added current connect, permission review, status, and reconnect guidance from app connection screens."
+    },
+    {
+      "source": "ui/src/pages/CompanyAccess.tsx",
+      "articleId": "people-and-company-access",
+      "sourceSha256": "9a17414a949ed4ed796eef2fe4d08dab8ff6309be6917a619cf33dc467f28b3d",
+      "articleSha256": "9b9250457bf790d4c79f60c44122bc3c73f940e630b61c727f91b18b1018c0be",
+      "decision": "updated",
+      "rationale": "Replaced org-chart instructions with current member, invite, join-request, role, status, and reassignment controls."
+    },
+    {
+      "source": "ui/src/components/access/InvitesSection.tsx",
+      "articleId": "people-and-company-access",
+      "sourceSha256": "7e77e3029b2ac1cfc55978678bd21488e22cc31fb180d061c50569c5ba75fa79",
+      "articleSha256": "9b9250457bf790d4c79f60c44122bc3c73f940e630b61c727f91b18b1018c0be",
+      "decision": "updated",
+      "rationale": "Replaced org-chart instructions with current member, invite, join-request, role, status, and reassignment controls."
+    },
+    {
+      "source": "ui/src/components/access/CompanySettingsNav.tsx",
+      "articleId": "people-and-company-access",
+      "sourceSha256": "040df1c9b646731d1f21961f00b270a3929352ff9e8ffee5019c86bab160ea2d",
+      "articleSha256": "9b9250457bf790d4c79f60c44122bc3c73f940e630b61c727f91b18b1018c0be",
+      "decision": "updated",
+      "rationale": "Replaced org-chart instructions with current member, invite, join-request, role, status, and reassignment controls."
+    },
+    {
+      "source": "ui/src/pages/Approvals.tsx",
+      "articleId": "approvals-and-stop",
+      "sourceSha256": "813b96ee74123a2568c23ce80440bf044e5de98c5aaf0b5bb1d665887b3ca06f",
+      "articleSha256": "601860635ecfdbef65d0703b3966a9af6429ec84d78d857ab85ac9863b77ba60",
+      "decision": "updated",
+      "rationale": "Replaced outdated approval types with current approval decisions and the separate task pause/stop actions."
+    },
+    {
+      "source": "ui/src/pages/ApprovalDetail.tsx",
+      "articleId": "approvals-and-stop",
+      "sourceSha256": "cd8bd0f9021c383cd87d5d0caf468ec04d6fe55e647d92332a855bfd43435e1a",
+      "articleSha256": "601860635ecfdbef65d0703b3966a9af6429ec84d78d857ab85ac9863b77ba60",
+      "decision": "updated",
+      "rationale": "Replaced outdated approval types with current approval decisions and the separate task pause/stop actions."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "articleId": "approvals-and-stop",
+      "sourceSha256": "8be44f0a61787fe84a5d049ccdcbc2d40ca7fd0626f8f4ef2d062fcd32914af5",
+      "articleSha256": "601860635ecfdbef65d0703b3966a9af6429ec84d78d857ab85ac9863b77ba60",
+      "decision": "updated",
+      "rationale": "Replaced outdated approval types with current approval decisions and the separate task pause/stop actions."
+    },
+    {
+      "source": "ui/src/pages/CompanyExport.tsx",
+      "articleId": "export-and-delete",
+      "sourceSha256": "bcb095fa5cce076e515485f318daefcc5940251ef917affd62eadb6c72f64dca",
+      "articleSha256": "d868b7fbe47bdd5d5cb4667721f173df7ee9590fe501e8b7fded426932b99a94",
+      "decision": "updated",
+      "rationale": "Added separate, source-bounded guidance for company export, organization deletion, and personal account deletion."
+    },
+    {
+      "source": "ui/src/pages/SaasDeletion.tsx",
+      "articleId": "export-and-delete",
+      "sourceSha256": "c10303000adfea5317b7cf3c75dd420eb1beee5771a749de17cec32d82a8161f",
+      "articleSha256": "d868b7fbe47bdd5d5cb4667721f173df7ee9590fe501e8b7fded426932b99a94",
+      "decision": "updated",
+      "rationale": "Added separate, source-bounded guidance for company export, organization deletion, and personal account deletion."
+    },
+    {
+      "source": "ui/src/pages/SaasAccount.tsx",
+      "articleId": "export-and-delete",
+      "sourceSha256": "4ea9ace52188ed50a115c403b27341bdd50454245260e13d49d1e678e1832fe3",
+      "articleSha256": "d868b7fbe47bdd5d5cb4667721f173df7ee9590fe501e8b7fded426932b99a94",
+      "decision": "updated",
+      "rationale": "Added separate, source-bounded guidance for company export, organization deletion, and personal account deletion."
+    },
+    {
+      "source": "server/src/services/saas/account-deletion.ts",
+      "articleId": "export-and-delete",
+      "sourceSha256": "7214bed4add42ad5778c1b8bc6e235e968c4bc2c9ae6bc3107c1b11e633c8911",
+      "articleSha256": "d868b7fbe47bdd5d5cb4667721f173df7ee9590fe501e8b7fded426932b99a94",
+      "decision": "updated",
+      "rationale": "Added separate, source-bounded guidance for company export, organization deletion, and personal account deletion."
+    },
+    {
+      "source": "server/src/services/saas/offboarding.ts",
+      "articleId": "export-and-delete",
+      "sourceSha256": "a59b45f938293783a1e5318ac8b409e866d921dca36d936fa803bfe986526fe9",
+      "articleSha256": "d868b7fbe47bdd5d5cb4667721f173df7ee9590fe501e8b7fded426932b99a94",
+      "decision": "updated",
+      "rationale": "Added separate, source-bounded guidance for company export, organization deletion, and personal account deletion."
+    },
+    {
+      "source": "server/src/services/saas/company-purge.ts",
+      "articleId": "export-and-delete",
+      "sourceSha256": "b7b59f6b8369a2f7ff62df2f026ba7ee5f813e386bb7142f2f83f17bd75899e0",
+      "articleSha256": "d868b7fbe47bdd5d5cb4667721f173df7ee9590fe501e8b7fded426932b99a94",
+      "decision": "updated",
+      "rationale": "Added separate, source-bounded guidance for company export, organization deletion, and personal account deletion."
+    },
+    {
+      "source": "ui/src/pages/SaasBilling.tsx",
+      "articleId": "billing-and-capacity",
+      "sourceSha256": "c3032499911b693f8a985f328f42b75e51488ade1f651b468d6be0e161bd6e1e",
+      "articleSha256": "1dc8a089d3a9db6699cca986f76f7484a74027850a915d6dc245b3ac68614110",
+      "decision": "updated",
+      "rationale": "Replaced token-cost promises with current subscription, portal, provider billing, access-state, and capacity wording."
+    },
+    {
+      "source": "ui/src/api/saas.ts",
+      "articleId": "billing-and-capacity",
+      "sourceSha256": "6e4042fd96d79554385be81645a2d30b46621523d0981d8823d0efbc4a132625",
+      "articleSha256": "1dc8a089d3a9db6699cca986f76f7484a74027850a915d6dc245b3ac68614110",
+      "decision": "updated",
+      "rationale": "Replaced token-cost promises with current subscription, portal, provider billing, access-state, and capacity wording."
+    },
+    {
+      "source": "server/src/routes/saas.ts",
+      "articleId": "billing-and-capacity",
+      "sourceSha256": "e1c3fab84d5d784ecbe91259d29c250be6b5520985d5305e73cee8c3689faa2d",
+      "articleSha256": "1dc8a089d3a9db6699cca986f76f7484a74027850a915d6dc245b3ac68614110",
+      "decision": "updated",
+      "rationale": "Replaced token-cost promises with current subscription, portal, provider billing, access-state, and capacity wording."
+    },
+    {
+      "source": "server/src/services/billing/billing.ts",
+      "articleId": "billing-and-capacity",
+      "sourceSha256": "79ea5055f710e573db740c1a187f8ee6a6e9544a74e24ef2549ba19499ad85da",
+      "articleSha256": "1dc8a089d3a9db6699cca986f76f7484a74027850a915d6dc245b3ac68614110",
+      "decision": "updated",
+      "rationale": "Replaced token-cost promises with current subscription, portal, provider billing, access-state, and capacity wording."
+    },
+    {
+      "source": "server/src/services/billing/usage.ts",
+      "articleId": "billing-and-capacity",
+      "sourceSha256": "fcc67e01f901eaa5b239e8326b8ab8af028ddbbea16315c79c2f1d447c8a1230",
+      "articleSha256": "1dc8a089d3a9db6699cca986f76f7484a74027850a915d6dc245b3ac68614110",
+      "decision": "updated",
+      "rationale": "Replaced token-cost promises with current subscription, portal, provider billing, access-state, and capacity wording."
+    },
+    {
+      "source": "ui/src/pages/IssueDetail.tsx",
+      "articleId": "recovering-work",
+      "sourceSha256": "8be44f0a61787fe84a5d049ccdcbc2d40ca7fd0626f8f4ef2d062fcd32914af5",
+      "articleSha256": "6135fbda7303f28bf82f6c16182dd7b7ad490cd62503b92516268d0fd72d2323",
+      "decision": "updated",
+      "rationale": "Added current task/run status checks and safe use of retry and stop actions without claiming remote success."
+    },
+    {
+      "source": "ui/src/components/IssueBlockedNotice.tsx",
+      "articleId": "recovering-work",
+      "sourceSha256": "90983e55a2fa9ea9a8abe2b33a5aab817e05a463a65bf5d5795335149d769fd2",
+      "articleSha256": "6135fbda7303f28bf82f6c16182dd7b7ad490cd62503b92516268d0fd72d2323",
+      "decision": "updated",
+      "rationale": "Added current task/run status checks and safe use of retry and stop actions without claiming remote success."
+    },
+    {
+      "source": "ui/src/lib/wait-for-stopped-runs.ts",
+      "articleId": "recovering-work",
+      "sourceSha256": "ce5726db6b535d3dd592bfde111b94de36291c1fe7dd5a85198dd22799bbe8c2",
+      "articleSha256": "6135fbda7303f28bf82f6c16182dd7b7ad490cd62503b92516268d0fd72d2323",
+      "decision": "updated",
+      "rationale": "Added current task/run status checks and safe use of retry and stop actions without claiming remote success."
+    },
+    {
+      "source": "server/src/services/issue-recovery-actions.ts",
+      "articleId": "recovering-work",
+      "sourceSha256": "5dba9a4821f71474d1bd510f87c55093ccd62223d1f28eba8adee287325869e0",
+      "articleSha256": "6135fbda7303f28bf82f6c16182dd7b7ad490cd62503b92516268d0fd72d2323",
+      "decision": "updated",
+      "rationale": "Added current task/run status checks and safe use of retry and stop actions without claiming remote success."
+    },
+    {
+      "source": "ui/src/pages/InstanceExperimentalSettings.tsx",
+      "articleId": "preview-and-known-limits",
+      "sourceSha256": "170ff8da5b3292eb72166ad7de15494841d05c6ce304245e65d29219637e3b35",
+      "articleSha256": "31876975653afeb3b21174eac35f4eeb58d8e6f96a1ef6824991e9fc874d15d3",
+      "decision": "updated",
+      "rationale": "Replaced stale experiment-specific instructions with current maturity labels, availability limits, and the absence of a complete release history."
+    },
+    {
+      "source": "ui/src/hooks/useSaasCapabilities.ts",
+      "articleId": "preview-and-known-limits",
+      "sourceSha256": "30d58429b54ae6de1eb632f4ed0f27c93175e28d8899eff0612c183d5a2e1ed7",
+      "articleSha256": "31876975653afeb3b21174eac35f4eeb58d8e6f96a1ef6824991e9fc874d15d3",
+      "decision": "updated",
+      "rationale": "Replaced stale experiment-specific instructions with current maturity labels, availability limits, and the absence of a complete release history."
+    },
+    {
+      "source": "packages/shared/src/v9-feature-flags.ts",
+      "articleId": "preview-and-known-limits",
+      "sourceSha256": "10d70828a4f7bff8763ac73a49eefab90150b8756ecbcc263eeb39968acbac15",
+      "articleSha256": "31876975653afeb3b21174eac35f4eeb58d8e6f96a1ef6824991e9fc874d15d3",
+      "decision": "updated",
+      "rationale": "Replaced stale experiment-specific instructions with current maturity labels, availability limits, and the absence of a complete release history."
+    },
+    {
+      "source": "server/src/routes/openapi.ts",
+      "articleId": "developer-and-advanced",
+      "sourceSha256": "b955280630c5b2e41d0a187578d47e00b00fedf7d73a325b9fa1835812dec4a0",
+      "articleSha256": "1d4d2db664346000357fafa1735eed2371dca17e2e96cb270d5ed5900cfff170",
+      "decision": "updated",
+      "rationale": "Added links to the existing API, CLI, and deployment references and limited availability statements to documented behavior."
+    },
+    {
+      "source": "server/src/routes/index.ts",
+      "articleId": "developer-and-advanced",
+      "sourceSha256": "c9fd3cfa17ddfd1534bef64b2bc9f6793a9af9b98a504d4b0099ec0955c4aece",
+      "articleSha256": "1d4d2db664346000357fafa1735eed2371dca17e2e96cb270d5ed5900cfff170",
+      "decision": "updated",
+      "rationale": "Added links to the existing API, CLI, and deployment references and limited availability statements to documented behavior."
+    },
+    {
+      "source": "cli/src/index.ts",
+      "articleId": "developer-and-advanced",
+      "sourceSha256": "7c3b4bfb3de9950590a50abff7c917115e819091148a76a658ff7233654568be",
+      "articleSha256": "1d4d2db664346000357fafa1735eed2371dca17e2e96cb270d5ed5900cfff170",
+      "decision": "updated",
+      "rationale": "Added links to the existing API, CLI, and deployment references and limited availability statements to documented behavior."
     }
   ]
 }

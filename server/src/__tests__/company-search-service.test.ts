@@ -26,6 +26,7 @@ import {
   companySearchService,
 } from "../services/company-search.js";
 import { issueReadSqlCondition, projectReadSqlCondition } from "../services/authorization.js";
+import { COMPANY_SEARCH_HELP_ARTICLES } from "../services/company-search-help.generated.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
@@ -864,10 +865,13 @@ describeEmbeddedPostgres("companySearchService", () => {
     await createIssue(companyId, { title: "Company search control" });
     const makeQuery = (scope: "help" | "all", offset = "0", extra: Record<string, string> = {}) =>
       companySearchQuerySchema.parse({ q: "company", scope, limit: "1", offset, ...extra });
+    const expectedHelpCount = COMPANY_SEARCH_HELP_ARTICLES.filter((article) =>
+      `${article.title} ${article.summary} ${article.body}`.toLowerCase().includes("company"),
+    ).length;
     const first = await svc.search(companyId, makeQuery("help"));
-    const second = await svc.search(companyId, makeQuery("help", "1"));
+    const last = await svc.search(companyId, makeQuery("help", String(expectedHelpCount - 1)));
 
-    expect(first.countsByType.help).toBe(2);
+    expect(first.countsByType.help).toBe(expectedHelpCount);
     expect(first.results).toHaveLength(1);
     expect(first.results[0]).toMatchObject({
       type: "help",
@@ -880,8 +884,8 @@ describeEmbeddedPostgres("companySearchService", () => {
       },
     });
     expect(first.hasMore).toBe(true);
-    expect(second.hasMore).toBe(false);
-    expect(second.results[0]?.id).not.toBe(first.results[0]?.id);
+    expect(last.hasMore).toBe(false);
+    expect(last.results[0]?.id).not.toBe(first.results[0]?.id);
 
     const all = await svc.search(companyId, makeQuery("all"));
     expect(all.countsByType.help).toBe(first.countsByType.help);
@@ -896,7 +900,11 @@ describeEmbeddedPostgres("companySearchService", () => {
     expect(filtered.countsByType.issue).toBe(0);
 
     const prefix = await svc.search(companyId, companySearchQuerySchema.parse({ q: "impor", scope: "help" }));
-    expect(prefix.results.map((row) => row.id)).toEqual(["company-import-export", "help-and-human-support"]);
+    expect(prefix.results.map((row) => row.id)).toEqual([
+      "company-import-export",
+      "help-and-human-support",
+      "export-and-delete",
+    ]);
     for (const q of ["changed package", "outcome unknown"]) {
       const recovery = await svc.search(companyId, companySearchQuerySchema.parse({ q, scope: "help" }));
       expect(recovery.results.map((row) => row.id), `query=${q}`).toContain("company-import-export");

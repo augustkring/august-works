@@ -1,71 +1,28 @@
 ---
-title: Experimental Features
-summary: What Paperclip experimental features mean for board operators
+help_article_id: preview-and-known-limits
+title: Preview features and known limits
+summary: Understand preview and experimental labels and find the current feature status
+audience: company-members
+product_capability_refs: [V10-015, V10-017, V10-032]
+screen_contract_refs: [SETTINGS-ADVANCED-DEVELOPER]
+owner: augustkring/august-works
+maturity: preview
+applicable_product_versions: [V10]
+locale: en
+last_verified_at: 2026-10-24
+review_trigger: Feature maturity labels, experimental settings, availability, or public release information changes
+security_or_privacy_sensitive: false
+linked_source_files: [ui/src/pages/InstanceExperimentalSettings.tsx, ui/src/hooks/useSaasCapabilities.ts, packages/shared/src/v9-feature-flags.ts]
 ---
 
-Experimental features are opt-in and are provided without compatibility guarantees. They may break, change, or be removed at any time. Use them at your own risk.
+Feature availability can differ by deployment and company. A feature marked **Preview** or **Experimental** is still changing. The Experimental settings page says experimental features may break; do not make a critical process depend on one unless your team accepts that risk.
 
-## What "experimental" means
+## Check whether a feature is available
 
-When a feature is marked experimental, Paperclip is still evaluating the product shape and implementation details.
+Look for the feature in the app and read its current label and setup notice. If it is missing, ask your instance administrator whether it is enabled for your deployment. Do not assume that a feature exists because it appears in an API or developer reference.
 
-- The feature is not part of the stable operator contract yet.
-- UI, API, CLI, behavior, and stored configuration may change as the feature evolves.
-- Paperclip does not promise compatibility, rollback, migration, or long-term support for experimental features.
+An experimental setting is controlled at the instance level when the control is visible. Ask the instance administrator before changing it. Before disabling a setting related to a running integration, check that feature’s own guidance and current status.
 
-If you need stable behavior for an important workflow, do not rely on an experimental feature.
+## Release information and service incidents
 
-## Where you enable them
-
-Board operators enable or disable experiments from **Instance Settings > Experimental** in the app.
-Controls are listed alphabetically within each section. Hosting operators can hide
-controls they manage; empty developer and legacy sections are omitted. Hidden
-controls retain their configured values.
-
-The CLI exposes the same surface:
-
-```sh
-pnpm paperclipai instance settings:experimental
-npx paperclipai instance settings:experimental:update --payload-json '{...}'
-```
-
-Those commands change the same opt-in settings that the UI manages.
-
-## Chat connectors
-
-**Chat connectors** is off by default. Enable it to connect a dedicated
-Slack, GitHub, Microsoft Teams, Telegram, or Discord bot to one Paperclip
-agent. The experiment shows chat setup, connection management, agent channels,
-and external task controls.
-
-When it is off, existing production tool connectors remain available. For
-example, GitHub opens its normal tool connection flow without asking you to
-choose between chat and tools.
-
-This setting controls visibility. Turning it off does not disconnect an
-existing bot or stop its messages. To stop a connection, pause it from its
-chat connection settings before turning off the experiment.
-
-## When to use them
-
-Experimental features are best used when you are:
-
-- evaluating a new capability before wider rollout
-- testing a non-critical workflow
-- comfortable with behavior changes between releases
-- prepared to stop using the feature if it changes or disappears
-
-## Operator expectations
-
-Before enabling an experimental feature:
-
-- decide whether the workflow can tolerate breakage or churn
-- avoid making the feature a dependency for stable production processes
-- keep the scope small until you understand how the feature behaves in your company
-- watch release notes and docs for changes to the feature contract
-
-## Related references
-
-- See [Status Cards](/guides/board-operator/status-cards) for the watched-query summary experiment, refresh policies, and cost model.
-- See the CLI caveat in [Control-Plane Commands](/cli/control-plane-commands).
-- See the repo CLI reference in [`doc/CLI.md`](https://github.com/paperclipai/paperclip/blob/master/doc/CLI.md) when working from the repository.
+This Help Center does not currently provide a complete release-by-release feature history. Use the feature’s current screen and its linked guidance for availability and limits. Open [Help and human support](/help/index) to ask about a specific product limitation. If Help shows a configured service status page, check it for reported service incidents; it does not describe every feature limitation.

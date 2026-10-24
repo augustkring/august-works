@@ -53,7 +53,9 @@ The **Import** page previews the package, lets you resolve name collisions and a
 
 ## Confirm the reviewed package
 
-Preview the package before importing. The app checks the resolved files again before applying the import. If the files changed, open a new preview, review the changes, and confirm again. This also applies when a GitHub URL still has the same name but its branch contents changed.
+Preview the package before importing. The app checks the resolved files again before applying the import. If the files changed, open a new preview, review the changes, and confirm again.
+
+For GitHub packages, the preview shows the exact source commit. All package files come from that revision. If the branch moves to a different commit, review a new preview even when the files appear unchanged. An incomplete file list or an unavailable revision stops the preview. Packages with unresolved submodules inside the selected directory are not supported; use a package whose files are included directly.
 
 Keep **Start imported agents and routines paused** selected while reviewing a package. An import does not authorize imported credentials or scripts. Review each selected Co-worker and routine before activation.
 
