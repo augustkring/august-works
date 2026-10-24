@@ -1,7 +1,7 @@
 import { AgentAvatar } from "../AgentAvatar";
 import { AgentIdentity } from "../AgentIdentity";
 import { memo, type ComponentType, type SVGProps } from "react";
-import { Bot, FileText, Hexagon, MessageSquare, Paperclip, Quote } from "lucide-react";
+import { Bot, BookOpen, FileText, Hexagon, MessageSquare, Paperclip, Quote } from "lucide-react";
 import type { Agent, CompanySearchResult } from "@paperclipai/shared";
 import { Link } from "@/lib/router";
 import { cn } from "@/lib/utils";
@@ -107,6 +107,37 @@ function SearchResultRowImpl({
           ) : null}
         </div>
       </Link>
+    );
+  }
+
+  if (result.type === "help") {
+    const maturity = result.helpArticle?.maturity === "ga" ? "GA" : "Preview";
+    const versions = result.helpArticle?.applicableProductVersions.join(", ") ?? "";
+    return (
+      <a
+        href={result.href}
+        target="_blank"
+        rel="noreferrer"
+        className={cn(ROW_BASE, "py-3", isActive && "bg-muted/40", className)}
+        data-result-type="help"
+      >
+        <BookOpen className="mt-0.5 h-4 w-4 shrink-0 text-muted-foreground" />
+        <div className="min-w-0 flex-1">
+          <div className="flex flex-wrap items-center gap-x-2">
+            <span className="truncate text-sm font-medium">{result.title}</span>
+            <span className="text-xs text-muted-foreground">{maturity}{versions ? ` · ${versions}` : ""}</span>
+          </div>
+          {result.snippet ? (
+            <SnippetLine
+              text={result.snippets[0]?.text ?? result.snippet}
+              highlights={result.snippets[0]?.highlights}
+              field="help"
+              fallbackLabel="Help article"
+              multiline
+            />
+          ) : null}
+        </div>
+      </a>
     );
   }
 

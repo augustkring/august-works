@@ -36,11 +36,13 @@ import {
   type CompanySearchSnippet,
   type CompanySearchSort,
   type CompanySearchUpdatedWithinOption,
+  PRODUCT_IDENTITY,
 } from "@paperclipai/shared";
 import { companyArtifactsService } from "./company-artifacts.js";
 import { companySearchExtractService } from "./company-search-extract.js";
 import { visibleIssueCondition } from "./issue-visibility.js";
 import { parseTaskSearch, taskSearchCtes, taskSearchScore, taskSearchFieldMatch, taskSearchTermMatch } from "./task-search.js";
+import { COMPANY_SEARCH_HELP_ARTICLES } from "./company-search-help.generated.js";
 
 const SNIPPET_MAX_CHARS = 240;
 export const COMPANY_SEARCH_BRANCH_FETCH_LIMIT = COMPANY_SEARCH_MAX_OFFSET + COMPANY_SEARCH_MAX_LIMIT + 1;
@@ -188,7 +190,13 @@ function matchTerms(normalizedQuery: string, tokens: string[]) {
 }
 
 function emptySearchCounts(): Record<CompanySearchCountType, number> {
-  return { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0 };
+  return { issue: 0, comment: 0, document: 0, artifact: 0, agent: 0, project: 0, help: 0 };
+}
+
+export function companySearchHelpHref(slug: string): string | null {
+  if (!/^[a-z0-9][a-z0-9/-]*$/.test(slug) || slug.split("/").some((part) => part === "." || part === "..")) return null;
+  const url = new URL(`/${slug}`, PRODUCT_IDENTITY.docsOrigin);
+  return url.origin === PRODUCT_IDENTITY.docsOrigin ? url.toString() : null;
 }
 
 function emptyFilterOptionCounts(): CompanySearchFilterOptionCounts {
@@ -396,6 +404,10 @@ function scopeIncludesProjects(scope: CompanySearchScope) {
   return scope === "all" || scope === "projects";
 }
 
+function scopeIncludesHelp(scope: CompanySearchScope) {
+  return scope === "all" || scope === "help";
+}
+
 function selectPrimarySnippets(row: IssueSearchRow, normalizedQuery: string, tokens: string[]) {
   const terms = matchTerms(normalizedQuery, tokens);
   const identifierQuery = parseTaskSearch(normalizedQuery).identifierQuery;
@@ -480,6 +492,15 @@ function scoreSimpleRow(row: SimpleSearchRow, normalizedQuery: string, tokens: s
   return score * 10;
 }
 
+function matchesHelpArticleQuery(row: SimpleSearchRow, normalizedQuery: string, tokens: string[]) {
+  const haystack = `${row.title} ${row.description ?? ""}`.toLowerCase();
+  if (normalizedQuery.includes(" ") && haystack.includes(normalizedQuery)) return true;
+  return tokens.length > 0 && tokens.every((token) => {
+    const escaped = token.toLowerCase().replace(/[.*+?^${}()|[\]\\]/g, "\\$&");
+    return new RegExp(`(^|[^\\p{L}\\p{N}_])${escaped}(?=$|[^\\p{L}\\p{N}_])`, "u").test(haystack);
+  });
+}
+
 function artifactResult(artifact: CompanyArtifact, normalizedQuery: string, tokens: string[]): CompanySearchResult {
   const terms = matchTerms(normalizedQuery, tokens);
   const snippet = createSnippet(
@@ -553,6 +574,31 @@ export function companySearchService(db: Db) {
       const sort = query.sort;
       const limit = query.limit;
       const offset = query.offset;
+      const helpRows = hasSearchText && scopeIncludesHelp(scope)
+        ? COMPANY_SEARCH_HELP_ARTICLES.flatMap((article) => {
+          const href = companySearchHelpHref(article.slug);
+          if (!href) return [];
+          const row: SimpleSearchRow = {
+            id: article.articleId,
+            title: article.title,
+            description: `${article.summary} ${article.body}`,
+            createdAt: new Date(`${article.lastVerifiedAt}T00:00:00.000Z`),
+            updatedAt: new Date(`${article.lastVerifiedAt}T00:00:00.000Z`),
+          };
+          if (!matchesHelpArticleQuery(row, normalizedQuery, tokens)) return [];
+          const score = scoreSimpleRow(row, normalizedQuery, tokens);
+          if (score <= 0) return [];
+          const terms = matchTerms(normalizedQuery, tokens);
+          const snippet = createSnippet("help", "Help article", article.summary || article.body, terms);
+          return [{
+            ...row,
+            href,
+            score,
+            snippet,
+            article,
+          }];
+        })
+        : [];
       if (!hasSearchText && !issueOnlyFiltersActive(query)) {
         return {
           query: query.q,
@@ -1028,11 +1074,13 @@ export function companySearchService(db: Db) {
       countsByType.artifact = artifactCount;
       countsByType.agent = agentCount;
       countsByType.project = projectCount;
+      countsByType.help = helpRows.length;
 
       const currentTotalCount = (scopeIncludesIssues(scope) ? aggregates.totals.current : 0)
         + artifactCount
         + agentCount
-        + projectCount;
+        + projectCount
+        + helpRows.length;
 
       const results: SearchResultWithSort[] = [
         ...issueRows.map((row) => {
@@ -1086,6 +1134,30 @@ export function companySearchService(db: Db) {
             sortPriorityRank: ISSUE_PRIORITIES.length,
           };
         }),
+        ...helpRows.map(({ article, snippet, ...row }) => ({
+          id: row.id,
+          type: "help" as const,
+          score: row.score,
+          title: row.title,
+          href: row.href,
+          matchedFields: ["title", "summary", "body"],
+          sourceLabel: `Help · ${article.maturity === "ga" ? "GA" : "Preview"}`,
+          snippet: snippet?.text ?? article.summary,
+          snippets: snippet ? [snippet] : [],
+          helpArticle: {
+            articleId: article.articleId,
+            audience: article.audience,
+            maturity: article.maturity,
+            applicableProductVersions: [...article.applicableProductVersions],
+            locale: article.locale,
+            lastVerifiedAt: article.lastVerifiedAt,
+            source: "mintlify" as const,
+          },
+          updatedAt: null,
+          previewImageUrl: null,
+          sortCreatedAt: null,
+          sortPriorityRank: ISSUE_PRIORITIES.length,
+        })),
       ].sort(compareSearchResults(sort));
 
       async function countTotalNonIssue(filters: CompanySearchQuery) {
@@ -1094,7 +1166,7 @@ export function companySearchService(db: Db) {
           scopeIncludesAgents(scope) ? countAgents(filters) : Promise.resolve(0),
           scopeIncludesProjects(scope) ? countProjects(filters) : Promise.resolve(0),
         ]);
-        return artifactTotal + agentTotal + projectTotal;
+        return artifactTotal + agentTotal + projectTotal + (scopeIncludesHelp(scope) ? helpRows.length : 0);
       }
 
       const filtersActive = activeIssueFilters(query);
