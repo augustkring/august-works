@@ -599,6 +599,24 @@ export async function issueReadSqlCondition(_db: Db | DbTransaction, actor: Auth
   return taskSourcePrivacySqlCondition("issue", sql`${issues.id}`, sql`${issues.companyId}`, actor);
 }
 
+/** Every native read uses the same persisted Task binding, including recursive
+ * list/count source checks. A display key cannot replace a missing UUID. */
+function heartbeatRunTaskBindingCondition(row: SQL): SQL<boolean> {
+  const context = sql`coalesce(${row}.context_snapshot,'{}'::jsonb)`;
+  return sql<boolean>`(jsonb_typeof(${context})='object' and (
+    (${row}.scope_kind='company' and ${row}.issue_id is null and ${row}.native_issue_id is null
+      and not (${context} ? 'issueId' or ${context} ? 'taskId' or ${context} ? 'taskKey'))
+    or (${row}.scope_kind='issue'
+      and (${context}->>'issueId' is null or ${context}->>'issueId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$')
+      and (${context}->>'taskId' is null or ${context}->>'taskId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$')
+      and (select count(distinct ref.id) from (values (${row}.issue_id),(${row}.native_issue_id),
+        (case when ${context}->>'issueId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+          then (${context}->>'issueId')::uuid end),
+        (case when ${context}->>'taskId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+          then (${context}->>'taskId')::uuid end)) ref(id))=1)
+  ))`;
+}
+
 /** One native Task/Project source graph; this never authorizes a company action. */
 function taskSourcePrivacySqlCondition(kind: "issue" | "project" | "run", id: SQL, company: SQL, actor: AuthorizationActor): SQL<boolean> {
   const contextRoots = sql`
@@ -674,8 +692,7 @@ function taskSourcePrivacySqlCondition(kind: "issue" | "project" | "run", id: SQ
         or (n.kind='project' and not exists(select 1 from projects p where p.id=n.id and p.company_id=${company}
           and p.source_provenance_qualified and (p.visibility='open' or ${projectPrincipalAccess(actor, sql`p.id`, sql`${company}`)})))
         or (n.kind='run' and not exists(select 1 from ${heartbeatRuns} r where r.id=n.id and r.company_id=${company}
-          and (r.context_snapshot->>'issueId' is null or r.context_snapshot->>'issueId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$')
-          and (r.context_snapshot->>'taskId' is null or r.context_snapshot->>'taskId' ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$')))
+          and ${heartbeatRunTaskBindingCondition(sql`r`)}))
     ) end
   )`;
 }
@@ -690,20 +707,6 @@ export async function canActorReadProjectPrivacy(db: Db | DbTransaction, actor: 
 /** Original persisted run binding, never caller-supplied scope or context facts.
  * This narrows payload visibility; company/action and V8 copy checks still apply. */
 export async function canActorReadHeartbeatRunPrivacy(db: Db | DbTransaction, actor: AuthorizationActor, source: { id: string; companyId: string }): Promise<boolean> {
-  const [run] = await db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.id, source.id), eq(heartbeatRuns.companyId, source.companyId))).limit(1);
-  if (!run) return false;
-  const context = run.contextSnapshot ?? {};
-  const refs = new Set<string>();
-  for (const ref of [run.issueId, run.nativeIssueId, context.issueId, context.taskId]) {
-    if (ref == null) continue;
-    if (typeof ref !== "string" || !privacyUuid.test(ref)) return false;
-    refs.add(ref);
-  }
-  // A legacy task key is not proof of a truly unbound company run.
-  if (Object.hasOwn(context, "taskKey") && !refs.size) return false;
-  if (run.scopeKind === "company") {
-    if (refs.size || Object.hasOwn(context, "issueId") || Object.hasOwn(context, "taskId")) return false;
-  } else if (run.scopeKind !== "issue" || !refs.size) return false;
   return (await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
     eq(heartbeatRuns.id, source.id), eq(heartbeatRuns.companyId, source.companyId),
     taskSourcePrivacySqlCondition("run", sql`${heartbeatRuns.id}`, sql`${heartbeatRuns.companyId}`, actor),

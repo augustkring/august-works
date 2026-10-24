@@ -915,3 +915,21 @@ additional legacy route failures reproduce against the parent production files
 and remain open. This first producer does not activate Native run protocols,
 complete payload reads, other constructors or full V10/PR admission. Evidence:
 `doc/operations/aw-v10-evidence/native-manual-task-2026-10-24/checkpoint.json`.
+
+### 2026-10-24 — consistent run identity at direct and recursive read owners
+
+The common SQL Task-source graph now validates the actual run's unique UUID
+binding for both direct run reads and recursive list/count/read projections.
+Conflicting references and Task-key-only unknown history are denied; equivalent
+UUID spellings remain valid. A parent-production control first reproduced the
+ambiguous-run exposure. The two broader route fixtures now use actual native
+Project HTTP creation and explicit valid Task bindings, retaining separate
+negative ambiguous/unknown rows. Final124 cases across five native suites pass.
+
+The corrected typed-origin fixture records three genuine open failures: valid
+Workflow/Routine origins are wrongly looked up as heartbeat runs, and a same-ID
+unrelated heartbeat can substitute for a missing WorkflowRun. Combined with the
+unchanged private-Memory/temporal cases, the focused remaining source gate is
+six failures/five passes in three suites. This checkpoint does not admit private
+work, complete input receipts, typed origins or full V10/PR acceptance. Evidence:
+`doc/operations/aw-v10-evidence/native-run-binding-2026-10-24/checkpoint.json`.

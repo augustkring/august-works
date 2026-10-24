@@ -206,3 +206,32 @@ broader legacy route failures also reproduce against the unchanged parent
 production files; their source contracts still need reconciliation. This is
 neither complete source support nor full V10/PR acceptance. Evidence:
 `doc/operations/aw-v10-evidence/native-manual-task-2026-10-24/checkpoint.json`.
+
+## Canonical persisted run identity — 2026-10-24
+
+Native Task source reads now share one SQL binding check, including the direct
+run reader and recursive Task/Project list/count paths. A genuine company run
+has no Task identity keys or UUID anchors. An issue run must retain exactly one
+UUID identity across `issue_id`, `native_issue_id` and context `issueId`/`taskId`;
+case-equivalent UUID spellings are the same identity. Malformed/unknown contexts,
+conflicting identities and a display Task key without a UUID remain withheld.
+Existing current ACLs, source traversal/bounds and action policies still apply.
+
+The parent-production control reproduced an ambiguous native run being readable
+directly. The final real PG check covers both Run and derived Task denial and
+case-equivalent valid references. Legacy positive route fixtures now construct
+Projects through their actual local-trusted HTTP owner and retain explicit,
+consistent Task UUIDs; separate negative rows preserve the original ambiguous
+and Task-key-only data. The earlier three route failures are reconciled without
+loosening source policy. Final verification passes124 cases in five suites.
+
+The separate seven-case typed-origin regression now uses valid transactional
+Workflow revision/backref fixtures. Four negative cases pass; valid Workflow
+and Routine creation still incorrectly seek heartbeat rows, while an unrelated
+same-UUID company heartbeat can substitute for a missing WorkflowRun. Those
+three failures and the original three private-Memory/temporal failures remain
+open (six failures/five passes across three focused suites). Typed owner lookup,
+retention triggers, canonical read semantics and exact revision ownership must
+be fixed together; no generic UUID fallback, provenance flag or private-source
+grant is introduced by this checkpoint. Evidence:
+`doc/operations/aw-v10-evidence/native-run-binding-2026-10-24/checkpoint.json`.
