@@ -6,7 +6,9 @@ import express from "express";
 import type WebSocket from "ws";
 import request from "supertest";
 import { issueRoutes } from "../routes/issues.js";
+import { projectRoutes } from "../routes/projects.js";
 import { errorHandler } from "../middleware/index.js";
+import { actorMiddleware } from "../middleware/auth.js";
 import { issueRecoveryActionService } from "../services/issue-recovery-actions.js";
 import { randomUUID } from "node:crypto";
 import { Readable } from "node:stream";
@@ -47,7 +49,6 @@ import {
   toolConnections,
   toolConnectionInstalls,
   connectionGrants,
-  projects,
 } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import {
@@ -1155,10 +1156,16 @@ describe("AgentMail durable email pipeline", () => {
         { userId: "email-board" },
       ),
     ).rejects.toThrow(/boundary/);
-    const [project] = await db
-      .insert(projects)
-      .values({ companyId: f.companyId, name: "Email work" })
-      .returning();
+    const app = express();
+    app.use(express.json());
+    app.use(actorMiddleware(db, { deploymentMode: "local_trusted" }));
+    app.use("/api", projectRoutes(db));
+    app.use(errorHandler);
+    const projectResponse = await request(app)
+      .post(`/api/companies/${f.companyId}/projects`)
+      .send({ name: "Email work", status: "in_progress" })
+      .expect(201);
+    const project = projectResponse.body as { id: string };
     await db
       .update(agents)
       .set({
