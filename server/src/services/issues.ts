@@ -8,6 +8,7 @@ import { createdFromIssueCondition } from "./issue-creation-origin.js";
 import { executionProjectionsForRuns } from "./execution-projection.js";
 import type { ExecutionProjection } from "@paperclipai/shared";
 import { Buffer } from "node:buffer";
+import { isDeepStrictEqual } from "node:util";
 import { createHash, randomUUID } from "node:crypto";
 import { suppressAnalyticalSource } from "./analytical-privacy.js";
 import { forgetMemoryForDeletedIssue, lockMemoryPrivacy } from "./memory/memory-privacy.js";
@@ -15,7 +16,8 @@ import { lockBusinessEventCompany, suppressBusinessEventsForObject } from "./bus
 import { authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, canActorReadTypedTaskSourcePrivacy, pinCurrentBoardActor, type AuthorizationActor } from "./authorization.js";
 import { assertHumanAuthentication, isAuthenticationStateBusy } from "../auth/authenticator-assurance.js";
 import { directHumanPayloadSnapshotSql, nativePayloadSnapshotSql, captureNativeTemporalContext,
-  assertDirectInputSessionCurrent as assertManualInputCredentialCurrent } from "./native-direct-input.js";
+  assertDirectInputSessionCurrent as assertManualInputCredentialCurrent, readNativeIssueEffectPrefix } from "./native-direct-input.js";
+import type { NativeToolEffectClaim } from "../agent-auth-jwt.js";
 import { resolveTaskWatchdogMutationScope, taskWatchdogScopeAllowsIssueMutation } from "./task-watchdog-scope.js";
 import {
   and,
@@ -10096,7 +10098,8 @@ export function issueService(db: Db) {
       data: IssueCreateInput,
       dbOrTx: Db | DbTransaction = db,
       postCommitActivityPublications?: ActivityPublication[],
-      options: { manualInputActor?: AuthorizationActor; privacyActor?: AuthorizationActor; sourceAccessActor?: AuthorizationActor } = {},
+      options: { manualInputActor?: AuthorizationActor; privacyActor?: AuthorizationActor; sourceAccessActor?: AuthorizationActor;
+        nativeEffectClaim?: NativeToolEffectClaim } = {},
     ) => {
       const ownedPrivacyPublications: ActivityPublication[] = [];
       const privacyPublications = postCommitActivityPublications ?? ownedPrivacyPublications;
@@ -10104,6 +10107,10 @@ export function issueService(db: Db) {
       const manualActor = options.manualInputActor ? { ...options.manualInputActor } : null;
       const suppliedPrivacyActor = options.privacyActor ? { ...options.privacyActor } : null;
       const suppliedSourceAccessActor = options.sourceAccessActor ? { ...options.sourceAccessActor } : null;
+      const nativeEffectClaim = options.nativeEffectClaim ?? null;
+      if (nativeEffectClaim && (!suppliedPrivacyActor || suppliedPrivacyActor.type !== "agent" ||
+        !suppliedPrivacyActor.nativeToolEffect || !isDeepStrictEqual(suppliedPrivacyActor.nativeToolEffect, nativeEffectClaim)))
+        throw forbidden("The authenticated native Task effect is unavailable");
       if (manualActor && (manualActor.type !== "board" || manualActor.source !== "session" ||
           !manualActor.userId || !manualActor.sessionId || manualActor.runId ||
           data.createdByUserId !== manualActor.userId || data.createdByAgentId))
@@ -10172,6 +10179,7 @@ export function issueService(db: Db) {
         let privacyActorExpiresAt: number | null = null;
         let privacyActorPinned = false;
         let currentPrivacyActor = suppliedPrivacyActor;
+        let nativeEffectPrefix: Awaited<ReturnType<typeof readNativeIssueEffectPrefix>> | null = null;
         let sourceAccessActorExpiresAt: number | null = null;
         let sourceAccessActorPinned = false;
         let currentSourceAccessActor = suppliedSourceAccessActor;
@@ -10186,6 +10194,12 @@ export function issueService(db: Db) {
           if (sourceAccessActorPinned && currentSourceAccessActor?.type === "board")
             await assertManualInputCredentialCurrent(tx, currentSourceAccessActor, sourceAccessActorExpiresAt,
               "The authenticated Task source reader credential is unavailable");
+          if (nativeEffectClaim) {
+            if (!currentPrivacyActor) throw forbidden("The authenticated native Task effect is unavailable");
+            const currentPrefix = await readNativeIssueEffectPrefix(tx, currentPrivacyActor, nativeEffectClaim);
+            if (!nativeEffectPrefix || !isDeepStrictEqual(currentPrefix, nativeEffectPrefix))
+              throw forbidden("Native Task input prefix changed");
+          }
           return result;
         };
         if (captureManualInput && manualActor) {
@@ -10227,6 +10241,11 @@ export function issueService(db: Db) {
           currentSourceAccessActor = pinned.actor;
           sourceAccessActorExpiresAt = pinned.credentialExpiresAt;
           sourceAccessActorPinned = true;
+        }
+        if (nativeEffectClaim) {
+          if (!currentPrivacyActor || currentPrivacyActor.type !== "agent")
+            throw forbidden("The authenticated native Task effect is unavailable");
+          nativeEffectPrefix = await readNativeIssueEffectPrefix(tx, currentPrivacyActor, nativeEffectClaim);
         }
         if (currentSourceAccessActor) {
           const sourceReaderDecision = await authorizationService(tx).decide({ actor: currentSourceAccessActor,
@@ -10600,16 +10619,46 @@ export function issueService(db: Db) {
 
         issueData.id ??= randomUUID();
         const privacy = await resolveIssuePrivacy(tx, companyId, { ...issueData, id: issueData.id }, null, actorRunId,
-          workspaceInheritanceIssueId ? [workspaceInheritanceIssueId] : [], !!suppliedPrivacyActor && suppliedPrivacyActor.type === "agent");
+          workspaceInheritanceIssueId ? [workspaceInheritanceIssueId] : [], !!suppliedPrivacyActor && suppliedPrivacyActor.type === "agent" && !nativeEffectClaim);
+        if (nativeEffectPrefix) {
+          const addCapturedSources = async (kind: "issue" | "project" | "run", ids: readonly string[]) => {
+            for (const sourceId of ids) {
+              if (kind === "issue" && sourceId === issueData.id) throw forbidden("Native Task input source is ambiguous");
+              if (!privacy.sources.some(source => source.sourceKind === kind && source.sourceId === sourceId))
+                privacy.sources.push({ sourceKind: kind, sourceId });
+              const readableWithoutActor = kind === "issue"
+                ? await canActorReadIssuePrivacy(tx, { type: "none" }, { id: sourceId, companyId })
+                : kind === "project"
+                  ? await canActorReadProjectPrivacy(tx, { type: "none" }, { id: sourceId, companyId })
+                  : await canActorReadHeartbeatRunPrivacy(tx, { type: "none" }, { id: sourceId, companyId });
+              if (!readableWithoutActor) {
+                privacy.visibility = "private";
+                if (kind === "issue") {
+                  const [source] = await tx.select({ id: issues.id, privacyRootIssueId: issues.privacyRootIssueId })
+                    .from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, sourceId)));
+                  privacy.privacyRootIssueId ??= source?.privacyRootIssueId ?? source?.id ?? null;
+                }
+              }
+            }
+          };
+          await addCapturedSources("issue", nativeEffectPrefix.policy.issueIds);
+          await addCapturedSources("project", nativeEffectPrefix.policy.projectIds);
+          await addCapturedSources("run", nativeEffectPrefix.policy.runIds);
+          await addCapturedSources("issue", nativeEffectPrefix.inputs.map(input => input.issueId));
+        }
         const temporalContextPolicy: NativePayloadSourcePolicy = {
           issueIds: [...new Set(privacy.sources.filter(source => source.sourceKind === "issue").map(source => source.sourceId))].sort(),
           projectIds: [...new Set(privacy.sources.filter(source => source.sourceKind === "project").map(source => source.sourceId))].sort(),
           runIds: [...new Set(privacy.sources.filter(source => source.sourceKind === "run").map(source => source.sourceId))].sort(),
           memoryIds: [], foundationRevisionIds: [],
         };
-        const freezeTemporalContext = privacy.temporalContextInputs !== null &&
+        const freezeTemporalContext = !nativeEffectPrefix && privacy.temporalContextInputs !== null &&
           privacy.temporalContextInputs.length + temporalContextPolicy.issueIds.length + temporalContextPolicy.projectIds.length +
             temporalContextPolicy.runIds.length <= 256;
+        const freezeNativeEffectPrefix = nativeEffectPrefix !== null &&
+          nativeEffectPrefix.inputs.length + temporalContextPolicy.issueIds.length + temporalContextPolicy.projectIds.length +
+            temporalContextPolicy.runIds.length <= 256;
+        if (nativeEffectPrefix && !freezeNativeEffectPrefix) throw forbidden("Native Task input prefix exceeds its bound");
         if (privateWorkAdmission === "closed" && privacy.visibility === "private") throw unprocessable("Private tasks are not available");
         if (privacy.visibility === "private" && !responsibleUserId) throw unprocessable("Private tasks require a responsible user");
         const creatorActor: AuthorizationActor = currentPrivacyActor ?? (issueData.createdByAgentId
@@ -10667,14 +10716,15 @@ export function issueService(db: Db) {
         if (captureManualInput) Object.assign(values, {
           payloadSourceProtocolVersion: 1, payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: false,
         });
-        if (freezeTemporalContext) Object.assign(values, {
+        if (freezeTemporalContext || freezeNativeEffectPrefix) Object.assign(values, {
           payloadSourceProtocolVersion: 1, payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: false,
         });
         let [issue] = await tx.insert(issues).values(values).returning();
         await retainIssuePrivacySources(tx, issue, privacy.sources);
-        if (freezeTemporalContext) {
+        if (freezeTemporalContext || freezeNativeEffectPrefix) {
+          const snapshotInputs = nativeEffectPrefix?.inputs ?? privacy.temporalContextInputs!;
           const [captured] = await tx.update(issues).set({ payloadSourceSnapshot: nativePayloadSnapshotSql(
-            "issue", temporalContextPolicy, privacy.temporalContextInputs!,
+            "issue", temporalContextPolicy, snapshotInputs,
           ) }).where(and(eq(issues.companyId, companyId), eq(issues.id, issue.id),
             eq(issues.payloadSourceProtocolVersion, 1), isNull(issues.payloadSourceSnapshot),
             eq(issues.payloadSourceSnapshotInvalidated, false))).returning();

@@ -3746,6 +3746,13 @@
       "when": 1792923052473,
       "tag": "0536_yellow_nemesis",
       "breakpoints": true
+    },
+    {
+      "idx": 537,
+      "version": "7",
+      "when": 1792924966372,
+      "tag": "0537_sandbox_admission_claim",
+      "breakpoints": true
     }
   ]
 }

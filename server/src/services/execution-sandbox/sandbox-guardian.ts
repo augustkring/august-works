@@ -3,6 +3,7 @@ import {
   runtimeCells,
   runtimeHosts,
   runtimePolicySnapshots,
+  runtimeHostCommands,
   runtimeSandboxBindings,
   type Db,
 } from "@paperclipai/db";
@@ -36,6 +37,7 @@ export async function fenceSandboxAdmissionOutcome(
     cellId: string;
     generation: string;
     policySnapshotId: string;
+    claimKey: string;
     operationKeys: string[];
     stopConfirmed: boolean;
     now?: Date;
@@ -102,8 +104,128 @@ export async function fenceSandboxAdmissionOutcome(
         details: {
           generation: input.generation,
           policySnapshotId: input.policySnapshotId,
+          claimKey: input.claimKey,
           operationKeys: input.operationKeys,
           stopConfirmed: input.stopConfirmed,
+        },
+      },
+      publications,
+    );
+    return true;
+  });
+}
+
+/** Release a durable reservation only on a path that has proved no apply/start
+ * command was attempted. The exact claim and generation prevent clearing a
+ * successor reservation. */
+export async function releaseSandboxAdmissionClaim(
+  db: Db,
+  input: {
+    companyId: string;
+    bindingId: string;
+    cellId: string;
+    generation: string;
+    policySnapshotId: string;
+    claimKey: string;
+    applyKey: string;
+    startKey: string;
+    reason: string;
+    now?: Date;
+  },
+) {
+  const now = input.now ?? new Date();
+  return withV7ActivityTransaction(db, async (tx, publications) => {
+    await tx
+      .select({ id: runtimeCells.id })
+      .from(runtimeCells)
+      .where(and(eq(runtimeCells.companyId, input.companyId), eq(runtimeCells.id, input.cellId)))
+      .for("update");
+    const [binding] = await tx
+      .select()
+      .from(runtimeSandboxBindings)
+      .where(
+        and(
+          eq(runtimeSandboxBindings.companyId, input.companyId),
+          eq(runtimeSandboxBindings.id, input.bindingId),
+          eq(runtimeSandboxBindings.runtimeCellId, input.cellId),
+          eq(runtimeSandboxBindings.cellGeneration, input.generation),
+          eq(runtimeSandboxBindings.status, "admitting"),
+        ),
+      )
+      .for("update");
+    if (!binding) return false;
+    const [claim] = await tx
+      .select({ id: activityLog.id })
+      .from(activityLog)
+      .where(
+        and(
+          eq(activityLog.companyId, input.companyId),
+          eq(activityLog.entityType, "runtime_sandbox"),
+          eq(activityLog.entityId, input.bindingId),
+          eq(activityLog.action, "sandbox.admission_claimed"),
+          sql`${activityLog.details}->>'claimKey' = ${input.claimKey}`,
+          sql`${activityLog.details}->>'generation' = ${input.generation}`,
+          sql`${activityLog.details}->>'policySnapshotId' = ${input.policySnapshotId}`,
+        ),
+      )
+      .limit(1);
+    if (!claim) return false;
+    const [applyCommand] = await tx
+      .select({ status: runtimeHostCommands.status, safeResult: runtimeHostCommands.safeResult })
+      .from(runtimeHostCommands)
+      .where(
+        and(
+          eq(runtimeHostCommands.companyId, input.companyId),
+          eq(runtimeHostCommands.runtimeCellId, input.cellId),
+          eq(runtimeHostCommands.cellGeneration, BigInt(input.generation)),
+          sql`${runtimeHostCommands.payload}->>'action' = 'apply'`,
+          sql`${runtimeHostCommands.payload}->'admission'->>'idempotencyKey' = ${input.applyKey}`,
+        ),
+      )
+      .limit(1);
+    const [startCommand] = await tx
+      .select({ id: runtimeHostCommands.id })
+      .from(runtimeHostCommands)
+      .where(
+        and(
+          eq(runtimeHostCommands.companyId, input.companyId),
+          eq(runtimeHostCommands.runtimeCellId, input.cellId),
+          eq(runtimeHostCommands.cellGeneration, BigInt(input.generation)),
+          sql`${runtimeHostCommands.payload}->>'action' = 'start'`,
+          sql`${runtimeHostCommands.payload}->'start'->>'idempotencyKey' = ${input.startKey}`,
+        ),
+      )
+      .limit(1);
+    const knownNoEffectApply = applyCommand?.status === "SUCCEEDED" &&
+      (applyCommand.safeResult as { action?: string; applied?: boolean; requiresRecreate?: boolean } | null)?.action === "apply" &&
+      !(applyCommand.safeResult as { applied?: boolean; requiresRecreate?: boolean }).applied;
+    if (startCommand || (applyCommand && !knownNoEffectApply)) return false;
+    await tx
+      .update(runtimeSandboxBindings)
+      .set({ status: "ready", version: binding.version + 1, updatedAt: now })
+      .where(
+        and(
+          eq(runtimeSandboxBindings.companyId, input.companyId),
+          eq(runtimeSandboxBindings.id, input.bindingId),
+          eq(runtimeSandboxBindings.cellGeneration, input.generation),
+          eq(runtimeSandboxBindings.version, binding.version),
+          eq(runtimeSandboxBindings.status, "admitting"),
+        ),
+      );
+    await logActivity(
+      tx,
+      {
+        companyId: input.companyId,
+        actorType: "system",
+        actorId: "sandbox-guardian",
+        action: "sandbox.admission_claim_released",
+        entityType: "runtime_sandbox",
+        entityId: input.bindingId,
+        details: {
+          claimKey: input.claimKey,
+          generation: input.generation,
+          policySnapshotId: input.policySnapshotId,
+          reason: input.reason,
         },
       },
       publications,
@@ -131,7 +253,7 @@ export async function reconcileSandboxSafety(
     await db.execute(sql`select b.id,b.company_id,b.runtime_cell_id
     from runtime_sandbox_bindings b join runtime_cells c on c.company_id=b.company_id and c.id=b.runtime_cell_id
     where b.status not in ('deleted','stopped') and c.deleted_at is null
-      and (b.status='ready' or c.status in ('HEALTHY','DEGRADED','FAILED'))
+      and (b.status in ('ready','running') or (b.status='admitting' and b.updated_at <= ${new Date(now.getTime() - 60000).toISOString()}::timestamptz) or c.status in ('HEALTHY','DEGRADED','FAILED'))
     order by b.updated_at,b.id limit ${Math.max(1, Math.min(100, Math.trunc(limit) || 20))}`);
   let quarantined = 0,
     stopRequested = 0,
@@ -176,6 +298,19 @@ export async function reconcileSandboxSafety(
               .where(eq(runtimeHosts.id, cell.runtimeHostId))
           : [];
         const reasons: string[] = [];
+        const staleAdmission = binding.status === "admitting" && binding.updatedAt.getTime() <= now.getTime() - 60000;
+        let staleClaimKey: string | null = null;
+        if (staleAdmission) {
+          reasons.push("admission_claim_stale");
+          const [claim] = await tx.select({ details: activityLog.details }).from(activityLog).where(and(
+            eq(activityLog.companyId, cell.companyId),
+            eq(activityLog.entityType, "runtime_sandbox"),
+            eq(activityLog.entityId, binding.id),
+            eq(activityLog.action, "sandbox.admission_claimed"),
+          )).orderBy(sql`${activityLog.createdAt} desc, ${activityLog.id} desc`).limit(1);
+          const details = claim?.details as Record<string, unknown> | undefined;
+          staleClaimKey = typeof details?.claimKey === "string" ? details.claimKey : null;
+        }
         if (
           !v7FeatureEnabled(flags, "sandbox_abstraction_v7") ||
           (binding.backend === "openshell" &&
@@ -216,7 +351,7 @@ export async function reconcileSandboxSafety(
             now.getTime() - (options.hostMaxAgeSeconds ?? 90) * 1000
         )
           reasons.push("host_authority_unavailable");
-        const live = ["HEALTHY", "DEGRADED", "FAILED"].includes(cell.status);
+        const live = binding.status === "running" || ["HEALTHY", "DEGRADED", "FAILED"].includes(cell.status);
         // Native V7-bound admission remains closed until applied-policy execution
         // is integrated. A live bound cell currently represents a lifecycle bypass.
         if (live) reasons.push("applied_boundary_admission_unavailable");
@@ -247,6 +382,26 @@ export async function reconcileSandboxSafety(
             },
             publications,
           );
+          if (staleAdmission) {
+            await logActivity(
+              tx,
+              {
+                companyId: cell.companyId,
+                actorType: "system",
+                actorId: "sandbox-guardian",
+                action: "sandbox.admission_safety_fenced",
+                entityType: "runtime_sandbox",
+                entityId: binding.id,
+                details: {
+                  generation: binding.cellGeneration,
+                  claimKey: staleClaimKey,
+                  stopConfirmed: false,
+                  reason: "stale_admission_outcome_unknown",
+                },
+              },
+              publications,
+            );
+          }
         } else
           await tx
             .update(runtimeSandboxBindings)

@@ -24,6 +24,7 @@ import {
 } from "./context-authority.js";
 import { fitEvidenceToBudget } from "./context-budget.js";
 import { contextManifestService, type DelegatedContextExecutionBindingInput } from "./context-manifest.js";
+import type { NativeBootstrapContextWitness } from "./native-bootstrap-context-witness.js";
 import {
   connectedKnowledgeContextProvider,
   createConnectedKnowledgeRegistry,
@@ -144,6 +145,8 @@ export interface ContextAssemblyResult {
   /** Additional evidence inspected for a bounded decision such as readiness,
    * kept separate from the normal Context packet budget. */
   inspectionEvidence?: EvidenceItem[];
+  /** Internal native-bootstrap token; never included in serialized Context packets. */
+  nativeBootstrapWitness?: NativeBootstrapContextWitness;
 }
 
 export interface ContextInspectionHooks<T> {
@@ -685,7 +688,8 @@ export function defaultConnectedKnowledgeContextProviders(
 export function contextEngineService(db: Db, options: { providers?: ContextProvider[] } = {}) {
   const assemble = async (rawInput: AssembleContextInput, inspectionActor?: AuthorizationActor,
     activeDb: Db = db, inspectionAuthority?: NativeContextInspectionOwner,
-    inspectionHooks?: ContextInspectionHooks<unknown>, delegatedSource?: NativeDelegatedContextSource): Promise<ContextAssemblyResult> => {
+    inspectionHooks?: ContextInspectionHooks<unknown>, delegatedSource?: NativeDelegatedContextSource,
+    nativeBootstrap = false): Promise<ContextAssemblyResult> => {
       const manifests = contextManifestService(activeDb);
       const access = accessService(activeDb);
       if (rawInput.sourceScope !== undefined && rawInput.sourceScope !== "task_only")
@@ -806,8 +810,14 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
             return { decision, retrievalScore };
           }),
         };
+      const bootstrapPacket = nativeBootstrap ? packetFromDecisions(budgeted.selected, {
+        sensitivityCeiling, asOf, warnings: providerResult.warnings, manifest: null,
+        selectedEstimatedTokens: budgeted.selectedEstimatedTokens,
+      }) : null;
+      const bootstrapMarkdown = bootstrapPacket ? serializeContextPacket(bootstrapPacket) : null;
       const manifestResult = inspectionActor ? null : await withContextStageDeadline(
-        "context_manifest", () => manifests.create(contextSourceInput), deadlineAt);
+        "context_manifest", () => manifests.create(contextSourceInput,
+          nativeBootstrap && bootstrapMarkdown !== null ? { renderedMarkdown: bootstrapMarkdown } : undefined), deadlineAt);
       const inspectionResult = inspectionActor ? await withContextStageDeadline(
         "context_inspection", () => manifests.inspectReadOnly(contextSourceInput, inspectionActor, inspectionAuthority!), deadlineAt) : null;
 
@@ -862,12 +872,16 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
         ).catch(() => undefined);
       }
 
+      const renderedMarkdown = serializeContextPacket(packet);
+      if (nativeBootstrap && bootstrapMarkdown !== renderedMarkdown)
+        throw forbidden("Native bootstrap Context rendering changed after its source pin.");
       const result: ContextAssemblyResult = {
         packet,
         decisions: budgeted.selected,
-        markdown: serializeContextPacket(packet),
+        markdown: renderedMarkdown,
         ...(inspectionResult ? { inspection: inspectionResult } : {}),
         ...(inspectionEvidence.length ? { inspectionEvidence: inspectedExtra } : {}),
+        ...(manifestResult?.nativeBootstrapWitness ? { nativeBootstrapWitness: manifestResult.nativeBootstrapWitness } : {}),
       };
       if (inspectionActor && inspectionHooks?.complete) {
         if (!inspectionAuthority || !inspectionResult) throw forbidden("Human Context inspection authority is unavailable");
@@ -883,6 +897,9 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
   };
   return {
     assemble: (rawInput: AssembleContextInput) => assemble(rawInput),
+    assembleNativeBootstrap: async (rawInput: AssembleContextInput): Promise<ContextAssemblyResult> => {
+      return assemble(rawInput, undefined, db, undefined, undefined, undefined, true);
+    },
     inspectReadOnly: async <T = ContextAssemblyResult>(rawInput: AssembleContextInput, actor: AuthorizationActor,
       hooks?: ContextInspectionHooks<T>): Promise<T> => db.transaction(async rawTx => {
       const txDb = rawTx as unknown as Db;

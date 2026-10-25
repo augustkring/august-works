@@ -105,7 +105,7 @@ export function openShellBackend(options: {
       const projection = projectOpenShellPolicy(input.policy.compiledPolicy);
       if (projection.unsupportedFeatures.length) throw forbidden("OpenShell cannot enforce every requested control");
       const current = await observed(input), policyHash = nativeSha256(input.policy);
-      if (!current.controlsHealthy || current.policyHash !== policyHash || !["ready", "stopped"].includes(current.state)) throw conflict("Current observed policy is required before workload admission");
+      if (!current.controlsHealthy || current.policyHash !== policyHash || !["ready", "stopped", "running"].includes(current.state)) throw conflict("Current observed policy is required before workload admission");
       try { await boundaryProof(projection.document); } catch (error) { await contain(policyHash); throw error; }
       return bridge.start({ ...identity, expiresAt: input.expiresAt, policyHash, idempotencyKey: input.idempotencyKey });
     },

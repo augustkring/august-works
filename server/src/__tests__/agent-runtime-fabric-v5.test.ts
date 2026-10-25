@@ -1,7 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
 import { and, eq } from "drizzle-orm";
-import { agents, companyMemberships, agentExecutionManifests, agentExecutionScopeRequests, delegatedContextManifestBindings, heartbeatRuns, instanceSettings, issues, projects, toolApplications, toolConnections, connectionGrants, contextManifests, toolCatalogEntries, toolProfiles, toolProfileBindings, toolInvocations, principalPermissionGrants, createDb } from "@paperclipai/db";
+import { agents, companies, companyMemberships, agentExecutionManifests, agentExecutionScopeRequests, delegatedContextManifestBindings, heartbeatRuns, instanceSettings, issues, projects, toolApplications, toolConnections, connectionGrants, contextManifests, toolCatalogEntries, toolProfiles, toolProfileBindings, toolInvocations, principalPermissionGrants, createDb } from "@paperclipai/db";
 import { PROVIDER_CAPABILITY_FEATURES } from "@paperclipai/shared";
 import { startEmbeddedPostgresTestDatabase, getEmbeddedPostgresTestSupport } from "./helpers/embedded-postgres.js";
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
@@ -108,7 +108,12 @@ describe.skipIf(!support.supported)("V5 execution authority", () => {
       expect(resolvedBinding[0]).toMatchObject({ guestCompanyId: f.guest, contextManifestId: guestContext!.contextManifestId,
         guestAgentId: f.guestPresence.id, scopeRequestId: request.id, accessMode, purpose: query });
       expect(resolvedBinding[0]!.bindingHash).toMatch(/^[0-9a-f]{64}$/);
-      if (accessMode === "read") expect(resolvedBinding[0]!.items.length).toBeGreaterThan(0);
+      if (accessMode === "read") {
+        expect(resolvedBinding[0]!.items.length).toBeGreaterThan(0);
+        expect(resolvedBinding[0]!.items).toEqual(expect.arrayContaining([
+          expect.objectContaining({ sourceProvider: "august_works_foundation", sourceVersion: foundation.latestRevisionId }),
+        ]));
+      }
       if (accessMode === "read") await expect(resolveDelegatedContextManifestBindings(db, { homeCompanyId: f.home,
         homeAgentId: f.presence.id, homeRunId: randomUUID(), responsibleUserId: f.userId, actor,
         manifestIds: [guestContext!.contextManifestId] })).rejects.toMatchObject({ status: 403 });
@@ -146,7 +151,9 @@ describe.skipIf(!support.supported)("V5 execution authority", () => {
     // Home-company erasure remains blocked while its identity is still shared
     // with the active guest presence; this guard must run before any content
     // purge or delegated-reference cleanup.
-    await expect(purgeCompanyContent(db, f.home)).rejects.toThrow(/Archive or rehome shared identities/);
+    await expect(purgeCompanyContent(db, f.home)).rejects.toThrow();
+    const [homeAfterBlockedPurge] = await db.select({ status: companies.status }).from(companies).where(eq(companies.id, f.home));
+    expect(homeAfterBlockedPurge?.status).toBe("active");
     expect(await db.select().from(contextManifests).where(and(eq(contextManifests.companyId, f.guest),
       eq(contextManifests.id, lastDelegated!.contextManifestId)))).toHaveLength(1);
     // Purging the delegated guest company must remove retained local Context

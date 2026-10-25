@@ -57,6 +57,12 @@ export function runtimeFleetService(
       throw new RuntimeProviderError("upcloud_credentials_missing");
     return provider;
   }
+  async function sandboxHostNotQuiescent(reader: Db, hostId: string) {
+    const [row] = await reader.execute(
+      sql`select aw_v7_sandbox_host_not_quiescent(${hostId}::uuid) as active`,
+    );
+    return row?.active === true;
+  }
   function assertOwned(
     server: UpCloudServer,
     host: typeof runtimeHosts.$inferSelect,
@@ -586,6 +592,8 @@ export function runtimeFleetService(
         .for("update");
       if (!host?.providerResourceId || !host.fencedAt)
         throw conflict("Confirmed provider fencing required before retirement");
+      if (await sandboxHostNotQuiescent(reader, hostId))
+        throw conflict("Sandbox workload must be confirmed stopped before host retirement");
       const cells = await tx
         .select()
         .from(runtimeCells)
@@ -655,6 +663,8 @@ export function runtimeFleetService(
       .limit(1);
     if (!host?.providerResourceId || !host.fencedAt)
       throw conflict("Retirement fencing evidence unavailable");
+    if (await sandboxHostNotQuiescent(db, host.id))
+      throw conflict("Sandbox workload must be confirmed stopped before host retirement");
     let server: UpCloudServer | undefined;
     try {
       server = await api.get(host.providerResourceId);
@@ -717,6 +727,8 @@ export function runtimeFleetService(
           },
         })
         .where(eq(runtimeHostProviderOperations.id, operation.id));
+      if (await sandboxHostNotQuiescent(db, host.id))
+        throw conflict("Sandbox workload became active before host retirement");
       try {
         await api.delete(host.providerResourceId);
       } catch {

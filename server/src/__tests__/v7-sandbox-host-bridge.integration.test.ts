@@ -13,6 +13,7 @@ import {
   runtimeCapacityProfiles,
   runtimeHostCommands,
   runtimeHosts,
+  runtimeSandboxBindings,
   runtimeVersionCatalog,
 } from "@paperclipai/db";
 import { SANDBOX_HOST_COMMAND } from "@paperclipai/shared";
@@ -208,6 +209,11 @@ const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
       ).toHaveLength(0);
     });
     it("caps the durable apply command at the original policy expiry and rejects an already expired request before queueing", async () => {
+      // A test-only reservation row is used to exercise the native command
+      // lane independently from qualification; this is not qualification proof.
+      await db.update(runtimeSandboxBindings)
+        .set({ status: "admitting", version: 2 })
+        .where(eq(runtimeSandboxBindings.id, scope.bindingId));
       const transport = nativeSandboxHostTransport(db, { operatorUserIds: [f.userId] });
       const bridge = transport.bridge(f.actor);
       const expired = bridge.apply({

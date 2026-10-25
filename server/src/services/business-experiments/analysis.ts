@@ -8,7 +8,7 @@ import { v7HumanActorId } from "../v7-authorization.js";
 import { withV7ActivityTransaction } from "../v7-mutations.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { businessMetricService } from "../business-metrics/service.js";
-import { prepareNativeMetric } from "../business-metrics/native-engine.js";
+import { prepareNativeMetric, prepareNativeMetricInput } from "../business-metrics/native-engine.js";
 import { admitBusinessExperiment,lockBusinessExperimentRoot,inspectBusinessExperimentVersion,businessExperimentRootView,auditBusinessExperiment } from "./service.js";
 import { transitionExperimentRecording } from "./recording.js";
 import { EXPERIMENT_OWNER_ENGINE,experimentBudget,experimentEdges,experimentStatementTime,signedExperimentReceipt } from "./receipts.js";
@@ -27,7 +27,8 @@ export function businessExperimentAnalysisService(db:Db){return {
       const version=pin.value,plan=version.definition.sampleOrDurationPlan,analysisId=randomUUID(),outcomes:ExperimentOutcome[]=[],pendingEdges=new Map<string,{direct:ReturnType<typeof experimentEdges>;assignmentManifestId:string;assignmentLineageHash:string;completeLineageHash:string;lineageHash:string}>();
       const metrics=version.metricPins.filter(p=>p.role!=="invariant"),definitions=new Map<string,Awaited<ReturnType<ReturnType<typeof businessMetricService>["inspectPublishedDefinition"]>>>();
       for(const metric of metrics)definitions.set(metric.key,await businessMetricService(tx).inspectPublishedDefinition(companyId,actor,metric.metricId,metric.metricVersionId));
-      const calculations=new Map(metrics.map(metric=>[metric.key,prepareNativeMetric(definitions.get(metric.key)!.version.definition,{metricId:metric.metricId,versionId:metric.metricVersionId,from:plan.from,until:plan.until,dimensions:[],maxRows:1})]));
+      const metricQuery={metricId:metrics[0]?.metricId??input.versionId,versionId:metrics[0]?.metricVersionId??input.versionId,from:plan.from,until:plan.until,dimensions:[] as string[],maxRows:1};
+      const calculations=new Map(metrics.map(metric=>[metric.key,prepareNativeMetric(definitions.get(metric.key)!.version.definition,{...metricQuery,metricId:metric.metricId,versionId:metric.metricVersionId})]));
       // Lock all current ITT sources before the common actual database capture
       // time. Never substitute status at horizon end for this current snapshot.
       // The receipt owner just admitted and share-locked every actual current
@@ -44,8 +45,9 @@ export function businessExperimentAnalysisService(db:Db){return {
         // bind the inherited manifest/hashes, rather than copying its same
         // protocol edges into every one of the seventeen outcomes.
         const direct=experimentEdges(source.edges),lineage={direct,assignmentManifestId:assignment.lineageManifestId,assignmentLineageHash:nativeSha256(experimentEdges(inherited)),completeLineageHash:nativeSha256(experimentEdges([...inherited,...direct])),lineageHash:nativeSha256(direct)};
+        const preparedInput=prepareNativeMetricInput(metricQuery,[source.snapshot]);
         for(const metric of metrics){
-          experimentBudget(deadline);const calculated=calculations.get(metric.key)!([source.snapshot]);
+          experimentBudget(deadline);const calculated=calculations.get(metric.key)!(preparedInput);
           if(calculated.status!=="observed"||calculated.value!==0&&calculated.value!==1)throw conflict("Every assigned unit requires exact binary native outcomes; no unit may be dropped");
           const value:ExperimentOutcome={id:randomUUID(),companyId,experimentId:id,versionId:version.id,analysisId,assignmentId:assignment.id,key:metric.key,metricId:metric.metricId,metricVersionId:metric.metricVersionId,value:calculated.value,sourceSnapshot:source.snapshot,inputHash:calculated.inputHash,sourceHash:nativeSha256({snapshot:source.snapshot,metricHash:metric.contentHash,inputHash:calculated.inputHash,value:calculated.value}),lineageManifestId:randomUUID(),receiptHash:"",signature:"",capturedAt:at};
           Object.assign(value,signedExperimentReceipt("outcome",experimentOutcomeMaterial(value,assignment.receiptHash,version.contentHash)));outcomes.push(value);pendingEdges.set(value.id,lineage);

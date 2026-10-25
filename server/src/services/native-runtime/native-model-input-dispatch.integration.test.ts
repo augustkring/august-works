@@ -16,6 +16,7 @@ import {
   issues,
   nativeRunFinalizations,
 } from "@paperclipai/db";
+import type { ContextAuthorityDecision } from "@paperclipai/shared";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { PROCESS_START_REQUESTED } from "../native-local-process-stop.js";
 import { recordNativeModelInputDispatchIntent, recordNativeModelInputDispatchAcknowledgement, recordNativeToolCallDispatchAssociation,
@@ -29,10 +30,15 @@ import { buildNativeExecutionInput, buildNativeBootstrapSourceSet } from "./nati
 import { nativeRuntimeContextFixture } from "./runtime-context.test-fixture.js";
 import { issueService } from "../issues.js";
 import type { NativeTaskSourceCapture } from "../issues.js";
+import { canActorReadIssuePrivacy } from "../authorization.js";
+import { contextManifestService } from "../context/context-manifest.js";
+import { memoryService } from "../memory/memory-service.js";
+import { initializeRunIdentity } from "../run-identity.js";
 import { getIssueExecutionContext, buildPaperclipTaskMarkdown } from "../heartbeat.js";
 import { createLocalAgentJwt } from "../../agent-auth-jwt.js";
 import { actorMiddleware } from "../../middleware/auth.js";
 import { errorHandler } from "../../middleware/error-handler.js";
+import { issueRoutes } from "../../routes/issues.js";
 
 describe("native model input dispatch intent", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
@@ -239,6 +245,145 @@ describe("native model input dispatch intent", () => {
     expect(replay.status).toBe(403);
   });
 
+  it("seals a real native Task-create HTTP effect to its one current task-only bootstrap", async () => {
+    const sessionId = randomUUID(), now = new Date();
+    await db.insert(authSessions).values({ id: sessionId, userId: responsibleUserId, token: randomUUID(), createdAt: now,
+      updatedAt: now, expiresAt: new Date(now.getTime() + 3_600_000) });
+    const humanActor = { type: "board" as const, source: "session" as const, userId: responsibleUserId, sessionId,
+      companyIds: [companyId], memberships: [{ companyId, membershipRole: "admin", status: "active" as const }] };
+    const sourceTask = await issueService(db).create(companyId, { title: "Native source Task", description: "Public task input",
+      createdByUserId: responsibleUserId }, db, undefined, { manualInputActor: humanActor });
+    let taskCapture: NativeTaskSourceCapture | null = null;
+    const selectedTask = await getIssueExecutionContext(db, companyId, sourceTask.id, capture => { taskCapture = capture; });
+    expect(selectedTask).not.toBeNull();
+    expect(taskCapture?.input.kind).toBe("task");
+    const renderedReferences: Array<{ kind: "task" | "comment" | "document_revision" | "attachment" | "unknown"; id: string }> = [];
+    const renderedMarkdown = buildPaperclipTaskMarkdown({ issue: { id: sourceTask.id, identifier: selectedTask!.identifier,
+      title: selectedTask!.title, description: selectedTask!.description, workMode: selectedTask!.workMode } },
+      { onRenderedSource: source => renderedReferences.push(source) });
+    expect(renderedMarkdown).toBeTruthy();
+    const parsedTaskCapture = taskCapture!;
+    const seeded = await seed({ existingIssueId: sourceTask.id, responsibleUserId });
+    const sourceSet = buildNativeBootstrapSourceSet({ companyId, renderedMarkdown: renderedMarkdown!,
+      runId: seeded.runId, agentId, issueId: sourceTask.id,
+      renderedMarkdownDigest: createHash("sha256").update(renderedMarkdown!, "utf8").digest("hex"), references: renderedReferences,
+      candidates: [{ kind: "task", id: sourceTask.id, input: parsedTaskCapture.input,
+        payloadSourceSnapshot: parsedTaskCapture.payloadSourceSnapshot }], runtimeInputs: [], contextManifestIds: [], rolePackInputs: [],
+      unsupportedInputPresent: false });
+    expect(sourceSet?.inputs).toEqual([expect.objectContaining({ kind: "task", issueId: sourceTask.id })]);
+
+    await initializeRunIdentity(db, { companyId, runId: seeded.runId, issueId: sourceTask.id, responsibleUserId, cause: "dispatch" });
+    const execution = buildNativeExecutionInput({ companyId, runId: seeded.runId, agentId,
+      issue: { id: sourceTask.id, identifier: selectedTask!.identifier, title: selectedTask!.title,
+        description: selectedTask!.description, workMode: "standard" }, taskPrompt: renderedMarkdown!,
+      workspace: { id: seeded.runId, cwd: "/native", repoUrl: null, repoRef: null, branchName: null }, normalizedSessionId: null,
+      executionMode: "default", provider: "claude_managed", model: "claude-sonnet-5",
+      managedProfile: { profileId: "profile", anthropicAgentId: "agent_01", agentVersion: "1", environmentId: "environment",
+        betaVersion: "managed-agents-2026-04-01" }, maxSessionListCostUsd: 1,
+      completionContract: { id: randomUUID(), sha256: `sha256:${"a".repeat(64)}`, schemaVersion: "paperclip.run-result.v1",
+        contract: { revision: "1", objective: "Create one requested task", criteria: [{ id: "task", requirement: "Create the task" }] } },
+      runtimeContext: nativeRuntimeContextFixture() });
+    await db.update(heartbeatRuns).set({ runnerProfileJson: { nativeExecutionInput: execution } }).where(eq(heartbeatRuns.id, seeded.runId));
+    const envelope = buildNativeModelEnvelope(execution);
+    const turnInput = { message: { role: "user" as const, text: JSON.stringify(envelope) }, requestedCollaborationMode: "default" as const };
+    const closure = { sourceSet: sourceSet!, taskEnvelopeDigest: createHash("sha256").update(JSON.stringify(execution.task), "utf8").digest("hex") };
+    const args = dispatchArgs(seeded, turnInput);
+    const dispatchId = await recordNativeModelInputDispatchIntent({ ...args, bootstrapSourceClosure: closure });
+    const turnId = "native-task-effect-turn", callId = "native-task-effect-call";
+    await recordNativeModelInputDispatchAcknowledgement({ ...acknowledgementArgs(seeded, dispatchId, turnInput, turnId), sourceClosure: closure });
+    await recordNativeToolCallDispatchAssociation({ ...args, turnId, callId, tool: "call_api" });
+
+    const body = { title: "Effect-bound native task", description: "Created from one current task-only input." };
+    const operationId = "POST /api/companies/{companyId}/issues";
+    const apiInput = { operationId, body };
+    const apiReceiptDigest = createHash("sha256").update(canonicalJson(apiInput)).digest("hex");
+    const receiptKey = createHash("sha256").update(callId).digest("hex");
+    await db.update(heartbeatRuns).set({ resultJson: { apiToolReceipts: {
+      [receiptKey]: { digest: apiReceiptDigest, operationId, state: "pending" },
+    } } }).where(eq(heartbeatRuns.id, seeded.runId));
+    const [lease] = await db.select().from(nativeRunFinalizations).where(eq(nativeRunFinalizations.runId, seeded.runId));
+    const pathAndQuery = `/api/companies/${companyId}/issues`;
+    const claim = { dispatchId, eventSeq: seeded.eventSeq, attempt: seeded.attempt, turnId, callId, tool: "call_api" as const,
+      operationId, method: "POST", pathAndQuery, bodyPresent: true,
+      bodyHash: createHash("sha256").update(canonicalJson(body)).digest("hex"), apiReceiptDigest,
+      leaseOwner: seeded.leaseOwner, leaseExpiresAt: lease!.leaseExpiresAt!.toISOString(), controllerBootId: controller.bootId,
+      controllerPid: controller.pid, controllerProcessStartedAt: controller.processStartedAt.toISOString() };
+    const token = createLocalAgentJwt(agentId, companyId, "paperclip_runner", seeded.runId, responsibleUserId, { kind: "standard" }, claim);
+    expect(token).not.toBeNull();
+
+    const app = express();
+    app.use(express.json());
+    app.use(actorMiddleware(db, { deploymentMode: "authenticated", resolveSession: async () => null }));
+    app.use("/api", issueRoutes(db, {} as never));
+    app.use(errorHandler);
+    const response = await request(app).post(pathAndQuery).set("Authorization", `Bearer ${token}`).send(body);
+    expect(response.status, JSON.stringify(response.body)).toBe(201);
+    const createdId = response.body.id as string;
+    const [created] = await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.id, createdId)));
+    expect(created?.payloadSourceProtocolVersion).toBe(1);
+    expect(created?.payloadSourceSnapshot).toMatchObject({
+      owner: { kind: "issue", companyId, id: createdId },
+      inputs: [expect.objectContaining({ kind: "task", issueId: sourceTask.id })],
+    });
+    expect(created?.payloadSourceSnapshot?.inputs.some(input => input.kind === "context")).toBe(false);
+
+    const bobId = randomUUID();
+    await db.insert(authUsers).values({ id: bobId, name: "Later Context reader", email: `${bobId}@example.test`, createdAt: now, updatedAt: now });
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: bobId, status: "active", membershipRole: "admin" });
+    const human = { principal: { type: "user" as const, userId: responsibleUserId } };
+    const memory = memoryService(db);
+    const binding = await memory.createCompanyBinding(companyId, { key: randomUUID(), name: "Future private Context", providerKey: "local" }, human);
+    await memory.addBindingTarget(companyId, binding.id, { targetType: "agent", targetId: agentId }, human);
+    const producer = { principal: { type: "agent" as const, agentId, responsibleUserId }, runId: seeded.runId };
+    const privateMemory = await memory.createPrivateMemory(companyId, agentId, { bindingId: binding.id, memoryType: "lesson",
+      title: "Later private input", content: "private context created after the Task effect", summary: null,
+      sensitivity: "internal", observedAt: new Date().toISOString(), validFrom: null, validUntil: null, expiresAt: null,
+      createdByOperationId: randomUUID(), evidence: [{ sourceClass: "task", sourceProvider: "native_effect_fixture",
+        sourceType: "actual_task", sourceRef: `issue://${sourceTask.id}`, sourceVersion: sourceTask.updatedAt.toISOString(),
+        sourceUpdatedAt: sourceTask.updatedAt.toISOString(), observedAt: new Date().toISOString(),
+        excerptHash: createHash("sha256").update("private context created after the Task effect").digest("hex"),
+        citation: { label: "Native source Task" }, trustLevel: "low", relation: "supports" }] }, producer);
+    const version = privateMemory.record.updatedAt.toISOString();
+    const decision: ContextAuthorityDecision = { authorityRank: 0, primaryForDomain: true, reason: "preferred_authority", evidence: {
+      id: `memory:${privateMemory.record.id}`, companyId, sourceClass: "private_memory", sourceProvider: "august_works_memory",
+      sourceType: "memory_record", sourceRef: `memory://record/${privateMemory.record.id}`, sourceVersion: version,
+      sourceUpdatedAt: version, title: privateMemory.record.title, excerpt: privateMemory.record.content,
+      observedAt: privateMemory.record.observedAt.toISOString(), validFrom: null, validUntil: null, authorityDomain: null,
+      trustLevel: "low", sensitivity: "internal", citation: { label: "Later private source" }, metadata: {} } };
+    await contextManifestService(db).create({ companyId, agentId, runId: seeded.runId, issueId: sourceTask.id,
+      responsibleUserId, query: "Private Context selected after earlier Task creation", policySnapshot: {}, selected: [{ decision }] });
+    const bob = { type: "board" as const, source: "session" as const, userId: bobId };
+    expect(await canActorReadIssuePrivacy(db, bob, { id: createdId, companyId })).toBe(true);
+
+    // A later unknown turn cannot inherit the earlier prefix's source closure.
+    // This is an actual second dispatch/association, but it deliberately has no
+    // complete source receipt because the newly selected Context is unsupported.
+    const nextEventSeq = seeded.eventSeq + 1;
+    await db.insert(heartbeatRunEvents).values({ companyId, runId: seeded.runId, agentId, seq: nextEventSeq,
+      eventType: PROCESS_START_REQUESTED, payload: { fixture: "later dispatch with unsupported Context" } });
+    const laterTurn = { message: { role: "user" as const, text: "Create a Task after selecting a new Context input" } };
+    const laterArgs = { ...args, eventSeq: nextEventSeq, turnInput: laterTurn };
+    const laterDispatchId = await recordNativeModelInputDispatchIntent(laterArgs);
+    const laterTurnId = "native-task-effect-later-turn", laterCallId = "native-task-effect-later-call";
+    await recordNativeModelInputDispatchAcknowledgement({ ...acknowledgementArgs(seeded, laterDispatchId, laterTurn, laterTurnId), eventSeq: nextEventSeq });
+    await recordNativeToolCallDispatchAssociation({ ...laterArgs, turnId: laterTurnId, callId: laterCallId, tool: "call_api" });
+    const laterBody = { title: "Must remain unknown", description: "Not admitted from the earlier prefix." };
+    const laterApiInput = { operationId, body: laterBody };
+    const laterApiDigest = createHash("sha256").update(canonicalJson(laterApiInput)).digest("hex");
+    await db.update(heartbeatRuns).set({ resultJson: { apiToolReceipts: {
+      [receiptKey]: { digest: apiReceiptDigest, operationId, state: "completed" },
+      [createHash("sha256").update(laterCallId).digest("hex")]: { digest: laterApiDigest, operationId, state: "pending" },
+    } } }).where(eq(heartbeatRuns.id, seeded.runId));
+    const laterClaim = { ...claim, dispatchId: laterDispatchId, eventSeq: nextEventSeq, turnId: laterTurnId, callId: laterCallId,
+      bodyHash: createHash("sha256").update(canonicalJson(laterBody)).digest("hex"), apiReceiptDigest: laterApiDigest };
+    const laterToken = createLocalAgentJwt(agentId, companyId, "paperclip_runner", seeded.runId, responsibleUserId,
+      { kind: "standard" }, laterClaim);
+    const laterResponse = await request(app).post(pathAndQuery).set("Authorization", `Bearer ${laterToken}`).send(laterBody);
+    expect(laterResponse.status, JSON.stringify(laterResponse.body)).toBe(403);
+    expect(JSON.stringify(laterResponse.body)).not.toContain(laterBody.title);
+    expect(await db.select().from(issues).where(and(eq(issues.companyId, companyId), eq(issues.title, laterBody.title)))).toHaveLength(0);
+  });
+
   it("binds an unknown Project tool result to its actual acknowledged dispatch without qualifying inputs", async () => {
     const seeded = await seed(), turnId = "actual-project-tool-turn", callId = "actual-project-tool-call";
     const turnInput = { message: { role: "user" as const, text: "Read the current Project" } };
@@ -364,7 +509,8 @@ describe("native model input dispatch intent", () => {
     expect(taskCapture!.payloadSourceSnapshot).toMatchObject({ owner: { kind: "issue", companyId, id: createdIssue.id } });
     expect(revisionCapture!.payloadSourceSnapshot).toMatchObject({ owner: { kind: "document_revision", companyId, id: revisionCapture!.input.revisionId } });
     const renderedDigest = createHash("sha256").update(renderedMarkdown!, "utf8").digest("hex");
-    const sourceSet = buildNativeBootstrapSourceSet({ companyId, renderedMarkdown: renderedMarkdown!, renderedMarkdownDigest: renderedDigest,
+    const sourceSet = buildNativeBootstrapSourceSet({ companyId, renderedMarkdown: renderedMarkdown!, runId: seeded.runId,
+      agentId, issueId: createdIssue.id, renderedMarkdownDigest: renderedDigest,
       references: renderedReferences,
       candidates: [
         { kind: "task", id: createdIssue.id, input: taskCapture!.input, payloadSourceSnapshot: taskCapture!.payloadSourceSnapshot },

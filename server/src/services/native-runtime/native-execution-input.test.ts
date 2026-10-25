@@ -7,9 +7,10 @@ import { buildNativeCompletionContract } from "./completion-contracts.js";
 import { renderPaperclipWakePrompt } from "@paperclipai/adapter-utils/server-utils";
 import { buildNativeBootstrapSourceSet, buildNativeExecutionInput } from "./native-execution-input.js";
 import { nativeRuntimeContextFixture } from "./runtime-context.test-fixture.js";
+import { captureNativeBootstrapContextWitness } from "../context/native-bootstrap-context-witness.js";
 
 describe("native bootstrap rendered-source closure", () => {
-  const companyId = randomUUID(), issueId = randomUUID(), renderedMarkdown = "Task body rendered by the native task renderer.";
+  const companyId = randomUUID(), issueId = randomUUID(), runId = randomUUID(), agentId = randomUUID(), renderedMarkdown = "Task body rendered by the native task renderer.";
   const hash = "a".repeat(64);
   const policy = { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
   const snapshot = (ownerCompanyId = companyId, ownerIssueId = issueId) => ({ version: 1 as const,
@@ -17,7 +18,7 @@ describe("native bootstrap rendered-source closure", () => {
   const input = (overrides: Partial<Parameters<typeof buildNativeBootstrapSourceSet>[0]> = {}) => {
     const taskInput = { kind: "task" as const, issueId, sourceVersion: "1", contentHash: hash };
     const references = [{ kind: "task" as const, id: issueId }];
-    return buildNativeBootstrapSourceSet({ companyId, renderedMarkdown,
+    return buildNativeBootstrapSourceSet({ companyId, runId, agentId, issueId, renderedMarkdown,
       renderedMarkdownDigest: createHash("sha256").update(renderedMarkdown, "utf8").digest("hex"), references,
       candidates: [{ kind: "task", id: issueId, input: taskInput, payloadSourceSnapshot: snapshot() }],
       runtimeInputs: [], contextManifestIds: [], rolePackInputs: [], unsupportedInputPresent: false, ...overrides });
@@ -29,6 +30,52 @@ describe("native bootstrap rendered-source closure", () => {
     expect(input({ candidates: [{ kind: "task", id: issueId, input: { kind: "task", issueId, sourceVersion: "1", contentHash: hash }, payloadSourceSnapshot: snapshot(randomUUID()) }] })).toBeNull();
     expect(input({ candidates: [{ kind: "task", id: issueId, input: { kind: "project", projectId: issueId, sourceVersion: "1", contentHash: hash }, payloadSourceSnapshot: snapshot() }] })).toBeNull();
     expect(input({ candidates: [{ kind: "task", id: issueId, input: { kind: "task", issueId: randomUUID(), sourceVersion: "1", contentHash: hash }, payloadSourceSnapshot: snapshot() }] })).toBeNull();
+  });
+
+  it("adds only an exact server-minted approved Context closure bound to the native run and rendered markdown", () => {
+    const foundationDocumentId = randomUUID(), foundationRevisionId = randomUUID();
+    const contextMarkdown = "## August Works governed context\n### Approved Foundation\nStable guidance.";
+    const taskInput = { kind: "task" as const, issueId, sourceVersion: "1", contentHash: hash };
+    const witness = captureNativeBootstrapContextWitness({ companyId, runId, agentId, issueId, renderedMarkdown: contextMarkdown,
+      manifest: { id: randomUUID(), companyId, runId, agentId, issueId, projectId: null, queryHash: hash,
+        policySnapshotHash: "b".repeat(64), createdAt: new Date() },
+      items: [
+        { id: randomUUID(), manifestId: randomUUID(), companyId, rank: 0, sourceProvider: "august_works_tasks",
+          sourceRef: `issue://${issueId}`, sourceVersion: new Date().toISOString(), contentHash: hash, payloadSourceSnapshot: snapshot() },
+        { id: randomUUID(), manifestId: "manifest-placeholder", companyId, rank: 1, sourceProvider: "august_works_foundation",
+          sourceRef: `foundation://${foundationDocumentId}/${foundationRevisionId}/1`, sourceVersion: foundationRevisionId,
+          contentHash: "c".repeat(64), payloadSourceSnapshot: null },
+      ], roots: [] });
+    // The helper above rejects mismatched item/manifest IDs. Build the same
+    // source from exact IDs to prove both the positive and substitution gates.
+    const manifestId = randomUUID();
+    const manifest = { id: manifestId, companyId, runId, agentId, issueId, projectId: null, queryHash: hash,
+      policySnapshotHash: "b".repeat(64), createdAt: new Date() };
+    const exactWitness = captureNativeBootstrapContextWitness({ companyId, runId, agentId, issueId, renderedMarkdown: contextMarkdown,
+      manifest, items: [
+        { id: randomUUID(), manifestId, companyId, rank: 0, sourceProvider: "august_works_tasks", sourceRef: `issue://${issueId}`,
+          sourceVersion: new Date().toISOString(), contentHash: hash, payloadSourceSnapshot: snapshot() },
+        { id: randomUUID(), manifestId, companyId, rank: 1, sourceProvider: "august_works_foundation",
+          sourceRef: `foundation://${foundationDocumentId}/${foundationRevisionId}/1`, sourceVersion: foundationRevisionId,
+          contentHash: "c".repeat(64), payloadSourceSnapshot: null },
+      ], roots: [] });
+    expect(witness).toBeNull();
+    const sourceSet = buildNativeBootstrapSourceSet({ companyId, runId, agentId, issueId, renderedMarkdown,
+      renderedMarkdownDigest: createHash("sha256").update(renderedMarkdown, "utf8").digest("hex"),
+      references: [{ kind: "task", id: issueId }],
+      candidates: [{ kind: "task", id: issueId, input: taskInput, payloadSourceSnapshot: snapshot() }], runtimeInputs: [],
+      contextManifestIds: [{ companyId, contextManifestId: manifestId }], governedContextMarkdown: contextMarkdown,
+      contextWitness: exactWitness, rolePackInputs: [], unsupportedInputPresent: false });
+    expect(sourceSet?.inputs).toEqual(expect.arrayContaining([
+      expect.objectContaining({ kind: "context", manifestId }),
+      expect.objectContaining({ kind: "task", issueId }),
+    ]));
+    expect(sourceSet?.policy.foundationRevisionIds).toEqual([foundationRevisionId]);
+    expect(buildNativeBootstrapSourceSet({ companyId, runId, agentId, issueId, renderedMarkdown,
+      renderedMarkdownDigest: createHash("sha256").update(renderedMarkdown, "utf8").digest("hex"),
+      references: [{ kind: "task", id: issueId }], candidates: [{ kind: "task", id: issueId, input: taskInput,
+        payloadSourceSnapshot: snapshot() }], runtimeInputs: [], contextManifestIds: [{ companyId, contextManifestId: manifestId }],
+      governedContextMarkdown: `${contextMarkdown} changed`, contextWitness: exactWitness, rolePackInputs: [], unsupportedInputPresent: false })).toBeNull();
   });
 });
 

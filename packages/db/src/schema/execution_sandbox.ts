@@ -10,11 +10,11 @@ export const runtimeSandboxBindings = pgTable("runtime_sandbox_bindings", {
   backend: text("backend").$type<SandboxCapabilitySnapshot["backend"]>().notNull(), profile: text("profile").$type<SandboxPolicy["profile"]>().notNull(), sandboxRef: text("sandbox_ref"),
   boundaryPolicy: jsonb("boundary_policy").$type<SandboxPolicy>().notNull(), boundaryPolicyHash: text("boundary_policy_hash").notNull(),
   capabilitySnapshot: jsonb("capability_snapshot").$type<SandboxCapabilitySnapshot | null>(), capabilitySnapshotHash: text("capability_snapshot_hash"), qualificationRunId: uuid("qualification_run_id"),
-  status: text("status").$type<"requested" | "ready" | "degraded" | "quarantined" | "stopping" | "stopped" | "failed" | "deleted">().notNull().default("requested"),
+  status: text("status").$type<"requested" | "ready" | "admitting" | "running" | "degraded" | "quarantined" | "stopping" | "stopped" | "failed" | "deleted">().notNull().default("requested"),
   version: integer("version").notNull().default(1), createdByUserId: text("created_by_user_id").notNull(), createdAt: timestamp("created_at", { withTimezone: true }).notNull().defaultNow(), updatedAt: timestamp("updated_at", { withTimezone: true }).notNull().defaultNow(),
 }, t => ({ tenantUq: unique("sandbox_binding_tenant_uq").on(t.companyId, t.id), cellGenerationUq: unique("sandbox_binding_cell_generation_uq").on(t.companyId, t.runtimeCellId, t.cellGeneration),
   cellFk: foreignKey({ columns: [t.companyId, t.runtimeCellId], foreignColumns: [runtimeCells.companyId, runtimeCells.id] }),
-  statusCheck: check("sandbox_binding_status_check", sql`${t.status} in ('requested','ready','degraded','quarantined','stopping','stopped','failed','deleted')`),
+  statusCheck: check("sandbox_binding_status_check", sql`${t.status} in ('requested','ready','admitting','running','degraded','quarantined','stopping','stopped','failed','deleted')`),
   versionCheck: check("sandbox_binding_version_check", sql`${t.version}>0`), cellIdx: index("sandbox_binding_cell_idx").on(t.companyId, t.runtimeCellId),
 }));
 export const sandboxQualificationRuns = pgTable("sandbox_qualification_runs", {

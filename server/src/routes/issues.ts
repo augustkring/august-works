@@ -12316,7 +12316,12 @@ export function issueRoutes(
       };
       let issue: Awaited<ReturnType<typeof svc.create>>;
       try {
-        issue = req.actor.type === "board" && req.actor.source === "session" &&
+        issue = req.actor.type === "agent" && req.actor.nativeToolEffect
+          ? await svc.create(companyId, createInput, db, undefined, {
+              privacyActor: req.actor,
+              nativeEffectClaim: req.actor.nativeToolEffect,
+            })
+          : req.actor.type === "board" && req.actor.source === "session" &&
           req.actor.userId && req.actor.sessionId && !req.actor.runId
           ? await svc.create(companyId, createInput, db, undefined, { manualInputActor: req.actor })
           : await svc.create(companyId, createInput);

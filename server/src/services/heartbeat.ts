@@ -23695,12 +23695,17 @@ export function heartbeatService(
               ? selectedNativeTaskPrompt : "";
             const nativeBootstrapSourceSet = buildNativeBootstrapSourceSet({
               companyId: agent.companyId,
+              runId: run.id,
+              agentId: agent.id,
+              issueId: issueRef.id,
               renderedMarkdown: selectedMarkdown,
               renderedMarkdownDigest: nativeBootstrapTaskMarkdownSourceMap?.renderedMarkdownDigest ?? null,
               references: nativeBootstrapTaskMarkdownSourceMap?.references ?? null,
               candidates: nativeSourceCandidates,
               runtimeInputs: capturedAuthoredSources?.inputs ?? null,
               contextManifestIds: nativeBootstrapContextManifests,
+              governedContextMarkdown,
+              contextWitness: freshGovernedContext?.sourceWitness ?? null,
               rolePackInputs: v5Fabric ? v5Fabric.inputRolePackSources : [],
               unsupportedInputPresent: Boolean(nativeReviewRequest || directAgentPrompt || previousNativeRun ||
                 persistedNativeExecutionInput || nativeResumeCheckpoint || governedContextMarkdown?.trim() ||
@@ -23708,6 +23713,7 @@ export function heartbeatService(
                 ("continuationPrompt" in nativeExecution && nativeExecution.continuationPrompt) ||
                 nativeExecution.interactionResponses.length || ("planningContext" in nativeExecution && nativeExecution.planningContext) ||
                 isConversation(issueContext) || context.paperclipWake || projectRepositoryPaths.length > 0 ||
+                Boolean(governedContextMarkdown?.trim() && !freshGovernedContext?.sourceWitness) ||
                 capturedAuthoredSources?.contextManifests.length || !capturedTaskSource),
             });
             nativeBootstrapSourceClosure = nativeBootstrapSourceSet

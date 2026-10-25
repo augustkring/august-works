@@ -21,6 +21,7 @@ import {
   parseNativeExecutionInput,
   resolveQualifiedAcpxProfile,
 } from "../../vendor/paperclip-runner/index.js";
+import { readNativeBootstrapContextWitness, type NativeBootstrapContextWitness } from "../context/native-bootstrap-context-witness.js";
 import {
   isPaperclipExternalChatContractTurn,
   isPaperclipExternalChatQuestionResponseTurn,
@@ -59,19 +60,29 @@ export type NativeBootstrapSourceClosure = {
  * ambiguous, unsupported, or source-history-unknown references stay unknown. */
 export function buildNativeBootstrapSourceSet(input: {
   companyId: string;
+  runId: string;
+  agentId: string;
+  issueId: string;
   renderedMarkdown: string;
   renderedMarkdownDigest: string | null;
   references: readonly NativeRenderedSourceReference[] | null;
   candidates: readonly NativePreparedSourceCandidate[];
   runtimeInputs: readonly NativePayloadSourceInput[] | null;
   contextManifestIds: readonly { companyId: string; contextManifestId: string }[] | null;
+  governedContextMarkdown?: string | null;
+  contextWitness?: NativeBootstrapContextWitness | null;
   rolePackInputs: readonly NativePayloadSourceInput[] | null;
   unsupportedInputPresent: boolean;
 }): NativePayloadSourceSet | null {
+  const context = input.contextWitness && input.governedContextMarkdown
+    ? readNativeBootstrapContextWitness(input.contextWitness, { companyId: input.companyId, runId: input.runId,
+      agentId: input.agentId, issueId: input.issueId, renderedMarkdown: input.governedContextMarkdown,
+      manifestIds: input.contextManifestIds ?? [] }) : null;
   if (input.unsupportedInputPresent || !input.references || input.references.length === 0 ||
     !input.references.some(reference => reference.kind === "task") || !input.renderedMarkdownDigest ||
     createHash("sha256").update(input.renderedMarkdown, "utf8").digest("hex") !== input.renderedMarkdownDigest ||
-    !input.runtimeInputs || !input.contextManifestIds || input.contextManifestIds.length !== 0 ||
+    !input.runtimeInputs || !input.contextManifestIds || input.contextManifestIds.length > 0 && !context ||
+    input.governedContextMarkdown?.trim() && !context ||
     !input.rolePackInputs || input.rolePackInputs.length !== 0 ||
     input.references.some(reference => reference.kind === "unknown")) return null;
   const policy: NativePayloadSourcePolicy = { issueIds: [], projectIds: [], runIds: [], memoryIds: [], foundationRevisionIds: [] };
@@ -91,6 +102,10 @@ export function buildNativeBootstrapSourceSet(input: {
     }
     for (const source of parsed.data.inputs) append(source);
     return true;
+  };
+  const mergePolicy = (incoming: NativePayloadSourcePolicy) => {
+    for (const key of Object.keys(policy) as Array<keyof NativePayloadSourcePolicy>)
+      policy[key] = [...new Set([...policy[key], ...incoming[key]])].sort();
   };
   for (const reference of input.references) {
     const matches = input.candidates.filter(candidate => candidate.kind === reference.kind && candidate.id === reference.id);
@@ -112,6 +127,11 @@ export function buildNativeBootstrapSourceSet(input: {
     append(candidate.input);
   }
   for (const source of input.runtimeInputs) append(source);
+  if (context) {
+    mergePolicy(context.policy);
+    append(context.contextInput);
+    for (const source of context.inputs) append(source);
+  }
   for (const source of input.rolePackInputs) append(source);
   const references = inputs.length + Object.values(policy).reduce((sum, values) => sum + values.length, 0);
   if (references > 256) return null;

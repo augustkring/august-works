@@ -478,7 +478,7 @@ export function agentPackageService(
       "qualified_managed"
     ) {
       const [qualified] = await tx.execute(
-        sql`select exists(select 1 from runtime_sandbox_bindings s join agent_presence_runtime_bindings r on r.company_id=s.company_id join runtime_cells c on c.company_id=s.company_id and c.id=s.runtime_cell_id and c.provider_binding_id=r.provider_binding_id where r.company_id=${row.companyId}::uuid and r.agent_id=${row.agentId}::uuid and s.status='ready' and s.cell_generation=c.generation::text) as current`,
+        sql`select exists(select 1 from runtime_sandbox_bindings s join agent_presence_runtime_bindings r on r.company_id=s.company_id join runtime_cells c on c.company_id=s.company_id and c.id=s.runtime_cell_id and c.provider_binding_id=r.provider_binding_id where r.company_id=${row.companyId}::uuid and r.agent_id=${row.agentId}::uuid and s.status in ('ready','running') and s.cell_generation=c.generation::text) as current`,
       );
       if (qualified?.current !== true)
         reasons.push("Current managed sandbox qualification is required");

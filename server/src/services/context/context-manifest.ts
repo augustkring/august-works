@@ -33,6 +33,7 @@ import { approvedFoundationView, foundationService } from "../foundation/foundat
 import {authorizationService,canActorReadHeartbeatRunPrivacy,canActorReadIssuePrivacy,canActorReadProjectPrivacy,type AuthorizationActor,type NativeContextInspectionOwner} from "../authorization.js";
 import { crossCompanyEvidencePolicy } from "../cross-company-context-policy.js";
 import { assertAnalyticalContextPayloadAccess } from "../analytical-context-authority.js";
+import { captureNativeBootstrapContextWitness, type NativeBootstrapContextWitness } from "./native-bootstrap-context-witness.js";
 
 export interface DelegatedContextExecutionBindingInput {
   homeCompanyId: string;
@@ -461,7 +462,7 @@ export function contextManifestService(db: Db) {
         return { policySnapshotHash: hashContextPolicySnapshot(input.policySnapshot), sourceSnapshotHash };
       });
     },
-    create: async (input: CreateContextManifestInput) => {
+    create: async (input: CreateContextManifestInput, nativeBootstrap?: { renderedMarkdown: string }) => {
       const queryHash = hashContextQuery(input.query);
       const policySnapshotHash = hashContextPolicySnapshot(input.policySnapshot);
 
@@ -635,6 +636,7 @@ export function contextManifestService(db: Db) {
         // Provider metadata is descriptive; it cannot shrink retained roots.
         const expectedRoots=new Map(learnedRoots);
         const delegatedRootSnapshot: Array<{ memoryRecordId: string; sourceVersion: string; payloadHash: string }> = [];
+        let retainedMemoryRoots: (typeof contextManifestMemoryRoots.$inferSelect)[] = [];
         for(const {decision} of input.selected){
           const item=decision.evidence;
           if(item.sourceProvider==="august_works_memory"){
@@ -683,8 +685,8 @@ export function contextManifestService(db: Db) {
           for (const root of roots) selectedPayloadSnapshots.set(sourceKey("august_works_memory",`memory://record/${root.id}`),root.payloadSourceSnapshot);
           delegatedRootSnapshot.push(...roots.map(root => ({ memoryRecordId: root.id, sourceVersion: root.updatedAt.toISOString(),
             payloadHash: hashContextPolicySnapshot(root.payloadSourceSnapshot) })));
-          await tx.insert(contextManifestMemoryRoots).values(roots.map((root) => ({ companyId: input.companyId, manifestId: manifest!.id,
-            memoryRecordId: root.id, sourceVersion: root.updatedAt.toISOString(), payloadSourceSnapshot: root.payloadSourceSnapshot })));
+          retainedMemoryRoots = await tx.insert(contextManifestMemoryRoots).values(roots.map((root) => ({ companyId: input.companyId, manifestId: manifest!.id,
+            memoryRecordId: root.id, sourceVersion: root.updatedAt.toISOString(), payloadSourceSnapshot: root.payloadSourceSnapshot }))).returning();
         }
 
         await retainLearnedAssetsInContext(tx as unknown as Db,input.companyId,sourceActor,manifest!.id,learnedAssets);
@@ -721,7 +723,15 @@ export function contextManifestService(db: Db) {
           if(!await canActorReadMemorySources(sourceDb,input.companyId,sourceActor,id))
             throw forbidden("Context Memory source access changed during assembly");
 
-        return { manifest: manifest!, items };
+        let nativeBootstrapWitness: NativeBootstrapContextWitness | undefined;
+        if (nativeBootstrap) {
+          if (delegated || !input.runId || !issueId || input.issueId !== issueId)
+            throw forbidden("Native bootstrap Context requires its exact same-company accountable Task run");
+          nativeBootstrapWitness = captureNativeBootstrapContextWitness({ companyId: input.companyId, runId: input.runId,
+            agentId: input.agentId, issueId, renderedMarkdown: nativeBootstrap.renderedMarkdown,
+            manifest: manifest!, items, roots: retainedMemoryRoots });
+        }
+        return { manifest: manifest!, items, roots: retainedMemoryRoots, ...(nativeBootstrapWitness ? { nativeBootstrapWitness } : {}) };
       });
     },
   };

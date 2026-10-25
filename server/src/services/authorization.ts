@@ -5,6 +5,7 @@ import { isSaasDeployment } from "../deployment-profile.js";
 import { and, eq, inArray, is, isNull, sql, type SQL } from "drizzle-orm";
 import { PgTransaction } from "drizzle-orm/pg-core";
 import type { Db } from "@paperclipai/db";
+import type { NativeToolEffectClaim } from "../agent-auth-jwt.js";
 import {
   agents,
   agentApiKeys,
@@ -96,6 +97,7 @@ export type AuthorizationActor =
       | "cloud_tenant"
       | "cloud_control"
       | "none";
+    nativeToolEffect?: NativeToolEffectClaim;
   };
 
 export type AuthorizationAction =
@@ -843,6 +845,25 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
     and temporal_owner.payload_source_snapshot->'policy'->'runIds'=coalesce((select jsonb_agg(source_id::text order by source_id::text)
       from (select distinct s.source_id from issue_privacy_sources s where s.company_id=temporal_owner.company_id
         and s.issue_id=temporal_owner.id and s.source_kind='run') captured_ids),'[]'::jsonb)
+    and not exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_input
+      where captured_input->>'kind'='task' and (
+        captured_input->>'issueId' !~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+        or not exists(select 1 from issue_privacy_sources captured_task_edge
+          join issues captured_task on captured_task.company_id=captured_task_edge.company_id
+            and captured_task.id=captured_task_edge.source_id
+          where captured_task_edge.company_id=temporal_owner.company_id and captured_task_edge.issue_id=temporal_owner.id
+            and captured_task_edge.source_kind='issue' and captured_task_edge.context_manifest_id is null
+            and captured_task_edge.source_id=(captured_input->>'issueId')::uuid
+            and extract(epoch from captured_task.updated_at)::text=captured_input->>'sourceVersion'
+            and captured_task.payload_source_protocol_version=1 and captured_task.payload_source_snapshot is not null
+            and captured_task.payload_source_snapshot_invalidated=false
+            and captured_task.payload_source_snapshot->'owner'->>'kind'='issue'
+            and captured_task.payload_source_snapshot->'owner'->>'id'=captured_task.id::text
+            and captured_task.payload_source_snapshot->'owner'->>'companyId'=captured_task.company_id::text
+            and captured_task.payload_source_snapshot->'owner'->>'contentHash'=public.aw_native_payload_body_hash('issue',to_jsonb(captured_task))
+            and captured_task.payload_source_snapshot->>'digest'=encode(sha256(convert_to((captured_task.payload_source_snapshot-'digest')::text,'UTF8')),'hex'))))
+    and not exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_input
+      where captured_input->>'kind' not in ('context','task'))
     and not exists(select 1 from jsonb_array_elements(temporal_owner.payload_source_snapshot->'inputs') captured_input
       where captured_input->>'kind'='context' and (
         not exists(select 1 from context_manifests captured_context
@@ -4019,10 +4040,10 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       const delegated = readSources.delegatedContext;
       const guestActor = delegated && input.actor.type === "agent" && input.actor.source === "agent_jwt" &&
         input.actor.companyId === delegated.guestCompanyId && input.actor.agentId === delegated.guestAgentId &&
-        input.actor.onBehalfOfUserId === delegated.guestActor.onBehalfOfUserId &&
-        input.actor.runId === delegated.guestActor.runId && input.actor.sessionId === delegated.guestActor.sessionId &&
-        input.actor.keyId === delegated.guestActor.keyId && input.actor.authenticatedKeyHash === delegated.guestActor.authenticatedKeyHash &&
-        input.actor.authenticatedCredentialExpiresAt === delegated.guestActor.authenticatedCredentialExpiresAt &&
+        (input.actor.onBehalfOfUserId ?? null) === (delegated.guestActor.onBehalfOfUserId ?? null) &&
+        (input.actor.runId ?? null) === (delegated.guestActor.runId ?? null) && (input.actor.sessionId ?? null) === (delegated.guestActor.sessionId ?? null) &&
+        (input.actor.keyId ?? null) === (delegated.guestActor.keyId ?? null) && (input.actor.authenticatedKeyHash ?? null) === (delegated.guestActor.authenticatedKeyHash ?? null) &&
+        (input.actor.authenticatedCredentialExpiresAt ?? null) === (delegated.guestActor.authenticatedCredentialExpiresAt ?? null) &&
         input.actor.ignoreInstanceAdmin === delegated.guestActor.ignoreInstanceAdmin &&
         isDeepStrictEqual(input.actor.keyScope ?? null, delegated.guestActor.keyScope ?? null);
       const homeActor = delegated && isDeepStrictEqual(input.actor, delegated.homeActor);
@@ -4031,22 +4052,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
           ? input.resource.companyId === delegated.guestCompanyId && guestActor || input.resource.companyId === delegated.scope.primaryCompanyId && homeActor
           : input.resource.companyId === delegated.guestCompanyId && guestActor);
       if (!delegated || !companyAllowed || input.scope && Object.keys(input.scope).length) {
-        const mismatch = !delegated ? "missing_scope" : input.resource.type !== "company" ? "resource_type"
-          : !guestActor && input.actor.type !== "agent" ? "actor_type"
-            : !guestActor && input.actor.companyId !== delegated.guestCompanyId ? "actor_company"
-              : !guestActor && input.actor.agentId !== delegated.guestAgentId ? "actor_presence"
-        : input.actor.type !== "agent" ? "actor_type"
-          : input.actor.source !== delegated.guestActor.source ? "actor_source"
-            : input.actor.onBehalfOfUserId !== delegated.guestActor.onBehalfOfUserId ? "actor_user"
-              : input.actor.runId !== delegated.guestActor.runId ? "actor_run"
-                : input.actor.sessionId !== delegated.guestActor.sessionId ? "actor_session"
-                  : input.actor.keyId !== delegated.guestActor.keyId ? "actor_key"
-                    : input.actor.authenticatedKeyHash !== delegated.guestActor.authenticatedKeyHash ? "actor_hash"
-                      : input.actor.authenticatedCredentialExpiresAt !== delegated.guestActor.authenticatedCredentialExpiresAt ? "actor_expiry"
-                        : input.actor.ignoreInstanceAdmin !== delegated.guestActor.ignoreInstanceAdmin ? "actor_admin"
-                          : !isDeepStrictEqual(input.actor.keyScope ?? null, delegated.guestActor.keyScope ?? null) ? "actor_scope"
-                            : "resource_company";
-        return deny({ action: input.action, reason: "deny_scope", explanation: `Delegated Context read scope mismatch (${mismatch}).` });
+        return deny({ action: input.action, reason: "deny_scope", explanation: "Delegated Context read scope mismatch." });
       }
       if (await delegatedContextCurrentFailure(delegated))
         return deny({ action: input.action, reason: "deny_missing_membership", explanation: "Delegated Context source authority is no longer current." });

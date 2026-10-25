@@ -95,6 +95,7 @@ export function nativeSandboxHostTransport(
       binding.runtimeCellId !== cell.id ||
       binding.cellGeneration !== request.scope.cellGeneration ||
       binding.backend !== "openshell" ||
+      (["apply", "start"].includes(request.action) && binding.status !== "admitting") ||
       ["deleted"].includes(binding.status) ||
       (!safety(request.action) && binding.status === "quarantined") ||
       !host ||

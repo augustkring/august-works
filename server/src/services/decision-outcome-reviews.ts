@@ -133,7 +133,7 @@ async function inspect(tx:Db,row:Root,actor:AuthorizationActor,bound:Bound,learn
  * review owner. Re-read every row that binds that proof under share locks. */
 export async function consumeLearningOutcomeReviewBundle(tx:Db,companyId:string,actor:AuthorizationActor,decisionId:string,revision:number,cycleId:string,purpose:string) {
   const {actorKey,key}=learningBundleKey(actor,companyId,decisionId,revision,cycleId,purpose),bundles=learningReviewBundles.get(tx as object),bundle=bundles?.get(key);
-  if(!bundle||bundle.actorKey!==actorKey||bundle.expiresAt<=Date.now())return null;
+  if(!bundle||bundle.companyId!==companyId||bundle.actorKey!==actorKey||bundle.decisionId!==decisionId||bundle.revision!==revision||bundle.cycleId!==cycleId||bundle.purpose!==purpose||bundle.expiresAt<=Date.now())return null;
   const discard=()=>{bundles!.delete(key);if(!bundles!.size)learningReviewBundles.delete(tx as object);};
   const [review]=await tx.select().from(decisionOutcomeReviews).where(and(eq(decisionOutcomeReviews.companyId,companyId),eq(decisionOutcomeReviews.id,bundle.reviewId),eq(decisionOutcomeReviews.decisionId,decisionId))).for("share");
   const [cycle]=await tx.select().from(learningCycles).where(and(eq(learningCycles.companyId,companyId),eq(learningCycles.id,cycleId))).for("share");

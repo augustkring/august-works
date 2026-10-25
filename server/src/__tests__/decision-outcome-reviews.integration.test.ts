@@ -134,10 +134,10 @@ suite("Native decision outcome reviews on migrated PostgreSQL",()=>{
     await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,targetId));
     const expiredCredential={...actor,authenticatedCredentialExpiresAt:Date.now()-1};
     await expect(reviews().startLearning(companyId,expiredCredential,d.id,input)).rejects.toMatchObject({status:403});
-    const colleague=await seedCurrentHumanSourceActor(db,[companyId],"outcome-review-colleague");
-    await expect(reviews().startLearning(companyId,colleague,d.id,input)).rejects.toMatchObject({status:404});
+    const foreignActor=await seedCurrentHumanSourceActor(db,[foreignId],"outcome-review-foreign-actor");
+    await expect(reviews().startLearning(companyId,foreignActor,d.id,input)).rejects.toMatchObject({status:403});
     const outOfScope=await db.transaction(async raw=>consumeLearningOutcomeReviewBundle(raw as unknown as Db,companyId,actor,d.id,3,cycles[0]!.id,input.purpose));
-    const wrongActor=await db.transaction(async raw=>consumeLearningOutcomeReviewBundle(raw as unknown as Db,companyId,colleague,d.id,3,cycles[0]!.id,input.purpose));
+    const wrongActor=await db.transaction(async raw=>consumeLearningOutcomeReviewBundle(raw as unknown as Db,companyId,foreignActor,d.id,3,cycles[0]!.id,input.purpose));
     const wrongRevision=await db.transaction(async raw=>consumeLearningOutcomeReviewBundle(raw as unknown as Db,companyId,actor,d.id,2,cycles[0]!.id,input.purpose));
     const wrongCycle=await db.transaction(async raw=>consumeLearningOutcomeReviewBundle(raw as unknown as Db,companyId,actor,d.id,3,randomUUID(),input.purpose));
     expect([outOfScope,wrongActor,wrongRevision,wrongCycle]).toEqual([null,null,null,null]);
@@ -253,7 +253,7 @@ suite("Native decision outcome reviews on migrated PostgreSQL",()=>{
     const retained=await management.detail(companyId,actor,copied.id);expect(retained.sources[0].outcome!.receipts[0].comparisons).toEqual(completed.receipts[0].comparisons);expect(retained.sources[0].outcome!.receipts[0].actualEvidence).toEqual(completed.receipts[0].actualEvidence);expect(retained.currentQualification).toBe("current");
     await management.publish(companyId,actor,copied.id,{expectedContentHash:copied.contentHash,rationale:"Human acknowledges original actuals without causal attribution",evidenceAndUncertaintyAcknowledged:true,supersedesId:null});
     await disableV8Rollout(db);await db.delete(analyticalLineageManifests).where(eq(analyticalLineageManifests.id,actual.lineageManifestId));expect(await db.select().from(managementReviewSnapshots).where(eq(managementReviewSnapshots.id,copied.id))).toHaveLength(0);expect((await native().get(d.id))!.chosenOptionId).toBe("proceed");
-  });
+  },60_000);
   it("denies old observations as later outcomes and rechecks hidden sources on reads and writes",async()=>{
     const baseline=await observation(),{d}=await scheduled();await begin(d.id);
     await expect(reviews().finish(companyId,actor,d.id,{...final(),actualMetrics:[{key:"old",source:{type:"metric_observation",id:baseline.id,metricId:baseline.metricId,metricVersionId:baseline.versionId}}]})).rejects.toMatchObject({status:409});

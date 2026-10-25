@@ -1488,6 +1488,132 @@
         "Duration  40.99s (transform 11.62s, setup 81ms, import 16.01s, tests 24.78s, environment 0ms)"
       ],
       "sourceCommit": "ee66402d4ff3d2e5ee20992c693522a066116d0c"
+    },
+    {
+      "name": "decision-outcome-reviews-full-final2",
+      "exitCode": 0,
+      "exitSidecar": "decision-outcome-reviews-full-final2.exit",
+      "rawSha256": "a5730469960074fd26c04a3effce5fcbc5e8222da64c2a9a758d5795087ef263",
+      "sanitizedSha256": "a5730469960074fd26c04a3effce5fcbc5e8222da64c2a9a758d5795087ef263",
+      "archiveSha256": "27bfeb070db5320b4acb34904f43003d43c202a5784b19fc6670e3c85bc4fc65",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  15 passed (15)",
+        "Duration  230.13s (transform 11.69s, setup 72ms, import 16.10s, tests 213.83s, environment 0ms)"
+      ],
+      "sourceCommit": "0465977a0dd2e2bfad7b360bd134689dfccd4d97"
+    },
+    {
+      "name": "decisions-service-cyclic-full-final2",
+      "exitCode": 0,
+      "exitSidecar": "decisions-service-cyclic-full-final2.exit",
+      "rawSha256": "a708daefbfacdf5b6ea7968b6269485d271e1ff2119a98996d05a53f241da4cd",
+      "sanitizedSha256": "61b9620ba8ebde4d2cba3b3835b02a979f86413af88f7fe1aa2b4ddb171a2e6c",
+      "archiveSha256": "b860d4175f2d51f61fc5352ff1d4135508e1154a05810e1c7dc5f485041813a4",
+      "redactions": {
+        "ansi": 18,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  34 passed (34)",
+        "Duration  34.06s (transform 13.54s, setup 149ms, import 18.12s, tests 15.64s, environment 0ms)"
+      ],
+      "sourceCommit": "0465977a0dd2e2bfad7b360bd134689dfccd4d97"
+    },
+    {
+      "name": "delegated-context-v5-runtime-full-current",
+      "exitCode": 0,
+      "exitSidecar": "delegated-context-v5-runtime-full-current.exit",
+      "rawSha256": "17e4e4a52e6374bdd9f3a96d012711bdba70ffea1fa8fd2bfe835c9a03b41c98",
+      "sanitizedSha256": "7d94c976683351e25039703bb9418b8a367b8aa7591ca2cc9f06b22fde6593cf",
+      "archiveSha256": "a5e3b750398b193db7b67b5fac45b84a3e6a44c44b175beb0c1846953a696eb5",
+      "redactions": {
+        "ansi": 6,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  5 passed (5)",
+        "Duration  33.56s (transform 12.30s, setup 67ms, import 16.95s, tests 16.43s, environment 0ms)"
+      ],
+      "sourceCommit": "0465977a0dd2e2bfad7b360bd134689dfccd4d97"
+    },
+    {
+      "name": "delegated-context-v5-runtime-purge-control",
+      "exitCode": 0,
+      "exitSidecar": "delegated-context-v5-runtime-purge-control.exit",
+      "rawSha256": "92105bc2051effda67e1353095a038a3c8241227775d3d0e375690e960f73121",
+      "sanitizedSha256": "92105bc2051effda67e1353095a038a3c8241227775d3d0e375690e960f73121",
+      "archiveSha256": "f7970f3eeef7b4014b9c701cd797d2982986586fe67224161f2f7b3546a82f61",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 4 skipped (5)",
+        "Duration  25.98s (transform 11.98s, setup 94ms, import 16.77s, tests 8.98s, environment 0ms)"
+      ],
+      "sourceCommit": "0465977a0dd2e2bfad7b360bd134689dfccd4d97"
+    },
+    {
+      "name": "native-call-carrier-full",
+      "exitCode": 0,
+      "exitSidecar": "native-call-carrier-full.exit",
+      "rawSha256": "757ecac90100b853a8cb6530c6e15f23cee7102935d2e032b31a3716647ab23f",
+      "sanitizedSha256": "757ecac90100b853a8cb6530c6e15f23cee7102935d2e032b31a3716647ab23f",
+      "archiveSha256": "b9dd777ec088f87f609892fcc9cd7776c347da5f3f1d829695f11c5adcf99fa0",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  64 passed (64)",
+        "Duration  28.37s (transform 11.81s, setup 153ms, import 17.14s, tests 10.79s, environment 0ms)"
+      ],
+      "sourceCommit": "0465977a0dd2e2bfad7b360bd134689dfccd4d97"
+    },
+    {
+      "name": "native-effect-prefix-http-final2",
+      "exitCode": 0,
+      "exitSidecar": "native-effect-prefix-http-final2.exit",
+      "rawSha256": "2449889421998a8f2cd6d9b4e75d0ebd48246aa4285081e368dcd8c9f76bfe2e",
+      "sanitizedSha256": "2449889421998a8f2cd6d9b4e75d0ebd48246aa4285081e368dcd8c9f76bfe2e",
+      "archiveSha256": "362241ad8c7b2f6933403d9f1090b2f28f0912e1dbb2e4d100a14aa18acc7a43",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 39 skipped (40)",
+        "Duration  19.72s (transform 9.81s, setup 79ms, import 13.32s, tests 6.20s, environment 0ms)"
+      ],
+      "sourceCommit": "0465977a0dd2e2bfad7b360bd134689dfccd4d97"
     }
   ],
   "updates": [
@@ -1665,6 +1791,18 @@
         "current-human-process-experiments-final",
         "current-human-business-experiment-recording-foreign-project-focus",
         "decision-outcome-reviews-learning-closed-bundle-clean1"
+      ]
+    },
+    {
+      "sourceCommit": "0465977a0dd2e2bfad7b360bd134689dfccd4d97",
+      "meaning": "Complete outcome15/decision34, genuine nonempty delegated Foundation5, native carrier64 scoped full files; no whole-workspace or complete18-family acceptance.",
+      "logs": [
+        "decision-outcome-reviews-full-final2",
+        "decisions-service-cyclic-full-final2",
+        "delegated-context-v5-runtime-full-current",
+        "delegated-context-v5-runtime-purge-control",
+        "native-call-carrier-full",
+        "native-effect-prefix-http-final2"
       ]
     }
   ],
