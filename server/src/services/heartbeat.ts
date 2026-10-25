@@ -9228,6 +9228,7 @@ export interface HeartbeatServiceOptions {
     stage: "claim" | "dispatch";
   }) => Promise<void>;
   pluginWorkerManager?: PluginWorkerManager;
+  sandboxExec?: NonNullable<Parameters<typeof environmentRuntimeService>[1]>["executeSandboxTask"];
   environmentRuntime?: HeartbeatEnvironmentRuntime;
   runtimeEnv?: Record<string, string | undefined>;
   /**
@@ -9448,6 +9449,7 @@ export function heartbeatService(
     options.environmentRuntime ??
     environmentRuntimeService(db, {
       pluginWorkerManager: options.pluginWorkerManager,
+      executeSandboxTask: options.sandboxExec,
     });
   const envOrchestrator = environmentRunOrchestrator(db, {
     pluginWorkerManager: options.pluginWorkerManager,

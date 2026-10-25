@@ -660,7 +660,7 @@ export function openShellHostEngine({
       !uuid.test(request.policySnapshotId) || !/^[a-f0-9]{64}$/.test(request.policyHash) ||
       !/^[a-f0-9]{64}$/.test(request.commandDigest) ||
       request.sandboxRef !== input.scope.sandboxRef ||
-      !/^sha256:[a-f0-9]{64}$/.test(request.imageDigest) ||
+      !/^[a-z0-9./:_-]+@sha256:[a-f0-9]{64}$/i.test(request.imageDigest) ||
       !Array.isArray(request.argv) || request.argv.length < 1 || request.argv.length > 64 ||
       request.argv.some(value => typeof value !== "string" || !value.length || value.length > 8192) ||
       typeof request.cwd !== "string" || !path.isAbsolute(request.cwd) ||
@@ -679,9 +679,14 @@ export function openShellHostEngine({
     const workload = await container(input.scope, detail, request.imageDigest, deadlineAt);
     if (!pinnedPolicy || pinnedPolicy.policyHash !== request.policyHash || !samePolicyRevision(effectivePolicy, pinnedPolicy) ||
       detail.phase !== "Ready" || !workload.State.Running) throw new Error("sandbox_operation_unsupported");
+    if (signal?.aborted) throw new Error("exec_unknown");
+    if (Date.parse(deadlineAt) <= Date.now()) throw new Error("exec_timeout");
 
     const requestHash = hash(JSON.stringify(canonical({ request: { ...request, stdinBase64: undefined }, stdinHash: hash(Buffer.from(request.stdinBase64, "base64")), scope: input.scope })));
-    const begin = await serial(async () => {
+    const privateConfig = await privateConfiguration();
+    if (signal?.aborted) throw new Error("exec_unknown");
+    if (Date.parse(deadlineAt) <= Date.now()) throw new Error("exec_timeout");
+    await serial(async () => {
       const existing = journal.commands[request.requestId];
       if (existing) {
         if (existing.requestHash !== requestHash) throw new Error("sandbox_scope_changed");
@@ -691,12 +696,14 @@ export function openShellHostEngine({
       journal.commands[request.requestId] = { requestHash, result: null, kind: "exec", state: "claimed" };
       await atomicJson(journalFile, journal);
     });
-    void begin;
-    const privateConfig = await privateConfiguration();
+    if (signal?.aborted) throw new Error("exec_unknown");
+    if (Date.parse(deadlineAt) <= Date.now()) throw new Error("exec_timeout");
     const cliArgs = ["--gateway", config.gateway, "--workspace", config.workspace, "sandbox", "exec", "--name", input.scope.sandboxRef, "--workdir", request.cwd];
     for (const key of Object.keys(request.env).sort()) cliArgs.push("--env", `${key}=${request.env[key]}`);
     cliArgs.push("--", ...request.argv);
     const remaining = Math.max(1, Math.min(60_000, Date.parse(deadlineAt) - Date.now()));
+    if (signal?.aborted) throw new Error("exec_unknown");
+    if (Date.parse(deadlineAt) <= Date.now()) throw new Error("exec_timeout");
     const child = spawnProcess(privateConfig.executable, cliArgs, {
       cwd: privateConfig.stateHome,
       env: privateConfig.env,

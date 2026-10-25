@@ -1742,6 +1742,86 @@
         "Duration  24.13s (transform 9.50s, setup 71ms, import 13.28s, tests 10.67s, environment 0ms)"
       ],
       "sourceCommit": "6f0512d1e4b4929a08a3d7fd2aa47a6ba6941224"
+    },
+    {
+      "name": "native-provider-boundary-deny",
+      "exitCode": 0,
+      "exitSidecar": "native-provider-boundary-deny.exit",
+      "rawSha256": "46246bdb990f52e71f881cf57d74fcb14b04bde0e06901f851c5dfafa394fd98",
+      "sanitizedSha256": "46246bdb990f52e71f881cf57d74fcb14b04bde0e06901f851c5dfafa394fd98",
+      "archiveSha256": "942e6f2c7816e8f661c5facca2d76bfe2e8dd02f3efd013ed25192530d294a1d",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  40 passed (40)",
+        "Duration  23.80s (transform 9.93s, setup 73ms, import 13.54s, tests 10.06s, environment 0ms)"
+      ],
+      "sourceCommit": "074eadec86b2e62e3da63971dc3b061ceec81ba2"
+    },
+    {
+      "name": "v10-server-checkpoint-typecheck",
+      "exitCode": 1,
+      "exitSidecar": "v10-server-checkpoint-typecheck.exit",
+      "rawSha256": "e69c5e119ab597752f3c2084ae845af7dddaa970eecc359d9a060f589a2a6805",
+      "sanitizedSha256": "e69c5e119ab597752f3c2084ae845af7dddaa970eecc359d9a060f589a2a6805",
+      "archiveSha256": "e212fc08fad69a102f1765d061fc0613b9f98512333e6f3db7cb595d470fe82e",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "074eadec86b2e62e3da63971dc3b061ceec81ba2"
+    },
+    {
+      "name": "v7-sandbox-owner-final",
+      "exitCode": 0,
+      "exitSidecar": "v7-sandbox-owner-final.exit",
+      "rawSha256": "2b63aa0f6e4a9a5d673690dd449019ad747e0251a9adf13d22ab7291d9d3a207",
+      "sanitizedSha256": "e36457c8ed9559372e912298c66d65eaeed8ec08f28b9534d1359ea7648da07e",
+      "archiveSha256": "52034fedc1af1387f04951298167fc7684fc018b9857be5d7006eb3bca2e01a7",
+      "redactions": {
+        "ansi": 6,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  32 passed (32)",
+        "Duration  38.69s (transform 10.19s, setup 130ms, import 18.46s, tests 19.82s, environment 0ms)"
+      ],
+      "sourceCommit": "074eadec86b2e62e3da63971dc3b061ceec81ba2"
+    },
+    {
+      "name": "worker-model-known-charge-after-revocation",
+      "exitCode": 0,
+      "exitSidecar": "worker-model-known-charge-after-revocation.exit",
+      "rawSha256": "1eb7b9f63dbf406d9f38a75925c33debc7cdb84d93c8a0684901e3bd1eee583f",
+      "sanitizedSha256": "1eb7b9f63dbf406d9f38a75925c33debc7cdb84d93c8a0684901e3bd1eee583f",
+      "archiveSha256": "1766c183b892760e5be67f9b798e421ef616c1eb3b2bea12eca12a4c46c23d06",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  9 passed | 56 skipped (65)",
+        "Duration  46.46s (transform 9.69s, setup 83ms, import 13.67s, tests 32.58s, environment 0ms)"
+      ],
+      "sourceCommit": "074eadec86b2e62e3da63971dc3b061ceec81ba2"
     }
   ],
   "updates": [
@@ -1943,6 +2023,34 @@
         "causal-claims-full-canonical",
         "v6-company-purge-after-artifact-owner",
         "v8-company-purge-canonical-human-retest"
+      ]
+    },
+    {
+      "sourceCommit": "074eadec86b2e62e3da63971dc3b061ceec81ba2",
+      "meaning": "Structural native dispatch with unavailable provider boundary denied; not complete provider-input qualification",
+      "logs": [
+        "native-provider-boundary-deny"
+      ]
+    },
+    {
+      "sourceCommit": "074eadec86b2e62e3da63971dc3b061ceec81ba2",
+      "meaning": "Concurrent checkpoint server compiler diagnostic only; failed integration errors assigned to owners; not stable-source acceptance",
+      "logs": [
+        "v10-server-checkpoint-typecheck"
+      ]
+    },
+    {
+      "sourceCommit": "074eadec86b2e62e3da63971dc3b061ceec81ba2",
+      "meaning": "Sandbox lifecycle software suites only; no actual Task transport or physical qualification claim",
+      "logs": [
+        "v7-sandbox-owner-final"
+      ]
+    },
+    {
+      "sourceCommit": "074eadec86b2e62e3da63971dc3b061ceec81ba2",
+      "meaning": "Known worker provider usage settles before post-response revocation fencing; eight revocation cases plus overflow; no provider qualification",
+      "logs": [
+        "worker-model-known-charge-after-revocation"
       ]
     }
   ],

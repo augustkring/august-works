@@ -760,14 +760,8 @@ export function workerModelGateway(db: Db, options: Options) {
           controller.signal,
           { fetch: options.fetch },
         );
-        await assertCurrent();
-        if (
-          result.usage.inputTokens > reservation.quote.inputTokensUpperBound ||
-          result.text.length > 256000
-        )
-          throw conflict(
-            "The qualified worker inference envelope was exceeded",
-          );
+        // A known provider charge survives access withdrawal. Settle its
+        // bounded receipt before checking whether the result may be disclosed.
         const outcome = await reservations.recordOutcome(
           claims.company_id,
           reservation.id,
@@ -781,6 +775,8 @@ export function workerModelGateway(db: Db, options: Options) {
         if (outcome.status !== "completed")
           throw conflict("Worker model charge could not be confirmed");
         await assertCurrent();
+        if (result.text.length > 256000)
+          throw conflict("The qualified worker inference envelope was exceeded");
         return workerModelResultSchema.parse({
           reservationId: reservation.id,
           ...result,

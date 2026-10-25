@@ -67,6 +67,7 @@ const describeEmbeddedPostgres = embeddedPostgresSupport.supported
 describeEmbeddedPostgres("Context Engine integration", () => {
   let db!: ReturnType<typeof createDb>;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
+  const activeNativeMemoryRunDrains: Array<() => Promise<void>> = [];
 
   beforeAll(async () => {
     tempDb = await startEmbeddedPostgresTestDatabase("paperclip-context-engine-");
@@ -74,6 +75,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
   }, 20_000);
 
   afterEach(async () => {
+    for (const drain of activeNativeMemoryRunDrains.splice(0)) await drain();
     await db.delete(activityLog);
     await db.delete(workflows);
     await db.delete(contextManifestItems);
@@ -190,11 +192,11 @@ describeEmbeddedPostgres("Context Engine integration", () => {
           async startTurn() {
             signalTurnStarted();
             await turnGate;
-            return { turnId: `context-memory-${openInput.binding.runId}` };
+            return { turnId: `context-memory-${openInput.identity.runId}` };
           },
           async result() { return null; },
           async snapshot() {
-            return { backendKind: "mock", sessionId: openInput.session.normalizedSessionId,
+            return { backendKind: "mock", sessionId: openInput.identity.sessionId,
               identity: openInput.identity, providerSessionId: "context-memory-fixture" } as never;
           },
           async close() { releaseTurn(); },
@@ -202,6 +204,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       },
     };
     const heartbeat = heartbeatService(db, { nativeSessionBackendFactory: () => backend });
+    let retainedForContextRead = false;
     try {
       await instanceSettingsService(db).updateExperimental({ enableNativeRunner: true });
       const run = await heartbeat.invoke(input.agentId, "on_demand", { issueId: input.issueId }, "manual",
@@ -235,9 +238,10 @@ describeEmbeddedPostgres("Context Engine integration", () => {
           bindingKey: input.bindingKey,
           observedAt: input.observedAt.toISOString(), expiresAt: input.expiresAt?.toISOString() ?? null,
           idempotencyKey: `context-memory-${randomUUID()}` } });
-      if (!result.data || typeof result.data !== "object" || !(result.data as { record?: { id?: string } }).record?.id)
+      if (result.status !== "completed" || !result.result || typeof result.result !== "object" ||
+        !("record" in result.result) || !(result.result as { record?: { id?: string } }).record?.id)
         throw new Error("The real Tool Gateway Memory producer returned no record");
-      const recordId = (result.data as { record: { id: string } }).record.id;
+      const recordId = (result.result as { record: { id: string } }).record.id;
       const [record] = await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, input.companyId),
         eq(memoryRecords.id, recordId)));
       if (!record) throw new Error("The real Tool Gateway Memory producer record was not persisted");
@@ -251,10 +255,17 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       const persistedAfterRestart = await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, input.companyId),
         eq(memoryRecords.id, recordId)));
       expect(persistedAfterRestart).toHaveLength(1);
+      retainedForContextRead = true;
+      activeNativeMemoryRunDrains.push(async () => {
+        releaseTurn();
+        await heartbeat.drainActiveRunExecutions();
+      });
       return record;
     } finally {
-      releaseTurn();
-      await heartbeat.drainActiveRunExecutions();
+      if (!retainedForContextRead) {
+        releaseTurn();
+        await heartbeat.drainActiveRunExecutions();
+      }
       if (previousSecret === undefined) delete process.env.PAPERCLIP_AGENT_JWT_SECRET;
       else process.env.PAPERCLIP_AGENT_JWT_SECRET = previousSecret;
     }
@@ -326,7 +337,9 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       return record;
     }
     const app=express(); app.use(express.json());
-    app.use(((req,_res,next)=>{req.actor={...human,companyIds:[input.companyId],memberships:[{companyId:input.companyId,membershipRole:"owner",status:"active"}]};next();}) as RequestHandler);
+    app.use(((req,_res,next)=>{req.actor={type:"board",source:"session",userId:human.userId!,sessionId:human.sessionId??undefined,
+      ...(typeof human.authenticatedCredentialExpiresAt==="number"?{authenticatedCredentialExpiresAt:human.authenticatedCredentialExpiresAt}:{}),
+      companyIds:[input.companyId],memberships:[{companyId:input.companyId,membershipRole:"owner",status:"active"}]};next();}) as RequestHandler);
     app.use("/api",issueRoutes(db,{} as never)); app.use(errorHandler);
     const createdSourceIssue=await request(app).post(`/api/companies/${input.companyId}/issues`)
       .send({title:`Actual Memory producer Task ${randomUUID()}`,description:"Human-authored source for a native Memory candidate."});

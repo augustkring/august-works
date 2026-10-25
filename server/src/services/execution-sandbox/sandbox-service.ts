@@ -1,4 +1,4 @@
-import { and, desc, eq, inArray, sql } from "drizzle-orm";
+import { and, desc, eq, gt, inArray, isNull, sql } from "drizzle-orm";
 import { activityLog, agentExecutionManifests, agents, agentPresenceRuntimeBindings, agentProviderBindings, billingAccounts, companyMemberships, principalPermissionGrants, heartbeatRuns, issues, environmentLeases, runtimeCapacityProfiles, orchestrationPlans, orchestrationWorkerAttempts, runtimeCells, runtimeHosts, runtimeSandboxBindings, runtimePolicySnapshots, sandboxQualificationRuns, type Db } from "@paperclipai/db";
 import { SANDBOX_CONTROLS, sandboxBindingCreateSchema, sandboxCapabilitySnapshotSchema, sandboxCompileSchema, type SandboxAdmissionInput, type SandboxBindingCreateInput, type SandboxCompileInput, type SandboxPosture } from "@paperclipai/shared";
 import { conflict, forbidden, notFound } from "../../errors.js";
@@ -7,7 +7,7 @@ import type { AuthorizationActor } from "../authorization.js";
 import { assertV7Authorization, assertV7Enabled, v7HumanActorId } from "../v7-authorization.js";
 import { logActivity, withV7ActivityTransaction } from "../v7-mutations.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
-import { assertAgentRunPolicyAllowed, assertAgentRunWriteAllowed } from "../../agent-run-cancellation.js";
+import { agentRunWritesRevoked, assertAgentRunPolicyAllowed, assertAgentRunWriteAllowed } from "../../agent-run-cancellation.js";
 import { agentProviderBindingService } from "../agent-provider-bindings.js";
 import { capabilityResolverService } from "../capability-resolver.js";
 import { compileSandboxPolicy } from "./policy-compiler.js";
@@ -23,6 +23,7 @@ function sandboxCapabilityFacts(value: ReturnType<typeof sandboxCapabilitySnapsh
 }
 export function executionSandboxService(db: Db, options: {
   operatorUserIds?: readonly string[];
+  runtimeSuspectSeconds?: number;
   backendFor?: (binding: Binding, actor: AuthorizationActor) => ExecutionSandboxBackend | undefined;
   nativeOperation?: (companyId: string, cellId: string, userId: string, action: "stop" | "delete", idempotencyKey: string) => Promise<{ id: string }>;
   assertRuntimeStartAdmission?: (tx: Db, input: { actor: AuthorizationActor; companyId: string; cellId: string; userId: string }) => Promise<unknown>;
@@ -84,7 +85,7 @@ export function executionSandboxService(db: Db, options: {
     const currentCapabilities = await capabilityResolverService(tx).search(worker, companyId, "");
     // Projection never grants broker credentials from an inventory pin. Direct
     // credential bindings stay closed until the native broker is qualified.
-    return { record, task, run, runtime, currentCapabilities, authorityHash: nativeSha256(JSON.parse(JSON.stringify({ manifest: record.hash, memberships, grants, agentPermissions: agent?.permissions, runtimeId: runtime.id, providerId: provider.id, providerSnapshot: provider.capabilitySnapshotHash, profile: runtime.providerProfileRef, currentCapabilities, configurationHash: runtime.qualifiedConfigurationHash, conformanceHash: runtime.conformanceSnapshotHash }))) };
+    return { record, task, run, agent, runtime, currentCapabilities, authorityHash: nativeSha256(JSON.parse(JSON.stringify({ manifest: record.hash, memberships, grants, agentPermissions: agent?.permissions, runtimeId: runtime.id, providerId: provider.id, providerSnapshot: provider.capabilitySnapshotHash, profile: runtime.providerProfileRef, currentCapabilities, configurationHash: runtime.qualifiedConfigurationHash, conformanceHash: runtime.conformanceSnapshotHash }))) };
   }
   async function assertTaskExecutionContext(tx: Db, input: { companyId: string; runId: string; leaseId: string; now?: Date }) {
     const now = input.now ?? new Date();
@@ -142,7 +143,7 @@ export function executionSandboxService(db: Db, options: {
       throw conflict("Current unexpired OpenShell policy is not bound to this exact Task manifest");
     const [host] = await tx.select().from(runtimeHosts).where(and(
       eq(runtimeHosts.id, cellRow.runtimeHostId), isNull(runtimeHosts.fencedAt), isNull(runtimeHosts.credentialRevokedAt), isNull(runtimeHosts.retiredAt),
-      inArray(runtimeHosts.status, ["READY", "DRAINING"]), gt(runtimeHosts.lastHeartbeatAt, new Date(now.getTime() - config.runtime.suspectSeconds * 1000)),
+      inArray(runtimeHosts.status, ["READY", "DRAINING"]), gt(runtimeHosts.lastHeartbeatAt, new Date(now.getTime() - (options.runtimeSuspectSeconds ?? 90) * 1000)),
     )).for("share");
     if (!host) throw conflict("Current qualified OpenShell host is unavailable");
     const [attempt] = await tx.select().from(orchestrationWorkerAttempts).where(and(

@@ -4,6 +4,8 @@ import { mkdtemp, rm, mkdir, writeFile, chmod, readFile } from "node:fs/promises
 import os from "node:os";
 import path from "node:path";
 import { createHash, randomUUID } from "node:crypto";
+import { EventEmitter } from "node:events";
+import { PassThrough, Readable } from "node:stream";
 import { openShellHostEngine } from "./openshell.mjs";
 
 const scope = {
@@ -30,7 +32,7 @@ const policyDocument = {
 };
 const policyHash = "b".repeat(64);
 const deadline = () => new Date(Date.now() + 20000).toISOString();
-async function fixture(work) {
+async function fixture(work, hooks = {}) {
   const root = await mkdtemp(path.join(os.tmpdir(), "aw-v7-host-cli-"));
   try {
     const executable = path.join(root, "fixture-cli"),
@@ -61,6 +63,7 @@ async function fixture(work) {
       imageId = "sha256:" + "e".repeat(64);
     const run = async (file, args, options) => {
       calls.push({ args, options });
+      await hooks.beforeCommand?.(file, args);
       assert.equal(options.env.HOME, stateHome);
       assert.equal(options.env.OPENSHELL_GATEWAY_INSECURE, undefined);
       assert.ok(options.timeout <= 6000);
@@ -154,7 +157,7 @@ async function fixture(work) {
       }
       throw new Error("fixture-unexpected-command");
     };
-    const engine = openShellHostEngine({ config, epoch: 1, root, run });
+    const engine = openShellHostEngine({ config, epoch: 1, root, run, spawnProcess: hooks.spawnProcess });
     await engine.initialize();
     await work({
       engine,
@@ -176,6 +179,28 @@ async function fixture(work) {
   } finally {
     await rm(root, { recursive: true, force: true });
   }
+}
+function canonical(value) {
+  if (Array.isArray(value)) return value.map(canonical);
+  if (value && typeof value === "object") return Object.fromEntries(Object.keys(value).sort().map(key => [key, canonical(value[key])]));
+  return value;
+}
+function execRequest(deadlineAt = deadline()) {
+  const argv = ["node", "-e", "process.stdout.write('fixture')"];
+  const cwd = "/workspace", env = {}, stdinBase64 = "";
+  const commandDigest = createHash("sha256").update(JSON.stringify(canonical({
+    argv, cwd, env,
+    stdinHash: createHash("sha256").update(Buffer.from(stdinBase64, "base64")).digest("hex"),
+    timeoutDeadline: deadlineAt,
+  }))).digest("hex");
+  return {
+    requestId: randomUUID(), bindingId: scope.bindingId, hostEpoch: 1,
+    runId: randomUUID(), attemptId: randomUUID(), attempt: 1,
+    manifestId: randomUUID(), manifestHash: "c".repeat(64),
+    policySnapshotId: randomUUID(), policyHash, commandDigest, deadlineAt,
+    sandboxRef: scope.sandboxRef, imageDigest: input("inspect").imageDigest,
+    argv, cwd, env, stdinBase64,
+  };
 }
 test("CLI fixtures cannot earn complete physical capabilities or passing probes", async () =>
   fixture(async ({ engine, calls }) => {
@@ -514,3 +539,60 @@ test("physical inspection never promotes host observations to qualification", as
       },
     );
   }));
+
+test("sandbox exec preflight cancellation and deadline expiry never spawn the CLI", async () => {
+  let holdInspect = false, enteredInspect = () => {}, releaseInspect = () => {}, inspectRelease = Promise.resolve();
+  let spawnCount = 0;
+  const hooks = {
+    async beforeCommand(file, args) {
+      if (holdInspect && file === "docker" && args[0] === "inspect") {
+        holdInspect = false;
+        enteredInspect();
+        await inspectRelease;
+      }
+    },
+    spawnProcess() { spawnCount++; throw new Error("must-not-spawn"); },
+  };
+  const holdNextInspection = () => {
+    const inspectEntered = new Promise(resolve => { enteredInspect = resolve; });
+    inspectRelease = new Promise(resolve => { releaseInspect = resolve; });
+    holdInspect = true;
+    return inspectEntered;
+  };
+  await fixture(async ({ engine, enablePhysical, setPhase }) => {
+    enablePhysical();
+    setPhase("Stopped");
+    await engine.execute(randomUUID(), {
+      ...input("apply"),
+      admission: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "exec-preflight-policy", document: policyDocument },
+    }, deadline());
+    await engine.execute(randomUUID(), {
+      ...input("start"),
+      start: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "exec-preflight-start" },
+    }, deadline());
+
+    const abortedInspection = holdNextInspection();
+    const controller = new AbortController();
+    const abortedRequest = engine.executeStream({
+      scope: { companyId: scope.companyId, bindingId: scope.bindingId, cellId: scope.cellId, cellGeneration: "1", sandboxRef: scope.sandboxRef },
+      request: execRequest(), capabilityToken: "fixture-token",
+    }, () => {}, controller.signal);
+    await abortedInspection;
+    controller.abort();
+    releaseInspect();
+    await assert.rejects(abortedRequest, /exec_unknown/);
+    assert.equal(spawnCount, 0);
+
+    const expiredInspection = holdNextInspection();
+    const expiredDeadline = new Date(Date.now() + 1000).toISOString();
+    const expiredRequest = engine.executeStream({
+      scope: { companyId: scope.companyId, bindingId: scope.bindingId, cellId: scope.cellId, cellGeneration: "1", sandboxRef: scope.sandboxRef },
+      request: execRequest(expiredDeadline), capabilityToken: "fixture-token",
+    }, () => {});
+    await expiredInspection;
+    await new Promise(resolve => setTimeout(resolve, 1100));
+    releaseInspect();
+    await assert.rejects(expiredRequest, /exec_timeout/);
+    assert.equal(spawnCount, 0);
+  }, hooks);
+});

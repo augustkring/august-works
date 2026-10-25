@@ -659,6 +659,7 @@ export async function createApp(
   const workerManager = opts.pluginWorkerManager ?? createPluginWorkerManager();
   const connectionIntentHeartbeat = heartbeatService(db, {
     pluginWorkerManager: workerManager,
+    sandboxExec: opts.saasPlatform?.runtime.executeSandboxTask,
   });
   const chatChannels = chatChannelService(db, {
     notificationDelivery: opts.saasPlatform?.notifications?.channelDelivery,
@@ -976,7 +977,10 @@ export async function createApp(
     deploymentExposure: opts.deploymentExposure,
     trustedLocalStdioRuntimeHost,
   });
-  const toolActionDeliveries = toolActionDeliveryService(db, heartbeatService(db, { pluginWorkerManager: workerManager }));
+  const toolActionDeliveries = toolActionDeliveryService(db, heartbeatService(db, {
+    pluginWorkerManager: workerManager,
+    sandboxExec: opts.saasPlatform?.runtime.executeSandboxTask,
+  }));
   const toolGateway = createToolGatewayService(db, {
     onToolActionSettled: (id) => toolActionDeliveries.deliver(id),
     pluginToolDispatcher: toolDispatcher,

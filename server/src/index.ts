@@ -923,7 +923,7 @@ async function startServerWithDatabaseTeardown(
   };
   const pluginWorkerManager = createPluginWorkerManager();
   const heartbeat = config.heartbeatSchedulerEnabled
-    ? heartbeatService(db as any, { pluginWorkerManager })
+    ? heartbeatService(db as any, { pluginWorkerManager, sandboxExec: platform?.runtime.executeSandboxTask })
     : null;
   const decisionServiceOptions = {
     wakeOriginAgent: createDecisionWakeOriginAgent(heartbeat?.wakeup ?? null),
@@ -1380,7 +1380,7 @@ async function startServerWithDatabaseTeardown(
   // sweep passes zero, so a restart retries a stranded orphan at once.
   const ENVIRONMENT_LEASE_CLEANUP_SWEEP_BACKOFF_MS = 5 * 60 * 1000;
   const environmentLeaseCleanupHeartbeat =
-    heartbeat ?? heartbeatService(db as any, { pluginWorkerManager });
+    heartbeat ?? heartbeatService(db as any, { pluginWorkerManager, sandboxExec: platform?.runtime.executeSandboxTask });
   const connectionDeliveries = connectionIntentDeliveryService(db as any, environmentLeaseCleanupHeartbeat);
   const questionResponseDeliveries = questionResponseDeliveryService(db as any, {
     heartbeat: environmentLeaseCleanupHeartbeat,

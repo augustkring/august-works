@@ -1748,7 +1748,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       "company",
       "Task source",
     ])(
-      "retains unknown debit and requests Native Stop on %s during inference",
+      "settles known usage without disclosure and requests Native Stop on %s during inference",
       async (kind) => {
         duringCall = () => change(kind);
         await expect(gateway().call(claims, input())).rejects.toMatchObject({
@@ -1756,8 +1756,9 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         });
         expect(calls).toBe(1);
         expect((await ledger())[0]).toMatchObject({
-          status: "unknown",
+          status: "completed",
           maximumMinor: 3,
+          usage: { inputTokens, outputTokens: 20 },
         });
         expect(
           (

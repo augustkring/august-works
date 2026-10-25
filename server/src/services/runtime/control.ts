@@ -316,6 +316,17 @@ export function runtimeControlService(
       await meter(tx as unknown as Tx, cell, now);
       await tx.update(runtimeCells).set({ status: "STOPPED", activeSince: null, meteredThrough: now, lastErrorCode: null, updatedAt: now }).where(eq(runtimeCells.id, input.cellId));
     }
+    if (input.action === "stop") {
+      await tx.update(runtimeHostCommands).set({
+        status: "CANCELED", errorCode: "sandbox_exec_quiesced_by_stop", completedAt: now, updatedAt: now,
+      }).where(and(
+        eq(runtimeHostCommands.companyId, input.companyId),
+        eq(runtimeHostCommands.runtimeCellId, input.cellId),
+        eq(runtimeHostCommands.cellGeneration, BigInt(input.generation)),
+        eq(runtimeHostCommands.commandType, "sandbox_exec"),
+        inArray(runtimeHostCommands.status, ["PENDING", "CLAIMED"]),
+      ));
+    }
     await tx.insert(activityLog).values({
       companyId: input.companyId, actorType: "user", actorId: input.userId,
       action: input.action === "start" ? "runtime.sandbox_workload_started" : "runtime.sandbox_workload_stopped",
@@ -2249,13 +2260,14 @@ export function runtimeControlService(
       throw forbidden("Sandbox execution capability scope mismatch");
     return db.transaction(async transaction => {
       const tx = transaction as unknown as Db;
-      const [operation] = await tx.select().from(runtimeOperations).where(and(
-        eq(runtimeOperations.companyId, claims.company_id), eq(runtimeOperations.runtimeCellId, input.cellId),
-        eq(runtimeOperations.operationType, "sandbox_exec"), eq(runtimeOperations.status, "RUNNING"),
-        eq(runtimeOperations.attemptCount, 0), gt(runtimeOperations.deadlineAt, now),
-        sql`${runtimeOperations.desiredState}->>'requestId' = ${request.requestId}`,
+      const [operation] = await tx.select().from(runtimeHostCommands).where(and(
+        eq(runtimeHostCommands.companyId, claims.company_id), eq(runtimeHostCommands.runtimeCellId, input.cellId),
+        eq(runtimeHostCommands.cellGeneration, BigInt(input.generation)),
+        eq(runtimeHostCommands.commandType, "sandbox_exec"), eq(runtimeHostCommands.status, "PENDING"),
+        eq(runtimeHostCommands.attempt, 0), gt(runtimeHostCommands.deadlineAt, now),
+        eq(runtimeHostCommands.idempotencyKey, request.requestId),
       )).for("update");
-      const expected = operation?.desiredState as Record<string, unknown> | undefined;
+      const expected = operation?.payload as Record<string, unknown> | undefined;
       if (!operation || expected?.bindingId !== request.bindingId || expected.generation !== input.generation ||
         expected.hostId !== capability.hostId || expected.hostEpoch !== request.hostEpoch ||
         expected.runId !== request.runId || expected.attemptId !== request.attemptId || expected.attempt !== request.attempt ||
@@ -2263,19 +2275,19 @@ export function runtimeControlService(
         expected.policySnapshotId !== request.policySnapshotId || expected.policyHash !== request.policyHash ||
         expected.commandDigest !== request.commandDigest || expected.deadlineAt !== request.deadlineAt)
         throw forbidden("Sandbox execution claim is missing, expired, or already consumed");
-      const source = await executionSandboxService(tx).assertTaskExecutionContext(tx, {
+      const source = await executionSandboxService(tx, { runtimeSuspectSeconds: config.runtime.suspectSeconds }).assertTaskExecutionContext(tx, {
         companyId: claims.company_id, runId: request.runId, leaseId: String(expected.leaseId), now,
       });
-      if (!source || source.run.agentId !== claims.sub || source.run.responsibleUserId !== claims.responsible_user_id ||
+      if (!source || source.run.agentId !== claims.sub || source.source.agent.adapterType !== claims.adapter_type || source.run.responsibleUserId !== claims.responsible_user_id ||
         source.sandboxBinding.id !== request.bindingId || source.cell.id !== input.cellId ||
         source.cell.generation.toString() !== input.generation || source.host.id !== capability.hostId ||
         source.host.credentialVersion !== request.hostEpoch || source.manifest.id !== request.manifestId ||
         source.manifest.hash !== request.manifestHash || source.policy.id !== request.policySnapshotId ||
         source.policy.policyHash !== request.policyHash || source.deadlineAt.toISOString() < request.deadlineAt)
         throw forbidden("Sandbox execution source changed before host dispatch");
-      const [consumed] = await tx.update(runtimeOperations).set({ attemptCount: 1, updatedAt: now }).where(and(
-        eq(runtimeOperations.id, operation.id), eq(runtimeOperations.status, "RUNNING"), eq(runtimeOperations.attemptCount, 0),
-      )).returning({ id: runtimeOperations.id });
+      const [consumed] = await tx.update(runtimeHostCommands).set({ status: "CLAIMED", attempt: 1, updatedAt: now }).where(and(
+        eq(runtimeHostCommands.id, operation.id), eq(runtimeHostCommands.status, "PENDING"), eq(runtimeHostCommands.attempt, 0),
+      )).returning({ id: runtimeHostCommands.id });
       if (!consumed) throw forbidden("Sandbox execution capability was already consumed");
       return { runtimeHostId: source.host.id, companyId: claims.company_id, generation: input.generation };
     });
@@ -2303,7 +2315,7 @@ export function runtimeControlService(
     const now = new Date();
     const prepared = await db.transaction(async transaction => {
       const tx = transaction as unknown as Db;
-      const source = await executionSandboxService(tx).assertTaskExecutionContext(tx, {
+      const source = await executionSandboxService(tx, { runtimeSuspectSeconds: config.runtime.suspectSeconds }).assertTaskExecutionContext(tx, {
         companyId: input.companyId, runId: input.runId!, leaseId: input.leaseId, now,
       });
       if (!source) return null;
@@ -2324,17 +2336,14 @@ export function runtimeControlService(
         policySnapshotId: source.policy.id, policyHash: source.policy.policyHash,
         commandDigest, deadlineAt: deadlineAt.toISOString(),
       };
-      const [claim] = await tx.insert(runtimeOperations).values({
-        companyId: input.companyId, runtimeCellId: source.cell.id, operationType: "sandbox_exec",
-        status: "REQUESTED", requestedByType: "agent", requestedById: source.run.agentId!,
-        idempotencyKey: requestId, requestHash: nativeSha256(desiredState), desiredState,
+      const [claim] = await tx.insert(runtimeHostCommands).values({
+        runtimeHostId: source.host.id, companyId: input.companyId, runtimeCellId: source.cell.id,
+        cellGeneration: source.cell.generation, commandType: "sandbox_exec",
+        idempotencyKey: requestId, payload: desiredState,
         deadlineAt, notBefore: now,
       }).returning();
       if (!claim) throw conflict("Sandbox execution claim could not be persisted");
-      const [running] = await tx.update(runtimeOperations).set({ status: "RUNNING", attemptCount: 1, updatedAt: now })
-        .where(and(eq(runtimeOperations.id, claim.id), eq(runtimeOperations.status, "REQUESTED"))).returning();
-      if (!running) throw conflict("Sandbox execution claim changed before dispatch");
-      return { source, claim: running, requestId, commandDigest, attempt, deadlineAt, argv, cwd, env, stdinBytes };
+      return { source, claim, requestId, commandDigest, attempt, deadlineAt, argv, cwd, env, stdinBytes };
     });
     if (!prepared) return null;
     const { source, claim, commandDigest, attempt, deadlineAt } = prepared;
@@ -2359,7 +2368,7 @@ export function runtimeControlService(
       stdinBase64: prepared.stdinBytes.toString("base64"),
     };
     const capabilityToken = createSandboxExecJwt({
-      agentId: source.run.agentId!, companyId: input.companyId, adapterType: source.source.record.manifest.agent.adapterType,
+      agentId: source.run.agentId!, companyId: input.companyId, adapterType: source.source.agent.adapterType,
       runId: source.run.id, responsibleUserId: source.run.responsibleUserId,
       claim: {
         requestId: prepared.requestId, bindingId: source.sandboxBinding.id, cellId: source.cell.id,
@@ -2371,7 +2380,11 @@ export function runtimeControlService(
       parentExpiresAt: source.run.executionControlDeadlineAt ?? source.deadlineAt,
       nativeLeaseExpiresAt: source.lease.expiresAt!,
     });
-    if (!capabilityToken) throw conflict("Short-lived sandbox execution capability could not be issued");
+    if (!capabilityToken) {
+      await db.update(runtimeHostCommands).set({ status: "FAILED", errorCode: "exec_capability_unavailable", completedAt: new Date(), updatedAt: new Date() })
+        .where(and(eq(runtimeHostCommands.id, claim.id), eq(runtimeHostCommands.status, "PENDING")));
+      throw conflict("Short-lived sandbox execution capability could not be issued");
+    }
     const stdout: Buffer[] = [], stderr: Buffer[] = [];
     let outputBytes = 0;
     try {
@@ -2388,15 +2401,15 @@ export function runtimeControlService(
           await input.onOutput?.(stream, chunk.toString("utf8"));
         },
       });
-      await db.update(runtimeOperations).set({
-        status: "SUCCEEDED", completedAt: new Date(), desiredState: { ...(claim.desiredState as Record<string, unknown>), exitCode: result.exitCode, timedOut: result.timedOut }, updatedAt: new Date(),
-      }).where(and(eq(runtimeOperations.id, claim.id), eq(runtimeOperations.status, "RUNNING")));
+      await db.update(runtimeHostCommands).set({
+        status: "SUCCEEDED", completedAt: new Date(), safeResult: { exitCode: result.exitCode, timedOut: result.timedOut }, updatedAt: new Date(),
+      }).where(and(eq(runtimeHostCommands.id, claim.id), eq(runtimeHostCommands.status, "CLAIMED")));
       return { exitCode: result.exitCode, signal: null, timedOut: result.timedOut, stdout: Buffer.concat(stdout).toString("utf8"), stderr: Buffer.concat(stderr).toString("utf8") };
     } catch (error) {
       const code = error instanceof Error && ["exec_timeout", "exec_unknown", "runtime_unavailable", "policy_changed", "exec_rejected"].includes(error.message)
         ? error.message : "exec_unknown";
-      await db.update(runtimeOperations).set({ status: "NEEDS_RECONCILIATION", errorCode: code, updatedAt: new Date() })
-        .where(and(eq(runtimeOperations.id, claim.id), eq(runtimeOperations.status, "RUNNING")));
+      await db.update(runtimeHostCommands).set({ errorCode: code, updatedAt: new Date() })
+        .where(and(eq(runtimeHostCommands.id, claim.id), inArray(runtimeHostCommands.status, ["PENDING", "CLAIMED"])));
       throw error;
     }
   }
