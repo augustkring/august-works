@@ -300,6 +300,16 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(ownerMessage.status, JSON.stringify(ownerMessage.body)).toBe(201);
 
       expect((await db.select().from(issueTreeHolds).where(eq(issueTreeHolds.id, pause.id)))[0].status).toBe("released");
+      await db.delete(companyMemberships).where(and(eq(companyMemberships.companyId, companyId),
+        eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, owner)));
+      const revokedMembershipMessage = await request(appFor(owner)).post(`/api/issues/${chatId}/comments`)
+        .send({ body: "Revoked membership", clientRequestId: randomUUID() });
+      expect(revokedMembershipMessage.status).toBe(404);
+      expect((await db.select().from(issueComments).where(eq(issueComments.issueId, chatId)))
+        .some(comment => comment.body === "Revoked membership")).toBe(false);
+      await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: owner,
+        status: "active", membershipRole: "operator" });
+      await ensureHumanRoleDefaultGrants(db, { companyId, principalId: owner, membershipRole: "operator", grantedByUserId: null });
       await db.delete(authSessions).where(eq(authSessions.id, sessionIds.get(owner)!));
       const revokedOwnerMessage = await request(appFor(owner)).post(`/api/issues/${chatId}/comments`)
         .send({ body: "Stale session", clientRequestId: randomUUID() });

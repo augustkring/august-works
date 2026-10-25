@@ -286,6 +286,7 @@ import {
   ISSUE_WAKE_DIAGNOSTICS_MAX_WAKE_REQUESTS,
   readAcceptedPlanConfirmationTarget,
   lockIssuePrivacyTree,
+  pinIssueMutationHuman,
   type IssuePostCommitAction,
 } from "../services/issues.js";
 import { authorizationDeniedDetails, authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, issueReadSqlCondition, projectReadSqlCondition, pinCurrentBoardActor } from "../services/authorization.js";
@@ -17768,16 +17769,17 @@ export function issueRoutes(
         const userId = req.actor.userId;
         const publications: ActivityPublication[] = [];
         const comment = await db.transaction(async (tx) => {
-          const [lockedIssue] = await tx.select().from(issueRows).where(and(
-            eq(issueRows.id, issue.id), eq(issueRows.companyId, issue.companyId),
-          )).for("update");
-          if (!lockedIssue || lockedIssue.conversationAgentId == null || lockedIssue.conversationUserId !== userId)
-            throw notFound("Conversation not found");
           const pinned = await pinCurrentBoardActor(tx, req.actor);
           if (!pinned || pinned.credentialExpiresAt === null)
             throw forbidden("The current conversation owner session is unavailable");
           await assertDirectInputSessionCurrent(tx, pinned.actor, pinned.credentialExpiresAt,
             "The current conversation owner session is unavailable");
+          await pinIssueMutationHuman(tx, pinned.actor, issue.companyId, true);
+          const [lockedIssue] = await tx.select().from(issueRows).where(and(
+            eq(issueRows.id, issue.id), eq(issueRows.companyId, issue.companyId),
+          )).for("update");
+          if (!lockedIssue || lockedIssue.conversationAgentId == null || lockedIssue.conversationUserId !== userId)
+            throw notFound("Conversation not found");
           const issueCommentDecision = await authorizationService(tx).decide({ actor: pinned.actor, action: "issue:comment",
             resource: { type: "issue", companyId: lockedIssue.companyId, issueId: lockedIssue.id,
               projectId: lockedIssue.projectId, parentIssueId: lockedIssue.parentId,

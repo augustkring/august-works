@@ -353,6 +353,129 @@
       },
       "summary": [],
       "sourceCommit": "d4e1abb2af1c70ac6f993b249f3c88cbeab84297"
+    },
+    {
+      "name": "support-assistant-help-tests-final",
+      "exitCode": null,
+      "exitSidecar": null,
+      "rawSha256": "8f7d0b1fb867dbcb5d344ac0b46cf2bee933f874baa2fffd13b50bd65b291876",
+      "sanitizedSha256": "8f7d0b1fb867dbcb5d344ac0b46cf2bee933f874baa2fffd13b50bd65b291876",
+      "archiveSha256": "5331a95eba66391c98bb3917b63dd0025e12c0ef22772e92afd8f17c12e0a86a",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "8031e16d0d6d7bd7a48d8e037f207acc316a15c6"
+    },
+    {
+      "name": "support-assistant-help-check-final",
+      "exitCode": null,
+      "exitSidecar": null,
+      "rawSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "sanitizedSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "archiveSha256": "9fc8ba837b9bf91304d8cb7d8f50559a74c76354fdbd9b6b6428562554a47350",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "8031e16d0d6d7bd7a48d8e037f207acc316a15c6"
+    },
+    {
+      "name": "support-assistant-token-gates",
+      "exitCode": 0,
+      "exitSidecar": "support-assistant-token-gates.exit",
+      "rawSha256": "56e0a50b41173d0ba8e8f4fa615171699416bc772149facee12d2a331f72cdf5",
+      "sanitizedSha256": "56e0a50b41173d0ba8e8f4fa615171699416bc772149facee12d2a331f72cdf5",
+      "archiveSha256": "3e3e1368d204954b1213ea76597557d40173876c412b3de51c5c05931e437aaf",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "8031e16d0d6d7bd7a48d8e037f207acc316a15c6"
+    },
+    {
+      "name": "v10-current-module-boundaries",
+      "exitCode": 0,
+      "exitSidecar": "v10-current-module-boundaries.exit",
+      "rawSha256": "935dd5340a4daa50d11012fcb35360c0b991990728b27a26e94fcdf025ae93ca",
+      "sanitizedSha256": "935dd5340a4daa50d11012fcb35360c0b991990728b27a26e94fcdf025ae93ca",
+      "archiveSha256": "28ffaeb6deae42b712200366e5abf9e845dcf6f1559cde1626bd85ecb9f3086d",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "8031e16d0d6d7bd7a48d8e037f207acc316a15c6"
+    },
+    {
+      "name": "support-assistant-openapi-full",
+      "exitCode": 0,
+      "exitSidecar": "support-assistant-openapi-full.exit",
+      "rawSha256": "2d7246fcbc6e3e78660cb337a6472e19d4e03c5e1e1ee037a0fd9735c0587e61",
+      "sanitizedSha256": "2d7246fcbc6e3e78660cb337a6472e19d4e03c5e1e1ee037a0fd9735c0587e61",
+      "archiveSha256": "a68b9a7c4e82a885a97f0dde61d24028df9093d40077ea9b9a7cf25ee23ab1b8",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  25 passed (25)",
+        "Duration  10.38s (transform 5.42s, setup 86ms, import 8.35s, tests 1.76s, environment 0ms)"
+      ],
+      "sourceCommit": "8031e16d0d6d7bd7a48d8e037f207acc316a15c6"
+    },
+    {
+      "name": "support-assistant-help-docs-root",
+      "exitCode": 0,
+      "exitSidecar": "support-assistant-help-docs-root.exit",
+      "rawSha256": "d655ad8dc672bd8936203fd57f1a82c0fe16d7e158f5d803803c8a376a066ff8",
+      "sanitizedSha256": "d655ad8dc672bd8936203fd57f1a82c0fe16d7e158f5d803803c8a376a066ff8",
+      "archiveSha256": "cdea5ac5c86ed12abe598526103c5abf5d8948d2fa7e6ae82d48729fc212c414",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "8031e16d0d6d7bd7a48d8e037f207acc316a15c6"
+    },
+    {
+      "name": "support-assistant-help-review-committed",
+      "exitCode": 1,
+      "exitSidecar": "support-assistant-help-review-committed.exit",
+      "rawSha256": "1031d0daeeb9d8e170979b23a6f4a227581bf7492d6c1339f10a34eaedc39762",
+      "sanitizedSha256": "1031d0daeeb9d8e170979b23a6f4a227581bf7492d6c1339f10a34eaedc39762",
+      "archiveSha256": "479d7d21daeb1493ea3ca0ef99b80928fadf9f5486cdadafaa6d83738c77091c",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "8031e16d0d6d7bd7a48d8e037f207acc316a15c6"
     }
   ],
   "updates": [
@@ -378,6 +501,19 @@
         "support-assistant-openapi-focused",
         "support-assistant-http-focused",
         "support-gateway-current-typecheck"
+      ]
+    },
+    {
+      "sourceCommit": "8031e16d0d6d7bd7a48d8e037f207acc316a15c6",
+      "meaning": "Support Assistant Help metadata/paired copy, full OpenAPI, token and module boundaries; source-review mid-checkpoint stale route hashes remain failed diagnostic until next saved owner checkpoint.",
+      "logs": [
+        "support-assistant-help-tests-final",
+        "support-assistant-help-check-final",
+        "support-assistant-token-gates",
+        "v10-current-module-boundaries",
+        "support-assistant-openapi-full",
+        "support-assistant-help-docs-root",
+        "support-assistant-help-review-committed"
       ]
     }
   ]

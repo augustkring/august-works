@@ -1205,6 +1205,27 @@
         "Duration  34.95s (transform 18.82s, setup 75ms, import 25.78s, tests 8.91s, environment 0ms)"
       ],
       "sourceCommit": "d4e1abb2af1c70ac6f993b249f3c88cbeab84297"
+    },
+    {
+      "name": "agent-conversations-current-human-pin-full5",
+      "exitCode": 0,
+      "exitSidecar": "agent-conversations-current-human-pin-full5.exit",
+      "rawSha256": "a9c546bb7a4e9bdab5c05ea67e1bbf0be7c34a51eaf87d39691dd8e6d71f29f4",
+      "sanitizedSha256": "ac36579e73174d914de853fb1289162cd15da0c4baf38a748a115f4b6a545c32",
+      "archiveSha256": "72942105953289b62cc9f33383d8d6acfbe57a28b1595201084bdc3333218e76",
+      "redactions": {
+        "ansi": 66,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  37 passed (37)",
+        "Duration  27.07s (transform 9.97s, setup 77ms, import 14.00s, tests 12.87s, environment 0ms)"
+      ],
+      "sourceCommit": "8031e16d0d6d7bd7a48d8e037f207acc316a15c6"
     }
   ],
   "updates": [
@@ -1344,6 +1365,13 @@
       "meaning": "Fresh guest-runtime diagnostic remains two real accountable cross-company Context failures; not acceptance.",
       "logs": [
         "runtime-fabric-current"
+      ]
+    },
+    {
+      "sourceCommit": "8031e16d0d6d7bd7a48d8e037f207acc316a15c6",
+      "meaning": "Actual current-Human membership pin and session gate inside original locked conversation comment transaction; full file passes.",
+      "logs": [
+        "agent-conversations-current-human-pin-full5"
       ]
     }
   ],
