@@ -137,7 +137,7 @@ export function firstPartySupportModelGateway(db: Db, options: GatewayOptions) {
       evidence,
       authorityHash: nativeSha256({
         sourceAuthorityHash: result.authorityHash,
-        companyId: request.companyId,
+        companyId,
         expectedUserId: request.expectedUserId,
         locale: request.locale,
         questionHash: nativeSha256(request.question),
@@ -150,8 +150,9 @@ export function firstPartySupportModelGateway(db: Db, options: GatewayOptions) {
     const query = supportAssistantAvailabilityQuerySchema.parse(raw);
     const selected = profile(companyId);
     if (!selected) return supportAssistantAvailabilitySchema.parse({ available: false });
+    let policyRevision: string;
     try {
-      const policyRevision = await withV7ActivityTransaction(db, async tx => {
+      policyRevision = await withV7ActivityTransaction(db, async tx => {
         await lockAnalyticalCompany(tx, companyId);
         await lockMemoryPrivacy(tx, companyId);
         await authorizedCompany(tx, actor, companyId, query.expectedUserId);

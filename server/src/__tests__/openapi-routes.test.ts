@@ -461,6 +461,8 @@ describe("openapi routes", () => {
     expect(res.body.paths["/api/agents/{id}/keys"].post.summary).toBe(
       "Create an agent API key",
     );
+    expect(res.body.paths["/api/companies/{companyId}/support/assistant"].get).toBeDefined();
+    expect(res.body.paths["/api/companies/{companyId}/support/assistant/answers"].post).toBeDefined();
     expect(res.body.components.securitySchemes).toMatchObject({
       BoardSessionAuth: { type: "apiKey", in: "cookie" },
       BoardApiKeyAuth: { type: "http", scheme: "bearer" },

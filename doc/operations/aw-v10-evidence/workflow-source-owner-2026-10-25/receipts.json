@@ -1183,6 +1183,28 @@
         "Duration  22.55s (transform 10.10s, setup 73ms, import 13.55s, tests 8.79s, environment 0ms)"
       ],
       "sourceCommit": "e6a72705c4b726266c08cac29d9d59f451f2c533"
+    },
+    {
+      "name": "runtime-fabric-current",
+      "exitCode": 1,
+      "exitSidecar": "runtime-fabric-current.exit",
+      "rawSha256": "d5c825b70a4b2d97a612f23f7653f675f52a0be15bffdd11176cf6db261a185d",
+      "sanitizedSha256": "732b76f05531a56a67822d8440bee0ee46c54657b059945a7165075f0027d8a4",
+      "archiveSha256": "4228538c8016b74c8145758df27664bb455287457d164c3a7041f6669b6ab11a",
+      "redactions": {
+        "ansi": 6,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 2 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  2 failed | 3 passed (5)",
+        "Duration  34.95s (transform 18.82s, setup 75ms, import 25.78s, tests 8.91s, environment 0ms)"
+      ],
+      "sourceCommit": "d4e1abb2af1c70ac6f993b249f3c88cbeab84297"
     }
   ],
   "updates": [
@@ -1315,6 +1337,13 @@
         "native-input-renderer-final",
         "native-input-exact-closure-final2",
         "native-input-actual-document-fields-final"
+      ]
+    },
+    {
+      "sourceCommit": "d4e1abb2af1c70ac6f993b249f3c88cbeab84297",
+      "meaning": "Fresh guest-runtime diagnostic remains two real accountable cross-company Context failures; not acceptance.",
+      "logs": [
+        "runtime-fabric-current"
       ]
     }
   ],

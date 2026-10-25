@@ -227,6 +227,14 @@ export const v6ApiPaths: {
     query: importJobListQuerySchema, result: importJobListSchema,
   },
   {
+    method: "get", path: "/api/companies/{companyId}/support/assistant", successStatus: 200, auth: "native",
+    query: shared.supportAssistantAvailabilityQuerySchema, result: shared.supportAssistantAvailabilitySchema, privateResponse: true,
+  },
+  {
+    method: "post", path: "/api/companies/{companyId}/support/assistant/answers", successStatus: 200, auth: "native",
+    query: noQuery, body: shared.supportAssistantRequestSchema, result: shared.supportAssistantResponseSchema, privateResponse: true,
+  },
+  {
     method: "get", path: "/api/companies/{companyId}/support/policy", successStatus: 200, auth: "native",
     query: expectedUserQuery, result: shared.supportCaseIntakePolicySchema, privateResponse: true,
   },

@@ -1255,5 +1255,62 @@ const support = await getEmbeddedPostgresTestSupport();
       }
       expect(await db.select().from(supportSessions)).not.toHaveLength(0);
     });
+    it("mounts the optional assistant with strict current-Human HTTP contracts and no-network disabled behavior", async () => {
+      const ownerActor: AuthorizationActor = {
+        type: "board",
+        source: "session",
+        userId: "owner",
+        sessionId: await seedNativePasskeySession(db, "owner"),
+        companyIds: [companyId],
+      };
+      const assistant = {
+        availability: vi.fn(async () => ({ available: false as const })),
+        answer: vi.fn(async (_actor: AuthorizationActor, _companyId: string, input: { requestId: string }) => ({
+          requestId: input.requestId,
+          kind: "unavailable" as const,
+          citations: [] as [],
+        })),
+      };
+      const app = express();
+      app.use(express.json());
+      app.use((req, _res, next) => { req.actor = ownerActor; next(); });
+      app.use("/api", customerSupportRoutes(db, { assistant: assistant as never }));
+      app.use(errorHandler);
+      const base = `/api/companies/${companyId}/support/assistant`;
+      const availability = await request(app).get(base).query({ expectedUserId: "owner", locale: "en" }).expect(200);
+      expect(availability.headers["cache-control"]).toBe("private, no-store");
+      expect(availability.body).toEqual({ available: false });
+      expect(assistant.availability).toHaveBeenCalledWith(ownerActor, companyId, { expectedUserId: "owner", locale: "en" });
+      await request(app).get(base).query({ expectedUserId: "other", locale: "en" }).expect(409);
+      await request(app).get(`/api/companies/${randomUUID()}/support/assistant`)
+        .query({ expectedUserId: "owner", locale: "en" }).expect(403);
+      await request(app).get(base).query({ expectedUserId: "owner", locale: "en", unexpected: "1" }).expect(400);
+      await request(app).get(base).query({ expectedUserId: "owner" }).expect(400);
+      expect(assistant.availability).toHaveBeenCalledTimes(1);
+
+      const input = {
+        requestId: randomUUID(), expectedUserId: "owner", question: "How do I use Help?",
+        locale: "en", consent: true, consentPolicyRevision: "a".repeat(64),
+      };
+      const answered = await request(app).post(`${base}/answers`).send(input).expect(200);
+      expect(answered.headers["cache-control"]).toBe("private, no-store");
+      expect(answered.body).toEqual({ requestId: input.requestId, kind: "unavailable", citations: [] });
+      expect(assistant.answer).toHaveBeenCalledWith(ownerActor, companyId, input, expect.any(AbortSignal));
+      await request(app).post(`${base}/answers`).send({ ...input, requestId: randomUUID(), expectedUserId: "other" }).expect(409);
+      await request(app).post(`${base}/answers`).send({ ...input, requestId: randomUUID(), extra: "rejected" }).expect(400);
+      await request(app).post(`${base}/answers`).send({ ...input, requestId: randomUUID(), consent: false }).expect(400);
+      await request(app).post(`${base}/answers`).query({ unexpected: "1" }).send({ ...input, requestId: randomUUID() }).expect(400);
+      expect(assistant.answer).toHaveBeenCalledTimes(1);
+
+      const disabled = express();
+      disabled.use(express.json());
+      disabled.use((req, _res, next) => { req.actor = ownerActor; next(); });
+      disabled.use("/api", customerSupportRoutes(db));
+      disabled.use(errorHandler);
+      expect((await request(disabled).get(base).query({ expectedUserId: "owner", locale: "en" }).expect(200)).body)
+        .toEqual({ available: false });
+      expect((await request(disabled).post(`${base}/answers`).send(input).expect(200)).body)
+        .toEqual({ requestId: input.requestId, kind: "unavailable", citations: [] });
+    });
   },
 );

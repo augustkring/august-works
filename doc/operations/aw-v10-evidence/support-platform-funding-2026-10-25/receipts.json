@@ -273,6 +273,86 @@
         "Duration  4.33s (transform 3.20s, setup 40ms, import 5.97s, tests 487ms, environment 1.71s)"
       ],
       "sourceCommit": "e6a72705c4b726266c08cac29d9d59f451f2c533"
+    },
+    {
+      "name": "support-assistant-http-owner-full",
+      "exitCode": 0,
+      "exitSidecar": "support-assistant-http-owner-full.exit",
+      "rawSha256": "0eea43e4fce0139672898211caab27012e3ed371a9c9c34e8dae4214a291b08e",
+      "sanitizedSha256": "0eea43e4fce0139672898211caab27012e3ed371a9c9c34e8dae4214a291b08e",
+      "archiveSha256": "11e23aca5debbc2af5bd3dd5e807be34ad34d77a3899d8710a7b5affcc9bcd0a",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  23 passed (23)",
+        "Duration  30.28s (transform 14.10s, setup 127ms, import 19.73s, tests 10.22s, environment 0ms)"
+      ],
+      "sourceCommit": "d4e1abb2af1c70ac6f993b249f3c88cbeab84297"
+    },
+    {
+      "name": "support-assistant-openapi-focused",
+      "exitCode": 0,
+      "exitSidecar": "support-assistant-openapi-focused.exit",
+      "rawSha256": "fe98a87ac0a92b2ca88988a97e07295fea9f2a0779c21d24b91178931d565330",
+      "sanitizedSha256": "fe98a87ac0a92b2ca88988a97e07295fea9f2a0779c21d24b91178931d565330",
+      "archiveSha256": "0414247e01808a27629b2c499fdbebb0c59ddcd9f182d3963ebdab5508eda3e3",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 24 skipped (25)",
+        "Duration  7.71s (transform 4.38s, setup 137ms, import 7.15s, tests 245ms, environment 0ms)"
+      ],
+      "sourceCommit": "d4e1abb2af1c70ac6f993b249f3c88cbeab84297"
+    },
+    {
+      "name": "support-assistant-http-focused",
+      "exitCode": 0,
+      "exitSidecar": "support-assistant-http-focused.exit",
+      "rawSha256": "027146dd14f1e8de095659dfdef65476306fbef9cabad79352ae29d0d58d70ea",
+      "sanitizedSha256": "027146dd14f1e8de095659dfdef65476306fbef9cabad79352ae29d0d58d70ea",
+      "archiveSha256": "b0a569a36edc1336e24bdc9e00eb38bfd722c16ca63776834043d211310e6931",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 22 skipped (23)",
+        "Duration  32.46s (transform 19.48s, setup 96ms, import 26.76s, tests 5.46s, environment 0ms)"
+      ],
+      "sourceCommit": "d4e1abb2af1c70ac6f993b249f3c88cbeab84297"
+    },
+    {
+      "name": "support-gateway-current-typecheck",
+      "exitCode": 0,
+      "exitSidecar": "support-gateway-current-typecheck.exit",
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "d4e1abb2af1c70ac6f993b249f3c88cbeab84297"
     }
   ],
   "updates": [
@@ -288,6 +368,16 @@
         "support-key-child-env-sanitizer-v2",
         "support-assistant-grounding-final",
         "support-assistant-ui-final"
+      ]
+    },
+    {
+      "sourceCommit": "d4e1abb2af1c70ac6f993b249f3c88cbeab84297",
+      "meaning": "Support HTTP current-Human routing and OpenAPI scoped proofs; original compiler failure retained separately, corrected scoped compiler result.",
+      "logs": [
+        "support-assistant-http-owner-full",
+        "support-assistant-openapi-focused",
+        "support-assistant-http-focused",
+        "support-gateway-current-typecheck"
       ]
     }
   ]
