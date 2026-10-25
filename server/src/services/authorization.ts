@@ -971,7 +971,6 @@ type ReadSourceRows = {
   routineScopeToken?: string;
   workflowRunIds?: Set<string>;
   workflowSourceCheckRunIds?: Set<string>;
-  workflowBaselineOnly?: boolean;
   workflowActorKey?: string;
   workflowScopeToken?: string;
 };
@@ -1161,11 +1160,11 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       context.credentialUserId = sourceActor.type === "board" ? sourceActor.userId ?? null
         : sourceActor.type === "agent" ? sourceActor.onBehalfOfUserId ?? null : null;
       context.workflowActorKey = workflowActorKey(actor);
-      const company = sourceActor.type === "none" ? { allowed: false } as AuthorizationDecision
+      const company = sourceActor.type === "none" ? null
         : await owner.decide({ actor: sourceActor, action: "company_scope:read",
           resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true });
       const { assertWorkflowRunPayloadSourceAccess, withWorkflowAuthoringSourceReview } = await import("./workflows/workflow-authoring-sources.js");
-      if (!company.allowed) {
+      if (!company?.allowed) {
         await requireActiveWorkflowBaselineMembership(db, companyId, sourceActor);
         await withWorkflowAuthoringSourceReview(async () => {
           for (const runId of runIds) {
@@ -1175,7 +1174,6 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
             await assertWorkflowRunPayloadSourceAccess(db as unknown as Db, companyId, runId, sourceActor);
           }
         });
-        context.workflowBaselineOnly = true;
         context.workflowRunIds = new Set();
         context.workflowSourceCheckRunIds = new Set(runIds);
         await db.execute(sql`select set_config('paperclip.native_workflow_run_ids', '', true)`);
@@ -1190,7 +1188,6 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       });
       context.workflowRunIds = authorized;
       context.workflowSourceCheckRunIds = new Set(authorized);
-      context.workflowBaselineOnly = false;
       await db.execute(sql`select set_config('paperclip.native_workflow_run_ids', ${[...authorized].sort().join(",")}, true)`);
       return [...authorized];
     };
@@ -1316,7 +1313,6 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
               await assertWorkflowRunPayloadSourceAccess(db as unknown as Db, companyId, runId, sourceActor, "task");
             }
           });
-          existing.workflowBaselineOnly = true;
           existing.workflowRunIds = new Set();
           existing.workflowSourceCheckRunIds = new Set(combined);
           existing.credentialUserId = sourceActor.type === "board" ? sourceActor.userId ?? null
@@ -1329,7 +1325,6 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
         });
         existing.workflowRunIds = new Set(combined);
         existing.workflowSourceCheckRunIds = new Set(combined);
-        existing.workflowBaselineOnly = false;
         existing.credentialUserId = sourceActor.type === "board" ? sourceActor.userId ?? null
           : sourceActor.type === "agent" ? sourceActor.onBehalfOfUserId ?? null : null;
         await db.execute(sql`select set_config('paperclip.native_workflow_run_ids', ${combined.join(",")}, true)`);

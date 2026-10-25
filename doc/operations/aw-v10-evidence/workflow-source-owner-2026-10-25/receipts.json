@@ -1,0 +1,80 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "dbe3e7c89fcf38d9980019682e76c23ec43205ef",
+  "meaning": "Saved Workflow source checkpoint; authoring18 and executor51 pass, latest full Learning39pass3fail retained explicitly, current server compiler0",
+  "logs": [
+    {
+      "name": "workflow-source-owner-current-final",
+      "exitCode": 0,
+      "rawSha256": "12a843abe7be00cbcc66188a366ab493f095a11b80f73fbef7346bd08630e2b1",
+      "sanitizedSha256": "12a843abe7be00cbcc66188a366ab493f095a11b80f73fbef7346bd08630e2b1",
+      "archiveSha256": "77bd2bb92fd9177a3240b24812fdd73cec3d44dfbd07f76a678e006c30862991",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  18 passed (18)",
+        "Duration  69.27s (transform 9.10s, setup 74ms, import 12.58s, tests 56.50s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "workflow-source-executor-current-final",
+      "exitCode": 0,
+      "rawSha256": "09bc975a153b1d70b864e78d517fc4869c6096ddf572ee685feab2fc9359bcad",
+      "sanitizedSha256": "4d7e1221fb12c5120834b14d050156ed3849d922b586cdd22878d52e0aed2f60",
+      "archiveSha256": "7b67eeff41430cc0f26cec76075f00edf8369c13af89fb7e2cbef008de56fa00",
+      "redactions": {
+        "ansi": 6,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  51 passed (51)",
+        "Duration  38.83s (transform 9.96s, setup 69ms, import 14.03s, tests 24.61s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "learning-workflow-source-final42-current",
+      "exitCode": 1,
+      "rawSha256": "955c020f1eb3f5838575862e2a7d75ec8f06affe7c926bb4e65ee85e9e775d1b",
+      "sanitizedSha256": "b3e70d6b2255f2a70300b5ce1b36b27114288858e7874b1465967ccfa6f32739",
+      "archiveSha256": "5b8d2c5d8ff0118b1f353c0b0f8eea39607768967b04c146f3261814a6c7c88a",
+      "redactions": {
+        "ansi": 30,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 3 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  3 failed | 39 passed (42)",
+        "Duration  443.78s (transform 9.51s, setup 75ms, import 13.48s, tests 430.10s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "workflow-source-checkpoint-server-typecheck",
+      "exitCode": 0,
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    }
+  ]
+}
