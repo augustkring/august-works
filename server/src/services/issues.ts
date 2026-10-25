@@ -14,7 +14,8 @@ import { forgetMemoryForDeletedIssue, lockMemoryPrivacy } from "./memory/memory-
 import { lockBusinessEventCompany, suppressBusinessEventsForObject } from "./business-event-privacy.js";
 import { authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, canActorReadTypedTaskSourcePrivacy, pinCurrentBoardActor, type AuthorizationActor } from "./authorization.js";
 import { assertHumanAuthentication, isAuthenticationStateBusy } from "../auth/authenticator-assurance.js";
-import { directHumanPayloadSnapshotSql, assertDirectInputSessionCurrent as assertManualInputCredentialCurrent } from "./native-direct-input.js";
+import { directHumanPayloadSnapshotSql, nativePayloadSnapshotSql, captureNativeTemporalContext,
+  assertDirectInputSessionCurrent as assertManualInputCredentialCurrent } from "./native-direct-input.js";
 import { resolveTaskWatchdogMutationScope, taskWatchdogScopeAllowsIssueMutation } from "./task-watchdog-scope.js";
 import {
   and,
@@ -108,6 +109,7 @@ import type {
   IssueWatchdogSummary,
   LowTrustBoundary,
   NativePayloadSourceInput,
+  NativePayloadSourcePolicy,
   NativePayloadSourceSnapshot,
   SuccessfulRunHandoffState,
 } from "@paperclipai/shared";
@@ -2048,6 +2050,7 @@ async function resolveIssuePrivacy(
   previous: typeof issues.$inferSelect | null,
   actorRunId?: string | null,
   additionalIssueSources: string[] = [],
+  freezeCurrentRunContext = false,
 ) {
   const sources: Array<{ sourceKind: "issue" | "project" | "run" | "workflow_run" | "routine_run"; sourceId: string }> = [];
   const parents = new Set([...additionalIssueSources, previous?.privacyParentIssueId, previous?.parentId, next.privacyParentIssueId,
@@ -2095,6 +2098,8 @@ async function resolveIssuePrivacy(
   }
   const heartbeatRunIds = new Set([actorRunId, previous?.originRunId && !typedOrigins.some(origin => origin === previous) ? previous.originRunId : null,
     next.originRunId && !typedOrigins.some(origin => origin === next) ? next.originRunId : null].filter((id): id is string => Boolean(id)));
+  const temporalContextInputs: Extract<NativePayloadSourceInput, { kind: "context" }>[] = [];
+  let temporalContextComplete = freezeCurrentRunContext;
   for (const runId of heartbeatRunIds) {
     if (!isUuidLike(runId)) throw unprocessable("Task privacy source run is invalid");
     const [run] = await tx.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.id, runId), eq(heartbeatRuns.companyId, companyId)));
@@ -2108,6 +2113,13 @@ async function resolveIssuePrivacy(
     sources.push({ sourceKind: "run", sourceId: runId });
     if (!(await canActorReadHeartbeatRunPrivacy(tx, { type: "none" }, run))) visibility = "private";
     if (sourceId) { parents.add(sourceId); privacyParentIssueId ??= sourceId; }
+    if (freezeCurrentRunContext && runId === actorRunId) {
+      const capture = await captureNativeTemporalContext(tx, companyId, runId, "issue");
+      temporalContextComplete = temporalContextComplete && capture.complete;
+      temporalContextInputs.push(...capture.inputs);
+      capture.issueIds.forEach(id => parents.add(id));
+      capture.projectIds.forEach(id => projectIds.add(id));
+    }
   }
   for (const parentId of parents) {
     if (parentId === next.id) throw unprocessable("A task cannot inherit its own privacy source");
@@ -2126,7 +2138,8 @@ async function resolveIssuePrivacy(
     if (!(await canActorReadProjectPrivacy(tx, { type: "none" }, project))) visibility = "private";
   }
   if (visibility === "private") privacyRootIssueId ??= next.id;
-  return { visibility, privacyParentIssueId, privacyRootIssueId, sources };
+  return { visibility, privacyParentIssueId, privacyRootIssueId, sources,
+    temporalContextInputs: temporalContextComplete ? temporalContextInputs : null };
 }
 
 async function assertIssuePrivacySourcesReadable(tx: DbTransaction, actor: AuthorizationActor,
@@ -10580,7 +10593,16 @@ export function issueService(db: Db) {
 
         issueData.id ??= randomUUID();
         const privacy = await resolveIssuePrivacy(tx, companyId, { ...issueData, id: issueData.id }, null, actorRunId,
-          workspaceInheritanceIssueId ? [workspaceInheritanceIssueId] : []);
+          workspaceInheritanceIssueId ? [workspaceInheritanceIssueId] : [], !!suppliedPrivacyActor && suppliedPrivacyActor.type === "agent");
+        const temporalContextPolicy: NativePayloadSourcePolicy = {
+          issueIds: [...new Set(privacy.sources.filter(source => source.sourceKind === "issue").map(source => source.sourceId))].sort(),
+          projectIds: [...new Set(privacy.sources.filter(source => source.sourceKind === "project").map(source => source.sourceId))].sort(),
+          runIds: [...new Set(privacy.sources.filter(source => source.sourceKind === "run").map(source => source.sourceId))].sort(),
+          memoryIds: [], foundationRevisionIds: [],
+        };
+        const freezeTemporalContext = privacy.temporalContextInputs !== null &&
+          privacy.temporalContextInputs.length + temporalContextPolicy.issueIds.length + temporalContextPolicy.projectIds.length +
+            temporalContextPolicy.runIds.length <= 256;
         if (privateWorkAdmission === "closed" && privacy.visibility === "private") throw unprocessable("Private tasks are not available");
         if (privacy.visibility === "private" && !responsibleUserId) throw unprocessable("Private tasks require a responsible user");
         const creatorActor: AuthorizationActor = currentPrivacyActor ?? (issueData.createdByAgentId
@@ -10638,8 +10660,20 @@ export function issueService(db: Db) {
         if (captureManualInput) Object.assign(values, {
           payloadSourceProtocolVersion: 1, payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: false,
         });
+        if (freezeTemporalContext) Object.assign(values, {
+          payloadSourceProtocolVersion: 1, payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: false,
+        });
         let [issue] = await tx.insert(issues).values(values).returning();
         await retainIssuePrivacySources(tx, issue, privacy.sources);
+        if (freezeTemporalContext) {
+          const [captured] = await tx.update(issues).set({ payloadSourceSnapshot: nativePayloadSnapshotSql(
+            "issue", temporalContextPolicy, privacy.temporalContextInputs!,
+          ) }).where(and(eq(issues.companyId, companyId), eq(issues.id, issue.id),
+            eq(issues.payloadSourceProtocolVersion, 1), isNull(issues.payloadSourceSnapshot),
+            eq(issues.payloadSourceSnapshotInvalidated, false))).returning();
+          if (!captured?.payloadSourceSnapshot) throw conflict("Temporal Task source capture was not stored");
+          issue = captured;
+        }
         if (issue.visibility === "private" && issue.createdByAgentId) {
           const [grant] = await tx.insert(issueAccessGrants).values({
             companyId, issueId: issue.id, subjectType: "agent", subjectId: issue.createdByAgentId,

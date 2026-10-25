@@ -3732,6 +3732,13 @@
       "when": 1792919213623,
       "tag": "0534_first_party_support_package_pin",
       "breakpoints": true
+    },
+    {
+      "idx": 535,
+      "version": "7",
+      "when": 1792922372709,
+      "tag": "0535_giant_adam_warlock",
+      "breakpoints": true
     }
   ]
 }

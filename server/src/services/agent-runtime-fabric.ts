@@ -6,7 +6,7 @@ import {assertAnalyticalContextPayloadAccess} from "./analytical-context-authori
 import {lockAnalyticalCompany} from "./analytical-privacy.js";
 import { and, eq, sql } from "drizzle-orm";
 import { agentIdentities, agents, companies, heartbeatRuns, issues, contextManifestItems, contextManifestMemoryRoots, companySkillTestRuns, companySkillEvalRuns, agentExecutionManifests, agentExecutionManifestItems, agentExecutionAuthorizations, agentExecutionScopeRequests, companySkillUsageEvents, type Db } from "@paperclipai/db";
-import { agentExecutionManifestSchema, createExecutionScopeRequestSchema, v5FeatureEnabled, type AgentExecutionScope, type NativePayloadSourceInput } from "@paperclipai/shared";
+import { agentExecutionManifestSchema, agentExecutionScopeSchema, createExecutionScopeRequestSchema, v5FeatureEnabled, type AgentExecutionScope, type NativePayloadSourceInput } from "@paperclipai/shared";
 import type { z } from "zod";
 import { readAuthoredAgentDefinition } from "./agents/authored-definition.js";
 import { resolveAuthoringProcedures } from "./agents/authoring-procedures.js";
@@ -40,9 +40,10 @@ export function agentRuntimeFabricService(db: Db) {
     if (!row || row.company.status !== "active" || row.identity.status !== "active" || !["idle", "running", "error"].includes(row.agent.status)) throw forbidden("An active, invokable local presence and logical identity are required");
     return row;
   }
-  async function freshContext(actor: AuthorizationActor, scope: AgentExecutionScope, query: string, runId: string, issueId: string | null, taskOnly = false) {
+  async function freshContext(actor: AuthorizationActor, scope: AgentExecutionScope, query: string, runId: string, issueId: string | null, scopeRequestId: string | null, taskOnly = false) {
     if (scope.delegatedScopes.length) {
-      const packet = await crossCompanyContextService(db).assemble(actor, { executionScope: scope, query, intent: "v5_runtime_execution", maxEstimatedTokens: 8000 });
+      if (!scopeRequestId) throw forbidden("Delegated execution requires its claimed scope request");
+      const packet = await crossCompanyContextService(db).assemble(actor, { executionScope: scope, query, intent: "v5_runtime_execution", maxEstimatedTokens: 8000 }, { runId, issueId, scopeRequestId });
       return { refs: packet.manifests, markdown: packet.evidence.map((e) => `### ${e.title ?? e.sourceType}\nSource company: ${e.sourceCompanyName} (${e.sourceCompanyId})\nClassification: ${e.shareClassification}; use: ${e.crossCompanyUsePolicy}\n${e.excerpt}\nCitation: ${e.citation.label}`).join("\n\n"), warnings: packet.warnings };
     }
     const result = await contextEngineService(db).assemble({ companyId: scope.primaryCompanyId, agentId: scope.primaryAgentPresenceId, responsibleUserId: actor.onBehalfOfUserId ?? actor.userId ?? null, enforceResponsibleUserIntersection: true, runId, issueId, query, intent: "v5_runtime_execution", includeFoundation: !taskOnly, ...(taskOnly ? { sourceScope: "task_only" as const } : {}), sensitivityCeiling: "internal" });
@@ -132,13 +133,24 @@ export function agentRuntimeFabricService(db: Db) {
       const local = await primary(actor, input.companyId, input.agentId);
       const authored = await readAuthoredAgentDefinition(db, local.agent);
       let scope: AgentExecutionScope = stored?.manifest.executionScope ?? { primaryCompanyId: input.companyId, primaryAgentPresenceId: input.agentId, delegatedScopes: [] };
+      let claimedScopeRequestId: string | null = null;
       let query = input.query.trim().slice(0, 500) || "Execute the assigned task";
       if (input.scopeRequestId) {
         const [request] = await db.select().from(agentExecutionScopeRequests).where(and(eq(agentExecutionScopeRequests.id, input.scopeRequestId), eq(agentExecutionScopeRequests.companyId, input.companyId), eq(agentExecutionScopeRequests.agentId, input.agentId))).limit(1);
         if (!request || request.requestedByUserId !== input.responsibleUserId || request.issueId !== input.issueId || (request.runId !== input.runId && (request.runId || request.expiresAt <= new Date()))) throw forbidden("Execution scope request is expired, claimed, or belongs to another operator/task");
         const [claimed] = await db.update(agentExecutionScopeRequests).set({ runId: input.runId }).where(and(eq(agentExecutionScopeRequests.id, request.id), sql`(${agentExecutionScopeRequests.runId} is null or ${agentExecutionScopeRequests.runId} = ${input.runId})`)).returning();
         if (!claimed) throw conflict("Execution scope was already claimed");
-        scope = request.scope; query = request.query;
+        scope = request.scope; query = request.query; claimedScopeRequestId = request.id;
+      }
+      if (scope.delegatedScopes.length && !claimedScopeRequestId) {
+        const [request] = await db.select().from(agentExecutionScopeRequests).where(and(
+          eq(agentExecutionScopeRequests.companyId, input.companyId), eq(agentExecutionScopeRequests.agentId, input.agentId),
+          eq(agentExecutionScopeRequests.runId, input.runId),
+        )).limit(1);
+        if (!request || request.requestedByUserId !== input.responsibleUserId || request.issueId !== input.issueId ||
+          hashContextPolicySnapshot(agentExecutionScopeSchema.parse(request.scope)) !== hashContextPolicySnapshot(scope))
+          throw forbidden("Delegated execution has no exact claimed scope request");
+        claimedScopeRequestId = request.id;
       }
       if (scope.delegatedScopes.length && await hasOrchestrationPlan(db, input.companyId, input.issueId)) throw forbidden("Bounded plans require local execution until delegated side-effect and budget receipts are qualified");
       if (authored && scope.delegatedScopes.length)
@@ -177,7 +189,7 @@ export function agentRuntimeFabricService(db: Db) {
       if (authored && !procedures && (resolvedSkills.skills.length || resolvedPlaybooks.pins.length))
         throw conflict("The existing run contains behavior outside this authored version");
       const capabilities = authored ? [] : await capabilityResolverService(db).search(actor, input.companyId, "");
-      const context = await freshContext(actor, scope, query, input.runId, input.issueId, Boolean(authored));
+      const context = await freshContext(actor, scope, query, input.runId, input.issueId, claimedScopeRequestId, Boolean(authored));
       if (stored) {
         if (stored.agentId !== input.agentId || stored.agentIdentityId !== local.identity.id || hashContextPolicySnapshot(stored.manifest.providers) !== hashContextPolicySnapshot(providers)) throw conflict("Pinned provider identity/profile changed; start a new execution");
         for (const pin of stored.manifest.skills) await skillResolverService(db).authorizedVersion(actor, input.companyId, pin.skillId, pin.versionId, Boolean(test && pin.skillId === test.skillId && pin.versionId === test.skillVersionId),"task");

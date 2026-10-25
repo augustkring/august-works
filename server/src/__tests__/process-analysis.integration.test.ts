@@ -7,7 +7,7 @@ import { randomUUID } from "node:crypto";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import { and, eq, sql } from "drizzle-orm";
 import { activityLog, analyticalLineageEdges, analyticalLineageManifests, applyPendingMigrations, businessEventObjects, businessEvents, companies, createDb, governanceObligations, issues, projects,
-  processAnalysisDefinitions, processAnalysisPublications, processAnalysisRuns, processAnalysisVersions, processFindings, processFindingTransitions, managementReviewSnapshots } from "@paperclipai/db";
+  processAnalysisDefinitions, processAnalysisPublications, processAnalysisRuns, processAnalysisVersions, processFindings, processFindingTransitions, managementReviewSnapshots, principalPermissionGrants, authUsers, authSessions, authPasskeys, companyMemberships } from "@paperclipai/db";
 import { processAnalysisDefinitionSchema, type ProcessAnalysisDefinition } from "@paperclipai/shared";
 import { processAnalysisService } from "../services/process-analysis.js";
 import { processFindingService } from "../services/process-findings.js";
@@ -23,10 +23,11 @@ import { assertDatabaseRestoreAdmission, prepareRestoredQuarantine } from "../se
 import { analyticalPurpose } from "./helpers/business-metric-fixture.js";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
+import { createCanonicalHumanProject, seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 
 const support = await getEmbeddedPostgresTestSupport();
 const suite = support.supported ? describe : describe.skip;
-const actor = { type: "board" as const, source: "local_implicit" as const };
+let actor: Awaited<ReturnType<typeof seedCurrentHumanSourceActor>>;
 const flags = { business_events_v8: true, analytical_lineage_v8: true, process_intelligence_v8: true, ai_use_cases_v7: true, governance_evidence_v7: true };
 const period = { from: "2026-01-01T00:00:00.000001Z", until: "2026-01-02T00:00:00.000002Z" };
 suite("Native human-published process analysis on migrated PostgreSQL", () => {
@@ -38,7 +39,9 @@ suite("Native human-published process analysis on migrated PostgreSQL", () => {
     await instanceSettingsService(db, { runtimeEnv: {} }).updateExperimental(flags);
     companyId = randomUUID(); otherCompanyId = randomUUID(); issueId = randomUUID(); projectId = randomUUID();
     await db.insert(companies).values([{ id: companyId, name: "Native process", issuePrefix: randomUUID() }, { id: otherCompanyId, name: "Foreign", issuePrefix: randomUUID() }]);
-    await db.insert(projects).values({ id: projectId, companyId, name: "Native project" });
+    actor = await seedCurrentHumanSourceActor(db, [companyId, otherCompanyId]);
+    await db.insert(principalPermissionGrants).values({ companyId, principalType: "user", principalId: actor.userId!, permissionKey: "audit:view_agent_actions", scope: null, grantedByUserId: actor.userId });
+    projectId = (await createCanonicalHumanProject(db, companyId, actor, "Native project")).id;
     await db.insert(issues).values({ id: issueId, companyId, projectId, title: "Native task" });
     const policy = analyticalPurpose(); policy.citation = "Native process test purpose";
     policy.analyticalPurpose!.purpose = "process_intelligence"; policy.analyticalPurpose!.capabilities = ["process"]; policy.analyticalPurpose!.maxRetentionDays = 90;
@@ -248,7 +251,7 @@ suite("Native human-published process analysis on migrated PostgreSQL", () => {
     expect(finding).toMatchObject({status:"OPEN",version:1,eventSetHash:run.eventSetHash,definitionHash:run.definitionHash,
       facts:{observed:{knownBlockedSeconds:45},semantics:"human_process_interpretation_of_observed_facts"}});
     expect(JSON.stringify(finding)).not.toMatch(/private-person|secret body/);
-    await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({business_metrics_v8:true});const management=await managementAnalyticalFixture(db,companyId,[{type:"process_finding",id:finding.id,definitionId:created.root.id,runId:run.id}]);expect(management.original.sources[0].grade).toBe("native_observation");expect(management.original.sources[0].facts).toMatchObject({findingStatus:"OPEN",findingVersion:1,knownBlockedSeconds:45,interpretation:input.interpretation});expect(management.original.currentQualification).toBe("current");
+    await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental({business_metrics_v8:true});const management=await managementAnalyticalFixture(db,companyId,[{type:"process_finding",id:finding.id,definitionId:created.root.id,runId:run.id}],actor);expect(management.original.sources[0].grade).toBe("native_observation");expect(management.original.sources[0].facts).toMatchObject({findingStatus:"OPEN",findingVersion:1,knownBlockedSeconds:45,interpretation:input.interpretation});expect(management.original.currentQualification).toBe("current");
     const [nativeFinding]=await db.select().from(processFindings).where(eq(processFindings.id,finding.id));
     await expect(db.insert(processFindings).values({...nativeFinding,id:randomUUID(),objectType:null,fingerprint:"9".repeat(64)})).rejects.toThrow();
     expect((await findings.create(companyId,actor,created.root.id,run.id,input)).id).toBe(finding.id);
@@ -353,6 +356,11 @@ suite("Native human-published process analysis on migrated PostgreSQL", () => {
     try {
       await applyPendingMigrations(target.toString());
       await restored.insert(companies).values(await db.select().from(companies).where(eq(companies.id,companyId)));
+      await restored.insert(authUsers).values(await db.select().from(authUsers).where(eq(authUsers.id,actor.userId!)));
+      await restored.insert(authPasskeys).values(await db.select().from(authPasskeys).where(eq(authPasskeys.userId,actor.userId!)));
+      await restored.insert(authSessions).values(await db.select().from(authSessions).where(eq(authSessions.id,actor.sessionId!)));
+      await restored.insert(companyMemberships).values(await db.select().from(companyMemberships).where(and(eq(companyMemberships.companyId,companyId),eq(companyMemberships.principalId,actor.userId!))));
+      await restored.insert(principalPermissionGrants).values(await db.select().from(principalPermissionGrants).where(and(eq(principalPermissionGrants.companyId,companyId),eq(principalPermissionGrants.principalId,actor.userId!))));
       await restored.insert(governanceObligations).values(await db.select().from(governanceObligations).where(eq(governanceObligations.companyId,companyId)));
       await restored.insert(projects).values(await db.select().from(projects).where(eq(projects.id,projectId)));
       await restored.insert(issues).values(await db.select().from(issues).where(eq(issues.id,issueId)));

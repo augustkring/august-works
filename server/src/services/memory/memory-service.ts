@@ -49,6 +49,7 @@ import { lockMemoryPrivacy, assertMemoryOperationRetained, assertMemorySourcesRe
 import { learningActorFromPrincipal } from "../learning/learning-analytical-sources.js";
 import { persistActivity, publishActivity, type ActivityPublication } from "../activity-log.js";
 import { pinCurrentBoardActor, type AuthorizationActor } from "../authorization.js";
+import { captureNativeTemporalContext, nativePayloadSnapshotSql } from "../native-direct-input.js";
 import {
   lockMemoryResolution,
   resolveMemoryCandidate,
@@ -631,6 +632,16 @@ async function insertCandidate(
   const now = new Date();
   const sourceProvenance=state.sourceProvenance??await captureMemorySources(tx,companyId,memorySourceActor(companyId,actor),input.scope,
     [...(supersedesRecordId?[supersedesRecordId]:[]),...(state.sourceMemoryIds??[])]);
+  const temporalContext = actor.principal.type === "agent" && actor.runId && sourceProvenance.sourceProvenanceQualified
+    ? await captureNativeTemporalContext(tx, companyId, actor.runId, "memory_record") : null;
+  const temporalContextPolicy = {
+    issueIds: sourceProvenance.sourceIssueIds, projectIds: sourceProvenance.sourceProjectIds,
+    runIds: sourceProvenance.sourceRunIds, memoryIds: sourceProvenance.sourceMemoryIds,
+    foundationRevisionIds: sourceProvenance.sourceFoundationRevisionIds,
+  };
+  const freezeTemporalContext = !!temporalContext?.complete && temporalContext.inputs.length + temporalContextPolicy.issueIds.length +
+    temporalContextPolicy.projectIds.length + temporalContextPolicy.runIds.length + temporalContextPolicy.memoryIds.length +
+    temporalContextPolicy.foundationRevisionIds.length <= 256;
 
   const [record] = await tx
     .insert(memoryRecords)
@@ -664,12 +675,23 @@ async function insertCandidate(
       createdByActorId: identity.actorId,
       createdByOperationId: input.createdByOperationId,
       ...sourceProvenance,
+      ...(freezeTemporalContext ? { payloadSourceProtocolVersion: 1, payloadSourceSnapshot: null, payloadSourceSnapshotInvalidated: false } : {}),
       metadata: input.metadata,
       createdAt: now,
       updatedAt: now,
     })
     .returning();
   if (!record) throw new Error("Memory candidate insert returned no row");
+
+  if (freezeTemporalContext) {
+    const [captured] = await tx.update(memoryRecords).set({ payloadSourceSnapshot: nativePayloadSnapshotSql(
+      "memory_record", temporalContextPolicy, temporalContext!.inputs,
+    ) }).where(and(eq(memoryRecords.companyId, companyId), eq(memoryRecords.id, record.id),
+      eq(memoryRecords.payloadSourceProtocolVersion, 1), isNull(memoryRecords.payloadSourceSnapshot),
+      eq(memoryRecords.payloadSourceSnapshotInvalidated, false))).returning();
+    if (!captured?.payloadSourceSnapshot) throw conflict("Temporal Memory source capture was not stored");
+    return captured;
+  }
 
   await insertEvidenceRows(tx, companyId, record.id, input.evidence);
   // Every new-row producer shares this final effect admission. An INSERT can

@@ -476,6 +476,40 @@
       },
       "summary": [],
       "sourceCommit": "8031e16d0d6d7bd7a48d8e037f207acc316a15c6"
+    },
+    {
+      "name": "support-assistant-help-metadata-root",
+      "exitCode": 0,
+      "exitSidecar": "support-assistant-help-metadata-root.exit",
+      "rawSha256": "9aed7fb3157ca91075ac6148f65ae324771b2ae88f1c0a4fd5c1b6a115cae0c1",
+      "sanitizedSha256": "9aed7fb3157ca91075ac6148f65ae324771b2ae88f1c0a4fd5c1b6a115cae0c1",
+      "archiveSha256": "180b4ce55f71c0c947cb94d4ba10defb07833b5bdd8ade3a9e298c0e7d0e641d",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "1d513ed00afbf5ec0d412e1a02962e920a51abc9"
+    },
+    {
+      "name": "support-assistant-help-review-owner-committed",
+      "exitCode": 0,
+      "exitSidecar": "support-assistant-help-review-owner-committed.exit",
+      "rawSha256": "0ac3fea38c032b289950760c947503710d02ca57e26bbbade7724f75ca95f29a",
+      "sanitizedSha256": "0ac3fea38c032b289950760c947503710d02ca57e26bbbade7724f75ca95f29a",
+      "archiveSha256": "b3b5c169327982e21592d52a7ba7cca5df33a019ed60966c17cc4e5f2b6536d5",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "1d513ed00afbf5ec0d412e1a02962e920a51abc9"
     }
   ],
   "updates": [
@@ -514,6 +548,14 @@
         "support-assistant-openapi-full",
         "support-assistant-help-docs-root",
         "support-assistant-help-review-committed"
+      ]
+    },
+    {
+      "sourceCommit": "1d513ed00afbf5ec0d412e1a02962e920a51abc9",
+      "meaning": "Root metadata14PASS with exact exit and committed source-review covering paired Help and actual conversation owner.",
+      "logs": [
+        "support-assistant-help-metadata-root",
+        "support-assistant-help-review-owner-committed"
       ]
     }
   ]

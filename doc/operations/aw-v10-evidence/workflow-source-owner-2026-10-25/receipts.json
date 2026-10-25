@@ -1226,6 +1226,103 @@
         "Duration  27.07s (transform 9.97s, setup 77ms, import 14.00s, tests 12.87s, environment 0ms)"
       ],
       "sourceCommit": "8031e16d0d6d7bd7a48d8e037f207acc316a15c6"
+    },
+    {
+      "name": "adaptive-planning-cross-project-fixtures-rerun",
+      "exitCode": 0,
+      "exitSidecar": "adaptive-planning-cross-project-fixtures-rerun.exit",
+      "rawSha256": "51200bc3947f99799701a4d0396eb14ba41d663022d0abd539e4421a1aea26b7",
+      "sanitizedSha256": "51200bc3947f99799701a4d0396eb14ba41d663022d0abd539e4421a1aea26b7",
+      "archiveSha256": "93f7489f1d80ec2c911e1775e699c86e2f5927e26c05aacb71e013aa8dd3d73b",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  19 passed (19)",
+        "Duration  100.72s (transform 11.56s, setup 75ms, import 15.84s, tests 84.69s, environment 0ms)"
+      ],
+      "sourceCommit": "1d513ed00afbf5ec0d412e1a02962e920a51abc9"
+    },
+    {
+      "name": "company-portability-import-batching-final2",
+      "exitCode": 0,
+      "exitSidecar": "company-portability-import-batching-final2.exit",
+      "rawSha256": "da18ce7ba58d8803da3af48ed77980c05cf58e8f83c8009cd5dd8b98826ed5d2",
+      "sanitizedSha256": "da18ce7ba58d8803da3af48ed77980c05cf58e8f83c8009cd5dd8b98826ed5d2",
+      "archiveSha256": "c10ac86eb658510f9e0f8d9b0681bdb8b049a0fcf096e4f54a8a1f01a999754e",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  14 passed | 1 skipped (15)",
+        "Duration  64.05s (transform 12.22s, setup 73ms, import 17.26s, tests 46.60s, environment 0ms)"
+      ],
+      "sourceCommit": "1d513ed00afbf5ec0d412e1a02962e920a51abc9"
+    },
+    {
+      "name": "learning-artifact-worker-cd1061d20",
+      "exitCode": 0,
+      "exitSidecar": "learning-artifact-worker-cd1061d20.exit",
+      "rawSha256": "5e8beda366922cdb78ffa306490c342345ff1f4b2039981d0e1e78872b81a2bb",
+      "sanitizedSha256": "6d5eddfa44679cf75f23cf1e649117ae8ceb98b7034b510f518628e40cb2c332",
+      "archiveSha256": "ab14bc5bf86ff4957c4ad857cfe14f7599ea4170492c4ded12dcef42397a3d11",
+      "redactions": {
+        "ansi": 78,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  2 passed | 40 skipped (42)",
+        "Duration  375.14s (transform 12.83s, setup 155ms, import 18.64s, tests 356.19s, environment 0ms)"
+      ],
+      "sourceCommit": "1d513ed00afbf5ec0d412e1a02962e920a51abc9"
+    },
+    {
+      "name": "worker-source-cd1061d20-update",
+      "exitCode": 2,
+      "exitSidecar": "worker-source-cd1061d20-update.exit",
+      "rawSha256": "07e4be5e3e608b34fb31a15f145ddfa0d4537fb34f11ab4a0322bde75dc8f01b",
+      "sanitizedSha256": "07e4be5e3e608b34fb31a15f145ddfa0d4537fb34f11ab4a0322bde75dc8f01b",
+      "archiveSha256": "4cce63e79bbfc9d56eecec85dfb14e3cac6f3322812248659bbbabc74b7bb17e",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "1d513ed00afbf5ec0d412e1a02962e920a51abc9"
+    },
+    {
+      "name": "worker-source-cd1061d20-root-update",
+      "exitCode": 2,
+      "exitSidecar": "worker-source-cd1061d20-root-update.exit",
+      "rawSha256": "6e1f1030794abcaee2c32dc8eb04906e7af9ca695fded9ece8b1d67803392b8c",
+      "sanitizedSha256": "6e1f1030794abcaee2c32dc8eb04906e7af9ca695fded9ece8b1d67803392b8c",
+      "archiveSha256": "a8e73f172331fc9cf77ab2bc48174c9bb5d51b3c63e02455151aefc59240eb3e",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "1d513ed00afbf5ec0d412e1a02962e920a51abc9"
     }
   ],
   "updates": [
@@ -1372,6 +1469,17 @@
       "meaning": "Actual current-Human membership pin and session gate inside original locked conversation comment transaction; full file passes.",
       "logs": [
         "agent-conversations-current-human-pin-full5"
+      ]
+    },
+    {
+      "sourceCommit": "1d513ed00afbf5ec0d412e1a02962e920a51abc9",
+      "meaning": "Current-Human cross-project planning19/import14+1benchmarkskip; exact cd1061d20 isolated artifact2PASS with independent5917sourcehash verification, not production qualification.",
+      "logs": [
+        "adaptive-planning-cross-project-fixtures-rerun",
+        "company-portability-import-batching-final2",
+        "learning-artifact-worker-cd1061d20",
+        "worker-source-cd1061d20-update",
+        "worker-source-cd1061d20-root-update"
       ]
     }
   ],

@@ -23,7 +23,7 @@ import {
   resolveEvidenceAuthority,
 } from "./context-authority.js";
 import { fitEvidenceToBudget } from "./context-budget.js";
-import { contextManifestService } from "./context-manifest.js";
+import { contextManifestService, type DelegatedContextExecutionBindingInput } from "./context-manifest.js";
 import {
   connectedKnowledgeContextProvider,
   createConnectedKnowledgeRegistry,
@@ -91,6 +91,8 @@ export interface AssembleContextInput {
   responsibleUserId?: string | null;
   enforceResponsibleUserIntersection?: boolean;
   runId?: string | null;
+  /** Server-only exact cross-company execution binding; never accepted from HTTP input. */
+  delegatedExecution?: DelegatedContextExecutionBindingInput;
   issueId?: string | null;
   projectId?: string | null;
   subjectRefs?: string[];
@@ -696,6 +698,7 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
 
       const input = { ...rawInput, query, authorizationActor: inspectionActor,
         authorizationDecision: inspectionAuthority?.decide };
+      if (inspectionActor && input.delegatedExecution) throw forbidden("Human Context inspection cannot create delegated runtime provenance");
       const asOf = rawInput.asOf ?? new Date();
       const sensitivityCeiling = rawInput.sensitivityCeiling ?? "internal";
       const budget = rawInput.budget ?? DEFAULT_CONTEXT_BUDGET;
@@ -771,6 +774,7 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
           agentId: input.agentId,
           issueId: input.issueId ?? null,
           responsibleUserId: input.responsibleUserId ?? null,
+          ...(input.delegatedExecution ? { delegatedExecution: input.delegatedExecution } : {}),
           projectId: input.projectId ?? null,
           query: input.query,
           policySnapshot: {

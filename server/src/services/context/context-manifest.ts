@@ -2,7 +2,10 @@ import { createHash } from "node:crypto";
 import { and, eq, inArray } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
+  agentExecutionScopeRequests,
   agents,
+  companyCrossCompanyPolicies,
+  delegatedContextManifestBindings,
   contextManifestItems,
   contextManifests,
   heartbeatRuns,
@@ -18,6 +21,7 @@ import type {
   ContextAuthorityDecision,
   EvidenceItem,
 } from "@paperclipai/shared";
+import { agentExecutionScopeSchema, crossCompanyPolicySchema, type AgentExecutionScope } from "@paperclipai/shared";
 import { conflict, forbidden, unprocessable } from "../../errors.js";
 import { learningAssetRoots,retainLearnedAssetsInContext } from "../learning/learning-assets.js";
 import { memoryPayloadVisible, canActorReadMemorySources } from "../memory/memory-privacy.js";
@@ -26,6 +30,24 @@ import { lockIssuePrivacyTree } from "../issues.js";
 import { foundationIndexService } from "../foundation/foundation-index.js";
 import { approvedFoundationView, foundationService } from "../foundation/foundation-service.js";
 import {authorizationService,canActorReadHeartbeatRunPrivacy,canActorReadIssuePrivacy,canActorReadProjectPrivacy,type AuthorizationActor,type NativeContextInspectionOwner} from "../authorization.js";
+import { crossCompanyEvidencePolicy } from "../cross-company-context-policy.js";
+
+export interface DelegatedContextExecutionBindingInput {
+  homeCompanyId: string;
+  homeAgentId: string;
+  homeAgentIdentityId: string;
+  homeRunId: string;
+  scopeRequestId: string;
+  responsibleUserId: string;
+  guestCompanyId: string;
+  guestAgentId: string;
+  guestAgentIdentityId: string;
+  purpose: string;
+  accessMode: "read" | "contribute" | "act";
+  scope: AgentExecutionScope;
+  /** Re-run the original current-scope owner on this physical source tx. */
+  assertCurrent: (tx: Db) => Promise<void>;
+}
 
 type JsonScalar = string | number | boolean | null;
 type CanonicalJson = JsonScalar | CanonicalJson[] | { [key: string]: CanonicalJson };
@@ -98,6 +120,7 @@ export interface CreateContextManifestInput {
   issueId?: string | null;
   projectId?: string | null;
   responsibleUserId?: string | null;
+  delegatedExecution?: DelegatedContextExecutionBindingInput;
   query: string;
   policySnapshot: unknown;
   selected: ContextManifestSelectedEvidence[];
@@ -350,21 +373,76 @@ export function contextManifestService(db: Db) {
       return db.transaction(async (tx) => {
         await lockIssuePrivacyTree(tx,input.companyId);
         const sourceDb = tx as unknown as Db;
+        const delegated = input.delegatedExecution;
+        if (delegated && (input.runId || input.companyId !== delegated.guestCompanyId || input.agentId !== delegated.guestAgentId ||
+          input.responsibleUserId !== delegated.responsibleUserId || input.issueId || input.projectId))
+          throw forbidden("Delegated Context does not match its guest-local source owner");
         const run = await assertManifestReferences(sourceDb, input);
-        if (!run?.responsibleUserId || (input.responsibleUserId && input.responsibleUserId !== run.responsibleUserId))
-          throw forbidden("Context requires its actual accountable run");
-        if(input.issueId && input.issueId!==run.issueId)
-          throw forbidden("Context task does not match its actual run");
-        const issueId=run.issueId;
-        const sourceActor:AuthorizationActor={type:"agent",source:"agent_jwt",companyId:input.companyId,agentId:input.agentId,runId:run.id,onBehalfOfUserId:run.responsibleUserId};
+        let issueId: string | null = null;
+        let sourceActor: AuthorizationActor;
+        if (delegated) {
+          const scope = agentExecutionScopeSchema.parse(delegated.scope);
+          const entry = scope.delegatedScopes.find(candidate => candidate.companyId === delegated.guestCompanyId && candidate.agentPresenceId === delegated.guestAgentId);
+          if (!entry || entry.purpose !== delegated.purpose || entry.accessMode !== delegated.accessMode ||
+            scope.primaryCompanyId !== delegated.homeCompanyId || scope.primaryAgentPresenceId !== delegated.homeAgentId)
+            throw forbidden("Delegated Context is outside its exact execution scope");
+          const [home] = await sourceDb.select({ id: heartbeatRuns.id, issueId: heartbeatRuns.issueId, responsibleUserId: heartbeatRuns.responsibleUserId,
+            status: heartbeatRuns.status, agentIdentityId: agents.agentIdentityId }).from(heartbeatRuns)
+            .innerJoin(agents, and(eq(agents.companyId, heartbeatRuns.companyId), eq(agents.id, heartbeatRuns.agentId)))
+            .where(and(eq(heartbeatRuns.companyId, delegated.homeCompanyId), eq(heartbeatRuns.agentId, delegated.homeAgentId),
+              eq(heartbeatRuns.id, delegated.homeRunId), eq(heartbeatRuns.status, "running"),
+              eq(heartbeatRuns.responsibleUserId, delegated.responsibleUserId))).for("share");
+          const [request] = await sourceDb.select().from(agentExecutionScopeRequests).where(and(
+            eq(agentExecutionScopeRequests.id, delegated.scopeRequestId), eq(agentExecutionScopeRequests.companyId, delegated.homeCompanyId),
+            eq(agentExecutionScopeRequests.agentId, delegated.homeAgentId), eq(agentExecutionScopeRequests.runId, delegated.homeRunId),
+            eq(agentExecutionScopeRequests.requestedByUserId, delegated.responsibleUserId),
+          )).for("share");
+          if (!home || home.agentIdentityId !== delegated.homeAgentIdentityId || !request || request.issueId !== home.issueId ||
+            hashContextPolicySnapshot(agentExecutionScopeSchema.parse(request.scope)) !== hashContextPolicySnapshot(scope))
+            throw forbidden("Delegated Context requires its exact current home Run and claimed scope request");
+          const [guest] = await sourceDb.select({ agentIdentityId: agents.agentIdentityId }).from(agents).where(and(
+            eq(agents.companyId, delegated.guestCompanyId), eq(agents.id, delegated.guestAgentId))).limit(1);
+          if (!guest || guest.agentIdentityId !== delegated.guestAgentIdentityId || guest.agentIdentityId !== home.agentIdentityId)
+            throw forbidden("Delegated Context presence identity changed");
+          sourceActor = { type:"agent", source:"agent_jwt", companyId:input.companyId, agentId:input.agentId,
+            onBehalfOfUserId:delegated.responsibleUserId };
+        } else {
+          if (!run?.responsibleUserId || (input.responsibleUserId && input.responsibleUserId !== run.responsibleUserId))
+            throw forbidden("Context requires its actual accountable run");
+          if (input.issueId && input.issueId !== run.issueId) throw forbidden("Context task does not match its actual run");
+          issueId = run.issueId;
+          sourceActor = {type:"agent",source:"agent_jwt",companyId:input.companyId,agentId:input.agentId,runId:run.id,onBehalfOfUserId:run.responsibleUserId};
+        }
         // Retrieval may have waited while membership or sharing changed. The
         // original privacy transaction owns admission of the retained copy.
         const assertScopePrivacy = async () => {
-          const [currentRun]=await sourceDb.select({id:heartbeatRuns.id}).from(heartbeatRuns).where(and(
-            eq(heartbeatRuns.companyId,input.companyId),eq(heartbeatRuns.id,run.id),
-            eq(heartbeatRuns.agentId,input.agentId),eq(heartbeatRuns.responsibleUserId,run.responsibleUserId!),
-          ));
-          if(!currentRun)throw forbidden("Context accountable run changed during assembly");
+          if (delegated) {
+            const [currentRun] = await sourceDb.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+              eq(heartbeatRuns.companyId, delegated.homeCompanyId), eq(heartbeatRuns.id, delegated.homeRunId),
+              eq(heartbeatRuns.agentId, delegated.homeAgentId), eq(heartbeatRuns.responsibleUserId, delegated.responsibleUserId),
+              eq(heartbeatRuns.status, "running")));
+            const [currentRequest] = await sourceDb.select({ id: agentExecutionScopeRequests.id, scope: agentExecutionScopeRequests.scope }).from(agentExecutionScopeRequests).where(and(
+              eq(agentExecutionScopeRequests.id, delegated.scopeRequestId), eq(agentExecutionScopeRequests.companyId, delegated.homeCompanyId),
+              eq(agentExecutionScopeRequests.agentId, delegated.homeAgentId), eq(agentExecutionScopeRequests.runId, delegated.homeRunId),
+              eq(agentExecutionScopeRequests.requestedByUserId, delegated.responsibleUserId)));
+            if (!currentRun || !currentRequest || hashContextPolicySnapshot(agentExecutionScopeSchema.parse(currentRequest.scope)) !== hashContextPolicySnapshot(delegated.scope))
+              throw forbidden("Delegated Context accountability changed during assembly");
+            await delegated.assertCurrent(sourceDb);
+            const [policyRow] = await sourceDb.select().from(companyCrossCompanyPolicies).where(eq(companyCrossCompanyPolicies.companyId, delegated.guestCompanyId)).limit(1);
+            const currentPolicy = crossCompanyPolicySchema.parse(policyRow?.policy ?? {});
+            const policyAllowsMode = delegated.accessMode === "read" ? currentPolicy.allowRead : delegated.accessMode === "contribute" ? currentPolicy.allowContribute : currentPolicy.allowAct;
+            if (!policyAllowsMode) throw forbidden("Guest company sharing policy changed during Context assembly");
+            for (const { decision } of input.selected) {
+              if (crossCompanyEvidencePolicy(decision.evidence) !== "allow" || !currentPolicy.allowedSensitivities.includes(decision.evidence.sensitivity as "public" | "internal" | "confidential"))
+                throw forbidden("Guest company sharing policy does not allow this Context source");
+            }
+          } else {
+            const [currentRun]=await sourceDb.select({id:heartbeatRuns.id}).from(heartbeatRuns).where(and(
+              eq(heartbeatRuns.companyId,input.companyId),eq(heartbeatRuns.id,run!.id),
+              eq(heartbeatRuns.agentId,input.agentId),eq(heartbeatRuns.responsibleUserId,run!.responsibleUserId!),
+            ));
+            if(!currentRun)throw forbidden("Context accountable run changed during assembly");
+          }
           const admission = await authorizationService(sourceDb).decide({actor:sourceActor,action:"company_scope:read",
             resource:{type:"company",companyId:input.companyId},enforceResponsibleUserIntersection:true});
           if (!admission.allowed) throw forbidden("Context source access is unavailable");
@@ -510,6 +588,22 @@ export function contextManifestService(db: Db) {
               payloadSourceSnapshot: selectedPayloadSnapshots.get(sourceKey(value.sourceProvider,value.sourceRef)) ?? null,
             }))).returning()
           : [];
+
+        if (delegated) {
+          const sourceSnapshotHash = hashContextPolicySnapshot(input.selected.map(({ decision }, rank) => ({
+            rank, sourceProvider: decision.evidence.sourceProvider, sourceRef: decision.evidence.sourceRef,
+            sourceVersion: decision.evidence.sourceVersion, contentHash: hashEvidenceContent(decision.evidence),
+          })));
+          await tx.insert(delegatedContextManifestBindings).values({
+            guestCompanyId: delegated.guestCompanyId, contextManifestId: manifest!.id,
+            homeCompanyId: delegated.homeCompanyId, homeAgentId: delegated.homeAgentId,
+            homeAgentIdentityId: delegated.homeAgentIdentityId, homeRunId: delegated.homeRunId,
+            scopeRequestId: delegated.scopeRequestId, responsibleUserId: delegated.responsibleUserId,
+            guestAgentId: delegated.guestAgentId, guestAgentIdentityId: delegated.guestAgentIdentityId,
+            purpose: delegated.purpose, accessMode: delegated.accessMode,
+            scopeSnapshot: agentExecutionScopeSchema.parse(delegated.scope), sourceSnapshotHash,
+          });
+        }
 
         await assertScopePrivacy();
         for (const id of selectedTaskIds)

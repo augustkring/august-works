@@ -38,6 +38,7 @@ import { workProductService } from "../services/work-products.js";
 import type { ImportIssueWorkProductRow } from "../services/import-write-types.js";
 import type { CompanyPortabilityFileEntry } from "@paperclipai/shared";
 import { randomUUID } from "node:crypto";
+import { seedCurrentHumanSourceActor } from "./helpers/current-human-source-fixture.js";
 
 // This suite proves the company-import writers batch their inserts: it runs a
 // real import against embedded Postgres and counts the SQL insert statements
@@ -263,19 +264,25 @@ describeEmbeddedPostgres("company import batches inserts", () => {
     counts.reset();
   });
 
-  async function qualifyNativeBundle(files: Record<string, CompanyPortabilityFileEntry>, userId: string, nativeConversation = false) {
-    const companyId = randomUUID(), sourceId = randomUUID();
+  async function qualifyNativeBundle(files: Record<string, CompanyPortabilityFileEntry>, userId: string, nativeConversation = false, sourceOwnerId = userId) {
+    const companyId = randomUUID();
     await db.insert(companies).values({ id: companyId, name: "Native copy fixture", issuePrefix: `N${companyId.slice(0, 7)}` });
-    await db.insert(authUsers).values({ id: userId, name: "Native copy owner", email: `${randomUUID()}@example.test`,
-      emailVerified: true, createdAt: new Date(), updatedAt: new Date() });
-    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: userId, membershipRole: "owner", status: "active" });
+    const actor = await seedCurrentHumanSourceActor(db, [companyId], userId);
+    const sourceActor = sourceOwnerId === userId ? actor : await seedCurrentHumanSourceActor(db, [companyId], sourceOwnerId);
     const conversationAgentId = nativeConversation ? randomUUID() : null;
     if (conversationAgentId) await db.insert(agents).values({ id: conversationAgentId, companyId, name: "Native source companion", role: "engineer", adapterType: "process" });
-    await db.insert(issues).values({ id: sourceId, companyId, title: "Native source fixture", visibility: "open",
-      ...(conversationAgentId ? { conversationAgentId, conversationUserId: userId, conversationState: "active" as const,
-        assigneeAgentId: conversationAgentId, responsibleUserId: userId, createdByUserId: userId } : {}),
-    });
-    nativeSourceIds.add(sourceId);
+    const sourceRows = new Map<string, typeof issues.$inferSelect>();
+    for (const path of Object.keys(files)) {
+      const match = /^tasks\/([^/]+)\/TASK\.md$/.exec(path);
+      if (!match) continue;
+      const slug = match[1]!, sourceId = randomUUID();
+      await issueService(db).create(companyId, { id: sourceId, title: `Native source ${slug}`, visibility: "open", createdByUserId: sourceOwnerId,
+        ...(conversationAgentId ? { conversationAgentId, conversationUserId: sourceOwnerId, conversationState: "active" as const,
+          assigneeAgentId: conversationAgentId, responsibleUserId: sourceOwnerId } : {}),
+      }, db, undefined, { ...(conversationAgentId ? {} : { manualInputActor: sourceActor }), privacyActor: sourceActor });
+      sourceRows.set(slug, (await db.select().from(issues).where(eq(issues.id, sourceId)))[0]!);
+      nativeSourceIds.add(sourceId);
+    }
     const extension = files[".paperclip.yaml"];
     if (typeof extension !== "string") throw new Error("Expected fixture YAML text");
     let qualified = extension;
@@ -283,8 +290,12 @@ describeEmbeddedPostgres("company import batches inserts", () => {
       const match = /^tasks\/([^/]+)\/TASK\.md$/.exec(path);
       if (!match) continue;
       const slug = match[1]!;
-      const proof = { sourceCompanyId: companyId, sourceIssueId: sourceId, visibility: "open", privacyRootIssueId: null,
-        privacyParentIssueId: null, privacySources: [], responsibleUserId: null, createdByUserId: null };
+      const source = sourceRows.get(slug)!;
+      const privacySources = await db.select({ sourceKind: issuePrivacySources.sourceKind, sourceId: issuePrivacySources.sourceId })
+        .from(issuePrivacySources).where(eq(issuePrivacySources.issueId, source.id));
+      const proof = { sourceCompanyId: companyId, sourceIssueId: source.id, visibility: source.visibility,
+        privacyRootIssueId: source.privacyRootIssueId, privacyParentIssueId: source.privacyParentIssueId,
+        privacySources, responsibleUserId: source.responsibleUserId, createdByUserId: source.createdByUserId };
       qualified = qualified.replace(`  ${slug}:\n`, `  ${slug}:\n${renderYamlBlock(proof, 2).join("\n")}\n`);
     }
     files[".paperclip.yaml"] = qualified;
@@ -354,7 +365,7 @@ describeEmbeddedPostgres("company import batches inserts", () => {
   it("keeps imported issues out of the importing user's inbox", async () => {
     const importingUserId = "board-inbox-user";
     const bundle = buildTouchedIssuesBundle(3);
-    const sourceCompanyId = await qualifyNativeBundle(bundle.files, importingUserId);
+    const sourceCompanyId = await qualifyNativeBundle(bundle.files, importingUserId, false, randomUUID());
     const portability = companyPortabilityService(db);
 
     const result = await portability.importBundle(
@@ -659,8 +670,8 @@ describeEmbeddedPostgres("company import batches inserts", () => {
       queryHash: "a".repeat(64), policySnapshotHash: "b".repeat(64) }).returning();
     await db.insert(contextManifestMemoryRoots).values({ companyId, manifestId: manifest.id, memoryRecordId: memory.id, sourceVersion: "1" });
     expect(await canActorReadMemorySources(db, companyId, actor, memory.id)).toBe(true);
-    // The task-only graph remains public; the full original Context gate narrows it.
-    expect(await canActorReadHeartbeatRunPrivacy(db, { type: "none" }, { id: companyRunId, companyId })).toBe(true);
+    // Retained private Memory context narrows access to the original company run.
+    expect(await canActorReadHeartbeatRunPrivacy(db, { type: "none" }, { id: companyRunId, companyId })).toBe(false);
     await expect(portability.importBundle(input, null, { actor })).rejects.toMatchObject({ status: 422 });
     expect(await db.select({ id: agents.id }).from(agents).where(eq(agents.companyId, companyId))).toEqual([{ id: agentId }]);
   });
@@ -710,7 +721,7 @@ describeEmbeddedPostgres("company import batches inserts", () => {
     }, { actor: { type: "board", source: "session", userId } });
     expect(exported.manifest.issues).toHaveLength(1);
     expect(exported.manifest.issues[0]).toMatchObject({ sourceCompanyId: companyId, sourceIssueId: sourceId,
-      privacyRootIssueId: null, privacyParentIssueId: null, privacySources: [], responsibleUserId: null, createdByUserId: null });
+      privacyRootIssueId: null, privacyParentIssueId: null, privacySources: [], responsibleUserId: userId, createdByUserId: userId });
     await portability.importBundle({
       source: { type: "inline", rootPath: exported.rootPath, files: exported.files },
       include: { company: false, agents: false, projects: false, issues: true },

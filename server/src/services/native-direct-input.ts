@@ -1,10 +1,96 @@
-import { sql } from "drizzle-orm";
-import { issues, projects, issueComments, documentRevisions, issueDocuments, issueAttachments, type Db } from "@paperclipai/db";
-import type { NativePayloadSourceSnapshot } from "@paperclipai/shared";
+import { createHash } from "node:crypto";
+import { and, eq, inArray, sql } from "drizzle-orm";
+import { issues, projects, issueComments, documentRevisions, issueDocuments, issueAttachments,
+  contextManifests, contextManifestItems, contextManifestMemoryRoots, type Db } from "@paperclipai/db";
+import { nativePayloadSourceSnapshotSchema, type NativePayloadSourceInput, type NativePayloadSourcePolicy,
+  type NativePayloadSourceSnapshot } from "@paperclipai/shared";
 import { forbidden } from "../errors.js";
 import type { AuthorizationActor } from "./authorization.js";
 
 type Transaction = Parameters<Parameters<Db["transaction"]>[0]>[0];
+
+export interface NativeTemporalContextCapture {
+  readonly complete: boolean;
+  readonly inputs: Extract<NativePayloadSourceInput, { kind: "context" }>[];
+  readonly issueIds: string[];
+  readonly projectIds: string[];
+  readonly memoryIds: string[];
+  readonly foundationRevisionIds: string[];
+}
+
+/** Capture only same-company persisted Context roots. Unsupported providers keep
+ * the legacy live-Run path; this is a temporal source pin, not qualification. */
+export async function captureNativeTemporalContext(db: Db, companyId: string, runId: string,
+  owner: "issue" | "memory_record"): Promise<NativeTemporalContextCapture> {
+  const manifests = await db.select().from(contextManifests).where(and(
+    eq(contextManifests.companyId, companyId), eq(contextManifests.runId, runId),
+  )).orderBy(contextManifests.createdAt, contextManifests.id).limit(65);
+  if (manifests.length > 64) return { complete: false, inputs: [], issueIds: [], projectIds: [], memoryIds: [], foundationRevisionIds: [] };
+  const ids = manifests.map(row => row.id);
+  const items = ids.length ? await db.select().from(contextManifestItems).where(and(
+    eq(contextManifestItems.companyId, companyId), inArray(contextManifestItems.manifestId, ids),
+  )).orderBy(contextManifestItems.manifestId, contextManifestItems.rank, contextManifestItems.id).limit(257) : [];
+  const memoryRoots = ids.length ? await db.select().from(contextManifestMemoryRoots).where(and(
+    eq(contextManifestMemoryRoots.companyId, companyId), inArray(contextManifestMemoryRoots.manifestId, ids),
+  )).orderBy(contextManifestMemoryRoots.manifestId, contextManifestMemoryRoots.memoryRecordId).limit(257) : [];
+  if (items.length > 256 || memoryRoots.length > 256) return { complete: false, inputs: [], issueIds: [], projectIds: [], memoryIds: [], foundationRevisionIds: [] };
+  const issueIds = new Set<string>(), projectIds = new Set<string>(), memoryIds = new Set<string>(), foundationRevisionIds = new Set<string>();
+  let complete = true;
+  const inputRows: Extract<NativePayloadSourceInput, { kind: "context" }>[] = [];
+  for (const manifest of manifests) {
+    if (manifest.projectId) projectIds.add(manifest.projectId);
+    const manifestItems = items.filter(item => item.manifestId === manifest.id);
+    const roots = memoryRoots.filter(root => root.manifestId === manifest.id);
+    for (const item of manifestItems) {
+      if (item.sourceProvider === "august_works_tasks") {
+        const ref = /^issue:\/\/([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$/i.exec(item.sourceRef);
+        if (!ref || !item.sourceVersion || !item.contentHash) complete = false;
+        else issueIds.add(ref[1]!);
+      } else if (item.sourceProvider === "august_works_foundation" && owner === "memory_record") {
+        const ref = /^foundation:\/\/[0-9a-f-]{36}\/([0-9a-f-]{36})\/(?:\d+|whole)$/i.exec(item.sourceRef);
+        if (!ref || item.sourceVersion !== ref[1]) complete = false;
+        else foundationRevisionIds.add(ref[1]!);
+      } else if (["august_works_memory", "august_works_derived_memory"].includes(item.sourceProvider) && owner === "memory_record") {
+        const ref = /^memory:\/\/(?:record|derived)\/([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$/i.exec(item.sourceRef);
+        if (!ref) complete = false;
+        else memoryIds.add(ref[1]!);
+      } else complete = false;
+    }
+    if (roots.length && owner !== "memory_record") complete = false;
+    roots.forEach(root => memoryIds.add(root.memoryRecordId));
+    const contentHash = createHash("sha256").update(JSON.stringify({
+      manifest: { id: manifest.id, companyId: manifest.companyId, runId: manifest.runId, agentId: manifest.agentId,
+        issueId: manifest.issueId, projectId: manifest.projectId, queryHash: manifest.queryHash,
+        policySnapshotHash: manifest.policySnapshotHash, createdAt: manifest.createdAt.toISOString() },
+      items: manifestItems.map(item => ({ id: item.id, provider: item.sourceProvider, ref: item.sourceRef,
+        version: item.sourceVersion, contentHash: item.contentHash, snapshot: item.payloadSourceSnapshot })),
+      roots: roots.map(root => ({ id: root.memoryRecordId, version: root.sourceVersion, snapshot: root.payloadSourceSnapshot })),
+    }), "utf8").digest("hex");
+    inputRows.push({ kind: "context", manifestId: manifest.id, queryHash: manifest.queryHash,
+      policySnapshotHash: manifest.policySnapshotHash, contentHash });
+  }
+  const refs = issueIds.size + projectIds.size + memoryIds.size + foundationRevisionIds.size + inputRows.length;
+  if (refs > 256) complete = false;
+  return { complete, inputs: complete ? inputRows : [], issueIds: [...issueIds].sort(), projectIds: [...projectIds].sort(),
+    memoryIds: [...memoryIds].sort(), foundationRevisionIds: [...foundationRevisionIds].sort() };
+}
+
+/** Bind an effect owner's source-policy facts to its actual body hash. The
+ * caller must build inputs/policy from locked native source owners. */
+export function nativePayloadSnapshotSql(kind: "issue" | "memory_record", policy: NativePayloadSourcePolicy,
+  inputs: NativePayloadSourceInput[]) {
+  const ownerId = kind === "issue" ? issues.id : sql`memory_records.id`;
+  const companyId = kind === "issue" ? issues.companyId : sql`memory_records.company_id`;
+  const body = kind === "issue" ? sql`to_jsonb(${issues})` : sql`to_jsonb(memory_records)`;
+  const policyJson = JSON.stringify(policy), inputsJson = JSON.stringify(inputs);
+  return sql<NativePayloadSourceSnapshot>`(
+    with payload as (select jsonb_build_object('version',1,'owner',jsonb_build_object(
+      'kind',${kind}::text,'companyId',${companyId}::text,'id',${ownerId}::text,
+      'contentHash',public.aw_native_payload_body_hash(${kind}::text,${body})),
+      'policy',${policyJson}::jsonb,'inputs',${inputsJson}::jsonb) as value)
+    select value || jsonb_build_object('digest',encode(sha256(convert_to(value::text,'UTF8')),'hex')) from payload
+  )`;
+}
 
 /** Used only after the original owner admits an independent direct Human
  * input. This expression binds bytes; it supplies no permission or completeness. */

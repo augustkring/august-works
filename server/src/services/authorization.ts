@@ -872,7 +872,13 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
           where n.kind='project' and p.id=n.id and p.company_id=${company}
         union all select 'project',source.id from projects p cross join lateral unnest(p.source_project_ids) source(id)
           where n.kind='project' and p.id=n.id and p.company_id=${company}
-        union all select s.source_kind,s.source_id from ${issuePrivacySources} s
+        union all select case when s.source_kind='run' and i.payload_source_protocol_version=1
+            and i.payload_source_snapshot_invalidated=false
+            and i.payload_source_snapshot->'owner'->>'kind'='issue'
+            and i.payload_source_snapshot->'owner'->>'id'=i.id::text
+            and i.payload_source_snapshot->'policy'->'runIds' ? s.source_id::text
+            then 'retained_run' else s.source_kind end,s.source_id from ${issuePrivacySources} s
+          join issues i on i.company_id=s.company_id and i.id=s.issue_id
           where n.kind='issue' and s.issue_id=n.id and s.company_id=${company}
         union all select 'issue',ref.id from ${heartbeatRuns} r cross join lateral (
           select r.issue_id as id where r.issue_id is not null
@@ -883,7 +889,7 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
             then (r.context_snapshot->>'taskId')::uuid end where r.context_snapshot ? 'taskId'
           union all select null::uuid where r.scope_kind='issue' and r.issue_id is null and r.native_issue_id is null
             and not coalesce(r.context_snapshot ? 'issueId',false) and not coalesce(r.context_snapshot ? 'taskId',false)
-        ) ref where n.kind='run' and r.id=n.id and r.company_id=${company}
+        ) ref where n.kind in ('run','retained_run') and r.id=n.id and r.company_id=${company}
         union all select root.kind,root.id from ${heartbeatRuns} r
           join context_manifests c on c.company_id=r.company_id and c.run_id=r.id
           cross join lateral (${contextRoots}) root
@@ -913,14 +919,14 @@ function taskSourcePrivacySqlCondition(db: Db | DbTransaction, kind: "issue" | "
       select 1 from reachable where kind=source_kind and id=source_id
       union all
       select 1 from bounded n where
-        n.kind not in ('issue','project','run','workflow_run','routine_run')
+        n.kind not in ('issue','project','run','retained_run','workflow_run','routine_run')
         or (n.kind='issue' and not exists(select 1 from issues i where i.id=n.id and i.company_id=${company}
           and i.conversation_retired_at is null and ((i.conversation_agent_id is null and i.conversation_user_id is null)
             or ${conversationIdentity})
           and (i.visibility='open' or ${issuePrincipalAccess(actor, sql`i.id`, sql`${company}`)})))
         or (n.kind='project' and not exists(select 1 from projects p where p.id=n.id and p.company_id=${company}
           and p.source_provenance_qualified and (p.visibility='open' or ${projectPrincipalAccess(actor, sql`p.id`, sql`${company}`)})))
-        or (n.kind='run' and not exists(select 1 from ${heartbeatRuns} r where r.id=n.id and r.company_id=${company}
+          or (n.kind in ('run','retained_run') and not exists(select 1 from ${heartbeatRuns} r where r.id=n.id and r.company_id=${company}
           and ${heartbeatRunTaskBindingCondition(sql`r`)}))
         -- Selected private Memory can narrow a derivative's audience, even when
         -- the producer's original Task is public. This is a necessary denial,

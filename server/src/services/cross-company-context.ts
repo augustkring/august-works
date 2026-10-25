@@ -1,9 +1,9 @@
 import { withV5ActivityTransaction } from "./v5-mutations.js";
 import { and, eq } from "drizzle-orm";
-import { agentIdentities, agents, companies, companyCrossCompanyPolicies, type Db } from "@paperclipai/db";
+import { agentExecutionScopeRequests, agentIdentities, agents, companies, companyCrossCompanyPolicies, type Db } from "@paperclipai/db";
 import {
   agentExecutionScopeSchema, crossCompanyPolicySchema, type AgentExecutionScope,
-  type CrossCompanyContextPacket, type CrossCompanyPolicy, type EvidenceItem,
+  type CrossCompanyContextPacket, type CrossCompanyPolicy,
   type ScopedEvidenceItem, type crossCompanyContextRequestSchema,
   getAgentWorkEligibility,
 } from "@paperclipai/shared";
@@ -13,38 +13,33 @@ import type { AuthorizationAction, AuthorizationActor, AuthorizationResource } f
 import { assertV5Authorization, assertV5Enabled, v5HumanActorId } from "./v5-authorization.js";
 import { agentProviderBindingService } from "./agent-provider-bindings.js";
 import { contextEngineService, DEFAULT_CONTEXT_BUDGET } from "./context/context-engine.js";
+import { crossCompanyEvidencePolicy } from "./cross-company-context-policy.js";
 import { estimateEvidenceTokens } from "./context/context-budget.js";
 import { logActivity } from "./activity-log.js";
+import { hashContextPolicySnapshot } from "./context/context-manifest.js";
 
-export function crossCompanyEvidencePolicy(evidence: EvidenceItem): ScopedEvidenceItem["crossCompanyUsePolicy"] {
-  if (evidence.sourceClass === "private_memory" || evidence.sensitivity === "restricted"
-    || evidence.metadata.scope === "user" || evidence.metadata.personal === true) return "no_export";
-  const policy = evidence.metadata.crossCompanyUsePolicy;
-  if (policy === "no_export" || policy === "aggregate_only") return policy;
-  if (policy === "allow") return "allow";
-  return evidence.sensitivity === "confidential" ? "no_export" : "allow";
-}
+export { crossCompanyEvidencePolicy } from "./cross-company-context-policy.js";
 
 export function crossCompanyContextService(db: Db) {
-  async function policy(companyId: string) {
-    const [row] = await db.select().from(companyCrossCompanyPolicies).where(eq(companyCrossCompanyPolicies.companyId, companyId)).limit(1);
+  async function policy(companyId: string, activeDb: Db = db) {
+    const [row] = await activeDb.select().from(companyCrossCompanyPolicies).where(eq(companyCrossCompanyPolicies.companyId, companyId)).limit(1);
     return crossCompanyPolicySchema.parse(row?.policy ?? {});
   }
 
-  async function resolve(actor: AuthorizationActor, rawScope: AgentExecutionScope) {
-    await assertV5Enabled(db, "cross_company_execution_v5");
+  async function resolve(actor: AuthorizationActor, rawScope: AgentExecutionScope, activeDb: Db = db) {
+    await assertV5Enabled(activeDb, "cross_company_execution_v5");
     const scope = agentExecutionScopeSchema.parse(rawScope);
-    await assertV5Authorization(db, actor, scope.primaryCompanyId, "company_scope:read");
+    await assertV5Authorization(activeDb, actor, scope.primaryCompanyId, "company_scope:read");
     if (actor.type === "agent" && (actor.agentId !== scope.primaryAgentPresenceId || actor.companyId !== scope.primaryCompanyId)) throw forbidden("The primary execution scope must match the authenticated local presence");
     // A narrow bridge/test key cannot expand its envelope by adding an identity.
     if (actor.type === "agent" && actor.keyScope && actor.keyScope.kind !== "standard") throw forbidden("Scoped agent keys cannot create cross-company execution");
     if (actor.type === "agent" && !actor.onBehalfOfUserId) throw forbidden("Cross-company agent execution requires a represented human");
     const companyScopes = [{ companyId: scope.primaryCompanyId, agentPresenceId: scope.primaryAgentPresenceId, purpose: "primary_execution", accessMode: "act" as const }, ...scope.delegatedScopes];
-    const primary = await db.select({ identityId: agents.agentIdentityId }).from(agents).where(and(eq(agents.companyId, scope.primaryCompanyId), eq(agents.id, scope.primaryAgentPresenceId))).limit(1);
+    const primary = await activeDb.select({ identityId: agents.agentIdentityId }).from(agents).where(and(eq(agents.companyId, scope.primaryCompanyId), eq(agents.id, scope.primaryAgentPresenceId))).limit(1);
     if (!primary[0]) throw notFound("Primary local presence not found");
     const resolved = [];
     for (const requested of companyScopes) {
-      const [row] = await db.select({ presence: agents, company: companies, identityStatus: agentIdentities.status }).from(agents)
+      const [row] = await activeDb.select({ presence: agents, company: companies, identityStatus: agentIdentities.status }).from(agents)
         .innerJoin(companies, eq(agents.companyId, companies.id)).innerJoin(agentIdentities, eq(agents.agentIdentityId, agentIdentities.id))
         .where(and(eq(agents.id, requested.agentPresenceId), eq(agents.companyId, requested.companyId), eq(agents.agentIdentityId, primary[0].identityId))).limit(1);
       if (!row || row.company.status !== "active" || row.identityStatus !== "active" || !["idle", "running", "error"].includes(row.presence.status)) throw forbidden("An active, invokable local presence of the same identity is required in every company");
@@ -53,7 +48,7 @@ export function crossCompanyContextService(db: Db) {
       const visited = new Set([row.presence.id]);
       for (let depth = 0; managerId && depth < 64 && !visited.has(managerId); depth++) {
         visited.add(managerId);
-        const [manager] = await db.select().from(agents).where(and(eq(agents.companyId, requested.companyId), eq(agents.id, managerId))).limit(1);
+        const [manager] = await activeDb.select().from(agents).where(and(eq(agents.companyId, requested.companyId), eq(agents.id, managerId))).limit(1);
         if (!manager) break;
         localAgents.push(manager);
         managerId = manager.reportsTo;
@@ -67,16 +62,16 @@ export function crossCompanyContextService(db: Db) {
         // from its own local presence, never from the source key or run id.
         ...(requested.companyId === scope.primaryCompanyId && actor.type === "agent" ? { keyScope: actor.keyScope, keyId: actor.keyId } : {}),
       };
-      await assertV5Authorization(db, actor.type === "board" ? actor : { type: "board", source: "session", userId: responsibleUserId }, requested.companyId, "company_scope:read");
-      await assertV5Authorization(db, localActor, requested.companyId, "company_scope:read");
-      await assertV5Authorization(db, actor.type === "board" ? actor : { type: "board", source: "session", userId: responsibleUserId }, requested.companyId, "agent:wake", { type: "agent", companyId: requested.companyId, agentId: row.presence.id });
-      const companyPolicy = await policy(requested.companyId);
+      await assertV5Authorization(activeDb, actor.type === "board" ? actor : { type: "board", source: "session", userId: responsibleUserId }, requested.companyId, "company_scope:read");
+      await assertV5Authorization(activeDb, localActor, requested.companyId, "company_scope:read");
+      await assertV5Authorization(activeDb, actor.type === "board" ? actor : { type: "board", source: "session", userId: responsibleUserId }, requested.companyId, "agent:wake", { type: "agent", companyId: requested.companyId, agentId: row.presence.id });
+      const companyPolicy = await policy(requested.companyId, activeDb);
       if (requested.companyId !== scope.primaryCompanyId) {
         const allowed = requested.accessMode === "read" ? companyPolicy.allowRead : requested.accessMode === "contribute" ? companyPolicy.allowContribute : companyPolicy.allowAct;
         if (!allowed) throw forbidden("The guest company's cross-company policy does not allow this mode");
 
       }
-      const provider = await agentProviderBindingService(db).assertRuntime(requested.companyId, row.presence.id);
+      const provider = await agentProviderBindingService(activeDb).assertRuntime(requested.companyId, row.presence.id);
       resolved.push({ ...requested, presence: row.presence, companyName: row.company.name, localActor, policy: companyPolicy, provider });
     }
     return { scope, scopes: resolved };
@@ -109,8 +104,21 @@ export function crossCompanyContextService(db: Db) {
       await assertV5Authorization(db, local.localActor, companyId, action, resource);
       return local.localActor;
     },
-    assemble: async (actor: AuthorizationActor, input: z.infer<typeof crossCompanyContextRequestSchema>): Promise<CrossCompanyContextPacket> => {
+    assemble: async (actor: AuthorizationActor, input: z.infer<typeof crossCompanyContextRequestSchema>, accountability?: { runId: string; scopeRequestId: string; issueId: string | null }): Promise<CrossCompanyContextPacket> => {
+      if (!accountability || actor.type !== "agent" || actor.runId !== accountability.runId || actor.companyId !== input.executionScope.primaryCompanyId || actor.agentId !== input.executionScope.primaryAgentPresenceId || !actor.onBehalfOfUserId)
+        throw forbidden("Persisted cross-company Context requires its actual accountable home execution");
       const resolved = await resolve(actor, input.executionScope);
+      const [scopeRequest] = await db.select().from(agentExecutionScopeRequests).where(and(
+        eq(agentExecutionScopeRequests.id, accountability.scopeRequestId),
+        eq(agentExecutionScopeRequests.companyId, input.executionScope.primaryCompanyId),
+        eq(agentExecutionScopeRequests.agentId, input.executionScope.primaryAgentPresenceId),
+        eq(agentExecutionScopeRequests.runId, accountability.runId),
+      )).limit(1);
+      if (!scopeRequest || scopeRequest.requestedByUserId !== actor.onBehalfOfUserId || scopeRequest.issueId !== accountability.issueId ||
+          hashContextPolicySnapshot(agentExecutionScopeSchema.parse(scopeRequest.scope)) !== hashContextPolicySnapshot(resolved.scope))
+        throw forbidden("Cross-company Context requires the exact claimed scope request");
+      const homeIdentityId = resolved.scopes.find((candidate) => candidate.companyId === resolved.scope.primaryCompanyId)?.presence.agentIdentityId;
+      if (!homeIdentityId) throw forbidden("Cross-company Context home identity is unavailable");
       const evidence: ScopedEvidenceItem[] = [], manifests: CrossCompanyContextPacket["manifests"] = [], warnings: string[] = [];
       let estimatedTokens = 0;
       const perCompanyBudget = Math.floor(input.maxEstimatedTokens / resolved.scopes.length);
@@ -119,6 +127,29 @@ export function crossCompanyContextService(db: Db) {
           companyId: local.companyId, agentId: local.presence.id,
           responsibleUserId: local.localActor.onBehalfOfUserId ?? null,
           enforceResponsibleUserIntersection: true,
+          ...(local.companyId === resolved.scope.primaryCompanyId ? { runId: accountability.runId, issueId: accountability.issueId } : {
+            delegatedExecution: {
+              homeCompanyId: resolved.scope.primaryCompanyId, homeAgentId: resolved.scope.primaryAgentPresenceId,
+              homeAgentIdentityId: homeIdentityId, homeRunId: accountability.runId, scopeRequestId: accountability.scopeRequestId,
+              responsibleUserId: actor.onBehalfOfUserId, guestCompanyId: local.companyId, guestAgentId: local.presence.id,
+              guestAgentIdentityId: local.presence.agentIdentityId, purpose: local.purpose, accessMode: local.accessMode,
+              scope: resolved.scope,
+              assertCurrent: async (sourceDb: Db) => {
+                const current = await resolve(actor, resolved.scope, sourceDb);
+                const currentScope = current.scopes.find(candidate => candidate.companyId === local.companyId && candidate.presence.id === local.presence.id);
+                if (!currentScope || currentScope.accessMode !== local.accessMode || currentScope.purpose !== local.purpose)
+                  throw forbidden("Guest execution scope changed during Context assembly");
+                const [request] = await sourceDb.select({ id: agentExecutionScopeRequests.id, scope: agentExecutionScopeRequests.scope,
+                  issueId: agentExecutionScopeRequests.issueId }).from(agentExecutionScopeRequests).where(and(
+                  eq(agentExecutionScopeRequests.id, accountability.scopeRequestId), eq(agentExecutionScopeRequests.companyId, resolved.scope.primaryCompanyId),
+                  eq(agentExecutionScopeRequests.agentId, resolved.scope.primaryAgentPresenceId), eq(agentExecutionScopeRequests.runId, accountability.runId),
+                )).limit(1);
+                if (!request || request.issueId !== accountability.issueId ||
+                  hashContextPolicySnapshot(agentExecutionScopeSchema.parse(request.scope)) !== hashContextPolicySnapshot(resolved.scope))
+                  throw forbidden("Claimed execution scope changed during Context assembly");
+              },
+            },
+          }),
           query: input.query, intent: `${input.intent}: ${local.purpose}`,
           sensitivityCeiling: "internal", budget: { ...DEFAULT_CONTEXT_BUDGET, maxEstimatedTokens: perCompanyBudget },
         });
@@ -142,6 +173,11 @@ export function crossCompanyContextService(db: Db) {
       }
       // Recheck after retrieval to close revoke/terminate races before disclosure.
       await resolve(actor, resolved.scope);
+      const [stillClaimed] = await db.select({ id: agentExecutionScopeRequests.id }).from(agentExecutionScopeRequests).where(and(
+        eq(agentExecutionScopeRequests.id, accountability.scopeRequestId), eq(agentExecutionScopeRequests.companyId, resolved.scope.primaryCompanyId),
+        eq(agentExecutionScopeRequests.agentId, resolved.scope.primaryAgentPresenceId), eq(agentExecutionScopeRequests.runId, accountability.runId),
+      )).limit(1);
+      if (!stillClaimed) throw forbidden("Cross-company Context scope request changed during assembly");
       return { executionScope: resolved.scope, evidence, manifests, estimatedTokens, warnings: [...new Set(warnings)], resultOwnerCompanyId: resolved.scope.primaryCompanyId };
     },
   };

@@ -1,13 +1,14 @@
 import { nativeManagementSdkFixture } from "./helpers/native-management-sdk-fixture.js";
 import {disableV8Rollout} from "./helpers/v8-rollout.js";
-import {randomUUID} from "node:crypto";
+import {createHash,randomUUID} from "node:crypto";
 import {afterAll,beforeAll,beforeEach,describe,expect,it} from "vitest";
 import {and,eq,sql} from "drizzle-orm";
-import {agents,authUsers,companies,companyMemberships,createDb,decisions,heartbeatRuns,issues,projects,issueComments,
+import {agents,companies,companyMemberships,createDb,decisions,heartbeatRuns,issues,projects,issueComments,
   decisionContexts,decisionContextVersions,decisionContextBindings,decisionContextPreparations,decisionCriteria,decisionAssumptions,decisionExpectedOutcomes,
-  decisionEvidenceLinks,analyticalLineageManifests,analyticalLineageEdges,decisionOutcomeReviews,decisionOutcomeReviewReceipts,managementReviewSnapshots,memoryBindings,memoryRecords,memoryEvidence,learningCycles,learningAnalyticalDependencies,learningEvidence,learningHypotheses,learningDomainCandidates,activityLog} from "@paperclipai/db";
+  decisionEvidenceLinks,analyticalLineageManifests,analyticalLineageEdges,decisionOutcomeReviews,decisionOutcomeReviewReceipts,managementReviewSnapshots,memoryBindings,memoryBindingTargets,memoryRecords,learningCycles,learningAnalyticalDependencies,learningEvidence,learningHypotheses,learningDomainCandidates,activityLog} from "@paperclipai/db";
 import {decisionContextDefinitionSchema,type DecisionContextDefinition,type FinishDecisionOutcomeReview} from "@paperclipai/shared";
 import {learningService} from "../services/learning/learning-service.js";
+import {memoryService} from "../services/memory/memory-service.js";
 import {memoryJobService} from "../services/memory/memory-jobs.js";
 import {decisionOutcomeReviewService} from "../services/decision-outcome-reviews.js";
 import {decisionIntelligenceService} from "../services/decision-intelligence.js";
@@ -23,22 +24,23 @@ import {eraseExpiredAnalyticalLineage} from "../services/analytical-retention.js
 import {purgeCompanyContent} from "../services/saas/company-purge.js";
 import {analyticalPurpose,metricDefinition} from "./helpers/business-metric-fixture.js";
 import {getEmbeddedPostgresTestSupport,startEmbeddedPostgresTestDatabase} from "./helpers/embedded-postgres.js";
+import {seedCurrentHumanSourceActor,createCanonicalHumanProject} from "./helpers/current-human-source-fixture.js";
+import type {AuthorizationActor} from "../services/authorization.js";
 const support=await getEmbeddedPostgresTestSupport(),suite=support.supported?describe:describe.skip;
-const actor={type:"board" as const,source:"local_implicit" as const};
+let actor:AuthorizationActor;
 const flags={analytical_lineage_v8:true,business_metrics_v8:true,decision_intelligence_v8:true,enableDecisions:true,ai_use_cases_v7:true,governance_evidence_v7:true};
 suite("Native decision outcome reviews on migrated PostgreSQL",()=>{
   let database:Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>,db:ReturnType<typeof createDb>;
   let companyId:string,foreignId:string,originId:string,targetId:string,projectId:string,agentId:string,runId:string,policyId:string;
   beforeAll(async()=>{database=await startEmbeddedPostgresTestDatabase("aw-v8-outcome-review-");db=createDb(database.connectionString);
-    process.env.PAPERCLIP_DECISION_SIGNING_SECRET="0123456789abcdef0123456789abcdef";
-    await db.insert(authUsers).values({id:"local-board",name:"Local native board",email:"local-board-context@example.test",createdAt:new Date(),updatedAt:new Date()});});
+    process.env.PAPERCLIP_DECISION_SIGNING_SECRET="0123456789abcdef0123456789abcdef";});
   afterAll(async()=>database?.cleanup());
   beforeEach(async()=>{
     await instanceSettingsService(db,{runtimeEnv:{}}).updateExperimental(flags);
-    companyId=randomUUID();foreignId=randomUUID();originId=randomUUID();targetId=randomUUID();projectId=randomUUID();agentId=randomUUID();runId=randomUUID();
+    companyId=randomUUID();foreignId=randomUUID();originId=randomUUID();targetId=randomUUID();agentId=randomUUID();runId=randomUUID();
     await db.insert(companies).values([{id:companyId,name:"Native decision context",issuePrefix:randomUUID()},{id:foreignId,name:"Other context tenant",issuePrefix:randomUUID()}]);
-    await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:"local-board",membershipRole:"member",status:"active"});
-    await db.insert(projects).values({id:projectId,companyId,name:"Controlled native project"});
+    actor=await seedCurrentHumanSourceActor(db,[companyId,foreignId]);
+    const project=await createCanonicalHumanProject(db,companyId,actor,"Controlled native project");projectId=project.id;
     await db.insert(agents).values({id:agentId,companyId,name:"Proposer",role:"engineer",status:"active",adapterType:"codex_local"});
     await db.insert(issues).values([{id:originId,companyId,projectId,title:"Private origin title",status:"done",responsibleUserId:"local-board",createdAt:new Date("2026-01-01T12:00:00Z")},
       {id:targetId,companyId,projectId,title:"Private target title",status:"todo",responsibleUserId:"local-board",createdAt:new Date("2026-01-01T12:00:00Z")}]);
@@ -82,11 +84,19 @@ suite("Native decision outcome reviews on migrated PostgreSQL",()=>{
   const begin=(id:string)=>reviews().transition(companyId,actor,id,{expectedRevision:1,action:"begin",rationale:"A human begins the separate outcome assessment"});
   async function verifiedLearningRoot(tenant=companyId) {
     await instanceSettingsService(db).updateExperimental({enableFoundationV1:true,enableCollectiveMemoryV1:true,enableContextEngineV1:true,agent_identities_v5:true,agent_provider_bindings_v5:true,agent_runtime_fabric_v5:true,role_packs_v5:true,cognitive_memory_v7:true,memory_observations_v7:true,skill_lifecycle_v5:true,playbooks_v5:true,learning_engine_v7:true});
-    const [task]=await db.insert(issues).values({companyId:tenant,title:"Independent verified outcome",status:"done",completedAt:new Date()}).returning();
+    const [task]=await db.insert(issues).values({companyId:tenant,title:"Independent verified outcome",status:"done",completedAt:new Date(),responsibleUserId:"local-board"}).returning();
     const [binding]=await db.insert(memoryBindings).values({companyId:tenant,key:randomUUID(),name:"Independent verified outcomes",providerKey:"local"}).returning();
-    const [record]=await db.insert(memoryRecords).values({companyId:tenant,bindingId:binding!.id,providerKey:"local",memoryType:"outcome",scopeType:"company",content:"An independently reviewed completed Task outcome",reviewState:"accepted",verificationState:"human_verified",observedAt:new Date(),createdByActorType:"system",createdByActorId:"fixture"}).returning();
-    await db.insert(memoryEvidence).values({companyId:tenant,memoryRecordId:record!.id,sourceClass:"task",sourceProvider:"august_works_tasks",sourceType:"issue",sourceRef:`issue://${task!.id}`,sourceVersion:"1",observedAt:new Date(),excerptHash:"a".repeat(64),citationJson:{label:"Actual reviewed outcome"},trustLevel:"high",supportsOrContradicts:"supports"});
-    return record!;
+    await db.insert(memoryBindingTargets).values({companyId:tenant,bindingId:binding!.id,targetType:"company",targetId:tenant});
+    const observedAt=new Date(),sourceVersion=task!.updatedAt.toISOString(),content="An independently reviewed completed Task outcome";
+    const memoryActor={principal:{type:"user" as const,userId:"local-board"},authorizationActor:actor};
+    const candidate=await memoryService(db).createCandidate(tenant,{bindingId:binding!.id,memoryType:"outcome",scope:{type:"company",id:null},subject:null,ownerAgentId:null,
+      title:"Independent verified outcome",content,summary:"A completed native Task outcome reviewed by the current Human",sensitivity:"internal",importance:50,confidenceScore:0.8,
+      validFrom:null,validUntil:null,observedAt:observedAt.toISOString(),retentionPolicy:"standard",expiresAt:null,createdByOperationId:null,metadata:{},evidence:[{
+        sourceClass:"task",sourceProvider:"august_works_tasks",sourceType:"issue",sourceRef:`issue://${task!.id}`,sourceVersion,sourceUpdatedAt:sourceVersion,
+        observedAt:observedAt.toISOString(),excerptHash:createHash("sha256").update(content).digest("hex"),citation:{label:"Actual reviewed outcome"},trustLevel:"high",relation:"supports",
+      }]},memoryActor);
+    await memoryService(db).reviewCandidate(tenant,candidate.record.id,{decision:"accept",reason:"The current Human verifies this completed Task outcome"},memoryActor);
+    return (await db.select().from(memoryRecords).where(eq(memoryRecords.id,candidate.record.id)))[0]!;
   }
   const startInput=(memoryRecordIds:string[],expectedRevision=3)=>({expectedRevision,purpose:"native_task_execution",trigger:"A human tests a reviewed lesson against independent verified outcomes",memoryRecordIds});
   it("reads an exact independently finished outcome review through the actual SDK without recording new judgments",async()=>{
@@ -207,7 +217,7 @@ suite("Native decision outcome reviews on migrated PostgreSQL",()=>{
   });
   it("computes native expected-versus-actual comparisons while preserving the frozen baseline and human process judgment",async()=>{
     const baseline=await observation(),input=definition();
-    input.timeHorizon={from:"2026-01-01T00:00:00Z",until:new Date(Date.now()+3000).toISOString()};
+    input.timeHorizon={from:"2026-01-01T00:00:00Z",until:new Date(Date.now()+15000).toISOString()};
     input.evidence=[{key:"baseline",source:{type:"metric_observation",id:baseline.id,metricId:baseline.metricId,metricVersionId:baseline.versionId},relationship:"metric_observation",optionId:null,criterionKey:null,rationale:"Prospective baseline from the exact native measurement owner"}];
     input.expectedOutcomes=[{kind:"metric",optionId:"proceed",evidenceKey:"baseline",expectedRange:{lower:0.6,upper:0.8},expectedDirection:"increase",reviewAt:input.timeHorizon.until,uncertaintySummary:"The expected range is human judgment without causal attribution"}];
     const {d,context,review}=await scheduled(input);
@@ -250,7 +260,7 @@ suite("Native decision outcome reviews on migrated PostgreSQL",()=>{
   it("runs retention while paused and flags off and preserves another company on purge",async()=>{
     const {d,review}=await scheduled();await begin(d.id);await reviews().finish(companyId,actor,d.id,final());
     const otherCompany=companyId;companyId=foreignId;
-    await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:"local-board",membershipRole:"member",status:"active"});
+    await db.insert(companyMemberships).values({companyId,principalType:"user",principalId:"local-board",membershipRole:"member",status:"active"}).onConflictDoNothing();
     await db.insert(projects).values({id:randomUUID(),companyId,name:"Unrelated surviving project"});
     companyId=otherCompany;await db.update(companies).set({status:"paused"}).where(eq(companies.id,companyId));await disableV8Rollout(db);
     await eraseExpiredAnalyticalLineage(db,new Date(Date.now()+31*86400000));
