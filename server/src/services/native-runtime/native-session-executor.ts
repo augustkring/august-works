@@ -50,7 +50,8 @@ import type {
   AdapterExecutionResult,
   AdapterRuntimeEvent,
 } from "../../adapters/index.js";
-import { nativePayloadSourceInputSchema, nativePayloadSourceSnapshotSchema, type NativeFinalizationResult } from "@paperclipai/shared";
+import { nativePayloadSourceInputSchema, nativePayloadSourceSnapshotSchema, type NativeFinalizationResult,
+  type NativePayloadSourceInput } from "@paperclipai/shared";
 import type {
   HarnessRuntimeRequestResolution,
   NativeExecutionInput,
@@ -145,7 +146,7 @@ import { reportRunFailure } from "../run-failure-report.js";
 import { persistActivity, publishActivity } from "../activity-log.js";
 import { commitNativeStatusDecision } from "./status-decision-committer.js";
 import { resolvePaperclipInstanceRoot } from "../../home-paths.js";
-import { documentService } from "../documents.js";
+import { documentService, type DocumentRevisionSourceCapture } from "../documents.js";
 import { issueThreadInteractionService } from "../issue-thread-interactions.js";
 import { issueService } from "../issues.js";
 import {
@@ -7320,15 +7321,17 @@ export async function recordNativeDocumentToolResultIntent(input: Parameters<typ
       !/^[\x21-\x7e]{1,240}$/.test(capture.callId) || !/^[0-9a-f]{64}$/.test(capture.resultDigest) ||
       capture.turnId !== null && (typeof capture.turnId !== "string" || !/^[\x21-\x7e]{1,240}$/.test(capture.turnId)))
       throw new Error("native_document_tool_capture_binding_invalid");
-    const source = capture.source === null ? null : {
-      input: nativePayloadSourceInputSchema.parse(capture.source.input),
-      payloadSourceSnapshot: capture.source.payloadSourceSnapshot === null ? null
-        : nativePayloadSourceSnapshotSchema.parse(capture.source.payloadSourceSnapshot),
-    };
-    if (source && (source.input.kind !== "document_revision" || source.input.issueId !== input.issueId ||
-      source.payloadSourceSnapshot && (source.payloadSourceSnapshot.owner.kind !== "document_revision" ||
-        source.payloadSourceSnapshot.owner.companyId !== input.companyId || source.payloadSourceSnapshot.owner.id !== source.input.revisionId)))
-      throw new Error("native_document_tool_capture_binding_invalid");
+    let source: DocumentRevisionSourceCapture | null = null;
+    if (capture.source !== null) {
+      const inputSource = nativePayloadSourceInputSchema.parse(capture.source.input);
+      const snapshot = capture.source.payloadSourceSnapshot === null ? null
+        : nativePayloadSourceSnapshotSchema.parse(capture.source.payloadSourceSnapshot);
+      if (inputSource.kind !== "document_revision" || inputSource.issueId !== input.issueId ||
+        snapshot && (snapshot.owner.kind !== "document_revision" || snapshot.owner.companyId !== input.companyId ||
+          snapshot.owner.id !== inputSource.revisionId))
+        throw new Error("native_document_tool_capture_binding_invalid");
+      source = { input: inputSource, payloadSourceSnapshot: snapshot };
+    }
     await persistNativeToolResultSourceCapture(input, { ...capture, source }, "document");
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "";
@@ -7352,9 +7355,13 @@ export async function recordNativeProjectToolResultIntent(input: Parameters<type
       capture.turnId !== null && !/^[\x21-\x7e]{1,240}$/.test(capture.turnId) ||
       capture.projectId !== null && !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/.test(capture.projectId))
       throw new Error("native_project_tool_capture_binding_invalid");
-    const source = capture.source === null ? null : nativePayloadSourceInputSchema.parse(capture.source);
-    if (source && (source.kind !== "project" || source.projectId !== capture.projectId))
-      throw new Error("native_project_tool_capture_binding_invalid");
+    let source: Extract<NativePayloadSourceInput, { kind: "project" }> | null = null;
+    if (capture.source !== null) {
+      const parsed = nativePayloadSourceInputSchema.parse(capture.source);
+      if (parsed.kind !== "project" || parsed.projectId !== capture.projectId)
+        throw new Error("native_project_tool_capture_binding_invalid");
+      source = parsed;
+    }
     await persistNativeToolResultSourceCapture(input, { ...capture, source }, "project");
   } catch (error: unknown) {
     const message = error instanceof Error ? error.message : "";

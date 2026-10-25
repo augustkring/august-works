@@ -147,7 +147,7 @@ export async function startRunnerApiTestServer() {
             companyIds: [targetCompanyId], memberships: [{ companyId: targetCompanyId, membershipRole: "member", status: "active" }] };
           const ownerApp = express();
           ownerApp.use(express.json());
-          ownerApp.use(((req, _res, next) => { (req as typeof req & { actor: AuthorizationActor }).actor = actor; next(); }) as RequestHandler);
+          ownerApp.use(((req, _res, next) => { Reflect.set(req, "actor", actor); next(); }) as RequestHandler);
           ownerApp.use("/api", projectRoutes(db));
           ownerApp.use(errorHandler);
           const created = await request(ownerApp).post(`/api/companies/${targetCompanyId}/projects`)
