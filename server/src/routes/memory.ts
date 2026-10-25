@@ -47,6 +47,7 @@ export function memoryRoutes(db: Db) {
       return {
         principal: { type: "system", service: "local-board" },
         runId: req.actor.runId ?? null,
+        authorizationActor: req.actor,
       };
     }
     if (!req.actor.userId) {
@@ -55,6 +56,7 @@ export function memoryRoutes(db: Db) {
     return {
       principal: { type: "user", userId: req.actor.userId },
       runId: req.actor.runId ?? null,
+      authorizationActor: req.actor,
     };
   }
 
@@ -216,7 +218,7 @@ export function memoryRoutes(db: Db) {
         publicMemoryDetail(await svc.reviewCandidate(
           companyId,
           recordId,
-          { decision: "accept", reason: req.body.reason ?? null },
+          { decision: "accept", reason: req.body.reason ?? null, publishPrivateShare: req.body.publishPrivateShare },
           actor,
         )),
       );
@@ -242,7 +244,7 @@ export function memoryRoutes(db: Db) {
         publicMemoryDetail(await svc.reviewCandidate(
           companyId,
           recordId,
-          { decision: "reject", reason: req.body.reason },
+          { decision: "reject", reason: req.body.reason, publishPrivateShare: req.body.publishPrivateShare },
           actor,
         )),
       );

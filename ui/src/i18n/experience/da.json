@@ -3294,5 +3294,20 @@
       "support": "Support",
       "other": "Andet"
     }
+  },
+  "memorySharing": {
+    "reviewTitle": "Gennemgå deling af privat Memory",
+    "reviewDescription": "Når du godkender, deles det præcise indhold nedenfor med den valgte målgruppe. Gennemgå indholdet og målgruppen, før du fortsætter.",
+    "destination": "Destination: {{company}} · {{scope}}{{reference}}",
+    "companyScope": "Virksomhedens Memory",
+    "projectScope": "Projektets Memory",
+    "subjectScope": "Memory om emnet",
+    "retainedSources": "Modtagere skal fortsat have aktuel adgang til destinationen og de bevarede kilder. Den private original forbliver privat. Hvis en kilde slettes eller trækkes tilbage, kan denne kopi blive utilgængelig.",
+    "approveAndShare": "Godkend og del",
+    "saving": "Gemmer…",
+    "shared": "Memory er delt",
+    "failed": "Memory kunne ikke godkendes",
+    "unconfirmed": "Resultatet kunne ikke bekræftes.",
+    "accessChanged": "Adgangen til kontoen eller virksomheden er ændret. Opdater siden, før du gennemgår denne Memory."
   }
 }

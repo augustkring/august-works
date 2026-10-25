@@ -990,9 +990,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       projects: new Map(locked && purpose !== "context_inspection" ? requestedProjects.map(id => [id, null]) : []),
     };
     if (purpose === "routine_sources") context.routineScopeToken = randomUUID();
-    const owner = createAuthorizationService(db, context) as ReadSourceOwner & {
-      readRoutineSources(runIds: string[], actor: AuthorizationActor): Promise<string[]>;
-    };
+    const owner: ReadSourceOwner = createAuthorizationService(db, context);
     owner.readRoutineSources = async (runIds, actor) => {
       if (purpose !== "routine_sources" || !locked || !context.active || context.companyId !== companyId)
         throw forbidden("Private Routine reads require their original native source scope.");
@@ -1036,7 +1034,8 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
               eq(heartbeatRuns.id, routine.originId), eq(heartbeatRuns.companyId, companyId))).for("share", { noWait: true });
           const conversationId = authoringRun?.issueId ?? authoringRun?.snapshot?.issueId ?? authoringRun?.snapshot?.taskId;
           if (!authoringRun || authoringRun.agentId !== routine.createdByAgentId ||
-            authoringRun.userId !== routine.responsibleUserId || !conversationId) continue;
+            authoringRun.userId !== routine.responsibleUserId || typeof conversationId !== "string" ||
+            !/^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(conversationId)) continue;
           const [conversation] = await db.select(issueReadColumns).from(issues).where(and(
             eq(issues.id, conversationId), eq(issues.companyId, companyId))).for("share", { noWait: true });
           if (!conversation) continue;

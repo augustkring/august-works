@@ -5,6 +5,7 @@ import {
   activityLog,
   agents,
   authUsers,
+  authSessions,
   companies,
   companyMemberships,
   createDb,
@@ -68,6 +69,7 @@ describePg("Memory Core service", () => {
     nativeActors.clear();
     await db.delete(principalPermissionGrants);
     await db.delete(companyMemberships);
+    await db.delete(authSessions);
     await db.delete(authUsers);
     await db.delete(agents);
     await db.delete(companies);
@@ -177,6 +179,14 @@ describePg("Memory Core service", () => {
   const userActor = (userId: string) => ({
     principal: { type: "user" as const, userId },
   });
+  async function verifiedUserActor(userId: string): Promise<MemoryMutationActor> {
+    const now = new Date(), expiresAt = new Date(now.getTime() + 60 * 60_000), sessionId = randomUUID();
+    await db.insert(authSessions).values({ id: sessionId, userId, token: randomUUID(),
+      createdAt: now, updatedAt: now, expiresAt, authenticationMethod: "password", authenticatedAt: now, authenticatorVersion: 0 });
+    return { principal: { type: "user", userId }, authorizationActor: {
+      type: "board", source: "session", userId, sessionId, authenticatedCredentialExpiresAt: expiresAt.getTime(),
+    } };
+  }
   const nativeActors = new Map<string, Promise<MemoryMutationActor>>();
   function agentActor(agentId: string, responsibleUserId?: string): Promise<MemoryMutationActor> {
     const key = `${agentId}:${responsibleUserId ?? "default"}`;
@@ -1379,8 +1389,8 @@ describePg("Memory Core service", () => {
     const accepted = await svc.reviewCandidate(
       seeded.companyId,
       sharedCandidate.record.id,
-      { decision: "accept" },
-      userActor(seeded.userId),
+      { decision: "accept", publishPrivateShare: true },
+      await verifiedUserActor(seeded.userId),
     );
     expect(accepted.record.reviewState).toBe("accepted");
 

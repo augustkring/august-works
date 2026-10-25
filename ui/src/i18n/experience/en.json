@@ -3294,5 +3294,20 @@
       "support": "Support",
       "other": "Other"
     }
+  },
+  "memorySharing": {
+    "reviewTitle": "Review private Memory sharing",
+    "reviewDescription": "Approving shares the exact content below with the selected destination. Review the content and audience before continuing.",
+    "destination": "Destination: {{company}} · {{scope}}{{reference}}",
+    "companyScope": "Company Memory",
+    "projectScope": "Project Memory",
+    "subjectScope": "Subject Memory",
+    "retainedSources": "Recipients still need current access to the destination and retained sources. The private original stays private. Source deletion or withdrawal can make this copy unavailable.",
+    "approveAndShare": "Approve and share",
+    "saving": "Saving…",
+    "shared": "Memory shared",
+    "failed": "Could not approve Memory",
+    "unconfirmed": "The result could not be confirmed.",
+    "accessChanged": "Account or company access changed. Refresh before reviewing this Memory."
   }
 }

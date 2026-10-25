@@ -3603,7 +3603,7 @@ export function issueRoutes(
   const searchRateLimiter =
     opts.searchRateLimiter ?? defaultCompanySearchRateLimiter;
   async function runCompanySearchRead<T>(req: Request, companyId: string,
-    read: (queryDb: Db, search: CompanySearchService) => Promise<T>): Promise<T> {
+    read: (queryDb: Db, search: CompanySearchService) => Promise<T>, needsTaskSources = true): Promise<T> {
     // Isolated route tests inject a service and deliberately omit a database.
     // This path preserves that service seam without claiming native authority.
     if (typeof (db as { transaction?: unknown }).transaction !== "function") {
@@ -3619,7 +3619,33 @@ export function issueRoutes(
         });
         if (!decision.allowed) throw forbidden("Company search is outside this actor's authorization boundary",
           authorizationDeniedDetails(decision));
-        return read(tx, getSearchService(tx));
+        const search = getSearchService(tx);
+        // Credential-free local administration retains the ordinary SQL policy:
+        // public rows remain usable and private Routine sources stay withheld.
+        if (!needsTaskSources || req.actor.type === "none" || req.actor.source === "local_implicit") return read(tx, search);
+        const routineRows = await tx.execute<{ ids: string[]; overflow: boolean }>(sql`
+          with referenced as materialized (
+            select case when i.origin_run_id ~* '^[0-9a-f]{8}(-[0-9a-f]{4}){3}-[0-9a-f]{12}$'
+              then i.origin_run_id::uuid end as id
+            from issues i where i.company_id=${companyId} and i.origin_kind='routine_execution'
+            union
+            select s.source_id as id from issue_privacy_sources s
+              join issues i on i.company_id=s.company_id and i.id=s.issue_id
+              where s.company_id=${companyId} and s.source_kind='routine_run'
+          ), conversation_runs as materialized (
+            select distinct r.id from referenced ref
+              join routine_runs r on r.id=ref.id and r.company_id=${companyId}
+              join routines p on p.id=r.routine_id and p.company_id=r.company_id
+              where p.origin_kind='conversation_draft'
+          ), bounded as materialized (select id from conversation_runs order by id limit 257)
+          select coalesce(array_agg(id::text order by id),array[]::text[]) as ids, count(*)>256 as overflow from bounded
+        `);
+        const candidateRoutineRunIds = routineRows[0]?.ids ?? [];
+        if (routineRows[0]?.overflow) throw forbidden("Search sources are unavailable for a complete current access review.");
+        return candidateRoutineRunIds.length
+          ? authorizationService(tx).withReadRoutineSources(companyId, req.actor, candidateRoutineRunIds,
+            async () => read(tx, search))
+          : read(tx, search);
       });
     });
   }
@@ -8103,10 +8129,11 @@ export function issueRoutes(
       });
       return;
     }
+    const needsTaskSources = query.scope !== "help" && query.scope !== "agents";
     const result = await runCompanySearchRead(req, companyId, async (queryDb, search) => search.search(companyId, query, {
       issueReadCondition: await issueReadSqlCondition(queryDb, req.actor),
       projectReadCondition: await projectReadSqlCondition(queryDb, req.actor),
-    }));
+    }), needsTaskSources);
     res.json(result);
   });
 

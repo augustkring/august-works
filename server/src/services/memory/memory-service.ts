@@ -6,6 +6,8 @@ import { and, desc, eq, gt, inArray, isNull, lte, ne, or, sql } from "drizzle-or
 import type { Db } from "@paperclipai/db";
 import {
   agents,
+  accountDeletionOperations,
+  authSessions,
   authUsers,
   companyMemberships,
   contextManifestItems,
@@ -15,6 +17,7 @@ import {
   memoryBindings,
   memoryBindingTargets,
   memoryEvidence,
+  memoryPrivateSharePublications,
   memoryRecords,
   memoryDeletionMarkers,
   memoryRetentionPolicies,
@@ -35,15 +38,17 @@ import {
   memorySourceDeletionInputSchema,
   memoryDeletionLedgerInputSchema,
   type ExecutionPrincipal,
+  type MemoryRecordDetail,
   type MemoryCandidateInputParsed,
   type MemoryResolutionMetadata,
 } from "@paperclipai/shared";
 import { conflict, forbidden, notFound, unprocessable } from "../../errors.js";
 import { isUniqueViolation } from "../../db-errors.js";
 import { lockMemoryPrivacy, assertMemoryOperationRetained, assertMemorySourcesRetained,
-  purgeMemoryRecords, memoryDeletionKey, memoryPayloadVisible, reapplyMemoryDeletionMarkers, canActorReadMemorySources, captureMemorySources, withNativeMemoryCaptureSources, type NativeMemoryCaptureReceipt } from "./memory-privacy.js";
+  purgeMemoryRecords, memoryDeletionKey, memoryPayloadVisible, reapplyMemoryDeletionMarkers, canActorReadMemorySources, captureMemorySources, capturePrivateShareSource, memoryShareContentFingerprint, withNativeMemoryCaptureSources, type NativeMemoryCaptureReceipt } from "./memory-privacy.js";
 import { learningActorFromPrincipal } from "../learning/learning-analytical-sources.js";
 import { persistActivity, publishActivity, type ActivityPublication } from "../activity-log.js";
+import { pinCurrentBoardActor, type AuthorizationActor } from "../authorization.js";
 import {
   lockMemoryResolution,
   resolveMemoryCandidate,
@@ -52,6 +57,37 @@ import {
 export interface MemoryMutationActor {
   principal: ExecutionPrincipal;
   runId?: string | null;
+  /** Original server-verified carrier; never request-controlled JSON. */
+  authorizationActor?: AuthorizationActor;
+}
+
+function memorySourceActor(companyId:string,actor:MemoryMutationActor):AuthorizationActor|undefined {
+  const current=actor.authorizationActor;
+  if(!current)return learningActorFromPrincipal(companyId,actor.principal,actor.runId);
+  if(actor.principal.type==="user"&&(current.type!=="board"||current.userId!==actor.principal.userId))
+    throw forbidden("Current Human Memory authority changed");
+  if(actor.principal.type==="agent"&&(current.type!=="agent"||current.agentId!==actor.principal.agentId
+    ||current.onBehalfOfUserId!==actor.principal.responsibleUserId||(actor.runId??null)!==(current.runId??null)
+    ||(current.companyId&&current.companyId!==companyId)))throw forbidden("Current Agent Memory authority changed");
+  if(actor.principal.type==="system"&&!(actor.principal.service==="local-board"&&current.type==="board"&&current.source==="local_implicit"))
+    throw forbidden("Current system Memory authority changed");
+  return current;
+}
+
+async function assertCurrentMemoryHumanCredential(db:Db,actor:AuthorizationActor,pinned:{credentialExpiresAt:number|null}) {
+  const current=await pinCurrentBoardActor(db,actor);
+  if(!current||actor.type!=="board"||!actor.userId)throw forbidden("Current Human credential is unavailable");
+  const [state]=await db.execute<{active:boolean}>(sql`select
+    not exists(select 1 from ${accountDeletionOperations} d where d.user_id=${actor.userId})
+    and ${actor.source==="session"&&actor.sessionId?sql`exists(select 1 from ${authSessions} s
+      join ${authUsers} u on u.id=s.user_id where s.id=${actor.sessionId} and s.user_id=${actor.userId}
+        and s.authenticator_version=u.authenticator_version and s.expires_at>clock_timestamp())`:sql`true`}
+    as active`);
+  if(!state?.active)throw forbidden("Current Human account or session changed");
+  const deadline=pinned.credentialExpiresAt;
+  const [currentDeadline]=await db.execute<{active:boolean}>(sql`select
+    ${deadline===null?sql`true`:sql`${deadline}::double precision>extract(epoch from clock_timestamp())*1000`} as active`);
+  if(!currentDeadline?.active)throw forbidden("The original Human credential expired before review committed");
 }
 
 interface SharePrivateMemoryInternalContext {
@@ -395,6 +431,7 @@ function metadataFingerprint(
     : null;
 }
 
+
 function recordDetail(
   record: typeof memoryRecords.$inferSelect,
   evidence: (typeof memoryEvidence.$inferSelect)[],
@@ -425,11 +462,17 @@ async function getRecordDetail(db: Db, companyId: string, recordId: string) {
       ),
     )
     .orderBy(memoryEvidence.createdAt);
-  return recordDetail(record, evidence);
+  const [share]=await db.select({state:memoryPrivateSharePublications.state,targetScopeType:memoryPrivateSharePublications.targetScopeType,
+    targetScopeId:memoryPrivateSharePublications.targetScopeId}).from(memoryPrivateSharePublications).where(and(
+      eq(memoryPrivateSharePublications.companyId,companyId),eq(memoryPrivateSharePublications.sharedRecordId,recordId)));
+  const scopeType=share?.targetScopeType;
+  const safeScope:MemoryRecordDetail["privateShareReview"]=share&&(scopeType==="company"||scopeType==="project"||scopeType==="subject")
+    ? {state:share.state,targetScopeType:scopeType,targetScopeId:share.targetScopeId}:undefined;
+  return { ...recordDetail(record, evidence), ...(safeScope?{privateShareReview:safeScope}:{}) };
 }
 
 async function visibleMemorySources(db:Db,companyId:string,rows:(typeof memoryRecords.$inferSelect)[],actor:MemoryMutationActor) {
-  const reader=learningActorFromPrincipal(companyId,actor.principal,actor.runId),visible:typeof rows=[];
+  const reader=memorySourceActor(companyId,actor),visible:typeof rows=[];
   for(const row of rows)if(await canActorReadMemorySources(db,companyId,reader,row.id))visible.push(row);
   return visible;
 }
@@ -458,7 +501,7 @@ async function visibleMemoryPage(db:Db,companyId:string,actor:MemoryMutationActo
   });
 }
 async function assertMemorySourceAccess(db:Db,companyId:string,recordId:string,actor:MemoryMutationActor) {
-  if(!await canActorReadMemorySources(db,companyId,learningActorFromPrincipal(companyId,actor.principal,actor.runId),recordId))throw notFound("Memory record not found");
+  if(!await canActorReadMemorySources(db,companyId,memorySourceActor(companyId,actor),recordId))throw notFound("Memory record not found");
 }
 async function requireCurrentMemoryDetail(db:Db,companyId:string,recordId:string,actor:MemoryMutationActor):Promise<NonNullable<Awaited<ReturnType<typeof getRecordDetail>>>> {
   const detail=await memoryService(db).get(companyId,recordId,actor);
@@ -559,6 +602,7 @@ async function insertCandidate(
       | "human_verified"
       | "system_verified";
     sourceMemoryIds?: string[];
+    sourceProvenance?: Awaited<ReturnType<typeof captureMemorySources>>;
   } = {},
 ) {
   await assertMemorySourcesRetained(tx, companyId, input.evidence);
@@ -585,7 +629,7 @@ async function insertCandidate(
   }
   const identity = actorIdentity(actor);
   const now = new Date();
-  const sourceProvenance=await captureMemorySources(tx,companyId,learningActorFromPrincipal(companyId,actor.principal,actor.runId),input.scope,
+  const sourceProvenance=state.sourceProvenance??await captureMemorySources(tx,companyId,memorySourceActor(companyId,actor),input.scope,
     [...(supersedesRecordId?[supersedesRecordId]:[]),...(state.sourceMemoryIds??[])]);
 
   const [record] = await tx
@@ -630,7 +674,7 @@ async function insertCandidate(
   await insertEvidenceRows(tx, companyId, record.id, input.evidence);
   // Every new-row producer shares this final effect admission. An INSERT can
   // wait on a foreign key after capture, while its Agent/Human loses authority.
-  if(!await canActorReadMemorySources(tx,companyId,learningActorFromPrincipal(companyId,actor.principal,actor.runId),record.id))
+  if(!await canActorReadMemorySources(tx,companyId,memorySourceActor(companyId,actor),record.id))
     throw forbidden("Memory candidate source access is unavailable");
 
   return record;
@@ -715,7 +759,7 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
           txDb,
           companyId,
           parsed.data,
-          {actor:learningActorFromPrincipal(companyId,actor.principal,actor.runId)},
+          {actor:memorySourceActor(companyId,actor)},
         );
 
         const attachesToExistingPendingContradiction =
@@ -740,8 +784,10 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
           if(!target || target.updatedAt.getTime()!==resolvedTarget.updatedAt.getTime())
             throw conflict("Memory resolution target changed before attachment",{code:"memory_resolution_conflict"});
           await assertMemorySourceAccess(txDb,companyId,target.id,actor);
+          const [privateShareCopy]=await txDb.select({id:memoryPrivateSharePublications.sharedRecordId}).from(memoryPrivateSharePublications).where(and(
+            eq(memoryPrivateSharePublications.companyId,companyId),eq(memoryPrivateSharePublications.sharedRecordId,target.id)));
 
-          const provenance=await captureMemorySources(txDb,companyId,learningActorFromPrincipal(companyId,actor.principal,actor.runId),parsed.data.scope,sourceMemoryIds);
+          const provenance=await captureMemorySources(txDb,companyId,memorySourceActor(companyId,actor),parsed.data.scope,sourceMemoryIds);
           if(provenance.sourceMemoryIds.includes(target.id)){
             // Only the exact current native selection can be a no-op input to
             // its own unchanged claim. Caller IDs and old receipts cannot erase
@@ -762,8 +808,15 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
             provenance.sourceMemoryIds=provenance.sourceMemoryIds.filter(id=>id!==target.id);
           }
           const sourceKeys=["sourceRunIds","sourceIssueIds","sourceProjectIds","sourceMemoryIds","sourceFoundationRevisionIds"] as const;
-          const sourceChanges=target.sourceProvenanceQualified!==(target.sourceProvenanceQualified && provenance.sourceProvenanceQualified)
-            || sourceKeys.some(key=>provenance[key].some(id=>!target[key].includes(id)));
+          const shareCopyHasOnlyIncidentalRunRoots=!!privateShareCopy&&resolution.metadata.kind==="duplicate"
+            && target.sourceProvenanceQualified===provenance.sourceProvenanceQualified
+            && !provenance.sourceIssueIds.some(id=>!target.sourceIssueIds.includes(id))
+            && !provenance.sourceProjectIds.some(id=>!target.sourceProjectIds.includes(id))
+            && !provenance.sourceFoundationRevisionIds.some(id=>!target.sourceFoundationRevisionIds.includes(id))
+            && !provenance.sourceMemoryIds.some(id=>id!==target.id&&!target.sourceMemoryIds.includes(id));
+          const sourceChanges=!shareCopyHasOnlyIncidentalRunRoots
+            && (target.sourceProvenanceQualified!==(target.sourceProvenanceQualified && provenance.sourceProvenanceQualified)
+              || sourceKeys.some(key=>provenance[key].some(id=>!target[key].includes(id))));
           if(resolution.metadata.kind!=="duplicate" || sourceChanges)await txDb.update(memoryRecords).set({
             ...(sourceChanges ? { payloadSourceSnapshot: null } : {}),
             sourceProvenanceQualified:target.sourceProvenanceQualified && provenance.sourceProvenanceQualified,
@@ -802,7 +855,7 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
           // A distinct descendant or another retained source may lead back to
           // this target. Use the original current source owner before commit,
           // so failed attachment rolls back lineage, evidence and audit alike.
-          if(!await canActorReadMemorySources(txDb,companyId,learningActorFromPrincipal(companyId,actor.principal,actor.runId),target.id))
+          if(!await canActorReadMemorySources(txDb,companyId,memorySourceActor(companyId,actor),target.id))
             throw conflict("Memory attachment sources are unavailable or cyclic",{code:"memory_resolution_source_conflict"});
           return { recordId: target.id, resolution: resolution.metadata, replayed:false as const };
         }
@@ -853,7 +906,7 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
         return { recordId: created.id, resolution: resolution.metadata, replayed:false as const };
         };
         return nativeCapture
-          ? withNativeMemoryCaptureSources(txDb,companyId,learningActorFromPrincipal(companyId,actor.principal,actor.runId),options.nativeCaptureReceipt!,inspect)
+          ? withNativeMemoryCaptureSources(txDb,companyId,memorySourceActor(companyId,actor),options.nativeCaptureReceipt!,inspect)
           : inspect();
       });
       publishOrDefer(publications);
@@ -1036,7 +1089,7 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
         const tx=rawTx as unknown as Db;await lockAnalyticalCompany(tx,companyId); await lockMemoryPrivacy(tx,companyId);
         const detail=await getRecordDetail(tx,companyId,recordId);
         if(!detail || detail.record.scopeType==="agent" || !await canActorReadMemorySources(tx,companyId,
-          learningActorFromPrincipal(companyId,actor.principal,actor.runId),recordId))return null;
+          memorySourceActor(companyId,actor),recordId))return null;
         return detail;
       });
     },
@@ -1052,7 +1105,7 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
         const detail=await getRecordDetail(tx,companyId,recordId);
         if(!detail)return null;
         assertPrivateMemoryReadAllowed(detail.record,actor);
-        if(!await canActorReadMemorySources(tx,companyId,learningActorFromPrincipal(companyId,actor.principal,actor.runId),recordId))return null;
+        if(!await canActorReadMemorySources(tx,companyId,memorySourceActor(companyId,actor),recordId))return null;
         return detail;
       });
     },
@@ -1260,7 +1313,6 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
           }
           return existing;
         }
-
         const created = await insertCandidate(
           txDb,
           companyId,
@@ -1327,6 +1379,7 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
             code: "private_memory_owner_missing",
           });
         }
+        if(!source.privateOwnerUserId)throw conflict("Private Memory owner is unavailable",{code:"private_memory_owner_missing"});
         assertPrivateMemoryWriter(source.ownerAgentId, actor);
 
         const operationFingerprint = memoryOperationFingerprint({
@@ -1498,6 +1551,7 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
             code: "private_memory_owner_missing",
           });
         }
+        if(!source.privateOwnerUserId)throw conflict("Private Memory owner is unavailable",{code:"private_memory_owner_missing"});
 
         const operationFingerprint = memoryOperationFingerprint({
           sourceRecordId: source.id,
@@ -1530,6 +1584,18 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
               operationId: parsed.data.createdByOperationId,
             });
           }
+          const [receipt]=await txDb.select().from(memoryPrivateSharePublications).where(and(
+            eq(memoryPrivateSharePublications.companyId,companyId),eq(memoryPrivateSharePublications.sharedRecordId,existing.id),
+            eq(memoryPrivateSharePublications.operationFingerprint,operationFingerprint)));
+          if(!receipt||!(receipt.state==="pending"||receipt.state==="published"||receipt.state==="rejected")
+            ||receipt.sourceRecordId!==source.id||receipt.sourceOwnerUserId!==source.privateOwnerUserId
+            ||receipt.sourceVersion!==source.updatedAt.toISOString()||receipt.sourceFingerprint!==memoryShareContentFingerprint(source)
+            ||receipt.sharedFingerprint!==memoryShareContentFingerprint(existing)||receipt.targetBindingId!==parsed.data.targetBindingId
+            ||receipt.targetScopeType!==parsed.data.targetScope.type||receipt.targetScopeId!==(parsed.data.targetScope.id??null)
+            ||source.reviewState!=="accepted"||source.retentionState!=="active"||source.revokedAt||source.supersededByRecordId
+            ||(source.validFrom&&source.validFrom.getTime()>Date.now())||(source.validUntil&&source.validUntil.getTime()<=Date.now())
+            ||(source.expiresAt&&source.expiresAt.getTime()<=Date.now()))
+            throw conflict("Private Memory share proposal is unavailable or changed",{code:"private_memory_share_proposal_invalid"});
           return existing;
         }
 
@@ -1598,14 +1664,28 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
           ],
         };
 
+        // The narrow copy can omit incidental run inputs only when no extra
+        // evidence was copied. Tool evidence includes the active Task's title,
+        // so it retains the original producer closure and its current ACL.
+        const sourceProvenance=internalContext.additionalEvidence?.length
+          ? await captureMemorySources(txDb,companyId,memorySourceActor(companyId,actor),candidate.scope,[source.id])
+          : await capturePrivateShareSource(txDb,companyId,
+            memorySourceActor(companyId,actor),source.id,source.privateOwnerUserId??"");
         const created = await insertCandidate(
           txDb,
           companyId,
           candidate,
           actor,
           null,
-          {sourceMemoryIds:[source.id]},
+          {sourceMemoryIds:[source.id],sourceProvenance},
         );
+        await txDb.insert(memoryPrivateSharePublications).values({
+          companyId,sharedRecordId:created.id,sourceRecordId:source.id,sourceOwnerUserId:source.privateOwnerUserId,
+          targetBindingId:parsed.data.targetBindingId,targetScopeType:parsed.data.targetScope.type,
+          targetScopeId:parsed.data.targetScope.id??null,sourceVersion:source.updatedAt.toISOString(),
+          sourceFingerprint:memoryShareContentFingerprint(source),sharedFingerprint:memoryShareContentFingerprint(created),operationFingerprint,
+          state:"pending",
+        });
         publications.push(
           await persistMemoryActivity(txDb, actor, {
             companyId,
@@ -1744,9 +1824,19 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
 
       const reviewed = await db.transaction(async (tx) => {
         const txDb = tx as unknown as Db;
+        const sourceActor=actor.authorizationActor?memorySourceActor(companyId,actor):null;
+        const pinnedBoard=sourceActor?await pinCurrentBoardActor(txDb,sourceActor):null;
+        if(sourceActor&&!pinnedBoard)throw forbidden("Current Human credential is unavailable");
         await lockAnalyticalCompany(txDb,companyId); await lockMemoryPrivacy(txDb,companyId);
         await assertActorCompanyScope(txDb, companyId, actor);
       await assertSaasDomainAdmission(txDb, companyId, "memory.use");
+        if(sourceActor?.type==="board"&&sourceActor.userId){
+          const [membership]=await txDb.select({id:companyMemberships.id}).from(companyMemberships).where(and(
+            eq(companyMemberships.companyId,companyId),eq(companyMemberships.principalType,"user"),
+            eq(companyMemberships.principalId,sourceActor.userId),eq(companyMemberships.status,"active"),
+          )).for("share",{noWait:true});
+          if(!membership)throw forbidden("Current Human company membership is unavailable");
+        }
         const record = await txDb
           .select()
           .from(memoryRecords)
@@ -1761,6 +1851,47 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
           .then((rows) => rows[0] ?? null);
         if (!record) throw notFound("Memory candidate not found");
         await assertMemorySourceAccess(txDb,companyId,record.id,actor);
+        const [shareReceipt]=await txDb.select().from(memoryPrivateSharePublications).where(and(
+          eq(memoryPrivateSharePublications.companyId,companyId),eq(memoryPrivateSharePublications.sharedRecordId,record.id))).for("update");
+        if(parsed.data.publishPrivateShare&&parsed.data.decision!=="accept")
+          throw unprocessable("Private share publication requires an acceptance decision",{code:"private_memory_share_flag_invalid"});
+        if(parsed.data.publishPrivateShare&&!shareReceipt)
+          throw unprocessable("Explicit publication applies only to a pending private share",{code:"private_memory_share_flag_invalid"});
+        if(shareReceipt){
+          if(shareReceipt.state!=="pending")throw conflict("Private share proposal was already reviewed",{code:"private_memory_share_proposal_reviewed"});
+          if(parsed.data.publishPrivateShare){
+            if(actor.principal.type!=="user"||actor.principal.userId!==shareReceipt.sourceOwnerUserId
+              ||!sourceActor||sourceActor.type!=="board"||sourceActor.userId!==shareReceipt.sourceOwnerUserId||!pinnedBoard
+              ||(sourceActor.source!=="session"&&sourceActor.source!=="board_key")
+              ||(sourceActor.source==="session"&&(!sourceActor.sessionId||!Number.isFinite(sourceActor.authenticatedCredentialExpiresAt))))
+              throw forbidden("Only the original Human owner can publish this exact private Memory share");
+            if(sourceActor.userId!==shareReceipt.sourceOwnerUserId)throw forbidden("The original Human company membership is unavailable");
+          }
+          const [source]=await txDb.select().from(memoryRecords).where(and(eq(memoryRecords.companyId,companyId),
+            eq(memoryRecords.id,shareReceipt.sourceRecordId),memoryPayloadVisible())).for("update");
+          const evidence=await txDb.select().from(memoryEvidence).where(and(eq(memoryEvidence.companyId,companyId),eq(memoryEvidence.memoryRecordId,record.id)));
+          const sourceEvidence=evidence.filter(item=>item.sourceProvider==="august_works_memory"&&item.sourceRef===`memory://private/${shareReceipt.sourceRecordId}`);
+          const nowForShare=Date.now();
+          if(!source||source.scopeType!=="agent"||source.privateOwnerUserId!==shareReceipt.sourceOwnerUserId
+            ||source.updatedAt.toISOString()!==shareReceipt.sourceVersion||memoryShareContentFingerprint(source)!==shareReceipt.sourceFingerprint
+            ||source.reviewState!=="accepted"||source.retentionState!=="active"||source.revokedAt||source.supersededByRecordId
+            ||(source.validFrom&&source.validFrom.getTime()>nowForShare)||(source.validUntil&&source.validUntil.getTime()<=nowForShare)
+            ||(source.expiresAt&&source.expiresAt.getTime()<=nowForShare)
+            ||memoryShareContentFingerprint(record)!==shareReceipt.sharedFingerprint||record.bindingId!==shareReceipt.targetBindingId
+            ||record.scopeType!==shareReceipt.targetScopeType||record.scopeId!==shareReceipt.targetScopeId
+            ||sourceEvidence.length!==1||sourceEvidence[0]!.sourceVersion!==shareReceipt.sourceVersion
+            ||sourceEvidence[0]!.excerptHash!==createHash("sha256").update(source.content).digest("hex"))
+            throw conflict("Private Memory share is stale or changed",{code:"private_memory_share_stale"});
+          await assertMemorySourceAccess(txDb,companyId,source.id,actor);
+          const [binding]=await txDb.select().from(memoryBindings).where(and(eq(memoryBindings.companyId,companyId),eq(memoryBindings.id,shareReceipt.targetBindingId)));
+          const targets=binding?await txDb.select().from(memoryBindingTargets).where(and(eq(memoryBindingTargets.companyId,companyId),
+            eq(memoryBindingTargets.bindingId,binding.id))):[];
+          const authorizedTarget=targets.some(target=>
+            (target.targetType==="company"&&target.targetId===companyId&&(record.scopeType==="company"||record.scopeType==="subject"))
+            ||(target.targetType==="project"&&record.scopeType==="project"&&target.targetId===record.scopeId));
+          if(!binding||!binding.enabled||!authorizedTarget)
+            throw conflict("Private Memory share target is no longer available",{code:"private_memory_share_target_changed"});
+        }
         if (record.reviewState !== "pending") {
           throw conflict("Memory candidate has already been reviewed", {
             code: "memory_review_conflict",
@@ -1842,6 +1973,16 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
           .returning();
         if (!updated) throw conflict("Memory candidate review raced with another reviewer");
 
+        if(shareReceipt){
+          const published=parsed.data.decision==="accept"&&parsed.data.publishPrivateShare===true;
+          const [receiptUpdated]=await txDb.update(memoryPrivateSharePublications).set({
+            state:published?"published":"rejected",publishedAt:published?now:null,
+            publishedByUserId:published?actor.principal.type==="user"?actor.principal.userId:null:null,
+          }).where(and(eq(memoryPrivateSharePublications.companyId,companyId),
+            eq(memoryPrivateSharePublications.sharedRecordId,record.id),eq(memoryPrivateSharePublications.state,"pending"))).returning();
+          if(!receiptUpdated)throw conflict("Private Memory publication raced with another reviewer");
+        }
+
         publications.push(
           await persistMemoryActivity(txDb, actor, {
             companyId,
@@ -1856,6 +1997,7 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
             },
           }),
         );
+        if(sourceActor&&pinnedBoard)await assertCurrentMemoryHumanCredential(txDb,sourceActor,pinnedBoard);
         return updated;
       });
       publishOrDefer(publications);

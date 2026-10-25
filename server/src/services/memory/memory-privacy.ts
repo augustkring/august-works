@@ -1,12 +1,12 @@
 import { createHash } from "node:crypto";
 import { AsyncLocalStorage } from "node:async_hooks";
 import { and, eq, inArray, isNull, lte, or, sql, type SQL } from "drizzle-orm";
-import { agentExecutionManifests,providerTraceRecords, memoryDeletionMarkers, memoryEvidence, memoryJobs, memoryRecords, memoryRetentionPolicies,
+import { agentExecutionManifests,providerTraceRecords, memoryDeletionMarkers, memoryEvidence, memoryJobs, memoryRecords, memoryPrivateSharePublications, memoryRetentionPolicies,
   contextManifests, contextManifestItems, contextManifestMemoryRoots, saasRunLogs, saasRunLogChunks, activityLog, issueThreadInteractions, toolAccessAuditEvents, toolActionRequests, toolCallEvents, toolInvocations,
   heartbeatRuns, heartbeatRunEvents, agentWakeupRequests, agents, authUsers, issues, issueComments, issueDocuments, documents, documentRevisions,
   nativeRunResults, workAssessments, statusDecisions, nativeRunFinalizations, completionContracts, issueWorkProducts, agentTaskSessions, agentRuntimeState,
   workflowRuns, workflowStepRuns, workflowWaits, workflowRunReviews, workflowOptimizerEvaluations, workflowOptimizerObservations, automationArtifacts, automationArtifactVersions, type Db } from "@paperclipai/db";
-import { notificationPreferenceProposals, foundationChangeProposals, foundationSections, routines, routineRevisions, routineTriggers, routineDocuments, routineRuns, companySecretBindings } from "@paperclipai/db";
+import { notificationPreferenceProposals, foundationChangeProposals, foundationSections, routines, routineRevisions, routineTriggers, routineDocuments, routineRuns, companySecretBindings, memoryBindings, memoryBindingTargets } from "@paperclipai/db";
 import { eraseAnalyticalSourcesUnderMemory } from "../analytical-source-erasure.js";
 import { eraseBusinessEventObjectUnderMemory } from "../business-event-payload-erasure.js";
 import { conflict, forbidden, HttpError } from "../../errors.js";
@@ -110,6 +110,15 @@ export async function withNativeMemoryCaptureSources<T>(db: Db, companyId: strin
 /** Current source authority, independent of a Memory record's display scope.
  * A shared/corrected copy keeps every original root. Unknown history is withheld. */
 const memorySourceReads=new AsyncLocalStorage<{active:Set<string>;deadline:number;work:number}>();
+export function memoryShareContentFingerprint(record:typeof memoryRecords.$inferSelect):string {
+  return createHash("sha256").update(JSON.stringify({
+    companyId:record.companyId,bindingId:record.bindingId,memoryType:record.memoryType,scopeType:record.scopeType,scopeId:record.scopeId,
+    subjectType:record.subjectType,subjectId:record.subjectId,ownerAgentId:record.ownerAgentId,title:record.title,content:record.content,
+    summary:record.summary,sensitivityLabel:record.sensitivityLabel,importance:record.importance,confidenceScore:record.confidenceScore,
+    validFrom:record.validFrom?.toISOString()??null,validUntil:record.validUntil?.toISOString()??null,observedAt:record.observedAt.toISOString(),
+    retentionPolicy:record.retentionPolicy,expiresAt:record.expiresAt?.toISOString()??null,
+  })).digest("hex");
+}
 export async function canActorReadMemorySources(db: Db, companyId: string, actor: AuthorizationActor | undefined, recordId: string):Promise<boolean> {
   const inherited=memorySourceReads.getStore(),state=inherited??{active:new Set<string>(),deadline:performance.now()+8000,work:0};
   const key=`${companyId}:${recordId}`;
@@ -152,30 +161,37 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
   const active = new Set<string>(), visited = new Set<string>();
   const runs = new Set<string>(), tasks = new Set<string>(), projectIds = new Set<string>(), revisions = new Set<string>();
   const deadline = state.deadline;
-  const visit = async (id:string,ancestor=false):Promise<boolean> => {
+  const visit = async (id:string,ancestor=false,authorizedPrivateOwnerEdge=false):Promise<boolean> => {
     if (active.has(id) || performance.now()>deadline || visited.size>=256 || state.work>=256) return false;
-    if (visited.has(id)) return true;
+    // A row reached through the exact published edge is not equivalent to the
+    // same row reached as a sibling source. Cache the edge context, never only
+    // the record ID, or an allowed path could mask a forbidden direct path.
+    const visitKey=`${id}:${ancestor?"ancestor":"root"}:${authorizedPrivateOwnerEdge?"published-edge":"ordinary-edge"}`;
+    if (visited.has(visitKey)) return true;
     state.work++;
     const [row] = await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId,companyId),eq(memoryRecords.id,id),memoryPayloadVisible()));
     if (!row?.sourceProvenanceQualified || (row.expiresAt && row.expiresAt.getTime()<=Date.now())) return false;
+    const publicationSource=authorizedPrivateOwnerEdge;
     const readerUserId=actor.type==="board"?actor.userId:actor.onBehalfOfUserId;
     // A run may legitimately change Human after acknowledged steering. Its
     // current identity cannot transfer an earlier private Memory to that Human.
     if((row.scopeType==="agent" && !row.privateOwnerUserId)
-      || (row.privateOwnerUserId && row.privateOwnerUserId!==readerUserId))return false;
+      || (row.privateOwnerUserId && row.privateOwnerUserId!==readerUserId && !publicationSource))return false;
     if(row.scopeType==="agent" && actor.type==="agent"
-      && (row.ownerAgentId!==actor.agentId || row.scopeId!==actor.agentId))return false;
+      && (row.ownerAgentId!==actor.agentId || row.scopeId!==actor.agentId) && !publicationSource)return false;
     if(ancestor && (row.revokedAt || row.retentionState==="expired" || row.validUntil && row.validUntil.getTime()<=Date.now()))return false;
     const ids = [...row.sourceRunIds,...row.sourceIssueIds,...row.sourceProjectIds,...row.sourceMemoryIds,...row.sourceFoundationRevisionIds];
     if (ids.length>256 || ids.some(value=>typeof value!=="string" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value))) return false;
-    visited.add(id);active.add(id);
+    visited.add(visitKey);active.add(id);
     row.sourceRunIds.forEach(value=>runs.add(value));row.sourceIssueIds.forEach(value=>tasks.add(value));
     row.sourceProjectIds.forEach(value=>projectIds.add(value));row.sourceFoundationRevisionIds.forEach(value=>revisions.add(value));
     if (row.scopeType==="project") {
       if (!row.scopeId || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(row.scopeId)) return false;
       projectIds.add(row.scopeId);
     }
-    for (const source of row.sourceMemoryIds) if (!await visit(source,true)) return false;
+    const publishedSourceId=await publishedShareSourceEdge(db,companyId,row);
+    if(publishedSourceId===false)return false;
+    for (const source of row.sourceMemoryIds) if (!await visit(source,true,source===publishedSourceId)) return false;
     active.delete(id);
     return visited.size+runs.size+tasks.size+projectIds.size+revisions.size<=256;
   };
@@ -195,6 +211,39 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
     }
   }
   return performance.now()<=deadline && await admitted();
+}
+
+/** Grants one edge only when the exact share payload, source version, owner
+ * acceptance, and live target binding still match their internal receipt. */
+async function publishedShareSourceEdge(db:Db,companyId:string,row:typeof memoryRecords.$inferSelect):Promise<string|null|false> {
+  const [receipt]=await db.select().from(memoryPrivateSharePublications).where(and(
+    eq(memoryPrivateSharePublications.companyId,companyId),eq(memoryPrivateSharePublications.sharedRecordId,row.id),
+    eq(memoryPrivateSharePublications.state,"published")));
+  if(!receipt)return null;
+  if(row.sourceMemoryIds.length!==1||row.sourceMemoryIds[0]!==receipt.sourceRecordId)return false;
+  const [source]=await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId,companyId),
+    eq(memoryRecords.id,receipt.sourceRecordId),memoryPayloadVisible()));
+  const [binding]=await db.select().from(memoryBindings).where(and(eq(memoryBindings.companyId,companyId),eq(memoryBindings.id,receipt.targetBindingId)));
+  if(!source||!binding)return false;
+  const targets=await db.select().from(memoryBindingTargets).where(and(eq(memoryBindingTargets.companyId,companyId),eq(memoryBindingTargets.bindingId,binding.id)));
+  const authorizedTarget=targets.some(target=>(target.targetType==="company"&&target.targetId===companyId
+    &&(row.scopeType==="company"||row.scopeType==="subject"))
+    ||(target.targetType==="project"&&row.scopeType==="project"&&target.targetId===row.scopeId));
+  const evidence=await db.select({id:memoryEvidence.id}).from(memoryEvidence).where(and(
+    eq(memoryEvidence.companyId,companyId),eq(memoryEvidence.memoryRecordId,row.id),
+    eq(memoryEvidence.sourceProvider,"august_works_memory"),eq(memoryEvidence.sourceRef,`memory://private/${source.id}`),
+    eq(memoryEvidence.sourceVersion,receipt.sourceVersion),eq(memoryEvidence.excerptHash,createHash("sha256").update(source.content).digest("hex")),
+  )).limit(2);
+  const now=Date.now();
+  if(receipt.sourceOwnerUserId===null||receipt.publishedByUserId!==receipt.sourceOwnerUserId||!receipt.publishedAt
+    ||receipt.sourceRecordId===row.id||source.scopeType!=="agent"||source.privateOwnerUserId!==receipt.sourceOwnerUserId
+    ||source.updatedAt.toISOString()!==receipt.sourceVersion||memoryShareContentFingerprint(source)!==receipt.sourceFingerprint
+    ||source.reviewState!=="accepted"||source.retentionState!=="active"||source.revokedAt||source.supersededByRecordId
+    ||(source.validFrom&&source.validFrom.getTime()>now)||(source.validUntil&&source.validUntil.getTime()<=now)
+    ||(source.expiresAt&&source.expiresAt.getTime()<=now)||row.reviewState!=="accepted"
+    ||row.scopeType!==receipt.targetScopeType||row.scopeId!==receipt.targetScopeId||row.bindingId!==receipt.targetBindingId
+    ||!binding.enabled||!authorizedTarget||memoryShareContentFingerprint(row)!==receipt.sharedFingerprint||evidence.length!==1)return false;
+  return source.id;
 }
 
 /** Only actual producer/run and persisted Context owners stamp these columns.
@@ -277,6 +326,20 @@ export async function captureMemorySources(db: Db, companyId: string, actor: Aut
   return sources;
 }
 
+/** Explicit share preserves the exact source edge but avoids attaching the
+ * producer's incidental run/context roots to the shared copy. The walk below
+ * still qualifies every root retained by the private source itself. */
+export async function capturePrivateShareSource(db:Db,companyId:string,actor:AuthorizationActor|undefined,
+  sourceRecordId:string,sourceOwnerUserId:string):Promise<Awaited<ReturnType<typeof captureMemorySources>>> {
+  if(!actor||!await memorySourceActorCurrent(db,companyId,actor))throw forbidden("Private Memory share authority is unavailable");
+  const [source]=await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId,companyId),
+    eq(memoryRecords.id,sourceRecordId),memoryPayloadVisible()));
+  if(!source||source.scopeType!=="agent"||source.privateOwnerUserId!==sourceOwnerUserId||!source.sourceProvenanceQualified
+    ||!await canActorReadMemorySources(db,companyId,actor,sourceRecordId))throw forbidden("Private Memory source is unavailable");
+  return {sourceProvenanceQualified:true,privateOwnerUserId:null,sourceRunIds:[],sourceIssueIds:[],sourceProjectIds:[],
+    sourceMemoryIds:[sourceRecordId],sourceFoundationRevisionIds:[]};
+}
+
 export function memoryPayloadVisible() {
   return and(isNull(memoryRecords.deletedAt), sql`not exists (select 1 from ${memoryDeletionMarkers}
     where ${memoryDeletionMarkers.companyId} = ${memoryRecords.companyId}
@@ -344,6 +407,8 @@ export async function purgeMemoryRecords(db: Db, companyId: string, rootIds: str
   }
   if (!ids.size) return { deletedRecordIds: [] as string[], deletedRecordCount: 0 };
   const rows = await db.select().from(memoryRecords).where(and(eq(memoryRecords.companyId, companyId), inArray(memoryRecords.id, [...ids]))).for("update");
+  await db.delete(memoryPrivateSharePublications).where(and(eq(memoryPrivateSharePublications.companyId,companyId),or(
+    inArray(memoryPrivateSharePublications.sharedRecordId,[...ids]),inArray(memoryPrivateSharePublications.sourceRecordId,[...ids]))));
   for (const row of rows) {
     const markers: Array<typeof memoryDeletionMarkers.$inferInsert> = [
       { companyId, kind: "record", recordId: row.id, key: memoryDeletionKey(companyId, "record", row.id), deletedAt: now },

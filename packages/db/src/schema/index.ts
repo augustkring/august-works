@@ -144,6 +144,7 @@ export {
   memoryDeletionMarkers,
   memoryRetentionPolicies,
 } from "./memory.js";
+export { memoryPrivateSharePublications } from "./memory_private_share_publications.js";
 export { memoryJobs } from "./memory_jobs.js";
 export {
   automationArtifacts,

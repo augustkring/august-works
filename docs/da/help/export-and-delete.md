@@ -10,9 +10,9 @@ maturity: preview
 applicable_product_versions: [V10]
 locale: da
 last_verified_at: 2026-10-25
-review_trigger: Ændringer i eksportens omfang, kontosletning, organisationssletning eller opbevaring
+review_trigger: Ændringer i eksport, sletning, opbevaring, privat Memory-deling eller kildeadgang
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/pages/CompanyExport.tsx, ui/src/pages/SaasDeletion.tsx, ui/src/pages/SaasAccount.tsx, server/src/services/saas/account-deletion.ts, server/src/services/saas/offboarding.ts, server/src/services/saas/company-purge.ts]
+linked_source_files: [ui/src/pages/CompanyExport.tsx, ui/src/pages/SaasDeletion.tsx, ui/src/pages/SaasAccount.tsx, server/src/services/saas/account-deletion.ts, server/src/services/saas/offboarding.ts, server/src/services/saas/company-purge.ts, ui/src/pages/Memory.tsx, server/src/routes/memory.ts, server/src/services/memory/memory-service.ts, server/src/services/memory/memory-privacy.ts]
 ---
 
 Blentera har særskilte handlinger til at eksportere en virksomhed, slette en organisation og slette din personlige konto. Kontrollér, hvilke data og hvilken identitet du mener, før du fortsætter.
@@ -32,3 +32,10 @@ Sletningen kan forblive i en opbevaringstilstand, mens administrerede sikkerheds
 Åbn **Company settings → Security** for at gennemgå sletning af din personlige konto. Formularen kræver din aktuelle adgangskode, teksten **DELETE MY ACCOUNT** og en bekræftelse af, at du har gemt de eksporter, du har brug for. Hvis anmodningen accepteres, viderestilles kontosiden og viser en kvittering, når den er tilgængelig.
 
 Hvis en tidligere anmodning har et ukendt resultat, skal du bruge gendannelsen på kontosiden i stedet for at indsende en ny anmodning. Ved spørgsmål om privatliv kan du skrive til [privacy@blentera.com](mailto:privacy@blentera.com). Send ikke din adgangskode, gendannelseskode eller API-nøgle.
+
+
+## Gennemgå deling af privat Memory (preview)
+
+Når Memory er slået til, viser et forslag om privat deling det præcise indhold og destinationen. Gennemgå begge dele, før du vælger **Godkend og del**. Kun den oprindelige ejer kan godkende delingen fra sin aktuelle konto. Almindelig gennemgang af Memory udvider ikke adgangen til private kilder.
+
+Den private original forbliver privat. Modtagere skal fortsat have aktuel adgang til destinationen og de bevarede kilder. Deling af Memory offentliggør ikke en underliggende privat opgave. En delt kopi kan blive utilgængelig, hvis kilden ændres, udløber, trækkes tilbage eller slettes. Sletning af den delte kopi sletter ikke den private original.

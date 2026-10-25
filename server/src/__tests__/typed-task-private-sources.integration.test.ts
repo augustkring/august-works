@@ -1,4 +1,6 @@
 import { randomUUID } from "node:crypto";
+import express from "express";
+import request from "supertest";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
 import {
@@ -15,7 +17,10 @@ import {
   routineRuns,
 } from "@paperclipai/db";
 import { authorizationService, canActorReadIssuePrivacy, issueReadSqlCondition } from "../services/authorization.js";
+import { canActorReadTypedTaskSourcePrivacy } from "../services/authorization.js";
 import { issueService } from "../services/issues.js";
+import { issueRoutes } from "../routes/issues.js";
+import { errorHandler } from "../middleware/error-handler.js";
 import { lockMemoryPrivacy, purgeDerivedWorkflowMemory } from "../services/memory/memory-privacy.js";
 import { routineAuthoringToolsService } from "../services/routine-authoring-tools.js";
 import { grantsForHumanRole } from "../services/company-member-roles.js";
@@ -93,7 +98,15 @@ describe("typed routine Task private source graph", () => {
   }
 
   const ownerActor = () => f.actor;
-  const bobActor = () => ({ type: "board" as const, source: "session" as const, userId: bobId, sessionId: bobSessionId });
+  const bobActor = () => ({ type: "board" as const, source: "session" as const, userId: bobId, sessionId: bobSessionId, companyIds: [f.home] });
+
+  function appFor(actor: Express.Request["actor"]) {
+    const app = express();
+    app.use((req, _res, next) => { req.actor = actor; next(); });
+    app.use("/api", issueRoutes(db, {} as never));
+    app.use(errorHandler);
+    return request(app);
+  }
 
   it("retains the exact typed RoutineRun edge and limits its private Task to the actual routine owner", async () => {
     const source = await createRoutineAndRun();
@@ -137,6 +150,99 @@ describe("typed routine Task private source graph", () => {
       createdByUserId: f.userId, responsibleUserId: f.userId });
     expect(await canActorReadIssuePrivacy(db, ownerActor(), task)).toBe(true);
     expect(await canActorReadIssuePrivacy(db, bobActor(), task)).toBe(true);
+  }, 90_000);
+
+  it("filters Routine-backed private Tasks before interactive search and extraction", async () => {
+    const source = await createRoutineAndRun();
+    await createTypedTask(source);
+    const ownerHttp = appFor(ownerActor());
+    const bobHttp = appFor(bobActor());
+    const search = await ownerHttp.get(`/api/companies/${f.home}/search`).query({ q: "PRIVATE copied execution Task", scope: "issues" }).expect(200);
+    expect(JSON.stringify(search.body.results)).toContain("PRIVATE copied execution Task");
+    const extraction = await ownerHttp.get(`/api/companies/${f.home}/search/extract`)
+      .query({ contains: "PRIVATE copied execution Task", scope: "issues" }).expect(200);
+    expect(JSON.stringify(extraction.body.results)).toContain("PRIVATE copied execution Task");
+
+    const bobSearch = await bobHttp.get(`/api/companies/${f.home}/search`)
+      .query({ q: "PRIVATE copied execution Task", scope: "issues" }).expect(200);
+    const bobExtraction = await bobHttp.get(`/api/companies/${f.home}/search/extract`)
+      .query({ contains: "PRIVATE copied execution Task", scope: "issues" }).expect(200);
+    expect(JSON.stringify(bobSearch.body.results)).not.toContain("PRIVATE copied execution Task");
+    expect(JSON.stringify(bobExtraction.body.results)).not.toContain("PRIVATE copied execution Task");
+    expect(bobSearch.body.countsByType.issue).toBe(0);
+    expect(bobExtraction.body.results).toHaveLength(0);
+
+    await db.transaction(async rawTx => {
+      const tx = rawTx as unknown as typeof db;
+      await authorizationService(tx).withReadRoutineSources(f.guest, ownerActor(), [source.run.id], async () => {
+        expect(await canActorReadTypedTaskSourcePrivacy(tx, ownerActor(), {
+          sourceKind: "routine_run", id: source.run.id, companyId: f.guest,
+        })).toBe(false);
+      });
+    });
+  }, 90_000);
+
+  it("keeps public local search usable without granting private Routine authority", async () => {
+    const source = await createRoutineAndRun();
+    await createTypedTask(source);
+    const task = await issueService(db).create(f.home, { title: "Public search control", visibility: "open",
+      createdByUserId: f.userId, responsibleUserId: f.userId });
+    const http = appFor({ type: "board", source: "local_implicit", isInstanceAdmin: true });
+    const visible = await http.get(`/api/companies/${f.home}/search`).query({ q: "Public search control", scope: "issues" }).expect(200);
+    expect(visible.body.results.some((row: { id: string }) => row.id === task.id)).toBe(true);
+    const hidden = await http.get(`/api/companies/${f.home}/search`).query({ q: "PRIVATE copied execution Task", scope: "issues" }).expect(200);
+    expect(hidden.body.countsByType.issue).toBe(0);
+    expect(hidden.body.results).toHaveLength(0);
+    const extraction = await http.get(`/api/companies/${f.home}/search/extract`)
+      .query({ contains: "PRIVATE copied execution Task", scope: "issues" }).expect(200);
+    expect(extraction.body.results).toHaveLength(0);
+  }, 90_000);
+
+  it("removes Routine-backed private Tasks from search after source conversation retirement", async () => {
+    const source = await createRoutineAndRun();
+    await createTypedTask(source);
+    const http = appFor(ownerActor());
+    const initial = await http.get(`/api/companies/${f.home}/search`).query({ q: "PRIVATE copied execution Task", scope: "issues" }).expect(200);
+    expect(JSON.stringify(initial.body.results)).toContain("PRIVATE copied execution Task");
+
+    await db.update(issues).set({ conversationRetiredAt: new Date(), hiddenAt: new Date(), status: "cancelled",
+      assigneeAgentId: null, assigneeUserId: null, executionRunId: null, conversationAgentId: null,
+      conversationUserId: null, conversationState: null }).where(eq(issues.id, conversationId));
+    const afterRetirement = await http.get(`/api/companies/${f.home}/search`)
+      .query({ q: "PRIVATE copied execution Task", scope: "issues" }).expect(200);
+    expect(JSON.stringify(afterRetirement.body.results)).not.toContain("PRIVATE copied execution Task");
+    const afterRetirementExtraction = await http.get(`/api/companies/${f.home}/search/extract`)
+      .query({ contains: "PRIVATE copied execution Task", scope: "issues" }).expect(200);
+    expect(JSON.stringify(afterRetirementExtraction.body.results)).not.toContain("PRIVATE copied execution Task");
+  }, 90_000);
+
+  it("rejects search and extraction after the original Human session expires", async () => {
+    const source = await createRoutineAndRun();
+    await createTypedTask(source);
+    const sessionId = ownerActor().sessionId!;
+    await db.update(authSessions).set({ expiresAt: new Date(Date.now() - 1_000) }).where(eq(authSessions.id, sessionId));
+    const http = appFor(ownerActor());
+    const search = await http.get(`/api/companies/${f.home}/search`).query({ q: "PRIVATE copied execution Task", scope: "issues" }).expect(403);
+    const extraction = await http.get(`/api/companies/${f.home}/search/extract`)
+      .query({ contains: "PRIVATE copied execution Task", scope: "issues" }).expect(403);
+    expect(JSON.stringify(search.body)).not.toContain("PRIVATE copied execution Task");
+    expect(JSON.stringify(extraction.body)).not.toContain("PRIVATE copied execution Task");
+  }, 90_000);
+
+  it("fails closed when the company search source candidate set exceeds its 256 run bound", async () => {
+    const source = await createRoutineAndRun();
+    const task = await createTypedTask(source);
+    const extraRuns = await db.insert(routineRuns).values(Array.from({ length: 256 }, () => ({ companyId: f.home,
+      routineId: source.routineId, routineRevisionId: source.revisionId, source: "api", status: "received",
+      responsibleUserId: f.userId }))).returning({ id: routineRuns.id });
+    await db.insert(issuePrivacySources).values(extraRuns.map(run => ({ companyId: f.home, issueId: task.id,
+      sourceKind: "routine_run" as const, sourceId: run.id })));
+    const response = await appFor(ownerActor()).get(`/api/companies/${f.home}/search`)
+      .query({ q: "PRIVATE copied execution Task", scope: "issues" }).expect(403);
+    expect(JSON.stringify(response.body)).not.toContain("PRIVATE copied execution Task");
+    const help = await appFor(ownerActor()).get(`/api/companies/${f.home}/search`)
+      .query({ q: "Recover interrupted work", scope: "help" }).expect(200);
+    expect(JSON.stringify(help.body.results)).toContain("recovering-work");
   }, 90_000);
 
   it("expires the exact Routine source capability when its native callback returns", async () => {
