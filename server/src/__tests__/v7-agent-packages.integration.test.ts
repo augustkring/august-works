@@ -64,6 +64,10 @@ import { purpose as governancePurpose, oversight as governanceOversight, reviews
 import { seedRequiredAuthoringProcedures, seedApprovedAuthoringPlaybook } from "./helpers/authoring-procedures.js";
 import { seedHireAutomationComponents } from "./helpers/hire-automations.js";
 import { agentSetupAuthoringToolsService } from "../services/agent-setup-authoring-tools.js";
+import { routineAuthoringToolsService } from "../services/routine-authoring-tools.js";
+import { routineService } from "../services/routines.js";
+import { issueService } from "../services/issues.js";
+import { memoryService } from "../services/memory/memory-service.js";
 import { workflows, routines, workflowRuns, routineRuns } from "@paperclipai/db";
 import { billingAccounts, billingAccountCompanies, billingSubscriptions, companyOnboardingRuns,
   documents, documentRevisions, issueDocuments } from "@paperclipai/db";
@@ -94,7 +98,7 @@ import { mkdtemp, rm } from "node:fs/promises";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { rolePacks } from "@paperclipai/db";
-import { randomUUID } from "node:crypto";
+import { createHash, randomUUID } from "node:crypto";
 import { and, eq, sql } from "drizzle-orm";
 import {
   createDb,
@@ -522,13 +526,24 @@ const support = await getEmbeddedPostgresTestSupport();
     });
     it("withholds another owner's conversation routine from package options and pin review", async () => {
       const automation = await seedHireAutomationComponents(db, f), { release } = await hireFixture();
-      const [conversation] = await db.insert(issues).values({ companyId: f.home, title: "PRIVATE routine source",
+      await instanceSettingsService(db).updateExperimental({ experience_projection_v9: true, ambient_commands_v9: true });
+      await db.insert(principalPermissionGrants).values({ companyId: f.home, principalType: "agent", principalId: f.presence.id,
+        permissionKey: "tasks:assign" }).onConflictDoNothing();
+      const conversation = await issueService(db).create(f.home, { title: "PRIVATE routine source",
         assigneeAgentId: f.presence.id, conversationAgentId: f.presence.id, conversationUserId: f.userId,
-        conversationState: "active", status: "in_progress" }).returning();
+        conversationState: "active", status: "in_progress", createdByUserId: f.userId });
       const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: f.presence.id, responsibleUserId: f.userId,
-        nativeIssueId: conversation!.id, runtimeMode: "native", status: "running", contextSnapshot: { conversationSessionGeneration: 0 } }).returning();
-      await db.update(routines).set({ originKind: "conversation_draft", originId: run!.id,
-        responsibleUserId: f.userId, createdByAgentId: f.presence.id }).where(eq(routines.id, automation.routine.id));
+        nativeIssueId: conversation.id, runtimeMode: "native", status: "running", contextSnapshot: { conversationSessionGeneration: 0 } }).returning();
+      await db.update(issues).set({ executionRunId: run!.id }).where(eq(issues.id, conversation.id));
+      const draft = await routineAuthoringToolsService(db).create({ companyId: f.home, agentId: f.presence.id, runId: run!.id }, {
+        idempotencyKey: `package-private-routine-${randomUUID()}`, title: "PRIVATE authored routine", description: "PRIVATE routine source body", priority: "medium",
+      });
+      const authoredRoutines = routineService(db, { sourceActor: f.actor });
+      await authoredRoutines.update(draft.routineId, { baseRevisionId: draft.currentRevisionId!, status: "active",
+        executionTarget: { kind: "workflow", workflowId: automation.workflow.id } }, { userId: f.userId });
+      const [authoredRoutine] = await db.select().from(routines).where(eq(routines.id, draft.routineId));
+      const [authoredRoutineHash] = await db.execute<{ hash: string }>(sql`select aw_v7_package_component_hash(${f.home}::uuid,
+        'routine_template',${authoredRoutine!.id}::uuid,${authoredRoutine!.latestRevisionId}::uuid) as hash`);
       const other = `package-other-owner-${randomUUID()}`, now = new Date();
       await db.insert(authUsers).values({ id: other, name: "Other owner", email: `${other}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now });
       await db.insert(companyMemberships).values({ companyId: f.home, principalType: "user", principalId: other, status: "active", membershipRole: "owner" });
@@ -536,15 +551,15 @@ const support = await getEmbeddedPostgresTestSupport();
         companyId: f.home, principalType: "user", principalId: other, ...grant })));
       const otherActor = { ...f.actor, userId: other, isInstanceAdmin: true };
       const ownOptions = await service.options(f.actor, f.home);
-      expect(ownOptions.components.some(component => component.resourceId === automation.routine.id)).toBe(true);
+      expect(ownOptions.components.some(component => component.resourceId === authoredRoutine!.id)).toBe(true);
       const hidden = await service.options(otherActor, f.home);
-      expect(hidden.components.some(component => component.resourceId === automation.routine.id)).toBe(false);
+      expect(hidden.components.some(component => component.resourceId === authoredRoutine!.id)).toBe(false);
       const published = await service.publish(f.actor, { ...release, packageKey: `private-routine-${randomUUID()}`,
         components: [...release.components, { key: "manual-routine", type: "routine_template", sourceVersion: "1",
-          contentHash: automation.routineHash, source: release.releaseEvidence.provenance, required: true }] });
+          contentHash: String(authoredRoutineHash!.hash), source: release.releaseEvidence.provenance, required: true }] });
       const beforeAssessments = await db.select().from(readinessAssessments), beforeInstalls = await db.select().from(companyAgentPackageInstallations);
       await expect(service.preview(otherActor, f.home, { ...installInput(), versionId: published.id,
-        components: [...installInput().components, { key: "manual-routine", resourceId: automation.routine.id, versionId: automation.routine.latestRevisionId }] }))
+        components: [...installInput().components, { key: "manual-routine", resourceId: authoredRoutine!.id, versionId: authoredRoutine!.latestRevisionId }] }))
         .rejects.toMatchObject({ status: 403 });
       expect(await db.select().from(readinessAssessments)).toEqual(beforeAssessments);
       expect(await db.select().from(companyAgentPackageInstallations)).toEqual(beforeInstalls);
@@ -1577,48 +1592,45 @@ const support = await getEmbeddedPostgresTestSupport();
           .returning();
         tasks.push(t!.id);
       }
-      const [binding] = await db
-        .insert(memoryBindings)
-        .values({
-          companyId: f.home,
-          key: "package-learning",
-          name: "Local outcome fixture",
-          providerKey: "local",
-        })
-        .returning();
+      const memory = memoryService(db), memoryActor = { principal: { type: "user" as const, userId: f.userId } };
+      const binding = await memory.createCompanyBinding(f.home, {
+        key: `package-learning-${randomUUID()}`,
+        name: "Local outcome fixture",
+        providerKey: "local",
+        config: {},
+        enabled: true,
+      }, memoryActor);
       const roots: string[] = [];
       for (let n = 0; n < 2; n++) {
-        const [root] = await db
-          .insert(memoryRecords)
-          .values({
-            companyId: f.home,
-            bindingId: binding!.id,
-            providerKey: "local",
-            memoryType: "outcome",
-            scopeType: "company",
-            content: `Local reviewed output fixture ${n}`,
-            reviewState: "accepted",
-            verificationState: "human_verified",
-            observedAt: new Date(),
-            createdByActorType: "user",
-            createdByActorId: f.userId,
-          })
-          .returning();
-        roots.push(root!.id);
-        await db.insert(memoryEvidence).values({
-          companyId: f.home,
-          memoryRecordId: root!.id,
-          sourceClass: "task",
-          sourceProvider: "august_works_tasks",
-          sourceType: "issue",
-          sourceRef: `issue://${tasks[n]}`,
-          sourceVersion: "1",
-          observedAt: new Date(),
-          excerptHash: String(n).repeat(64),
-          citationJson: { label: "Local paired fixture" },
-          trustLevel: "high",
-          supportsOrContradicts: "supports",
-        });
+        const [task] = await db.select().from(issues).where(eq(issues.id, tasks[n]!));
+        const observedAt = new Date().toISOString();
+        const candidate = await memory.createCandidate(f.home, {
+          bindingId: binding.id,
+          memoryType: "outcome",
+          scope: { type: "company", id: null },
+          subject: { type: "task", id: task!.id },
+          ownerAgentId: null,
+          title: `Local reviewed output fixture ${n}`,
+          content: `Local reviewed output fixture ${n}`,
+          summary: `Reviewed output fixture ${n}`,
+          sensitivity: "internal",
+          importance: 50,
+          confidenceScore: 0.8,
+          validFrom: null,
+          validUntil: null,
+          observedAt,
+          retentionPolicy: "standard",
+          expiresAt: null,
+          createdByOperationId: null,
+          metadata: {},
+          evidence: [{ sourceClass: "task", sourceProvider: "august_works_tasks", sourceType: "issue",
+            sourceRef: `issue://${task!.id}`, sourceVersion: task!.updatedAt.toISOString(),
+            sourceUpdatedAt: task!.updatedAt.toISOString(), observedAt,
+            excerptHash: createHash("sha256").update(task!.title).digest("hex"),
+            citation: { label: task!.title }, trustLevel: "high", relation: "supports" }],
+        }, memoryActor);
+        const accepted = await memory.reviewCandidate(f.home, candidate.record.id, { decision: "accept" }, memoryActor);
+        roots.push(accepted.record.id);
       }
       const learning = learningService(db),
         change = learningChangeSchema.parse({
@@ -1723,6 +1735,7 @@ const support = await getEmbeddedPostgresTestSupport();
       expect(updated.status).toBe("configuring");
       expect(updated.installedVersionId).toBe(nextId);
       await instanceSettingsService(db).updateExperimental({
+        hire_agent_v9: false,
         learning_engine_v7: false,
         agent_packages_v7: false,
       });
