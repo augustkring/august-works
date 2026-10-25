@@ -256,6 +256,86 @@
         "Duration  36.19s (transform 11.55s, setup 91ms, import 16.12s, tests 19.77s, environment 0ms)"
       ],
       "sourceCommit": "beb0a78f663e2b5bcff4b50758e6101fa7d6c505"
+    },
+    {
+      "name": "up06-reopen-final",
+      "exitCode": 0,
+      "exitSidecar": "up06-reopen-final.exit",
+      "rawSha256": "7d6271a8fe5281538780f09cd6caabea5c256a92291a09849de59ed974bb3ccd",
+      "sanitizedSha256": "4be22e35c895f8633514b832be1a7073052f51e1a27f6ffc2101047f1af0c4fd",
+      "archiveSha256": "f1f8c18eb3a3edf6f94ce601c0c5876f898c642faffdedd9c6cfc084a4d3e972",
+      "redactions": {
+        "ansi": 54,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  10 passed (10)",
+        "Duration  29.19s (transform 14.17s, setup 79ms, import 19.23s, tests 9.75s, environment 0ms)"
+      ],
+      "sourceCommit": "ae0221c8b430a2447ce9b3e32f3f560a14456cce"
+    },
+    {
+      "name": "up06-workspaces-final",
+      "exitCode": 0,
+      "exitSidecar": "up06-workspaces-final.exit",
+      "rawSha256": "645148072b91e1094b74f54b54e299799dbc013ebfcb6ae8f023dd44829882ba",
+      "sanitizedSha256": "1548cc46ceda7042871bd6c0e65e75effdebf045cc2c755d8c131aa5d3ed49ea",
+      "archiveSha256": "e3e0428c43a2ffcd33e739069aca908343858aa4ac135081e15dd4bc3f6bda13",
+      "redactions": {
+        "ansi": 516,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  71 passed (71)",
+        "Duration  40.46s (transform 14.12s, setup 79ms, import 18.99s, tests 21.26s, environment 0ms)"
+      ],
+      "sourceCommit": "ae0221c8b430a2447ce9b3e32f3f560a14456cce"
+    },
+    {
+      "name": "up06-clone-final",
+      "exitCode": 0,
+      "exitSidecar": "up06-clone-final.exit",
+      "rawSha256": "3e2c830ed8b6f2d1a164758d76324acb1ce7b1eb0d4b2507f27316dd71a7c04c",
+      "sanitizedSha256": "521e0bdf07ea17b5ab1b1613c252858d59fe8fd4c1200f5f544c5d3a3f067a3a",
+      "archiveSha256": "11a2f2d04d1e92b5c26f80dc0fecaf6b7effcb319509555bd976b4f75db68826",
+      "redactions": {
+        "ansi": 24,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  18 passed (18)",
+        "Duration  15.54s (transform 10.66s, setup 72ms, import 14.47s, tests 884ms, environment 0ms)"
+      ],
+      "sourceCommit": "ae0221c8b430a2447ce9b3e32f3f560a14456cce"
+    },
+    {
+      "name": "up06-scoped-typecheck-final",
+      "exitCode": 0,
+      "exitSidecar": "up06-scoped-typecheck-final.exit",
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "ae0221c8b430a2447ce9b3e32f3f560a14456cce"
     }
   ],
   "updates": [
@@ -284,6 +364,16 @@
         "up06-reopen-canonical-fixture-final",
         "up06-closed-route-actor-final6",
         "up06-reopen-service-final2"
+      ]
+    },
+    {
+      "sourceCommit": "ae0221c8b430a2447ce9b3e32f3f560a14456cce",
+      "meaning": "Full existing-owner scoped regression reruns after exact recipe work; local file bare remote is software evidence only, not provider/network or final whole workspace qualification.",
+      "logs": [
+        "up06-reopen-final",
+        "up06-workspaces-final",
+        "up06-clone-final",
+        "up06-scoped-typecheck-final"
       ]
     }
   ]

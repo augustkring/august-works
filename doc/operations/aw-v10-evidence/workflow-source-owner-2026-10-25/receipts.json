@@ -757,6 +757,69 @@
         "Duration  75.29s (transform 13.91s, setup 81ms, import 19.77s, tests 0ms, environment 0ms)"
       ],
       "sourceCommit": "e6f69a25aefaffb5170fc79b2c65df2f1e8c0581"
+    },
+    {
+      "name": "native-plan-canonical-project-suite",
+      "exitCode": 0,
+      "exitSidecar": "native-plan-canonical-project-suite.exit",
+      "rawSha256": "b8af203d38a1b96828436d1def7b52766e168c06905cdebc6fcdff1ce96c28a9",
+      "sanitizedSha256": "416750da171af0dd12aaaf2831af3a31114f2060d1ce16e45f8227d4934c714a",
+      "archiveSha256": "f540a9773b3c64ac18b49a647cbfc7ec275c6c1adde24e4631360790efdbc2c8",
+      "redactions": {
+        "ansi": 78,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  5 passed (5)",
+        "Duration  34.39s (transform 15.35s, setup 95ms, import 20.60s, tests 13.53s, environment 0ms)"
+      ],
+      "sourceCommit": "ae0221c8b430a2447ce9b3e32f3f560a14456cce"
+    },
+    {
+      "name": "workspace-busy-native-project-fixtures",
+      "exitCode": 0,
+      "exitSidecar": "workspace-busy-native-project-fixtures.exit",
+      "rawSha256": "23e7b44fa8adf4d03dd70bb49c9084687ae24b3b039f11d468ebf2fe6e0d39c2",
+      "sanitizedSha256": "2987d59c00cbba52101be34b4037cc3dd5e34c7f001c05e3b137086986b74b3e",
+      "archiveSha256": "75ddbcd5d2651b05be55482f5b6a2dd663773b4f546ba0b4273a4b2c5fd6681d",
+      "redactions": {
+        "ansi": 168,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  18 passed (18)",
+        "Duration  53.45s (transform 11.83s, setup 80ms, import 16.48s, tests 36.76s, environment 0ms)"
+      ],
+      "sourceCommit": "ae0221c8b430a2447ce9b3e32f3f560a14456cce"
+    },
+    {
+      "name": "heartbeat-plugin-native-project-fixtures",
+      "exitCode": 0,
+      "exitSidecar": "heartbeat-plugin-native-project-fixtures.exit",
+      "rawSha256": "0110dbdcdd37b66cb24fe210912f25d39c19e0dac04dff93f85de8a0637a7f18",
+      "sanitizedSha256": "312570f74ab832e1e117adc68d607b2ef1cf5e617dd5c6fbaf2d2ff3d19e9ff0",
+      "archiveSha256": "2966af044107f44bf1b4875ba48312254df539016c73f0cc435d051d57df8338",
+      "redactions": {
+        "ansi": 36,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  3 passed (3)",
+        "Duration  29.57s (transform 15.37s, setup 75ms, import 21.13s, tests 8.23s, environment 0ms)"
+      ],
+      "sourceCommit": "ae0221c8b430a2447ce9b3e32f3f560a14456cce"
     }
   ],
   "updates": [
@@ -838,6 +901,15 @@
         "learning-worker-native-sandbox-systempaths",
         "learning-worker-native-sandbox-full",
         "learning-artifact-isolated-worker-qualified-boundary"
+      ]
+    },
+    {
+      "sourceCommit": "ae0221c8b430a2447ce9b3e32f3f560a14456cce",
+      "meaning": "Canonical Human-created Project fixtures, real credentials and memberships; scoped regression runs only.",
+      "logs": [
+        "native-plan-canonical-project-suite",
+        "workspace-busy-native-project-fixtures",
+        "heartbeat-plugin-native-project-fixtures"
       ]
     }
   ],
