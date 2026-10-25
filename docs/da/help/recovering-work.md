@@ -12,7 +12,7 @@ locale: da
 last_verified_at: 2026-10-25
 review_trigger: Ændringer i opgavekørselsstatus, planlagt nyt forsøg, stop, fortsættelse eller genopretning
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/pages/IssueDetail.tsx, ui/src/components/IssueBlockedNotice.tsx, ui/src/lib/wait-for-stopped-runs.ts, server/src/services/issue-recovery-actions.ts, server/src/services/issues.ts]
+linked_source_files: [ui/src/pages/IssueDetail.tsx, ui/src/components/IssueBlockedNotice.tsx, ui/src/lib/wait-for-stopped-runs.ts, server/src/services/issue-recovery-actions.ts, server/src/services/issues.ts, server/src/services/routines.ts, server/src/services/scheduled-work.ts]
 ---
 
 Når en opgave ikke længere gør fremskridt, skal du åbne den oprindelige opgave og kontrollere dens aktuelle status, aktivitet, kørselsoversigt og besked om næste trin. Et fejlslagent svar i browseren betyder ikke altid, at opgaven fejlede. Serveren kan have accepteret den oprindelige handling.
@@ -24,6 +24,8 @@ Læs den seneste kørsel og eventuelle blokeringer eller genoprettelsesbeskeder.
 Hvis et planlagt nyt forsøg vises, skal du kun bruge opgavens **Retry now**, hvis du vil fremrykke det eksisterende forsøg. Handlingen opretter ikke en separat opgave. Kontrollér status igen, når handlingen er færdig.
 
 Hvis en Co-workers opdatering afvises, fordi adgangen til dens begrænsede kilder ikke kan bevares, forbliver opgavens eksisterende indhold uændret. Behold den oprindelige opgave, og bed dens ejer eller [menneskelig support](/da/help/index) gennemgå afvisningen, før du gentager opdateringen.
+
+En planlagt kørsel kan blive sprunget over, hvis de gemte kilder ikke længere er tilgængelige for den ansvarlige person. Bed kildens ejer gennemgå adgangen, før du ændrer tidsplanen eller forsøger igen.
 
 ## Mens et stop afventer
 

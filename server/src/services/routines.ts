@@ -278,8 +278,13 @@ function getZonedMinuteParts(date: Date, timeZone: string) {
   };
 }
 
-function matchesCronMinute(expression: string, timeZone: string, date: Date) {
-  const cron = parseCron(expression);
+function matchesCronMinute(cron: ReturnType<typeof parseCron>, timeZone: string, date: Date) {
+  if (timeZone === "UTC" && Number.isFinite(date.getTime()) && (
+    !cron.minutes.includes(date.getUTCMinutes())
+    || !cron.daysOfMonth.includes(date.getUTCDate())
+    || !cron.months.includes(date.getUTCMonth() + 1)
+    || !cron.daysOfWeek.includes(date.getUTCDay())
+  )) return false;
   const parts = getZonedMinuteParts(date, timeZone);
   return (
     cron.minutes.includes(parts.minute) &&
@@ -292,17 +297,20 @@ function matchesCronMinute(expression: string, timeZone: string, date: Date) {
 
 export function nextCronTickInTimeZone(expression: string, timeZone: string, after: Date) {
   const trimmed = expression.trim();
+  if (!Number.isFinite(after.getTime())) throw unprocessable("Invalid schedule reference time");
   assertTimeZone(timeZone);
-  const error = validateCron(trimmed);
-  if (error) {
-    throw unprocessable(error);
+  let cron: ReturnType<typeof parseCron>;
+  try {
+    cron = parseCron(trimmed);
+  } catch (error) {
+    throw unprocessable(error instanceof Error ? error.message : String(error));
   }
 
   const cursor = floorToMinute(after);
   cursor.setUTCMinutes(cursor.getUTCMinutes() + 1);
   const limit = 366 * 24 * 60 * 5;
   for (let i = 0; i < limit; i += 1) {
-    if (matchesCronMinute(trimmed, timeZone, cursor)) {
+    if (matchesCronMinute(cron, timeZone, cursor)) {
       return new Date(cursor.getTime());
     }
     cursor.setUTCMinutes(cursor.getUTCMinutes() + 1);
@@ -1671,8 +1679,10 @@ export function routineService(
     details?: Record<string, unknown> | null;
     idempotencyKey?: string | null;
     rejectIdempotencyReplay?: boolean;
+    expectedTriggerNextRunAt?: Date | null;
   }) {
     const triggeredAt = new Date();
+    let inserted = false;
     const run = await db.transaction(async (tx) => {
       const txDb = tx as unknown as Db;
       await tx.execute(
@@ -1711,6 +1721,27 @@ export function routineService(
         }
       }
 
+      if (input.expectedTriggerNextRunAt !== undefined) {
+        const [claimed] = await txDb.update(routineTriggers).set({
+          nextRunAt: input.nextRunAt ?? null,
+          updatedAt: new Date(),
+        }).where(and(
+          eq(routineTriggers.companyId, input.routine.companyId),
+          eq(routineTriggers.routineId, input.routine.id),
+          eq(routineTriggers.id, input.trigger.id),
+          eq(routineTriggers.kind, "schedule"),
+          eq(routineTriggers.enabled, true),
+          eq(routineTriggers.archived, false),
+          eq(routineTriggers.setupPending, false),
+          input.expectedTriggerNextRunAt === null
+            ? isNull(routineTriggers.nextRunAt)
+            : eq(routineTriggers.nextRunAt, input.expectedTriggerNextRunAt),
+        )).returning({ id: routineTriggers.id });
+        if (!claimed) throw conflict("Scheduled routine occurrence was already claimed", {
+          code: "SCHEDULED_ROUTINE_OCCURRENCE_ALREADY_CLAIMED",
+        });
+      }
+
       const [createdRun] = await txDb
         .insert(routineRuns)
         .values({
@@ -1729,11 +1760,14 @@ export function routineService(
           idempotencyKey: input.idempotencyKey ?? null,
         })
         .returning();
+      inserted = true;
       await updateRoutineTouchedState({
         routineId: input.routine.id,
         triggerId: input.trigger.id,
         triggeredAt,
-        status: input.reason === "paused"
+        status: input.reason === "source_access_withdrawn"
+          ? "skipped_source_access_withdrawn"
+          : input.reason === "paused"
           ? "skipped_paused"
           : input.reason === "no_external_activity"
             ? "skipped_no_activity"
@@ -1743,7 +1777,7 @@ export function routineService(
       return createdRun;
     });
 
-    try {
+    if (inserted) try {
       await logActivity(db, {
         companyId: input.routine.companyId,
         actorType: "system",
@@ -2118,8 +2152,16 @@ export function routineService(
     descriptionAppendix?: string | null;
     nextRunAtOverride?: Date | null;
     actor?: Actor;
+    onSourceAccessDenied?: () => Promise<void>;
   }) {
-    await assertRoutineSourceAccess(db, input.routine, deps.sourceActor);
+    try {
+      await assertRoutineSourceAccess(db, input.routine, deps.sourceActor);
+    } catch (error) {
+      if (input.onSourceAccessDenied && error instanceof HttpError && (error.status === 401 || error.status === 403)) {
+        await input.onSourceAccessDenied();
+      }
+      throw error;
+    }
     const projectId = input.projectId ?? input.routine.projectId ?? null;
     const projectWorkspaceId = input.projectWorkspaceId ?? null;
     const configuredExecutionTarget = resolveRoutineExecutionTarget(input.routine);
@@ -4106,6 +4148,37 @@ export function routineService(
           }
         }
 
+        const occurrenceIdempotencyKey = row.trigger.nextRunAt
+          ? `scheduled-source-denial:v1:${row.trigger.id}:${row.trigger.nextRunAt.toISOString()}`
+          : null;
+        const isCurrentSourceDenial = (error: unknown): error is HttpError =>
+          error instanceof HttpError && (error.status === 401 || error.status === 403);
+        const isAlreadyClaimedOccurrence = (error: unknown) => error instanceof HttpError
+          && error.details !== null && typeof error.details === "object"
+          && "code" in error.details
+          && error.details.code === "SCHEDULED_ROUTINE_OCCURRENCE_ALREADY_CLAIMED";
+        try {
+          await assertRoutineSourceAccess(db, row.routine, deps.sourceActor);
+        } catch (error) {
+          if (!isCurrentSourceDenial(error)) throw error;
+          try {
+            await recordSuppressedAutomaticRun({
+              routine: row.routine,
+              trigger: row.trigger,
+              source: "schedule",
+              reason: "source_access_withdrawn",
+              nextRunAt: claimedNextRunAt,
+              idempotencyKey: occurrenceIdempotencyKey,
+              expectedTriggerNextRunAt: row.trigger.nextRunAt ?? undefined,
+              details: { reasonCode: "routine_source_access_withdrawn" },
+            });
+          } catch (recordingError) {
+            if (isAlreadyClaimedOccurrence(recordingError)) continue;
+            throw recordingError;
+          }
+          throw error;
+        }
+
         // Cancellation may prevent claiming another occurrence, but once the
         // claim commits below its durable dispatch/suppression intent must be
         // recorded even if shutdown starts while that write is in flight.
@@ -4167,6 +4240,24 @@ export function routineService(
             trigger: row.trigger,
             source: "schedule",
             nextRunAtOverride: claimedNextRunAt,
+            onSourceAccessDenied: async () => {
+              try {
+                await recordSuppressedAutomaticRun({
+                  routine: row.routine,
+                  trigger: row.trigger,
+                  source: "schedule",
+                  reason: "source_access_withdrawn",
+                  nextRunAt: claimedNextRunAt,
+                  idempotencyKey: occurrenceIdempotencyKey,
+                  expectedTriggerNextRunAt: claimedNextRunAt,
+                  details: { reasonCode: "routine_source_access_withdrawn" },
+                });
+              } catch (recordingError) {
+                // A concurrent trigger claimant or edit owns the later state.
+                // Preserve the source denial returned by the original gate.
+                if (!isAlreadyClaimedOccurrence(recordingError)) throw recordingError;
+              }
+            },
           });
           triggered += 1;
         }

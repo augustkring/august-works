@@ -2,7 +2,7 @@ import { randomUUID } from "node:crypto";
 import express from "express";
 import request from "supertest";
 import { and, eq } from "drizzle-orm";
-import { afterAll, beforeAll, beforeEach, describe, expect, it } from "vitest";
+import { afterAll, beforeAll, beforeEach, describe, expect, it, vi } from "vitest";
 import {
   authUsers,
   authSessions,
@@ -17,6 +17,8 @@ import {
   memoryDeletionMarkers,
   principalPermissionGrants,
   routineRuns,
+  routines,
+  routineTriggers,
 } from "@paperclipai/db";
 import { authorizationService, canActorReadIssuePrivacy, issueReadSqlCondition } from "../services/authorization.js";
 import { canActorReadTypedTaskSourcePrivacy } from "../services/authorization.js";
@@ -26,6 +28,7 @@ import { projectRoutes } from "../routes/projects.js";
 import { errorHandler } from "../middleware/error-handler.js";
 import { lockMemoryPrivacy, purgeDerivedWorkflowMemory } from "../services/memory/memory-privacy.js";
 import { routineAuthoringToolsService } from "../services/routine-authoring-tools.js";
+import { routineService } from "../services/routines.js";
 import { grantsForHumanRole } from "../services/company-member-roles.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
@@ -233,6 +236,73 @@ describe("typed routine Task private source graph", () => {
     expect(response.body.map((row: { id: string }) => row.id)).toContain(assignedTask.id);
     expect(response.body.map((row: { id: string }) => row.id)).not.toContain(privateTask.id);
     expect(JSON.stringify(response.body)).not.toContain("PRIVATE execution detail");
+  }, 90_000);
+
+  it("withholds a due private Routine after its current Human source grant is withdrawn", async () => {
+    const saved = await routineAuthoringToolsService(db).create(authoringContext(),
+      routineInput("private-routine-scheduled-source-withdrawal"));
+    const source = { routineId: saved.routineId, revisionId: saved.currentRevisionId! };
+    const wakeup = vi.fn(async () => ({ status: "queued" }));
+    const owner = routineService(db, { sourceActor: ownerActor(), heartbeat: { wakeup } });
+
+    // A private conversation draft remains inactive until the current Human
+    // explicitly configures its target and enables the schedule.
+    const configured = await owner.update(source.routineId, {
+      baseRevisionId: source.revisionId,
+      status: "active",
+      executionTarget: { kind: "agent_task", agentId: f.presence.id },
+    }, { userId: f.userId });
+    expect(configured).toMatchObject({ status: "active", executionTargetKind: "agent_task", executionTargetRef: f.presence.id });
+    const { trigger } = await owner.createTrigger(source.routineId, {
+      kind: "schedule", enabled: true, cronExpression: "* * * * *", timezone: "UTC",
+    }, { userId: f.userId });
+    const [scheduledRoutine] = await db.select({ latestRevisionId: routines.latestRevisionId })
+      .from(routines).where(eq(routines.id, source.routineId));
+
+    const dueAt = new Date(Date.now() - 1_000);
+    await db.update(routineTriggers).set({ nextRunAt: dueAt }).where(eq(routineTriggers.id, trigger.id));
+    const runsBefore = await db.select({ id: routineRuns.id }).from(routineRuns).where(eq(routineRuns.routineId, source.routineId));
+    const childTasksBefore = await db.select({ id: issues.id }).from(issues).where(and(
+      eq(issues.originKind, "routine_execution"), eq(issues.originId, source.routineId),
+    ));
+    const queuedRunsBefore = await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.status, "queued"),
+    ));
+
+    // This is the actual authoring Human membership used by the immutable
+    // conversation source. Its revocation must invalidate the scheduled read.
+    await db.update(companyMemberships).set({ status: "inactive" }).where(and(
+      eq(companyMemberships.companyId, f.home), eq(companyMemberships.principalType, "user"),
+      eq(companyMemberships.principalId, f.userId),
+    ));
+    const independentOwner = routineService(db, { sourceActor: ownerActor(), heartbeat: { wakeup } });
+    const deniedTicks = await Promise.allSettled([
+      owner.tickScheduledTriggers(new Date()),
+      independentOwner.tickScheduledTriggers(new Date()),
+    ]);
+    expect(deniedTicks).toHaveLength(2);
+    expect(deniedTicks.some(result => result.status === "rejected"
+      && (result.reason as { status?: number })?.status === 403)).toBe(true);
+
+    const [storedTrigger] = await db.select().from(routineTriggers).where(eq(routineTriggers.id, trigger.id));
+    expect(storedTrigger?.nextRunAt).toBeInstanceOf(Date);
+    expect(storedTrigger!.nextRunAt!.getTime()).toBeGreaterThan(dueAt.getTime());
+    const runsAfter = await db.select().from(routineRuns).where(eq(routineRuns.routineId, source.routineId));
+    expect(runsAfter).toHaveLength(runsBefore.length + 1);
+    expect(runsAfter.filter(run => run.status !== "skipped")).toHaveLength(runsBefore.length);
+    expect(runsAfter.at(-1)).toMatchObject({
+      companyId: f.home, routineId: source.routineId, routineRevisionId: scheduledRoutine!.latestRevisionId,
+      source: "schedule", status: "skipped", failureReason: "source_access_withdrawn", triggerId: trigger.id,
+      idempotencyKey: `scheduled-source-denial:v1:${trigger.id}:${dueAt.toISOString()}`,
+      triggerPayload: { reasonCode: "routine_source_access_withdrawn" }, linkedIssueId: null,
+    });
+    expect(await db.select({ id: issues.id }).from(issues).where(and(
+      eq(issues.originKind, "routine_execution"), eq(issues.originId, source.routineId),
+    ))).toEqual(childTasksBefore);
+    expect(await db.select({ id: heartbeatRuns.id }).from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, f.home), eq(heartbeatRuns.status, "queued"),
+    ))).toEqual(queuedRunsBefore);
+    expect(wakeup).not.toHaveBeenCalled();
   }, 90_000);
 
   it("filters Routine-backed Tasks before issue list limits, blocked counts, and project metrics", async () => {

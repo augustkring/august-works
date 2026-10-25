@@ -3,6 +3,10 @@ import express, { type RequestHandler } from "express";
 import request from "supertest";
 import { eq } from "drizzle-orm";
 import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
+import { createDeliveryWorkCoordinator } from "../services/delivery-work-coordinator.js";
+import { DELIVERY_QUEUES } from "../services/delivery-work-notifications.js";
+import { registerScheduledWork } from "../services/scheduled-work.js";
+import { readTaskDrain, startTaskDrain, stopTaskDrain } from "../services/task-admission.js";
 import {
   activityLog,
   agents,
@@ -30,6 +34,7 @@ import {
   routines,
   routineTriggers,
   secretAccessEvents,
+  subscribeDatabaseWork,
   workflowRevisions,
   workflowRuns,
   workflowStepRuns,
@@ -192,44 +197,42 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
       .send({ name: "Routines", description: "Routine test project" }).expect(201);
     const projectId = projectResponse.body.id as string;
 
+    const wakeup = async (wakeupAgentId: string, wakeupOpts: {
+      source?: string; triggerDetail?: string; reason?: string | null; payload?: Record<string, unknown> | null;
+      requestedByActorType?: "user" | "agent" | "system"; requestedByActorId?: string | null;
+      contextSnapshot?: Record<string, unknown>;
+    }) => {
+      wakeups.push({ agentId: wakeupAgentId, opts: wakeupOpts });
+      if (opts?.wakeup) return opts.wakeup(wakeupAgentId, wakeupOpts);
+      const issueId =
+        (typeof wakeupOpts.payload?.issueId === "string" && wakeupOpts.payload.issueId) ||
+        (typeof wakeupOpts.contextSnapshot?.issueId === "string" && wakeupOpts.contextSnapshot.issueId) ||
+        null;
+      if (!issueId) return null;
+      const issue = await db
+        .select({ responsibleUserId: issues.responsibleUserId })
+        .from(issues)
+        .where(eq(issues.id, issueId))
+        .then((rows) => rows[0] ?? null);
+      const queuedRunId = randomUUID();
+      await db.insert(heartbeatRuns).values({
+        id: queuedRunId,
+        companyId,
+        agentId: wakeupAgentId,
+        invocationSource: wakeupOpts.source ?? "assignment",
+        triggerDetail: wakeupOpts.triggerDetail ?? null,
+        status: "queued",
+        responsibleUserId: issue?.responsibleUserId ?? defaultResponsibleUserId,
+        contextSnapshot: { ...(wakeupOpts.contextSnapshot ?? {}), issueId },
+      });
+      await db.update(issues).set({ executionRunId: queuedRunId, executionLockedAt: new Date() })
+        .where(eq(issues.id, issueId));
+      return { id: queuedRunId };
+    };
     const svc = routineService(db, {
       runtimeEnv: opts?.runtimeEnv,
       sourceActor: actor,
-      heartbeat: {
-        wakeup: async (wakeupAgentId, wakeupOpts) => {
-          wakeups.push({ agentId: wakeupAgentId, opts: wakeupOpts });
-          if (opts?.wakeup) return opts.wakeup(wakeupAgentId, wakeupOpts);
-          const issueId =
-            (typeof wakeupOpts.payload?.issueId === "string" && wakeupOpts.payload.issueId) ||
-            (typeof wakeupOpts.contextSnapshot?.issueId === "string" && wakeupOpts.contextSnapshot.issueId) ||
-            null;
-          if (!issueId) return null;
-          const issue = await db
-            .select({ responsibleUserId: issues.responsibleUserId })
-            .from(issues)
-            .where(eq(issues.id, issueId))
-            .then((rows) => rows[0] ?? null);
-          const queuedRunId = randomUUID();
-          await db.insert(heartbeatRuns).values({
-            id: queuedRunId,
-            companyId,
-            agentId: wakeupAgentId,
-            invocationSource: wakeupOpts.source ?? "assignment",
-            triggerDetail: wakeupOpts.triggerDetail ?? null,
-            status: "queued",
-            responsibleUserId: issue?.responsibleUserId ?? defaultResponsibleUserId,
-            contextSnapshot: { ...(wakeupOpts.contextSnapshot ?? {}), issueId },
-          });
-          await db
-            .update(issues)
-            .set({
-              executionRunId: queuedRunId,
-              executionLockedAt: new Date(),
-            })
-            .where(eq(issues.id, issueId));
-          return { id: queuedRunId };
-        },
-      },
+      heartbeat: { wakeup },
     });
     const issueSvc = issueService(db);
     const routine = await svc.create(
@@ -249,7 +252,7 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
       {},
     );
 
-    return { actor, companyId, userId, sessionId, agentId, issueSvc, projectId, routine, svc, wakeups };
+    return { actor, companyId, userId, sessionId, agentId, issueSvc, projectId, routine, svc, wakeup, wakeups };
   }
 
   async function armWorktreeExecution(cutoff: Date, instanceId = "worktree-routines-test") {
@@ -813,6 +816,142 @@ describeEmbeddedPostgres("routine service live-execution coalescing", () => {
     expect(serialized).not.toContain("adapterConfig");
     expect(serialized).not.toContain("runtimeConfig");
   });
+
+  it("wakes the durable schedule reader after a committed schedule creation and edit", async () => {
+    const { routine, svc, actor } = await seedFixture();
+    const coordinator = createDeliveryWorkCoordinator({
+      owner: db,
+      canRun: () => true,
+      onError: error => { throw error; },
+    });
+    const workers = registerScheduledWork(coordinator, db, {
+      retryMs: 60_000,
+      tickTimers: async () => {},
+      tickRoutines: async () => {},
+    });
+    const events: string[] = [];
+    const unsubscribe = subscribeDatabaseWork(db, DELIVERY_QUEUES.routineSchedules, event => events.push(event));
+    try {
+      await Promise.all([workers.routines.ready, workers.timers.ready]);
+      expect(coordinator.nextWakeAt()).toBeNull();
+
+      let trigger!: Awaited<ReturnType<typeof svc.createTrigger>>["trigger"];
+      await db.transaction(async outer => {
+        const txService = routineService(outer as any, { sourceActor: actor });
+        trigger = (await txService.createTrigger(routine.id, {
+          kind: "schedule", cronExpression: "0 10 * * *", timezone: "UTC",
+        }, {})).trigger;
+        expect(events).toEqual(["intent"]);
+        expect(coordinator.nextWakeAt()).not.toBe(trigger.nextRunAt!.getTime());
+        expect(await db.select({ id: routineTriggers.id }).from(routineTriggers)
+          .where(eq(routineTriggers.id, trigger.id))).toHaveLength(0);
+      });
+      expect(events).toEqual(["intent", "settled"]);
+      expect(trigger.nextRunAt).toBeInstanceOf(Date);
+      await vi.waitFor(() => expect(coordinator.nextWakeAt()).toBe(trigger.nextRunAt!.getTime()));
+
+      await expect(db.transaction(async outer => {
+        const txService = routineService(outer as any, { sourceActor: actor });
+        await txService.updateTrigger(trigger.id, { enabled: false }, {});
+        expect(events).toEqual(["intent", "settled", "intent"]);
+        const [stillEnabled] = await db.select({ enabled: routineTriggers.enabled }).from(routineTriggers)
+          .where(eq(routineTriggers.id, trigger.id));
+        expect(stillEnabled?.enabled).toBe(true);
+        throw new Error("rollback schedule edit");
+      })).rejects.toThrow("rollback schedule edit");
+      expect(events).toEqual(["intent", "settled", "intent", "settled"]);
+      await vi.waitFor(() => expect(coordinator.nextWakeAt()).toBe(trigger.nextRunAt!.getTime()));
+
+      await db.transaction(async outer => {
+        const txService = routineService(outer as any, { sourceActor: actor });
+        await txService.updateTrigger(trigger.id, { enabled: false }, {});
+        expect(events.at(-1)).toBe("intent");
+      });
+      expect(events.at(-1)).toBe("settled");
+      await vi.waitFor(() => expect(coordinator.nextWakeAt()).toBeNull());
+    } finally {
+      unsubscribe();
+      await coordinator.stop();
+    }
+  });
+
+  it("claims one due scheduled occurrence across independent scheduler instances", async () => {
+    const { actor, agentId, companyId, routine, svc, wakeup, wakeups } = await seedFixture();
+    const independentSvc = routineService(db, { sourceActor: actor, heartbeat: { wakeup } });
+    const { trigger } = await svc.createTrigger(routine.id, {
+      kind: "schedule", cronExpression: "* * * * *", timezone: "UTC",
+    }, {});
+    const dueAt = new Date(Date.now() - 1_000);
+    await db.update(routineTriggers).set({ nextRunAt: dueAt }).where(eq(routineTriggers.id, trigger.id));
+
+    const ticks = await Promise.all([
+      svc.tickScheduledTriggers(new Date()),
+      independentSvc.tickScheduledTriggers(new Date()),
+    ]);
+
+    expect(ticks.map(result => result.triggered).sort()).toEqual([0, 1]);
+    const runs = await db.select().from(routineRuns).where(eq(routineRuns.routineId, routine.id));
+    expect(runs).toHaveLength(1);
+    expect(runs[0]).toMatchObject({
+      source: "schedule", status: "issue_created", linkedIssueId: expect.any(String),
+    });
+    const tasks = await db.select().from(issues).where(eq(issues.originRunId, runs[0]!.id));
+    expect(tasks).toHaveLength(1);
+    expect(tasks[0]).toMatchObject({
+      companyId, assigneeAgentId: agentId, originKind: "routine_execution", originId: routine.id,
+    });
+    expect(wakeups).toHaveLength(1);
+    const queuedRuns = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId));
+    expect(queuedRuns).toHaveLength(1);
+  });
+
+  it("retains a due schedule through the original task drain and dispatches after drain cancellation", async () => {
+    stopTaskDrain();
+    const { routine, svc, wakeups } = await seedFixture();
+    const { trigger } = await svc.createTrigger(routine.id, {
+      kind: "schedule", cronExpression: "* * * * *", timezone: "UTC",
+    }, {});
+    const deadline = new Date(Date.now() + 1_500);
+    await db.update(routineTriggers).set({ nextRunAt: deadline }).where(eq(routineTriggers.id, trigger.id));
+
+    const coordinator = createDeliveryWorkCoordinator({
+      owner: db,
+      canRun: () => readTaskDrain(new Date()) === null,
+      canReconcile: () => true,
+      onError: error => { throw error; },
+    });
+    const workers = registerScheduledWork(coordinator, db, {
+      retryMs: 60_000,
+      tickTimers: async () => {},
+      tickRoutines: signal => svc.tickScheduledTriggers(new Date(), signal),
+    });
+    try {
+      await Promise.all([workers.routines.ready, workers.timers.ready]);
+      expect(coordinator.nextWakeAt()).toBe(deadline.getTime());
+      startTaskDrain({ ttlMs: null });
+      await new Promise(resolve => setTimeout(resolve, 1_900));
+
+      expect(readTaskDrain(new Date())).not.toBeNull();
+      expect(await db.select().from(routineRuns).where(eq(routineRuns.routineId, routine.id))).toEqual([]);
+      expect(wakeups).toEqual([]);
+      const [stillDue] = await db.select({ nextRunAt: routineTriggers.nextRunAt }).from(routineTriggers)
+        .where(eq(routineTriggers.id, trigger.id));
+      expect(stillDue?.nextRunAt?.getTime()).toBe(deadline.getTime());
+
+      stopTaskDrain();
+      workers.routines.wake();
+      await vi.waitFor(async () => {
+        expect(await db.select().from(routineRuns).where(eq(routineRuns.routineId, routine.id))).toHaveLength(1);
+      });
+      const [claimed] = await db.select({ nextRunAt: routineTriggers.nextRunAt }).from(routineTriggers)
+        .where(eq(routineTriggers.id, trigger.id));
+      expect(claimed?.nextRunAt?.getTime()).toBeGreaterThan(deadline.getTime());
+      expect(wakeups).toHaveLength(1);
+    } finally {
+      stopTaskDrain();
+      await coordinator.stop();
+    }
+  }, 90_000);
 
   it("creates revision 1 on routine create and appends revisions for real updates only", async () => {
     const { routine, svc } = await seedFixture();

@@ -11632,10 +11632,11 @@ export function issueService(db: Db) {
           "monitorNextCheckAt", "monitorWakeRequestedAt", "monitorLastTriggeredAt",
           "monitorAttemptCount", "monitorNotes", "monitorScheduledBy",
         ] as const;
-        const monitorScheduleChanged = monitorSchedulingFields.some(field => Object.hasOwn(patch, field))
+        const monitorScheduleChanged = (receiptExisting.monitorNextCheckAt != null || patch.monitorNextCheckAt != null) && (
+          monitorSchedulingFields.some(field => Object.hasOwn(patch, field))
           || (patch.status !== undefined && patch.status !== receiptExisting.status)
           || (patch.assigneeAgentId !== undefined && patch.assigneeAgentId !== receiptExisting.assigneeAgentId)
-          || (patch.assigneeUserId !== undefined && patch.assigneeUserId !== receiptExisting.assigneeUserId);
+          || (patch.assigneeUserId !== undefined && patch.assigneeUserId !== receiptExisting.assigneeUserId));
         if (monitorScheduleChanged) await notifyDeliveryWork(tx, DELIVERY_QUEUES.issueMonitors);
         const updated = await tx
           .update(issues)

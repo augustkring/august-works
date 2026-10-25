@@ -9,10 +9,10 @@ owner: augustkring/august-works
 maturity: preview
 applicable_product_versions: [V10]
 locale: en
-last_verified_at: 2026-10-24
+last_verified_at: 2026-10-25
 review_trigger: Task run status, scheduled retry, stop, continuation, or recovery actions change
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/pages/IssueDetail.tsx, ui/src/components/IssueBlockedNotice.tsx, ui/src/lib/wait-for-stopped-runs.ts, server/src/services/issue-recovery-actions.ts, server/src/services/issues.ts]
+linked_source_files: [ui/src/pages/IssueDetail.tsx, ui/src/components/IssueBlockedNotice.tsx, ui/src/lib/wait-for-stopped-runs.ts, server/src/services/issue-recovery-actions.ts, server/src/services/issues.ts, server/src/services/routines.ts, server/src/services/scheduled-work.ts]
 ---
 
 When a task stops making progress, open the original task and check its current status, activity, run history, and next-step notice. A failed response from your browser does not always mean the task failed; the server may have accepted the original action.
@@ -24,6 +24,8 @@ Read the latest run and any blocker or recovery message. Resolve the named conne
 If a scheduled retry is shown, use the task’s **Retry now** action only if you want to bring that existing retry forward. It does not create a separate task. Check the status again after the action completes.
 
 If a Co-worker’s update is refused because access to its restricted sources cannot be preserved, the task’s existing content stays in place. Keep the original task and ask its owner or [human support](/help/index) to review the refusal before repeating the update.
+
+A skipped scheduled run can mean its saved sources are no longer available to the responsible person. Ask the source owner to review access before changing or retrying the schedule.
 
 ## When a stop is pending
 

@@ -462,7 +462,7 @@
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "recovering-work",
       "sourceSha256": "8be44f0a61787fe84a5d049ccdcbc2d40ca7fd0626f8f4ef2d062fcd32914af5",
-      "articleSha256": "a6601c43c0b37a662474bb499bc08c7f2bcc909b93a31ea62aafa334363b9640",
+      "articleSha256": "4debb5d861f9d172aafb5d3e0614ba8c5670124cdc9cf86fd9cb890bf751a27f",
       "decision": "updated",
       "rationale": "Added current task/run status checks and safe use of retry and stop actions without claiming remote success."
     },
@@ -470,7 +470,7 @@
       "source": "ui/src/components/IssueBlockedNotice.tsx",
       "articleId": "recovering-work",
       "sourceSha256": "90983e55a2fa9ea9a8abe2b33a5aab817e05a463a65bf5d5795335149d769fd2",
-      "articleSha256": "a6601c43c0b37a662474bb499bc08c7f2bcc909b93a31ea62aafa334363b9640",
+      "articleSha256": "4debb5d861f9d172aafb5d3e0614ba8c5670124cdc9cf86fd9cb890bf751a27f",
       "decision": "updated",
       "rationale": "Added current task/run status checks and safe use of retry and stop actions without claiming remote success."
     },
@@ -478,7 +478,7 @@
       "source": "ui/src/lib/wait-for-stopped-runs.ts",
       "articleId": "recovering-work",
       "sourceSha256": "ce5726db6b535d3dd592bfde111b94de36291c1fe7dd5a85198dd22799bbe8c2",
-      "articleSha256": "a6601c43c0b37a662474bb499bc08c7f2bcc909b93a31ea62aafa334363b9640",
+      "articleSha256": "4debb5d861f9d172aafb5d3e0614ba8c5670124cdc9cf86fd9cb890bf751a27f",
       "decision": "updated",
       "rationale": "Added current task/run status checks and safe use of retry and stop actions without claiming remote success."
     },
@@ -486,17 +486,17 @@
       "source": "server/src/services/issue-recovery-actions.ts",
       "articleId": "recovering-work",
       "sourceSha256": "5dba9a4821f71474d1bd510f87c55093ccd62223d1f28eba8adee287325869e0",
-      "articleSha256": "a6601c43c0b37a662474bb499bc08c7f2bcc909b93a31ea62aafa334363b9640",
+      "articleSha256": "4debb5d861f9d172aafb5d3e0614ba8c5670124cdc9cf86fd9cb890bf751a27f",
       "decision": "updated",
       "rationale": "Added current task/run status checks and safe use of retry and stop actions without claiming remote success."
     },
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "a527172a1b0484d66f6136e6a81b6c6154881df830f910efc1267bd200606e6d",
-      "articleSha256": "a6601c43c0b37a662474bb499bc08c7f2bcc909b93a31ea62aafa334363b9640",
+      "sourceSha256": "b14bc5bc085eb82323d65a027da55712ea9dc2083f22248d5af98cfcaa599ccc",
+      "articleSha256": "4debb5d861f9d172aafb5d3e0614ba8c5670124cdc9cf86fd9cb890bf751a27f",
       "decision": "updated",
-      "rationale": "Reviewed original Task monitor producer notification before the locked update. Nested/outer transaction settlement supplies a wake hint; native status, Stop, source-preserving updates and recovery actions remain authoritative. The recovery guide remains accurate and does not promise timely provider execution."
+      "rationale": "Reviewed current native monitor/routine producer settlement, original source admission, durable source-denied occurrence and deadline restoration. Added paired recovery guidance to ask the source owner before changing or retrying a skipped schedule; no provider timing or publication authority is promised."
     },
     {
       "source": "ui/src/App.tsx",
@@ -1198,7 +1198,7 @@
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "recovering-work-da",
       "sourceSha256": "8be44f0a61787fe84a5d049ccdcbc2d40ca7fd0626f8f4ef2d062fcd32914af5",
-      "articleSha256": "58d909a279f9ccb7f90e42dab3b19567a078671a70a365ae5e523a431be5d011",
+      "articleSha256": "0ec42e60a1cbca5c0b1eb3b0e5a8692fe587cedcfea1d53640471d8c8404a234",
       "decision": "updated",
       "rationale": "Danish translation of recovering-work: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
@@ -1206,7 +1206,7 @@
       "source": "ui/src/components/IssueBlockedNotice.tsx",
       "articleId": "recovering-work-da",
       "sourceSha256": "90983e55a2fa9ea9a8abe2b33a5aab817e05a463a65bf5d5795335149d769fd2",
-      "articleSha256": "58d909a279f9ccb7f90e42dab3b19567a078671a70a365ae5e523a431be5d011",
+      "articleSha256": "0ec42e60a1cbca5c0b1eb3b0e5a8692fe587cedcfea1d53640471d8c8404a234",
       "decision": "updated",
       "rationale": "Danish translation of recovering-work: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
@@ -1214,7 +1214,7 @@
       "source": "ui/src/lib/wait-for-stopped-runs.ts",
       "articleId": "recovering-work-da",
       "sourceSha256": "ce5726db6b535d3dd592bfde111b94de36291c1fe7dd5a85198dd22799bbe8c2",
-      "articleSha256": "58d909a279f9ccb7f90e42dab3b19567a078671a70a365ae5e523a431be5d011",
+      "articleSha256": "0ec42e60a1cbca5c0b1eb3b0e5a8692fe587cedcfea1d53640471d8c8404a234",
       "decision": "updated",
       "rationale": "Danish translation of recovering-work: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
@@ -1222,17 +1222,17 @@
       "source": "server/src/services/issue-recovery-actions.ts",
       "articleId": "recovering-work-da",
       "sourceSha256": "5dba9a4821f71474d1bd510f87c55093ccd62223d1f28eba8adee287325869e0",
-      "articleSha256": "58d909a279f9ccb7f90e42dab3b19567a078671a70a365ae5e523a431be5d011",
+      "articleSha256": "0ec42e60a1cbca5c0b1eb3b0e5a8692fe587cedcfea1d53640471d8c8404a234",
       "decision": "updated",
       "rationale": "Danish translation of recovering-work: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "a527172a1b0484d66f6136e6a81b6c6154881df830f910efc1267bd200606e6d",
-      "articleSha256": "58d909a279f9ccb7f90e42dab3b19567a078671a70a365ae5e523a431be5d011",
+      "sourceSha256": "b14bc5bc085eb82323d65a027da55712ea9dc2083f22248d5af98cfcaa599ccc",
+      "articleSha256": "0ec42e60a1cbca5c0b1eb3b0e5a8692fe587cedcfea1d53640471d8c8404a234",
       "decision": "updated",
-      "rationale": "Reviewed original Task monitor producer notification before the locked update. Nested/outer transaction settlement supplies a wake hint; native status, Stop, source-preserving updates and recovery actions remain authoritative. The recovery guide remains accurate and does not promise timely provider execution."
+      "rationale": "Reviewed current native monitor/routine producer settlement, original source admission, durable source-denied occurrence and deadline restoration. Added paired recovery guidance to ask the source owner before changing or retrying a skipped schedule; no provider timing or publication authority is promised."
     },
     {
       "source": "ui/src/App.tsx",
@@ -1473,6 +1473,38 @@
       "articleSha256": "e27a68c1ed13e31bbdca2d3da6d672a6863c47efca9cd6d5d3eb61572e4de23b",
       "decision": "updated",
       "rationale": "Danish translation of developer-and-advanced: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+    },
+    {
+      "source": "server/src/services/routines.ts",
+      "articleId": "recovering-work",
+      "sourceSha256": "29f78a1b0ecf31239eeb4c4cae215d0b9dccc78ec9cd35c58b94d8f7871007f1",
+      "articleSha256": "4debb5d861f9d172aafb5d3e0614ba8c5670124cdc9cf86fd9cb890bf751a27f",
+      "decision": "updated",
+      "rationale": "Reviewed current native monitor/routine producer settlement, original source admission, durable source-denied occurrence and deadline restoration. Added paired recovery guidance to ask the source owner before changing or retrying a skipped schedule; no provider timing or publication authority is promised."
+    },
+    {
+      "source": "server/src/services/scheduled-work.ts",
+      "articleId": "recovering-work",
+      "sourceSha256": "36f16b664876fddcc54ad9f8df27049eac628d7f768e6fdcd3727c741ff1d490",
+      "articleSha256": "4debb5d861f9d172aafb5d3e0614ba8c5670124cdc9cf86fd9cb890bf751a27f",
+      "decision": "updated",
+      "rationale": "Reviewed current native monitor/routine producer settlement, original source admission, durable source-denied occurrence and deadline restoration. Added paired recovery guidance to ask the source owner before changing or retrying a skipped schedule; no provider timing or publication authority is promised."
+    },
+    {
+      "source": "server/src/services/routines.ts",
+      "articleId": "recovering-work-da",
+      "sourceSha256": "29f78a1b0ecf31239eeb4c4cae215d0b9dccc78ec9cd35c58b94d8f7871007f1",
+      "articleSha256": "0ec42e60a1cbca5c0b1eb3b0e5a8692fe587cedcfea1d53640471d8c8404a234",
+      "decision": "updated",
+      "rationale": "Reviewed current native monitor/routine producer settlement, original source admission, durable source-denied occurrence and deadline restoration. Added paired recovery guidance to ask the source owner before changing or retrying a skipped schedule; no provider timing or publication authority is promised."
+    },
+    {
+      "source": "server/src/services/scheduled-work.ts",
+      "articleId": "recovering-work-da",
+      "sourceSha256": "36f16b664876fddcc54ad9f8df27049eac628d7f768e6fdcd3727c741ff1d490",
+      "articleSha256": "0ec42e60a1cbca5c0b1eb3b0e5a8692fe587cedcfea1d53640471d8c8404a234",
+      "decision": "updated",
+      "rationale": "Reviewed current native monitor/routine producer settlement, original source admission, durable source-denied occurrence and deadline restoration. Added paired recovery guidance to ask the source owner before changing or retrying a skipped schedule; no provider timing or publication authority is promised."
     }
   ]
 }
