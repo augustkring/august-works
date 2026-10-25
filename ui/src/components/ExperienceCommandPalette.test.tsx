@@ -5,7 +5,10 @@ import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, expect, it, vi } from "vitest";
 import { ExperienceCommandPalette } from "./ExperienceCommandPalette";
 import { api } from "../api/client";
+import type { CompanySearchResponse } from "@paperclipai/shared";
 import { i18n } from "../i18n";
+import { queryKeys } from "../lib/queryKeys";
+import { v9SessionFixture } from "../hooks/v9-session.test-support";
 import {
   Dialog,
   DialogContent,
@@ -116,10 +119,24 @@ const model = () => ({
   ],
   semanticDrafting: "unqualified",
 });
-let root: Root, container: HTMLDivElement, client: QueryClient;
+function helpResponse(title: string, snippet: string): CompanySearchResponse {
+  return {
+    query: "recover", normalizedQuery: "recover", scope: "help", sort: "relevance", limit: 6, offset: 0,
+    results: [{ id: "recovering-work", type: "help", score: 2, title, href: "https://docs.blentera.com/help/recovering-work",
+      matchedFields: ["title"], sourceLabel: "Help · Preview", snippet, snippets: [],
+      helpArticle: { articleId: "recovering-work", audience: "company-members", maturity: "preview", applicableProductVersions: ["V10"], locale: "en", lastVerifiedAt: "2026-10-24", source: "mintlify" },
+      updatedAt: null, previewImageUrl: null }],
+    countsByType: { issue: 0, artifact: 0, agent: 0, project: 0, help: 1, comment: 0, document: 0 },
+    filterOptionCounts: { status: {}, priority: {}, assigneeAgentId: {}, assigneeUserId: {}, projectId: {}, labelId: {}, updatedWithin: {} },
+    zeroResults: null, hasMore: false,
+  };
+}
+let root: Root, container: HTMLDivElement, client: QueryClient, testInvoker: HTMLButtonElement | null;
 afterEach(async () => {
   if (root) await act(async () => root.unmount());
   container?.remove();
+  testInvoker?.remove();
+  testInvoker = null;
   client?.clear();
   vi.restoreAllMocks();
   state.principal = "first-member";
@@ -148,16 +165,27 @@ async function render() {
     ),
   );
 }
-async function mount() {
+async function mount(authenticated = false, withInvoker = false) {
   await i18n.changeLanguage("en");
   client = new QueryClient({ defaultOptions: { queries: { retry: false } } });
+  if (authenticated) {
+    client.setQueryDefaults(queryKeys.auth.session, { gcTime: Infinity });
+    client.setQueryData(queryKeys.auth.session, v9SessionFixture(state.principal));
+  }
   container = document.createElement("div");
   document.body.append(container);
   root = createRoot(container);
   await render();
+  if (withInvoker) {
+    testInvoker = document.createElement("button");
+    testInvoker.textContent = "Current work control";
+    document.body.append(testInvoker);
+    testInvoker.focus();
+  }
   await act(async () =>
     document.dispatchEvent(new Event("paperclip:open-command")),
   );
+  return testInvoker;
 }
 async function enter(value: string) {
   const input = document.querySelector("input")!;
@@ -193,6 +221,84 @@ it("opens an editable native Task draft only after explicit selection and perfor
   });
   expect(post).not.toHaveBeenCalled();
   expect(get.mock.calls.at(-1)![0]).toContain("expectedUserId=first-member");
+});
+
+it("shows checked company Help results and opens only the trusted docs URL in a new tab", async () => {
+  state.principal = "10000000-0000-4000-8000-000000000003";
+  const title = "Recover interrupted work";
+  const get = vi.spyOn(api, "get").mockImplementation(async (url) => {
+    if (String(url).includes("/search?")) return helpResponse(title, "Review the original task before retrying.");
+    return model();
+  });
+  const open = vi.spyOn(window, "open").mockReturnValue(null);
+  const invoker = await mount(true, true);
+  await enter("recover");
+  await vi.waitFor(() => expect(document.body.textContent).toContain(title));
+  const result = [...document.querySelectorAll("button")].find((button) => button.textContent?.includes(title));
+  expect(result).toBeTruthy();
+  expect(get.mock.calls.some(([url]) => String(url).includes("scope=help"))).toBe(true);
+  await act(async () => result!.click());
+  expect(open).toHaveBeenCalledWith("https://docs.blentera.com/help/recovering-work", "_blank", "noopener,noreferrer");
+  expect(state.navigate).not.toHaveBeenCalled();
+  await vi.waitFor(() => expect(document.activeElement).toBe(invoker));
+});
+
+it("hides late Help results after the original authenticated account changes", async () => {
+  state.principal = "10000000-0000-4000-8000-000000000004";
+  let finish!: (value: unknown) => void;
+  let searches = 0;
+  vi.spyOn(api, "get").mockImplementation((url) => {
+    if (String(url).includes("/search?")) {
+      searches += 1;
+      if (searches === 1) return Promise.resolve(helpResponse("Existing visible Help result", "Visible before access changes."));
+      return new Promise((resolve) => { finish = resolve; });
+    }
+    return Promise.resolve(model());
+  });
+  await mount(true);
+  await enter("recover");
+  await vi.waitFor(() => expect(document.body.textContent).toContain("Existing visible Help result"));
+  await act(async () => live({
+    companyId: state.companyId, type: "activity.logged", payload: { action: "permission.revoked" },
+  }));
+  expect(document.body.textContent).not.toContain("Existing visible Help result");
+  await vi.waitFor(() => expect(finish).toBeTypeOf("function"));
+  await act(async () => {
+    state.principal = "10000000-0000-4000-8000-000000000005";
+    client.setQueryData(queryKeys.auth.session, v9SessionFixture(state.principal));
+    await render();
+  });
+  await vi.waitFor(() => expect(document.querySelector('[role="dialog"]')).toBeNull());
+  expect(document.body.textContent).not.toContain("Existing visible Help result");
+  await act(async () => finish(helpResponse("LATE-STALE-HELP-CANARY", "LATE-STALE-HELP-SNIPPET")));
+  expect(document.body.textContent).not.toContain("LATE-STALE-HELP-CANARY");
+  expect(document.body.textContent).not.toContain("LATE-STALE-HELP-SNIPPET");
+  expect(document.body.textContent).not.toContain("Recover interrupted work");
+});
+
+it.each([
+  "https://outside.invalid/redirect",
+  "https://user:secret@docs.blentera.com/help/recovering-work",
+])("rejects a Help result with an unsafe destination: %s", async (href) => {
+  state.principal = "10000000-0000-4000-8000-000000000006";
+  vi.spyOn(api, "get").mockImplementation(async (url) => {
+    if (String(url).includes("/search?")) return {
+      query: "recover", normalizedQuery: "recover", scope: "help", sort: "relevance", limit: 6, offset: 0,
+      results: [{ id: "recovering-work", type: "help", score: 2, title: "Recover interrupted work", href,
+        matchedFields: ["title"], sourceLabel: "Help · Preview", snippet: "Private malicious title", snippets: [],
+        helpArticle: { articleId: "recovering-work", audience: "company-members", maturity: "preview", applicableProductVersions: ["V10"], locale: "en", lastVerifiedAt: "2026-10-24", source: "mintlify" },
+        updatedAt: null, previewImageUrl: null }],
+      countsByType: { issue: 0, artifact: 0, agent: 0, project: 0, help: 1, comment: 0, document: 0 },
+      filterOptionCounts: { status: {}, priority: {}, assigneeAgentId: {}, assigneeUserId: {}, projectId: {}, labelId: {}, updatedWithin: {} }, zeroResults: null, hasMore: false,
+    };
+    return model();
+  });
+  const open = vi.spyOn(window, "open");
+  await mount(true);
+  await enter("recover");
+  await vi.waitFor(() => expect(document.body.textContent).toContain("Help results could not be loaded"));
+  expect(document.body.textContent).not.toContain("Private malicious title");
+  expect(open).not.toHaveBeenCalled();
 });
 it("reports semantic authoring as unqualified and sends no model or effect request", async () => {
   const get = vi

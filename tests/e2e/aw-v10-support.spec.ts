@@ -24,7 +24,7 @@ test("Help retains its originating view and reload recovers requests before and 
   const token = new URL(invitation).pathname.split("/").at(-1);
   await json(await page.request.post(`/api/invites/${token}/accept`, { data: { requestType: "human" } }));
   await json(await page.request.patch("/api/instance/settings/experimental", { data: {
-    experience_projection_v9: true, progressive_shell_v9: true, home_v9: true,
+    experience_projection_v9: true, progressive_shell_v9: true, home_v9: true, ambient_commands_v9: true,
   } }));
   const company = await json(await page.request.post("/api/companies", { data: { name: "Disposable V10 support browser company" } }));
   const support = `/api/companies/${company.id}/support`;
@@ -67,6 +67,29 @@ test("Help retains its originating view and reload recovers requests before and 
   expect(await page.evaluate(() => !!document.activeElement?.closest("dialog"))).toBe(true);
   await page.keyboard.press("Escape");
   await expect(page.getByRole("dialog")).toHaveCount(0);
+  await expect(helpEntry).toBeFocused();
+  expect(await heading!.evaluate(node => node.isConnected)).toBe(true);
+  // Exercise native Cmd+K and company Help search. Only the outbound docs
+  // navigation is controlled; this does not qualify a hosted docs deployment.
+  await page.context().route("https://docs.blentera.com/**", route => route.fulfill({
+    status: 200, contentType: "text/html", body: "<title>Controlled documentation destination</title>",
+  }));
+  const workUrl = page.url();
+  await helpEntry.focus();
+  await page.keyboard.press("Control+k");
+  const commands = page.getByRole("dialog", { name: "Ask and commands", exact: true });
+  await expect(commands).toBeVisible();
+  await commands.getByRole("combobox", { name: "Search or enter a command", exact: true }).fill("recover");
+  const helpOption = commands.getByRole("option", { name: "Open Help article: Recover interrupted work", exact: true });
+  await expect(helpOption).toBeVisible();
+  const popupPromise = page.waitForEvent("popup");
+  await helpOption.click();
+  const popup = await popupPromise;
+  await expect(popup).toHaveURL("https://docs.blentera.com/help/recovering-work");
+  await popup.close();
+  await page.bringToFront();
+  await expect(commands).toHaveCount(0);
+  await expect(page).toHaveURL(workUrl);
   await expect(helpEntry).toBeFocused();
   expect(await heading!.evaluate(node => node.isConnected)).toBe(true);
   const unsent = "Private unsent support draft retained only in this account's memory.";

@@ -748,6 +748,11 @@
     "unavailable": "Denne kommando er ikke tilgængelig med din aktuelle adgang eller konfiguration.",
     "noMatches": "Ingen tilgængelige poster matcher i disse begrænsede resultater. Åbn den fulde søgning for flere.",
     "matches": "Matchende arbejde",
+    "helpMatches": "Hjælpeartikler",
+    "help": "Hjælp",
+    "helpPreview": "Hjælp · Forhåndsvisning",
+    "helpUnavailable": "Hjælperesultater kunne ikke indlæses. Din aktuelle adgang blev ikke ændret.",
+    "openHelp": "Åbn hjælpeartikel: {{title}}",
     "recent": "Seneste arbejde",
     "groups": {
       "navigate": "Navigation og søgning",

@@ -748,6 +748,11 @@
     "unavailable": "This command is unavailable for your current access or configuration.",
     "noMatches": "No matching accessible records in these bounded results. Open full search for more.",
     "matches": "Matching work",
+    "helpMatches": "Help articles",
+    "help": "Help",
+    "helpPreview": "Help · Preview",
+    "helpUnavailable": "Help results could not be loaded. Your current access was not changed.",
+    "openHelp": "Open Help article: {{title}}",
     "recent": "Recent work",
     "groups": {
       "navigate": "Navigate and search",

@@ -77,14 +77,21 @@ describe("company search native transaction credential lifetime", () => {
 
   const requests = [
     ["interactive search", (http: ReturnType<typeof request>) => http.get(`/api/companies/${companyId}/search`).query({ q: marker }), marker],
+    ["checked Help search", (http: ReturnType<typeof request>) => http.get(`/api/companies/${companyId}/search`).query({ q: "Recover interrupted work", scope: "help", limit: "8" }), "recovering-work"],
     ["extract search", (http: ReturnType<typeof request>) => http.get(`/api/companies/${companyId}/search/extract`).query({ contains: marker }), marker],
   ] as const;
 
   it.each(requests)("returns %s results for a current session", async (_name, send, expected) => {
     const actor = await sessionActor(new Date(Date.now() + 60_000));
     const response = await send(appFor(actor, false)).expect(200);
-    expect(response.body.results).toHaveLength(1);
-    expect(JSON.stringify(response.body.results)).toContain(expected);
+    if (_name === "checked Help search") {
+      const article = response.body.results.find((result: { id: string }) => result.id === expected);
+      expect(article).toMatchObject({ type: "help", id: expected, helpArticle: { source: "mintlify", articleId: expected } });
+      expect(article.href).toBe("https://docs.blentera.com/help/recovering-work");
+    } else {
+      expect(response.body.results).toHaveLength(1);
+      expect(JSON.stringify(response.body.results)).toContain(expected);
+    }
   });
 
   it.each(requests)("discards %s results when its original deadline expires during the database read", async (_name, send) => {

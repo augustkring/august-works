@@ -3,14 +3,19 @@ import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { useTranslation } from "react-i18next";
 import {
   parseExperienceCommand,
+  PRODUCT_IDENTITY,
+  type CompanySearchResponse,
+  type CompanySearchResult,
   type ExperienceCommands,
   type ExperienceCommandId,
 } from "@paperclipai/shared";
 import { useV9CurrentAccount } from "../hooks/useV9CurrentAccount";
+import { useV9PrivateReadAuthority } from "../hooks/useV9PrivateReadAuthority";
 import {
   experienceCommandsKey,
   getExperienceCommands,
 } from "../api/experience-commands";
+import { searchApi } from "../api/search";
 import { useCompany } from "../context/CompanyContext";
 import { useCompanyLiveEvent } from "../context/LiveUpdatesProvider";
 import { useDialogActions } from "../context/DialogContext";
@@ -31,18 +36,46 @@ import {
 } from "./ui/command";
 import { Button } from "./ui/button";
 
+const HELP_RESULT_LIMIT = 6;
+
+function checkedHelpHref(result: CompanySearchResult): string {
+  const article = result.helpArticle;
+  if (result.type !== "help" || !article || result.id !== article.articleId || article.source !== "mintlify" ||
+    !article.articleId.trim() || !article.applicableProductVersions.length || !article.locale || !article.lastVerifiedAt)
+    throw new Error("Help search result is unavailable");
+  const docsOrigin = new URL(PRODUCT_IDENTITY.docsOrigin), href = new URL(result.href);
+  const slug = href.pathname.slice(1);
+  if (href.protocol !== "https:" || href.origin !== docsOrigin.origin || href.pathname === "/" ||
+    href.username || href.password || href.search || href.hash || !/^[a-z0-9][a-z0-9/-]*$/.test(slug) ||
+    slug.split("/").some((part) => !part || part === "." || part === ".."))
+    throw new Error("Help search destination is unavailable");
+  return href.toString();
+}
+
+function checkedHelpResults(response: CompanySearchResponse): CompanySearchResult[] {
+  if (
+    response.scope !== "help" ||
+    response.limit !== HELP_RESULT_LIMIT ||
+    response.results.length > HELP_RESULT_LIMIT ||
+    response.results.some((result) => { try { checkedHelpHref(result); return false; } catch { return true; } })
+  ) throw new Error("Help search response is unavailable");
+  return response.results;
+}
+
 function Commands({
   companyId,
   principal,
   close,
   accountReady,
   authorityEpoch,
+  sessionId,
 }: {
   companyId: string;
   principal: string;
-  close: () => void;
+  close: (navigating?: boolean) => void;
   accountReady: boolean;
   authorityEpoch: number;
+  sessionId: string | null;
 }) {
   const { t } = useTranslation("experience"),
     navigate = useNavigate(),
@@ -53,6 +86,14 @@ function Commands({
   const [epoch, setEpoch] = useState(0);
   const error = useRef<HTMLDivElement>(null);
   const prefix = experienceCommandsKey(companyId, principal);
+  const helpPrefix = ["experience-command-help", companyId, principal] as const;
+  const authority = useV9PrivateReadAuthority(principal, true);
+  const scope = JSON.stringify([
+    companyId, principal, sessionId, authorityEpoch, authority.epoch,
+  ]);
+  const scopeRef = useRef(scope);
+  scopeRef.current = scope;
+  const helpTokenRef = useRef("");
   useCompanyLiveEvent((event) => {
     if (event.companyId !== companyId) return;
     const action =
@@ -68,15 +109,22 @@ function Commands({
       )
     )
       return;
+    helpTokenRef.current = "";
     setEpoch((value) => value + 1);
     void client.cancelQueries({ queryKey: prefix });
     client.removeQueries({ queryKey: prefix });
+    void client.cancelQueries({ queryKey: helpPrefix });
+    client.removeQueries({ queryKey: helpPrefix });
   });
   useEffect(() => {
     const timer = setTimeout(() => setDebounced(text), 200);
     return () => clearTimeout(timer);
   }, [text]);
   const intent = parseExperienceCommand(text);
+  const settledIntent = parseExperienceCommand(debounced);
+  const helpQueryText = settledIntent.kind === "resources" ? settledIntent.text.trim() : "";
+  const helpToken = text === debounced && helpQueryText ? `${scope}:${epoch}:${helpQueryText}` : "";
+  helpTokenRef.current = helpToken;
   const query = useQuery({
     queryKey: [...prefix, authorityEpoch, debounced, epoch],
     queryFn: ({ signal }) =>
@@ -85,6 +133,26 @@ function Commands({
     staleTime: 0,
     gcTime: 0,
     retry: false,
+  });
+  const helpQuery = useQuery({
+    queryKey: [...helpPrefix, sessionId, authorityEpoch, authority.epoch, epoch, helpQueryText],
+    enabled: accountReady && authority.readReady && !!helpQueryText,
+    queryFn: async ({ signal }) => {
+      const requestedScope = scopeRef.current;
+      const requestedToken = helpToken;
+      const current = () => scopeRef.current === requestedScope &&
+        helpTokenRef.current === requestedToken && authority.canRead();
+      if (!current()) throw new Error("Current Help search access is unavailable");
+      const response = await authority.read(() => searchApi.search(companyId, {
+        q: helpQueryText, scope: "help", limit: HELP_RESULT_LIMIT,
+      }, signal));
+      if (!current()) throw new Error("Help search access changed during the request");
+      return checkedHelpResults(response);
+    },
+    staleTime: 0,
+    gcTime: 0,
+    retry: false,
+    refetchOnWindowFocus: false,
   });
   const ready =
     accountReady && query.isSuccess && text === debounced && !query.isFetching;
@@ -95,6 +163,7 @@ function Commands({
     if (!focusedDialog || focusedDialog === ownDialog) error.current?.focus();
   }, [query.isError]);
   const data = ready ? query.data : null;
+  const helpResults = ready && authority.canRead() && helpToken ? helpQuery.data ?? [] : [];
   function execute(command: ExperienceCommands["commands"][number]) {
     if (!data) return;
     close();
@@ -231,9 +300,37 @@ function Commands({
                 ))}
               </CommandGroup>
             )}
+            {!!helpResults.length && (
+              <CommandGroup heading={t("commands.helpMatches")}>
+                {helpResults.map((result) => (
+                  <CommandItem
+                    key={`help:${result.helpArticle!.articleId}`}
+                    value={`help:${result.helpArticle!.articleId}:${result.title}`}
+                    aria-label={t("commands.openHelp", { title: result.title })}
+                    className="min-h-11 flex-wrap gap-2"
+                    onSelect={() => {
+                      if (!authority.canRead() || helpTokenRef.current !== helpToken || scopeRef.current !== scope) return;
+                      window.open(checkedHelpHref(result), "_blank", "noopener,noreferrer");
+                      close(false);
+                    }}
+                  >
+                    <span className="break-words">{result.title}</span>
+                    <span className="text-sm text-muted-foreground">
+                      {result.helpArticle!.maturity === "preview" ? t("commands.helpPreview") : t("commands.help")}
+                    </span>
+                    {result.snippet && <span className="basis-full text-sm text-muted-foreground">{result.snippet}</span>}
+                  </CommandItem>
+                ))}
+              </CommandGroup>
+            )}
+            {ready && helpToken && helpQuery.isError && (
+              <p role="status" className="p-3 text-sm text-muted-foreground">{t("commands.helpUnavailable")}</p>
+            )}
             {intent.kind !== "semantic" &&
               text.trim() &&
               !data?.resources.length &&
+              !helpResults.length &&
+              !helpQuery.isFetching &&
               !data?.commands.some((command) => visible(command.id)) && (
                 <p role="status" className="p-4">
                   {t("commands.unavailable")}
@@ -325,8 +422,9 @@ export function ExperienceCommandPalette() {
             principal={principal}
             accountReady={identity.settled}
             authorityEpoch={identity.authorityEpoch}
-            close={() => {
-              navigating.current = true;
+            sessionId={identity.sessionId}
+            close={(willNavigate = true) => {
+              navigating.current = willNavigate;
               setOpen(false);
             }}
           />
