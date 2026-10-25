@@ -5,6 +5,8 @@ import {
   activityLog,
   agents,
   agentWakeupRequests,
+  authUsers,
+  companyMemberships,
   companies,
   createDb,
   heartbeatRuns,
@@ -49,7 +51,9 @@ describeEmbeddedPostgres("issueTreeControlService", () => {
     await db.delete(heartbeatRuns);
     await db.delete(agentWakeupRequests);
     await db.delete(agents);
+    await db.delete(companyMemberships);
     await db.delete(companies);
+    await db.delete(authUsers);
   });
 
   afterAll(async () => {
@@ -280,6 +284,8 @@ describeEmbeddedPostgres("issueTreeControlService", () => {
       issuePrefix: `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`,
       requireBoardApprovalForNewAgents: false,
     });
+    await db.insert(authUsers).values({ id: "board-user", name: "Current tree owner", email: "tree-owner@example.test", createdAt: new Date(), updatedAt: new Date() }).onConflictDoNothing();
+    await db.insert(companyMemberships).values({ companyId, principalType: "user", principalId: "board-user", membershipRole: "owner", status: "active" });
     await db.insert(issues).values([
       {
         id: rootIssueId,

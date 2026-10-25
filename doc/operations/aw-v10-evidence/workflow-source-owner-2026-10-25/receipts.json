@@ -503,6 +503,133 @@
         "Duration  35.96s (transform 16.02s, setup 122ms, import 22.13s, tests 13.52s, environment 0ms)"
       ],
       "sourceCommit": "99b7f564efb5b005f3be2623f79b1233f08daf78"
+    },
+    {
+      "name": "issue-tree-control-diagnostic",
+      "exitCode": 1,
+      "exitSidecar": "issue-tree-control-diagnostic.exit",
+      "rawSha256": "f0dc0edccd51d232fa11643ad58a4a1913c5e0ce4f792c003e0cca4c064b7754",
+      "sanitizedSha256": "f0dc0edccd51d232fa11643ad58a4a1913c5e0ce4f792c003e0cca4c064b7754",
+      "archiveSha256": "329085b5f544ba81bbb9b23fb232b18e476d0f8808e035ed571f2a5df7f6f7a5",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 5 passed (6)",
+        "Duration  24.97s (transform 13.33s, setup 80ms, import 18.19s, tests 6.57s, environment 0ms)"
+      ],
+      "sourceCommit": "4cbca4f20f551937e442e60cf2a3e034c306112f"
+    },
+    {
+      "name": "issue-tree-control-current-human",
+      "exitCode": 1,
+      "exitSidecar": "issue-tree-control-current-human.exit",
+      "rawSha256": "d2edd1c951f9424f6dfc3a5b080b7a9881c1882c234adf77a658d282268d62cb",
+      "sanitizedSha256": "d2edd1c951f9424f6dfc3a5b080b7a9881c1882c234adf77a658d282268d62cb",
+      "archiveSha256": "dfe0f5bd2d9341cd83582230a9ce8d4ee3c4134e561ea7bc7604ca505e6291da",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 3 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  3 failed | 3 passed (6)",
+        "Duration  27.47s (transform 15.92s, setup 99ms, import 21.45s, tests 5.77s, environment 0ms)"
+      ],
+      "sourceCommit": "4cbca4f20f551937e442e60cf2a3e034c306112f"
+    },
+    {
+      "name": "issue-tree-control-current-human-final",
+      "exitCode": 0,
+      "exitSidecar": "issue-tree-control-current-human-final.exit",
+      "rawSha256": "1e567b1a063affaceec79cd29b4363bce65191fff954176d9a17e033d1aa23de",
+      "sanitizedSha256": "1e567b1a063affaceec79cd29b4363bce65191fff954176d9a17e033d1aa23de",
+      "archiveSha256": "c36db8efe16ea0728160abfc4594f774f2d0f2d8a13662765442f514478e7507",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  6 passed (6)",
+        "Duration  19.49s (transform 10.26s, setup 85ms, import 14.39s, tests 4.87s, environment 0ms)"
+      ],
+      "sourceCommit": "4cbca4f20f551937e442e60cf2a3e034c306112f"
+    },
+    {
+      "name": "learning-artifact-isolated-worker-diagnostic",
+      "exitCode": 1,
+      "exitSidecar": "learning-artifact-isolated-worker-diagnostic.exit",
+      "rawSha256": "36e09f7882d7a72046b23811d3f1553dc663ca9f134c95c8d30b63d79b8f8e93",
+      "sanitizedSha256": "387dd2021ee76488fbe820b5480dba2675857e98b4b55243c66fe9832995c627",
+      "archiveSha256": "a89252db0fe9c65367217ae74a89ff0afa28afb34300f748aece2a1075933c12",
+      "redactions": {
+        "ansi": 66,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 failed (1)",
+        "Duration  229ms (transform 21ms, setup 89ms, import 0ms, tests 0ms, environment 0ms)"
+      ],
+      "sourceCommit": "4cbca4f20f551937e442e60cf2a3e034c306112f"
+    },
+    {
+      "name": "learning-artifact-isolated-worker-diagnostic2",
+      "exitCode": 1,
+      "exitSidecar": "learning-artifact-isolated-worker-diagnostic2.exit",
+      "rawSha256": "65602818004b411243036c2111ead4bc9a5c7259a094ba0a193a43cc27be2836",
+      "sanitizedSha256": "a643498bcd543d37f1eb241d322208cecf6c2ad5158354d7751d5f2aca074d82",
+      "archiveSha256": "4625ddc66623c11010b8d2b38a0dd5491fe70affb3c923ed2c2f23e0a6781e9c",
+      "redactions": {
+        "ansi": 312,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "AssertionError: {\"status\":\"failed\",\"reasonCode\":\"optimizer_replay_case_failed\",\"criticalInvariantFailure\":false,\"requiredCategories\":[\"representative\",\"boundary\",\"shape_variant\"],\"missingCategories\":[],\"caseResults\":[{\"id\":\"run:0f2a027e-eda5-41f3-8911-5f8f8a167606\",\"category\":\"representative\",\"status\":\"failed\",\"outputSchemaValid\":false,\"exactOutputMatch\":null,\"invariantResults\":[],\"differenceSummary\":\"candidate_execution_failed\",\"durationMs\":0,\"costEstimate\":null,\"unsupportedCases\":[]},{\"id\":\"run:2cf4b013-3055-44a7-88d2-6834eabc08de\",\"category\":\"representative\",\"status\":\"failed\",\"outputSchemaValid\":false,\"exactOutputMatch\":null,\"invariantResults\":[],\"differenceSummary\":\"candidate_execution_failed\",\"durationMs\":0,\"costEstimate\":null,\"unsupportedCases\":[]},{\"id\":\"run:bbc39e62-f021-417e-8a96-3e671916d28f\",\"category\":\"representative\",\"status\":\"failed\",\"outputSchemaValid\":false,\"exactOutputMatch\":null,\"invariantResults\":[],\"differenceSummary\":\"candidate_execution_failed\",\"durationMs\":0,\"costEstimate\":null,\"unsupportedCases\":[]},{\"id\":\"fixture:generated-boundary\",\"category\":\"boundary\",\"status\":\"failed\",\"outputSchemaValid\":false,\"exactOutputMatch\":null,\"invariantResults\":[],\"differenceSummary\":\"candidate_execution_failed\",\"durationMs\":0,\"costEstimate\":null,\"unsupportedCases\":[]},{\"id\":\"fixture:generated-shape-variant\",\"category\":\"shape_variant\",\"status\":\"failed\",\"outputSchemaValid\":false,\"exactOutputMatch\":null,\"invariantResults\":[],\"differenceSummary\":\"candidate_execution_failed\",\"durationMs\":0,\"costEstimate\":null,\"unsupportedCases\":[]}],\"passedCaseCount\":0,\"failedCaseCount\":5,\"unsupportedCaseCount\":0,\"totalDurationMs\":0,\"totalCostEstimate\":null}: expected false to be true // Object.is equality",
+        "Test Files  1 failed (1)",
+        "Tests  2 failed | 40 skipped (42)",
+        "Duration  29.09s (transform 12.32s, setup 81ms, import 16.95s, tests 11.92s, environment 0ms)"
+      ],
+      "sourceCommit": "4cbca4f20f551937e442e60cf2a3e034c306112f"
+    },
+    {
+      "name": "learning-worker-native-sandbox-direct",
+      "exitCode": 1,
+      "exitSidecar": "learning-worker-native-sandbox-direct.exit",
+      "rawSha256": "53ed11bd1b1582f73a2832b1e27dca51421e39b84f441bdc142df6da72d7137f",
+      "sanitizedSha256": "73e2abcaa0395a0acb36dd60d9d96ce24adb722dfe6376bda898632d7bbe2e1e",
+      "archiveSha256": "80fd5fd9f8b6b4688d529c4a699f8fc32a52a11f5cd83f38077223e75b936080",
+      "redactions": {
+        "ansi": 128,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 failed (1)",
+        "Duration  427ms (transform 144ms, setup 91ms, import 0ms, tests 0ms, environment 0ms)"
+      ],
+      "sourceCommit": "4cbca4f20f551937e442e60cf2a3e034c306112f"
     }
   ],
   "updates": [
@@ -560,6 +687,18 @@
         "native-plan-fixture-suite",
         "learning-worker-namespace-unconfined-probe",
         "learning-artifact-isolated-worker-namespaces"
+      ]
+    },
+    {
+      "sourceCommit": "4cbca4f20f551937e442e60cf2a3e034c306112f",
+      "meaning": "Scoped owner regressions and explicit failed diagnostics, not final workspace acceptance.",
+      "logs": [
+        "issue-tree-control-diagnostic",
+        "issue-tree-control-current-human",
+        "issue-tree-control-current-human-final",
+        "learning-artifact-isolated-worker-diagnostic",
+        "learning-artifact-isolated-worker-diagnostic2",
+        "learning-worker-native-sandbox-direct"
       ]
     }
   ],
