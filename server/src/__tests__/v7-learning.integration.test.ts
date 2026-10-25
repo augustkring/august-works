@@ -287,7 +287,7 @@ const support = await getEmbeddedPostgresTestSupport();
     }
     const optimizer = optimizerEvaluationService(db), replay = await optimizer.compile(companyId, created.id, suggestion.id, request,
       { principal: { type: "user", userId: "local-board" }, sourceActor });
-    expect(replay.gatesPassed).toBe(true);
+    expect(replay.gatesPassed, JSON.stringify(replay.replayEvaluation)).toBe(true);
     const [evaluation] = await db.select().from(workflowOptimizerEvaluations).where(eq(workflowOptimizerEvaluations.id, replay.evaluationId));
     const link = await domainProposal(created.id, `optimizer://${created.id}/${published.publishedRevisionId}`, { targetDomain: "automation_artifact", optimizerEvaluationId: replay.evaluationId, expectedArtifactVersionId: replay.artifactVersionId, expectedContentHash: evaluation!.contentHash },generated?[signal!.pin]:undefined);
     expect(link.candidateId).toBe(replay.evaluationId);

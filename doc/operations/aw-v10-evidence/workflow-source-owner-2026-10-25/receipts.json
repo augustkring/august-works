@@ -422,6 +422,87 @@
         "Duration  37.37s (transform 12.98s, setup 88ms, import 17.81s, tests 19.34s, environment 0ms)"
       ],
       "sourceCommit": "8f8733afeeef37b52d5a5854e106e94baa685173"
+    },
+    {
+      "name": "v9-publication-safe-tests-full-retry2",
+      "exitCode": 0,
+      "exitSidecar": "v9-publication-safe-tests-full-retry2.exit",
+      "rawSha256": "6175317d5f7651ec33de2ea0de2aab38777a56d4f5bbee564524189646a109ef",
+      "sanitizedSha256": "60c98dbb58fca26c298f7b4c342222390cf5ecb1c010e60d9d090bd0d9f2e4a1",
+      "archiveSha256": "b03e0926967da02c4477996991022a252379642caa4519d4aebadabb7d39a5ce",
+      "redactions": {
+        "ansi": 6,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  49 passed (49)",
+        "Duration  182.98s (transform 10.61s, setup 138ms, import 18.89s, tests 163.70s, environment 0ms)"
+      ],
+      "sourceCommit": "99b7f564efb5b005f3be2623f79b1233f08daf78"
+    },
+    {
+      "name": "native-plan-fixture-suite",
+      "exitCode": 0,
+      "exitSidecar": "native-plan-fixture-suite.exit",
+      "rawSha256": "cd679870fb6e3cd633e2f3e096d234ed84d83f6b80c591abce46efc415231d2a",
+      "sanitizedSha256": "d6d2f00b15327e3aecc89bbb9320064a838805bb62c7dac751e3f4becf1cc5b0",
+      "archiveSha256": "84b8735f5d48f14075609552944a50812ca67b84facc3196e3fc90c499cd8694",
+      "redactions": {
+        "ansi": 78,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  5 passed (5)",
+        "Duration  29.76s (transform 12.11s, setup 87ms, import 16.74s, tests 12.80s, environment 0ms)"
+      ],
+      "sourceCommit": "99b7f564efb5b005f3be2623f79b1233f08daf78"
+    },
+    {
+      "name": "learning-worker-namespace-unconfined-probe",
+      "exitCode": 0,
+      "exitSidecar": "learning-worker-namespace-unconfined-probe.exit",
+      "rawSha256": "a37186cc16e3ccf0e458b7359f365fded400230687c43f730d5c8364f7c186c7",
+      "sanitizedSha256": "a37186cc16e3ccf0e458b7359f365fded400230687c43f730d5c8364f7c186c7",
+      "archiveSha256": "d8203e00b4a2e0fe1233a3bd3ae86dc3f9f276fcc5154da12a2986b7ee4523f1",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "99b7f564efb5b005f3be2623f79b1233f08daf78"
+    },
+    {
+      "name": "learning-artifact-isolated-worker-namespaces",
+      "exitCode": 1,
+      "exitSidecar": "learning-artifact-isolated-worker-namespaces.exit",
+      "rawSha256": "611a8fc57464fafbcb08c3813fde4c700c6847dd988f6fcdbca0f8f5786e01de",
+      "sanitizedSha256": "de1cc0dfd1e52dbc52d912f18aea894eb2494c20ac703b4c9903a341f9020bfa",
+      "archiveSha256": "c6aa2064976ceed64f940d7733cc1872574e320438f6f69b3a39e314d2aa6037",
+      "redactions": {
+        "ansi": 290,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 2 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  2 failed | 40 skipped (42)",
+        "Duration  35.96s (transform 16.02s, setup 122ms, import 22.13s, tests 13.52s, environment 0ms)"
+      ],
+      "sourceCommit": "99b7f564efb5b005f3be2623f79b1233f08daf78"
     }
   ],
   "updates": [
@@ -469,6 +550,16 @@
         "tool-gateway-workflow-source-diagnostic",
         "tool-gateway-workflow-source-current-principals",
         "tool-gateway-workflow-principals-full"
+      ]
+    },
+    {
+      "sourceCommit": "99b7f564efb5b005f3be2623f79b1233f08daf78",
+      "meaning": "Concurrent scoped diagnostics and full owner reruns; checkout at archive time is not final acceptance provenance.",
+      "logs": [
+        "v9-publication-safe-tests-full-retry2",
+        "native-plan-fixture-suite",
+        "learning-worker-namespace-unconfined-probe",
+        "learning-artifact-isolated-worker-namespaces"
       ]
     }
   ],

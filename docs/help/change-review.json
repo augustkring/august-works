@@ -224,7 +224,7 @@
       "sourceSha256": "848676297a26bb77b3f53b31256f8bbfcfb296421cc5ce1c0d4dc61827fda7fa",
       "articleSha256": "c51a73bf02851b92d2dae42dbfe6855ede800542dacbe01fe854817a8a7a83fe",
       "decision": "updated",
-      "rationale": "Extended authorized Import history to find the original requester\u2019s unbound new-company receipt; the article now states the honest target label and its limits."
+      "rationale": "Extended authorized Import history to find the original requester’s unbound new-company receipt; the article now states the honest target label and its limits."
     },
     {
       "source": "server/src/routes/companies.ts",
@@ -240,7 +240,7 @@
       "sourceSha256": "37682d39ad51f1ade89469c8812bf9347138d5115db026d1e273dbcc7d2e33e3",
       "articleSha256": "c51a73bf02851b92d2dae42dbfe6855ede800542dacbe01fe854817a8a7a83fe",
       "decision": "updated",
-      "rationale": "Extended authorized Import history to find the original requester\u2019s unbound new-company receipt; the article now states the honest target label and its limits."
+      "rationale": "Extended authorized Import history to find the original requester’s unbound new-company receipt; the article now states the honest target label and its limits."
     },
     {
       "source": "server/src/services/company-import-transfers.ts",
@@ -413,10 +413,10 @@
     {
       "source": "server/src/services/memory/memory-privacy.ts",
       "articleId": "export-and-delete",
-      "sourceSha256": "f4caae114dd72bc31b971bacff37bc4f9b975fe665dc40c29c19d3b46779e75e",
+      "sourceSha256": "26a3946bd9e417b1823b266365edf93b1212233230d14ca9981d9857c40bdc4e",
       "articleSha256": "f4a921bd0683d97d5d7c4cb8ef15a1af9494d6df8ec6bf4cf366ede6da2771cb",
-      "decision": "updated",
-      "rationale": "Reviewed the original private Memory share, Human review, exact receipt/source walk and current session UI. Paired privacy guides now distinguish explicit Approve and share from ordinary verification, preserve underlying Task/source restrictions and describe source withdrawal without claiming complete Source or provider qualification."
+      "decision": "no_change",
+      "rationale": "Reviewed bounded callback-local paused safe-test Memory admission: selected original sources retain current Human and transitive source checks. Export contents, private-share approval, recipient access and deletion guidance are unchanged."
     },
     {
       "source": "ui/src/pages/SaasBilling.tsx",
@@ -462,41 +462,41 @@
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "recovering-work",
       "sourceSha256": "8be44f0a61787fe84a5d049ccdcbc2d40ca7fd0626f8f4ef2d062fcd32914af5",
-      "articleSha256": "4debb5d861f9d172aafb5d3e0614ba8c5670124cdc9cf86fd9cb890bf751a27f",
+      "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
       "decision": "updated",
-      "rationale": "Added current task/run status checks and safe use of retry and stop actions without claiming remote success."
+      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
     },
     {
       "source": "ui/src/components/IssueBlockedNotice.tsx",
       "articleId": "recovering-work",
       "sourceSha256": "90983e55a2fa9ea9a8abe2b33a5aab817e05a463a65bf5d5795335149d769fd2",
-      "articleSha256": "4debb5d861f9d172aafb5d3e0614ba8c5670124cdc9cf86fd9cb890bf751a27f",
+      "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
       "decision": "updated",
-      "rationale": "Added current task/run status checks and safe use of retry and stop actions without claiming remote success."
+      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
     },
     {
       "source": "ui/src/lib/wait-for-stopped-runs.ts",
       "articleId": "recovering-work",
       "sourceSha256": "ce5726db6b535d3dd592bfde111b94de36291c1fe7dd5a85198dd22799bbe8c2",
-      "articleSha256": "4debb5d861f9d172aafb5d3e0614ba8c5670124cdc9cf86fd9cb890bf751a27f",
+      "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
       "decision": "updated",
-      "rationale": "Added current task/run status checks and safe use of retry and stop actions without claiming remote success."
+      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
       "articleId": "recovering-work",
       "sourceSha256": "5dba9a4821f71474d1bd510f87c55093ccd62223d1f28eba8adee287325869e0",
-      "articleSha256": "4debb5d861f9d172aafb5d3e0614ba8c5670124cdc9cf86fd9cb890bf751a27f",
+      "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
       "decision": "updated",
-      "rationale": "Added current task/run status checks and safe use of retry and stop actions without claiming remote success."
+      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
     },
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work",
       "sourceSha256": "b14bc5bc085eb82323d65a027da55712ea9dc2083f22248d5af98cfcaa599ccc",
-      "articleSha256": "4debb5d861f9d172aafb5d3e0614ba8c5670124cdc9cf86fd9cb890bf751a27f",
+      "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
       "decision": "updated",
-      "rationale": "Reviewed current native monitor/routine producer settlement, original source admission, durable source-denied occurrence and deadline restoration. Added paired recovery guidance to ask the source owner before changing or retrying a skipped schedule; no provider timing or publication authority is promised."
+      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
     },
     {
       "source": "ui/src/App.tsx",
@@ -613,10 +613,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support",
-      "sourceSha256": "d62fe287b46c6c3e8f1d2e82e534ed774d76fdc024af1860ffbbd6c064a45264",
+      "sourceSha256": "b7d8a379ee0d7b5cd620eb21108ebb9f2e34b90fcad7127e753f124482f5c6fe",
       "articleSha256": "7db4ab48ab595554d9c6d838f803d0bf70b4e931bf6e428f526e048031f64fe1",
       "decision": "no_change",
-      "rationale": "Reviewed the shared original Workflow/Routine source scope used before Task and Project limits, counts and Find results, including cache bypass and current reader revalidation. Help-only search still skips Task source enumeration; the paired Help navigation and human support guidance remains accurate."
+      "rationale": "Reviewed workspace reopen forwarding of the actual authenticated actor and current source checks. Support intake, recovery receipts, direct Human contact and diagnostic sharing described here are unchanged; workspace-specific guidance is in Recover interrupted work."
     },
     {
       "source": "packages/shared/src/types/search.ts",
@@ -1149,10 +1149,10 @@
     {
       "source": "server/src/services/memory/memory-privacy.ts",
       "articleId": "export-and-delete-da",
-      "sourceSha256": "f4caae114dd72bc31b971bacff37bc4f9b975fe665dc40c29c19d3b46779e75e",
+      "sourceSha256": "26a3946bd9e417b1823b266365edf93b1212233230d14ca9981d9857c40bdc4e",
       "articleSha256": "0deb4c9a8300bff2bfc69e3bd20d6e0478909ec6ceece03fe50cf2bef856ee01",
-      "decision": "updated",
-      "rationale": "Reviewed the original private Memory share, Human review, exact receipt/source walk and current session UI. Paired privacy guides now distinguish explicit Approve and share from ordinary verification, preserve underlying Task/source restrictions and describe source withdrawal without claiming complete Source or provider qualification."
+      "decision": "no_change",
+      "rationale": "Reviewed bounded callback-local paused safe-test Memory admission: selected original sources retain current Human and transitive source checks. Export contents, private-share approval, recipient access and deletion guidance are unchanged."
     },
     {
       "source": "ui/src/pages/SaasBilling.tsx",
@@ -1198,41 +1198,41 @@
       "source": "ui/src/pages/IssueDetail.tsx",
       "articleId": "recovering-work-da",
       "sourceSha256": "8be44f0a61787fe84a5d049ccdcbc2d40ca7fd0626f8f4ef2d062fcd32914af5",
-      "articleSha256": "0ec42e60a1cbca5c0b1eb3b0e5a8692fe587cedcfea1d53640471d8c8404a234",
+      "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
       "decision": "updated",
-      "rationale": "Danish translation of recovering-work: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
     },
     {
       "source": "ui/src/components/IssueBlockedNotice.tsx",
       "articleId": "recovering-work-da",
       "sourceSha256": "90983e55a2fa9ea9a8abe2b33a5aab817e05a463a65bf5d5795335149d769fd2",
-      "articleSha256": "0ec42e60a1cbca5c0b1eb3b0e5a8692fe587cedcfea1d53640471d8c8404a234",
+      "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
       "decision": "updated",
-      "rationale": "Danish translation of recovering-work: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
     },
     {
       "source": "ui/src/lib/wait-for-stopped-runs.ts",
       "articleId": "recovering-work-da",
       "sourceSha256": "ce5726db6b535d3dd592bfde111b94de36291c1fe7dd5a85198dd22799bbe8c2",
-      "articleSha256": "0ec42e60a1cbca5c0b1eb3b0e5a8692fe587cedcfea1d53640471d8c8404a234",
+      "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
       "decision": "updated",
-      "rationale": "Danish translation of recovering-work: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
     },
     {
       "source": "server/src/services/issue-recovery-actions.ts",
       "articleId": "recovering-work-da",
       "sourceSha256": "5dba9a4821f71474d1bd510f87c55093ccd62223d1f28eba8adee287325869e0",
-      "articleSha256": "0ec42e60a1cbca5c0b1eb3b0e5a8692fe587cedcfea1d53640471d8c8404a234",
+      "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
       "decision": "updated",
-      "rationale": "Danish translation of recovering-work: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
     },
     {
       "source": "server/src/services/issues.ts",
       "articleId": "recovering-work-da",
       "sourceSha256": "b14bc5bc085eb82323d65a027da55712ea9dc2083f22248d5af98cfcaa599ccc",
-      "articleSha256": "0ec42e60a1cbca5c0b1eb3b0e5a8692fe587cedcfea1d53640471d8c8404a234",
+      "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
       "decision": "updated",
-      "rationale": "Reviewed current native monitor/routine producer settlement, original source admission, durable source-denied occurrence and deadline restoration. Added paired recovery guidance to ask the source owner before changing or retrying a skipped schedule; no provider timing or publication authority is promised."
+      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
     },
     {
       "source": "ui/src/App.tsx",
@@ -1349,10 +1349,10 @@
     {
       "source": "server/src/routes/issues.ts",
       "articleId": "help-and-human-support-da",
-      "sourceSha256": "d62fe287b46c6c3e8f1d2e82e534ed774d76fdc024af1860ffbbd6c064a45264",
+      "sourceSha256": "b7d8a379ee0d7b5cd620eb21108ebb9f2e34b90fcad7127e753f124482f5c6fe",
       "articleSha256": "e9ef1d13e8079524d3e58d816ed9f43d0221a3edf777605aa0e19a93a60c76fd",
       "decision": "no_change",
-      "rationale": "Reviewed the shared original Workflow/Routine source scope used before Task and Project limits, counts and Find results, including cache bypass and current reader revalidation. Help-only search still skips Task source enumeration; the paired Help navigation and human support guidance remains accurate."
+      "rationale": "Reviewed workspace reopen forwarding of the actual authenticated actor and current source checks. Support intake, recovery receipts, direct Human contact and diagnostic sharing described here are unchanged; workspace-specific guidance is in Recover interrupted work."
     },
     {
       "source": "packages/shared/src/types/search.ts",
@@ -1477,34 +1477,130 @@
     {
       "source": "server/src/services/routines.ts",
       "articleId": "recovering-work",
-      "sourceSha256": "29f78a1b0ecf31239eeb4c4cae215d0b9dccc78ec9cd35c58b94d8f7871007f1",
-      "articleSha256": "4debb5d861f9d172aafb5d3e0614ba8c5670124cdc9cf86fd9cb890bf751a27f",
+      "sourceSha256": "91da0f195f11263c7613f455d0c43bcdd4de3c4c06590e704baf779682bd73ff",
+      "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
       "decision": "updated",
-      "rationale": "Reviewed current native monitor/routine producer settlement, original source admission, durable source-denied occurrence and deadline restoration. Added paired recovery guidance to ask the source owner before changing or retrying a skipped schedule; no provider timing or publication authority is promised."
+      "rationale": "Reviewed exact manual-run Human credential forwarding: existing advice to restore current source access before retrying remains valid. Added saved-workspace recovery guidance in this article."
     },
     {
       "source": "server/src/services/scheduled-work.ts",
       "articleId": "recovering-work",
       "sourceSha256": "36f16b664876fddcc54ad9f8df27049eac628d7f768e6fdcd3727c741ff1d490",
-      "articleSha256": "4debb5d861f9d172aafb5d3e0614ba8c5670124cdc9cf86fd9cb890bf751a27f",
+      "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
       "decision": "updated",
-      "rationale": "Reviewed current native monitor/routine producer settlement, original source admission, durable source-denied occurrence and deadline restoration. Added paired recovery guidance to ask the source owner before changing or retrying a skipped schedule; no provider timing or publication authority is promised."
+      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
     },
     {
       "source": "server/src/services/routines.ts",
       "articleId": "recovering-work-da",
-      "sourceSha256": "29f78a1b0ecf31239eeb4c4cae215d0b9dccc78ec9cd35c58b94d8f7871007f1",
-      "articleSha256": "0ec42e60a1cbca5c0b1eb3b0e5a8692fe587cedcfea1d53640471d8c8404a234",
+      "sourceSha256": "91da0f195f11263c7613f455d0c43bcdd4de3c4c06590e704baf779682bd73ff",
+      "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
       "decision": "updated",
-      "rationale": "Reviewed current native monitor/routine producer settlement, original source admission, durable source-denied occurrence and deadline restoration. Added paired recovery guidance to ask the source owner before changing or retrying a skipped schedule; no provider timing or publication authority is promised."
+      "rationale": "Reviewed exact manual-run Human credential forwarding: existing advice to restore current source access before retrying remains valid. Added saved-workspace recovery guidance in this article."
     },
     {
       "source": "server/src/services/scheduled-work.ts",
       "articleId": "recovering-work-da",
       "sourceSha256": "36f16b664876fddcc54ad9f8df27049eac628d7f768e6fdcd3727c741ff1d490",
-      "articleSha256": "0ec42e60a1cbca5c0b1eb3b0e5a8692fe587cedcfea1d53640471d8c8404a234",
+      "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
       "decision": "updated",
-      "rationale": "Reviewed current native monitor/routine producer settlement, original source admission, durable source-denied occurrence and deadline restoration. Added paired recovery guidance to ask the source owner before changing or retrying a skipped schedule; no provider timing or publication authority is promised."
+      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+    },
+    {
+      "source": "server/src/routes/issues.ts",
+      "articleId": "recovering-work",
+      "sourceSha256": "b7d8a379ee0d7b5cd620eb21108ebb9f2e34b90fcad7127e753f124482f5c6fe",
+      "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
+      "decision": "updated",
+      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+    },
+    {
+      "source": "server/src/routes/issues.ts",
+      "articleId": "recovering-work-da",
+      "sourceSha256": "b7d8a379ee0d7b5cd620eb21108ebb9f2e34b90fcad7127e753f124482f5c6fe",
+      "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
+      "decision": "updated",
+      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+    },
+    {
+      "source": "server/src/services/execution-workspaces.ts",
+      "articleId": "recovering-work",
+      "sourceSha256": "a79171e51ca7c7ea35eb587d3d0c33453c1479d32fed60f3b9ac2d184d9fd98b",
+      "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
+      "decision": "updated",
+      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+    },
+    {
+      "source": "server/src/services/execution-workspaces.ts",
+      "articleId": "recovering-work-da",
+      "sourceSha256": "a79171e51ca7c7ea35eb587d3d0c33453c1479d32fed60f3b9ac2d184d9fd98b",
+      "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
+      "decision": "updated",
+      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+    },
+    {
+      "source": "server/src/services/heartbeat.ts",
+      "articleId": "recovering-work",
+      "sourceSha256": "9f0720082f26824fc55033eedf3317f7a54d09a6f00def9e8ba93b5623e5fd2d",
+      "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
+      "decision": "updated",
+      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+    },
+    {
+      "source": "server/src/services/heartbeat.ts",
+      "articleId": "recovering-work-da",
+      "sourceSha256": "9f0720082f26824fc55033eedf3317f7a54d09a6f00def9e8ba93b5623e5fd2d",
+      "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
+      "decision": "updated",
+      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+    },
+    {
+      "source": "server/src/services/workspace-runtime.ts",
+      "articleId": "recovering-work",
+      "sourceSha256": "e6b93bc100a26b8f363656bee02b79ced8b24335552c8e6f9170b3741b5bb6ea",
+      "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
+      "decision": "updated",
+      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+    },
+    {
+      "source": "server/src/services/workspace-runtime.ts",
+      "articleId": "recovering-work-da",
+      "sourceSha256": "e6b93bc100a26b8f363656bee02b79ced8b24335552c8e6f9170b3741b5bb6ea",
+      "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
+      "decision": "updated",
+      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+    },
+    {
+      "source": "server/src/services/managed-repository-checkout.ts",
+      "articleId": "recovering-work",
+      "sourceSha256": "a1a541ddfd891aa3e4fcea7748403c8c4c65d4cfebf3fac78ac2d8879eb7feda",
+      "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
+      "decision": "updated",
+      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+    },
+    {
+      "source": "server/src/services/managed-repository-checkout.ts",
+      "articleId": "recovering-work-da",
+      "sourceSha256": "a1a541ddfd891aa3e4fcea7748403c8c4c65d4cfebf3fac78ac2d8879eb7feda",
+      "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
+      "decision": "updated",
+      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+    },
+    {
+      "source": "server/src/services/git-credentials.ts",
+      "articleId": "recovering-work",
+      "sourceSha256": "87e3715036da6bb070b75b4d9bef539ff93a199aa47254652b98669c4cb999a7",
+      "articleSha256": "54ba747c42686a3646ab5853d49c33a79c4d869ddbb39e3cc76a412be19c17a5",
+      "decision": "updated",
+      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
+    },
+    {
+      "source": "server/src/services/git-credentials.ts",
+      "articleId": "recovering-work-da",
+      "sourceSha256": "87e3715036da6bb070b75b4d9bef539ff93a199aa47254652b98669c4cb999a7",
+      "articleSha256": "653be69f33553a2937d71f8f8cec015e288235f7e470f817ad19b2c6bcef8ff6",
+      "decision": "updated",
+      "rationale": "Added current saved-workspace access, repository connection, original-task retry and unrecoverable history guidance; exact restoration remains conditional on retained authorized sources and available saved history."
     }
   ]
 }
