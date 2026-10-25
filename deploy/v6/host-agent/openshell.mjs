@@ -312,6 +312,17 @@ export function openShellHostEngine({
   }
   async function executeAction(request, deadlineAt) {
     const scope = request.scope;
+    const sourceExpiry = request.action === "apply"
+      ? request.admission?.expiresAt
+      : request.action === "start"
+        ? request.start?.expiresAt
+        : null;
+    if (sourceExpiry !== null && sourceExpiry !== undefined &&
+      (!Number.isFinite(Date.parse(sourceExpiry)) ||
+        Date.parse(sourceExpiry) <= Date.now() ||
+        Date.parse(deadlineAt) > Date.parse(sourceExpiry))) {
+      throw new Error("sandbox_scope_changed");
+    }
     // Neither a private JSON file nor CLI version/kernel output is physical
     // qualification of credentials, syscalls, resource limits or forced Stop.
     if (request.action === "capabilities")
@@ -362,7 +373,7 @@ export function openShellHostEngine({
     }
     if (request.action === "apply") {
       const admission = request.admission;
-      if (!admission) throw new Error("sandbox_scope_changed");
+      if (!admission || Date.parse(admission.expiresAt) <= Date.now()) throw new Error("sandbox_scope_changed");
       const workload = await container(scope, detail, request.imageDigest, deadlineAt);
       if (detail.phase !== "Stopped" || workload.State.Running)
         throw new Error("sandbox_operation_unsupported");
@@ -713,7 +724,13 @@ export function openShellHostEngine({
         if (existing) {
           if (existing.requestHash !== requestHash)
             throw new Error("sandbox_scope_changed");
-          return existing.result;
+          // An intent persisted before an effect without its completion receipt
+          // is ambiguous. Never replay the external operation after that point.
+          return existing.result ?? {
+            success: false,
+            reply: null,
+            errorCode: "sandbox_observation_unavailable",
+          };
         }
         if (
           Object.keys(journal.commands).length >=
@@ -722,6 +739,8 @@ export function openShellHostEngine({
             : 10000)
         )
           throw new Error("sandbox_host_unavailable");
+        journal.commands[id] = { requestHash, result: null };
+        await atomicJson(journalFile, journal);
         let result;
         try {
           result = {

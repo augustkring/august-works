@@ -1,7 +1,7 @@
 import { createHash, timingSafeEqual } from "node:crypto";
 import type { Request, RequestHandler } from "express";
 import { isDeepStrictEqual } from "node:util";
-import { and, eq, isNull } from "drizzle-orm";
+import { and, eq, gte, isNull, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
   activityLog,
@@ -12,6 +12,7 @@ import {
   companyMemberships,
   heartbeatRuns,
   instanceUserRoles,
+  nativeRunFinalizations,
 } from "@paperclipai/db";
 import {
   MAX_ISSUE_PREFIX_ATTEMPTS,
@@ -21,7 +22,7 @@ import {
   pickAvailableIssuePrefix,
   rekeyCompanyIssueIdentifiers,
 } from "../services/issue-prefix.js";
-import { verifyLocalAgentJwt } from "../agent-auth-jwt.js";
+import { verifyLocalAgentJwt, type NativeToolEffectClaim } from "../agent-auth-jwt.js";
 import { agentRunWritesRevoked } from "../agent-run-cancellation.js";
 import { isUuidLike, normalizeAgentApiKeyScope, type DeploymentMode } from "@paperclipai/shared";
 import type { BetterAuthSessionResult } from "../auth/better-auth.js";
@@ -65,6 +66,68 @@ import { cloudTenantPrimaryCompanyId } from "../services/cloud-instance.js";
 
 function hashToken(token: string) {
   return createHash("sha256").update(token).digest("hex");
+}
+
+function canonicalJson(value: unknown): string {
+  if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+  if (typeof value === "object" && value !== null) {
+    const object = value as Record<string, unknown>;
+    return `{${Object.keys(object).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(object[key])}`).join(",")}}`;
+  }
+  return JSON.stringify(value) ?? "null";
+}
+
+function objectRecord(value: unknown): Record<string, unknown> {
+  return typeof value === "object" && value !== null && !Array.isArray(value) ? value as Record<string, unknown> : {};
+}
+
+/** Consume the one server-signed native call carrier before reaching a route.
+ * It is bound to the current acknowledged dispatch, lease and exact HTTP
+ * request. Legacy local JWTs have no such claim and remain ordinary requests. */
+async function consumeNativeToolEffectClaim(db: Db, claim: NativeToolEffectClaim, input: {
+  companyId: string; agentId: string; runId: string; responsibleUserId: string | null;
+  method: string; originalUrl: string; body: unknown; bodyPresent: boolean;
+}): Promise<boolean> {
+  if (claim.method !== input.method.toUpperCase() || claim.pathAndQuery !== input.originalUrl ||
+    claim.bodyPresent !== input.bodyPresent ||
+    createHash("sha256").update(input.bodyPresent ? canonicalJson(input.body) : "null").digest("hex") !== claim.bodyHash) return false;
+  return db.transaction(async tx => {
+    const [run] = await tx.select().from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, input.companyId),
+      eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.runtimeMode, "native"),
+      eq(heartbeatRuns.status, "running"),
+    )).for("update");
+    if (!run || !input.responsibleUserId || run.responsibleUserId !== input.responsibleUserId) return false;
+    const profile = objectRecord(run.runnerProfileJson);
+    const associations = profile.nativeToolCallDispatchAssociations;
+    const intents = profile.nativeModelInputDispatchIntents;
+    if (!Array.isArray(associations) || !Array.isArray(intents)) return false;
+    const matchingAssociations = associations.map(objectRecord).filter(row => row.callId === claim.callId && row.turnId === claim.turnId &&
+      row.tool === claim.tool && row.dispatchId === claim.dispatchId && row.eventSeq === claim.eventSeq && row.attempt === claim.attempt);
+    const matchingIntents = intents.map(objectRecord).filter(row => row.dispatchId === claim.dispatchId && row.turnId === claim.turnId &&
+      row.eventSeq === claim.eventSeq && row.attempt === claim.attempt && row.responsibleUserId === input.responsibleUserId);
+    if (matchingAssociations.length !== 1 || matchingIntents.length !== 1 || !run.nativeIssueId) return false;
+    const [lease] = await tx.select().from(nativeRunFinalizations).where(and(
+      eq(nativeRunFinalizations.runId, input.runId), eq(nativeRunFinalizations.companyId, input.companyId),
+      eq(nativeRunFinalizations.issueId, run.nativeIssueId),
+      eq(nativeRunFinalizations.attempt, claim.attempt),
+      eq(nativeRunFinalizations.leaseOwner, claim.leaseOwner),
+      eq(nativeRunFinalizations.controllerBootId, claim.controllerBootId),
+      eq(nativeRunFinalizations.controllerPid, claim.controllerPid),
+      eq(nativeRunFinalizations.controllerProcessStartedAt, new Date(claim.controllerProcessStartedAt)),
+      gte(nativeRunFinalizations.leaseExpiresAt, new Date(claim.leaseExpiresAt)),
+      sql`${nativeRunFinalizations.leaseExpiresAt} > clock_timestamp()`,
+    )).for("update");
+    if (!lease) return false;
+    const resultJson = objectRecord(run.resultJson), apiReceipts = objectRecord(resultJson.apiToolReceipts);
+    const receiptKey = createHash("sha256").update(claim.callId).digest("hex");
+    const apiReceipt = objectRecord(apiReceipts[receiptKey]);
+    if (apiReceipt.digest !== claim.apiReceiptDigest || apiReceipt.operationId !== claim.operationId ||
+      apiReceipt.state !== "pending" || apiReceipt.nativeEffectClaimConsumed === true) return false;
+    apiReceipts[receiptKey] = { ...apiReceipt, nativeEffectClaimConsumed: true };
+    await tx.update(heartbeatRuns).set({ resultJson: { ...resultJson, apiToolReceipts: apiReceipts } }).where(eq(heartbeatRuns.id, run.id));
+    return true;
+  });
 }
 
 function normalizeOptionalString(value: string | null | undefined) {
@@ -451,6 +514,16 @@ export function actorMiddleware(db: Db, opts: ActorMiddlewareOptions): RequestHa
         next(unauthorized("Agent credential scope is unavailable; obtain fresh credentials and retry"));
         return;
       }
+      if (claims.native_tool_effect) {
+        if (keyScope.kind !== "standard" || !await consumeNativeToolEffectClaim(db, claims.native_tool_effect, {
+          companyId: claims.company_id, agentId: claims.sub, runId: claims.run_id,
+          responsibleUserId: onBehalfOfUserId, method: req.method, originalUrl: req.originalUrl,
+          body: req.body, bodyPresent: req.body !== undefined,
+        })) {
+          next(forbidden("Native tool effect binding is stale or does not match this request", { code: "native_tool_effect_binding_invalid" }));
+          return;
+        }
+      }
       req.actor = {
         type: "agent",
         agentId: claims.sub,
@@ -463,6 +536,7 @@ export function actorMiddleware(db: Db, opts: ActorMiddlewareOptions): RequestHa
         identityContextId: identityRun?.activeIdentityContextId ?? null,
         onBehalfOfMemberships,
         source: "agent_jwt",
+        ...(claims.native_tool_effect ? { nativeToolEffect: claims.native_tool_effect } : {}),
       };
       next();
       return;

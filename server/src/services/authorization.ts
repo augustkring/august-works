@@ -9,6 +9,7 @@ import {
   agents,
   agentApiKeys,
   agentExecutionManifests,
+  agentExecutionScopeRequests,
   authUsers,
   authSessions,
   boardApiKeys,
@@ -34,7 +35,7 @@ import {
   memoryDeletionMarkers,
   contextManifests,
 } from "@paperclipai/db";
-import { nativePayloadSourceSnapshotSchema } from "@paperclipai/shared";
+import { agentExecutionScopeSchema, nativePayloadSourceSnapshotSchema, type AgentExecutionScope } from "@paperclipai/shared";
 import type {
   AgentApiKeyScope,
   InboxAgentPolicyMode,
@@ -152,6 +153,7 @@ export type AuthorizationDecision = {
     | "allow_issue_mention_grant"
     | "allow_direct_parent_report"
     | "allow_visible_issue_write"
+    | "allow_delegated_context_source"
     | "allow_self"
     | "allow_company_agent"
     | "allow_company_member"
@@ -1253,12 +1255,15 @@ type ReadSourceDecisionInput = {
   enforceResponsibleUserIntersection?: boolean;
 };
 export type NativeContextInspectionOwner = { decide(input: ReadSourceDecisionInput): Promise<AuthorizationDecision> };
+export type NativeDelegatedContextSource = { actor: AuthorizationActor; decide: ReadSourceOwner["decide"] };
 type ReadSourceOwner = NativeContextInspectionOwner & {
   assertTaskPrivacyBatch(actor: AuthorizationActor, issueIds: string[], projectIds: string[], deadline?:number): Promise<void>;
   readRoutineSources?(runIds: string[], actor: AuthorizationActor): Promise<string[]>;
   readWorkflowSources?(runIds: string[], actor: AuthorizationActor, mode?: "strict" | "task_candidates"): Promise<string[]>;
 };
-type ReadScopePurpose = "task_sources" | "company_search" | "context_inspection" | "routine_sources" | "workflow_sources" | "workflow_task_candidates";
+type ReadScopePurpose = "task_sources" | "company_search" | "context_inspection" | "routine_sources" | "workflow_sources" | "workflow_task_candidates" | "delegated_context";
+type DelegatedContextReadAuthority = { homeActor: AuthorizationActor; scope: AgentExecutionScope; scopeRequestId: string;
+  guestCompanyId: string; guestAgentId: string; guestActor: AuthorizationActor; credentialExpiresAt: number | null };
 type ReadSourceRows = {
   companyId: string;
   agentId: string | null;
@@ -1278,6 +1283,7 @@ type ReadSourceRows = {
   workflowReadableRunIds?: Set<string>;
   workflowActorKey?: string;
   workflowScopeToken?: string;
+  delegatedContext?: DelegatedContextReadAuthority;
 };
 type NativeTaskPrivacyBatch = {
   active: boolean;
@@ -1298,7 +1304,15 @@ type NativeTaskDecisionMemo = {
 };
 const nativeRoutineReadScopes = new WeakMap<object, ReadSourceRows>();
 const nativeWorkflowReadScopes = new WeakMap<object, ReadSourceRows>();
+const nativeDelegatedContextReadScopes = new WeakMap<object, ReadSourceRows>();
+const nativeDelegatedContextSourceTokens = new WeakMap<object, { db: object; scope: ReadSourceRows }>();
 const nativeTaskPrivacyBatches = new WeakMap<object, NativeTaskPrivacyBatch>();
+export function isActiveNativeDelegatedContextSource(db: Db | DbTransaction, value: unknown): value is NativeDelegatedContextSource {
+  if (!value || typeof value !== "object") return false;
+  const token = nativeDelegatedContextSourceTokens.get(value as object);
+  return !!token && token.db === (db as object) && token.scope.active && token.scope.purpose === "delegated_context" &&
+    nativeDelegatedContextReadScopes.get(db as object) === token.scope;
+}
 function createNativeTaskDecisionMemo(): NativeTaskDecisionMemo {
   return { agents: new Map(), memberships: new Map(), grants: new Map(), responsibleUsers: new Map(), runPolicies: new Map(), instanceAdmins: new Map(), readActorEvidence: new Map() };
 }
@@ -1389,6 +1403,7 @@ async function requireActiveWorkflowBaselineMembership(db: Db | DbTransaction, c
 // Only this native owner can construct the private row context. Caller DTOs
 // cannot supply row facts, policies, authorization results or a read capability.
 function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSourceRows, sourceAuthorityPins = false) {
+  readSources ??= nativeDelegatedContextReadScopes.get(db as object);
   const taskDecisionMemo = () => sourceAuthorityPins ? nativeTaskPrivacyBatches.get(db as object)?.decisionMemo : undefined;
   function memoized<T>(cache: Map<string, Promise<T>> | undefined, key: string, load: () => Promise<T>): Promise<T> {
     if (!cache) return load();
@@ -1400,7 +1415,8 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     return pending;
   }
   async function withReadScope<T>(companyId: string, issueIds: string[], projectIds: string[], purpose: ReadScopePurpose,
-    read: (owner: ReadSourceOwner) => Promise<T>, agentId: string | null = null, preflightActor?: AuthorizationActor): Promise<T> {
+    read: (owner: ReadSourceOwner) => Promise<T>, agentId: string | null = null, preflightActor?: AuthorizationActor,
+    delegatedContext?: DelegatedContextReadAuthority): Promise<T> {
     const locked = is(db, PgTransaction);
     const requestedIssues = [...new Set(issueIds)], requestedProjects = [...new Set(projectIds)];
     if (requestedIssues.length + requestedProjects.length > 20065) throw new Error("Native Source row transport exceeds its complete-population bound");
@@ -1410,6 +1426,7 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
       // reading any Task/Project Source row. Other scopes retain their historic order.
       issues: new Map(locked && purpose !== "context_inspection" ? requestedIssues.map(id => [id, null]) : []),
       projects: new Map(locked && purpose !== "context_inspection" ? requestedProjects.map(id => [id, null]) : []),
+      ...(delegatedContext ? { delegatedContext } : {}),
     };
     if (purpose === "routine_sources") context.routineScopeToken = randomUUID();
     if (purpose === "workflow_sources" || purpose === "workflow_task_candidates") context.workflowScopeToken = randomUUID();
@@ -1635,9 +1652,11 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     }
     for (const row of issueRows) context.issues.set(row.id, row);
     for (const row of projectRows) context.projects.set(row.id, row);
+    const priorDelegatedContext = purpose === "delegated_context" ? nativeDelegatedContextReadScopes.get(db as object) : undefined;
     try {
       if (purpose === "routine_sources") nativeRoutineReadScopes.set(db as object, context);
       if (purpose === "workflow_sources" || purpose === "workflow_task_candidates") nativeWorkflowReadScopes.set(db as object, context);
+      if (purpose === "delegated_context") nativeDelegatedContextReadScopes.set(db as object, context);
       const result = await read(owner);
       if (purpose === "routine_sources" && context.routineActor) {
         const before = [...(context.routineRunIds ?? [])].sort();
@@ -1690,6 +1709,12 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
           context.active = false;
           if (nativeWorkflowReadScopes.get(db as object) === context) nativeWorkflowReadScopes.delete(db as object);
         }
+      } else if (purpose === "delegated_context") {
+        context.active = false;
+        if (nativeDelegatedContextReadScopes.get(db as object) === context) {
+          if (priorDelegatedContext?.active) nativeDelegatedContextReadScopes.set(db as object, priorDelegatedContext);
+          else nativeDelegatedContextReadScopes.delete(db as object);
+        }
       } else {
         context.active = false;
         if (nativeRoutineReadScopes.get(db as object) === context) nativeRoutineReadScopes.delete(db as object);
@@ -1698,6 +1723,64 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
   }
   async function withReadSources<T>(companyId: string, issueIds: string[], projectIds: string[], read: (owner: ReadSourceOwner) => Promise<T>) {
     return withReadScope(companyId, issueIds, projectIds, "task_sources", read);
+  }
+  async function withReadDelegatedContextSources<T>(input: { homeActor: AuthorizationActor; scope: AgentExecutionScope;
+    scopeRequestId: string; guestCompanyId: string; guestAgentId: string },
+    read: (source: { db: Db; actor: AuthorizationActor; decide: ReadSourceOwner["decide"]; nativeSource: NativeDelegatedContextSource }) => Promise<T>): Promise<T> {
+    if (!is(db, PgTransaction)) {
+      return (db as unknown as Db).transaction(async rawTx => authorizationService(rawTx as unknown as Db)
+        .withReadDelegatedContextSources(input, read));
+    }
+    if (nativeDelegatedContextReadScopes.get(db as object)?.active)
+      throw forbidden("Nested delegated Context source scopes are unavailable.");
+    const scope = agentExecutionScopeSchema.parse(input.scope);
+    if (input.homeActor.type !== "agent" || input.homeActor.source !== "agent_jwt" || !input.homeActor.runId ||
+      !input.homeActor.agentId || !input.homeActor.onBehalfOfUserId || input.homeActor.companyId !== scope.primaryCompanyId ||
+      input.homeActor.agentId !== scope.primaryAgentPresenceId)
+      throw forbidden("Delegated Context reads require their original accountable home actor.");
+    const selected = scope.delegatedScopes.find(item => item.companyId === input.guestCompanyId && item.agentPresenceId === input.guestAgentId);
+    if (!selected) throw forbidden("Delegated Context read is outside the exact requested guest scope.");
+    const pinnedHomeActor = await pinReadSourceActor(input.homeActor, scope.primaryCompanyId);
+    const sameHomeCredential = pinnedHomeActor && pinnedHomeActor.type === input.homeActor.type &&
+      pinnedHomeActor.source === input.homeActor.source && pinnedHomeActor.companyId === input.homeActor.companyId &&
+      pinnedHomeActor.agentId === input.homeActor.agentId && pinnedHomeActor.runId === input.homeActor.runId &&
+      pinnedHomeActor.onBehalfOfUserId === input.homeActor.onBehalfOfUserId && pinnedHomeActor.sessionId === input.homeActor.sessionId &&
+      pinnedHomeActor.keyId === input.homeActor.keyId && pinnedHomeActor.authenticatedKeyHash === input.homeActor.authenticatedKeyHash &&
+      isDeepStrictEqual(pinnedHomeActor.keyScope ?? null, input.homeActor.keyScope ?? null) &&
+      pinnedHomeActor.authenticatedCredentialExpiresAt === input.homeActor.authenticatedCredentialExpiresAt;
+    if (!sameHomeCredential)
+      throw forbidden("Delegated Context home credential changed before source access.");
+    const [request] = await db.select({ scope: agentExecutionScopeRequests.scope, requestedByUserId: agentExecutionScopeRequests.requestedByUserId,
+      expiresAt: agentExecutionScopeRequests.expiresAt }).from(agentExecutionScopeRequests).where(and(
+      eq(agentExecutionScopeRequests.id, input.scopeRequestId), eq(agentExecutionScopeRequests.companyId, scope.primaryCompanyId),
+      eq(agentExecutionScopeRequests.agentId, scope.primaryAgentPresenceId), eq(agentExecutionScopeRequests.runId, input.homeActor.runId))).for("share", { noWait: true });
+    if (!request || request.requestedByUserId !== input.homeActor.onBehalfOfUserId || request.expiresAt.getTime() <= Date.now() ||
+      !isDeepStrictEqual(agentExecutionScopeSchema.parse(request.scope), scope))
+      throw forbidden("Delegated Context read requires its exact current scope request.");
+    const { crossCompanyContextService } = await import("./cross-company-context.js");
+    const resolved = await crossCompanyContextService(db as unknown as Db).resolve(input.homeActor, scope, db as unknown as Db);
+    const guest = resolved.scopes.find(item => item.companyId === input.guestCompanyId && item.presence.id === input.guestAgentId);
+    if (!guest) throw forbidden("Delegated Context guest authority is unavailable.");
+    const authority: DelegatedContextReadAuthority = { homeActor: input.homeActor, scope, scopeRequestId: input.scopeRequestId,
+      guestCompanyId: input.guestCompanyId, guestAgentId: input.guestAgentId, guestActor: guest.localActor,
+      credentialExpiresAt: input.homeActor.authenticatedCredentialExpiresAt ?? null };
+    const result = await withReadScope(input.guestCompanyId, [], [], "delegated_context", async owner => {
+      const initialFailure = await delegatedContextCurrentFailure(authority);
+      if (initialFailure) throw forbidden(`Delegated Context source authority changed before provider reads (${initialFailure}).`);
+      const nativeSource: NativeDelegatedContextSource = Object.freeze({ actor: guest.localActor, decide: owner.decide.bind(owner) });
+      const scope = nativeDelegatedContextReadScopes.get(db as object);
+      if (!scope) throw forbidden("Delegated Context source scope is unavailable.");
+      nativeDelegatedContextSourceTokens.set(nativeSource, { db: db as object, scope });
+      const value = await read({ db: db as unknown as Db, actor: guest.localActor, decide: nativeSource.decide, nativeSource });
+      const finalFailure = await delegatedContextCurrentFailure(authority);
+      if (finalFailure) throw forbidden("Delegated Context source authority changed during provider reads.", { code: finalFailure });
+      if (authority.credentialExpiresAt !== null) {
+        const [deadline] = await db.execute<{ current: boolean }>(sql`select clock_timestamp() < to_timestamp(${authority.credentialExpiresAt} / 1000.0) as current`);
+        if (!deadline?.current) throw forbidden("Delegated Context home credential expired during provider reads.");
+      }
+      return value;
+    }, input.guestAgentId, undefined, authority);
+    return result;
   }
   async function assertTaskPrivacyBatch(actor: AuthorizationActor, issueIds: string[], projectIds: string[], deadline?:number) {
     const checkDeadline=()=>{if(deadline!==undefined&&performance.now()>deadline)throw unprocessable("Forecast exceeds the native source time budget");};
@@ -3931,6 +4014,44 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     scope?: Record<string, unknown> | null;
     enforceResponsibleUserIntersection?: boolean;
   }): Promise<AuthorizationDecision> {
+    if (readSources?.purpose === "delegated_context" &&
+      (input.action === "foundation:read" || input.action === "company_scope:read")) {
+      const delegated = readSources.delegatedContext;
+      const guestActor = delegated && input.actor.type === "agent" && input.actor.source === "agent_jwt" &&
+        input.actor.companyId === delegated.guestCompanyId && input.actor.agentId === delegated.guestAgentId &&
+        input.actor.onBehalfOfUserId === delegated.guestActor.onBehalfOfUserId &&
+        input.actor.runId === delegated.guestActor.runId && input.actor.sessionId === delegated.guestActor.sessionId &&
+        input.actor.keyId === delegated.guestActor.keyId && input.actor.authenticatedKeyHash === delegated.guestActor.authenticatedKeyHash &&
+        input.actor.authenticatedCredentialExpiresAt === delegated.guestActor.authenticatedCredentialExpiresAt &&
+        input.actor.ignoreInstanceAdmin === delegated.guestActor.ignoreInstanceAdmin &&
+        isDeepStrictEqual(input.actor.keyScope ?? null, delegated.guestActor.keyScope ?? null);
+      const homeActor = delegated && isDeepStrictEqual(input.actor, delegated.homeActor);
+      const companyAllowed = delegated && input.resource.type === "company" &&
+        (input.action === "company_scope:read"
+          ? input.resource.companyId === delegated.guestCompanyId && guestActor || input.resource.companyId === delegated.scope.primaryCompanyId && homeActor
+          : input.resource.companyId === delegated.guestCompanyId && guestActor);
+      if (!delegated || !companyAllowed || input.scope && Object.keys(input.scope).length) {
+        const mismatch = !delegated ? "missing_scope" : input.resource.type !== "company" ? "resource_type"
+          : !guestActor && input.actor.type !== "agent" ? "actor_type"
+            : !guestActor && input.actor.companyId !== delegated.guestCompanyId ? "actor_company"
+              : !guestActor && input.actor.agentId !== delegated.guestAgentId ? "actor_presence"
+        : input.actor.type !== "agent" ? "actor_type"
+          : input.actor.source !== delegated.guestActor.source ? "actor_source"
+            : input.actor.onBehalfOfUserId !== delegated.guestActor.onBehalfOfUserId ? "actor_user"
+              : input.actor.runId !== delegated.guestActor.runId ? "actor_run"
+                : input.actor.sessionId !== delegated.guestActor.sessionId ? "actor_session"
+                  : input.actor.keyId !== delegated.guestActor.keyId ? "actor_key"
+                    : input.actor.authenticatedKeyHash !== delegated.guestActor.authenticatedKeyHash ? "actor_hash"
+                      : input.actor.authenticatedCredentialExpiresAt !== delegated.guestActor.authenticatedCredentialExpiresAt ? "actor_expiry"
+                        : input.actor.ignoreInstanceAdmin !== delegated.guestActor.ignoreInstanceAdmin ? "actor_admin"
+                          : !isDeepStrictEqual(input.actor.keyScope ?? null, delegated.guestActor.keyScope ?? null) ? "actor_scope"
+                            : "resource_company";
+        return deny({ action: input.action, reason: "deny_scope", explanation: `Delegated Context read scope mismatch (${mismatch}).` });
+      }
+      if (await delegatedContextCurrentFailure(delegated))
+        return deny({ action: input.action, reason: "deny_missing_membership", explanation: "Delegated Context source authority is no longer current." });
+      return allow({ action: input.action, reason: "allow_delegated_context_source", explanation: "Allowed by the current native delegated Context source scope." });
+    }
     if (readSources) {
       if (!readSources.active) throw new Error("Native Source read scope has ended");
       const foundationRead = input.action === "foundation:read" && input.resource.type === "company" && is(db, PgTransaction)
@@ -4023,10 +4144,50 @@ function createAuthorizationService(db: Db | DbTransaction, readSources?: ReadSo
     return decision;
   }
 
+  async function delegatedContextCurrentFailure(context: DelegatedContextReadAuthority): Promise<string | null> {
+    const activeReadScope = readSources ?? nativeDelegatedContextReadScopes.get(db as object);
+    if (!activeReadScope?.active || activeReadScope.purpose !== "delegated_context" || !is(db, PgTransaction)) return "scope_inactive";
+    const [request] = await db.select({ scope: agentExecutionScopeRequests.scope, requestedByUserId: agentExecutionScopeRequests.requestedByUserId,
+      expiresAt: agentExecutionScopeRequests.expiresAt }).from(agentExecutionScopeRequests).where(and(
+      eq(agentExecutionScopeRequests.id, context.scopeRequestId), eq(agentExecutionScopeRequests.companyId, context.scope.primaryCompanyId),
+      eq(agentExecutionScopeRequests.agentId, context.scope.primaryAgentPresenceId), eq(agentExecutionScopeRequests.runId, context.homeActor.runId!))).for("share", { noWait: true });
+    if (!request || request.requestedByUserId !== context.homeActor.onBehalfOfUserId || request.expiresAt.getTime() <= Date.now() ||
+      !isDeepStrictEqual(agentExecutionScopeSchema.parse(request.scope), context.scope)) return "scope_request_changed";
+    // The canonical cross-company owner needs its ordinary policy path while
+    // it rechecks exact source identities. Temporarily suspend only this
+    // callback's delegated Foundation capability; restore it immediately.
+    if (nativeDelegatedContextReadScopes.get(db as object) === activeReadScope) nativeDelegatedContextReadScopes.delete(db as object);
+    try {
+      const pinned = await pinReadSourceActor(context.homeActor, context.scope.primaryCompanyId);
+      const credentialMatches = pinned?.type === context.homeActor.type && pinned.source === context.homeActor.source &&
+        pinned.companyId === context.homeActor.companyId && pinned.agentId === context.homeActor.agentId &&
+        pinned.runId === context.homeActor.runId && pinned.onBehalfOfUserId === context.homeActor.onBehalfOfUserId &&
+        pinned.sessionId === context.homeActor.sessionId && pinned.keyId === context.homeActor.keyId &&
+        pinned.authenticatedKeyHash === context.homeActor.authenticatedKeyHash &&
+        pinned.authenticatedCredentialExpiresAt === context.homeActor.authenticatedCredentialExpiresAt &&
+        isDeepStrictEqual(pinned.keyScope ?? null, context.homeActor.keyScope ?? null);
+      if (!credentialMatches) return "home_credential_changed";
+      const { crossCompanyContextService } = await import("./cross-company-context.js");
+      const resolved = await crossCompanyContextService(db as unknown as Db).resolve(context.homeActor, context.scope, db as unknown as Db);
+      const guest = resolved.scopes.find(candidate => candidate.companyId === context.guestCompanyId && candidate.presence.id === context.guestAgentId);
+      const matches = !!guest && guest.localActor.type === "agent" && guest.localActor.source === context.guestActor.source &&
+        guest.localActor.companyId === context.guestActor.companyId && guest.localActor.agentId === context.guestActor.agentId &&
+        guest.localActor.onBehalfOfUserId === context.guestActor.onBehalfOfUserId &&
+        isDeepStrictEqual(guest.localActor.keyScope ?? null, context.guestActor.keyScope ?? null);
+      return matches ? null : "current_scope_changed";
+    } catch (error) {
+      if (error instanceof HttpError && [403, 404, 409, 422].includes(error.status)) return "current_scope_denied";
+      throw error;
+    } finally {
+      if (activeReadScope.active) nativeDelegatedContextReadScopes.set(db as object, activeReadScope);
+    }
+  }
+
   return {
     decide,
     decidePrincipalGrant,
     withReadSources,
+    withReadDelegatedContextSources,
     assertTaskPrivacyBatch,
     withReadCompany,
     withReadRoutineSources,

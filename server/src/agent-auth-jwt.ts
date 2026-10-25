@@ -14,12 +14,34 @@ export interface LocalAgentJwtClaims {
   run_id: string;
   responsible_user_id?: string | null;
   key_scope?: AgentApiKeyScope | null;
+  /** Server-minted, one HTTP effect binding for an authenticated native tool call. */
+  native_tool_effect?: NativeToolEffectClaim;
   iat: number;
   exp: number;
   iss?: string;
   aud?: string;
   instance_id?: string;
   jti?: string;
+}
+
+export interface NativeToolEffectClaim {
+  dispatchId: string;
+  eventSeq: number;
+  attempt: number;
+  turnId: string;
+  callId: string;
+  tool: "call_api";
+  operationId: string;
+  method: string;
+  pathAndQuery: string;
+  bodyPresent: boolean;
+  bodyHash: string;
+  apiReceiptDigest: string;
+  leaseOwner: string;
+  leaseExpiresAt: string;
+  controllerBootId: string;
+  controllerPid: number;
+  controllerProcessStartedAt: string;
 }
 
 const JWT_ALGORITHM = "HS256";
@@ -126,11 +148,17 @@ export function createLocalAgentJwt(
   runId: string,
   responsibleUserId?: string | null,
   keyScope: AgentApiKeyScope = { kind: "standard" },
+  nativeToolEffect?: NativeToolEffectClaim,
 ) {
   const config = jwtConfig();
   if (!config) return null;
 
   const now = Math.floor(Date.now() / 1000);
+  const parsedNativeToolEffect = nativeToolEffect ? parseNativeToolEffectClaim(nativeToolEffect) : null;
+  if (nativeToolEffect && !parsedNativeToolEffect) return null;
+  const exp = Math.min(now + config.ttlSeconds, parsedNativeToolEffect
+    ? Math.floor(Date.parse(parsedNativeToolEffect.leaseExpiresAt) / 1000) : Number.MAX_SAFE_INTEGER);
+  if (exp <= now) return null;
   const claims: LocalAgentJwtClaims = {
     sub: agentId,
     company_id: companyId,
@@ -138,8 +166,9 @@ export function createLocalAgentJwt(
     run_id: runId,
     responsible_user_id: responsibleUserId?.trim() || null,
     ...(keyScope.kind === "standard" ? {} : { key_scope: keyScope }),
+    ...(parsedNativeToolEffect ? { native_tool_effect: parsedNativeToolEffect } : {}),
     iat: now,
-    exp: now + config.ttlSeconds,
+    exp,
     iss: config.issuer,
     aud: config.audience,
     instance_id: config.instanceId,
@@ -217,6 +246,8 @@ export function verifyLocalAgentJwt(token: string): LocalAgentJwtClaims | null {
     ? normalizeAgentApiKeyScope(claims.key_scope)
     : undefined;
   if (keyScopeClaim === null) return null;
+  const nativeToolEffect = parseNativeToolEffectClaim(claims.native_tool_effect);
+  if (Object.hasOwn(claims, "native_tool_effect") && !nativeToolEffect) return null;
   const iat = typeof claims.iat === "number" ? claims.iat : null;
   const exp = typeof claims.exp === "number" ? claims.exp : null;
   if (!sub || !adapterType || !runId || !iat || !exp) return null;
@@ -246,6 +277,7 @@ export function verifyLocalAgentJwt(token: string): LocalAgentJwtClaims | null {
     run_id: runId,
     ...(responsibleUserClaim !== undefined ? { responsible_user_id: responsibleUserClaim } : {}),
     ...(keyScopeClaim !== undefined ? { key_scope: keyScopeClaim } : {}),
+    ...(nativeToolEffect ? { native_tool_effect: nativeToolEffect } : {}),
     iat,
     exp,
     ...(issuer ? { iss: issuer } : {}),
@@ -253,4 +285,30 @@ export function verifyLocalAgentJwt(token: string): LocalAgentJwtClaims | null {
     ...(instanceClaim ? { instance_id: instanceClaim } : {}),
     jti: typeof claims.jti === "string" ? claims.jti : undefined,
   };
+}
+
+function parseNativeToolEffectClaim(value: unknown): NativeToolEffectClaim | null {
+  if (value === undefined) return null;
+  if (!value || typeof value !== "object" || Array.isArray(value)) return null;
+  const claim = value as Record<string, unknown>;
+  const keys = ["dispatchId", "eventSeq", "attempt", "turnId", "callId", "tool", "operationId", "method", "pathAndQuery", "bodyPresent",
+    "bodyHash", "apiReceiptDigest", "leaseOwner", "leaseExpiresAt", "controllerBootId", "controllerPid", "controllerProcessStartedAt"];
+  if (Object.keys(claim).length !== keys.length || keys.some(key => !Object.hasOwn(claim, key))) return null;
+  const uuidV4 = /^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+  const digest = /^[0-9a-f]{64}$/;
+  const printable = (raw: unknown, max: number) => typeof raw === "string" && raw.length > 0 && raw.length <= max && /^[\x21-\x7e]+$/.test(raw);
+  if (typeof claim.dispatchId !== "string" || !uuidV4.test(claim.dispatchId) ||
+    !Number.isSafeInteger(claim.eventSeq) || (claim.eventSeq as number) < 0 ||
+    !Number.isSafeInteger(claim.attempt) || (claim.attempt as number) < 1 ||
+    !printable(claim.turnId, 240) || !printable(claim.callId, 240) || claim.tool !== "call_api" ||
+    typeof claim.operationId !== "string" || claim.operationId.length > 500 || !/^[\x20-\x7e]+$/.test(claim.operationId) ||
+    !["POST", "PUT", "PATCH", "DELETE"].includes(String(claim.method)) ||
+    !printable(claim.pathAndQuery, 16_384) || !String(claim.pathAndQuery).startsWith("/api/") ||
+    typeof claim.bodyPresent !== "boolean" ||
+    typeof claim.bodyHash !== "string" || !digest.test(claim.bodyHash) ||
+    typeof claim.apiReceiptDigest !== "string" || !digest.test(claim.apiReceiptDigest) ||
+    !printable(claim.leaseOwner, 500) || !Number.isFinite(Date.parse(String(claim.leaseExpiresAt))) ||
+    !printable(claim.controllerBootId, 200) || !Number.isSafeInteger(claim.controllerPid) || (claim.controllerPid as number) < 1 ||
+    !Number.isFinite(Date.parse(String(claim.controllerProcessStartedAt)))) return null;
+  return claim as unknown as NativeToolEffectClaim;
 }

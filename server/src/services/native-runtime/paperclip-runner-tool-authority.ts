@@ -26,14 +26,14 @@ import {
 import { runnerApiToolsEnabled } from "./runner-api-rollout.js";
 import { openRunnerApiWorkspaceFile } from "./runner-api-files.js";
 import { basename } from "node:path";
-import { createLocalAgentJwt } from "../../agent-auth-jwt.js";
+import { createLocalAgentJwt, type NativeToolEffectClaim } from "../../agent-auth-jwt.js";
 import { getStorageService } from "../../storage/index.js";
 import type { StorageService } from "../../storage/types.js";
 import { assetService } from "../assets.js";
 import { workspaceFileResourceService } from "../workspace-file-resources.js";
 import { badRequest, forbidden } from "../../errors.js";
 import { searchRunnerApi } from "./runner-api-catalog.js";
-import { executeRunnerApi, validateRunnerApiCall, RUNNER_API_MAX_BYTES, type RunnerApiFile } from "./runner-api-client.js";
+import { executeRunnerApi, validateRunnerApiCall, runnerApiUrl, RUNNER_API_MAX_BYTES, type RunnerApiFile } from "./runner-api-client.js";
 import { and, desc, eq, isNull, notInArray, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
 import {
@@ -49,6 +49,7 @@ import {
   issueDocuments,
   issues,
   issueThreadInteractions,
+  nativeRunFinalizations,
 } from "@paperclipai/db";
 import { CAPABILITY_SEMANTIC_TOOL_CATALOG, runnerCodexDynamicToolsFit } from "../../vendor/paperclip-runner/index.js";
 import { agentService } from "../agents.js";
@@ -692,7 +693,43 @@ export class PaperclipRunnerToolAuthority {
     const { input, operation } = validateRunnerApiCall(value, context);
     const apiUrl = this.binding.apiUrl ?? process.env.PAPERCLIP_API_URL;
     if (!apiUrl) throw new Error("Paperclip API origin is unavailable");
-    const token = createLocalAgentJwt(this.binding.agentId, this.binding.companyId, bound.actor.adapterType, this.binding.runId, bound.run.responsibleUserId);
+    let nativeToolEffect: NativeToolEffectClaim | undefined;
+    const callIdentity = nativeBackendToolCallIdentity.getStore();
+    const nativeInputDispatch = resolveNativeInputDispatchReceiptIdentity(bound.run.runnerProfileJson, callIdentity, "call_api");
+    const mutation = !["GET", "HEAD", "OPTIONS"].includes(operation.method);
+    const contentType = input.contentType ?? (input.files?.length ? "multipart/form-data" : "application/json");
+    if (mutation && nativeInputDispatch && callIdentity && !input.files?.length &&
+      (!input.body || (typeof input.body === "object" && !Array.isArray(input.body))) &&
+      /^application\/json(?:\s*;|$)/i.test(contentType)) {
+      const [lease] = await this.db.select({ leaseOwner: nativeRunFinalizations.leaseOwner,
+        leaseExpiresAt: nativeRunFinalizations.leaseExpiresAt, controllerBootId: nativeRunFinalizations.controllerBootId,
+        controllerPid: nativeRunFinalizations.controllerPid, controllerProcessStartedAt: nativeRunFinalizations.controllerProcessStartedAt,
+      }).from(nativeRunFinalizations).where(and(
+        eq(nativeRunFinalizations.companyId, this.binding.companyId), eq(nativeRunFinalizations.runId, this.binding.runId),
+        eq(nativeRunFinalizations.issueId, this.binding.issueId), eq(nativeRunFinalizations.attempt, nativeInputDispatch.attempt),
+        sql`${nativeRunFinalizations.leaseExpiresAt} > clock_timestamp()`,
+      ));
+      if (lease?.leaseOwner && lease.leaseExpiresAt && lease.controllerBootId && lease.controllerPid && lease.controllerProcessStartedAt) {
+        const url = runnerApiUrl(operation, input, context, apiUrl);
+        nativeToolEffect = {
+          ...nativeInputDispatch,
+          tool: "call_api",
+          operationId: operation.operationId,
+          method: operation.method.toUpperCase(),
+          pathAndQuery: `${url.pathname}${url.search}`,
+          bodyPresent: input.body !== undefined,
+          bodyHash: createHash("sha256").update(input.body === undefined ? "null" : canonicalJson(input.body)).digest("hex"),
+          apiReceiptDigest: createHash("sha256").update(canonicalJson(input)).digest("hex"),
+          leaseOwner: lease.leaseOwner,
+          leaseExpiresAt: lease.leaseExpiresAt.toISOString(),
+          controllerBootId: lease.controllerBootId,
+          controllerPid: lease.controllerPid,
+          controllerProcessStartedAt: lease.controllerProcessStartedAt.toISOString(),
+        };
+      }
+    }
+    const token = createLocalAgentJwt(this.binding.agentId, this.binding.companyId, bound.actor.adapterType,
+      this.binding.runId, bound.run.responsibleUserId, { kind: "standard" }, nativeToolEffect);
     if (!token) throw new Error("Paperclip run authentication is unavailable");
     const execute = async () => {
       const current = await this.#boundContext();

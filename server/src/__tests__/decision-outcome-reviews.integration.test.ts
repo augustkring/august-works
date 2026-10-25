@@ -3,14 +3,14 @@ import {disableV8Rollout} from "./helpers/v8-rollout.js";
 import {createHash,randomUUID} from "node:crypto";
 import {afterAll,beforeAll,beforeEach,describe,expect,it} from "vitest";
 import {and,eq,sql} from "drizzle-orm";
-import {agents,companies,companyMemberships,createDb,decisions,heartbeatRuns,issues,projects,issueComments,
+import {agents,companies,companyMemberships,createDb,decisions,heartbeatRuns,issues,projects,issueComments,type Db,
   decisionContexts,decisionContextVersions,decisionContextBindings,decisionContextPreparations,decisionCriteria,decisionAssumptions,decisionExpectedOutcomes,
   decisionEvidenceLinks,analyticalLineageManifests,analyticalLineageEdges,decisionOutcomeReviews,decisionOutcomeReviewReceipts,managementReviewSnapshots,memoryBindings,memoryBindingTargets,memoryRecords,learningCycles,learningAnalyticalDependencies,learningEvidence,learningHypotheses,learningDomainCandidates,activityLog} from "@paperclipai/db";
 import {decisionContextDefinitionSchema,type DecisionContextDefinition,type FinishDecisionOutcomeReview} from "@paperclipai/shared";
 import {learningService} from "../services/learning/learning-service.js";
 import {memoryService} from "../services/memory/memory-service.js";
 import {memoryJobService} from "../services/memory/memory-jobs.js";
-import {decisionOutcomeReviewService} from "../services/decision-outcome-reviews.js";
+import {consumeLearningOutcomeReviewBundle,decisionOutcomeReviewService} from "../services/decision-outcome-reviews.js";
 import {decisionIntelligenceService} from "../services/decision-intelligence.js";
 import {decisionService} from "../services/decisions.js";
 import {managementReviewService} from "../services/management-reviews/service.js";
@@ -128,6 +128,19 @@ suite("Native decision outcome reviews on migrated PostgreSQL",()=>{
     expect(await db.select().from(learningDomainCandidates).where(eq(learningDomainCandidates.companyId,companyId))).toHaveLength(0);
     for(const action of ["learning.cycle_created","decision.outcome_review_learning_started"])expect(await db.select().from(activityLog).where(and(eq(activityLog.companyId,companyId),eq(activityLog.action,action)))).toHaveLength(1);
     expect((await native().get(d.id))!.chosenOptionId).toBe(before!.chosenOptionId);
+    expect((await reviews().startLearning(companyId,actor,d.id,input)).cycleId).toBe(cycles[0]!.id);
+    await db.update(issues).set({hiddenAt:new Date()}).where(eq(issues.id,targetId));
+    await expect(reviews().startLearning(companyId,actor,d.id,input)).rejects.toMatchObject({status:404});
+    await db.update(issues).set({hiddenAt:null}).where(eq(issues.id,targetId));
+    const expiredCredential={...actor,authenticatedCredentialExpiresAt:Date.now()-1};
+    await expect(reviews().startLearning(companyId,expiredCredential,d.id,input)).rejects.toMatchObject({status:403});
+    const colleague=await seedCurrentHumanSourceActor(db,[companyId],"outcome-review-colleague");
+    await expect(reviews().startLearning(companyId,colleague,d.id,input)).rejects.toMatchObject({status:404});
+    const outOfScope=await db.transaction(async raw=>consumeLearningOutcomeReviewBundle(raw as unknown as Db,companyId,actor,d.id,3,cycles[0]!.id,input.purpose));
+    const wrongActor=await db.transaction(async raw=>consumeLearningOutcomeReviewBundle(raw as unknown as Db,companyId,colleague,d.id,3,cycles[0]!.id,input.purpose));
+    const wrongRevision=await db.transaction(async raw=>consumeLearningOutcomeReviewBundle(raw as unknown as Db,companyId,actor,d.id,2,cycles[0]!.id,input.purpose));
+    const wrongCycle=await db.transaction(async raw=>consumeLearningOutcomeReviewBundle(raw as unknown as Db,companyId,actor,d.id,3,randomUUID(),input.purpose));
+    expect([outOfScope,wrongActor,wrongRevision,wrongCycle]).toEqual([null,null,null,null]);
     await expect(reviews().startLearning(companyId,actor,d.id,{...input,trigger:"A different human request cannot silently reuse the previous conversion"})).rejects.toMatchObject({status:409});
     await expect(db.update(decisionOutcomeReviews).set({learningCycleId:null}).where(eq(decisionOutcomeReviews.id,review.id))).rejects.toBeDefined();
     await expect(db.update(decisionOutcomeReviews).set({reviewedByUserId:"other"}).where(eq(decisionOutcomeReviews.id,review.id))).rejects.toBeDefined();

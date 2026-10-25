@@ -11,7 +11,7 @@ import {HttpError,conflict,forbidden,unprocessable} from "../errors.js";
 const pinsSchema=z.array(analyticalContextAuthorityPinSchema).min(1).max(32);
 /** Exact native source owners reauthorize retained identities. No copied fact,
  * historical requester or feature flag supplies a current reader privilege. */
-export async function inspectAnalyticalContextPins(tx:Db,companyId:string,actor:AuthorizationActor,raw:AnalyticalContextAuthorityPin[],deadline=performance.now()+30000,historicalQualification=true) {
+export async function inspectAnalyticalContextPins(tx:Db,companyId:string,actor:AuthorizationActor,raw:AnalyticalContextAuthorityPin[],deadline=performance.now()+30000,historicalQualification=true,learningCycleScope?:{cycleId:string;purpose:string}) {
  let sourceSensitivity:"internal"|"confidential"="internal";
  const retainSensitivity=(value:string)=>{if(value==="confidential")sourceSensitivity="confidential";};
  const pins=pinsSchema.parse(raw),manifestIds=new Set<string>();let expiresAt=Infinity;
@@ -32,13 +32,18 @@ export async function inspectAnalyticalContextPins(tx:Db,companyId:string,actor:
    if(!stored||stored.contentHash!==version.contentHash)throw conflict("The native Decision context changed");
    retainSensitivity(stored.definition.sensitivity);manifestIds.add(stored.lineageManifestId);expiresAt=Math.min(expiresAt,stored.expiresAt.getTime());
   }else if(pin.kind==="outcome_review"){
-   const {decisionOutcomeReviewService}=await import("./decision-outcome-reviews.js");
-   const view=await decisionOutcomeReviewService(tx).detail(companyId,actor,pin.decisionId);
-   if(!view||view.revision!==pin.revision)throw conflict("The retained native outcome review changed");
-   const [version]=await tx.select().from(decisionContextVersions).where(and(eq(decisionContextVersions.companyId,companyId),eq(decisionContextVersions.id,view.contextVersionId))).for("share");if(!version)throw conflict("Native outcome-review source definition is unavailable");retainSensitivity(version.definition.sensitivity);
-   const receipts=await tx.select().from(decisionOutcomeReviewReceipts).where(and(eq(decisionOutcomeReviewReceipts.companyId,companyId),eq(decisionOutcomeReviewReceipts.reviewId,view.id))).limit(4);
-   if(receipts.length!==view.receipts.length)throw conflict("Native outcome review provenance is unavailable");
-   for(const receipt of receipts){manifestIds.add(receipt.lineageManifestId);expiresAt=Math.min(expiresAt,Date.parse(receipt.payload.expiresAt));}
+   const {consumeLearningOutcomeReviewBundle,decisionOutcomeReviewService}=await import("./decision-outcome-reviews.js");
+   const owned=learningCycleScope?await consumeLearningOutcomeReviewBundle(tx,companyId,actor,pin.decisionId,pin.revision,learningCycleScope.cycleId,learningCycleScope.purpose):null;
+   if(owned){
+    retainSensitivity(owned.sourceSensitivity);owned.manifestIds.forEach(id=>manifestIds.add(id));expiresAt=Math.min(expiresAt,owned.expiresAt.getTime());
+   }else{
+    const view=await decisionOutcomeReviewService(tx).detail(companyId,actor,pin.decisionId);
+    if(!view||view.revision!==pin.revision)throw conflict("The retained native outcome review changed");
+    const [version]=await tx.select().from(decisionContextVersions).where(and(eq(decisionContextVersions.companyId,companyId),eq(decisionContextVersions.id,view.contextVersionId))).for("share");if(!version)throw conflict("Native outcome-review source definition is unavailable");retainSensitivity(version.definition.sensitivity);
+    const receipts=await tx.select().from(decisionOutcomeReviewReceipts).where(and(eq(decisionOutcomeReviewReceipts.companyId,companyId),eq(decisionOutcomeReviewReceipts.reviewId,view.id))).limit(4);
+    if(receipts.length!==view.receipts.length)throw conflict("Native outcome review provenance is unavailable");
+    for(const receipt of receipts){manifestIds.add(receipt.lineageManifestId);expiresAt=Math.min(expiresAt,Date.parse(receipt.payload.expiresAt));}
+   }
   }else if(pin.kind==="planning_outcome"){
    const {inspectPlanningOutcome}=await import("./adaptive-planning/outcome.js"),source=await inspectPlanningOutcome(tx,companyId,actor,pin.projectId,pin.proposalId,pin.manifestId);retainSensitivity(source.sourceSensitivity);source.manifestIds.forEach(id=>manifestIds.add(id));expiresAt=Math.min(expiresAt,source.expiresAt.getTime());
   }else if(pin.kind==="metric_definition"){

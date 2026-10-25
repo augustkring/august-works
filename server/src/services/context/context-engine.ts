@@ -39,7 +39,8 @@ import { retrieveEligibleMemory } from "../memory/memory-retrieval.js";
 import { cognitiveContextProvider } from "../memory/cognitive-context.js";
 import { derivedMemoryContextProvider } from "../memory/derived-context.js";
 import {assertAnalyticalContextPayloadAccess} from "../analytical-context-authority.js";
-import { authorizationService, type AuthorizationActor, type NativeContextInspectionOwner } from "../authorization.js";
+import { authorizationService, isActiveNativeDelegatedContextSource, type AuthorizationActor, type NativeContextInspectionOwner,
+  type NativeDelegatedContextSource } from "../authorization.js";
 import { cognitiveMemoryActor } from "../memory/cognitive-memory.js";
 
 export const DEFAULT_CONTEXT_TOTAL_DEADLINE_MS = 1_500;
@@ -684,7 +685,7 @@ export function defaultConnectedKnowledgeContextProviders(
 export function contextEngineService(db: Db, options: { providers?: ContextProvider[] } = {}) {
   const assemble = async (rawInput: AssembleContextInput, inspectionActor?: AuthorizationActor,
     activeDb: Db = db, inspectionAuthority?: NativeContextInspectionOwner,
-    inspectionHooks?: ContextInspectionHooks<unknown>): Promise<ContextAssemblyResult> => {
+    inspectionHooks?: ContextInspectionHooks<unknown>, delegatedSource?: NativeDelegatedContextSource): Promise<ContextAssemblyResult> => {
       const manifests = contextManifestService(activeDb);
       const access = accessService(activeDb);
       if (rawInput.sourceScope !== undefined && rawInput.sourceScope !== "task_only")
@@ -696,8 +697,13 @@ export function contextEngineService(db: Db, options: { providers?: ContextProvi
         throw unprocessable("Context total deadline must be between 1 and 30000 ms");
       }
 
-      const input = { ...rawInput, query, authorizationActor: inspectionActor,
-        authorizationDecision: inspectionAuthority?.decide };
+      if (delegatedSource && (!isActiveNativeDelegatedContextSource(activeDb, delegatedSource) || inspectionActor ||
+        !rawInput.delegatedExecution || delegatedSource.actor.type !== "agent" ||
+        delegatedSource.actor.companyId !== rawInput.companyId || delegatedSource.actor.agentId !== rawInput.agentId ||
+        delegatedSource.actor.onBehalfOfUserId !== rawInput.responsibleUserId))
+        throw forbidden("Delegated Context providers require their active original authorization owner.");
+      const input = { ...rawInput, query, authorizationActor: delegatedSource?.actor ?? inspectionActor,
+        authorizationDecision: delegatedSource?.decide ?? inspectionAuthority?.decide };
       if (inspectionActor && input.delegatedExecution) throw forbidden("Human Context inspection cannot create delegated runtime provenance");
       const asOf = rawInput.asOf ?? new Date();
       const sensitivityCeiling = rawInput.sensitivityCeiling ?? "internal";

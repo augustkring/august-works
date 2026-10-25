@@ -1,6 +1,6 @@
 import {randomUUID} from "node:crypto";
 import {and,desc,eq,sql} from "drizzle-orm";
-import {analyticalLineageEdges,analyticalLineageManifests,businessMetricObservations,businessMetricVersions,decisionOutcomeReviews,decisionOutcomeReviewReceipts,learningEvidence,type Db} from "@paperclipai/db";
+import {analyticalLineageEdges,analyticalLineageManifests,businessMetricObservations,businessMetricVersions,decisionContextVersions,decisionOutcomeReviews,decisionOutcomeReviewReceipts,learningCycles,learningEvidence,type Db} from "@paperclipai/db";
 import {scheduleDecisionOutcomeReviewSchema,transitionDecisionOutcomeReviewSchema,finishDecisionOutcomeReviewSchema,startDecisionReviewLearningSchema,type StartDecisionReviewLearning,type ScheduleDecisionOutcomeReview,type TransitionDecisionOutcomeReview,type FinishDecisionOutcomeReview,type DecisionOutcomeReviewReceipt,type DecisionOutcomeReviewView,type CapturedDecisionEvidence,type DecisionMetricComparison} from "@paperclipai/shared";
 import {conflict,forbidden,notFound,unprocessable} from "../errors.js";
 import {pinCurrentBoardActor,type AuthorizationActor} from "./authorization.js";
@@ -16,7 +16,14 @@ import {logActivity,withV7ActivityTransaction} from "./v7-mutations.js";
 type Root=typeof decisionOutcomeReviews.$inferSelect;
 type Bound=Awaited<ReturnType<typeof inspectBoundDecisionContext>>;
 type Edge=Pick<typeof analyticalLineageEdges.$inferInsert,"inputType"|"inputRef"|"inputHash"|"relationship">;
+type LearningReviewBundleScope={cycleId:string;purpose:string};
+type LearningReviewBundle={companyId:string;actorKey:string;decisionId:string;reviewId:string;revision:number;contextVersionId:string;contextHash:string;cycleId:string;purpose:string;manifestIds:string[];sourceEdges:Edge[];receiptPins:{revision:number;manifestId:string;contentHash:string;expiresAt:string}[];expiresAt:number;sensitivity:"internal"|"confidential"};
+const learningReviewBundles=new WeakMap<object,Map<string,LearningReviewBundle>>();
 const BUDGET=20_065;
+function learningBundleKey(actor:AuthorizationActor,companyId:string,decisionId:string,revision:number,cycleId:string,purpose:string){
+  const actorKey=JSON.stringify(actor.type==="board"?[actor.type,actor.source,actor.userId??null,actor.sessionId??null,actor.keyId??null]:actor.type==="agent"?[actor.type,actor.companyId,actor.agentId,actor.runId??null]:[actor.type]);
+  return {actorKey,key:JSON.stringify([companyId,decisionId,revision,cycleId,purpose,actorKey])};
+}
 function receiptHash(receipt:DecisionOutcomeReviewReceipt) {const {contentHash:_,...material}=receipt;return nativeSha256(material);}
 function deadlineCheck(deadline:number) {if(performance.now()>deadline) throw unprocessable("Decision outcome review exceeded its bounded source budget");}
 async function root(tx:Db,companyId:string,decisionId:string) {
@@ -25,7 +32,7 @@ async function root(tx:Db,companyId:string,decisionId:string) {
 async function lineage(tx:Db,companyId:string,manifestId:string) {
   await assertMemorySourcesRetained(tx,companyId,[{sourceProvider:"august_works_analytical",sourceRef:`manifest://${manifestId}`}]);
   const [manifest]=await tx.select().from(analyticalLineageManifests).where(and(eq(analyticalLineageManifests.companyId,companyId),eq(analyticalLineageManifests.id,manifestId))).for("share");
-  const rows=await tx.select().from(analyticalLineageEdges).where(and(eq(analyticalLineageEdges.companyId,companyId),eq(analyticalLineageEdges.manifestId,manifestId))).limit(BUDGET+1);
+  const rows=await tx.select().from(analyticalLineageEdges).where(and(eq(analyticalLineageEdges.companyId,companyId),eq(analyticalLineageEdges.manifestId,manifestId))).limit(BUDGET+1).for("share");
   if(!manifest || manifest.expiresAt<=new Date() || rows.length>BUDGET) throw notFound("Decision outcome review lineage is unavailable");
   const edges=rows.map(({inputType,inputRef,inputHash,relationship})=>({inputType,inputRef,inputHash,relationship})).sort((a,b)=>`${a.inputType}:${a.inputRef}`.localeCompare(`${b.inputType}:${b.inputRef}`));
   return {manifest,edges};
@@ -97,22 +104,53 @@ async function append(tx:Db,row:Root,receipt:DecisionOutcomeReviewReceipt,edges:
   for(let start=0;start<edges.length;start+=500) await tx.insert(analyticalLineageEdges).values(edges.slice(start,start+500).map(edge=>({...edge,companyId:row.companyId,manifestId:id})));
   await tx.insert(decisionOutcomeReviewReceipts).values({companyId:row.companyId,reviewId:row.id,revision:receipt.revision,payload:receipt,lineageManifestId:id});
 }
-async function inspect(tx:Db,row:Root,actor:AuthorizationActor,bound:Bound):Promise<DecisionOutcomeReviewView> {
+async function inspect(tx:Db,row:Root,actor:AuthorizationActor,bound:Bound,learningScope?:LearningReviewBundleScope):Promise<DecisionOutcomeReviewView> {
   if(row.contextVersionId!==bound.version.id || row.contextHash!==bound.version.contentHash || row.optionId!==bound.binding.optionId) throw conflict("Outcome review no longer agrees with its frozen native baseline");
-  const receipts=await tx.select().from(decisionOutcomeReviewReceipts).where(and(eq(decisionOutcomeReviewReceipts.companyId,row.companyId),eq(decisionOutcomeReviewReceipts.reviewId,row.id))).orderBy(desc(decisionOutcomeReviewReceipts.revision)).limit(4);
+  const receipts=await tx.select().from(decisionOutcomeReviewReceipts).where(and(eq(decisionOutcomeReviewReceipts.companyId,row.companyId),eq(decisionOutcomeReviewReceipts.reviewId,row.id))).orderBy(desc(decisionOutcomeReviewReceipts.revision)).limit(4).for("share");
   if(receipts.length!==row.revision || receipts.length>3 || receipts[0]?.revision!==row.revision) throw notFound("Outcome review receipts are erased or unavailable");
-  const deadline=performance.now()+30_000;
+  const deadline=performance.now()+30_000,sourceGroups:Edge[][]=[],sourceManifestIds:string[]=[],receiptPins:LearningReviewBundle["receiptPins"]=[];let sourceExpiresAt=Infinity;
   for(const item of receipts) {
     deadlineCheck(deadline);const receipt=item.payload,source=await lineage(tx,row.companyId,item.lineageManifestId);
     if(receipt.contentHash!==receiptHash(receipt) || receipt.contextHash!==row.contextHash || new Date(receipt.expiresAt)<=new Date() || source.manifest.analysisType!=="decision_outcome_review" || source.manifest.analysisRef!==row.id || source.manifest.definitionHash!==receipt.contentHash
       || source.manifest.inputHash!==nativeSha256({actualEvidence:receipt.actualEvidence,comparisons:receipt.comparisons,nativeExecution:receipt.nativeExecution}) || source.manifest.parameters.lineageHash!==nativeSha256(source.edges) || source.manifest.sourceCount!==source.edges.length) throw conflict("Outcome review evidence integrity is unavailable");
     if(receipt.assessment && !finishDecisionOutcomeReviewSchema.safeParse(receipt.assessment).success) throw conflict("Outcome review human assessment integrity is unavailable");
     for(const pin of receipt.actualEvidence) {deadlineCheck(deadline);if(pin.source.type!=="metric_observation") throw conflict("Outcome review measurement type is unavailable");await authorizeStrategyReference(tx,row.companyId,actor,pin.source,bound.version.definition.sensitivity);}
-    await inspectDecisionSourceAuthority(tx,row.companyId,actor,source.edges,deadline);
+    sourceGroups.push(source.edges);sourceManifestIds.push(source.manifest.id);sourceExpiresAt=Math.min(sourceExpiresAt,new Date(receipt.expiresAt).getTime(),source.manifest.expiresAt.getTime());
+    receiptPins.push({revision:item.revision,manifestId:item.lineageManifestId,contentHash:receipt.contentHash,expiresAt:receipt.expiresAt});
+  }
+  const sourceEdges=mergeEdges(sourceGroups);await inspectDecisionSourceAuthority(tx,row.companyId,actor,sourceEdges,deadline);
+  if(learningScope){
+    if(!Number.isFinite(sourceExpiresAt)||sourceExpiresAt<=Date.now())throw conflict("Outcome review source retention is unavailable");
+    const {actorKey,key}=learningBundleKey(actor,row.companyId,row.decisionId,row.revision,learningScope.cycleId,learningScope.purpose);
+    const bundle:LearningReviewBundle={companyId:row.companyId,actorKey,decisionId:row.decisionId,reviewId:row.id,revision:row.revision,contextVersionId:row.contextVersionId,contextHash:row.contextHash,cycleId:learningScope.cycleId,purpose:learningScope.purpose,manifestIds:[...new Set(sourceManifestIds)].sort(),sourceEdges,receiptPins,expiresAt:sourceExpiresAt,sensitivity:bound.version.definition.sensitivity};
+    const bundles=learningReviewBundles.get(tx as object)??new Map<string,LearningReviewBundle>();bundles.set(key,bundle);learningReviewBundles.set(tx as object,bundles);
   }
   return {id:row.id,companyId:row.companyId,decisionId:row.decisionId,contextVersionId:row.contextVersionId,contextHash:row.contextHash,optionId:row.optionId,revision:row.revision,
     status:row.status==="scheduled"&&row.reviewDueAt<=new Date()?"due":row.status,reviewDueAt:row.reviewDueAt.toISOString(),reviewedAt:row.reviewedAt?.toISOString()??null,reviewedByUserId:row.reviewedByUserId,
     receipts:receipts.map(item=>item.payload),causalClaimRef:null,learningCycleId:row.learningCycleId,authorizationCheckedAt:new Date().toISOString()};
+}
+/** Consume a transaction-local source proof created only by the original
+ * review owner. Re-read every row that binds that proof under share locks. */
+export async function consumeLearningOutcomeReviewBundle(tx:Db,companyId:string,actor:AuthorizationActor,decisionId:string,revision:number,cycleId:string,purpose:string) {
+  const {actorKey,key}=learningBundleKey(actor,companyId,decisionId,revision,cycleId,purpose),bundles=learningReviewBundles.get(tx as object),bundle=bundles?.get(key);
+  if(!bundle||bundle.actorKey!==actorKey||bundle.expiresAt<=Date.now())return null;
+  const discard=()=>{bundles!.delete(key);if(!bundles!.size)learningReviewBundles.delete(tx as object);};
+  const [review]=await tx.select().from(decisionOutcomeReviews).where(and(eq(decisionOutcomeReviews.companyId,companyId),eq(decisionOutcomeReviews.id,bundle.reviewId),eq(decisionOutcomeReviews.decisionId,decisionId))).for("share");
+  const [cycle]=await tx.select().from(learningCycles).where(and(eq(learningCycles.companyId,companyId),eq(learningCycles.id,cycleId))).for("share");
+  const [version]=await tx.select().from(decisionContextVersions).where(and(eq(decisionContextVersions.companyId,companyId),eq(decisionContextVersions.decisionId,decisionId),eq(decisionContextVersions.id,bundle.contextVersionId))).for("share");
+  const receipts=review?await tx.select().from(decisionOutcomeReviewReceipts).where(and(eq(decisionOutcomeReviewReceipts.companyId,companyId),eq(decisionOutcomeReviewReceipts.reviewId,review.id))).orderBy(desc(decisionOutcomeReviewReceipts.revision)).limit(4).for("share"):[];
+  const currentPins=receipts.map(item=>({revision:item.revision,manifestId:item.lineageManifestId,contentHash:item.payload.contentHash,expiresAt:item.payload.expiresAt}));
+  if(!review||review.learningCycleId!==cycleId||review.revision!==revision||review.contextHash!==bundle.contextHash||review.contextVersionId!==bundle.contextVersionId
+    ||!cycle||cycle.erasedAt||cycle.scopeType!=="company"||cycle.scopeId!==null||cycle.purpose!==purpose
+    ||!version||version.contentHash!==bundle.contextHash||version.expiresAt.getTime()<=Date.now()
+    ||JSON.stringify(currentPins)!==JSON.stringify(bundle.receiptPins)||bundle.expiresAt<=Date.now()) {discard();return null;}
+  await pinCurrentHumanCredential(tx,actor);
+  await inspectDecisionSourceAuthority(tx,companyId,actor,bundle.sourceEdges,performance.now()+30_000);
+  discard();return {manifestIds:bundle.manifestIds,expiresAt:new Date(bundle.expiresAt),sourceSensitivity:bundle.sensitivity};
+}
+function discardLearningOutcomeReviewBundle(tx:Db,actor:AuthorizationActor,companyId:string,decisionId:string,revision:number,cycleId:string,purpose:string){
+  const {key}=learningBundleKey(actor,companyId,decisionId,revision,cycleId,purpose),bundles=learningReviewBundles.get(tx as object);
+  bundles?.delete(key);if(bundles&&!bundles.size)learningReviewBundles.delete(tx as object);
 }
 async function pinCurrentHumanCredential(tx:Db,actor:AuthorizationActor) {
   if(actor.type!=="board"||actor.source==="local_implicit") return;
@@ -130,28 +168,28 @@ export function decisionOutcomeReviewService(db:Db) {
     async startLearning(companyId:string,actor:AuthorizationActor,decisionId:string,raw:StartDecisionReviewLearning) {
       v7HumanActorId(actor);const input=startDecisionReviewLearningSchema.parse(raw);
       return withV7ActivityTransaction(db,async(tx,publications)=>{
-        const timingStart=performance.now();const timing=(step:string)=>console.log("decision-outcome-learning-step",step,Math.round(performance.now()-timingStart));
+        let bundleScope:LearningReviewBundleScope|undefined;
+        try {
         const bound=await inspectBoundDecisionContext(tx,companyId,actor,decisionId,true),prior=await root(tx,companyId,decisionId);
-        timing("bound-and-root");
         if(!prior||prior.revision!==input.expectedRevision||!["completed","inconclusive"].includes(prior.status))throw conflict("Complete the current outcome review before starting Learning");
-        const inspected=await inspect(tx,prior,actor,bound);
-        timing("initial-inspect");
+        bundleScope=prior.learningCycleId?{cycleId:prior.learningCycleId,purpose:input.purpose}:undefined;
+        const inspected=await inspect(tx,prior,actor,bound,bundleScope);
         const learning=learningService(tx);
         if(prior.learningCycleId){
-          const cycle=await learning.getCycleWithCurrentRoots(actor,companyId,prior.learningCycleId);
-          timing("learning-current-roots");
+          const cycle=await learning.get(actor,companyId,prior.learningCycleId);
           const edges=await tx.select({id:learningEvidence.memoryRecordId}).from(learningEvidence).where(and(eq(learningEvidence.companyId,companyId),eq(learningEvidence.cycleId,cycle.id)));
-          timing("learning-evidence");
           if(cycle.purpose!==input.purpose||cycle.trigger!==input.trigger||cycle.maxHypotheses!==input.maxHypotheses||cycle.maxEvaluations!==input.maxEvaluations||JSON.stringify(edges.map(edge=>edge.id).sort())!==JSON.stringify([...input.memoryRecordIds].sort()))throw conflict("This review already started a Learning cycle with different inputs");
-          timing("replay-validation");await pinCurrentHumanCredential(tx,actor);timing("credential-pin");return {review:{...inspected,learningCycleId:prior.learningCycleId},cycleId:cycle.id};
+          await pinCurrentHumanCredential(tx,actor);return {review:{...inspected,learningCycleId:prior.learningCycleId},cycleId:cycle.id};
         }
         const {expectedRevision,...cycleInput}=input;
         const cycle=await learning.createInTransaction(actor,companyId,{...cycleInput,scope:{type:"company",id:null},analyticalSources:[{kind:"outcome_review",decisionId,revision:expectedRevision}]},publications);
-        timing("learning-create");
         const [linked]=await tx.update(decisionOutcomeReviews).set({learningCycleId:cycle.id}).where(and(eq(decisionOutcomeReviews.companyId,companyId),eq(decisionOutcomeReviews.id,prior.id))).returning();
         await logActivity(tx,{companyId,actorType:"user",actorId:v7HumanActorId(actor),action:"decision.outcome_review_learning_started",entityType:"decision",entityId:decisionId,details:{reviewId:prior.id,revision:prior.revision,cycleId:cycle.id}},publications);
         if(!linked) throw notFound("Outcome review disappeared during Learning conversion");
-        timing("create-link");await pinCurrentHumanCredential(tx,actor);timing("credential-pin");return {review:{...inspected,learningCycleId:linked.learningCycleId},cycleId:cycle.id};
+        await pinCurrentHumanCredential(tx,actor);return {review:{...inspected,learningCycleId:linked.learningCycleId},cycleId:cycle.id};
+        } finally {
+          if(bundleScope) discardLearningOutcomeReviewBundle(tx,actor,companyId,decisionId,input.expectedRevision,bundleScope.cycleId,bundleScope.purpose);
+        }
       });
     },
     async schedule(companyId:string,actor:AuthorizationActor,decisionId:string,raw:ScheduleDecisionOutcomeReview) {

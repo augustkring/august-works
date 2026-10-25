@@ -352,7 +352,7 @@ test("apply and start use pinned OpenShell policy APIs plus exact Docker identit
     setPhase("Stopped");
     const applied = await engine.execute(
       randomUUID(),
-      { ...input("apply"), admission: { policyHash, idempotencyKey: "policy-test", document: policyDocument } },
+      { ...input("apply"), admission: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "policy-test", document: policyDocument } },
       deadline(),
     );
     assert.equal(applied.reply.action, "apply");
@@ -380,6 +380,50 @@ test("apply and start use pinned OpenShell policy APIs plus exact Docker identit
     assert.ok(calls.some(({ args }) => args.includes("sandbox") && args.includes("start")));
   }));
 
+test("expired source policy deadlines fail before any host or CLI observation", async () =>
+  fixture(async ({ engine, calls }) => {
+    const expiredApply = await engine.execute(
+      randomUUID(),
+      { ...input("apply"), admission: { policyHash, expiresAt: new Date(0).toISOString(), idempotencyKey: "expired-apply", document: policyDocument } },
+      deadline(),
+    );
+    assert.equal(expiredApply.errorCode, "sandbox_scope_changed");
+    const startBeforeItsSourceDeadline = await engine.execute(
+      randomUUID(),
+      { ...input("start"), start: { policyHash, expiresAt: new Date(Date.now() + 1000).toISOString(), idempotencyKey: "late-start", } },
+      deadline(),
+    );
+    assert.equal(startBeforeItsSourceDeadline.errorCode, "sandbox_scope_changed");
+    assert.equal(calls.length, 0);
+  }));
+
+test("a persisted unknown command intent is never replayed after host restart", async () =>
+  fixture(async ({ engine, calls, root }) => {
+    await engine.execute(randomUUID(), input("inspect"), deadline());
+    const commandId = randomUUID();
+    const request = {
+      ...input("apply"),
+      admission: {
+        policyHash,
+        expiresAt: new Date(Date.now() + 50000).toISOString(),
+        idempotencyKey: "unknown-after-restart",
+        document: policyDocument,
+      },
+    };
+    const journalPath = path.join(root, "openshell-journal.json");
+    const journal = JSON.parse(await readFile(journalPath, "utf8"));
+    journal.commands[commandId] = {
+      requestHash: createHash("sha256").update(JSON.stringify(request)).digest("hex"),
+      result: null,
+    };
+    await writeFile(journalPath, JSON.stringify(journal), { mode: 0o600 });
+    await engine.initialize();
+    calls.length = 0;
+    const retry = await engine.execute(commandId, request, deadline());
+    assert.equal(retry.errorCode, "sandbox_observation_unavailable");
+    assert.equal(calls.length, 0);
+  }));
+
 test("static policy changes require sandbox recreation before any policy mutation", async () =>
   fixture(async ({ engine, calls, enablePhysical, setPhase }) => {
     enablePhysical();
@@ -388,7 +432,7 @@ test("static policy changes require sandbox recreation before any policy mutatio
     candidate.process.run_as_user = "1001";
     const result = await engine.execute(
       randomUUID(),
-      { ...input("apply"), admission: { policyHash, idempotencyKey: "static-change", document: candidate } },
+      { ...input("apply"), admission: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "static-change", document: candidate } },
       deadline(),
     );
     assert.equal(result.reply.applied, false);
@@ -403,7 +447,7 @@ test("foreign Docker labels block policy mutation before any effect", async () =
     setWrongContainerLabels();
     const result = await engine.execute(
       randomUUID(),
-      { ...input("apply"), admission: { policyHash, idempotencyKey: "foreign-label", document: policyDocument } },
+      { ...input("apply"), admission: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "foreign-label", document: policyDocument } },
       deadline(),
     );
     assert.equal(result.success, false);
@@ -418,7 +462,7 @@ test("an image repository digest mismatch blocks policy mutation before any effe
     setContainerImageDigest("fixture.invalid/other@sha256:" + "f".repeat(64));
     const result = await engine.execute(
       randomUUID(),
-      { ...input("apply"), admission: { policyHash, idempotencyKey: "wrong-image", document: policyDocument } },
+      { ...input("apply"), admission: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "wrong-image", document: policyDocument } },
       deadline(),
     );
     assert.equal(result.success, false);
@@ -432,7 +476,7 @@ test("a changed OpenShell policy revision blocks workload start", async () =>
     setPhase("Stopped");
     const applied = await engine.execute(
       randomUUID(),
-      { ...input("apply"), admission: { policyHash, idempotencyKey: "revision-test", document: policyDocument } },
+      { ...input("apply"), admission: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "revision-test", document: policyDocument } },
       deadline(),
     );
     assert.equal(applied.reply.applied, true);

@@ -30,6 +30,7 @@ import { open as unseal } from "../services/saas/crypto.js";
 import type { SaasPlatformConfig } from "../saas-platform-config.js";
 import type { SandboxIdentity } from "../services/execution-sandbox/backend.js";
 import { openShellBackend } from "../services/execution-sandbox/openshell-backend.js";
+import { projectOpenShellPolicy } from "../services/execution-sandbox/openshell-policy.js";
 
 const support = await getEmbeddedPostgresTestSupport();
 const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
@@ -205,6 +206,42 @@ const image = "fixture.invalid/openshell@sha256:" + "a".repeat(64);
           .from(runtimeHostCommands)
           .where(eq(runtimeHostCommands.runtimeCellId, cell.id)),
       ).toHaveLength(0);
+    });
+    it("caps the durable apply command at the original policy expiry and rejects an already expired request before queueing", async () => {
+      const transport = nativeSandboxHostTransport(db, { operatorUserIds: [f.userId] });
+      const bridge = transport.bridge(f.actor);
+      const expired = bridge.apply({
+        ...scope,
+        document: projectOpenShellPolicy(policyFixture()).document,
+        policyHash: "f".repeat(64),
+        expiresAt: new Date(0).toISOString(),
+        idempotencyKey: "expired-source-policy",
+      });
+      await expect(expired).rejects.toMatchObject({ status: 409 });
+      expect(await db.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.runtimeCellId, cell.id))).toHaveLength(0);
+
+      const expiresAt = new Date(Date.now() + 8000);
+      const pendingApply = bridge.apply({
+        ...scope,
+        document: projectOpenShellPolicy(policyFixture()).document,
+        policyHash: "e".repeat(64),
+        expiresAt: expiresAt.toISOString(),
+        idempotencyKey: "bounded-source-policy",
+      }).catch((error) => error);
+      const command = await pending();
+      expect(command.deadlineAt.getTime()).toBeLessThanOrEqual(expiresAt.getTime());
+      expect(command.deadlineAt.getTime()).toBeGreaterThan(Date.now());
+      const claim = await transport.claim(host.id);
+      expect(claim).toBeTruthy();
+      const payload = decrypt(claim!);
+      await transport.complete(host.id, claim!.id, {
+        claimToken: payload.claimToken,
+        generation: "1",
+        success: false,
+        reply: null,
+        errorCode: "sandbox_host_unavailable",
+      });
+      await expect(pendingApply).resolves.toMatchObject({ status: 409 });
     });
     it("persists an encrypted current native scope and rejects mismatched receipts without earning capability", async () => {
       // Private host metadata reads require current proof, not a new recent event.

@@ -24,6 +24,94 @@ type StopRequest = {
   idempotencyKey: string;
 };
 
+/** Fence one exact admission generation after an ambiguous workload outcome.
+ * This internal safety owner deliberately does not depend on the initiating
+ * operator remaining authorized; callers must still use the native Stop lane
+ * and treat an unconfirmed Stop as unknown. */
+export async function fenceSandboxAdmissionOutcome(
+  db: Db,
+  input: {
+    companyId: string;
+    bindingId: string;
+    cellId: string;
+    generation: string;
+    policySnapshotId: string;
+    operationKeys: string[];
+    stopConfirmed: boolean;
+    now?: Date;
+  },
+) {
+  const now = input.now ?? new Date();
+  return withV7ActivityTransaction(db, async (tx, publications) => {
+    // Preserve the runtime owner’s cell-before-binding lock order. The binding
+    // predicate also pins the original generation if the cell has advanced.
+    await tx
+      .select({ id: runtimeCells.id })
+      .from(runtimeCells)
+      .where(
+        and(
+          eq(runtimeCells.companyId, input.companyId),
+          eq(runtimeCells.id, input.cellId),
+        ),
+      )
+      .for("update");
+    const [binding] = await tx
+      .select()
+      .from(runtimeSandboxBindings)
+      .where(
+        and(
+          eq(runtimeSandboxBindings.companyId, input.companyId),
+          eq(runtimeSandboxBindings.id, input.bindingId),
+          eq(runtimeSandboxBindings.runtimeCellId, input.cellId),
+          eq(runtimeSandboxBindings.cellGeneration, input.generation),
+        ),
+      )
+      .for("update");
+    if (!binding || binding.status === "deleted") return false;
+    if (binding.status !== "quarantined") {
+      await tx
+        .update(runtimeSandboxBindings)
+        .set({ status: "quarantined", version: binding.version + 1, updatedAt: now })
+        .where(
+          and(
+            eq(runtimeSandboxBindings.companyId, input.companyId),
+            eq(runtimeSandboxBindings.id, input.bindingId),
+            eq(runtimeSandboxBindings.cellGeneration, input.generation),
+          ),
+        );
+    }
+    await tx
+      .update(runtimePolicySnapshots)
+      .set({ status: "revoked" })
+      .where(
+        and(
+          eq(runtimePolicySnapshots.companyId, input.companyId),
+          eq(runtimePolicySnapshots.bindingId, input.bindingId),
+          inArray(runtimePolicySnapshots.status, ["draft", "qualified"]),
+        ),
+      );
+    await logActivity(
+      tx,
+      {
+        companyId: input.companyId,
+        actorType: "system",
+        actorId: "sandbox-guardian",
+        action: "sandbox.admission_safety_fenced",
+        entityType: "runtime_sandbox",
+        entityId: input.bindingId,
+        details: {
+          generation: input.generation,
+          policySnapshotId: input.policySnapshotId,
+          operationKeys: input.operationKeys,
+          stopConfirmed: input.stopConfirmed,
+        },
+      },
+      publications,
+    );
+    return true;
+  });
+}
+
 /** Safety reconciliation is independent of rollout and the original user's
  * continued membership. Only the existing runtime Stop engine can perform a
  * physical effect; quarantine or an accepted request never proves termination.

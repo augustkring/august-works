@@ -32,8 +32,8 @@ export async function assertLearningAnalyticalSources(db:Db,actor:AuthorizationA
   if(performance.now()>deadline)throw lost();
   if(!cycle.analyticalSourceCount)return null;
   if(!cycle.analyticalSourceExpiresAt||cycle.analyticalSourceExpiresAt.getTime()<=Date.now())throw lost();
-  const current=await inspectAnalyticalContextPins(db,cycle.companyId,actor,cycle.analyticalSourcePins);
-  const retained=await db.select({id:learningAnalyticalDependencies.sourceManifestId}).from(learningAnalyticalDependencies).where(and(eq(learningAnalyticalDependencies.companyId,cycle.companyId),eq(learningAnalyticalDependencies.cycleId,cycle.id))).limit(26201);
+  const current=await inspectAnalyticalContextPins(db,cycle.companyId,actor,cycle.analyticalSourcePins,deadline,true,{cycleId:cycle.id,purpose:cycle.purpose});
+  const retained=await db.select({id:learningAnalyticalDependencies.sourceManifestId}).from(learningAnalyticalDependencies).where(and(eq(learningAnalyticalDependencies.companyId,cycle.companyId),eq(learningAnalyticalDependencies.cycleId,cycle.id))).limit(26201).for("share");
   if(retained.length!==cycle.analyticalSourceCount||JSON.stringify(retained.map(row=>row.id).sort())!==JSON.stringify(current.manifestIds))throw lost();
   return current.sourceSensitivity;
  };

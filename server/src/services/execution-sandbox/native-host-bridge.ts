@@ -150,6 +150,19 @@ export function nativeSandboxHostTransport(
     // Fail closed before revealing host/capability state to an unconfigured
     // or weakly authenticated operator.
     await assertOperator(actor, action);
+    const originalExpiry =
+      action === "apply" ? admission?.expiresAt : action === "start" ? start?.expiresAt : undefined;
+    if (
+      (action === "apply" || action === "start") &&
+      (!originalExpiry || !Number.isFinite(Date.parse(originalExpiry)) || Date.parse(originalExpiry) <= now.getTime())
+    )
+      throw conflict("Original execution deadline expired before host admission");
+    const commandDeadlineAt = new Date(
+      Math.min(
+        now.getTime() + Math.min(30000, options.timeoutMs ?? 20000),
+        originalExpiry ? Date.parse(originalExpiry) : Number.POSITIVE_INFINITY,
+      ),
+    );
     const queued = await withV7ActivityTransaction(
       db,
       async (tx, publications) => {
@@ -227,9 +240,7 @@ export function nativeSandboxHostTransport(
             commandType: SANDBOX_HOST_COMMAND,
             idempotencyKey: key,
             payload: request,
-            deadlineAt: new Date(
-              now.getTime() + Math.min(30000, options.timeoutMs ?? 20000),
-            ),
+            deadlineAt: commandDeadlineAt,
           })
           .onConflictDoNothing()
           .returning();
@@ -331,6 +342,7 @@ export function nativeSandboxHostTransport(
             undefined,
             {
               policyHash: input.policyHash,
+              expiresAt: input.expiresAt,
               idempotencyKey: input.idempotencyKey,
               document: input.document,
             },

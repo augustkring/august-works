@@ -9,7 +9,7 @@ import {
 } from "@paperclipai/shared";
 import type { z } from "zod";
 import { forbidden, notFound } from "../errors.js";
-import type { AuthorizationAction, AuthorizationActor, AuthorizationResource } from "./authorization.js";
+import { authorizationService, type AuthorizationAction, type AuthorizationActor, type AuthorizationResource } from "./authorization.js";
 import { assertV5Authorization, assertV5Enabled, v5HumanActorId } from "./v5-authorization.js";
 import { agentProviderBindingService } from "./agent-provider-bindings.js";
 import { contextEngineService, DEFAULT_CONTEXT_BUDGET } from "./context/context-engine.js";
@@ -123,7 +123,7 @@ export function crossCompanyContextService(db: Db) {
       let estimatedTokens = 0;
       const perCompanyBudget = Math.floor(input.maxEstimatedTokens / resolved.scopes.length);
       for (const local of resolved.scopes) {
-        const result = await contextEngineService(db).assemble({
+        const assembleInput = {
           companyId: local.companyId, agentId: local.presence.id,
           responsibleUserId: local.localActor.onBehalfOfUserId ?? null,
           enforceResponsibleUserIntersection: true,
@@ -137,8 +137,13 @@ export function crossCompanyContextService(db: Db) {
             },
           }),
           query: input.query, intent: `${input.intent}: ${local.purpose}`,
-          sensitivityCeiling: "internal", budget: { ...DEFAULT_CONTEXT_BUDGET, maxEstimatedTokens: perCompanyBudget },
-        });
+          sensitivityCeiling: "internal" as const, budget: { ...DEFAULT_CONTEXT_BUDGET, maxEstimatedTokens: perCompanyBudget },
+        };
+        const result = local.companyId === resolved.scope.primaryCompanyId
+          ? await contextEngineService(db).assemble(assembleInput)
+          : await authorizationService(db).withReadDelegatedContextSources({ homeActor: actor, scope: resolved.scope,
+            scopeRequestId: accountability.scopeRequestId, guestCompanyId: local.companyId, guestAgentId: local.presence.id },
+          source => contextEngineService(source.db).assemble(assembleInput, undefined, source.db, undefined, undefined, source.nativeSource));
         if (!result.packet.manifest) throw forbidden("Cross-company context requires a persisted provenance manifest");
         manifests.push({ companyId: local.companyId, contextManifestId: result.packet.manifest.id });
         for (const item of [

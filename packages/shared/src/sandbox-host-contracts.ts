@@ -105,6 +105,7 @@ export const sandboxHostRequestSchema = z
     admission: z
       .object({
         policyHash: hash,
+        expiresAt: z.iso.datetime(),
         idempotencyKey: z.string().min(1).max(200),
         document: openShellObservedDocumentSchema,
       })

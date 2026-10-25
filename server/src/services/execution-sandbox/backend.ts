@@ -15,7 +15,7 @@ export interface ExecutionSandboxBackend {
   /** null means no target-environment qualification; never invent a snapshot. */
   capabilities(): Promise<SandboxCapabilitySnapshot | null>;
   prepareSandbox(input: SandboxIdentity): Promise<PreparedSandbox>;
-  applyPolicy(input: SandboxIdentity & { policy: SandboxPolicyCompilation; currentStaticFingerprint: string | null }): Promise<PolicyApplyResult>;
+  applyPolicy(input: SandboxIdentity & { policy: SandboxPolicyCompilation; currentStaticFingerprint: string | null; expiresAt: string }): Promise<PolicyApplyResult>;
   startWorkload(input: SandboxIdentity & { policy: SandboxPolicyCompilation; expiresAt: string; idempotencyKey: string }): Promise<{ operationId: string }>;
   inspectWorkload(input: SandboxIdentity): Promise<SandboxObservation>;
   stopWorkload(input: SandboxIdentity & { idempotencyKey: string }): Promise<{ operationId: string }>;

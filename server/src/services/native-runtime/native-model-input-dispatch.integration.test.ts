@@ -1,5 +1,7 @@
 import { createHash, randomUUID } from "node:crypto";
-import { eq, sql } from "drizzle-orm";
+import { and, eq, gte, sql } from "drizzle-orm";
+import express from "express";
+import request from "supertest";
 import { afterAll, beforeAll, describe, expect, it } from "vitest";
 import {
   agents,
@@ -28,24 +30,38 @@ import { nativeRuntimeContextFixture } from "./runtime-context.test-fixture.js";
 import { issueService } from "../issues.js";
 import type { NativeTaskSourceCapture } from "../issues.js";
 import { getIssueExecutionContext, buildPaperclipTaskMarkdown } from "../heartbeat.js";
+import { createLocalAgentJwt } from "../../agent-auth-jwt.js";
+import { actorMiddleware } from "../../middleware/auth.js";
+import { errorHandler } from "../../middleware/error-handler.js";
 
 describe("native model input dispatch intent", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
   let db: ReturnType<typeof createDb>;
   let controller: Awaited<ReturnType<typeof currentNativeControllerIdentity>>;
+  const originalJwtSecret = process.env.PAPERCLIP_AGENT_JWT_SECRET;
   const companyId = randomUUID();
   const agentId = randomUUID();
   const responsibleUserId = randomUUID();
 
   beforeAll(async () => {
+    process.env.PAPERCLIP_AGENT_JWT_SECRET ??= "native-dispatch-integration-secret";
     database = await startEmbeddedPostgresTestDatabase("native-model-input-dispatch-");
     db = createDb(database.connectionString);
     controller = await currentNativeControllerIdentity();
     await db.insert(companies).values({ id: companyId, name: "Dispatch intent fixture", issuePrefix: "NMI" });
+    await db.insert(authUsers).values({ id: responsibleUserId, name: "Dispatch Human", email: `${responsibleUserId}@example.test`, createdAt: new Date(), updatedAt: new Date() });
     await db.insert(agents).values({ id: agentId, companyId, name: "Dispatch agent", adapterType: "paperclip_runner" });
+    await db.insert(companyMemberships).values([
+      { companyId, principalType: "user", principalId: responsibleUserId, status: "active", membershipRole: "admin" },
+      { companyId, principalType: "agent", principalId: agentId, status: "active" },
+    ]);
   }, EMBEDDED_POSTGRES_TEST_TIMEOUT_MS);
 
-  afterAll(async () => { await database?.cleanup(); }, 30_000);
+  afterAll(async () => {
+    await database?.cleanup();
+    if (originalJwtSecret === undefined) delete process.env.PAPERCLIP_AGENT_JWT_SECRET;
+    else process.env.PAPERCLIP_AGENT_JWT_SECRET = originalJwtSecret;
+  }, 30_000);
 
   async function seed(options: {
     responsibleUserId?: string | null;
@@ -131,6 +147,15 @@ describe("native model input dispatch intent", () => {
     return { ...binding, dispatchId, turnInput, turnId };
   }
 
+  function canonicalJson(value: unknown): string {
+    if (Array.isArray(value)) return `[${value.map(canonicalJson).join(",")}]`;
+    if (typeof value === "object" && value !== null) {
+      const row = value as Record<string, unknown>;
+      return `{${Object.keys(row).sort().map(key => `${JSON.stringify(key)}:${canonicalJson(row[key])}`).join(",")}}`;
+    }
+    return JSON.stringify(value) ?? "null";
+  }
+
   it("retains the exact document read before later revision edits without inventing source history", async () => {
     const seeded = await seed();
     const service = documentService(db), body = "ACTUAL_TOOL_DOCUMENT /private/document/path";
@@ -153,6 +178,65 @@ describe("native model input dispatch intent", () => {
     expect(JSON.stringify(run!.runnerProfileJson)).not.toContain(body);
     expect(run!.nativeInputSourceProtocolVersion).toBe(0);
     expect(run!.runnerProfileJson).not.toHaveProperty("nativeInputSourceReceipt");
+  });
+
+  it("authenticates a single-use native HTTP effect claim against the current dispatch, lease and exact request", async () => {
+    const seeded = await seed(), turnId = "actual-effect-provider-turn", callId = "actual-effect-call";
+    const turnInput = { message: { role: "user" as const, text: "Create the requested task" } };
+    const args = dispatchArgs(seeded, turnInput);
+    const dispatchId = await recordNativeModelInputDispatchIntent(args);
+    await recordNativeModelInputDispatchAcknowledgement(acknowledgementArgs(seeded, dispatchId, turnInput, turnId));
+    expect(await recordNativeToolCallDispatchAssociation({ ...args, turnId, callId, tool: "call_api" })).toBe(true);
+
+    const body = { title: "Exact server-bound request" };
+    const apiInput = { operationId: "POST /api/native-effect", body };
+    const apiReceiptDigest = createHash("sha256").update(canonicalJson(apiInput)).digest("hex");
+    const receiptKey = createHash("sha256").update(callId).digest("hex");
+    await db.update(heartbeatRuns).set({ resultJson: { apiToolReceipts: {
+      [receiptKey]: { digest: apiReceiptDigest, operationId: "POST /api/native-effect", state: "pending" },
+    } } }).where(eq(heartbeatRuns.id, seeded.runId));
+    const [lease] = await db.select().from(nativeRunFinalizations).where(eq(nativeRunFinalizations.runId, seeded.runId));
+    const pathAndQuery = "/api/native-effect?source=runner";
+    const bodyHash = createHash("sha256").update(canonicalJson(body)).digest("hex");
+    const claim = {
+      dispatchId, eventSeq: seeded.eventSeq, attempt: seeded.attempt, turnId, callId, tool: "call_api" as const,
+      operationId: "POST /api/native-effect", method: "POST", pathAndQuery, bodyPresent: true,
+      bodyHash, apiReceiptDigest, leaseOwner: seeded.leaseOwner, leaseExpiresAt: lease!.leaseExpiresAt!.toISOString(),
+      controllerBootId: controller.bootId, controllerPid: controller.pid,
+      controllerProcessStartedAt: controller.processStartedAt.toISOString(),
+    };
+    const token = createLocalAgentJwt(agentId, companyId, "paperclip_runner", seeded.runId, responsibleUserId,
+      { kind: "standard" }, claim);
+    expect(token).not.toBeNull();
+    const app = express();
+    app.use(express.json());
+    app.use(actorMiddleware(db, { deploymentMode: "authenticated", resolveSession: async () => null }));
+    app.post("/api/native-effect", (req, res) => res.json({ accepted: true, effect: req.actor.nativeToolEffect ?? null }));
+    app.use(errorHandler);
+
+    const wrongBody = await request(app).post(pathAndQuery).set("Authorization", `Bearer ${token}`).send({ title: "forged body" });
+    expect(wrongBody.status, JSON.stringify(wrongBody.body)).toBe(403);
+    const wrongPath = await request(app).post("/api/other?source=runner").set("Authorization", `Bearer ${token}`).send(body);
+    expect(wrongPath.status).toBe(403);
+    const rotated = createLocalAgentJwt(agentId, companyId, "paperclip_runner", seeded.runId, responsibleUserId,
+      { kind: "standard" }, { ...claim, leaseOwner: "rotated-owner" });
+    expect((await request(app).post(pathAndQuery).set("Authorization", `Bearer ${rotated}`).send(body)).status).toBe(403);
+    await db.execute(sql`update native_run_finalizations set lease_expires_at=clock_timestamp()+interval '30 minutes' where run_id=${seeded.runId}::uuid`);
+    const [renewedLease] = await db.select().from(nativeRunFinalizations).where(and(
+      eq(nativeRunFinalizations.runId, seeded.runId), eq(nativeRunFinalizations.companyId, companyId),
+      eq(nativeRunFinalizations.issueId, seeded.issueId), eq(nativeRunFinalizations.attempt, claim.attempt),
+      eq(nativeRunFinalizations.leaseOwner, claim.leaseOwner), eq(nativeRunFinalizations.controllerBootId, claim.controllerBootId),
+      eq(nativeRunFinalizations.controllerPid, claim.controllerPid),
+      eq(nativeRunFinalizations.controllerProcessStartedAt, new Date(claim.controllerProcessStartedAt)),
+      gte(nativeRunFinalizations.leaseExpiresAt, new Date(claim.leaseExpiresAt)),
+      sql`${nativeRunFinalizations.leaseExpiresAt} > clock_timestamp()`,
+    ));
+    expect(renewedLease).toBeDefined();
+    const accepted = await request(app).post(pathAndQuery).set("Authorization", `Bearer ${token}`).send(body);
+    expect(accepted.status, JSON.stringify(accepted.body)).toBe(200);
+    expect(accepted.body.effect).toMatchObject({ dispatchId, turnId, callId, operationId: "POST /api/native-effect" });
+    const replay = await request(app).post(pathAndQuery).set("Authorization", `Bearer ${token}`).send(body);
+    expect(replay.status).toBe(403);
   });
 
   it("binds an unknown Project tool result to its actual acknowledged dispatch without qualifying inputs", async () => {

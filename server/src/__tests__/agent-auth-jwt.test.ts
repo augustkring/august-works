@@ -79,6 +79,38 @@ describe("agent local JWT", () => {
     expect(claims?.key_scope).toEqual({ kind: "skill_test", issueId });
   });
 
+  it("round-trips only a closed native HTTP effect claim and rejects malformed claim extensions", () => {
+    vi.setSystemTime(new Date("2026-01-01T00:00:00.000Z"));
+    const native_tool_effect = {
+      dispatchId: "11111111-1111-4111-8111-111111111111", eventSeq: 7, attempt: 3,
+      turnId: "provider-turn", callId: "provider-call", tool: "call_api" as const,
+      operationId: "POST /api/issues", method: "POST", pathAndQuery: "/api/issues?x=1", bodyPresent: true,
+      bodyHash: "a".repeat(64), apiReceiptDigest: "b".repeat(64), leaseOwner: "lease-owner",
+      leaseExpiresAt: "2026-01-01T00:01:00.000Z", controllerBootId: "controller-boot", controllerPid: 42,
+      controllerProcessStartedAt: "2026-01-01T00:00:00.000Z",
+    };
+    const token = createLocalAgentJwt("agent-1", "company-1", "paperclip_runner", "run-1", "user-1", { kind: "standard" }, native_tool_effect);
+    expect(verifyLocalAgentJwt(token!)?.native_tool_effect).toEqual(native_tool_effect);
+    const [header, encoded, signature] = token!.split(".");
+    const body = JSON.parse(Buffer.from(encoded!, "base64url").toString("utf8"));
+    body.native_tool_effect.pathAndQuery = "/api/other";
+    const changed = Buffer.from(JSON.stringify(body)).toString("base64url");
+    expect(verifyLocalAgentJwt(`${header}.${changed}.${signature}`)).toBeNull();
+  });
+
+  it("will not mint a native effect token that outlives its pinned lease deadline", () => {
+    vi.setSystemTime(new Date("2026-01-01T00:00:05.000Z"));
+    const claim = {
+      dispatchId: "11111111-1111-4111-8111-111111111111", eventSeq: 7, attempt: 3,
+      turnId: "provider-turn", callId: "provider-call", tool: "call_api" as const,
+      operationId: "POST /api/issues", method: "POST", pathAndQuery: "/api/issues", bodyPresent: false,
+      bodyHash: "a".repeat(64), apiReceiptDigest: "b".repeat(64), leaseOwner: "lease-owner",
+      leaseExpiresAt: "2026-01-01T00:00:04.000Z", controllerBootId: "controller-boot", controllerPid: 42,
+      controllerProcessStartedAt: "2026-01-01T00:00:00.000Z",
+    };
+    expect(createLocalAgentJwt("agent-1", "company-1", "paperclip_runner", "run-1", "user-1", { kind: "standard" }, claim)).toBeNull();
+  });
+
   it("returns null when secret is missing", () => {
     process.env[secretEnv] = "";
     const token = createLocalAgentJwt("agent-1", "company-1", "claude_local", "run-1");

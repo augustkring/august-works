@@ -1404,6 +1404,90 @@
         "Duration  30.90s (transform 12.44s, setup 116ms, import 17.15s, tests 13.52s, environment 0ms)"
       ],
       "sourceCommit": "2be1b0cd777be0c7675bfaab151fa4b5d8a7f2d8"
+    },
+    {
+      "name": "current-human-business-experiment-analysis-final-2",
+      "exitCode": 0,
+      "exitSidecar": "current-human-business-experiment-analysis-final-2.log.exit",
+      "rawSha256": "e0c8699e620f67afdae0e33a1e190021792555cde817e5a06e63e2ac434eb580",
+      "sanitizedSha256": "e0c8699e620f67afdae0e33a1e190021792555cde817e5a06e63e2ac434eb580",
+      "archiveSha256": "bbb56f96c6fd9c277cbd9dca0893abce58ec74ef6f14eb5cba5ac8c5d287aa9a",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  20 passed (20)",
+        "Duration  224.88s (transform 13.21s, setup 78ms, import 18.04s, tests 206.64s, environment 0ms)"
+      ],
+      "sourceCommit": "ee66402d4ff3d2e5ee20992c693522a066116d0c"
+    },
+    {
+      "name": "current-human-process-experiments-final",
+      "exitCode": 0,
+      "exitSidecar": "current-human-process-experiments-final.log.exit",
+      "rawSha256": "b6f2f685f914e32d4c0e869cd2a4fb895702a4c1d529c9875d8f3504f07e1725",
+      "sanitizedSha256": "b6f2f685f914e32d4c0e869cd2a4fb895702a4c1d529c9875d8f3504f07e1725",
+      "archiveSha256": "e23a8154baedc0cef6d45fb5b7971c48b1614edd0df39307d16635bdac17ad7c",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  32 passed (32)",
+        "Duration  150.46s (transform 12.46s, setup 142ms, import 21.64s, tests 128.42s, environment 0ms)"
+      ],
+      "sourceCommit": "ee66402d4ff3d2e5ee20992c693522a066116d0c"
+    },
+    {
+      "name": "current-human-business-experiment-recording-foreign-project-focus",
+      "exitCode": 0,
+      "exitSidecar": "current-human-business-experiment-recording-foreign-project-focus.log.exit",
+      "rawSha256": "b0fede81147893b6f3b15c9a6f88aec4f23128e9a202df21f824858c0ee8e94b",
+      "sanitizedSha256": "b0fede81147893b6f3b15c9a6f88aec4f23128e9a202df21f824858c0ee8e94b",
+      "archiveSha256": "06c7ee2202e1b3b52076bfad63da2c457f1256ab61c3bf15c3743f3335374aa9",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 15 skipped (16)",
+        "Duration  25.37s (transform 14.14s, setup 99ms, import 19.09s, tests 6.02s, environment 0ms)"
+      ],
+      "sourceCommit": "ee66402d4ff3d2e5ee20992c693522a066116d0c"
+    },
+    {
+      "name": "decision-outcome-reviews-learning-closed-bundle-clean1",
+      "exitCode": 0,
+      "exitSidecar": "decision-outcome-reviews-learning-closed-bundle-clean1.exit",
+      "rawSha256": "aa7bd773bc042acbd221c9ffd4b212dcdc4327f92d603e3f886c1543caef7f96",
+      "sanitizedSha256": "aa7bd773bc042acbd221c9ffd4b212dcdc4327f92d603e3f886c1543caef7f96",
+      "archiveSha256": "a3c968ebdb93276c625824a3c068ea97baa3d36ae3cb3e764c55047053cecee0",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 14 skipped (15)",
+        "Duration  40.99s (transform 11.62s, setup 81ms, import 16.01s, tests 24.78s, environment 0ms)"
+      ],
+      "sourceCommit": "ee66402d4ff3d2e5ee20992c693522a066116d0c"
     }
   ],
   "updates": [
@@ -1571,6 +1655,16 @@
         "v10-context-runtime-server-typecheck-current",
         "delegated-context-v5-runtime-purgefix",
         "native-payload-temporal-final2"
+      ]
+    },
+    {
+      "sourceCommit": "ee66402d4ff3d2e5ee20992c693522a066116d0c",
+      "meaning": "Full experiment analysis20PASS, process/experiment pair32PASS, foreign Project404regression1PASS, closed-source Learning replay focused1PASS/sixconcurrentrequests (14notselected); not final workspace acceptance.",
+      "logs": [
+        "current-human-business-experiment-analysis-final-2",
+        "current-human-process-experiments-final",
+        "current-human-business-experiment-recording-foreign-project-focus",
+        "decision-outcome-reviews-learning-closed-bundle-clean1"
       ]
     }
   ],

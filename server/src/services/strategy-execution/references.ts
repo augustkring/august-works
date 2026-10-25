@@ -154,7 +154,7 @@ export async function authorizeStrategyNativePopulation(tx: Db, companyId: strin
     for (const row of rows) reads.projects.set(row.id, row);
   }
   if (type === "issue" && unitIds.some(id => !reads.issues.has(id) || reads.issues.get(id)!.hiddenAt)) throw notFound("Strategy task source is unavailable");
-  if (type === "project" && unitIds.some(id => !reads.projects.has(id))) throw notFound("Strategy project source is unavailable");
+  if (projectIds.some(id => !reads.projects.has(id))) throw notFound("Strategy project source is unavailable");
   // Batch the canonical action plus exact private-ACL predicates once for this
   // complete population. The owner then transports only these same-transaction
   // share-locked rows; it does not repeat an identical decision for each row.

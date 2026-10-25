@@ -1,6 +1,7 @@
 import { createHash } from "node:crypto";
-import { and, eq, inArray } from "drizzle-orm";
+import { and, eq, inArray, is } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
+import { PgTransaction } from "drizzle-orm/pg-core";
 import {
   agentExecutionScopeRequests,
   agents,
@@ -116,6 +117,7 @@ export function hashEvidenceContent(evidence: EvidenceItem): string {
 export async function revalidateStoredContextManifestSources(db: Db, input: {
   companyId: string; manifestId: string; agentId: string; actor: AuthorizationActor;
 }) {
+  if (!is(db, PgTransaction)) throw forbidden("Delegated Context source review requires its active native transaction.");
   const [manifest] = await db.select({ id: contextManifests.id, agentId: contextManifests.agentId,
     runId: contextManifests.runId }).from(contextManifests).where(and(
     eq(contextManifests.companyId, input.companyId), eq(contextManifests.id, input.manifestId))).limit(1);

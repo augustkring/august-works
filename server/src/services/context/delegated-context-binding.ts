@@ -1,9 +1,10 @@
+import { isDeepStrictEqual } from "node:util";
 import { and, eq, inArray } from "drizzle-orm";
 import { agentExecutionScopeRequests, agents, contextManifestItems, contextManifestMemoryRoots,
   contextManifests, delegatedContextManifestBindings, heartbeatRuns, type Db } from "@paperclipai/db";
 import { agentExecutionScopeSchema, type AgentExecutionScope } from "@paperclipai/shared";
 import { forbidden } from "../../errors.js";
-import type { AuthorizationActor } from "../authorization.js";
+import { authorizationService, type AuthorizationActor } from "../authorization.js";
 import { hashContextPolicySnapshot, revalidateStoredContextManifestSources } from "./context-manifest.js";
 
 export interface DelegatedContextManifestResolverInput {
@@ -109,8 +110,15 @@ async function resolveDelegatedContextManifestBindingsInScope(
       eq(contextManifestMemoryRoots.companyId, binding.guestCompanyId), eq(contextManifestMemoryRoots.manifestId, binding.contextManifestId)))
       .orderBy(contextManifestMemoryRoots.memoryRecordId).limit(257);
     if (roots.length > 256) throw forbidden("Delegated Context Memory roots exceed their bounded review");
-    await revalidateStoredContextManifestSources(db, { companyId: binding.guestCompanyId,
-      manifestId: binding.contextManifestId, agentId: binding.guestAgentId, actor: guestActor });
+    await authorizationService(db).withReadDelegatedContextSources({ homeActor: input.actor, scope,
+      scopeRequestId: binding.scopeRequestId, guestCompanyId: binding.guestCompanyId, guestAgentId: binding.guestAgentId },
+    async source => {
+      if (!isDeepStrictEqual(source.actor, guestActor))
+        throw forbidden("Delegated Context source principal changed during review");
+      await revalidateStoredContextManifestSources(source.db, { companyId: binding.guestCompanyId,
+        manifestId: binding.contextManifestId, agentId: binding.guestAgentId, actor: source.actor });
+      return undefined;
+    });
     const sourceSnapshotHash = hashContextPolicySnapshot({ items: items.map(item => ({ rank: item.rank, sourceProvider: item.sourceProvider,
       sourceRef: item.sourceRef, sourceVersion: item.sourceVersion, contentHash: item.contentHash })),
       roots: roots.map(root => ({ memoryRecordId: root.memoryRecordId, sourceVersion: root.sourceVersion,

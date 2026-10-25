@@ -13,7 +13,7 @@ export interface OpenShellHostBridge {
   prepare(scope: SandboxIdentity): Promise<PreparedSandbox>;
   inspect(scope: SandboxIdentity): Promise<SandboxObservation>;
   effectivePolicy(scope: SandboxIdentity): Promise<OpenShellPolicyDocument>;
-  apply(scope: SandboxIdentity & { document: OpenShellPolicyDocument; policyHash: string; idempotencyKey: string }): Promise<{ applied: boolean; policyHash: string | null; requiresRecreate?: boolean }>;
+  apply(scope: SandboxIdentity & { document: OpenShellPolicyDocument; policyHash: string; expiresAt: string; idempotencyKey: string }): Promise<{ applied: boolean; policyHash: string | null; requiresRecreate?: boolean }>;
   start(scope: SandboxIdentity & { expiresAt: string; policyHash: string; idempotencyKey: string }): Promise<{ operationId: string }>;
   /** Revocation and native Stop must be independently available. */
   revokeProviders(scope: SandboxIdentity): Promise<void>;
@@ -72,6 +72,7 @@ export function openShellBackend(options: {
     },
     applyPolicy: async input => {
       scoped(input);
+      if (!Number.isFinite(Date.parse(input.expiresAt)) || new Date(input.expiresAt) <= new Date()) throw forbidden("Original unexpired execution deadline is required before policy application");
       if (input.policy.proverResult !== "pass" || input.policy.boundaryPolicyHash !== nativeSha256(options.boundary)) throw conflict("An unchanged authoritative boundary and passing compilation are required");
       const currentCaps = await capabilities();
       const freshCompilation = compileSandboxPolicy({ boundary: options.boundary, candidate: input.policy.compiledPolicy, capabilities: currentCaps, authorizedConnectionGrantHashes: {}, sourcePolicyRefs: input.policy.sourcePolicyRefs });
@@ -85,7 +86,7 @@ export function openShellBackend(options: {
       if (boundary.unsupportedFeatures.length) return { applied: false, requiresRecreate: false, observedPolicyHash: null, unsupportedFeatures: boundary.unsupportedFeatures };
       const requestedProof = await checkOpenShellBoundary({ ...options.prover, candidate: projection.document, boundary: boundary.document });
       if (requestedProof.result !== "within_boundary") return { applied: false, requiresRecreate: false, observedPolicyHash: null, unsupportedFeatures: [`boundary:${requestedProof.result}`] };
-      const policyHash = nativeSha256(input.policy), receipt = await bridge.apply({ ...identity, document: projection.document, policyHash, idempotencyKey: `v7-sandbox-policy:${identity.bindingId}:${identity.cellGeneration}:${policyHash}` });
+      const policyHash = nativeSha256(input.policy), receipt = await bridge.apply({ ...identity, document: projection.document, policyHash, expiresAt: input.expiresAt, idempotencyKey: `v7-sandbox-policy:${identity.bindingId}:${identity.cellGeneration}:${policyHash}` });
       if (receipt.requiresRecreate) return { applied: false, requiresRecreate: true, observedPolicyHash: null, unsupportedFeatures: [] };
       if (!receipt.applied || receipt.policyHash !== policyHash) throw conflict("OpenShell did not observe the exact requested policy");
       try {

@@ -1,5 +1,5 @@
 import { and, desc, eq, inArray, sql } from "drizzle-orm";
-import { agentExecutionManifests, agents, agentPresenceRuntimeBindings, agentProviderBindings, companyMemberships, principalPermissionGrants, heartbeatRuns, issues, runtimeCapacityProfiles, orchestrationPlans, orchestrationWorkerAttempts, runtimeCells, runtimeHosts, runtimeSandboxBindings, runtimePolicySnapshots, sandboxQualificationRuns, type Db } from "@paperclipai/db";
+import { activityLog, agentExecutionManifests, agents, agentPresenceRuntimeBindings, agentProviderBindings, companyMemberships, principalPermissionGrants, heartbeatRuns, issues, runtimeCapacityProfiles, orchestrationPlans, orchestrationWorkerAttempts, runtimeCells, runtimeHosts, runtimeSandboxBindings, runtimePolicySnapshots, sandboxQualificationRuns, type Db } from "@paperclipai/db";
 import { SANDBOX_CONTROLS, sandboxBindingCreateSchema, sandboxCapabilitySnapshotSchema, sandboxCompileSchema, type SandboxAdmissionInput, type SandboxBindingCreateInput, type SandboxCompileInput, type SandboxPosture } from "@paperclipai/shared";
 import { conflict, forbidden, notFound } from "../../errors.js";
 import { assertConfiguredOperatorAuthentication } from "../../auth/authenticator-assurance.js";
@@ -14,6 +14,7 @@ import { compileSandboxPolicy } from "./policy-compiler.js";
 import { runSandboxQualification } from "./qualification.js";
 import { existingCellContainerBackend } from "./compatibility-backend.js";
 import { SANDBOX_PROBE_CASES, type ExecutionSandboxBackend, type SandboxIdentity } from "./backend.js";
+import { fenceSandboxAdmissionOutcome } from "./sandbox-guardian.js";
 
 type Binding = typeof runtimeSandboxBindings.$inferSelect;
 export function executionSandboxService(db: Db, options: {
@@ -155,6 +156,7 @@ export function executionSandboxService(db: Db, options: {
       qualification.evidenceKind !== "protected_host_report" ||
       qualification.reportHash !== capability.qualificationHash ||
       qualification.suiteVersion !== "aw-v7-boundary-1" ||
+      !Array.isArray(qualification.results) ||
       qualification.results.length !== SANDBOX_PROBE_CASES.length ||
       SANDBOX_PROBE_CASES.some((test) => {
         const matches = qualification.results.filter((result) => result.caseId === test.caseId);
@@ -345,6 +347,9 @@ export function executionSandboxService(db: Db, options: {
       );
       const scope = identity(initial.row);
       const selected = initial.selected;
+      const policyHash = nativeSha256(initial.snapshot.compilation);
+      const applyKey = `v7-sandbox-policy:${id}:${scope.cellGeneration}:${policyHash}`;
+      const startKey = `v7-sandbox-start:${id}:${scope.cellGeneration}:${initial.snapshot.id}`;
       let effectAttempted = false;
       const stopAndConfirm = async () => {
         try {
@@ -361,58 +366,6 @@ export function executionSandboxService(db: Db, options: {
         } catch {
           return false;
         }
-      };
-      const quarantineUnknown = async () => {
-        await db.transaction(async (transaction, publications) => {
-          const tx = transaction as unknown as Db;
-          await assertConfiguredOperatorAuthentication(
-            tx,
-            actor,
-            options.operatorUserIds ?? [],
-            { requireRecent: true },
-          );
-          await access(tx, actor, companyId, true);
-          const [row] = await tx
-            .select()
-            .from(runtimeSandboxBindings)
-            .where(
-              and(
-                eq(runtimeSandboxBindings.companyId, companyId),
-                eq(runtimeSandboxBindings.id, id),
-                eq(runtimeSandboxBindings.runtimeCellId, scope.cellId),
-                eq(runtimeSandboxBindings.cellGeneration, scope.cellGeneration),
-              ),
-            )
-            .for("update");
-          if (!row) return;
-          await tx
-            .update(runtimeSandboxBindings)
-            .set({ status: "quarantined", version: row.version + 1, updatedAt: new Date() })
-            .where(eq(runtimeSandboxBindings.id, id));
-          await tx
-            .update(runtimePolicySnapshots)
-            .set({ status: "revoked" })
-            .where(
-              and(
-                eq(runtimePolicySnapshots.companyId, companyId),
-                eq(runtimePolicySnapshots.bindingId, id),
-                inArray(runtimePolicySnapshots.status, ["draft", "qualified"]),
-              ),
-            );
-          await logActivity(
-            tx,
-            {
-              companyId,
-              actorType: "user",
-              actorId: v7HumanActorId(actor),
-              action: "sandbox.admission_quarantined",
-              entityType: "runtime_sandbox",
-              entityId: id,
-              details: { policySnapshotId: initial.snapshot.id, reason: "stop_unconfirmed" },
-            },
-            publications,
-          );
-        });
       };
       try {
         const currentCapabilities = sandboxCapabilitySnapshotSchema.safeParse(
@@ -447,19 +400,25 @@ export function executionSandboxService(db: Db, options: {
           ...scope,
           policy: initial.snapshot.compilation,
           currentStaticFingerprint: null,
+          expiresAt: initial.snapshot.expiresAt.toISOString(),
         });
-        if (applied.requiresRecreate)
+        if (applied.requiresRecreate) {
+          // The host explicitly observed a static-control mismatch before
+          // mutation; this is a named pre-effect rejection, not an unknown run.
+          effectAttempted = false;
           throw conflict(
             "Static OpenShell policy controls require sandbox replacement before admission",
             { code: "sandbox_recreate_required" },
           );
-        const policyHash = nativeSha256(initial.snapshot.compilation);
+        }
         if (
           !applied.applied ||
           applied.observedPolicyHash !== policyHash ||
           applied.unsupportedFeatures.length
-        )
+        ) {
+          if (!applied.applied) effectAttempted = false;
           throw conflict("Physical policy application was not observed exactly");
+        }
         await db.transaction((transaction) =>
           admissionContext(
             transaction as unknown as Db,
@@ -469,7 +428,6 @@ export function executionSandboxService(db: Db, options: {
             initial.snapshot.id,
           ),
         );
-        const startKey = `v7-sandbox-start:${id}:${scope.cellGeneration}:${initial.snapshot.id}`;
         const started = await selected.startWorkload({
           ...scope,
           policy: initial.snapshot.compilation,
@@ -485,8 +443,7 @@ export function executionSandboxService(db: Db, options: {
           observation.policyHash !== policyHash
         )
           throw conflict("Running workload state is not independently observed");
-        const completion = await db.transaction(async (transaction, publications) => {
-          const tx = transaction as unknown as Db;
+        const completion = await withV7ActivityTransaction(db, async (tx, publications) => {
           const current = await admissionContext(
             tx,
             actor,
@@ -518,12 +475,39 @@ export function executionSandboxService(db: Db, options: {
                 action: "sandbox.workload_started",
                 entityType: "runtime_sandbox",
                 entityId: id,
-                details: { policySnapshotId: initial.snapshot.id, operationId: started.operationId },
+                details: {
+                  policySnapshotId: initial.snapshot.id,
+                  operationId: started.operationId,
+                  generation: scope.cellGeneration,
+                  executionManifestId: current.source.record.id,
+                  executionManifestHash: current.source.record.hash,
+                  policyHash,
+                },
               },
               publications,
             );
             return { binding: updated, duplicate: false };
           }
+          const [durableAdmission] = await tx
+            .select({ id: activityLog.id })
+            .from(activityLog)
+            .where(
+              and(
+                eq(activityLog.companyId, companyId),
+                eq(activityLog.entityType, "runtime_sandbox"),
+                eq(activityLog.entityId, id),
+                eq(activityLog.action, "sandbox.workload_started"),
+                sql`${activityLog.details}->>'operationId' = ${started.operationId}`,
+                sql`${activityLog.details}->>'policySnapshotId' = ${initial.snapshot.id}`,
+                sql`${activityLog.details}->>'generation' = ${scope.cellGeneration}`,
+                sql`${activityLog.details}->>'executionManifestId' = ${current.source.record.id}`,
+                sql`${activityLog.details}->>'executionManifestHash' = ${current.source.record.hash}`,
+                sql`${activityLog.details}->>'policyHash' = ${policyHash}`,
+              ),
+            )
+            .limit(1);
+          if (!durableAdmission)
+            throw conflict("Sandbox version changed without this admission's durable success receipt");
           return { binding: current.row, duplicate: true };
         });
         effectAttempted = false;
@@ -535,12 +519,27 @@ export function executionSandboxService(db: Db, options: {
           duplicate: completion.duplicate,
         };
       } catch (error) {
-        if (effectAttempted && !(await stopAndConfirm())) {
-          await quarantineUnknown().catch(() => {});
-          throw conflict(
-            "Sandbox admission outcome is unknown; the binding is quarantined until host stop is confirmed",
-            { code: "sandbox_stop_unconfirmed" },
-          );
+        if (effectAttempted) {
+          const stopConfirmed = await stopAndConfirm();
+          const fenced = await fenceSandboxAdmissionOutcome(db, {
+            companyId,
+            bindingId: id,
+            cellId: scope.cellId,
+            generation: scope.cellGeneration,
+            policySnapshotId: initial.snapshot.id,
+            operationKeys: [applyKey, startKey],
+            stopConfirmed,
+          });
+          if (!fenced)
+            throw conflict(
+              "Sandbox admission failed and its original generation could not be safety fenced",
+              { code: "sandbox_quarantine_persistence_failed" },
+            );
+          if (!stopConfirmed)
+            throw conflict(
+              "Sandbox admission outcome is unknown; the binding is quarantined until host stop is confirmed",
+              { code: "sandbox_stop_unconfirmed" },
+            );
         }
         throw error;
       }

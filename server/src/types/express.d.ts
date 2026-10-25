@@ -1,6 +1,7 @@
 export {};
 
 import type { AgentApiKeyScope } from "@paperclipai/shared";
+import type { NativeToolEffectClaim } from "../agent-auth-jwt.js";
 
 declare global {
   namespace Express {
@@ -33,6 +34,7 @@ declare global {
         onBehalfOfUserId?: string | null;
         identityContextId?: string | null;
         source?: "local_implicit" | "session" | "board_key" | "agent_key" | "agent_jwt" | "cloud_tenant" | "cloud_control" | "none";
+        nativeToolEffect?: NativeToolEffectClaim;
       };
     }
   }

@@ -66,7 +66,16 @@ const support = await getEmbeddedPostgresTestSupport(), image = "fixture.invalid
   it("reconciles missing enforcement into quarantine independently of flag rollback", async () => { const row = await create(); await instanceSettingsService(db).updateExperimental({ sandbox_abstraction_v7: false }); expect(await executionSandboxService(db, { operatorUserIds: [f.userId] }).reconcile(f.actor, f.home, row.id, 1)).toMatchObject({ status: "quarantined", version: 2 }); });
   it("requires an actual owned manifest instead of caller policy pins", async () => { const row = await create(); await expect(executionSandboxService(db, { operatorUserIds: [f.userId] }).compile(f.actor, f.home, row.id, { expectedVersion: 1, executionManifestId: "11111111-1111-4111-8111-111111111111", candidatePolicy: policyFixture() })).rejects.toMatchObject({ status: 404 }); await expect(executionSandboxService(db, { operatorUserIds: [f.userId] }).qualify(f.actor, f.home, row.id, 2)).rejects.toMatchObject({ status: 409 }); });
   it("refuses workload admission before protected physical qualification and a current compiled manifest policy", async () => {
-    await instanceSettingsService(db).updateExperimental({ openshell_v7: true, hosted_openclaw_v6: true });
+    await instanceSettingsService(db).updateExperimental({
+      openshell_v7: true,
+      sandbox_abstraction_v7: true,
+      hosted_openclaw_v6: true,
+      runtime_host_agent_v6: true,
+      saas_deployment_profile_v6: true,
+      billing_v6: true,
+      billing_entitlements_v6: true,
+      billing_usage_v6: true,
+    });
     const service = executionSandboxService(db, { operatorUserIds: [f.userId] });
     const binding = await service.create(f.actor, f.home, {
       runtimeCellId: cell.id,
@@ -75,6 +84,12 @@ const support = await getEmbeddedPostgresTestSupport(), image = "fixture.invalid
       profile: "development",
       boundaryPolicy: policyFixture(),
     });
+    await expect(
+      service.admit({ ...f.actor, sessionId: undefined }, f.home, binding.id, {
+        expectedVersion: binding.version,
+        policySnapshotId: "11111111-1111-4111-8111-111111111111",
+      }),
+    ).rejects.toMatchObject({ status: 403 });
     await expect(
       service.admit(f.actor, f.home, binding.id, {
         expectedVersion: binding.version,

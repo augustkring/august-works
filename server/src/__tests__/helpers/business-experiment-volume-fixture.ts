@@ -6,6 +6,7 @@ import { calculateNativeMetric } from "../../services/business-metrics/native-en
 import { businessMetricService } from "../../services/business-metrics/service.js";
 import { assignmentMaterial, exposureMaterial, EXPERIMENT_OWNER_ENGINE, experimentAssignmentKey, experimentEdges, signedExperimentReceipt, type ExperimentAssignment, type ExperimentExposure } from "../../services/business-experiments/receipts.js";
 import { assignNativeBusinessExperimentUnit } from "../../services/business-experiments/kernel.js";
+import { createCanonicalHumanProject, seedCurrentHumanSourceActor } from "./current-human-source-fixture.js";
 
 /** Explicit bulk software prerequisites for maximum-population reader testing.
  * Actual same-company native Tasks, original signing/calculation owners and all
@@ -13,6 +14,8 @@ import { assignNativeBusinessExperimentUnit } from "../../services/business-expe
  * Human attestations, provider execution, a business trial or observed outcomes. */
 export async function experimentVolumeFixture(db: Db, companyId: string, versionId: string, count: number, exposureReports = false) {
   const actor = { type: "board" as const, source: "local_implicit" as const };
+  const sourceActor = await seedCurrentHumanSourceActor(db, [companyId], "local-board");
+  const sourceProject = await createCanonicalHumanProject(db, companyId, sourceActor, "Native maximum-population experiment source");
   const [version] = await db.select().from(businessExperimentVersions).where(and(eq(businessExperimentVersions.companyId, companyId), eq(businessExperimentVersions.id, versionId)));
   const [execution] = await db.select().from(businessExperimentExecutions).where(and(eq(businessExperimentExecutions.companyId, companyId), eq(businessExperimentExecutions.versionId, versionId)));
   const inherited = await db.select().from(analyticalLineageEdges).where(and(eq(analyticalLineageEdges.companyId, companyId), eq(analyticalLineageEdges.manifestId, version.lineageManifestId)));
@@ -20,7 +23,12 @@ export async function experimentVolumeFixture(db: Db, companyId: string, version
   for (const pin of version.metricPins.filter(pin => pin.role === "invariant")) definitions.set(pin.key, await businessMetricService(db).inspectPublishedDefinition(companyId, actor, pin.metricId, pin.metricVersionId));
   const at = new Date(), key = experimentAssignmentKey(companyId, versionId);
   const units: Array<typeof issues.$inferSelect> = [];
-  for (let offset = 0; offset < count; offset += 200) units.push(...await db.insert(issues).values(Array.from({ length: Math.min(200, count - offset) }, () => ({ companyId, title: "Explicit synthetic maximum-population Source prerequisite", status: "todo", createdAt: at, updatedAt: at }))).returning());
+  for (let offset = 0; offset < count; offset += 200) {
+    const rows = await db.insert(issues).values(Array.from({ length: Math.min(200, count - offset) }, () => ({ companyId,
+      projectId: sourceProject.id, title: "Explicit maximum-population native Task prerequisite", status: "todo",
+      responsibleUserId: "local-board", createdByUserId: "local-board", createdAt: at, updatedAt: at }))).returning();
+    units.push(...rows);
+  }
   await db.transaction(async tx => {
     for (let offset = 0; offset < units.length; offset += 100) {
       const assignments: ExperimentAssignment[] = [], manifests: Array<typeof analyticalLineageManifests.$inferInsert> = [], lineage: Array<typeof analyticalLineageEdges.$inferInsert> = [];
@@ -33,7 +41,10 @@ export async function experimentVolumeFixture(db: Db, companyId: string, version
         });
         const value: ExperimentAssignment = { id: randomUUID(), companyId, experimentId: version.experimentId, versionId, unitType: "issue", unitId: unit.id, issueId: unit.id, projectId: null, arm: assignNativeBusinessExperimentUnit(key, companyId, versionId, unit.id, version.definition.assignment.treatmentProbability), sourceSnapshot: snapshot, sourceHash: nativeSha256({ snapshot, invariantReceipts }), invariantReceipts, lineageManifestId: randomUUID(), receiptHash: "", signature: "", assignedBy: "local-board", assignedAt: at };
         Object.assign(value, signedExperimentReceipt("assignment", assignmentMaterial(value, execution.receiptHash, version.contentHash)));
-        const edges = experimentEdges([...inherited, { inputType: "issue", inputRef: unit.id, inputHash: nativeSha256({ type: "issue", id: unit.id }), relationship: "source" }]);
+        const edges = experimentEdges([...inherited,
+          { inputType: "issue", inputRef: unit.id, inputHash: nativeSha256({ type: "issue", id: unit.id }), relationship: "source" },
+          { inputType: "project", inputRef: sourceProject.id, inputHash: nativeSha256({ type: "project", id: sourceProject.id }), relationship: "source" },
+        ]);
         manifests.push({ id: value.lineageManifestId, companyId, analysisType: "experiment_assignment", analysisRef: value.id, engineVersion: EXPERIMENT_OWNER_ENGINE, definitionHash: version.contentHash, inputHash: value.sourceHash, requestedBy: "local-board", sourceWatermark: snapshot.updatedAt, sourceCount: edges.length, parameters: { receiptHash: value.receiptHash, lineageHash: nativeSha256(edges) }, createdAt: at, expiresAt: version.expiresAt });
         lineage.push(...edges.map(edge => ({ ...edge, companyId, manifestId: value.lineageManifestId }))); assignments.push(value);
       }
