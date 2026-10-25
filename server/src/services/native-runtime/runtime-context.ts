@@ -42,7 +42,7 @@ type RuntimeAgent = { id: string; companyId: string; name: string; adapterType?:
 type AssetFile = { path: string; content: Buffer; mode: number };
 
 export type NativeRuntimeAuthoredSourceCapture = {
-  inputs: Array<Extract<NativePayloadSourceInput, { kind: "authored_definition" | "foundation_revision" | "playbook_revision" }>>;
+  inputs: Array<Extract<NativePayloadSourceInput, { kind: "authored_definition" | "foundation_revision" | "playbook_revision" | "skill_version" | "memory" | "runtime_instructions" | "runtime_skill" }>>;
   contextManifests: Array<{ companyId: string; contextManifestId: string }>;
 };
 
@@ -380,6 +380,16 @@ export async function buildNativeRuntimeContext(input: { db: Db; agent: RuntimeA
       documentId: pin.documentId, revisionId: pin.revisionId, contentHash: pin.bodyHash })) ?? []),
     ...(procedures?.playbooks.map(pin => ({ kind: "playbook_revision" as const, playbookId: pin.playbookId,
       revisionId: pin.revisionId, contentHash: pin.bodyHash })) ?? []),
+    ...(procedures?.skills.map(pin => ({ kind: "skill_version" as const, skillId: pin.skillId,
+      versionId: pin.versionId, skillKey: pin.key, contentHash: pin.bodyHash })) ?? []),
+    ...(procedures?.memory.map(pin => ({ kind: "memory" as const, memoryId: pin.recordId,
+      sourceVersion: pin.version, contentHash: pin.bodyHash })) ?? []),
+    // Exact prepared assets only. This does not establish dispatch, file reads,
+    // model consumption or complete input provenance for the run.
+    { kind: "runtime_instructions", agentId: input.agent.id,
+      bundleDigest: parsed.instructions.bundle.digest, manifestDigest: parsed.instructions.bundle.manifestDigest },
+    ...parsed.skills.map(skill => ({ kind: "runtime_skill" as const, key: skill.key, versionId: skill.versionId,
+      bundleDigest: skill.bundle.digest, manifestDigest: skill.bundle.manifestDigest })),
   ]);
   return parsed;
 }

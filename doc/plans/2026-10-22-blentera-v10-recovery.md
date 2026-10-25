@@ -1520,3 +1520,8 @@ The complete original Workflow executor file passes51/51. Its Human fixtures now
 ### 2026-10-25 — Exact selected document result identity
 
 Native document result capture now transports the actual backend turn/call identity and uses the existing canonical mutation dispatch resolver, with current launch/attempt checks. Model arguments supply no identity. Missing/ambiguous association stays null permanently even if later acknowledgement succeeds. Two original native files pass70tests; the full original executor passes473, including persistence-before-return failure controls. The concurrent server compiler reports only the in-progress Workflow analytical recursion annotations; its failure is retained. Evidence: `native-document-dispatch-2026-10-25/receipts.json`. This establishes selected result identity only, not complete model input/source qualification, delivery or temporal closure.
+
+
+### 2026-10-25 — Selected runtime instruction/Skill inputs
+
+The original retained runtime preparation capture now includes exact selected authored Skill and approved Memory versions, plus the actual materialized instruction and selected runtime Skill bundle/manifest identities. No unselected Skills, raw instruction body or private filesystem path is added to those references. Both complete original runtime/procedure files pass26tests. Evidence: `native-prepared-asset-inputs-2026-10-25/receipts.json`. This closes missing prepared-asset facts only; dispatch/file-read/consumption, Role Pack and other input families, immutable output closure and current cross-slice compilation/final workspace gates remain open.
