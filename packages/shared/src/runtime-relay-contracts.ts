@@ -23,12 +23,18 @@ const sandboxExecRequest = z.object({
   argv: z.array(z.string().min(1).max(8192)).min(1).max(64),
   cwd: z.string().min(1).max(4096),
   env: z.record(z.string().regex(/^[A-Za-z_][A-Za-z0-9_]{0,127}$/), z.string().max(8192)).refine(value => Object.keys(value).length <= 64),
+  brokerCredential: z.object({
+    capabilityToken: z.string().min(1).max(16_384),
+    profileId: z.string().min(1).max(100).regex(/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/),
+    profileHash: digest,
+    expiresAt: z.iso.datetime(),
+  }).strict().optional(),
   stdinBase64: z.string().max(512 * 1024).regex(/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/),
 }).strict().superRefine((value, ctx) => {
-  const commandBytes = new TextEncoder().encode(JSON.stringify(value.argv)).byteLength + new TextEncoder().encode(JSON.stringify(value.env)).byteLength + value.stdinBase64.length;
+  const commandBytes = new TextEncoder().encode(JSON.stringify(value.argv)).byteLength + new TextEncoder().encode(JSON.stringify(value.env)).byteLength + (value.brokerCredential?.capabilityToken.length ?? 0) + value.stdinBase64.length;
   if (commandBytes > 768 * 1024) ctx.addIssue({ code: "custom", message: "exec_request_too_large" });
   if (!value.cwd.startsWith("/")) ctx.addIssue({ code: "custom", message: "exec_workdir_must_be_absolute" });
-  if (Object.keys(value.env).some(key => key !== "PAPERCLIP_SANDBOX_BROKER_TOKEN" && /(?:TOKEN|SECRET|PASSWORD|CREDENTIAL|API[_-]?KEY|PRIVATE[_-]?KEY|AUTHORIZATION)/i.test(key)))
+  if (Object.keys(value.env).some(key => /(?:TOKEN|SECRET|PASSWORD|CREDENTIAL|API[_-]?KEY|PRIVATE[_-]?KEY|AUTHORIZATION)/i.test(key)))
     ctx.addIssue({ code: "custom", message: "raw_managed_credentials_are_not_supported" });
 });
 export const runtimeSandboxExecRelayRequestSchema = sandboxExecRequest;

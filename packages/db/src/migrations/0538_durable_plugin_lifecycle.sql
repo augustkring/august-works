@@ -139,3 +139,128 @@ $$;
 --> statement-breakpoint
 CREATE TRIGGER paperclip_project_lifecycle_changed AFTER INSERT OR UPDATE OR DELETE ON projects
   FOR EACH ROW EXECUTE FUNCTION paperclip_project_lifecycle_changed();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION paperclip_invalidate_company_agent_runtimes(p_company uuid) RETURNS void
+LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+DECLARE candidate uuid;
+BEGIN
+  FOR candidate IN SELECT id FROM agents WHERE company_id = p_company AND status NOT IN ('pending_approval','terminated')
+    AND jsonb_array_length(lifecycle_required_plugin_ids) > 0 ORDER BY id FOR NO KEY UPDATE LOOP
+    PERFORM paperclip_record_agent_runtime(p_company, candidate);
+  END LOOP;
+END;
+$$;
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION paperclip_agent_selects_runtime_skill(config jsonb, adapter text, skill_key text, skill_slug text) RETURNS boolean
+LANGUAGE sql IMMUTABLE SET search_path = public, pg_temp AS $$
+  SELECT (adapter <> 'paperclip_runner' AND skill_key IN ('paperclipai/paperclip/paperclip','paperclipai/paperclip/complain','paperclipai/paperclip/suggestion-box')) OR
+    EXISTS (SELECT 1 FROM jsonb_array_elements(CASE WHEN jsonb_typeof(config#>'{paperclipSkillSync,desiredSkills}') = 'array'
+      THEN config#>'{paperclipSkillSync,desiredSkills}' ELSE '[]'::jsonb END) choice
+      WHERE lower(trim(CASE WHEN jsonb_typeof(choice) = 'string' THEN choice#>>'{}' ELSE choice->>'key' END)) = ANY(ARRAY[
+        lower(skill_key), lower(regexp_replace(skill_key, '.*/', '')), lower(skill_slug),
+        lower(CASE WHEN skill_key LIKE 'paperclipai/paperclip/%' THEN skill_slug
+          ELSE skill_slug || '--' || left(encode(sha256(convert_to(skill_key, 'UTF8')), 'hex'), 10) END)]));
+$$;
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION paperclip_skill_runtime_changed() RETURNS trigger
+LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+DECLARE old_row jsonb; new_row jsonb; company uuid; skill_key text; skill_slug text; candidate uuid;
+BEGIN
+  IF TG_OP <> 'INSERT' THEN old_row := to_jsonb(OLD); END IF;
+  IF TG_OP <> 'DELETE' THEN new_row := to_jsonb(NEW); END IF;
+  IF TG_OP = 'UPDATE' AND
+    jsonb_build_array(old_row->>'key',old_row->>'slug',old_row->>'markdown',old_row->>'lifecycle_state',old_row->>'active_version_id',old_row->>'current_version_id',old_row->>'file_inventory',old_row->>'compatibility',old_row->>'trust_level',old_row->>'metadata')
+    IS NOT DISTINCT FROM
+    jsonb_build_array(new_row->>'key',new_row->>'slug',new_row->>'markdown',new_row->>'lifecycle_state',new_row->>'active_version_id',new_row->>'current_version_id',new_row->>'file_inventory',new_row->>'compatibility',new_row->>'trust_level',new_row->>'metadata') THEN RETURN NEW; END IF;
+  company := coalesce((new_row->>'company_id')::uuid,(old_row->>'company_id')::uuid);
+  FOR candidate IN SELECT a.id FROM agents a WHERE a.company_id = company AND a.status NOT IN ('pending_approval','terminated')
+    AND jsonb_array_length(a.lifecycle_required_plugin_ids) > 0 AND EXISTS (
+      SELECT 1 FROM (
+        SELECT old_row->>'key' AS skill_key, old_row->>'slug' AS skill_slug
+        UNION ALL SELECT new_row->>'key', new_row->>'slug'
+      ) changed_skill
+      WHERE changed_skill.skill_key IS NOT NULL AND changed_skill.skill_slug IS NOT NULL
+        AND paperclip_agent_selects_runtime_skill(a.adapter_config,a.adapter_type,changed_skill.skill_key,changed_skill.skill_slug))
+    ORDER BY a.id FOR NO KEY UPDATE LOOP
+    PERFORM paperclip_record_agent_runtime(company,candidate);
+  END LOOP;
+  IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER paperclip_skill_runtime_changed AFTER INSERT OR UPDATE OR DELETE ON company_skills
+  FOR EACH ROW EXECUTE FUNCTION paperclip_skill_runtime_changed();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION paperclip_skill_policy_runtime_changed() RETURNS trigger
+LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+BEGIN
+  IF TG_OP = 'DELETE' THEN PERFORM paperclip_invalidate_company_agent_runtimes(OLD.company_id); RETURN OLD; END IF;
+  PERFORM paperclip_invalidate_company_agent_runtimes(NEW.company_id);
+  RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER paperclip_skill_policy_runtime_changed AFTER INSERT OR UPDATE OR DELETE ON company_skill_policies
+  FOR EACH ROW EXECUTE FUNCTION paperclip_skill_policy_runtime_changed();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION paperclip_skill_version_runtime_changed() RETURNS trigger
+LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+DECLARE skill_id uuid; company uuid; skill_key text; skill_slug text; candidate uuid;
+BEGIN
+  skill_id := coalesce(NEW.company_skill_id,OLD.company_skill_id);
+  company := coalesce(NEW.company_id,OLD.company_id);
+  IF TG_OP = 'UPDATE' AND jsonb_build_array(OLD.file_inventory,OLD.state,OLD.visibility,OLD.validation_summary)
+    IS NOT DISTINCT FROM jsonb_build_array(NEW.file_inventory,NEW.state,NEW.visibility,NEW.validation_summary) THEN RETURN NEW; END IF;
+  SELECT key,slug INTO skill_key,skill_slug FROM company_skills WHERE company_id = company AND id = skill_id;
+  IF skill_key IS NOT NULL THEN
+    FOR candidate IN SELECT a.id FROM agents a WHERE a.company_id = company AND a.status NOT IN ('pending_approval','terminated')
+      AND jsonb_array_length(a.lifecycle_required_plugin_ids) > 0
+      AND paperclip_agent_selects_runtime_skill(a.adapter_config,a.adapter_type,skill_key,skill_slug)
+      ORDER BY a.id FOR NO KEY UPDATE LOOP
+      PERFORM paperclip_record_agent_runtime(company,candidate);
+    END LOOP;
+  END IF;
+  IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER paperclip_skill_version_runtime_changed AFTER INSERT OR UPDATE OR DELETE ON company_skill_versions
+  FOR EACH ROW EXECUTE FUNCTION paperclip_skill_version_runtime_changed();
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION paperclip_runtime_assignment_change(p_company uuid,p_target_type text,p_target_id text) RETURNS void
+LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+DECLARE candidate uuid;
+BEGIN
+  IF p_target_type = 'agent' THEN
+    PERFORM paperclip_record_agent_runtime(p_company,p_target_id::uuid);
+  ELSIF p_target_type = 'company' AND p_target_id = p_company::text THEN
+    FOR candidate IN SELECT id FROM agents WHERE company_id = p_company AND status NOT IN ('pending_approval','terminated')
+      AND jsonb_array_length(lifecycle_required_plugin_ids) > 0 ORDER BY id FOR NO KEY UPDATE LOOP
+      PERFORM paperclip_record_agent_runtime(p_company,candidate);
+    END LOOP;
+  END IF;
+END;
+$$;
+--> statement-breakpoint
+CREATE OR REPLACE FUNCTION paperclip_runtime_assignment_changed() RETURNS trigger
+LANGUAGE plpgsql SET search_path = public, pg_temp AS $$
+DECLARE old_row jsonb; new_row jsonb;
+BEGIN
+  IF TG_OP <> 'INSERT' THEN old_row := to_jsonb(OLD); END IF;
+  IF TG_OP <> 'DELETE' THEN new_row := to_jsonb(NEW); END IF;
+  IF TG_OP = 'UPDATE' AND old_row->>'company_id' = new_row->>'company_id' AND old_row->>'target_type' = new_row->>'target_type' AND old_row->>'target_id' = new_row->>'target_id'
+    THEN PERFORM paperclip_runtime_assignment_change((new_row->>'company_id')::uuid,new_row->>'target_type',new_row->>'target_id'); RETURN NEW; END IF;
+  IF old_row IS NOT NULL THEN PERFORM paperclip_runtime_assignment_change((old_row->>'company_id')::uuid,old_row->>'target_type',old_row->>'target_id'); END IF;
+  IF new_row IS NOT NULL THEN PERFORM paperclip_runtime_assignment_change((new_row->>'company_id')::uuid,new_row->>'target_type',new_row->>'target_id'); END IF;
+  IF TG_OP = 'DELETE' THEN RETURN OLD; END IF;
+  RETURN NEW;
+END;
+$$;
+--> statement-breakpoint
+CREATE TRIGGER paperclip_connection_install_runtime_changed AFTER INSERT OR UPDATE OR DELETE ON tool_connection_installs
+  FOR EACH ROW EXECUTE FUNCTION paperclip_runtime_assignment_changed();
+--> statement-breakpoint
+CREATE TRIGGER paperclip_tool_profile_binding_runtime_changed AFTER INSERT OR UPDATE OR DELETE ON tool_profile_bindings
+  FOR EACH ROW EXECUTE FUNCTION paperclip_runtime_assignment_changed();

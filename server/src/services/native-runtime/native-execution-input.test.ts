@@ -5,7 +5,7 @@ import type { ExecutionContinuationEnvelope, AskUserQuestionsInteraction } from 
 import { formatDurableQuestionResponseSummary } from "../question-response-delivery.js";
 import { buildNativeCompletionContract } from "./completion-contracts.js";
 import { renderPaperclipWakePrompt } from "@paperclipai/adapter-utils/server-utils";
-import { buildNativeBootstrapSourceSet, buildNativeExecutionInput } from "./native-execution-input.js";
+import { buildNativeBootstrapSourceSet, buildNativeExecutionInput, captureNativeTaskWakeSource } from "./native-execution-input.js";
 import { nativeRuntimeContextFixture } from "./runtime-context.test-fixture.js";
 import { captureNativeBootstrapContextWitness } from "../context/native-bootstrap-context-witness.js";
 
@@ -30,6 +30,52 @@ describe("native bootstrap rendered-source closure", () => {
     expect(input({ candidates: [{ kind: "task", id: issueId, input: { kind: "task", issueId, sourceVersion: "1", contentHash: hash }, payloadSourceSnapshot: snapshot(randomUUID()) }] })).toBeNull();
     expect(input({ candidates: [{ kind: "task", id: issueId, input: { kind: "project", projectId: issueId, sourceVersion: "1", contentHash: hash }, payloadSourceSnapshot: snapshot() }] })).toBeNull();
     expect(input({ candidates: [{ kind: "task", id: issueId, input: { kind: "task", issueId: randomUUID(), sourceVersion: "1", contentHash: hash }, payloadSourceSnapshot: snapshot() }] })).toBeNull();
+  });
+
+  it("closes only the exact Task-only wake payload and rejects comment or interaction additions", () => {
+    const task = { id: issueId, identifier: "NATIVE-1", title: "Draft", description: "Internal draft",
+      status: "todo", priority: "medium", workMode: "standard" };
+    const payload = {
+      reason: "on_demand", executionContinuation: null, attachmentOmissions: [], externalChatProvider: null,
+      recovery: null, issue: { id: task.id, identifier: task.identifier, title: task.title, description: task.description,
+        descriptionTruncated: false, status: task.status, priority: task.priority, workMode: task.workMode },
+      agentMessage: null, childIssueSummaries: [], childIssueSummaryTruncated: false, dispositionRepair: null,
+      livenessContinuation: null, interactionKind: null, interactionStatus: null, interactionId: null, sourceRunId: null,
+      externalChatQuestionResponse: null, externalInteractionContinuation: false, checkboxSelection: null,
+      checkedOutByHarness: false, externalChatExecutionBound: false, simplifiedEnglishInteractions: false,
+      dependencyBlockedInteraction: false, treeHoldInteraction: false, activeTreeHold: {}, unresolvedBlockerIssueIds: [],
+      unresolvedBlockerSummaries: [], executionStage: null, taskWatchdog: null, skillTest: null, continuationSummary: null,
+      commentIds: [], latestCommentId: null, comments: [], annotationDeltas: [], planReviewContext: null,
+      documentReviewContext: null, commentWindow: { requestedCount: 0, includedCount: 0, missingCount: 0 },
+      truncated: false, fallbackFetchNeeded: false,
+    };
+    const emptyContinuation = { version: 1, companyId, issueId, trigger: { reason: "on_demand", interactionId: null, sourceRunId: null },
+      originCommentIds: [], objective: task.description, messages: [], humanResponses: [], interactionOutcomes: [],
+      completedWork: null, recoveryOutcomes: [], unresolvedInteractionIds: [],
+      coverage: { kind: "full_task_history", throughCommentId: null, summaryThroughCommentId: null } };
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", wakeReason: "on_demand", task,
+      payload: { ...payload, connectorSkillInstructions: "" } })).toMatchObject({
+      kind: "native_task_wake", runId, issueId, sourceVersion: "1", contentHash: expect.stringMatching(/^[0-9a-f]{64}$/),
+    });
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", wakeReason: "on_demand", task, payload })).toMatchObject({ kind: "native_task_wake" });
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", wakeReason: "on_demand", task,
+      payload: { ...payload, executionContinuation: emptyContinuation } })).toMatchObject({ kind: "native_task_wake" });
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", wakeReason: null, task,
+      payload: { ...payload, reason: null, executionContinuation: { ...emptyContinuation,
+        trigger: { reason: "task_execution", interactionId: null, sourceRunId: null } } } })).toMatchObject({ kind: "native_task_wake" });
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", wakeReason: "on_demand", task, payload: {
+      ...payload, connectorSkillInstructions: "untracked connector instructions",
+    } })).toBeNull();
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", wakeReason: "on_demand", task, payload: {
+      ...payload, comments: [{ id: randomUUID(), body: "unaccounted" }],
+    } })).toBeNull();
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", wakeReason: "on_demand", task, payload: {
+      ...payload, futureField: "unknown input",
+    } })).toBeNull();
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", wakeReason: "on_demand", task,
+      payload: { ...payload, executionContinuation: { ...emptyContinuation, completedActions: [{ runId, receiptId: "x" }] } } })).toBeNull();
+    expect(captureNativeTaskWakeSource({ companyId, runId, issueId, sourceVersion: "1", wakeReason: "different_reason", task,
+      payload: { ...payload, executionContinuation: emptyContinuation } })).toBeNull();
   });
 
   it("adds only an exact server-minted approved Context closure bound to the native run and rendered markdown", () => {

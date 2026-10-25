@@ -95,7 +95,7 @@ export function openShellHostEngine({
       env: { HOME: stateHome, PATH: "/usr/bin:/bin", LANG: "C", NO_COLOR: "1" },
     };
   }
-  async function cli(args, deadlineAt, json = true) {
+  async function cli(args, deadlineAt, json = true, envOverrides = {}, timeoutCapMs = 6000) {
     const privateConfig = await privateConfiguration();
     const remaining = new Date(deadlineAt).getTime() - Date.now();
     if (!Number.isFinite(remaining) || remaining <= 0)
@@ -104,14 +104,96 @@ export function openShellHostEngine({
       privateConfig.executable,
       ["--gateway", config.gateway, "--workspace", config.workspace, ...args],
       {
-        env: privateConfig.env,
-        timeout: Math.min(6000, remaining),
+        env: { ...privateConfig.env, ...envOverrides },
+        timeout: Math.min(timeoutCapMs, remaining),
         maxBuffer: 262144,
         windowsHide: true,
         killSignal: "SIGKILL",
       },
     );
     return json ? JSON.parse(stdout) : stdout;
+  }
+  async function inspectBrokerProviderProfile(request, deadlineAt) {
+    const broker = request.brokerCredential;
+    if (!broker) return null;
+    const profile = await cli(["profile", "describe", broker.profileId, "--output", "json"], deadlineAt);
+    if (!profile || profile.id !== broker.profileId || hash(JSON.stringify(canonical(profile))) !== broker.profileHash ||
+      !Array.isArray(profile.credentials) || profile.credentials.length !== 1 ||
+      !Array.isArray(profile.endpoints) || profile.endpoints.length !== 1 ||
+      !Array.isArray(profile.binaries)) throw new Error("sandbox_operation_unsupported");
+    const credential = profile.credentials[0];
+    if (credential?.auth_style !== "bearer" || credential.header_name?.toLowerCase() !== "authorization" ||
+      credential.env_vars?.length !== 1 || credential.env_vars[0] !== "PAPERCLIP_SANDBOX_BROKER_TOKEN" ||
+      credential.token_grant || credential.refresh) throw new Error("sandbox_operation_unsupported");
+    const endpoint = profile.endpoints[0];
+    const origin = new URL(request.env.PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN ?? "");
+    const port = origin.port ? Number(origin.port) : origin.protocol === "https:" ? 443 : 80;
+    const rules = endpoint?.rules;
+    if (origin.protocol !== "https:" || endpoint?.host !== origin.hostname || endpoint?.port !== port ||
+      endpoint.protocol !== "rest" || endpoint.enforcement !== "enforce" || endpoint.allow_uninspected_credentials === true ||
+      endpoint.path || !Array.isArray(rules) || rules.length !== 1 ||
+      rules[0]?.allow?.method !== "POST" || rules[0]?.allow?.path !== "/mcp/gateways/*")
+      throw new Error("sandbox_operation_unsupported");
+    return { profile, origin };
+  }
+  async function attachBrokerProvider(request, scope, deadlineAt, providerName) {
+    const broker = request.brokerCredential;
+    if (!broker) return;
+    if (Date.parse(broker.expiresAt) <= Date.now() || Date.parse(broker.expiresAt) > Date.parse(deadlineAt))
+      throw new Error("exec_timeout");
+    const decoded = (() => {
+      try { return JSON.parse(Buffer.from(broker.capabilityToken.split(".")[1], "base64url").toString("utf8")); }
+      catch { return null; }
+    })();
+    const capability = decoded?.sandbox_broker;
+    if (!decoded || decoded.purpose !== "sandbox_broker" || decoded.aud !== "paperclip-sandbox-broker" ||
+      decoded.jti !== request.requestId || capability?.parentRequestId !== request.requestId ||
+      capability.bindingId !== request.bindingId || capability.cellId !== scope.cellId ||
+      capability.generation !== scope.cellGeneration || capability.hostEpoch !== request.hostEpoch ||
+      capability.runId !== request.runId || capability.attemptId !== request.attemptId || capability.attempt !== request.attempt ||
+      capability.manifestId !== request.manifestId || capability.manifestHash !== request.manifestHash ||
+      capability.policySnapshotId !== request.policySnapshotId || capability.policyHash !== request.policyHash ||
+      capability?.endpointOrigin !== request.env.PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN ||
+      capability?.brokerSessionId !== request.env.PAPERCLIP_SANDBOX_BROKER_SESSION_ID ||
+      Date.parse(capability?.expiresAt ?? "") !== Date.parse(broker.expiresAt) || decoded.exp * 1000 > Date.parse(broker.expiresAt) + 999 ||
+      decoded.company_id !== scope.companyId || decoded.run_id !== request.runId || !Number.isFinite(decoded.exp) || decoded.exp * 1000 <= Date.now())
+      throw new Error("sandbox_scope_changed");
+    const { origin } = await inspectBrokerProviderProfile(request, deadlineAt);
+    if (origin.username || origin.password || origin.pathname !== "/" || origin.search || origin.hash)
+      throw new Error("sandbox_operation_unsupported");
+    const providerCredentialEnv = "PAPERCLIP_SANDBOX_BROKER_TOKEN";
+    const providerEnv = { [providerCredentialEnv]: broker.capabilityToken };
+    await cli(["provider", "create", "--name", providerName, "--type", broker.profileId, "--credential", providerCredentialEnv], deadlineAt, false, providerEnv);
+    await cli(["provider", "update", providerName, "--credential-expires-at", `${providerCredentialEnv}=${broker.expiresAt}`], deadlineAt, false);
+    const waitSeconds = Math.max(1, Math.min(15, Math.floor((Date.parse(deadlineAt) - Date.now()) / 1000)));
+    await cli(["sandbox", "provider", "attach", scope.sandboxRef, providerName, "--wait", "--timeout", String(waitSeconds), "--output", "json"], deadlineAt, true, {}, 18_000);
+    const attached = await cli(["sandbox", "provider", "list", scope.sandboxRef, "--page-size", "16", "--output", "json"], deadlineAt);
+    if (!Array.isArray(attached.providers) || !attached.providers.some(value => value?.name === providerName) || attached.next_page_token !== "")
+      throw new Error("sandbox_observation_unavailable");
+  }
+  async function detachAndDeleteBrokerProvider(scope, deadlineAt, providerName) {
+    await cli(["sandbox", "provider", "detach", scope.sandboxRef, providerName, "--wait", "--timeout", "15", "--output", "json"], deadlineAt, true, {}, 18_000);
+    const attached = await cli(["sandbox", "provider", "list", scope.sandboxRef, "--page-size", "16", "--output", "json"], deadlineAt);
+    if (!Array.isArray(attached.providers) || attached.providers.some(value => value?.name === providerName) || attached.next_page_token !== "")
+      throw new Error("sandbox_observation_unavailable");
+    await cli(["provider", "delete", providerName], deadlineAt, false);
+  }
+  async function deleteQuiescedBrokerProviders(scope, deadlineAt) {
+    const pending = Object.values(journal.commands).flatMap(command => {
+      const provider = command?.brokerProvider;
+      return provider && validScope(provider.scope) && sameDocument(provider.scope, scope) &&
+        /^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,100}$/.test(provider.name ?? "")
+        ? [provider.name] : [];
+    });
+    const names = [...new Set(pending)].slice(0, 32);
+    for (const name of names) await cli(["provider", "delete", name], deadlineAt, false);
+    if (names.length) await serial(async () => {
+      for (const command of Object.values(journal.commands)) {
+        if (command?.brokerProvider && names.includes(command.brokerProvider.name) && validScope(command.brokerProvider.scope) && sameDocument(command.brokerProvider.scope, scope))
+          delete command.brokerProvider;
+      }
+      await atomicJson(journalFile, journal);
+    });
   }
   async function docker(args, deadlineAt, json = true) {
     const privateConfig = await privateConfiguration();
@@ -268,6 +350,7 @@ export function openShellHostEngine({
       const workload = await container(scope, stopped, imageDigest, deadlineAt);
       if (stopped.phase !== "Stopped" || workload.State.Running)
         throw new Error("sandbox_observation_unavailable");
+      await deleteQuiescedBrokerProviders(scope, deadlineAt);
     } catch {
       throw new Error("sandbox_host_unavailable");
     }
@@ -650,8 +733,9 @@ export function openShellHostEngine({
   async function executeStream(input, onOutput, signal) {
     const request = input?.request;
     const requestKeys = ["requestId", "bindingId", "hostEpoch", "runId", "attemptId", "attempt", "manifestId", "manifestHash", "policySnapshotId", "policyHash", "commandDigest", "deadlineAt", "sandboxRef", "imageDigest", "argv", "cwd", "env", "stdinBase64"];
+    const requestKeysWithBroker = [...requestKeys, "brokerCredential"];
     if (!input || !validScope(input.scope) || !request ||
-      Object.keys(request).sort().join(",") !== requestKeys.slice().sort().join(",") ||
+      ![requestKeys, requestKeysWithBroker].some(keys => Object.keys(request).sort().join(",") === keys.slice().sort().join(",")) ||
       !uuid.test(request.requestId) || request.bindingId !== input.scope.bindingId ||
       request.hostEpoch !== epoch || !uuid.test(request.runId) ||
       (request.attemptId !== null && !uuid.test(request.attemptId)) ||
@@ -665,13 +749,22 @@ export function openShellHostEngine({
       request.argv.some(value => typeof value !== "string" || !value.length || value.length > 8192) ||
       typeof request.cwd !== "string" || !path.isAbsolute(request.cwd) ||
       !request.env || typeof request.env !== "object" || Array.isArray(request.env) || Object.keys(request.env).length > 64 ||
-      Object.entries(request.env).some(([key, value]) => !/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(key) || typeof value !== "string" || value.length > 8192 || key !== "PAPERCLIP_SANDBOX_BROKER_TOKEN" && /(?:TOKEN|SECRET|PASSWORD|CREDENTIAL|API[_-]?KEY|PRIVATE[_-]?KEY|AUTHORIZATION)/i.test(key)) ||
+      Object.entries(request.env).some(([key, value]) => !/^[A-Za-z_][A-Za-z0-9_]{0,127}$/.test(key) || typeof value !== "string" || value.length > 8192 || /(?:TOKEN|SECRET|PASSWORD|CREDENTIAL|API[_-]?KEY|PRIVATE[_-]?KEY|AUTHORIZATION)/i.test(key)) ||
+      (request.brokerCredential !== undefined && (!request.brokerCredential || typeof request.brokerCredential.capabilityToken !== "string" || request.brokerCredential.capabilityToken.length > 16_384 ||
+        typeof request.brokerCredential.profileId !== "string" || !/^[a-zA-Z0-9][a-zA-Z0-9_.-]{0,99}$/.test(request.brokerCredential.profileId) ||
+        typeof request.brokerCredential.profileHash !== "string" || !/^[a-f0-9]{64}$/.test(request.brokerCredential.profileHash) ||
+        typeof request.brokerCredential.expiresAt !== "string" || !Number.isFinite(Date.parse(request.brokerCredential.expiresAt)))) ||
+      (!!request.brokerCredential !== (typeof request.env.PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN === "string" && typeof request.env.PAPERCLIP_SANDBOX_BROKER_SESSION_ID === "string")) ||
       typeof request.stdinBase64 !== "string" || request.stdinBase64.length > 512 * 1024 || !/^(?:[A-Za-z0-9+/]{4})*(?:[A-Za-z0-9+/]{2}==|[A-Za-z0-9+/]{3}=)?$/.test(request.stdinBase64) ||
       typeof input.capabilityToken !== "string" || input.capabilityToken.length > 16384 ||
       typeof onOutput !== "function") throw new Error("sandbox_scope_changed");
     const deadlineAt = request.deadlineAt;
     if (!Number.isFinite(Date.parse(deadlineAt)) || Date.parse(deadlineAt) <= Date.now()) throw new Error("sandbox_host_unavailable");
-    const commandDigest = hash(JSON.stringify(canonical({ argv: request.argv, cwd: request.cwd, env: request.env, stdinHash: hash(Buffer.from(request.stdinBase64, "base64")), timeoutDeadline: deadlineAt })));
+    const commandDigest = hash(JSON.stringify(canonical({ argv: request.argv, cwd: request.cwd, env: request.env,
+      stdinHash: hash(Buffer.from(request.stdinBase64, "base64")), timeoutDeadline: deadlineAt,
+      brokerCapabilityHash: request.brokerCredential ? hash(request.brokerCredential.capabilityToken) : null,
+      brokerProviderProfile: request.brokerCredential ? { id: request.brokerCredential.profileId, hash: request.brokerCredential.profileHash } : null,
+    })));
     if (commandDigest !== request.commandDigest) throw new Error("sandbox_scope_changed");
     const detail = await observed(input.scope, deadlineAt);
     const pinnedPolicy = journal.scopes[input.scope.bindingId]?.policy;
@@ -693,11 +786,19 @@ export function openShellHostEngine({
         throw new Error("exec_unknown");
       }
       if (Object.keys(journal.commands).length >= 10256) throw new Error("sandbox_host_unavailable");
-      journal.commands[request.requestId] = { requestHash, result: null, kind: "exec", state: "claimed" };
+      journal.commands[request.requestId] = { requestHash, result: null, kind: "exec", state: "claimed",
+        ...(request.brokerCredential ? { brokerProvider: {
+          name: `awbr-${request.requestId.replaceAll("-", "")}`,
+          expiresAt: request.brokerCredential.expiresAt,
+          scope: input.scope,
+        } } : {}),
+      };
       await atomicJson(journalFile, journal);
     });
     if (signal?.aborted) throw new Error("exec_unknown");
     if (Date.parse(deadlineAt) <= Date.now()) throw new Error("exec_timeout");
+    const brokerProviderName = request.brokerCredential ? `awbr-${request.requestId.replaceAll("-", "")}` : null;
+    if (brokerProviderName) await attachBrokerProvider(request, input.scope, deadlineAt, brokerProviderName);
     const cliArgs = ["--gateway", config.gateway, "--workspace", config.workspace, "sandbox", "exec", "--name", input.scope.sandboxRef, "--workdir", request.cwd];
     for (const key of Object.keys(request.env).sort()) cliArgs.push("--env", `${key}=${request.env[key]}`);
     cliArgs.push("--", ...request.argv);
@@ -745,6 +846,8 @@ export function openShellHostEngine({
       clearTimeout(timeout);
       signal?.removeEventListener("abort", onAbort);
     }
+    if (timedOut) throw new Error("exec_unknown");
+    if (brokerProviderName) await detachAndDeleteBrokerProvider(input.scope, deadlineAt, brokerProviderName);
     await serial(async () => {
       journal.commands[request.requestId] = { requestHash, result: { exitCode, timedOut }, kind: "exec", state: "completed" };
       await atomicJson(journalFile, journal);

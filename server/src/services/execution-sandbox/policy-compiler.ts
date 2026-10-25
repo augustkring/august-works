@@ -44,7 +44,9 @@ export function compileSandboxPolicy(input: { boundary: SandboxPolicy; candidate
     if (!origin) unsupported.push("credential_broker_origin_unavailable");
     if (resolvedBrokerBindings.length !== candidate.credentials.bindings.length ||
       candidate.credentials.bindings.some(binding => !resolvedBrokerBindings.some(resolved =>
-        resolved.connectionId === binding.connectionId && resolved.grantVersionHash === binding.grantVersionHash))) {
+        resolved.connectionId === binding.connectionId && resolved.grantVersionHash === binding.grantVersionHash &&
+        resolved.destination.hostname === binding.hostname && resolved.destination.port === binding.port &&
+        binding.binary === null && binding.methods.includes("POST") && pathsWithin([resolved.destination.path], binding.pathPrefixes)))) {
       failures.push("credential_broker_binding_resolution_mismatch");
     }
     const endpoints: NonNullable<typeof input.credentialBrokerBindings> = [];
@@ -100,6 +102,7 @@ export function compileSandboxPolicy(input: { boundary: SandboxPolicy; candidate
     for (const control of SANDBOX_CONTROLS) if (required.has(control) && !caps[control]) unsupported.push(control);
     if (required.has("filesystemPolicy") && caps.filesystemEnforcementMode !== "hard_requirement") unsupported.push("filesystem_hard_enforcement_missing");
     if (compiledPolicy.credentials.mode === "brokered") for (const dimension of ["company", "presence", "host", "port", "method", "path", "expiry", "revocation"] as const) if (!caps.credentialBindingDimensions.includes(dimension)) unsupported.push(`credential_${dimension}_binding_missing`);
+    if (compiledPolicy.credentials.mode === "brokered" && !caps.credentialBrokerProviderProfile) unsupported.push("credential_broker_provider_profile_unqualified");
     if (compiledPolicy.credentials.bindings.some(binding => binding.binary) && !caps.credentialBindingDimensions.includes("binary")) unsupported.push("credential_binary_binding_missing");
     if (candidate.profile === "high_assurance_managed" && (!caps.policyProverBoundaryCheck || [...required].some(control => !caps.policyProverCoverage.includes(control)))) unsupported.push("backend_boundary_prover_coverage_missing");
   }

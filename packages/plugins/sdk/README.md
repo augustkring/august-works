@@ -136,6 +136,32 @@ Subscribe in `setup` with `ctx.events.on(name, handler)` or `ctx.events.on(name,
 
 **Company context:** Events still carry `companyId` for company-scoped data, but plugin installation and activation are instance-wide in the current runtime. Access and authorization host services require an active company-scoped invocation such as an event, API route, tool run, environment call, or UI bridge call; the requested `companyId` must match that active scope.
 
+## Durable resource lifecycle hooks
+
+Plugins that maintain runtime state can declare `resourceLifecycle` in the manifest and implement `onResourceLifecycle`:
+
+```ts
+const manifest = {
+  // ...
+  capabilities: ["events.subscribe", "agents.lifecycle.manage"],
+  agentLifecycle: true,
+  resourceLifecycle: ["agent_runtime", "agent", "project"],
+};
+
+definePlugin({
+  manifest,
+  async onResourceLifecycle(event) {
+    // Apply or reconcile current state before acknowledging this revision.
+    await syncResource(event);
+    return { eventId: event.id, status: "acknowledged" };
+  },
+});
+```
+
+`agentLifecycle` requires `agents.lifecycle.manage`; `agent_runtime` also requires `events.subscribe`. Runtime ownership is assigned only to a ready, company-configured, enabled plugin with these declarations. Lifecycle event IDs are decimal strings: compare them with `BigInt` or decimal-string logic and never convert them to `Number`. Return the exact event ID with `acknowledged`, `retry`, or `deferred`; the host acknowledges only after the callback completes successfully. Delivery is at least once, so handlers should be idempotent. `deferred` leaves the event available for a later authoritative scan.
+
+The current assigned runtime owner can call `ctx.agents.getRuntime(agentId, companyId)` to read the latest revision, redacted agent configuration, instructions location, Skills and bounded connection/profile assignments. `skillsReady` is false until there is a current native run; wait or defer before applying a Skill snapshot in that state. During a native run, returned Skills are limited by its current manifest and source permissions. Secret values are redacted.
+
 ## Scheduled (recurring) jobs
 
 Plugins can declare **scheduled jobs** that the host runs on a cron schedule. Use this for recurring tasks like syncs, digest reports, or cleanup.

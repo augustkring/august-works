@@ -40,6 +40,7 @@ import {
 import type { Db } from "@paperclipai/db";
 import {
   agents,
+  agentPresenceRuntimeBindings,
   approvals,
   companies,
   companyMemberships,
@@ -7524,6 +7525,102 @@ export function createToolGatewayService(
     );
   }
 
+  async function sandboxBrokerSessionFromBearer(input: {
+    gatewayId?: string | null;
+    gatewayPublicId?: string | null;
+    bearerToken: string;
+    protocolMethod: McpGatewayProtocolMethod;
+    callerHeaders?: Record<string, string | string[] | undefined>;
+  }): Promise<ToolGatewaySession | null> {
+    const claims = verifySandboxBrokerJwt(input.bearerToken);
+    if (!claims) return null;
+    if (!sandboxBrokerAuthority || !input.gatewayPublicId) {
+      throw new ToolGatewayHttpError(503, "Managed credential broker is unavailable", "sandbox_broker_unavailable");
+    }
+    const capability = await sandboxBrokerAuthority({ capabilityToken: input.bearerToken, gatewayPublicId: input.gatewayPublicId });
+    if (stableHash(capability) !== stableHash(claims.sandbox_broker)) {
+      throw new ToolGatewayHttpError(401, "Sandbox broker capability changed", "sandbox_broker_capability_invalid");
+    }
+    const selected = capability.bindings.find(binding => binding.gatewayPublicId === input.gatewayPublicId);
+    if (!selected || selected.endpointPath !== `/mcp/gateways/${input.gatewayPublicId}` ||
+      (input.gatewayId && !/^[0-9a-f-]{36}$/i.test(input.gatewayId))) {
+      throw new ToolGatewayHttpError(403, "Sandbox broker capability does not include this Gateway", "sandbox_broker_gateway_denied");
+    }
+    const now = new Date();
+    const [parent] = await db.select().from(runtimeHostCommands).where(and(
+      eq(runtimeHostCommands.idempotencyKey, capability.parentRequestId),
+      eq(runtimeHostCommands.companyId, claims.company_id),
+      eq(runtimeHostCommands.runtimeCellId, capability.cellId),
+      eq(runtimeHostCommands.cellGeneration, BigInt(capability.generation)),
+      eq(runtimeHostCommands.commandType, "sandbox_exec"), eq(runtimeHostCommands.status, "CLAIMED"),
+      gt(runtimeHostCommands.deadlineAt, now),
+    )).limit(1);
+    const parentPayload = parent?.payload as Record<string, unknown> | undefined;
+    if (!parent || parentPayload?.bindingId !== capability.bindingId || parentPayload.hostId !== capability.hostId ||
+      parentPayload.hostEpoch !== capability.hostEpoch || parentPayload.runId !== capability.runId ||
+      parentPayload.attemptId !== capability.attemptId || parentPayload.attempt !== capability.attempt ||
+      parentPayload.manifestId !== capability.manifestId || parentPayload.manifestHash !== capability.manifestHash ||
+      parentPayload.policySnapshotId !== capability.policySnapshotId || parentPayload.policyHash !== capability.policyHash) {
+      throw new ToolGatewayHttpError(403, "Parent sandbox execution is no longer current", "sandbox_broker_parent_fenced");
+    }
+    const [run] = await db.select({ agentId: heartbeatRuns.agentId, responsibleUserId: heartbeatRuns.responsibleUserId,
+      issueId: heartbeatRuns.nativeIssueId, status: heartbeatRuns.status }).from(heartbeatRuns).where(and(
+      eq(heartbeatRuns.companyId, claims.company_id), eq(heartbeatRuns.id, capability.runId),
+    )).limit(1);
+    if (!run || run.status !== "running" || run.agentId !== claims.sub ||
+      !claims.responsible_user_id || run.responsibleUserId !== claims.responsible_user_id || !run.issueId) {
+      throw new ToolGatewayHttpError(403, "Current responsible run is unavailable", "sandbox_broker_run_changed");
+    }
+    const [policy] = await db.select().from(runtimePolicySnapshots).where(and(
+      eq(runtimePolicySnapshots.companyId, claims.company_id), eq(runtimePolicySnapshots.id, capability.policySnapshotId),
+      eq(runtimePolicySnapshots.bindingId, capability.bindingId), eq(runtimePolicySnapshots.runtimeCellId, capability.cellId),
+      eq(runtimePolicySnapshots.agentId, claims.sub), eq(runtimePolicySnapshots.executionManifestId, capability.manifestId),
+      eq(runtimePolicySnapshots.policyHash, capability.policyHash), eq(runtimePolicySnapshots.status, "qualified"),
+      gt(runtimePolicySnapshots.expiresAt, now),
+    )).limit(1);
+    const compiledPolicy = policy?.compilation.compiledPolicy;
+    if (!policy || !compiledPolicy || compiledPolicy.credentials.mode !== "brokered") {
+      throw new ToolGatewayHttpError(403, "Compiled credential broker policy is no longer current", "sandbox_broker_policy_changed");
+    }
+    const [presence] = await db.select().from(agentPresenceRuntimeBindings).where(and(
+      eq(agentPresenceRuntimeBindings.companyId, claims.company_id), eq(agentPresenceRuntimeBindings.agentId, claims.sub),
+      eq(agentPresenceRuntimeBindings.status, "active"),
+    )).limit(1);
+    if (!presence) throw new ToolGatewayHttpError(403, "Current local presence is unavailable", "sandbox_broker_presence_changed");
+    const resolved = await createToolGatewayService(db).resolveSandboxCredentialBrokerBindings({
+      companyId: claims.company_id, agentId: claims.sub, runId: capability.runId,
+      responsibleUserId: claims.responsible_user_id, presenceId: presence.id,
+      bindings: compiledPolicy.credentials.bindings,
+    });
+    if (resolved.bindings.length !== capability.bindings.length ||
+      stableHash(resolved.bindings) !== stableHash(capability.bindings) ||
+      compiledPolicy.credentials.bindings.some(binding => resolved.authorizedConnectionGrantHashes[binding.connectionId] !== binding.grantVersionHash)) {
+      throw new ToolGatewayHttpError(403, "Current connector grant or secret revision changed", "sandbox_broker_grant_changed");
+    }
+    const [gateway] = await db.select().from(toolMcpGateways).where(and(
+      eq(toolMcpGateways.companyId, claims.company_id), eq(toolMcpGateways.gatewayPublicId, input.gatewayPublicId),
+      eq(toolMcpGateways.status, "active"), isNull(toolMcpGateways.archivedAt),
+      ...(input.gatewayId ? [eq(toolMcpGateways.id, input.gatewayId)] : []),
+    )).limit(1);
+    if (!gateway) throw new ToolGatewayHttpError(404, "MCP gateway not found", "gateway_not_found");
+    const [issue] = await db.select({ projectId: issues.projectId }).from(issues).where(and(
+      eq(issues.companyId, claims.company_id), eq(issues.id, run.issueId), eq(issues.assigneeAgentId, claims.sub),
+    )).limit(1);
+    if (!issue) throw new ToolGatewayHttpError(403, "Current Task owner is unavailable", "sandbox_broker_task_changed");
+    const session = await captureSessionIdentity({
+      id: `sandbox-broker:${capability.brokerSessionId}`, token: "", companyId: claims.company_id,
+      agentId: claims.sub, runId: capability.runId, issueId: run.issueId, projectId: issue.projectId,
+      gatewayId: gateway.id, gatewayPublicId: gateway.gatewayPublicId, gatewayName: gateway.name,
+      gatewayProfileId: gateway.profileId, gatewayTokenAllowedActions: ["tools/list", "tools/call"],
+      actorType: "agent", actorId: claims.sub, responsibleUserId: claims.responsible_user_id,
+      sandboxBrokerCapability: capability, createdAt: now, expiresAt: new Date(capability.expiresAt),
+    });
+    if (session.responsibleUserId !== claims.responsible_user_id) {
+      throw new ToolGatewayHttpError(403, "Current execution identity changed", "sandbox_broker_identity_changed");
+    }
+    return session;
+  }
+
   async function namedGatewaySessionFromBearer(input: {
     gatewayId?: string | null;
     gatewayPublicId?: string | null;
@@ -7533,6 +7630,8 @@ export function createToolGatewayService(
   }): Promise<ToolGatewaySession> {
     const clientMetadata = safeClientMetadata(input.callerHeaders);
     const bearerToken = input.bearerToken.trim();
+    const sandboxBroker = await sandboxBrokerSessionFromBearer({ ...input, bearerToken });
+    if (sandboxBroker) return sandboxBroker;
     const tokenId = namedGatewayTokenId(bearerToken.trim());
     const tokenHash = hashGatewayToken(bearerToken.trim());
     const conditions = [eq(toolMcpGatewayTokens.tokenHash, tokenHash)];
@@ -9034,7 +9133,133 @@ export function createToolGatewayService(
     };
   }
 
-  return {
+  const service = {
+    setSandboxBrokerAuthority(authority: SandboxBrokerAuthority) {
+      sandboxBrokerAuthority = authority;
+    },
+    isSandboxBrokerToken(token: string) {
+      return verifySandboxBrokerJwt(token) !== null;
+    },
+    async executeSandboxBrokerTool(input: {
+      capabilityToken: string;
+      gatewayPublicId: string;
+      operationId: string;
+      tool: string;
+      parameters?: unknown;
+      timeoutMs?: number;
+      signal?: AbortSignal;
+    }) {
+      if (!/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i.test(input.operationId)) {
+        throw new ToolGatewayHttpError(400, "Broker operation id must be a UUID", "sandbox_broker_operation_id_invalid");
+      }
+      const session = await sandboxBrokerSessionFromBearer({
+        gatewayPublicId: input.gatewayPublicId, bearerToken: input.capabilityToken, protocolMethod: "tools/call",
+      });
+      if (!session?.sandboxBrokerCapability) throw new ToolGatewayHttpError(401, "Sandbox broker capability is required", "sandbox_broker_capability_invalid");
+      const capability = session.sandboxBrokerCapability;
+      const binding = capability.bindings.find(candidate => candidate.gatewayPublicId === input.gatewayPublicId);
+      if (!binding || !binding.allowedTools.includes(input.tool)) {
+        throw new ToolGatewayHttpError(403, "Operation is outside the current broker capability", "sandbox_broker_operation_denied");
+      }
+      const [parent] = await db.select().from(runtimeHostCommands).where(and(
+        eq(runtimeHostCommands.idempotencyKey, capability.parentRequestId),
+        eq(runtimeHostCommands.companyId, session.companyId),
+        eq(runtimeHostCommands.runtimeCellId, capability.cellId),
+        eq(runtimeHostCommands.cellGeneration, BigInt(capability.generation)),
+        eq(runtimeHostCommands.commandType, "sandbox_exec"), eq(runtimeHostCommands.status, "CLAIMED"),
+      )).limit(1);
+      if (!parent) throw new ToolGatewayHttpError(403, "Parent sandbox execution is fenced", "sandbox_broker_parent_fenced");
+      const parameterValue = input.parameters ?? {};
+      const operationHash = stableHash({ tool: input.tool, parameters: parameterValue });
+      const operationKey = `sandbox-broker:${capability.brokerSessionId}:${input.operationId}`;
+      const claimState = await db.transaction(async tx => {
+        const [liveParent] = await tx.select({ id: runtimeHostCommands.id }).from(runtimeHostCommands).where(and(
+          eq(runtimeHostCommands.idempotencyKey, capability.parentRequestId),
+          eq(runtimeHostCommands.companyId, session.companyId),
+          eq(runtimeHostCommands.runtimeCellId, capability.cellId),
+          eq(runtimeHostCommands.cellGeneration, BigInt(capability.generation)),
+          eq(runtimeHostCommands.commandType, "sandbox_exec"), eq(runtimeHostCommands.status, "CLAIMED"),
+          gt(runtimeHostCommands.deadlineAt, new Date()),
+        )).for("update").limit(1);
+        if (!liveParent) throw new ToolGatewayHttpError(403, "Parent sandbox execution is fenced", "sandbox_broker_parent_fenced");
+        const [prior] = await tx.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.idempotencyKey, operationKey)).for("update").limit(1);
+        if (prior) {
+          const payload = prior.payload as Record<string, unknown>;
+          if (payload.operationHash !== operationHash || payload.parentRequestId !== capability.parentRequestId || payload.connectionId !== binding.connectionId || payload.tool !== input.tool) {
+            throw new ToolGatewayHttpError(409, "Broker operation id was reused for different arguments", "sandbox_broker_operation_conflict");
+          }
+          if (prior.status !== "SUCCEEDED") throw new ToolGatewayHttpError(409, "Original broker operation has an unknown or incomplete outcome", "sandbox_broker_operation_unsettled");
+          return { replay: prior };
+        }
+        const now = new Date();
+        const [created] = await tx.insert(runtimeHostCommands).values({
+          runtimeHostId: capability.hostId, companyId: session.companyId, runtimeCellId: capability.cellId,
+          cellGeneration: BigInt(capability.generation), commandType: "sandbox_broker", idempotencyKey: operationKey,
+          payload: {
+            parentRequestId: capability.parentRequestId, brokerSessionId: capability.brokerSessionId,
+            bindingId: capability.bindingId, runId: capability.runId, attemptId: capability.attemptId, attempt: capability.attempt,
+            manifestId: capability.manifestId, manifestHash: capability.manifestHash,
+            policySnapshotId: capability.policySnapshotId, policyHash: capability.policyHash,
+            connectionId: binding.connectionId, gatewayPublicId: input.gatewayPublicId,
+            tool: input.tool, operationId: input.operationId, operationHash,
+          },
+          status: "PENDING", attempt: 0, deadlineAt: new Date(Math.min(parent.deadlineAt.getTime(), Date.parse(capability.expiresAt))),
+        }).onConflictDoNothing().returning();
+        if (!created) {
+          const [raced] = await tx.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.idempotencyKey, operationKey)).for("update").limit(1);
+          if (!raced) throw new ToolGatewayHttpError(409, "Broker operation claim could not be persisted", "sandbox_broker_claim_unavailable");
+          const payload = raced.payload as Record<string, unknown>;
+          if (payload.operationHash !== operationHash || raced.status !== "SUCCEEDED") throw new ToolGatewayHttpError(409, "Original broker operation has an unknown or conflicting outcome", "sandbox_broker_operation_unsettled");
+          return { replay: raced };
+        }
+        const [claimed] = await tx.update(runtimeHostCommands).set({ status: "CLAIMED", attempt: 1, updatedAt: now }).where(and(
+          eq(runtimeHostCommands.id, created.id), eq(runtimeHostCommands.status, "PENDING"), eq(runtimeHostCommands.attempt, 0),
+        )).returning();
+        if (!claimed) throw new ToolGatewayHttpError(409, "Broker operation claim was already consumed", "sandbox_broker_claim_unavailable");
+        return { replay: null, claim: claimed };
+      });
+      if (claimState.replay) {
+        const safe = claimState.replay.safeResult as Record<string, unknown> | null;
+        const invocationId = typeof safe?.invocationId === "string" ? safe.invocationId : null;
+        const [invocation] = invocationId ? await db.select().from(toolInvocations).where(and(
+          eq(toolInvocations.companyId, session.companyId), eq(toolInvocations.id, invocationId),
+          eq(toolInvocations.idempotencyKey, operationKey), eq(toolInvocations.status, "succeeded"),
+        )).limit(1) : [];
+        if (!invocation) throw new ToolGatewayHttpError(409, "Completed broker result is unavailable; external outcome cannot be repeated", "sandbox_broker_result_unavailable");
+        return { invocationId, status: "replayed" as const, tool: input.tool, result: invocation.workflowResultJson };
+      }
+      const claim = "claim" in claimState ? claimState.claim : null;
+      if (!claim) throw new ToolGatewayHttpError(409, "Broker operation claim is unavailable", "sandbox_broker_claim_unavailable");
+      const assertCurrent = async (tool?: ToolGatewayDescriptor) => {
+        const current = await sandboxBrokerSessionFromBearer({
+          gatewayPublicId: input.gatewayPublicId, bearerToken: input.capabilityToken, protocolMethod: "tools/call",
+        });
+        if (!current?.sandboxBrokerCapability || stableHash(current.sandboxBrokerCapability) !== stableHash(capability) ||
+          current.gatewayId !== session.gatewayId || current.runId !== session.runId || current.responsibleUserId !== session.responsibleUserId ||
+          (tool && (tool.connectionId !== binding.connectionId || tool.name !== input.tool || !binding.allowedTools.includes(tool.name)))) {
+          throw new ToolGatewayHttpError(403, "Broker execution authority changed", "sandbox_broker_authority_changed");
+        }
+      };
+      try {
+        await assertCurrent();
+        const result = await service.executeTool({
+          sessionToken: input.capabilityToken, tool: input.tool, parameters: parameterValue,
+          idempotencyKey: operationKey, timeoutMs: input.timeoutMs, signal: input.signal,
+        }, undefined, { session, assertCurrent });
+        await assertCurrent();
+        const [completed] = await db.update(runtimeHostCommands).set({
+          status: "SUCCEEDED", completedAt: new Date(),
+          safeResult: { invocationId: result.invocationId, resultHash: stableHash(result.result ?? null) },
+        }).where(and(eq(runtimeHostCommands.id, claim.id), eq(runtimeHostCommands.status, "CLAIMED"))).returning({ id: runtimeHostCommands.id });
+        if (!completed) throw new ToolGatewayHttpError(409, "Broker result was fenced before delivery", "sandbox_broker_result_fenced");
+        return result;
+      } catch (error) {
+        const reasonCode = error instanceof ToolGatewayHttpError ? error.reasonCode : "sandbox_broker_outcome_unknown";
+        await db.update(runtimeHostCommands).set({ status: "FAILED", completedAt: new Date(), errorCode: reasonCode })
+          .where(and(eq(runtimeHostCommands.id, claim.id), eq(runtimeHostCommands.status, "CLAIMED")));
+        throw error;
+      }
+    },
     /** Resolve current, server-owned credential and gateway metadata for sandbox
      * policy compilation. Secret values are never returned; only the selected
      * grant revision and resolved secret version numbers enter the digest. */
@@ -9102,6 +9327,7 @@ export function createToolGatewayService(
             subjectAgentId: grant.subjectAgentId, status: grant.status, revokedAt: grant.revokedAt,
             updatedAt: grant.updatedAt, isDefault: grant.isDefault,
             credentialSecretRefs: grant.credentialSecretRefs, externalCredential: grant.externalCredential,
+            providerTenant: grant.providerTenant,
           },
           endpoint: { protocol: endpoint.protocol, hostname: endpoint.hostname, port, path },
           secretVersions,
@@ -9142,7 +9368,12 @@ export function createToolGatewayService(
             return profileEntries.some(entry => entry.effect === "include" && matches(entry, tool)) &&
               !profileEntries.some(entry => entry.effect === "exclude" && matches(entry, tool));
           });
-          if (visibleTools.length) eligible.push({ gateway, tools: visibleTools });
+          const dispatchableTools: ToolGatewayDescriptor[] = [];
+          for (const tool of visibleTools) {
+            const decision = await policyService.decide(policyInputForTool({ session, tool }));
+            if (decision.allowed) dispatchableTools.push(tool);
+          }
+          if (dispatchableTools.length) eligible.push({ gateway, tools: dispatchableTools });
         }
         eligible.sort((a, b) => a.gateway.gatewayPublicId.localeCompare(b.gateway.gatewayPublicId));
         const selected = eligible[0];
@@ -9565,7 +9796,11 @@ export function createToolGatewayService(
         callerHeaders: input.callerHeaders,
       });
       await assertGatewayTokenAction(session, "tools/list");
-      const tools = await listToolsForContext(session);
+      const tools = (await listToolsForContext(session)).filter(tool => {
+        if (!session.sandboxBrokerCapability) return true;
+        const binding = session.sandboxBrokerCapability.bindings.find(candidate => candidate.gatewayPublicId === session.gatewayPublicId);
+        return !!binding && tool.connectionId === binding.connectionId && binding.allowedTools.includes(tool.name);
+      });
       await writeAudit({
         session,
         companyId: session.companyId,
@@ -12008,6 +12243,7 @@ export function createToolGatewayService(
       }
     },
   };
+  return service;
 }
 
 export type ToolGatewayService = ReturnType<typeof createToolGatewayService>;

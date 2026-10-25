@@ -1953,6 +1953,167 @@
         "Duration  24.17s (transform 16.27s, setup 116ms, import 21.87s, tests 2.05s, environment 0ms)"
       ],
       "sourceCommit": "923f181297e291cb39aa7088329b090039600006"
+    },
+    {
+      "name": "business-experiment-recording-16-final",
+      "exitCode": 0,
+      "exitSidecar": "business-experiment-recording-16-final.exit",
+      "rawSha256": "527c3fc8b91b1872c6cd5fa46cee8d4b907882e9e2c2bb8f1f2c0e54e0a12ba5",
+      "sanitizedSha256": "527c3fc8b91b1872c6cd5fa46cee8d4b907882e9e2c2bb8f1f2c0e54e0a12ba5",
+      "archiveSha256": "a99b1b6ff3e4938d8da7a1f3d2f0e74d0bd7d1eb67d37373c5378ab65459b1f6",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  16 passed (16)",
+        "Duration  268.29s (transform 10.40s, setup 82ms, import 14.62s, tests 253.47s, environment 0ms)"
+      ],
+      "sourceCommit": "39f9694cafbfdafa41aed5722dc32c7cb3dfb00f"
+    },
+    {
+      "name": "business-experiment-volume-exact-lookup-reuse",
+      "exitCode": 0,
+      "exitSidecar": "business-experiment-volume-exact-lookup-reuse.exit",
+      "rawSha256": "d088fe7b5dcdaacdd3e0ecaf24a05cfd586e568581fe129d541bf850c838915f",
+      "sanitizedSha256": "d088fe7b5dcdaacdd3e0ecaf24a05cfd586e568581fe129d541bf850c838915f",
+      "archiveSha256": "5569812c4562aca7f504bb8ea16cf510bb305756d3006a86b86535467e05aebf",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 15 skipped (16)",
+        "Duration  142.17s (transform 10.43s, setup 96ms, import 14.66s, tests 127.28s, environment 0ms)"
+      ],
+      "sourceCommit": "39f9694cafbfdafa41aed5722dc32c7cb3dfb00f"
+    },
+    {
+      "name": "business-experiment-receipt-engine-final",
+      "exitCode": 0,
+      "exitSidecar": "business-experiment-receipt-engine-final.exit",
+      "rawSha256": "108f9c117b8898155c01dba2f5e1b739f96b3717c88df886a57c2640bb5fa428",
+      "sanitizedSha256": "108f9c117b8898155c01dba2f5e1b739f96b3717c88df886a57c2640bb5fa428",
+      "archiveSha256": "8fc5225eaa4dd30c331eab57935b25ed725eca785a73929fcf5a8a7a48b1bb02",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  7 passed (7)",
+        "Duration  20.53s (transform 13.87s, setup 153ms, import 19.80s, tests 29ms, environment 0ms)"
+      ],
+      "sourceCommit": "39f9694cafbfdafa41aed5722dc32c7cb3dfb00f"
+    },
+    {
+      "name": "v10-workspace-serial-typecheck",
+      "exitCode": 1,
+      "exitSidecar": "v10-workspace-serial-typecheck.exit",
+      "rawSha256": "7b9e0d532889599774c9317c4786d1a5ea4174f3ac4db4e78b881a07c8a2fbf0",
+      "sanitizedSha256": "7b9e0d532889599774c9317c4786d1a5ea4174f3ac4db4e78b881a07c8a2fbf0",
+      "archiveSha256": "a797478aa3d425c5b00f1c1836a63a65524640d45bc4fdcb1d1541dec0cc004a",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "39f9694cafbfdafa41aed5722dc32c7cb3dfb00f"
+    },
+    {
+      "name": "v10-server-integrated-typecheck",
+      "exitCode": 1,
+      "exitSidecar": "v10-server-integrated-typecheck.exit",
+      "rawSha256": "28de762bcb27699aad7c50f99cb40dd104dcd69824556cc66d64d5553701a0cc",
+      "sanitizedSha256": "28de762bcb27699aad7c50f99cb40dd104dcd69824556cc66d64d5553701a0cc",
+      "archiveSha256": "554bc5e421c62084a1839ee42e39c6975a3c3526ef782b020d8704345d4ed8b8",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "39f9694cafbfdafa41aed5722dc32c7cb3dfb00f"
+    },
+    {
+      "name": "sandbox-broker-policy-focused",
+      "exitCode": 0,
+      "exitSidecar": "sandbox-broker-policy-focused.exit",
+      "rawSha256": "1c2294e82eeea1e6a5d5d6d8e9fced1a08b217f6bb3c5cd0493374027c09ef79",
+      "sanitizedSha256": "1c2294e82eeea1e6a5d5d6d8e9fced1a08b217f6bb3c5cd0493374027c09ef79",
+      "archiveSha256": "3627ea82fa6a04ee13deea06c2d15ccb1d9b725d4a11a3c7a6ad6c9357307ad4",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  35 passed (35)",
+        "Duration  2.77s (transform 1.61s, setup 81ms, import 2.49s, tests 34ms, environment 0ms)"
+      ],
+      "sourceCommit": "39f9694cafbfdafa41aed5722dc32c7cb3dfb00f"
+    },
+    {
+      "name": "sandbox-broker-resolver-focused",
+      "exitCode": 1,
+      "exitSidecar": "sandbox-broker-resolver-focused.exit",
+      "rawSha256": "f1126e3f49460d43c4c66d7720ba368069bac86f8abe3a225bbbf7ccdf973a1d",
+      "sanitizedSha256": "f1126e3f49460d43c4c66d7720ba368069bac86f8abe3a225bbbf7ccdf973a1d",
+      "archiveSha256": "b7b539969a5af8903847fdc3ae060d9195ef63f8219ac50c6c7dff3d1881a582",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 73 skipped (74)",
+        "Duration  20.68s (transform 10.85s, setup 70ms, import 15.29s, tests 5.18s, environment 0ms)"
+      ],
+      "sourceCommit": "39f9694cafbfdafa41aed5722dc32c7cb3dfb00f"
+    },
+    {
+      "name": "sandbox-broker-resolver-focused-rerun",
+      "exitCode": 0,
+      "exitSidecar": "sandbox-broker-resolver-focused-rerun.exit",
+      "rawSha256": "c87270dc368cca260e06d576440fa13d4c23a33afa0945fd0e861ea8b2f20b29",
+      "sanitizedSha256": "c87270dc368cca260e06d576440fa13d4c23a33afa0945fd0e861ea8b2f20b29",
+      "archiveSha256": "94867efcad4353bccbf29c764524a084941a25b8b946aa7b6b77d92cc12a4ccb",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 73 skipped (74)",
+        "Duration  20.86s (transform 11.47s, setup 75ms, import 16.10s, tests 4.49s, environment 0ms)"
+      ],
+      "sourceCommit": "39f9694cafbfdafa41aed5722dc32c7cb3dfb00f"
     }
   ],
   "updates": [
@@ -2219,6 +2380,32 @@
       "meaning": "Shared Git cleanup preserves modified/untracked/ignored files before commands; non-forced default and branch retention controls only",
       "logs": [
         "workspace-cleanup-preserve-files"
+      ]
+    },
+    {
+      "sourceCommit": "39f9694cafbfdafa41aed5722dc32c7cb3dfb00f",
+      "meaning": "Full canonical experiment recording16PASS including68k exact outcomes/replay30sec limits and hidden-source refusal; scoped concurrent-source evidence",
+      "logs": [
+        "business-experiment-recording-16-final",
+        "business-experiment-volume-exact-lookup-reuse",
+        "business-experiment-receipt-engine-final"
+      ]
+    },
+    {
+      "sourceCommit": "39f9694cafbfdafa41aed5722dc32c7cb3dfb00f",
+      "meaning": "Serial workspace/shared and server compiler diagnostics retained; failed checkpoint, not final acceptance",
+      "logs": [
+        "v10-workspace-serial-typecheck",
+        "v10-server-integrated-typecheck"
+      ]
+    },
+    {
+      "sourceCommit": "39f9694cafbfdafa41aed5722dc32c7cb3dfb00f",
+      "meaning": "Broker policy35 and resolver real secret rotation1 software controls only; actual workload broker acceptance outstanding",
+      "logs": [
+        "sandbox-broker-policy-focused",
+        "sandbox-broker-resolver-focused",
+        "sandbox-broker-resolver-focused-rerun"
       ]
     }
   ],

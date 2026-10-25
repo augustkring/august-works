@@ -1,12 +1,13 @@
 import { describe, expect, it } from "vitest";
 import { sandboxPolicySchema, SANDBOX_CONTROLS, type SandboxCapabilitySnapshot, type SandboxPolicy } from "@paperclipai/shared";
 import { compileSandboxPolicy } from "../services/execution-sandbox/policy-compiler.js";
+import { projectOpenShellPolicy } from "../services/execution-sandbox/openshell-policy.js";
 import { runSandboxQualification } from "../services/execution-sandbox/qualification.js";
 import { existingCellContainerBackend } from "../services/execution-sandbox/compatibility-backend.js";
 import type { ExecutionSandboxBackend } from "../services/execution-sandbox/backend.js";
 const now = new Date("2026-10-05T12:00:00Z"), image = "fixture.invalid/sandbox@sha256:" + "a".repeat(64);
 import { policyFixture } from "./helpers/sandbox-fixture.js";
-const caps = (): SandboxCapabilitySnapshot => ({ ...Object.fromEntries(SANDBOX_CONTROLS.map(control => [control, true])), backend: "openshell", backendVersion: "fixture", hostKernelVersion: "fixture", sandboxImageDigest: image, filesystemEnforcementMode: "hard_requirement", staticPolicyRequiresRecreate: true, dynamicNetworkPolicy: true, policyProverBoundaryCheck: true, policyProverCoverage: [...SANDBOX_CONTROLS], credentialBindingDimensions: ["company", "presence", "host", "port", "method", "path", "binary", "expiry", "revocation"], testedAt: now.toISOString(), expiresAt: "2026-10-06T12:00:00Z", qualificationHash: "a".repeat(64), evidenceKind: "local_fixture" } as SandboxCapabilitySnapshot);
+const caps = (): SandboxCapabilitySnapshot => ({ ...Object.fromEntries(SANDBOX_CONTROLS.map(control => [control, true])), backend: "openshell", backendVersion: "fixture", hostKernelVersion: "fixture", sandboxImageDigest: image, filesystemEnforcementMode: "hard_requirement", staticPolicyRequiresRecreate: true, dynamicNetworkPolicy: true, policyProverBoundaryCheck: true, policyProverCoverage: [...SANDBOX_CONTROLS], credentialBindingDimensions: ["company", "presence", "host", "port", "method", "path", "binary", "expiry", "revocation"], credentialBrokerProviderProfile: { id: "paperclip-broker", hash: "d".repeat(64) }, testedAt: now.toISOString(), expiresAt: "2026-10-06T12:00:00Z", qualificationHash: "a".repeat(64), evidenceKind: "local_fixture" } as SandboxCapabilitySnapshot);
 const compile = (candidate = policyFixture(), capabilities: SandboxCapabilitySnapshot | null = caps(), boundary = policyFixture(), grants = {}) => compileSandboxPolicy({ candidate, capabilities, boundary, authorizedConnectionGrantHashes: grants, sourcePolicyRefs: ["fixture-only"], now });
 describe("V7 policy subset proofs, distinct from physical boundary qualification", () => {
   it("proves a narrower policy and pins deterministic content", () => { const p = policyFixture(); p.filesystem.readPaths = ["/work/input"]; p.resources.wallClockSeconds = 60; const first = compile(p); expect(first.proverResult).toBe("pass"); expect(compile(p)).toEqual(first); expect(first.candidatePolicyHash).not.toBe(first.boundaryPolicyHash); });
@@ -48,6 +49,10 @@ describe("V7 policy subset proofs, distinct from physical boundary qualification
     const result = compileSandboxPolicy({ boundary: p, candidate: p, capabilities: caps(), authorizedConnectionGrantHashes: { [p.credentials.bindings[0]!.connectionId]: p.credentials.bindings[0]!.grantVersionHash }, credentialBrokerOrigin: "https://paperclip.example.test/", credentialBrokerBindings: resolved, sourcePolicyRefs: ["fixture-only"], now });
     expect(result.proverResult).toBe("pass");
     expect(result.compiledPolicy.network.destinations).toEqual([{ hostname: "paperclip.example.test", port: 443, methods: ["POST"], pathPrefixes: ["/mcp/gateways/gateway_1"] }]);
+    const projected = projectOpenShellPolicy(result.compiledPolicy);
+    expect(projected.document.network_policies.aw_0?.endpoints[0]?.rules).toEqual([{ allow: { method: "POST", path: "/mcp/gateways/gateway_1" } }]);
+    const wrongDestination = compileSandboxPolicy({ boundary: p, candidate: p, capabilities: caps(), authorizedConnectionGrantHashes: { [p.credentials.bindings[0]!.connectionId]: p.credentials.bindings[0]!.grantVersionHash }, credentialBrokerOrigin: "https://paperclip.example.test/", credentialBrokerBindings: [{ ...resolved[0]!, destination: { ...resolved[0]!.destination, hostname: "other-provider.example.test" } }], sourcePolicyRefs: ["fixture-only"], now });
+    expect(wrongDestination.failedBoundaries).toContain("credential_broker_binding_resolution_mismatch");
   });
   it("blocks direct provider egress and broad predeclared broker origins", () => {
     const p = policyFixture();

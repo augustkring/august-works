@@ -66,7 +66,7 @@ async function fixture(work, hooks = {}) {
       await hooks.beforeCommand?.(file, args);
       assert.equal(options.env.HOME, stateHome);
       assert.equal(options.env.OPENSHELL_GATEWAY_INSECURE, undefined);
-      assert.ok(options.timeout <= 6000);
+      assert.ok(options.timeout <= 18000);
       if (file === "docker") {
         assert.equal(options.env.PATH, process.env.PATH);
         assert.equal(options.env.DOCKER_HOST, "unix:///var/run/docker.sock");
@@ -103,6 +103,23 @@ async function fixture(work, hooks = {}) {
       }
       assert.equal(options.env.PATH, "/usr/bin:/bin");
       const command = args.slice(4);
+      if (command[0] === "profile" && command[1] === "describe")
+        return { stdout: JSON.stringify(hooks.brokerProfile ?? {}) };
+      if (command[0] === "provider" && command[1] === "create") {
+        assert.ok(!args.some(value => String(value).includes(hooks.brokerSecret ?? "__never__")));
+        assert.equal(options.env.PAPERCLIP_SANDBOX_BROKER_TOKEN, hooks.brokerSecret);
+        return { stdout: "provider created" };
+      }
+      if (command[0] === "provider" && command[1] === "update") return { stdout: "provider updated" };
+      if (command[0] === "provider" && command[1] === "delete") return { stdout: "provider deleted" };
+      if (command[0] === "sandbox" && command[1] === "provider" && command[2] === "attach") {
+        attached.push({ name: command[4] });
+        return { stdout: JSON.stringify({ provider: command[4] }) };
+      }
+      if (command[0] === "sandbox" && command[1] === "provider" && command[2] === "detach") {
+        attached = attached.filter(value => value.name !== command[4]);
+        return { stdout: "{}" };
+      }
       if (command[0] === "--version") return { stdout: "openshell 0.1.2\n" };
       if (command[0] === "sandbox" && command[1] === "get")
         return {
@@ -192,6 +209,8 @@ function execRequest(deadlineAt = deadline(), stdinBase64 = "") {
     argv, cwd, env,
     stdinHash: createHash("sha256").update(Buffer.from(stdinBase64, "base64")).digest("hex"),
     timeoutDeadline: deadlineAt,
+    brokerCapabilityHash: null,
+    brokerProviderProfile: null,
   }))).digest("hex");
   return {
     requestId: randomUUID(), bindingId: scope.bindingId, hostEpoch: 1,
@@ -201,6 +220,57 @@ function execRequest(deadlineAt = deadline(), stdinBase64 = "") {
     sandboxRef: scope.sandboxRef, imageDigest: input("inspect").imageDigest,
     argv, cwd, env, stdinBase64,
   };
+}
+const brokerProfile = {
+  id: "paperclip-broker",
+  credentials: [{ name: "broker_token", env_vars: ["PAPERCLIP_SANDBOX_BROKER_TOKEN"], required: true, auth_style: "bearer", header_name: "Authorization" }],
+  endpoints: [{ host: "paperclip.example.test", port: 443, protocol: "rest", enforcement: "enforce", path: "", rules: [{ allow: { method: "POST", path: "/mcp/gateways/*" } }] }],
+  binaries: [{ path: "/usr/bin/node" }],
+};
+function brokerExecRequest() {
+  const request = execRequest();
+  const expiresAt = new Date(Math.min(Date.parse(request.deadlineAt), Date.now() + 30000)).toISOString();
+  const claim = {
+    parentRequestId: request.requestId,
+    bindingId: request.bindingId,
+    cellId: scope.cellId,
+    generation: scope.cellGeneration,
+    hostId: randomUUID(),
+    hostEpoch: request.hostEpoch,
+    runId: request.runId,
+    attemptId: request.attemptId,
+    attempt: request.attempt,
+    manifestId: request.manifestId,
+    manifestHash: request.manifestHash,
+    policySnapshotId: request.policySnapshotId,
+    policyHash: request.policyHash,
+    brokerSessionId: request.requestId,
+    endpointOrigin: "https://paperclip.example.test/",
+    bindings: [],
+    expiresAt,
+  };
+  const claims = {
+    purpose: "sandbox_broker",
+    aud: "paperclip-sandbox-broker",
+    jti: request.requestId,
+    company_id: scope.companyId,
+    run_id: request.runId,
+    exp: Math.floor(Date.parse(expiresAt) / 1000),
+    sandbox_broker: claim,
+  };
+  const token = `fixture.${Buffer.from(JSON.stringify(claims)).toString("base64url")}.signature`;
+  request.env.PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN = claim.endpointOrigin;
+  request.env.PAPERCLIP_SANDBOX_BROKER_SESSION_ID = request.requestId;
+  request.brokerCredential = { capabilityToken: token, profileId: brokerProfile.id,
+    profileHash: createHash("sha256").update(JSON.stringify(canonical(brokerProfile))).digest("hex"), expiresAt };
+  const argv = request.argv, cwd = request.cwd, env = request.env;
+  request.commandDigest = createHash("sha256").update(JSON.stringify(canonical({ argv, cwd, env,
+    stdinHash: createHash("sha256").update(Buffer.from(request.stdinBase64, "base64")).digest("hex"),
+    timeoutDeadline: request.deadlineAt,
+    brokerCapabilityHash: createHash("sha256").update(token).digest("hex"),
+    brokerProviderProfile: { id: request.brokerCredential.profileId, hash: request.brokerCredential.profileHash },
+  }))).digest("hex");
+  return { request, token };
 }
 test("CLI fixtures cannot earn complete physical capabilities or passing probes", async () =>
   fixture(async ({ engine, calls }) => {
@@ -585,6 +655,57 @@ test("sandbox exec streams through pinned CLI argv without shell and journals no
     assert.equal(journal.includes("fixture stderr"), false);
     await assert.rejects(engine.executeStream({ scope: scopeInput, request, capabilityToken: "fixture-token" }, () => {}), /exec_unknown/);
     assert.equal(spawnCount, 1);
+  }, hooks);
+});
+
+test("sandbox broker capability enters through an expiring native provider, never CLI argv or workload env", async () => {
+  const brokerSecret = "one-shot-broker-capability-secret";
+  let spawnedArgs = null, providerEnvSeen = false;
+  const hooks = {
+    brokerProfile,
+    brokerSecret,
+    spawnProcess(_file, args, options) {
+      spawnedArgs = args;
+      assert.equal(options.shell, false);
+      assert.equal(options.env.PAPERCLIP_SANDBOX_BROKER_TOKEN, undefined);
+      const child = new EventEmitter();
+      child.stdin = new PassThrough();
+      child.stdout = Readable.from([Buffer.from("brokered output")]);
+      child.stderr = Readable.from([]);
+      child.kill = () => true;
+      setImmediate(() => child.emit("close", 0, null));
+      return child;
+    },
+    beforeCommand(_file, args) {
+      if (args.includes("PAPERCLIP_SANDBOX_BROKER_TOKEN")) providerEnvSeen = true;
+    },
+  };
+  await fixture(async ({ engine, enablePhysical, setPhase, calls }) => {
+    enablePhysical();
+    setPhase("Stopped");
+    await engine.execute(randomUUID(), {
+      ...input("apply"),
+      admission: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "broker-stream-policy", document: policyDocument },
+    }, deadline());
+    await engine.execute(randomUUID(), {
+      ...input("start"),
+      start: { policyHash, expiresAt: new Date(Date.now() + 50000).toISOString(), idempotencyKey: "broker-stream-start" },
+    }, deadline());
+    const { request, token } = brokerExecRequest();
+    const outputs = [];
+    const scopeInput = { companyId: scope.companyId, bindingId: scope.bindingId, cellId: scope.cellId, cellGeneration: "1", sandboxRef: scope.sandboxRef };
+    const result = await engine.executeStream({ scope: scopeInput, request, capabilityToken: "fixture-token" }, (stream, chunk) => outputs.push([stream, chunk.toString("utf8")]));
+    assert.deepEqual(result, { exitCode: 0, timedOut: false });
+    assert.deepEqual(outputs, [["stdout", "brokered output"]]);
+    assert.equal(providerEnvSeen, true);
+    assert.ok(calls.some(call => call.args.slice(4).join(" ").includes("provider create")));
+    assert.ok(calls.some(call => call.args.slice(4).join(" ").includes("credential-expires-at")));
+    assert.ok(calls.some(call => call.args.slice(4).join(" ").includes("provider attach")));
+    assert.ok(calls.some(call => call.args.slice(4).join(" ").includes("provider detach")));
+    assert.ok(calls.some(call => call.args.slice(4).join(" ").includes("provider delete")));
+    assert.equal(calls.some(call => call.args.some(value => String(value).includes(token))), false);
+    assert.equal(spawnedArgs.some(value => String(value).includes(token)), false);
+    assert.equal(spawnedArgs.some(value => String(value).startsWith("PAPERCLIP_SANDBOX_BROKER_TOKEN=")), false);
   }, hooks);
 });
 

@@ -76,6 +76,7 @@ import type {
   PluginAuthorizationDecisionResult,
   PluginAuthorizationPolicyRecord,
   PluginAuthorizationPolicySummary,
+  PluginAgentRuntimeState,
 } from "./types.js";
 import type {
   PluginHealthDiagnostics,
@@ -2092,6 +2093,10 @@ export interface WorkerToHostMethods {
   "agents.get": [
     params: { agentId: string; companyId: string },
     result: Agent | null,
+  ];
+  "agents.getRuntime": [
+    params: { agentId: string; companyId: string },
+    result: PluginAgentRuntimeState | null,
   ];
 
   // Agents (write)

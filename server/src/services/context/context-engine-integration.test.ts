@@ -63,6 +63,7 @@ import type { AuthorizationActor } from "../authorization.js";
 import { createToolGatewayService } from "../tool-gateway.js";
 import { heartbeatService } from "../heartbeat.js";
 import type { NativeSessionBackend } from "../../vendor/paperclip-runner/index.js";
+import { CONTROL_PLANE_CONFORMANCE_RESULT, CONTROL_PLANE_CONFORMANCE_TERMINAL } from "../../vendor/paperclip-runner/testing.js";
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported
@@ -182,6 +183,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
   async function createOwnerPrivateMemoryThroughNativeGateway(input: {
     companyId: string; agentId: string; userId: string; issueId: string; bindingKey: string; content: string;
     sensitivity: "public" | "internal" | "confidential" | "restricted"; observedAt: Date; expiresAt: Date | null;
+    onNativeRun?: (run: { id: string; actor: AuthorizationActor }) => void;
   }) {
     const previousSecret = process.env.PAPERCLIP_AGENT_JWT_SECRET;
     process.env.PAPERCLIP_AGENT_JWT_SECRET = randomUUID();
@@ -198,21 +200,45 @@ describeEmbeddedPostgres("Context Engine integration", () => {
           runtimeContextCapabilities: { instructions: "native", skills: "native", mcp: "native" } };
       },
       async openSession(openInput) {
+        const turnId = `context-memory-${openInput.identity.runId}`;
+        const terminalEvent = {
+          schema: "paperclip.prp.event.v1" as const,
+          sourceEventId: `context-memory:${openInput.identity.runId}:terminal`,
+          sourceSeq: 1,
+          sourceInstanceId: `context-memory:${openInput.identity.runId}`,
+          sourceKind: "runner" as const,
+          runId: openInput.identity.runId,
+          normalizedSessionId: openInput.identity.sessionId,
+          turnId,
+          eventType: "turn.completed" as const,
+          schemaVersion: 1 as const,
+          priority: 0 as const,
+          emittedAt: new Date().toISOString(),
+          payload: {},
+        };
         return {
           identity: () => openInput.identity,
           async capabilities() { return { resume: false, typedEvents: true, steering: false, interruption: true, structuredResult: true }; },
-          async *events() { await turnGate; },
+          async *events() {
+            await turnStarted;
+            await turnGate;
+            yield terminalEvent;
+          },
           async startTurn() {
             signalTurnStarted();
-            await turnGate;
-            return { turnId: `context-memory-${openInput.identity.runId}` };
+            return { turnId };
           },
-          async result() { return null; },
+          async result() {
+            const result = structuredClone(CONTROL_PLANE_CONFORMANCE_RESULT);
+            const terminal = { ...CONTROL_PLANE_CONFORMANCE_TERMINAL,
+              reportedWorkDisposition: result.reportedWorkDisposition };
+            return { result, terminal, turnId };
+          },
           async snapshot() {
             return { backendKind: "mock", sessionId: openInput.identity.sessionId,
               identity: openInput.identity, providerSessionId: "context-memory-fixture" } as never;
           },
-          async close() { releaseTurn(); },
+          async close() { signalTurnStarted(); releaseTurn(); },
         };
       },
     };
@@ -257,6 +283,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
         onBehalfOfUserId: claims.responsible_user_id, authenticatedCredentialExpiresAt: claims.exp * 1000,
         keyScope: claims.key_scope ?? { kind: "standard" }, onBehalfOfMemberships: memberships,
       };
+      input.onNativeRun?.({ id: run.id, actor });
       await db.insert(toolPolicies).values({ companyId: input.companyId, name: `Allow native Memory ${randomUUID()}`,
         policyType: "allow", selectors: { toolName: "paperclip-self:remember" } });
       const gateway = createToolGatewayService(db);
@@ -320,6 +347,8 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     revokedAt?: Date | null;
     expiresAt?: Date | null;
     verificationState?: "unverified" | "corroborated" | "human_verified" | "system_verified";
+    sourceTaskBody?: string;
+    onNativeRun?: (run: { id: string; actor: AuthorizationActor }) => void;
   }) {
     const scope = input.scope ?? "company";
     const [binding] = await db
@@ -363,7 +392,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
         expiresAt:input.expiresAt?.toISOString()??null,createdByOperationId:null,metadata:{},evidence:[{
           sourceClass:"task",sourceProvider:"august_works_tasks",sourceType:"issue",sourceRef:`issue://${sourceTask.id}`,
           sourceVersion:sourceTask.updatedAt.toISOString(),sourceUpdatedAt:sourceTask.updatedAt.toISOString(),observedAt:observedAt.toISOString(),
-          excerptHash:createHash("sha256").update(JSON.stringify({id:sourceTask.id,updatedAt:sourceTask.updatedAt.toISOString()})).digest("hex"),
+          excerptHash:createHash("sha256").update(input.content).digest("hex"),
           citation:{label:`${sourceTask.identifier}: ${sourceTask.title}`},
           trustLevel:"low",relation:"supports"}],
       },humanActor);
@@ -387,7 +416,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       companyIds:[input.companyId],memberships:[{companyId:input.companyId,membershipRole:"owner",status:"active"}]};next();}) as RequestHandler);
     app.use("/api",issueRoutes(db,{} as never)); app.use(errorHandler);
     const createdSourceIssue=await request(app).post(`/api/companies/${input.companyId}/issues`)
-      .send({title:`Actual Memory producer Task ${randomUUID()}`,description:"Human-authored source for a native Memory candidate."});
+      .send({title:`Actual Memory producer Task ${randomUUID()}`,description:input.sourceTaskBody??"Human-authored source for a native Memory candidate."});
     if(createdSourceIssue.status!==201)throw new Error(`Canonical source Task creation returned ${createdSourceIssue.status}: ${JSON.stringify(createdSourceIssue.body)}`);
     const sourceIssueId=createdSourceIssue.body.id as string;
     await request(app).patch(`/api/issues/${sourceIssueId}`).send({assigneeAgentId:input.agentId}).expect(200);
@@ -397,7 +426,7 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       permissionKey:"company_scope:read"}).onConflictDoNothing();
     const memoryRecord=await createOwnerPrivateMemoryThroughNativeGateway({
       companyId:input.companyId,agentId:input.agentId,userId,issueId:sourceIssueId,bindingKey:binding!.key,content:input.content,
-      sensitivity:input.sensitivity??"internal",observedAt,expiresAt:input.expiresAt??null,
+      sensitivity:input.sensitivity??"internal",observedAt,expiresAt:input.expiresAt??null,onNativeRun:input.onNativeRun,
     });
     if(input.revokedAt){
       const [revoked]=await db.update(memoryRecords).set({revokedAt:input.revokedAt,revokedByActorType:"system",
@@ -444,7 +473,6 @@ describeEmbeddedPostgres("Context Engine integration", () => {
 
   it("executes Foundation and Memory query nodes with approved and accepted sources only", async () => {
     const seeded = await seed();
-    const humanActor = await seedCurrentHumanSourceActor(db, [seeded.companyId], seeded.userId);
     await instanceSettingsService(db).updateExperimental({ enableFoundationV1: true, enableCollectiveMemoryV1: true });
     const approved = await createApprovedFoundation({ companyId: seeded.companyId, userId: seeded.userId,
       key: "enterprise-guidance", body: "# Enterprise\nApproved enterprise strategy", sensitivity: "internal" });
@@ -457,7 +485,14 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       content: "Pending enterprise memory", reviewState: "pending" });
     await seedMemory({ companyId: seeded.companyId, agentId: seeded.agent.id,
       content: "Private enterprise memory", scope: "agent", reviewState: "accepted" });
-    const sourceRef = `run://${accepted.sourceRunIds[0]}/issue/${seeded.issue.id}`;
+    // Memory setup creates canonical passkey sessions for its review flows;
+    // the last ceremony revokes older sessions, so capture the Workflow reader
+    // only after those source-owner fixtures are complete.
+    const humanActor = await seedCurrentHumanSourceActor(db, [seeded.companyId], seeded.userId);
+    await db.insert(principalPermissionGrants).values({ companyId: seeded.companyId, principalType: "user",
+      principalId: seeded.userId, permissionKey: "company_scope:read", scope: null }).onConflictDoNothing();
+    expect(accepted.sourceIssueIds).toHaveLength(1);
+    const sourceRef = `issue://${accepted.sourceIssueIds[0]}`;
     const actor = { principal: { type: "user" as const, userId: seeded.userId }, authorizationActor: humanActor };
     const svc = workflowService(db);
     const created = await svc.create(seeded.companyId, { name: "Native evidence workflow" }, actor);
@@ -479,12 +514,27 @@ describeEmbeddedPostgres("Context Engine integration", () => {
     expect(memory.records).toMatchObject([{ record: { id: accepted.id, content: "Accepted enterprise memory" }, sourceRef: `memory://shared/${accepted.id}` }]);
     expect(memory.records).toHaveLength(1);
     expect(result.steps.find((step) => step.nodeId === "derived")).toMatchObject({ outputJson: { content: "Accepted enterprise memory" }, memoryRecordIds: [accepted.id] });
+    // Use the canonical authenticated PATCH owner to change the captured Task
+    // body. The owner invalidates the old body snapshot; retained Memory must
+    // fail closed against that changed source.
+    const sourceUpdateApp = express();
+    sourceUpdateApp.use(express.json());
+    sourceUpdateApp.use(((req, _res, next) => {
+      req.actor = { ...humanActor, companyIds: [seeded.companyId],
+        memberships: [{ companyId: seeded.companyId, membershipRole: "owner", status: "active" }] };
+      next();
+    }) as RequestHandler);
+    sourceUpdateApp.use("/api", issueRoutes(db, {} as never));
+    sourceUpdateApp.use(errorHandler);
+    await request(sourceUpdateApp).patch(`/api/issues/${accepted.sourceIssueIds[0]}`)
+      .send({ description: "The canonical Human Task source changed after Memory review." }).expect(200);
+    expect(await memoryService(db).get(seeded.companyId, accepted.id, actor)).toBeNull();
     await issueService(db).remove(accepted.sourceIssueIds[0]!);
     await issueService(db).remove(seeded.issue.id);
     const erased = await executor.getRun(seeded.companyId, result.run.id);
     for (const id of ["memory", "derived"]) expect(erased?.steps.find((step) => step.nodeId === id)).toMatchObject({ inputJson: null, outputJson: null, payloadDeleted: true });
     expect(await memoryService(db).get(seeded.companyId, accepted.id, actor)).toBeNull();
-    await expect(assertMemorySourcesRetained(db, seeded.companyId, [{ sourceProvider: "august_works_memory_agent_tool", sourceRef }]))
+    await expect(assertMemorySourcesRetained(db, seeded.companyId, [{ sourceProvider: "august_works_tasks", sourceRef }]))
       .rejects.toMatchObject({ details: { code: "memory_source_deleted" } });
     await instanceSettingsService(db).updateExperimental({ enableCollectiveMemoryV1: false });
     const denied = await executor.startManualRun(seeded.companyId, created.id, { input: { query: "enterprise" } }, actor, "native-evidence-disabled");
@@ -958,12 +1008,23 @@ describeEmbeddedPostgres("Context Engine integration", () => {
       sensitivity: "internal",
     });
 
+    const nativeRuns: Array<{ id: string; actor: AuthorizationActor }> = [];
+    const privateMemory = await seedMemory({ companyId: seeded.companyId, agentId: seeded.agent.id,
+      content: "Enterprise strategy context for the native source reader.", scope: "agent",
+      sourceTaskBody: "Enterprise strategy source task for the current native run.",
+      onNativeRun: run => { nativeRuns.push(run); } });
+    const nativeRun = nativeRuns[0];
+    if (!nativeRun) throw new Error("Canonical native producer did not expose its exact run authority");
+    const sourceIssueId = privateMemory.sourceIssueIds[0];
+    if (!sourceIssueId) throw new Error("Canonical native Memory producer Task was not retained");
+
     const result = await contextEngineService(db).assemble({
-      runId: seeded.run.id,
+      runId: nativeRun.id,
       companyId: seeded.companyId,
       agentId: seeded.agent.id,
       responsibleUserId: seeded.userId,
-      issueId: seeded.issue.id,
+      issueId: sourceIssueId,
+      authorizationActor: nativeRun.actor,
       query: "enterprise strategy",
       sensitivityCeiling: "internal",
       totalDeadlineMs: 3_000,

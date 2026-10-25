@@ -586,8 +586,16 @@ describeEmbeddedPostgres("tool gateway acceptance", () => {
   it("resolves broker bindings from the current run grant and assigned gateway without returning secrets", async () => {
     const company = await createCompany(db);
     const agent = await createAgent(db, company.id);
+    const providerSecret = await secretService(db).create(company.id, {
+      name: `Broker connector secret ${randomUUID()}`,
+      key: `broker_connector_secret_${randomUUID().replace(/-/g, "")}`,
+      provider: "local_encrypted",
+      value: `provider-secret-${randomUUID()}`,
+    });
     const { application, connection, catalogEntry } = await createRemoteMcpTool(db, company.id, {
       url: "https://mcp.example.test/mcp", toolName: "read_record", riskLevel: "read",
+      credentialRefs: [{ name: "credentials.authorization", secretId: providerSecret.id, version: "latest", placement: "header", key: "Authorization", prefix: "Bearer " }],
+      credentialSecretRefs: [{ secretId: providerSecret.id, versionSelector: "latest", configPath: "credentials.authorization", required: true, label: "Broker provider token" }],
     });
     const toolName = expectedConnectedToolName({ applicationKey: application.applicationKey, connectionId: connection.id, toolName: catalogEntry.toolName });
     await allowToolsForAgent(db, company.id, agent.id, [toolName]);
@@ -620,9 +628,7 @@ describeEmbeddedPostgres("tool gateway acceptance", () => {
     const firstHash = resolved.authorizedConnectionGrantHashes[connection.id];
     expect(firstHash).toMatch(/^[a-f0-9]{64}$/);
     expect(JSON.stringify(resolved)).not.toContain("token");
-    await db.update(connectionGrants).set({ updatedAt: new Date(Date.now() + 1000) }).where(and(
-      eq(connectionGrants.companyId, company.id), eq(connectionGrants.connectionId, connection.id),
-    ));
+    await secretService(db).rotate(providerSecret.id, { value: `rotated-provider-secret-${randomUUID()}`, expectedLatestVersion: 1 });
     const rotated = await gateway.resolveSandboxCredentialBrokerBindings({
       companyId: company.id, agentId: agent.id, runId: run.id, responsibleUserId,
       presenceId, bindings: [policyBinding],

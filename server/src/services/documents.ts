@@ -52,7 +52,7 @@ async function persistNativeAwDocumentCapture(tx: DocumentTx, input: {
     eq(orchestrationModelReservations.status, "completed"),
   )).for("share");
   const bootstrap = receipt?.success ? receipt.data.bootstrap : null;
-  if (!run || !receipt?.success || !intent || !reservation ||
+  if (!run || !receipt?.success || !bootstrap || !intent || !reservation ||
     reservation.inputHash !== capture.dispatch.requestHash || reservation.providerResponseHash !== capture.dispatch.responseHash ||
     reservation.idempotencyKey !== `worker-model:${input.runId}:${capture.dispatch.callId}` ||
     intent.callId !== capture.dispatch.callId || intent.requestHash !== capture.dispatch.requestHash ||

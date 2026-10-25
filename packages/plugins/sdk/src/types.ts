@@ -1677,6 +1677,8 @@ export interface PluginApprovalsClient {
 export interface PluginAgentsClient {
   list(input: { companyId: string; status?: Agent["status"]; limit?: number; offset?: number }): Promise<Agent[]>;
   get(agentId: string, companyId: string): Promise<Agent | null>;
+  /** Read current runtime inputs only as the assigned, enabled lifecycle owner. */
+  getRuntime(agentId: string, companyId: string): Promise<PluginAgentRuntimeState | null>;
   /** Pause an agent. Throws if agent is terminated or not found. Requires `agents.pause`. */
   pause(agentId: string, companyId: string): Promise<Agent>;
   /** Resume a paused agent (sets status to idle). Throws if terminated, pending_approval, or not found. Requires `agents.resume`. */
@@ -1691,6 +1693,24 @@ export interface PluginAgentsClient {
   };
   /** Create, message, and close agent chat sessions. Requires `agent.sessions.*` capabilities. */
   sessions: PluginAgentSessionsClient;
+}
+
+export interface PluginAgentRuntimeState {
+  revision: string;
+  agent: Agent;
+  instructionsRootPath: string | null;
+  instructionsEntryFile: string;
+  /** False means Skills are deliberately omitted until a native run supplies task scope. */
+  skillsReady: boolean;
+  skills: Array<{ key: string; runtimeName: string; source: string; versionId: string | null; currentVersionId: string | null; sourceStatus: "available" | "missing"; missingDetail: string | null }>;
+  connectionAssignments: PluginAgentConnectionAssignments;
+}
+
+/** Safe, bounded effective assignment snapshot; contains no credentials or schemas. */
+export interface PluginAgentConnectionAssignments {
+  features: { publicMcp: boolean; chatConnectors: boolean };
+  connections: Array<{ id: string; name: string; transport: string; enabled: boolean; status: string }>;
+  profileIds: string[];
 }
 
 // ---------------------------------------------------------------------------

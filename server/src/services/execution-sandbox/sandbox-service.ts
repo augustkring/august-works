@@ -144,7 +144,7 @@ export function executionSandboxService(db: Db, options: {
     if (!policy || policy.status !== "qualified" || policy.expiresAt <= now || policy.authorityHash !== source.authorityHash ||
       policy.capabilitySnapshotHash !== sandboxBinding.capabilitySnapshotHash || !credentials ||
       credentials.mode === "legacy_injected" || (credentials.mode === "none" && credentials.bindings.length !== 0) ||
-      (credentials.mode === "brokered" && (!credentials.bindings.length || brokerDimensions.some(dimension => !capability.credentialBindingDimensions.includes(dimension)))) ||
+      (credentials.mode === "brokered" && (!credentials.bindings.length || !capability.credentialBrokerProviderProfile || brokerDimensions.some(dimension => !capability.credentialBindingDimensions.includes(dimension)))) ||
       policy.compilation.sourcePolicyRefs.find(ref => ref.startsWith("manifest:")) !== `manifest:${manifest.id}:${manifest.hash}`)
       throw conflict("Current unexpired OpenShell policy is not bound to this exact Task manifest");
     const [host] = await tx.select().from(runtimeHosts).where(and(
@@ -470,6 +470,12 @@ export function executionSandboxService(db: Db, options: {
           });
           authorizedConnectionGrantHashes = broker.authorizedConnectionGrantHashes;
           credentialBrokerBindings = broker.bindings;
+          if (options.credentialBrokerOrigin) {
+            try {
+              const origin = new URL(options.credentialBrokerOrigin);
+              refs.push(`credential-broker-origin:${origin.origin}`);
+            } catch { /* compiler records a blocking unsupported feature */ }
+          }
           for (const [connectionId, grantHash] of Object.entries(authorizedConnectionGrantHashes)) refs.push(`credential-grant:${connectionId}:${grantHash}`);
           for (const brokerBinding of credentialBrokerBindings) refs.push(`credential-broker-route:${brokerBinding.gatewayPublicId}:${brokerBinding.endpointPath}`);
         }

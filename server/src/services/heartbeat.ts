@@ -210,7 +210,8 @@ import {
 import { documentService, type DocumentRevisionSourceCapture } from "./documents.js";
 import { getTaskPlanContext } from "./task-plan-context.js";
 import { selectNativeHeartbeatBackend } from "./orchestration/native-draft-runtime.js";
-import { buildNativeBootstrapSourceSet, type NativeBootstrapSourceClosure, type NativePreparedSourceCandidate } from "./native-runtime/native-execution-input.js";
+import { buildNativeBootstrapSourceSet, captureNativeTaskWakeSource, type NativeBootstrapSourceClosure,
+  type NativePreparedSourceCandidate } from "./native-runtime/native-execution-input.js";
 import { managedAgentProfileService } from "./managed-agent-profiles.js";
 import { remoteAgentProfileService } from "./remote-agent-profiles.js";
 import {
@@ -23680,6 +23681,14 @@ export function heartbeatService(
             const nativeSourceCandidates: NativePreparedSourceCandidate[] = [];
             const capturedTaskSource = taskSourceCapture.value;
             const capturedAuthoredSources = nativeBootstrapAuthoredSources.value;
+            const nativeTaskWakeSource = capturedTaskSource?.input.kind === "task" && issueRef
+              ? captureNativeTaskWakeSource({ companyId: agent.companyId, runId: run.id, issueId: issueRef.id,
+                sourceVersion: capturedTaskSource.input.sourceVersion,
+                wakeReason: readNonEmptyString(parseObject(context.paperclipWake).reason),
+                task: { id: issueRef.id, identifier: issueRef.identifier, title: issueRef.title,
+                  description: issueContext?.description ?? null, status: issueRef.status,
+                  priority: issueRef.priority, workMode: issueRef.workMode }, payload: context.paperclipWake })
+              : null;
             if (capturedTaskSource?.input.kind === "task") nativeSourceCandidates.push({ kind: "task", id: capturedTaskSource.input.issueId,
               input: capturedTaskSource.input, payloadSourceSnapshot: capturedTaskSource.payloadSourceSnapshot });
             for (const capture of ancestorSourceCaptures) nativeSourceCandidates.push({ kind: "task", id: capture.input.issueId,
@@ -23704,11 +23713,9 @@ export function heartbeatService(
               resume: Boolean(nativeResumeCheckpoint), initialGuidance: Boolean("initialCommunicationGuidance" in nativeExecution && nativeExecution.initialCommunicationGuidance),
               continuation: Boolean("continuationPrompt" in nativeExecution && nativeExecution.continuationPrompt),
               interaction: Boolean(nativeExecution.interactionResponses.length), planning: Boolean("planningContext" in nativeExecution && nativeExecution.planningContext),
-              conversation: isConversation(issueContext), wake: Boolean(context.paperclipWake), projectPaths: projectRepositoryPaths.length > 0,
+              conversation: isConversation(issueContext), wake: Boolean(context.paperclipWake && !nativeTaskWakeSource), projectPaths: projectRepositoryPaths.length > 0,
               authoredContextManifests: Boolean(capturedAuthoredSources?.contextManifests.length), missingTask: !capturedTaskSource,
             };
-            if (process.env.NODE_ENV === "test" && Object.values(nativeBootstrapUnsupported).some(Boolean))
-              logger.warn({ nativeBootstrapUnsupported }, "Native bootstrap source closure has unsupported inputs");
             const nativeBootstrapSourceSet = buildNativeBootstrapSourceSet({
               companyId: agent.companyId,
               runId: run.id,
@@ -23721,7 +23728,8 @@ export function heartbeatService(
               runtimeInputs: capturedAuthoredSources?.inputs ?? null,
               additionalInputs: completionContract ? [{ kind: "completion_contract",
                 issueId: issueRef.id, contractId: completionContract.row.id,
-                revision: String(completionContract.row.revision), contentHash: completionContract.row.canonicalSha256 }] : null,
+                revision: String(completionContract.row.revision), contentHash: completionContract.row.canonicalSha256 },
+                ...(nativeTaskWakeSource ? [nativeTaskWakeSource] : [])] : null,
               contextManifestIds: nativeBootstrapContextManifests,
               governedContextMarkdown,
               contextWitness: freshGovernedContext?.sourceWitness ?? null,

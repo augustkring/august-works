@@ -8,7 +8,7 @@ import {
   orchestrationWorkerAttempts,
   type Db,
 } from "@paperclipai/db";
-import { orchestrationCompletionSchema } from "@paperclipai/shared";
+import { orchestrationCompletionSchema, type NativePayloadSourceInput } from "@paperclipai/shared";
 import type {
   NativeExecutionInput,
   NativeSessionBackend,
@@ -309,7 +309,7 @@ export async function prepareNativeDraftBackend(
     bound.run.completionContractSha256 !== contract.row.canonicalSha256
   )
     throw forbidden("The persisted native draft completion contract changed");
-  const taskSource = sourceClosure?.sourceSet.inputs.find((source) =>
+  const taskSource = sourceClosure?.sourceSet.inputs.find((source): source is Extract<NativePayloadSourceInput, { kind: "task" }> =>
     source.kind === "task" && source.issueId === execution.binding.issueId);
   const completionSource = sourceClosure?.sourceSet.inputs.find((source) =>
     source.kind === "completion_contract" && source.issueId === execution.binding.issueId &&
@@ -321,7 +321,7 @@ export async function prepareNativeDraftBackend(
     source.manifestDigest === execution.runtimeContext.instructions.bundle.manifestDigest);
   const skillSources = sourceClosure?.sourceSet.inputs.filter((source) => source.kind === "runtime_skill") ?? [];
   const expectedTaskDigest = createHash("sha256").update(JSON.stringify({
-    id: execution.task.id, identifier: execution.task.identifier, title: execution.task.title,
+    id: execution.binding.issueId, identifier: execution.task.identifier, title: execution.task.title,
     description: execution.task.description, workMode: execution.task.workMode,
   }), "utf8").digest("hex");
   if (!sourceClosure || !taskSource || taskSource.contentHash !== expectedTaskDigest || !completionSource ||

@@ -6,6 +6,7 @@ import { afterAll, afterEach, beforeAll, beforeEach, describe, expect, it, vi } 
 import { getEmbeddedPostgresTestSupport, startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { logger } from "../middleware/logger.js";
 import { registerPluginLifecycleDelivery } from "../services/plugin-lifecycle-delivery.js";
+import { synchronizeCompanyAgentRuntimeOwners } from "../services/agent-runtime-owner-assignments.js";
 import { pluginLifecycleInbox } from "../services/plugin-lifecycle-inbox.js";
 import { pluginRegistryService } from "../services/plugin-registry.js";
 import { recordProjectLifecycleEvent, recordResourceCreationEvent } from "../services/resource-lifecycle-events.js";
@@ -61,7 +62,7 @@ describePostgres("durable plugin lifecycle delivery", () => {
     const restarted = delivery(); await restarted.run(); await restarted.run(); await restarted.run();
     expect(restarted.call.mock.calls.map(c => c[2].action)).toEqual(["update", "delete"]);
     expect(await restarted.pending()).toBe(false);
-    expect((await pluginLifecycleInbox(db, pluginId).list(companyId)).map(e => e.resourceType)).toEqual(["agent"]);
+    expect(await pluginLifecycleInbox(db, pluginId).list(companyId)).toEqual([]);
     restarted.worker.dispose();
   });
   it("replays failures and invalid acknowledgments without blocking independent resources", async () => {
@@ -243,18 +244,34 @@ describePostgres("durable plugin lifecycle delivery", () => {
     expect((await pluginLifecycleInbox(db, pluginId).list(companyId, 100, "9007199254740992"))[0]?.id).toBe(id);
   });
   it("pins runtime revision delivery to assigned lifecycle plugins and omits the private recipient list", async () => {
-    await db.update(plugins).set({ manifestJson: { resourceLifecycle: ["agent_runtime"], capabilities: ["events.subscribe", "agents.lifecycle.manage"] } as never }).where(eq(plugins.id, pluginId));
+    await db.update(plugins).set({ manifestJson: { agentLifecycle: true, resourceLifecycle: ["agent_runtime"], capabilities: ["events.subscribe", "agents.lifecycle.manage"] } as never }).where(eq(plugins.id, pluginId));
     const otherPluginId = randomUUID();
     await db.insert(plugins).values({ id: otherPluginId, pluginKey: otherPluginId, packageName: "other-delivery-fixture", version: "1.0.0", status: "ready",
       manifestJson: { resourceLifecycle: ["agent_runtime"], capabilities: ["events.subscribe", "agents.lifecycle.manage"] } as never });
     await db.insert(pluginConfig).values({ pluginId: otherPluginId, companyId, configJson: {} });
     const [agent] = await db.insert(agents).values({ companyId, name: "Lifecycle owner", status: "active" }).returning();
-    await db.update(agents).set({ lifecycleRequiredPluginIds: [pluginId] }).where(eq(agents.id, agent!.id));
+    await db.transaction(tx => synchronizeCompanyAgentRuntimeOwners(tx as unknown as Db, companyId));
     const owner = delivery();
     await owner.run();
     expect(owner.call).toHaveBeenCalledTimes(1);
     expect(owner.call.mock.calls[0]![0]).toBe(pluginId);
     expect(owner.call.mock.calls[0]![2]).not.toHaveProperty("recipientPluginIds");
     owner.worker.dispose();
+  });
+  it("does not let a prior runtime revision for a former owner block the newly assigned owner", async () => {
+    await db.update(plugins).set({ manifestJson: { agentLifecycle: true, resourceLifecycle: ["agent_runtime"], capabilities: ["events.subscribe", "agents.lifecycle.manage"] } as never }).where(eq(plugins.id, pluginId));
+    const nextOwnerId = randomUUID();
+    await db.insert(plugins).values({ id: nextOwnerId, pluginKey: nextOwnerId, packageName: "next-runtime-owner", version: "1.0.0", status: "ready",
+      manifestJson: { agentLifecycle: true, resourceLifecycle: ["agent_runtime"], capabilities: ["events.subscribe", "agents.lifecycle.manage"] } as never });
+    await db.insert(pluginConfig).values({ pluginId: nextOwnerId, companyId, configJson: {} });
+    const resourceId = randomUUID();
+    await db.insert(resourceLifecycleEvents).values([
+      { companyId, resourceType: "agent_runtime", resourceId, action: "update", recipientPluginIds: [pluginId] },
+      { companyId, resourceType: "agent_runtime", resourceId, action: "update", recipientPluginIds: [nextOwnerId] },
+    ]);
+    const inbox = pluginLifecycleInbox(db, nextOwnerId);
+    const [nextEvent] = await inbox.list(companyId);
+    expect(nextEvent?.id).toBeTruthy();
+    await expect(inbox.acknowledge(companyId, nextEvent!.id)).resolves.toBeUndefined();
   });
 });

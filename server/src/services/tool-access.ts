@@ -669,6 +669,32 @@ type ToolAccessMutationDb = Pick<
   "select" | "insert" | "update" | "delete"
 >;
 
+async function lockToolAssignmentAgents(
+  client: ToolAccessMutationDb,
+  companyId: string,
+  targets: ReadonlyArray<{ targetType: string; targetId: string }>,
+) {
+  const allAgents = targets.some(
+    (target) => target.targetType === "company" && target.targetId === companyId,
+  );
+  const ids = targets
+    .filter((target) => target.targetType === "agent")
+    .map((target) => target.targetId);
+  if (!allAgents && ids.length === 0) return;
+  await client
+    .select({ id: agents.id })
+    .from(agents)
+    .where(
+      and(
+        eq(agents.companyId, companyId),
+        sql`${agents.status} NOT IN ('pending_approval', 'terminated')`,
+        allAgents ? undefined : inArray(agents.id, ids),
+      ),
+    )
+    .orderBy(agents.id)
+    .for("no key update");
+}
+
 export type McpToolDescriptor = {
   name: string;
   title?: string | null;
@@ -5236,13 +5262,42 @@ export function toolAccessService(
     return profile;
   }
 
+  async function lockManagedAppPolicies(dbClient: ToolAccessMutationDb, companyId: string, connectionId: string) {
+    await dbClient.select({ id: toolPolicies.id }).from(toolPolicies)
+      .where(and(
+        eq(toolPolicies.companyId, companyId),
+        eq(toolPolicies.policyType, "require_approval"),
+        sql`${toolPolicies.config}->>'source' = 'app_gallery_finish'`,
+        sql`${toolPolicies.config}->>'connectionId' = ${connectionId}`,
+      ))
+      .orderBy(toolPolicies.id)
+      .for("no key update");
+  }
+
+  async function lockToolConnectionRuntimeInputs(dbClient: ToolAccessMutationDb, companyId: string, connectionId: string) {
+    await dbClient.select({ id: toolApplications.id }).from(toolApplications)
+      .innerJoin(toolConnections, and(
+        eq(toolConnections.applicationId, toolApplications.id),
+        eq(toolConnections.companyId, toolApplications.companyId),
+      ))
+      .where(and(eq(toolConnections.id, connectionId), eq(toolConnections.companyId, companyId)))
+      .for("update", { of: toolApplications });
+    await dbClient.select({ id: toolConnections.id }).from(toolConnections)
+      .where(and(eq(toolConnections.id, connectionId), eq(toolConnections.companyId, companyId)))
+      .for("update");
+    await dbClient.select({ id: toolProfiles.id }).from(toolProfiles)
+      .where(and(eq(toolProfiles.companyId, companyId), eq(toolProfiles.profileKey, `app:${connectionId}`)))
+      .for("no key update");
+    await lockManagedAppPolicies(dbClient, companyId, connectionId);
+  }
+
   async function enableCatalogEntriesByDefault(input: {
     connection: typeof toolConnections.$inferSelect;
     newCatalogEntryIds: string[];
     activeCatalogEntryIds: string[];
     restoreDraftDefaults?: boolean;
     actor?: ActorInfo;
-  }) {
+  }, dbClient: ToolAccessMutationDb = db) {
     // Catalog discovery also runs while the setup wizard is still a draft.
     // Access is not granted until the operator finishes that wizard, so a
     // draft refresh must never manufacture a profile or company-wide binding.
@@ -5253,7 +5308,7 @@ export function toolAccessService(
     if (input.connection.status !== "active" && !input.restoreDraftDefaults)
       return;
     const profileKey = `app:${input.connection.id}`;
-    let [profile] = await db
+    let [profile] = await dbClient
       .select()
       .from(toolProfiles)
       .where(
@@ -5262,11 +5317,13 @@ export function toolAccessService(
           eq(toolProfiles.profileKey, profileKey),
         ),
       )
-      .limit(1);
+      .limit(1)
+      .for("update");
+    await lockManagedAppPolicies(dbClient, input.connection.companyId, input.connection.id);
     const createdProfile = !profile;
     const resetToRecommendedDefaults = !profile || profile.status !== "active";
     if (!profile) {
-      const [sameName] = await db
+      const [sameName] = await dbClient
         .select({ id: toolProfiles.id })
         .from(toolProfiles)
         .where(
@@ -5279,7 +5336,7 @@ export function toolAccessService(
       const profileName = sameName
         ? `${input.connection.name} (${input.connection.id.replace(/-/g, "").slice(0, 8)})`
         : input.connection.name;
-      [profile] = await db
+      [profile] = await dbClient
         .insert(toolProfiles)
         .values({
           companyId: input.connection.companyId,
@@ -5294,7 +5351,8 @@ export function toolAccessService(
           },
         })
         .returning();
-      await db.insert(toolProfileBindings).values({
+      await lockToolAssignmentAgents(dbClient, input.connection.companyId, [{ targetType: "company", targetId: input.connection.companyId }]);
+      await dbClient.insert(toolProfileBindings).values({
         companyId: input.connection.companyId,
         profileId: profile.id,
         targetType: "company",
@@ -5315,7 +5373,8 @@ export function toolAccessService(
       // references it (for example, an MCP gateway). Reconnecting revives the
       // same connection id, so restore that retained profile as a fresh
       // all-agents assignment instead of leaving every read action Off.
-      [profile] = await db
+      await lockToolAssignmentAgents(dbClient, input.connection.companyId, [{ targetType: "company", targetId: input.connection.companyId }]);
+      [profile] = await dbClient
         .update(toolProfiles)
         .set({
           name: input.connection.name,
@@ -5330,7 +5389,7 @@ export function toolAccessService(
         })
         .where(eq(toolProfiles.id, profile.id))
         .returning();
-      await db
+      await dbClient
         .delete(toolProfileBindings)
         .where(
           and(
@@ -5338,7 +5397,7 @@ export function toolAccessService(
             eq(toolProfileBindings.profileId, profile.id),
           ),
         );
-      await db
+      await dbClient
         .delete(toolProfileEntries)
         .where(
           and(
@@ -5346,7 +5405,7 @@ export function toolAccessService(
             eq(toolProfileEntries.profileId, profile.id),
           ),
         );
-      await db.insert(toolProfileBindings).values({
+      await dbClient.insert(toolProfileBindings).values({
         companyId: input.connection.companyId,
         profileId: profile.id,
         targetType: "company",
@@ -5374,7 +5433,7 @@ export function toolAccessService(
         connection: input.connection,
         askFirstEntries: [],
         actor: input.actor,
-      });
+      }, dbClient);
     }
 
     // A new or revived connection starts with every discovered action enabled.
@@ -5388,7 +5447,7 @@ export function toolAccessService(
       ),
     ];
     if (candidateIds.length === 0) return;
-    const existingEntries = await db
+    const existingEntries = await dbClient
       .select({ catalogEntryId: toolProfileEntries.catalogEntryId })
       .from(toolProfileEntries)
       .where(
@@ -5405,7 +5464,7 @@ export function toolAccessService(
     );
     const entryIds = candidateIds.filter((id) => !configuredIds.has(id));
     if (entryIds.length === 0) return;
-    await db.insert(toolProfileEntries).values(
+    await dbClient.insert(toolProfileEntries).values(
       entryIds.map((catalogEntryId) => ({
         companyId: input.connection.companyId,
         profileId: profile.id,
@@ -6252,16 +6311,6 @@ export function toolAccessService(
       )
       .returning({ id: companySecretBindings.id });
 
-    const removedInstalls = await db
-      .delete(toolConnectionInstalls)
-      .where(
-        and(
-          eq(toolConnectionInstalls.companyId, connection.companyId),
-          eq(toolConnectionInstalls.connectionId, connection.id),
-        ),
-      )
-      .returning({ id: toolConnectionInstalls.id });
-
     // The app-managed profile exists only to carry this connection's action
     // selection, so it goes with the connection. Operator-authored profiles that
     // happen to mention the connection are left alone — the archived connection
@@ -6276,10 +6325,24 @@ export function toolAccessService(
         ),
       )
       .limit(1);
+    const { removedInstalls, removedProfileBindings } = await db.transaction(async (tx) => {
+      const installs = await tx.select().from(toolConnectionInstalls).where(and(
+        eq(toolConnectionInstalls.companyId, connection.companyId),
+        eq(toolConnectionInstalls.connectionId, connection.id),
+      ));
+      const profileBindings = appProfile ? await tx.select().from(toolProfileBindings).where(and(
+        eq(toolProfileBindings.companyId, connection.companyId),
+        eq(toolProfileBindings.profileId, appProfile.id),
+      )) : [];
+      await lockToolAssignmentAgents(tx, connection.companyId, [...installs, ...profileBindings]);
+      if (installs.length) await tx.delete(toolConnectionInstalls).where(inArray(toolConnectionInstalls.id, installs.map(row => row.id)));
+      if (profileBindings.length) await tx.delete(toolProfileBindings).where(inArray(toolProfileBindings.id, profileBindings.map(row => row.id)));
+      return { removedInstalls: installs.map(({ id }) => ({ id })), removedProfileBindings: profileBindings };
+    });
     let appProfileOutcome: ToolConnectionRemovalSummary["appProfile"] =
       "absent";
     let appProfileEntriesRemoved = 0;
-    let appProfileBindingsRemoved = 0;
+    let appProfileBindingsRemoved = removedProfileBindings.length;
     let gatewayTokensRevoked = 0;
     let gatewaySessionsRevoked = 0;
     if (appProfile) {
@@ -6294,18 +6357,6 @@ export function toolAccessService(
           )
           .returning({ id: toolProfileEntries.id })
       ).length;
-      appProfileBindingsRemoved = (
-        await db
-          .delete(toolProfileBindings)
-          .where(
-            and(
-              eq(toolProfileBindings.companyId, connection.companyId),
-              eq(toolProfileBindings.profileId, appProfile.id),
-            ),
-          )
-          .returning({ id: toolProfileBindings.id })
-      ).length;
-
       const gatewayRows = await db
         .select({ id: toolMcpGateways.id })
         .from(toolMcpGateways)
@@ -7623,7 +7674,7 @@ export function toolAccessService(
     const preserveMcpAccess = connection.config.mcpPreserveAccess === true
       && isRemoteMcpConnectorMethod(connection.config.sourceTemplateKey, connection.config.connectionMethodKey);
     if (!refreshOptions.skipDefaultProfileSync || preserveMcpAccess) {
-      await enableCatalogEntriesByDefault({
+      await db.transaction((tx) => enableCatalogEntriesByDefault({
         connection: updatedConnection,
         // Discovery must not re-enable actions the operator turned Off,
         // including curated MCP connections during API-key replacement.
@@ -7636,7 +7687,7 @@ export function toolAccessService(
         activeCatalogEntryIds: activeEntries.map((entry) => entry.id),
         restoreDraftDefaults: refreshOptions.restoreDraftDefaults || preserveMcpAccess,
         actor,
-      });
+      }, tx));
     }
     await audit({
       companyId: connection.companyId,
@@ -8234,35 +8285,34 @@ export function toolAccessService(
     existing: typeof toolProfileBindings.$inferSelect | null,
     actor?: ActorInfo,
   ): Promise<ToolProfileBinding> {
-    const metadata = {
-      ...(existing?.metadata ?? {}),
-      source: "paperclip_example",
-      safeDefault: true,
-    };
-    if (existing) {
-      const [updated] = await db
-        .update(toolProfileBindings)
-        .set({ priority: 100, metadata, updatedAt: new Date() })
-        .where(eq(toolProfileBindings.id, existing.id))
+    return db.transaction(async (tx) => {
+      await lockToolAssignmentAgents(tx, companyId, [{ targetType: "company", targetId: companyId }]);
+      const metadata = {
+        ...(existing?.metadata ?? {}),
+        source: "paperclip_example",
+        safeDefault: true,
+      };
+      if (existing) {
+        const [updated] = await tx.update(toolProfileBindings)
+          .set({ priority: 100, metadata, updatedAt: new Date() })
+          .where(eq(toolProfileBindings.id, existing.id))
+          .returning();
+        return toProfileBinding(updated);
+      }
+      const [created] = await tx.insert(toolProfileBindings)
+        .values({
+          companyId,
+          profileId,
+          targetType: "company",
+          targetId: companyId,
+          priority: 100,
+          metadata,
+          createdByAgentId: actor?.actorType === "agent" ? (actor.actorId ?? null) : null,
+          createdByUserId: actor?.actorType === "user" ? (actor.actorId ?? null) : null,
+        })
         .returning();
-      return toProfileBinding(updated);
-    }
-    const [created] = await db
-      .insert(toolProfileBindings)
-      .values({
-        companyId,
-        profileId,
-        targetType: "company",
-        targetId: companyId,
-        priority: 100,
-        metadata,
-        createdByAgentId:
-          actor?.actorType === "agent" ? (actor.actorId ?? null) : null,
-        createdByUserId:
-          actor?.actorType === "user" ? (actor.actorId ?? null) : null,
-      })
-      .returning();
-    return toProfileBinding(created);
+      return toProfileBinding(created);
+    });
   }
 
   async function exampleSmokeActor(companyId: string, actor?: ActorInfo) {
@@ -13677,16 +13727,7 @@ export function toolAccessService(
       const currentSetup = currentPurpose ? await readDeferredActivationSetup(tx as unknown as Db, currentPurpose, false) : null;
       if (currentPurpose && !currentSetup)
         throw conflict("The original personal connection needs a current successful validation");
-      await tx
-        .select({ id: toolConnections.id })
-        .from(toolConnections)
-        .where(
-          and(
-            eq(toolConnections.id, connectionId),
-            eq(toolConnections.companyId, companyId),
-          ),
-        )
-        .for("update");
+      await lockToolConnectionRuntimeInputs(tx, companyId, connectionId);
       const [existingProfile] = await tx
         .select()
         .from(toolProfiles)
@@ -13697,13 +13738,21 @@ export function toolAccessService(
           ),
         )
         .limit(1);
+      const priorBindings = existingProfile
+        ? await tx.select().from(toolProfileBindings)
+            .where(and(eq(toolProfileBindings.companyId, companyId), eq(toolProfileBindings.profileId, existingProfile.id)))
+        : [];
+      const priorInstalls = await tx.select().from(toolConnectionInstalls)
+        .where(and(eq(toolConnectionInstalls.companyId, companyId), eq(toolConnectionInstalls.connectionId, connection.id)));
+      await lockToolAssignmentAgents(tx, companyId, [
+        ...priorBindings,
+        ...priorInstalls,
+        ...bindingInputs,
+        ...(input.access === "all_agents" ? [{ targetType: "company", targetId: companyId }] : []),
+      ]);
       let profileId: string;
       if (existingProfile) {
         if (input.preserveExistingAccess) {
-          const priorBindings = await tx
-            .select()
-            .from(toolProfileBindings)
-            .where(eq(toolProfileBindings.profileId, existingProfile.id));
           for (const prior of priorBindings)
             if (
               !bindingInputs.some(
@@ -15022,24 +15071,18 @@ export function toolAccessService(
               targetId: agentId,
             }));
       if (installTargets.length > 0) {
-        await db
-          .insert(toolConnectionInstalls)
-          .values(
-            installTargets.map((target) => ({
+        await db.transaction(async (tx) => {
+          await lockToolAssignmentAgents(tx, input.connection.companyId, installTargets);
+          await tx.insert(toolConnectionInstalls)
+            .values(installTargets.map((target) => ({
               companyId: input.connection.companyId,
               connectionId: input.connection.id,
               ...target,
-              createdByAgentId:
-                input.actor?.actorType === "agent"
-                  ? (input.actor.actorId ?? null)
-                  : null,
-              createdByUserId:
-                input.actor?.actorType === "user"
-                  ? (input.actor.actorId ?? null)
-                  : null,
-            })),
-          )
-          .onConflictDoNothing();
+              createdByAgentId: input.actor?.actorType === "agent" ? (input.actor.actorId ?? null) : null,
+              createdByUserId: input.actor?.actorType === "user" ? (input.actor.actorId ?? null) : null,
+            })))
+            .onConflictDoNothing();
+        });
       }
     }
     return finished;
@@ -16726,16 +16769,20 @@ export function toolAccessService(
       },
       actor,
     );
-    if (!onboardingPurpose) await db
-      .insert(toolConnectionInstalls)
-      .values({
+    if (!onboardingPurpose) await db.transaction(async (tx) => {
+      const installTarget = {
+        targetType: requestingAgentId ? "agent" as const : "company" as const,
+        targetId: requestingAgentId ?? companyId,
+      };
+      await lockToolAssignmentAgents(tx, companyId, [installTarget]);
+      await tx.insert(toolConnectionInstalls).values({
         companyId,
         connectionId: connection.id,
-        targetType: requestingAgentId ? "agent" : "company",
-        targetId: requestingAgentId ?? companyId,
+        ...installTarget,
         createdByUserId: actorUserId,
       })
       .onConflictDoNothing();
+    });
     return finished;
   }
 
@@ -18312,6 +18359,7 @@ export function toolAccessService(
         profileId: string;
       }> = [];
       await db.transaction(async (tx) => {
+        await lockToolConnectionRuntimeInputs(tx, connection.companyId, connection.id);
         const existing = await tx
           .select()
           .from(toolConnectionInstalls)
@@ -18321,6 +18369,24 @@ export function toolAccessService(
               eq(toolConnectionInstalls.connectionId, connection.id),
             ),
           );
+        const [installProfile] = await tx
+          .select({ id: toolProfiles.id })
+          .from(toolProfiles)
+          .where(and(
+            eq(toolProfiles.companyId, connection.companyId),
+            eq(toolProfiles.profileKey, `app:${connection.id}`),
+          ))
+          .limit(1);
+        const existingBindings = installProfile
+          ? await tx.select({ targetType: toolProfileBindings.targetType, targetId: toolProfileBindings.targetId })
+              .from(toolProfileBindings)
+              .where(and(eq(toolProfileBindings.companyId, connection.companyId), eq(toolProfileBindings.profileId, installProfile.id)))
+          : [];
+        await lockToolAssignmentAgents(tx, connection.companyId, [
+          ...existing,
+          ...requested.values(),
+          ...existingBindings,
+        ]);
         const existingKeys = new Set(
           existing.map(
             (install) => `${install.targetType}:${install.targetId}`,
@@ -18347,16 +18413,6 @@ export function toolAccessService(
           // Only bindings tagged `source: "tool_connection_install"` are removed.
           // A binding the operator authored through the access model carries a
           // different source and must survive an uninstall.
-          const [installProfile] = await tx
-            .select({ id: toolProfiles.id })
-            .from(toolProfiles)
-            .where(
-              and(
-                eq(toolProfiles.companyId, connection.companyId),
-                eq(toolProfiles.profileKey, `app:${connection.id}`),
-              ),
-            )
-            .limit(1);
           if (installProfile) {
             for (const install of removals) {
               await tx
@@ -19153,18 +19209,21 @@ export function toolAccessService(
         );
       }
       if (input.includeAssignments && bindings.length > 0) {
-        await db.insert(toolProfileBindings).values(
-          bindings.map((binding) => ({
-            companyId: binding.companyId,
-            profileId: created.id,
-            targetType: binding.targetType,
-            targetId: binding.targetId,
-            priority: binding.priority,
-            metadata: binding.metadata ?? {},
-            createdByAgentId: binding.createdByAgentId,
-            createdByUserId: binding.createdByUserId,
-          })),
-        );
+        await db.transaction(async (tx) => {
+          await lockToolAssignmentAgents(tx, existing.companyId, bindings);
+          await tx.insert(toolProfileBindings).values(
+            bindings.map((binding) => ({
+              companyId: binding.companyId,
+              profileId: created.id,
+              targetType: binding.targetType,
+              targetId: binding.targetId,
+              priority: binding.priority,
+              metadata: binding.metadata ?? {},
+              createdByAgentId: binding.createdByAgentId,
+              createdByUserId: binding.createdByUserId,
+            })),
+          );
+        });
       }
       return profileDetails(created.id, existing.companyId);
     },
@@ -19231,30 +19290,30 @@ export function toolAccessService(
             !targetKeys.has(`${binding.targetType}:${binding.targetId}`),
         );
         if (copiedBindings.length > 0) {
-          await db.insert(toolProfileBindings).values(
-            copiedBindings.map((binding) => ({
-              companyId: binding.companyId,
-              profileId: target.id,
-              targetType: binding.targetType,
-              targetId: binding.targetId,
-              priority: binding.priority,
-              metadata: binding.metadata ?? {},
-              createdByAgentId: binding.createdByAgentId,
-              createdByUserId: binding.createdByUserId,
-            })),
-          );
+          await db.transaction(async (tx) => {
+            await lockToolAssignmentAgents(tx, existing.companyId, copiedBindings);
+            await tx.insert(toolProfileBindings).values(
+              copiedBindings.map((binding) => ({
+                companyId: binding.companyId,
+                profileId: target.id,
+                targetType: binding.targetType,
+                targetId: binding.targetId,
+                priority: binding.priority,
+                metadata: binding.metadata ?? {},
+                createdByAgentId: binding.createdByAgentId,
+                createdByUserId: binding.createdByUserId,
+              })),
+            );
+            await tx.update(toolProfiles).set({ updatedAt: new Date() }).where(eq(toolProfiles.id, target.id));
+          });
           reassignedBindingCount = copiedBindings.length;
-          await db
-            .update(toolProfiles)
-            .set({ updatedAt: new Date() })
-            .where(eq(toolProfiles.id, target.id));
         }
       }
 
-      const [deleted] = await db
-        .delete(toolProfiles)
-        .where(eq(toolProfiles.id, existing.id))
-        .returning();
+      const [deleted] = await db.transaction(async (tx) => {
+        await lockToolAssignmentAgents(tx, existing.companyId, details.bindings);
+        return tx.delete(toolProfiles).where(eq(toolProfiles.id, existing.id)).returning();
+      });
       if (!deleted) throw notFound("Tool profile not found");
       return {
         profile: toProfile(deleted),
@@ -19367,26 +19426,29 @@ export function toolAccessService(
         input.targetType,
         input.targetId,
       );
-      const [row] = await db
-        .insert(toolProfileBindings)
-        .values({
-          companyId: profile.companyId,
-          profileId: profile.id,
-          targetType: input.targetType,
-          targetId: input.targetId,
-          priority: input.priority ?? 100,
-          metadata: input.metadata ?? {},
-          createdByAgentId:
-            actor?.actorType === "agent" ? (actor.actorId ?? null) : null,
-          createdByUserId:
-            actor?.actorType === "user" ? (actor.actorId ?? null) : null,
-        })
-        .returning();
-      await db
-        .update(toolProfiles)
-        .set({ updatedAt: new Date() })
-        .where(eq(toolProfiles.id, profile.id));
-      return toProfileBinding(row);
+      return db.transaction(async (tx) => {
+        await lockToolAssignmentAgents(tx, profile.companyId, [input]);
+        const [row] = await tx
+          .insert(toolProfileBindings)
+          .values({
+            companyId: profile.companyId,
+            profileId: profile.id,
+            targetType: input.targetType,
+            targetId: input.targetId,
+            priority: input.priority ?? 100,
+            metadata: input.metadata ?? {},
+            createdByAgentId:
+              actor?.actorType === "agent" ? (actor.actorId ?? null) : null,
+            createdByUserId:
+              actor?.actorType === "user" ? (actor.actorId ?? null) : null,
+          })
+          .returning();
+        await tx
+          .update(toolProfiles)
+          .set({ updatedAt: new Date() })
+          .where(eq(toolProfiles.id, profile.id));
+        return toProfileBinding(row);
+      });
     },
 
     unbindProfile: async (
@@ -19399,24 +19461,27 @@ export function toolAccessService(
         input.targetType,
         input.targetId,
       );
-      const rows = await db
-        .delete(toolProfileBindings)
-        .where(
-          and(
-            eq(toolProfileBindings.companyId, profile.companyId),
-            eq(toolProfileBindings.profileId, profile.id),
-            eq(toolProfileBindings.targetType, input.targetType),
-            eq(toolProfileBindings.targetId, input.targetId),
-          ),
-        )
-        .returning({ id: toolProfileBindings.id });
-      if (rows.length > 0) {
-        await db
-          .update(toolProfiles)
-          .set({ updatedAt: new Date() })
-          .where(eq(toolProfiles.id, profile.id));
-      }
-      return { unbound: rows.length };
+      return db.transaction(async (tx) => {
+        await lockToolAssignmentAgents(tx, profile.companyId, [input]);
+        const rows = await tx
+          .delete(toolProfileBindings)
+          .where(
+            and(
+              eq(toolProfileBindings.companyId, profile.companyId),
+              eq(toolProfileBindings.profileId, profile.id),
+              eq(toolProfileBindings.targetType, input.targetType),
+              eq(toolProfileBindings.targetId, input.targetId),
+            ),
+          )
+          .returning({ id: toolProfileBindings.id });
+        if (rows.length > 0) {
+          await tx
+            .update(toolProfiles)
+            .set({ updatedAt: new Date() })
+            .where(eq(toolProfiles.id, profile.id));
+        }
+        return { unbound: rows.length };
+      });
     },
 
     getEffectiveProfilesForAgent: async (

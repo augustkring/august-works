@@ -162,6 +162,15 @@ describe("agent local JWT", () => {
     const legacySignature = createHmac("sha256", process.env.PAPERCLIP_AGENT_JWT_SECRET!)
       .update(signingInput).digest("base64url");
     expect(verifySandboxBrokerJwt(`${signingInput}.${legacySignature}`)).toBeNull();
+    process.env.PAPERCLIP_INSTANCE_ID = "sandbox-broker-other-instance";
+    const otherInstanceToken = createSandboxBrokerJwt({
+      agentId: "agent-1", companyId: "company-1", adapterType: "paperclip_runner", runId: claim.runId,
+      responsibleUserId: "user-1", claim,
+      parentExpiresAt: new Date(now.getTime() + 60_000), nativeLeaseExpiresAt: new Date(now.getTime() + 45_000),
+      execDeadlineAt: new Date(now.getTime() + 40_000),
+    })!;
+    process.env.PAPERCLIP_INSTANCE_ID = "sandbox-broker-current-instance";
+    expect(verifySandboxBrokerJwt(otherInstanceToken)).toBeNull();
   });
 
   it("round-trips a skill_test run scope", () => {

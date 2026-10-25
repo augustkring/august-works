@@ -7100,6 +7100,19 @@ async function nativeTurnFrameMatchesSourceClosure(tx: Parameters<Parameters<Db[
     description: parsedExecution.task.description, workMode: parsedExecution.task.workMode }), "utf8").digest("hex") !== taskInput.contentHash)
     return no();
 
+  // Wake payload is rendered into task.prompt before the closed execution
+  // input is built; it is intentionally not a second field in that contract.
+  // The closure's taskEnvelopeDigest binds those final prompt bytes, while the
+  // server-only wake capture preserves the exact source payload hash.
+  const wakeInputs = closure.sourceSet.inputs.filter((input): input is Extract<NativePayloadSourceInput, { kind: "native_task_wake" }> =>
+    input.kind === "native_task_wake");
+  if (wakeInputs.length > 1 || wakeInputs.some(input => input.runId !== run.id || input.issueId !== run.nativeIssueId)) return no();
+  if (wakeInputs.length === 1) {
+    const [wakeTask] = await tx.select({ sourceVersion: sql<string>`extract(epoch from ${issues.updatedAt})::text` }).from(issues).where(and(
+      eq(issues.companyId, run.companyId), eq(issues.id, run.nativeIssueId!)));
+    if (!wakeTask || wakeTask.sourceVersion !== wakeInputs[0]!.sourceVersion) return no();
+  }
+
   if (!run.completionContractId || !run.completionContractSha256 ||
     parsedExecution.completionContract.id !== run.completionContractId ||
     parsedExecution.completionContract.sha256 !== run.completionContractSha256) return no();

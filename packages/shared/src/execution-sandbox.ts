@@ -10,6 +10,7 @@ export const sandboxCapabilitySnapshotSchema = controlSchema.extend({
   backend: sandboxBackendSchema, backendVersion: z.string().trim().min(1).max(100), hostKernelVersion: z.string().trim().min(1).max(200).nullable(), sandboxImageDigest: digest,
   filesystemEnforcementMode: z.enum(["hard_requirement", "best_effort", "unknown"]), staticPolicyRequiresRecreate: z.boolean(), dynamicNetworkPolicy: z.boolean(),
   policyProverBoundaryCheck: z.boolean(), policyProverCoverage: z.array(z.enum(SANDBOX_CONTROLS)).max(8), credentialBindingDimensions: z.array(z.enum(["company", "presence", "host", "port", "method", "path", "binary", "expiry", "revocation"])).max(9),
+  credentialBrokerProviderProfile: z.object({ id: z.string().min(1).max(100).regex(/^[a-zA-Z0-9][a-zA-Z0-9_.-]*$/), hash }).strict().optional(),
   testedAt: z.iso.datetime(), expiresAt: z.iso.datetime(), qualificationHash: hash, evidenceKind: z.enum(["local_fixture", "protected_host_report"]),
 }).strict();
 const absolutePath = z.string().min(1).max(1000).refine(path => path.startsWith("/") && !path.includes("\u0000") && !path.includes("\\") && !path.split("/").some(part => part === "." || part === "..") && !/[\r\n*?]/.test(path) && !path.includes("//") && (path === "/" || !path.endsWith("/")), "Use a normalized absolute path without traversal or wildcard syntax");

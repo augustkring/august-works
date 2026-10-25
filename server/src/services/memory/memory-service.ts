@@ -631,7 +631,7 @@ async function insertCandidate(
   const identity = actorIdentity(actor);
   const now = new Date();
   const sourceProvenance=state.sourceProvenance??await captureMemorySources(tx,companyId,memorySourceActor(companyId,actor),input.scope,
-    [...(supersedesRecordId?[supersedesRecordId]:[]),...(state.sourceMemoryIds??[])]);
+    [...(supersedesRecordId?[supersedesRecordId]:[]),...(state.sourceMemoryIds??[])], input.evidence);
   const temporalContext = actor.principal.type === "agent" && actor.runId && sourceProvenance.sourceProvenanceQualified
     ? await captureNativeTemporalContext(tx, companyId, actor.runId, "memory_record") : null;
   const temporalContextPolicy = {

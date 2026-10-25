@@ -68,6 +68,8 @@ import { assertV7Authorization } from "../v7-authorization.js";
 import { nativeSha256 } from "../native-runtime/canonical.js";
 import { executionSandboxService } from "../execution-sandbox/sandbox-service.js";
 import { getAssignedMcpGateway } from "../native-runtime/assigned-mcp-tools.js";
+import { createRunSecretRedactionRegistry } from "../run-secret-redaction.js";
+import { REDACTED_EVENT_VALUE } from "../../redaction.js";
 
 const ACTIVE_OPERATIONS = [
   "REQUESTED",
@@ -2300,9 +2302,9 @@ export function runtimeControlService(
         source.policy.policyHash !== request.policyHash || source.deadlineAt.toISOString() < request.deadlineAt)
         throw forbidden("Sandbox execution source changed before host dispatch");
       const credentials = source.policy.compilation.compiledPolicy.credentials;
-      const brokerToken = request.env.PAPERCLIP_SANDBOX_BROKER_TOKEN;
+      const brokerCredential = request.brokerCredential;
       if (credentials.mode === "brokered") {
-        const brokerClaims = typeof brokerToken === "string" ? verifySandboxBrokerJwt(brokerToken) : null;
+        const brokerClaims = brokerCredential ? verifySandboxBrokerJwt(brokerCredential.capabilityToken) : null;
         const brokerCapability = brokerClaims?.sandbox_broker;
         const endpointOrigin = credentialBrokerOrigin;
         if (!brokerClaims || !brokerCapability || !endpointOrigin || brokerClaims.sub !== claims.sub ||
@@ -2316,6 +2318,9 @@ export function runtimeControlService(
           brokerCapability.policySnapshotId !== request.policySnapshotId || brokerCapability.policyHash !== request.policyHash ||
           brokerCapability.endpointOrigin !== endpointOrigin || Date.parse(brokerCapability.expiresAt) > Date.parse(request.deadlineAt) ||
           brokerClaims.exp > claims.exp || brokerClaims.exp * 1000 > Date.parse(brokerCapability.expiresAt) + 999 ||
+          Date.parse(brokerCredential.expiresAt) !== Date.parse(brokerCapability.expiresAt) ||
+          brokerCredential.profileId !== source.capability.credentialBrokerProviderProfile?.id ||
+          brokerCredential.profileHash !== source.capability.credentialBrokerProviderProfile?.hash ||
           request.env.PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN !== endpointOrigin ||
           request.env.PAPERCLIP_SANDBOX_BROKER_SESSION_ID !== brokerCapability.brokerSessionId)
           throw forbidden("Sandbox broker capability is not bound to this exact parent execution");
@@ -2329,8 +2334,7 @@ export function runtimeControlService(
           credentials.bindings.some(binding => resolved.authorizedConnectionGrantHashes[binding.connectionId] !== binding.grantVersionHash))
           throw forbidden("Current assigned ToolGateway grants changed before sandbox dispatch");
       } else if (credentials.mode !== "none" || credentials.bindings.length ||
-        brokerToken !== undefined || request.env.PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN !== undefined ||
-        request.env.PAPERCLIP_SANDBOX_BROKER_SESSION_ID !== undefined) {
+        brokerCredential !== undefined) {
         throw forbidden("Sandbox execution contains an unauthorized broker capability");
       }
       const [consumed] = await tx.update(runtimeHostCommands).set({ status: "CLAIMED", attempt: 1 }).where(and(
@@ -2339,6 +2343,61 @@ export function runtimeControlService(
       if (!consumed) throw forbidden("Sandbox execution capability was already consumed");
       return { runtimeHostId: source.host.id, companyId: claims.company_id, generation: input.generation };
     });
+  }
+  async function authorizeSandboxBrokerCapability(input: { capabilityToken: string; gatewayPublicId: string }): Promise<SandboxBrokerCapabilityClaim> {
+    const claims = verifySandboxBrokerJwt(input.capabilityToken);
+    const capability = claims?.sandbox_broker;
+    const now = new Date();
+    if (!claims || !capability || !credentialBrokerOrigin || claims.exp * 1000 <= now.getTime() ||
+      claims.sub === "" || claims.company_id === "" || claims.jti !== capability.parentRequestId ||
+      capability.endpointOrigin !== credentialBrokerOrigin ||
+      !capability.bindings.some(binding => binding.gatewayPublicId === input.gatewayPublicId))
+      throw forbidden("Sandbox broker capability is invalid or outside its gateway scope");
+    await db.transaction(async transaction => {
+      const tx = transaction as unknown as Db;
+      const [operation] = await tx.select().from(runtimeHostCommands).where(and(
+        eq(runtimeHostCommands.companyId, claims.company_id),
+        eq(runtimeHostCommands.idempotencyKey, capability.parentRequestId),
+        eq(runtimeHostCommands.commandType, "sandbox_exec"),
+        eq(runtimeHostCommands.status, "CLAIMED"),
+        eq(runtimeHostCommands.runtimeCellId, capability.cellId),
+        eq(runtimeHostCommands.cellGeneration, BigInt(capability.generation)),
+        gt(runtimeHostCommands.deadlineAt, now),
+      )).for("share");
+      const payload = operation?.payload as Record<string, unknown> | undefined;
+      if (!operation || payload?.kind !== "sandbox_exec_v1" || payload.requestId !== capability.parentRequestId ||
+        payload.bindingId !== capability.bindingId || payload.generation !== capability.generation ||
+        payload.hostId !== capability.hostId || payload.hostEpoch !== capability.hostEpoch ||
+        payload.runId !== capability.runId || payload.attemptId !== capability.attemptId || payload.attempt !== capability.attempt ||
+        payload.manifestId !== capability.manifestId || payload.manifestHash !== capability.manifestHash ||
+        payload.policySnapshotId !== capability.policySnapshotId || payload.policyHash !== capability.policyHash ||
+        typeof payload.leaseId !== "string") throw forbidden("Sandbox broker parent execution is no longer active");
+      const source = await executionSandboxService(tx, { runtimeSuspectSeconds: config.runtime.suspectSeconds }).assertTaskExecutionContext(tx, {
+        companyId: claims.company_id, runId: capability.runId, leaseId: payload.leaseId, now,
+      });
+      if (!source || source.run.agentId !== claims.sub || source.run.responsibleUserId !== claims.responsible_user_id ||
+        source.source.agent.adapterType !== claims.adapter_type || source.sandboxBinding.id !== capability.bindingId ||
+        source.cell.id !== capability.cellId || source.cell.generation.toString() !== capability.generation ||
+        source.host.id !== capability.hostId || source.host.credentialVersion !== capability.hostEpoch ||
+        source.manifest.id !== capability.manifestId || source.manifest.hash !== capability.manifestHash ||
+        source.policy.id !== capability.policySnapshotId || source.policy.policyHash !== capability.policyHash ||
+        source.policy.compilation.compiledPolicy.credentials.mode !== "brokered")
+        throw forbidden("Sandbox broker source authority changed");
+      const credentials = source.policy.compilation.compiledPolicy.credentials;
+      if (credentials.bindings.length === 0) throw forbidden("Sandbox broker policy has no current bindings");
+      const minimumBindingTtl = Math.min(...credentials.bindings.map(binding => binding.ttlSeconds));
+      if (!Number.isFinite(minimumBindingTtl) || claims.exp > claims.iat + minimumBindingTtl)
+        throw forbidden("Sandbox broker capability exceeded its compiled binding TTL");
+      const resolved = await getAssignedMcpGateway(tx).resolveSandboxCredentialBrokerBindings({
+        companyId: claims.company_id, agentId: source.run.agentId!, runId: source.run.id,
+        responsibleUserId: source.run.responsibleUserId!, presenceId: source.source.runtime.id,
+        bindings: credentials.bindings,
+      });
+      if (resolved.bindings.length !== capability.bindings.length || nativeSha256(resolved.bindings) !== nativeSha256(capability.bindings) ||
+        credentials.bindings.some(item => resolved.authorizedConnectionGrantHashes[item.connectionId] !== item.grantVersionHash))
+        throw forbidden("Sandbox broker grants changed during execution");
+    });
+    return capability;
   }
   async function executeSandboxTask(input: {
     companyId: string;
@@ -2377,7 +2436,12 @@ export function runtimeControlService(
     if (deadlineAt <= now) throw conflict("Task execution deadline expired");
     const credentials = initialSource.policy.compilation.compiledPolicy.credentials;
     let brokerCapability: SandboxBrokerCapabilityClaim | null = null;
+    let brokerCapabilityToken: string | null = null;
+    let brokerProviderProfile: { id: string; hash: string } | null = null;
     if (credentials.mode === "brokered") {
+      if (credentials.bindings.length === 0) throw conflict("Brokered sandbox policy has no current credential bindings");
+      brokerProviderProfile = initialSource.capability.credentialBrokerProviderProfile ?? null;
+      if (!brokerProviderProfile) throw conflict("Qualified OpenShell broker provider profile is unavailable");
       const endpointOrigin = credentialBrokerOrigin;
       if (!endpointOrigin) throw conflict("Configured Paperclip MCP endpoint is unavailable for brokered credentials");
       const broker = await getAssignedMcpGateway(db).resolveSandboxCredentialBrokerBindings({
@@ -2393,6 +2457,7 @@ export function runtimeControlService(
         throw conflict("Current assigned ToolGateway grants do not match the compiled broker policy");
       const brokerExpiresAt = new Date(Math.min(
         Date.now() + 60_000,
+        Date.now() + Math.min(...credentials.bindings.map(binding => binding.ttlSeconds)) * 1000,
         deadlineAt.getTime(),
         initialSource.lease.expiresAt!.getTime(),
         (initialSource.run.executionControlDeadlineAt ?? initialSource.deadlineAt).getTime(),
@@ -2425,13 +2490,19 @@ export function runtimeControlService(
         nativeLeaseExpiresAt: initialSource.lease.expiresAt!, execDeadlineAt: deadlineAt,
       });
       if (!brokerToken) throw conflict("Short-lived ToolGateway broker capability could not be issued");
-      env.PAPERCLIP_SANDBOX_BROKER_TOKEN = brokerToken;
+      // A workload can print its environment. Register the attenuated token in
+      // the existing per-run redaction owner before it reaches the host, and
+      // only deliver buffered, redacted output to the adapter/UI.
+      await createRunSecretRedactionRegistry(db).register(input.companyId, initialSource.run.id, brokerToken);
+      brokerCapabilityToken = brokerToken;
       env.PAPERCLIP_SANDBOX_BROKER_ENDPOINT_ORIGIN = endpointOrigin;
       env.PAPERCLIP_SANDBOX_BROKER_SESSION_ID = requestId;
     } else if (credentials.mode !== "none" || credentials.bindings.length) {
       throw conflict("Raw or inconsistent credential policy cannot execute in a managed sandbox");
     }
-    const commandDigest = nativeSha256({ argv, cwd, env, stdinHash: sha256(stdinBytes), timeoutDeadline: deadlineAt.toISOString() });
+    const commandDigest = nativeSha256({ argv, cwd, env, stdinHash: sha256(stdinBytes), timeoutDeadline: deadlineAt.toISOString(),
+      brokerCapabilityHash: brokerCapabilityToken ? sha256(brokerCapabilityToken) : null,
+      brokerProviderProfile: brokerProviderProfile ? { id: brokerProviderProfile.id, hash: brokerProviderProfile.hash } : null });
     const attempt = initialSource.attempt?.attempt ?? Math.max(1, initialSource.run.continuationAttempt + 1);
     const prepared = await db.transaction(async transaction => {
       const tx = transaction as unknown as Db;
@@ -2467,10 +2538,16 @@ export function runtimeControlService(
         deadlineAt, notBefore: now,
       }).returning();
       if (!claim) throw conflict("Sandbox execution claim could not be persisted");
-      return { source, claim, requestId, commandDigest, attempt, deadlineAt, argv, cwd, env, stdinBytes };
+      return { source, claim, requestId, commandDigest, attempt, deadlineAt, argv, cwd, env, stdinBytes,
+        ...(brokerCapabilityToken && brokerProviderProfile && brokerCapability ? { brokerCredential: {
+          capabilityToken: brokerCapabilityToken, profileId: brokerProviderProfile.id,
+          profileHash: brokerProviderProfile.hash, expiresAt: brokerCapability.expiresAt,
+        } } : {}),
+      };
     });
     if (!prepared) return null;
-    const { source, claim, commandDigest, attempt, deadlineAt } = prepared;
+    const source = prepared.source;
+    const claim = prepared.claim;
     const request = {
       requestId: prepared.requestId,
       bindingId: source.sandboxBinding.id,
@@ -2489,6 +2566,10 @@ export function runtimeControlService(
       argv: prepared.argv,
       cwd: prepared.cwd,
       env: prepared.env,
+      ...(brokerCapabilityToken && brokerProviderProfile && brokerCapability ? { brokerCredential: {
+        capabilityToken: brokerCapabilityToken, profileId: brokerProviderProfile.id,
+        profileHash: brokerProviderProfile.hash, expiresAt: brokerCapability.expiresAt,
+      } } : {}),
       stdinBase64: prepared.stdinBytes.toString("base64"),
     };
     const capabilityToken = createSandboxExecJwt({
@@ -2511,6 +2592,56 @@ export function runtimeControlService(
     }
     const stdout: Buffer[] = [], stderr: Buffer[] = [];
     let outputBytes = 0;
+    const brokerTokenForRedaction = prepared.brokerCredential?.capabilityToken ?? null;
+    const outputTail: Record<"stdout" | "stderr", string> = { stdout: "", stderr: "" };
+    const assertCurrentOutputAuthority = async () => db.transaction(async transaction => {
+      const tx = transaction as unknown as Db;
+      const current = await executionSandboxService(tx, { runtimeSuspectSeconds: config.runtime.suspectSeconds }).assertTaskExecutionContext(tx, {
+        companyId: input.companyId, runId: source.run.id, leaseId: source.lease.id, now: new Date(),
+      });
+      const [claimStillActive] = await tx.select({ id: runtimeHostCommands.id }).from(runtimeHostCommands).where(and(
+        eq(runtimeHostCommands.id, claim.id), eq(runtimeHostCommands.status, "CLAIMED"), gt(runtimeHostCommands.deadlineAt, new Date()),
+      )).limit(1);
+      if (!claimStillActive || !current || current.run.agentId !== source.run.agentId ||
+        current.run.responsibleUserId !== source.run.responsibleUserId || current.sandboxBinding.id !== source.sandboxBinding.id ||
+        current.cell.id !== source.cell.id || current.cell.generation !== source.cell.generation || current.host.id !== source.host.id ||
+        current.host.credentialVersion !== source.host.credentialVersion || current.manifest.id !== source.manifest.id ||
+        current.manifest.hash !== source.manifest.hash || current.policy.id !== source.policy.id ||
+        current.policy.policyHash !== source.policy.policyHash || current.deadlineAt < new Date())
+        throw conflict("Sandbox execution authority changed before output delivery");
+      if (brokerCapability) {
+        const credentials = current.policy.compilation.compiledPolicy.credentials;
+        if (credentials.mode !== "brokered" || credentials.bindings.length === 0)
+          throw conflict("Sandbox broker policy changed before output delivery");
+        const resolved = await getAssignedMcpGateway(tx).resolveSandboxCredentialBrokerBindings({
+          companyId: input.companyId, agentId: current.run.agentId!, runId: current.run.id,
+          responsibleUserId: current.run.responsibleUserId!, presenceId: current.source.runtime.id,
+          bindings: credentials.bindings,
+        });
+        if (resolved.bindings.length !== brokerCapability.bindings.length || nativeSha256(resolved.bindings) !== nativeSha256(brokerCapability.bindings) ||
+          credentials.bindings.some(binding => resolved.authorizedConnectionGrantHashes[binding.connectionId] !== binding.grantVersionHash))
+          throw conflict("Sandbox broker grants changed before output delivery");
+      }
+    });
+    const deliverOutput = async (stream: "stdout" | "stderr", chunk: string, final = false) => {
+      if (!input.onOutput) return;
+      if (!brokerTokenForRedaction) {
+        if (chunk) await input.onOutput(stream, chunk);
+        return;
+      }
+      const combined = outputTail[stream] + chunk;
+      let safeEnd = final ? combined.length : Math.max(0, combined.length - brokerTokenForRedaction.length + 1);
+      if (!final) {
+        let found = combined.indexOf(brokerTokenForRedaction);
+        while (found >= 0 && found < safeEnd) {
+          if (found + brokerTokenForRedaction.length > safeEnd) safeEnd = found;
+          found = combined.indexOf(brokerTokenForRedaction, found + brokerTokenForRedaction.length);
+        }
+      }
+      const safe = combined.slice(0, safeEnd).split(brokerTokenForRedaction).join(REDACTED_EVENT_VALUE);
+      outputTail[stream] = combined.slice(safeEnd);
+      if (safe) await input.onOutput(stream, safe);
+    };
     try {
       const result = await relay.executeOpenShell({
         cellId: source.cell.id,
@@ -2519,11 +2650,17 @@ export function runtimeControlService(
         capabilityToken,
         signal: input.signal,
         onOutput: async (stream, chunk) => {
+          await assertCurrentOutputAuthority();
           outputBytes += chunk.length;
           if (outputBytes > 64 * 1024 * 1024) throw conflict("Sandbox output exceeded its bounded stream limit");
           (stream === "stdout" ? stdout : stderr).push(chunk);
-          await input.onOutput?.(stream, chunk.toString("utf8"));
+          await deliverOutput(stream, chunk.toString("utf8"));
         },
+      });
+      await deliverOutput("stdout", "", true);
+      await deliverOutput("stderr", "", true);
+      const redacted = await createRunSecretRedactionRegistry(db).redactForRun(input.companyId, source.run.id, {
+        stdout: Buffer.concat(stdout).toString("utf8"), stderr: Buffer.concat(stderr).toString("utf8"),
       });
       const returned = await db.transaction(async transaction => {
         const tx = transaction as unknown as Db;
@@ -2541,7 +2678,7 @@ export function runtimeControlService(
         return completed ?? null;
       });
       if (!returned) throw conflict("Sandbox execution claim was fenced before result delivery");
-      return { exitCode: result.exitCode, signal: null, timedOut: result.timedOut, stdout: Buffer.concat(stdout).toString("utf8"), stderr: Buffer.concat(stderr).toString("utf8") };
+      return { exitCode: result.exitCode, signal: null, timedOut: result.timedOut, stdout: redacted.stdout, stderr: redacted.stderr };
     } catch (error) {
       const code = error instanceof Error && ["exec_timeout", "exec_unknown", "runtime_unavailable", "policy_changed", "exec_rejected"].includes(error.message)
         ? error.message : "exec_unknown";
@@ -2558,6 +2695,7 @@ export function runtimeControlService(
     relay,
     getCell,
     executeSandboxTask,
+    authorizeSandboxBrokerCapability,
     create,
     request,
     assertSandboxStartAdmission,

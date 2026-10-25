@@ -112,26 +112,23 @@ async function handleMcpGatewayProtocol(
             description: tool.description,
             inputSchema: tool.parametersSchema ?? { type: "object", properties: {} },
             })),
-            {
+            ...(!toolGateway.isSandboxBrokerToken(token) ? [{
               name: "paperclip_list_resources",
               description: "List resources from fully assigned MCP connections.",
               inputSchema: { type: "object", properties: {}, additionalProperties: false },
-            },
-            {
+            }, {
               name: "paperclip_read_resource",
               description: "Read a resource URI returned by paperclip_list_resources.",
               inputSchema: { type: "object", required: ["uri"], properties: { uri: { type: "string" } }, additionalProperties: false },
-            },
-            {
+            }, {
               name: "paperclip_list_prompts",
               description: "List prompts from fully assigned MCP connections.",
               inputSchema: { type: "object", properties: {}, additionalProperties: false },
-            },
-            {
+            }, {
               name: "paperclip_get_prompt",
               description: "Get a prompt returned by paperclip_list_prompts.",
               inputSchema: { type: "object", required: ["name"], properties: { name: { type: "string" }, arguments: { type: "object" } }, additionalProperties: false },
-            },
+            }] : []),
           ],
         },
       });
@@ -164,14 +161,26 @@ async function handleMcpGatewayProtocol(
         res.json({ jsonrpc: "2.0", id, result: { content: [{ type: "text", text: JSON.stringify(result) }], structuredContent: result, isError: false } });
         return;
       }
-      const result = await toolGateway.executeTool({
-        sessionToken: token,
-        gatewayId: locator.gatewayId ?? null,
-        gatewayPublicId: locator.gatewayPublicId ?? null,
-        tool: name,
-        parameters: params.arguments ?? {},
-        callerHeaders: req.headers,
-      });
+      const brokerMeta = params._meta && typeof params._meta === "object" && !Array.isArray(params._meta)
+        ? params._meta as Record<string, unknown>
+        : null;
+      const brokerOperationId = brokerMeta?.["paperclip/operationId"];
+      const result = toolGateway.isSandboxBrokerToken(token)
+        ? await toolGateway.executeSandboxBrokerTool({
+            capabilityToken: token,
+            gatewayPublicId: locator.gatewayPublicId ?? "",
+            operationId: typeof brokerOperationId === "string" ? brokerOperationId : "",
+            tool: name,
+            parameters: params.arguments ?? {},
+          })
+        : await toolGateway.executeTool({
+            sessionToken: token,
+            gatewayId: locator.gatewayId ?? null,
+            gatewayPublicId: locator.gatewayPublicId ?? null,
+            tool: name,
+            parameters: params.arguments ?? {},
+            callerHeaders: req.headers,
+          });
       const resultRecord = result.result && typeof result.result === "object" && !Array.isArray(result.result)
         ? result.result as Record<string, unknown>
         : null;

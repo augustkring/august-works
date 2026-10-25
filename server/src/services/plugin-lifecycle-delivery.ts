@@ -6,6 +6,7 @@ import { DELIVERY_QUEUES } from "./delivery-work-notifications.js";
 import type { createDeliveryWorkCoordinator } from "./delivery-work-coordinator.js";
 import type { PluginWorkerManager } from "./plugin-worker-manager.js";
 import type { PluginLifecycleManager } from "./plugin-lifecycle.js";
+import { synchronizeAllAgentRuntimeOwners } from "./agent-runtime-owner-assignments.js";
 
 /** Outbox rows are authoritative; local transaction signals only reduce latency. */
 export function registerPluginLifecycleDelivery(
@@ -32,6 +33,7 @@ export function registerPluginLifecycleDelivery(
       nextAuthoritativeSweepAt = Date.now() + retryMs;
       for (const [key, at] of retryAt) if (at <= Date.now()) retryAt.delete(key);
       try {
+        await synchronizeAllAgentRuntimeOwners(db);
         const configured = await db.select({ plugin: plugins, companyId: pluginConfig.companyId }).from(plugins)
           .innerJoin(pluginConfig, eq(pluginConfig.pluginId, plugins.id)).where(eq(plugins.status, "ready"))
           .orderBy(asc(plugins.installOrder), asc(pluginConfig.companyId));
@@ -59,7 +61,7 @@ export function registerPluginLifecycleDelivery(
               stage = "callback";
               const { recipientPluginIds: _recipientPluginIds, ...publicEvent } = event as typeof event & { recipientPluginIds?: string[] };
               const result = await manager.call(plugin.id, "resourceLifecycle", publicEvent, 30_000) as { eventId?: unknown; status?: unknown } | undefined;
-              if (result?.eventId !== event.id || !["acknowledged", "retry", "deferred"].includes(String(result.status))) throw new Error("Invalid lifecycle response");
+              if (!result || result.eventId !== event.id || !["acknowledged", "retry", "deferred"].includes(String(result.status))) throw new Error("Invalid lifecycle response");
               if (signal.aborted || disposed) return;
               if (result.status === "acknowledged") {
                 stage = "acknowledgment";
@@ -84,18 +86,25 @@ export function registerPluginLifecycleDelivery(
     pausePassiveMaintenance: true,
   });
   function wake() { if (disposed) return; pending = true; task.wake(); }
-  const unsubscribeConfig = manager.onConfigApplied?.(wake) ?? (() => {});
-  lifecycle.on("plugin.loaded", wake);
-  lifecycle.on("plugin.enabled", wake);
-  lifecycle.on("plugin.worker_started", wake);
+  const pluginChanged = () => wake();
+  const unsubscribeConfig = manager.onConfigApplied?.(pluginChanged) ?? (() => {});
+  lifecycle.on("plugin.loaded", pluginChanged);
+  lifecycle.on("plugin.enabled", pluginChanged);
+  lifecycle.on("plugin.worker_started", pluginChanged);
+  lifecycle.on("plugin.status_changed", pluginChanged);
+  lifecycle.on("plugin.disabled", pluginChanged);
+  lifecycle.on("plugin.unloaded", pluginChanged);
   return {
     ...task, wake,
     dispose() {
       disposed = true;
       unsubscribeConfig();
-      lifecycle.off("plugin.loaded", wake);
-      lifecycle.off("plugin.enabled", wake);
-      lifecycle.off("plugin.worker_started", wake);
+      lifecycle.off("plugin.loaded", pluginChanged);
+      lifecycle.off("plugin.enabled", pluginChanged);
+      lifecycle.off("plugin.worker_started", pluginChanged);
+      lifecycle.off("plugin.status_changed", pluginChanged);
+      lifecycle.off("plugin.disabled", pluginChanged);
+      lifecycle.off("plugin.unloaded", pluginChanged);
     },
   };
 }

@@ -34,7 +34,12 @@ export function projectOpenShellPolicy(raw: SandboxPolicy) {
     landlock: { compatibility: "hard_requirement" }, process: { run_as_user: String(policy.process.uid), run_as_group: String(policy.process.uid) }, network_policies: {},
   };
   policy.network.destinations.forEach((destination, index) => {
-    const rules = destination.methods.flatMap(method => destination.pathPrefixes.flatMap(path => path === "/" ? [{ allow: { method, path: "/**" } }] : [{ allow: { method, path } }, { allow: { method, path: `${path}/**` } }]));
+    const rules = destination.methods.flatMap(method => destination.pathPrefixes.flatMap(path => {
+      const exactBrokerGatewayRoute = policy.credentials.mode === "brokered" && /^\/mcp\/gateways\/[A-Za-z0-9_-]{1,128}$/.test(path);
+      return path === "/" ? [{ allow: { method, path: "/**" } }]
+        : exactBrokerGatewayRoute ? [{ allow: { method, path } }]
+          : [{ allow: { method, path } }, { allow: { method, path: `${path}/**` } }];
+    }));
     document.network_policies[`aw_${index}`] = { name: `aw_${index}`, binaries: policy.process.allowedBinaries.map(path => ({ path })), endpoints: [{ host: destination.hostname, port: destination.port, protocol: "rest", enforcement: "enforce", rules }] };
   });
   return { document, documentHash: nativeSha256(document), unsupportedFeatures: unsupported };

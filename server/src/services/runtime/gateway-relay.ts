@@ -169,7 +169,12 @@ export function runtimeGatewayRelay(deps: Dependencies) {
               return;
             }
             if (message.type === "exec_output") {
-              await channel.onOutput(message.stream, Buffer.from(message.base64, "base64"));
+              try {
+                await channel.onOutput(message.stream, Buffer.from(message.base64, "base64"));
+              } catch (error) {
+                send(connection.ws, { type: "close", channelId: message.channelId });
+                finishExec(message.channelId, error instanceof Error ? error : new Error("sandbox_output_rejected"));
+              }
             } else if (message.type === "exec_exit") {
               finishExec(message.channelId, undefined, { exitCode: message.exitCode, timedOut: message.timedOut });
             } else finishExec(message.channelId, new Error(message.code));

@@ -10,6 +10,7 @@ import {
 } from "@paperclipai/db";
 import { and, eq } from "drizzle-orm";
 import { workerModelResultSchema, agentDraftRequestsTaskReview, parseAgentDraftOutput,
+  type NativePayloadSourceInput,
   agentDraftReviewDocument, AGENT_REVIEWED_TASK_OUTPUT_INSTRUCTIONS } from "@paperclipai/shared";
 import type {
   NativeRunIdentity,
@@ -255,7 +256,7 @@ export function createAwTextDraftBackend(
       if (activeTask.id !== identity.issueId)
         throw forbidden("Text draft canonical Task changed");
           if (input.sourceClosure) {
-            const taskSource = input.sourceClosure.sourceSet.inputs.find((source) =>
+            const taskSource = input.sourceClosure.sourceSet.inputs.find((source): source is Extract<NativePayloadSourceInput, { kind: "task" }> =>
               source.kind === "task" && source.issueId === activeTask.id);
             const taskDigest = createHash("sha256").update(JSON.stringify(activeTask), "utf8").digest("hex");
             if (!taskSource || taskSource.contentHash !== taskDigest)
@@ -431,7 +432,7 @@ function draftSession(
       work = (async () => {
         try {
           controller.signal.throwIfAborted();
-          let wireReceipt: WorkerModelDispatchWireReceipt | null = null;
+          const wireReceipt: { value: WorkerModelDispatchWireReceipt | null } = { value: null };
           const modelCallId = `aw-draft:${identity.runId}`;
           const response = workerModelResultSchema.parse(
             await gateway.call(
@@ -450,10 +451,10 @@ function draftSession(
                 maxOutputTokens: input.maxOutputTokens,
               },
               controller.signal,
-              input.sourceClosure ? { onWireDispatch: (receipt) => { wireReceipt = receipt; } } : undefined,
+              input.sourceClosure ? { onWireDispatch: (receipt) => { wireReceipt.value = receipt; } } : undefined,
             ),
           );
-          const exactWireReceipt = wireReceipt;
+          const exactWireReceipt = wireReceipt.value;
           if (input.sourceClosure) {
             if (!exactWireReceipt || exactWireReceipt.callId !== modelCallId ||
               exactWireReceipt.reservationId !== response.reservationId)

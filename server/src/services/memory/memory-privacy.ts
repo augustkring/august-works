@@ -11,7 +11,7 @@ import { notificationPreferenceProposals, foundationChangeProposals, foundationS
 import { eraseAnalyticalSourcesUnderMemory } from "../analytical-source-erasure.js";
 import { eraseBusinessEventObjectUnderMemory } from "../business-event-payload-erasure.js";
 import { conflict, forbidden, HttpError } from "../../errors.js";
-import { nativePayloadSourceSnapshotSchema } from "@paperclipai/shared";
+import { nativePayloadSourceSnapshotSchema, type MemoryCandidateInputParsed } from "@paperclipai/shared";
 import type { AuthorizationActor } from "../authorization.js";
 import { agentAuthoringTestMemorySourceReadActive } from "../agents/authoring-test-memory-source-scope.js";
 import { invalidateCognitiveRecords } from "./cognitive-privacy.js";
@@ -189,6 +189,29 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
     if(ancestor && (row.revokedAt || row.retentionState==="expired" || row.validUntil && row.validUntil.getTime()<=Date.now()))return false;
     const ids = [...row.sourceRunIds,...row.sourceIssueIds,...row.sourceProjectIds,...row.sourceMemoryIds,...row.sourceFoundationRevisionIds];
     if (ids.length>256 || ids.some(value=>typeof value!=="string" || !/^[0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12}$/i.test(value))) return false;
+    if (row.createdByActorType === "user" && row.sourceIssueIds.length && row.sourceMemoryIds.length === 0) {
+      const evidenceRows = await db.select({ sourceRef: memoryEvidence.sourceRef, sourceProvider: memoryEvidence.sourceProvider,
+        sourceType: memoryEvidence.sourceType, sourceVersion: memoryEvidence.sourceVersion, sourceUpdatedAt: memoryEvidence.sourceUpdatedAt })
+        .from(memoryEvidence).where(and(eq(memoryEvidence.companyId, companyId), eq(memoryEvidence.memoryRecordId, row.id),
+          eq(memoryEvidence.sourceClass, "task")));
+      const versions = new Map<string, string>();
+      for (const item of evidenceRows) {
+        if (item.sourceProvider !== "august_works_tasks" || item.sourceType !== "issue") return false;
+        const ref = /^issue:\/\/([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})$/i.exec(item.sourceRef);
+        if (!ref || !item.sourceVersion || item.sourceUpdatedAt?.toISOString() !== item.sourceVersion) return false;
+        const previous = versions.get(ref[1]!);
+        if (previous && previous !== item.sourceVersion) return false;
+        versions.set(ref[1]!, item.sourceVersion);
+      }
+      if (versions.size !== new Set(row.sourceIssueIds).size || row.sourceIssueIds.some(issueId => !versions.has(issueId)))
+        return false;
+      for (const [issueId, version] of versions) {
+        const [issue] = await db.select({ updatedAt: issues.updatedAt }).from(issues).where(and(
+          eq(issues.companyId, companyId), eq(issues.id, issueId),
+        )).for("share");
+        if (!issue || issue.updatedAt.toISOString() !== version) return false;
+      }
+    }
     visited.add(visitKey);active.add(id);
     const capturedSnapshot=nativePayloadSourceSnapshotSchema.safeParse(row.payloadSourceSnapshot);
     const capturedContextIds=capturedSnapshot.success&&row.payloadSourceProtocolVersion===1&&!row.payloadSourceSnapshotInvalidated
@@ -274,7 +297,8 @@ async function publishedShareSourceEdge(db:Db,companyId:string,row:typeof memory
 /** Only actual producer/run and persisted Context owners stamp these columns.
  * Caller citations and metadata never qualify a producer or remove a source. */
 export async function captureMemorySources(db: Db, companyId: string, actor: AuthorizationActor | undefined,
-  scope:{type:string;id:string|null}, sourceMemoryIds:string[] = []) {
+  scope:{type:string;id:string|null}, sourceMemoryIds:string[] = [],
+  evidence:MemoryCandidateInputParsed["evidence"] = []) {
   const sources = {
     sourceProvenanceQualified:false,privateOwnerUserId:null as string|null,sourceRunIds:[] as string[],sourceIssueIds:[] as string[],
     sourceProjectIds:[] as string[],sourceMemoryIds:[...new Set(sourceMemoryIds)],sourceFoundationRevisionIds:[] as string[],
@@ -317,7 +341,26 @@ export async function captureMemorySources(db: Db, companyId: string, actor: Aut
         }
       }
     }
-  } else if (actor.type!=="board" || (!actor.userId && actor.source!=="local_implicit")) return sources;
+  } else if (actor.type==="board") {
+    const {canActorReadIssuePrivacy} = await import("../authorization.js");
+    for (const item of evidence) {
+      if (item.sourceClass !== "task") continue;
+      const ref = /^issue:\/\/([a-f0-9]{8}(?:-[a-f0-9]{4}){3}-[a-f0-9]{12})$/i.exec(item.sourceRef);
+      if (item.sourceProvider !== "august_works_tasks" || item.sourceType !== "issue" || !ref ||
+        !item.sourceVersion || item.sourceUpdatedAt !== item.sourceVersion) {
+        throw forbidden("Human Memory Task evidence is unavailable");
+      }
+      const issueId = ref[1]!;
+      const [issue] = await db.select({ id: issues.id, updatedAt: issues.updatedAt }).from(issues).where(and(
+        eq(issues.companyId, companyId), eq(issues.id, issueId),
+      )).for("share");
+      if (!issue || issue.updatedAt.toISOString() !== item.sourceVersion ||
+        !await canActorReadIssuePrivacy(db, actor, { companyId, id: issueId })) {
+        throw forbidden("Human Memory Task evidence is no longer current");
+      }
+      sources.sourceIssueIds.push(issueId);
+    }
+  } else return sources;
   for (const key of ["sourceRunIds","sourceIssueIds","sourceProjectIds","sourceMemoryIds","sourceFoundationRevisionIds"] as const)
     sources[key]=[...new Set(sources[key])].sort();
   if (sources.sourceRunIds.length+sources.sourceIssueIds.length+sources.sourceProjectIds.length+sources.sourceMemoryIds.length+sources.sourceFoundationRevisionIds.length>256)

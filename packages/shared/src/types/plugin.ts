@@ -687,6 +687,8 @@ export interface PaperclipPluginManifestV1 {
   minimumPaperclipVersion?: PluginMinimumHostVersion;
   /** Capabilities this plugin requires from the host. Enforced at runtime. */
   capabilities: PluginCapability[];
+  /** Declares participation in the managed agent runtime lifecycle. */
+  agentLifecycle?: true;
   /** Durable lifecycle events this plugin handles; requires events.subscribe. */
   resourceLifecycle?: Array<"agent" | "project" | "agent_runtime">;
   /** Entrypoint paths relative to the package root. */
