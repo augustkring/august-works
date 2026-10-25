@@ -2537,6 +2537,7 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
           checked: 0,
           eligible: 0,
           archived: 0,
+          preservedGitWorktree: 0,
           cleanupFailed: 0,
           skippedActiveRun: 0,
           skippedNonTerminalTree: 0,
@@ -2601,6 +2602,7 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
         checked: candidates.length,
         eligible: 0,
         archived: 0,
+        preservedGitWorktree: 0,
         cleanupFailed: 0,
         skippedActiveRun: 0,
         skippedNonTerminalTree: 0,
@@ -2846,6 +2848,24 @@ export function executionWorkspaceService(db: Db, opts: ExecutionWorkspaceServic
         const capturedGeneration = readExecutionWorkspaceLifecycleGeneration(
           archived.metadata as Record<string, unknown> | null,
         );
+        if (archived.providerType === "git_worktree") {
+          // UP-06 requires exact Git source/history/settings preservation and
+          // verified restoration before automatic cache reclamation. This fork
+          // does not yet have that recipe/proof owner. Keep the archive row and
+          // worktree available for reads/reopen; ordinary `git status` cannot
+          // prove ignored or nested customer data reproducible.
+          result.preservedGitWorktree += 1;
+          logger.info(
+            {
+              event: "execution_workspace.git_worktree_preserved",
+              reason: "exact_restore_package_unqualified",
+              executionWorkspaceId: archived.id,
+              sourceIssueId: archived.sourceIssueId,
+            },
+            "preserved terminal Git worktree until exact restoration is qualified",
+          );
+          continue;
+        }
         try {
           const cleanup = await cleanupTerminalWorkspace(archived, assessment.workspaceHeadSha, capturedGeneration);
           if (cleanup.skippedReopened) result.skippedReopened += 1;

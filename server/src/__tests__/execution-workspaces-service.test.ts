@@ -43,6 +43,9 @@ import {
   readExecutionWorkspaceConfig,
   readMetadataReopenPendingConsumptionSince,
 } from "../services/execution-workspaces.ts";
+import {
+  acquireGitWorktreeCleanupLock,
+} from "../services/workspace-runtime.js";
 import { issueService } from "../services/issues.ts";
 import {
   startRuntimeServicesForWorkspaceControl,
@@ -264,9 +267,8 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
         pullRequestDetailsByKey.get(`${companyId}:${reference.number}`)
         ?? { state: "unknown", headRef: null, headSha: null }
       ),
-      // Disable the reaper cooldown for the delivery, terminal, race, and
-      // cleanup tests. They assert immediate reaping. The cooldown gets its own
-      // tests further down.
+      // Disable the reaper cooldown for delivery, terminal, and archive tests.
+      // The cooldown gets its own tests further down.
       workspaceReaperCooldownDays: 0,
     });
   }, 20_000);
@@ -483,7 +485,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
       .where(eq(executionWorkspaces.id, seeded.executionWorkspaceId))
       .then((rows) => rows[0]);
 
-    expect(sweep.archived).toBe(1);
+    expect(sweep.preservedGitWorktree).toBe(1);
     expect(archived).toMatchObject({ status: "archived", cleanupReason: "issue_terminal" });
     expect(archived?.cleanupEligibleAt).toBeInstanceOf(Date);
   }, 20_000);
@@ -546,7 +548,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
       .update(executionWorkspaces)
       .set({ sourceIssueId, ...(overrides.updatedAt ? { updatedAt: overrides.updatedAt } : {}) })
       .where(eq(executionWorkspaces.id, executionWorkspaceId));
-    return { companyId, projectId, executionWorkspaceId, sourceIssueId, worktreePath };
+    return { companyId, projectId, executionWorkspaceId, sourceIssueId, worktreePath, repoRoot };
   }
 
   it("archives a terminal workspace delivered by ancestry with no pull request", async () => {
@@ -562,8 +564,61 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
       .from(executionWorkspaces)
       .where(eq(executionWorkspaces.id, seeded.executionWorkspaceId));
 
-    expect(sweep).toMatchObject({ archived: 1, cleanupFailed: 0 });
+    expect(sweep).toMatchObject({ archived: 0, preservedGitWorktree: 1, cleanupFailed: 0 });
     expect(workspace).toMatchObject({ status: "archived", cleanupReason: "issue_terminal" });
+  }, 20_000);
+
+  it("archives but retains Git worktrees and ignored customer data until exact restoration is qualified", async () => {
+    const seeded = await seedAncestryTerminalWorkspace();
+    const projectWorkspaceId = randomUUID();
+    await db.insert(projectWorkspaces).values({
+      id: projectWorkspaceId,
+      companyId: seeded.companyId,
+      projectId: seeded.projectId,
+      name: "Local recovery base",
+      cwd: seeded.repoRoot,
+      isPrimary: true,
+    });
+    await db.update(executionWorkspaces)
+      .set({ projectWorkspaceId })
+      .where(eq(executionWorkspaces.id, seeded.executionWorkspaceId));
+    const commonGitDir = await readGit(seeded.worktreePath, ["rev-parse", "--git-common-dir"]);
+    expect(commonGitDir).toBeTruthy();
+    const excludePath = path.resolve(seeded.worktreePath, commonGitDir!, "info", "exclude");
+    await fs.mkdir(path.dirname(excludePath), { recursive: true });
+    await fs.appendFile(excludePath, "\n/.claude/\n/.paperclip-repositories/\n", "utf8");
+
+    const settingsPath = path.join(seeded.worktreePath, ".claude", "settings.local.json");
+    const settingsBytes = "{\"customerSetting\":\"keep-exactly\"}\n";
+    await fs.mkdir(path.dirname(settingsPath), { recursive: true });
+    await fs.writeFile(settingsPath, settingsBytes, "utf8");
+    const nestedPath = path.join(seeded.worktreePath, ".paperclip-repositories", "widget");
+    await fs.mkdir(nestedPath, { recursive: true });
+    await execFileAsync("git", ["init", nestedPath], { cwd: nestedPath });
+    await fs.writeFile(path.join(nestedPath, "unique-local.txt"), "nested customer work\n", "utf8");
+    expect(await readGit(seeded.worktreePath, ["check-ignore", ".claude/settings.local.json"])).toContain(".claude/settings.local.json");
+    expect(await readGit(seeded.worktreePath, ["check-ignore", ".paperclip-repositories/widget/unique-local.txt"])).toContain(".paperclip-repositories/widget/unique-local.txt");
+
+    const sweep = await svc.sweepTerminalWorkspaces();
+    const [workspace] = await db
+      .select({ status: executionWorkspaces.status, cleanupReason: executionWorkspaces.cleanupReason })
+      .from(executionWorkspaces)
+      .where(eq(executionWorkspaces.id, seeded.executionWorkspaceId));
+
+    expect(sweep).toMatchObject({ archived: 0, preservedGitWorktree: 1, cleanupFailed: 0 });
+    expect(workspace).toMatchObject({ status: "archived", cleanupReason: "issue_terminal" });
+    await expect(fs.readFile(settingsPath, "utf8")).resolves.toBe(settingsBytes);
+    await expect(fs.readFile(path.join(nestedPath, "unique-local.txt"), "utf8")).resolves.toBe("nested customer work\n");
+    await expect(fs.access(path.join(nestedPath, ".git"))).resolves.toBeUndefined();
+
+    const reopened = await svc.reopenClosedIsolatedExecutionWorkspaceForIssue({
+      workspaceId: seeded.executionWorkspaceId,
+      issue: { id: seeded.sourceIssueId, companyId: seeded.companyId, projectId: seeded.projectId },
+      actor: { agentId: null, actorType: "user" },
+    });
+    expect(reopened).toMatchObject({ ok: true, reopened: true });
+    await expect(fs.readFile(settingsPath, "utf8")).resolves.toBe(settingsBytes);
+    await expect(fs.readFile(path.join(nestedPath, "unique-local.txt"), "utf8")).resolves.toBe("nested customer work\n");
   }, 20_000);
 
   it("fails closed before archive when git status inspection is unavailable", async () => {
@@ -594,20 +649,21 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
     }
   }, 20_000);
 
-  it("fails the final cleanup fence when a later git status scan is unavailable", async () => {
+  it("does not start destructive Git cleanup after the terminal archive", async () => {
     const seeded = await seedAncestryTerminalWorkspace();
     const originalRun = workspaceGitOperationScheduler.run.bind(workspaceGitOperationScheduler);
     let statusScanCount = 0;
     const statusSpy = vi.spyOn(workspaceGitOperationScheduler, "run")
       .mockImplementation(async (input) => {
         statusScanCount += 1;
-        if (statusScanCount > 1) throw new Error("scan timed out");
+        if (statusScanCount > 1) throw new Error("unexpected destructive cleanup scan");
         return originalRun(input);
       });
 
     try {
       const sweep = await svc.sweepTerminalWorkspaces();
-      expect(sweep).toMatchObject({ archived: 0, cleanupFailed: 1 });
+      expect(sweep).toMatchObject({ archived: 0, preservedGitWorktree: 1, cleanupFailed: 0 });
+      expect(statusScanCount).toBe(1);
       await expect(fs.access(seeded.worktreePath)).resolves.toBeUndefined();
     } finally {
       statusSpy.mockRestore();
@@ -630,7 +686,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
     // The concurrent sweep inspected no candidate and changed no state.
     expect(concurrentSweep).toMatchObject({ checked: 0, archived: 0, eligible: 0 });
     // The first sweep archived the eligible workspace.
-    expect(firstSweep.archived).toBe(1);
+    expect(firstSweep.preservedGitWorktree).toBe(1);
 
     const [workspace] = await db
       .select({ status: executionWorkspaces.status })
@@ -714,13 +770,13 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
       .where(eq(executionWorkspaces.id, eligible.executionWorkspaceId));
     expect(afterFirst?.status).toBe("active");
 
-    let archivedSweep: Awaited<ReturnType<typeof service.sweepTerminalWorkspaces>> | null = null;
-    for (let attempt = 0; attempt < 4 && !archivedSweep; attempt += 1) {
+    let preservedSweep: Awaited<ReturnType<typeof service.sweepTerminalWorkspaces>> | null = null;
+    for (let attempt = 0; attempt < 4 && !preservedSweep; attempt += 1) {
       const sweep = await service.sweepTerminalWorkspaces(1);
-      if (sweep.archived > 0) archivedSweep = sweep;
+      if (sweep.preservedGitWorktree > 0) preservedSweep = sweep;
     }
 
-    expect(archivedSweep).toMatchObject({ archived: 1 });
+    expect(preservedSweep).toMatchObject({ archived: 0, preservedGitWorktree: 1 });
     const workspaces = await db
       .select({ id: executionWorkspaces.id, status: executionWorkspaces.status })
       .from(executionWorkspaces)
@@ -732,7 +788,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
     }
   }, 20_000);
 
-  it("revisits an eligible workspace behind the cursor despite continuous newer churn", async () => {
+  it("revisits and preserves an eligible workspace behind the cursor despite continuous newer churn", async () => {
     // Reproduce the rotation-starvation case. The scan cursor advances past a
     // workspace while it is not eligible. The workspace then becomes eligible
     // but keeps its old updatedAt, so it stays behind the cursor. Meanwhile a
@@ -805,8 +861,8 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
     // Drive continuous churn. Each sweep, advance the clock and add a newer
     // skipped candidate ahead of the cursor. Without the frozen bound the cursor
     // would chase this churn forever and never revisit the eligible workspace.
-    let archived = false;
-    for (let attempt = 0; attempt < 8 && !archived; attempt += 1) {
+    let preserved = false;
+    for (let attempt = 0; attempt < 8 && !preserved; attempt += 1) {
       clockMs += 24 * 60 * 60 * 1000;
       const churnId = randomUUID();
       const churnIssueId = randomUUID();
@@ -836,10 +892,10 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
         .where(eq(executionWorkspaces.id, churnId));
 
       const sweep = await service.sweepTerminalWorkspaces(1);
-      if (sweep.archived > 0) archived = true;
+      if (sweep.preservedGitWorktree > 0) preserved = true;
     }
 
-    expect(archived).toBe(true);
+    expect(preserved).toBe(true);
     const [finalState] = await db
       .select({ status: executionWorkspaces.status })
       .from(executionWorkspaces)
@@ -889,7 +945,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
       expect(await statusOf(seeded.executionWorkspaceId)).toBe("active");
     }, 20_000);
 
-    it("archives a terminal tree that is older than the cooldown", async () => {
+    it("archives and retains a terminal Git tree that is older than the cooldown", async () => {
       const seeded = await seedTerminalWorkspace({ mergedPr: true });
       await db
         .update(executionWorkspaces)
@@ -903,11 +959,11 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
 
       const sweep = await cooldownService(7).sweepTerminalWorkspaces();
 
-      expect(sweep).toMatchObject({ archived: 1, skippedCooldown: 0 });
+      expect(sweep).toMatchObject({ archived: 0, preservedGitWorktree: 1, skippedCooldown: 0 });
       expect(await statusOf(seeded.executionWorkspaceId)).toBe("archived");
     }, 20_000);
 
-    it("archives immediately when the cooldown is zero", async () => {
+    it("archives and retains immediately when the cooldown is zero", async () => {
       const seeded = await seedTerminalWorkspace({ mergedPr: true });
       await db
         .update(executionWorkspaces)
@@ -921,7 +977,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
 
       const sweep = await cooldownService(0).sweepTerminalWorkspaces();
 
-      expect(sweep).toMatchObject({ archived: 1, skippedCooldown: 0 });
+      expect(sweep).toMatchObject({ archived: 0, preservedGitWorktree: 1, skippedCooldown: 0 });
       expect(await statusOf(seeded.executionWorkspaceId)).toBe("archived");
     }, 20_000);
 
@@ -1071,7 +1127,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
     expect(workspace?.status).toBe("active");
   });
 
-  it("refuses cleanup when the worktree changes after delivery assessment", async () => {
+  it("does not invoke terminal Git cleanup after archiving a workspace", async () => {
     const seeded = await seedTerminalWorkspace({ mergedPr: true });
     await db.update(executionWorkspaces).set({
       metadata: {
@@ -1079,11 +1135,13 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
         config: { cleanupCommand: "rm -f late-work.txt" },
       },
     }).where(eq(executionWorkspaces.id, seeded.executionWorkspaceId));
+    let cleanupStarted = false;
     const racingService = executionWorkspaceService(db, {
       resolvePullRequestDetails: async (_companyId, reference) =>
         pullRequestDetailsByKey.get(`${seeded.companyId}:${reference.number}`) ?? { state: "unknown" },
       workspaceReaperCooldownDays: 0,
       beforeTerminalWorkspaceCleanup: async () => {
+        cleanupStarted = true;
         await fs.writeFile(path.join(seeded.worktreePath, "late-work.txt"), "not delivered\n", "utf8");
       },
     });
@@ -1094,39 +1152,22 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
       .from(executionWorkspaces)
       .where(eq(executionWorkspaces.id, seeded.executionWorkspaceId));
 
-    expect(sweep).toMatchObject({ archived: 0, cleanupFailed: 1 });
-    expect(workspace?.status).toBe("cleanup_failed");
-    expect(workspace?.cleanupReason).toContain("git worktree changed after delivery was verified");
-    await expect(fs.readFile(path.join(seeded.worktreePath, "late-work.txt"), "utf8"))
-      .resolves.toBe("not delivered\n");
+    expect(sweep).toMatchObject({ archived: 0, preservedGitWorktree: 1, cleanupFailed: 0 });
+    expect(cleanupStarted).toBe(false);
+    expect(workspace).toMatchObject({ status: "archived", cleanupReason: "issue_terminal" });
+    await expect(fs.access(seeded.worktreePath)).resolves.toBeUndefined();
+    await expect(fs.access(path.join(seeded.worktreePath, "late-work.txt"))).rejects.toThrow();
   });
 
-  it("does not write stale cleanup-failure state onto a newer archive lifecycle", async () => {
-    // Reproduce the cleanup-failure race. The reaper archives the workspace at one
-    // generation and captures it. The cleanup then throws. Before the catch handler
-    // writes the cleanup-failed status, a reopen and a fresh archive raise the
-    // generation. The catch handler must skip its write, so the stale failure never
-    // overwrites the newer archive lifecycle.
+  it("retains Git worktrees without repeatedly changing their lifecycle metadata", async () => {
     const seeded = await seedTerminalWorkspace({ mergedPr: true });
-    const newerReason = "newer_archive_lifecycle_marker";
+    let cleanupStarted = false;
     const racingService = executionWorkspaceService(db, {
       resolvePullRequestDetails: async (_companyId, reference) =>
         pullRequestDetailsByKey.get(`${seeded.companyId}:${reference.number}`) ?? { state: "unknown" },
       workspaceReaperCooldownDays: 0,
-      beforeTerminalWorkspaceCleanup: async (workspace) => {
-        // Stand in for a reopen and a fresh archive that ran after this sweep
-        // captured the generation. Raise the generation past the captured value,
-        // keep the row closed, then force the cleanup to throw.
-        await db
-          .update(executionWorkspaces)
-          .set({
-            status: "archived",
-            cleanupReason: newerReason,
-            metadata: { [EXECUTION_WORKSPACE_LIFECYCLE_GENERATION_METADATA_KEY]: 2 },
-            updatedAt: new Date(),
-          })
-          .where(eq(executionWorkspaces.id, workspace.id));
-        throw new Error("forced cleanup failure");
+      beforeTerminalWorkspaceCleanup: async () => {
+        cleanupStarted = true;
       },
     });
 
@@ -1140,14 +1181,73 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
       .from(executionWorkspaces)
       .where(eq(executionWorkspaces.id, seeded.executionWorkspaceId));
 
-    expect(sweep).toMatchObject({ cleanupFailed: 1 });
-    // The fenced write saw the raised generation and skipped, so the newer
-    // lifecycle state survives untouched.
+    expect(sweep).toMatchObject({ preservedGitWorktree: 1, cleanupFailed: 0 });
+    expect(cleanupStarted).toBe(false);
+    const generation = (workspace?.metadata as Record<string, unknown> | null)?.[EXECUTION_WORKSPACE_LIFECYCLE_GENERATION_METADATA_KEY];
     expect(workspace?.status).toBe("archived");
-    expect(workspace?.cleanupReason).toBe(newerReason);
-    expect(
-      (workspace?.metadata as Record<string, unknown> | null)?.[EXECUTION_WORKSPACE_LIFECYCLE_GENERATION_METADATA_KEY],
-    ).toBe(2);
+    expect(workspace?.cleanupReason).toBe("issue_terminal");
+    expect(generation).toBe(1);
+
+    const repeated = await racingService.sweepTerminalWorkspaces();
+    const [afterRepeated] = await db.select({ metadata: executionWorkspaces.metadata })
+      .from(executionWorkspaces).where(eq(executionWorkspaces.id, seeded.executionWorkspaceId));
+    expect(repeated.preservedGitWorktree).toBe(0);
+    expect((afterRepeated?.metadata as Record<string, unknown> | null)?.[EXECUTION_WORKSPACE_LIFECYCLE_GENERATION_METADATA_KEY]).toBe(generation);
+  });
+
+  it("does not write stale cleanup-failure state onto a newer local workspace archive", async () => {
+    const seeded = await seedTerminalWorkspace({ mergedPr: true });
+    const localRepoHead = await readGit(seeded.repoRoot, ["rev-parse", "HEAD"]);
+    expect(localRepoHead).toBeTruthy();
+    pullRequestDetailsByKey.set(`${seeded.companyId}:10623`, {
+      state: "merged",
+      headRef: "main",
+      headSha: localRepoHead,
+    });
+    await db.update(executionWorkspaces).set({
+      providerType: "local_fs",
+      providerRef: seeded.repoRoot,
+      cwd: seeded.repoRoot,
+      branchName: "main",
+      baseRef: "main",
+      metadata: { createdByRuntime: true },
+    }).where(eq(executionWorkspaces.id, seeded.executionWorkspaceId));
+
+    const newerReason = "newer_local_archive_lifecycle_marker";
+    const racingService = executionWorkspaceService(db, {
+      resolvePullRequestDetails: async (_companyId, reference) =>
+        pullRequestDetailsByKey.get(`${seeded.companyId}:${reference.number}`) ?? { state: "unknown" },
+      workspaceReaperCooldownDays: 0,
+      beforeTerminalWorkspaceCleanup: async (workspace) => {
+        await db
+          .update(executionWorkspaces)
+          .set({
+            status: "archived",
+            cleanupReason: newerReason,
+            metadata: { [EXECUTION_WORKSPACE_LIFECYCLE_GENERATION_METADATA_KEY]: 2 },
+            updatedAt: new Date(),
+          })
+          .where(eq(executionWorkspaces.id, workspace.id));
+        throw new Error("forced cleanup failure after a newer archive lifecycle");
+      },
+    });
+
+    const sweep = await racingService.sweepTerminalWorkspaces();
+    const [afterFailure] = await db
+      .select({
+        status: executionWorkspaces.status,
+        cleanupReason: executionWorkspaces.cleanupReason,
+        metadata: executionWorkspaces.metadata,
+      })
+      .from(executionWorkspaces)
+      .where(eq(executionWorkspaces.id, seeded.executionWorkspaceId));
+
+    expect(sweep).toMatchObject({ archived: 0, cleanupFailed: 1 });
+    expect(afterFailure?.status).toBe("archived");
+    expect(afterFailure?.cleanupReason).toBe(newerReason);
+    expect((afterFailure?.metadata as Record<string, unknown> | null)?.[EXECUTION_WORKSPACE_LIFECYCLE_GENERATION_METADATA_KEY]).toBe(2);
+    await expect(fs.access(seeded.repoRoot)).resolves.toBeUndefined();
+    await expect(fs.access(path.join(seeded.repoRoot, "README.md"))).resolves.toBeUndefined();
   });
 
   it("archives terminal workspaces without running configured cleanup hooks", async () => {
@@ -1167,9 +1267,9 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
       .from(executionWorkspaces)
       .where(eq(executionWorkspaces.id, seeded.executionWorkspaceId));
 
-    expect(sweep).toMatchObject({ archived: 1, cleanupFailed: 0 });
+    expect(sweep).toMatchObject({ archived: 0, preservedGitWorktree: 1, cleanupFailed: 0 });
     expect(workspace?.status).toBe("archived");
-    await expect(fs.access(seeded.worktreePath)).rejects.toThrow();
+    await expect(fs.access(seeded.worktreePath)).resolves.toBeUndefined();
     await expect(fs.access(cleanupMarker)).rejects.toThrow();
   });
 
@@ -1210,7 +1310,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
     await expect(fs.access(seeded.worktreePath)).resolves.toBeUndefined();
   });
 
-  it("clears a stranded reopen flag whose consumer never ran, then reaps on a later sweep", async () => {
+  it("clears a stranded reopen flag whose consumer never ran, then archives and retains on a later sweep", async () => {
     // A reopen published the workspace active and set the flag, but the consuming
     // request never moved the source issue out of the terminal state, and the
     // response-end clear never landed. The flag is older than the grace period.
@@ -1253,7 +1353,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
       .from(executionWorkspaces)
       .where(eq(executionWorkspaces.id, seeded.executionWorkspaceId));
 
-    expect(secondSweep).toMatchObject({ archived: 1 });
+    expect(secondSweep).toMatchObject({ archived: 0, preservedGitWorktree: 1 });
     expect(afterArchive?.status).toBe("archived");
   });
 
@@ -1707,77 +1807,43 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
     expect(destroyResult).toEqual({ skippedReopened: true });
     expect(destroy).not.toHaveBeenCalled();
 
-    // Writer 4 (markTerminalCleanupFailedFenced). The reaper archives the row at
-    // one generation and captures it. The cleanup then throws. Before the catch
-    // handler writes cleanup_failed, a reopen and a fresh archive raise the
-    // generation. The fenced write must skip, so the newer archive survives.
-    const failSeed = await seedTerminalWorkspace({ mergedPr: true });
-    const newerReason = "newer_archive_lifecycle_marker";
-    const racingService = executionWorkspaceService(db, {
-      resolvePullRequestDetails: async (_companyId, reference) =>
-        pullRequestDetailsByKey.get(`${failSeed.companyId}:${reference.number}`) ?? { state: "unknown" },
-      workspaceReaperCooldownDays: 0,
-      beforeTerminalWorkspaceCleanup: async (workspace) => {
-        await db
-          .update(executionWorkspaces)
-          .set({
-            status: "archived",
-            cleanupReason: newerReason,
-            metadata: { [EXECUTION_WORKSPACE_LIFECYCLE_GENERATION_METADATA_KEY]: 2 },
-            updatedAt: new Date(),
-          })
-          .where(eq(executionWorkspaces.id, workspace.id));
-        throw new Error("forced cleanup failure");
-      },
-    });
-    const sweep = await racingService.sweepTerminalWorkspaces();
-    expect(sweep).toMatchObject({ cleanupFailed: 1 });
-    const [afterFail] = await db
-      .select({
-        status: executionWorkspaces.status,
-        cleanupReason: executionWorkspaces.cleanupReason,
-        metadata: executionWorkspaces.metadata,
-      })
-      .from(executionWorkspaces)
-      .where(eq(executionWorkspaces.id, failSeed.executionWorkspaceId));
-    // The fenced write saw the raised generation and skipped, so the newer
-    // lifecycle state survives untouched.
-    expect(afterFail?.status).toBe("archived");
-    expect(afterFail?.cleanupReason).toBe(newerReason);
-    expect(
-      (afterFail?.metadata as Record<string, unknown> | null)?.[EXECUTION_WORKSPACE_LIFECYCLE_GENERATION_METADATA_KEY],
-    ).toBe(2);
   });
 
-  it("holds Git index and ref locks across terminal cleanup", async () => {
+  it("holds Git index and ref locks in the explicit closed-workspace cleanup owner", async () => {
     const seeded = await seedTerminalWorkspace({ mergedPr: true });
     await db.update(executionWorkspaces).set({
+      status: "archived",
+      closedAt: new Date(),
+      cleanupReason: "issue_terminal",
       metadata: {
         createdByRuntime: true,
         gitBranchOwnershipVersion: 1,
+        [EXECUTION_WORKSPACE_LIFECYCLE_GENERATION_METADATA_KEY]: 1,
       },
     }).where(eq(executionWorkspaces.id, seeded.executionWorkspaceId));
     let commitFailure = "";
     let refUpdateFailure = "";
-    const lockingService = executionWorkspaceService(db, {
-      resolvePullRequestDetails: async (_companyId, reference) =>
-        pullRequestDetailsByKey.get(`${seeded.companyId}:${reference.number}`) ?? { state: "unknown" },
-      workspaceReaperCooldownDays: 0,
-      beforeTerminalWorkspaceCleanup: async () => {
+    const fenced = await svc.fenceClosedWorkspaceDestruction({
+      workspaceId: seeded.executionWorkspaceId,
+      capturedGeneration: 1,
+      destroy: async () => {
+        const lock = await acquireGitWorktreeCleanupLock(seeded.worktreePath);
         try {
-          await runGit(seeded.worktreePath, ["commit", "--allow-empty", "-m", "Late commit"]);
-        } catch (error) {
-          commitFailure = error instanceof Error ? error.message : String(error);
-        }
-        try {
-          await runGit(seeded.worktreePath, ["update-ref", "HEAD", seeded.headSha]);
-        } catch (error) {
-          refUpdateFailure = error instanceof Error ? error.message : String(error);
+          try {
+            await runGit(seeded.worktreePath, ["commit", "--allow-empty", "-m", "Late commit"]);
+          } catch (error) {
+            commitFailure = error instanceof Error ? error.message : String(error);
+          }
+          try {
+            await runGit(seeded.worktreePath, ["update-ref", "HEAD", seeded.headSha]);
+          } catch (error) {
+            refUpdateFailure = error instanceof Error ? error.message : String(error);
+          }
+        } finally {
+          await lock.release();
         }
       },
     });
-
-    const sweep = await lockingService.sweepTerminalWorkspaces();
     const [workspace] = await db
       .select({ status: executionWorkspaces.status, cleanupReason: executionWorkspaces.cleanupReason })
       .from(executionWorkspaces)
@@ -1785,10 +1851,10 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
 
     expect(commitFailure).toContain("index.lock");
     expect(refUpdateFailure).toMatch(/HEAD\.lock|refs\/heads\/PAP-16015-delivery\.lock/);
-    expect(sweep).toMatchObject({ archived: 1, cleanupFailed: 0 });
+    expect(fenced.skippedReopened).toBe(false);
     expect(workspace).toMatchObject({ status: "archived", cleanupReason: "issue_terminal" });
-    await expect(fs.access(seeded.worktreePath)).rejects.toThrow();
-    expect(await readGit(seeded.repoRoot, ["branch", "--list", "PAP-16015-delivery"])).toBeNull();
+    await expect(fs.access(seeded.worktreePath)).resolves.toBeUndefined();
+    expect(await readGit(seeded.repoRoot, ["branch", "--list", "PAP-16015-delivery"])).toContain("PAP-16015-delivery");
   });
 
   it("does not treat a descendant PR on the shared workspace as parent delivery evidence", async () => {
@@ -1827,7 +1893,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
     expect(parentWorkspace?.status).toBe("active");
   });
 
-  it("reaps only fully-terminal delivered workspaces without active checkout runs", async () => {
+  it("archives and retains only fully-terminal delivered workspaces without active checkout runs", async () => {
     const eligible = await seedTerminalWorkspace({ mergedPr: true, childStatus: "done" });
     const activeRun = await seedTerminalWorkspace({ mergedPr: true, activeRun: true });
     const openDescendant = await seedTerminalWorkspace({ mergedPr: true, childStatus: "todo" });
@@ -1845,7 +1911,7 @@ describeEmbeddedPostgres("executionWorkspaceService.getCloseReadiness", () => {
       ]));
     const byId = new Map(rows.map((row) => [row.id, row]));
 
-    expect(result).toMatchObject({ archived: 1, skippedActiveRun: 1, skippedNonTerminalTree: 1, skippedUndelivered: 1 });
+    expect(result).toMatchObject({ archived: 0, preservedGitWorktree: 1, skippedActiveRun: 1, skippedNonTerminalTree: 1, skippedUndelivered: 1 });
     expect(byId.get(eligible.executionWorkspaceId)).toMatchObject({ status: "archived", cleanupReason: "issue_terminal" });
     expect(byId.get(eligible.executionWorkspaceId)?.cleanupEligibleAt).toBeInstanceOf(Date);
     expect(byId.get(activeRun.executionWorkspaceId)?.status).toBe("active");
