@@ -265,6 +265,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
   let pendingContextProbeCallId: string | null = null;
   let pendingContextProbeStartedAt: number | null = null;
   let contextProbeStartedAt: number | null = null;
+  let contextProbeCompletedAt: number | null = null;
   let contextProbeSamples = 0;
   const contextTransactionOwners = new Set<string>();
   const ownerDb = db as typeof db & { transaction: typeof db.transaction };
@@ -601,6 +602,8 @@ export async function runManagedNativeOpenCodeFixture(input: {
     const modelCalls: Array<Record<string, unknown>> = [];
     const contextResultConsumers: Array<{ callId: string; consumed: boolean }> = [];
     const brokerRequests: string[] = [];
+    const brokerFailureFacts = () => brokerRequests
+      .filter(value => !value.startsWith("managed-tool-schema-comparison ")).slice(-40);
     const submittedPromptFacts: Array<{ length: number; sha256: string }> = [];
     let managedConfigReadOnlyVerified = false;
     const assignedToolGateway = createToolGatewayService(db);
@@ -1128,18 +1131,36 @@ export async function runManagedNativeOpenCodeFixture(input: {
                 and idempotency_key = ${`aw-native-tool:${run!.id}:${contextProbeCallId}`} limit 1
             `)[0] ?? null
             : null;
+          const contextResultCapturePresent = contextProbeCallId && contextInvocation?.status === "succeeded"
+            ? (await pgMonitor<{ present: boolean }[]>`
+              select exists (
+                select 1 from heartbeat_runs r,
+                  jsonb_array_elements(coalesce(r.runner_profile_json->'nativeToolResultSourceCaptures', '[]'::jsonb)) capture
+                where r.company_id = ${companyId}::uuid and r.id = ${run!.id}::uuid
+                  and capture->>'callId' = ${contextProbeCallId}
+                  and capture->>'tool' = 'read_context' and capture->>'managedOpenCode' = 'true'
+              ) as present
+            `)[0]?.present === true
+            : false;
+          if (contextInvocation?.status === "succeeded" && contextProbeCompletedAt === null)
+            contextProbeCompletedAt = Date.now();
           const sampleFacts = {
             elapsedSinceSessionStartMs: pgMonitorStartedAt === null ? null : Math.max(0, Date.now() - pgMonitorStartedAt),
             contextProbeElapsedMs: contextProbeStartedAt === null ? null : Math.max(0, Date.now() - contextProbeStartedAt),
+            contextProbeCompletedElapsedMs: contextProbeCompletedAt === null ? null : Math.max(0, Date.now() - contextProbeCompletedAt),
             contextProbeSample: contextProbeCallId ? contextProbeSamples : null,
             contextInvocationStatus: contextInvocation?.status ?? (contextProbeCallId ? "not_started" : null),
+            contextResultCapturePresent,
             ...sample,
           };
           if (!contextProbeCallId || sample.waiters.length || sample.sessions.length || contextProbeSamples <= 1 ||
             contextInvocation?.status && contextInvocation.status !== "executing")
             diagnostics.push(`independent PG wait sample: ${JSON.stringify(sampleFacts)}`);
-          if (contextProbeCallId && (contextInvocation?.status && contextInvocation.status !== "executing" ||
-            contextProbeStartedAt !== null && Date.now() - contextProbeStartedAt >= 5_000)) {
+          const invocationFinished = contextInvocation?.status && contextInvocation.status !== "executing";
+          const completedCaptureStillPending = contextInvocation?.status === "succeeded" && !contextResultCapturePresent &&
+            contextProbeCompletedAt !== null && Date.now() - contextProbeCompletedAt < 5_000;
+          if (contextProbeCallId && ((invocationFinished && !completedCaptureStillPending) ||
+            contextProbeStartedAt !== null && Date.now() - contextProbeStartedAt >= 10_000)) {
             if (contextProbeTimer) clearInterval(contextProbeTimer);
             contextProbeTimer = undefined;
             contextProbeCallId = null;
@@ -1166,6 +1187,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
           contextProbeCallId = callId;
           pendingContextProbeCallId = null;
           contextProbeStartedAt = Date.now();
+          contextProbeCompletedAt = null;
           contextProbeSamples = 0;
           if (contextInvocationWatchTimer) clearInterval(contextInvocationWatchTimer);
           contextInvocationWatchTimer = undefined;
@@ -1398,7 +1420,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
             causeCode: safeCode(failure?.cause?.code), stage: safeCode(failure?.stage), frames };
           diagnostics.push(`execution failure metadata: ${JSON.stringify(metadata)}`);
           const safeMessage = safeCode(failure?.message) ?? "native_session_execution_failed";
-          throw new Error(`${safeMessage}\n${diagnostics.join("\n")}\nBroker: ${brokerRequests.join(", ")}\nArtifacts: ${runRoot}`);
+          throw new Error(`${safeMessage}\n${diagnostics.join("\n")}\nBroker: ${JSON.stringify(brokerFailureFacts())}\nArtifacts: ${runRoot}`);
         });
       if (result.exitCode !== 0) {
         input.onPreserveDebugArtifacts?.();
@@ -1674,7 +1696,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
         diagnostics.push(`managed context invocation facts: ${JSON.stringify(contextInvocationFacts)}`);
         diagnostics.push(`managed Context source facts: ${JSON.stringify(contextReadSourceFacts)}`);
         diagnostics.push(`managed context transaction owners: ${JSON.stringify([...contextTransactionOwners].slice(0, 40))}`);
-        throw new Error(`managed_opencode_runner_exit_${result.exitCode}; providerResponses=${responseCount}; fakeFetchEntrances=${JSON.stringify(fakeFetchEntrances)}\n${diagnostics.join("\n")}\nBroker: ${brokerRequests.join(", ")}\nArtifacts: ${runRoot}`);
+        throw new Error(`managed_opencode_runner_exit_${result.exitCode}; providerResponses=${responseCount}; fakeFetchEntrances=${JSON.stringify(fakeFetchEntrances)}\n${diagnostics.join("\n")}\nBroker: ${JSON.stringify(brokerFailureFacts())}\nArtifacts: ${runRoot}`);
       }
       completedNativeFinalization = (result as unknown as Record<string, unknown>).nativeFinalization as NonNullable<typeof completedNativeFinalization>;
       expect(responseCount).toBeGreaterThanOrEqual(2);

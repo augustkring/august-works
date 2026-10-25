@@ -480,7 +480,7 @@ function memoryContextProvider(db: Db): ContextProvider {
   return {
     key: "memory",
     requirement: "optional",
-    async retrieve({ request }) {
+    async retrieve({ request, signal, providerDeadlineAt }) {
       const experimental = await settings.getExperimental();
       const allowShared = experimental.enableCollectiveMemoryV1 === true;
       const allowPrivate = experimental.enablePrivateAgentMemoryV1 === true;

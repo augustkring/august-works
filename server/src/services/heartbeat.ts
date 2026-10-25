@@ -23723,7 +23723,7 @@ export function heartbeatService(
               previousRun: Boolean(previousNativeRun), persistedInput: Boolean(persistedNativeExecutionInput),
               resume: Boolean(nativeResumeCheckpoint), initialGuidance: Boolean("initialCommunicationGuidance" in nativeExecution && nativeExecution.initialCommunicationGuidance),
               continuation: Boolean("continuationPrompt" in nativeExecution && nativeExecution.continuationPrompt),
-              interaction: Boolean(nativeExecution.interactionResponses.length), planning: Boolean("planningContext" in nativeExecution && nativeExecution.planningContext),
+              planning: Boolean("planningContext" in nativeExecution && nativeExecution.planningContext),
               conversation: isConversation(issueContext), wake: Boolean(context.paperclipWake && !nativeTaskWakeSource), projectPaths: projectRepositoryPaths.length > 0,
               authoredContextManifests: Boolean(capturedAuthoredSources?.contextManifests.length), missingTask: !capturedTaskSource,
             };
@@ -23753,6 +23753,8 @@ export function heartbeatService(
                     repoRef: nativeExecution.workspace.repoRef, branchName: nativeExecution.workspace.branchName,
                   }), "utf8").digest("hex") },
               ],
+              interactionResponses: nativeExecution.interactionResponses,
+              interactionSources: nativeBootstrapInteractionSources,
               contextManifestIds: nativeBootstrapContextManifests,
               governedContextMarkdown,
               contextWitnessMarkdown: v5Fabric?.inputContextSourceMarkdown ?? governedContextMarkdown,

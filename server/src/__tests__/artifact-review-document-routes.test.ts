@@ -30,8 +30,14 @@ const mockAccessService = vi.hoisted(() => ({
 const mockLogActivity = vi.hoisted(() => vi.fn(async () => undefined));
 const mockEnsureForWorkProduct = vi.hoisted(() => vi.fn());
 const mockSyncDocumentSafely = vi.hoisted(() => vi.fn(async () => undefined));
+const mockCanReadIssue = vi.hoisted(() => vi.fn(async () => true));
 
 function registerRouteMocks() {
+  // Isolate review-document HTTP behavior; source policies have PostgreSQL coverage.
+  vi.doMock("../services/authorization.js", async () => ({
+    ...await vi.importActual<typeof import("../services/authorization.js")>("../services/authorization.js"),
+    canActorReadIssuePrivacy: mockCanReadIssue,
+  }));
   vi.doMock("@paperclipai/shared/telemetry", () => ({
     trackAgentTaskCompleted: vi.fn(),
     trackErrorHandlerCrash: vi.fn(),
@@ -214,8 +220,20 @@ describe("work product review-document route", () => {
     vi.resetModules();
     vi.clearAllMocks();
     registerRouteMocks();
+    mockCanReadIssue.mockResolvedValue(true);
     mockIssueService.getById.mockResolvedValue(makeIssue());
     mockWorkProductService.getById.mockResolvedValue(makeWorkProduct());
+  });
+
+  it("denies an unavailable Task before materializing a review document", async () => {
+    mockCanReadIssue.mockResolvedValue(false);
+    const app = await createApp();
+    const res = await request(app).post(
+      `/api/issues/${ISSUE_ID}/work-products/${WORK_PRODUCT_ID}/review-document`,
+    );
+    expect(res.status).toBe(404);
+    expect(mockEnsureForWorkProduct).not.toHaveBeenCalled();
+    expect(mockLogActivity).not.toHaveBeenCalled();
   });
 
   it("returns 404 when the work product belongs to another issue", async () => {

@@ -448,7 +448,9 @@ function recordDetail(
   return { record, evidence };
 }
 
-async function getRecordDetail(db: Db, companyId: string, recordId: string) {
+async function getRecordDetail(db: Db, companyId: string, recordId: string, budget: MemoryReadBudget = {}) {
+  const bounded = budget.deadlineAt !== undefined || budget.signal !== undefined;
+  if (bounded) await setMemoryReadStatementBudget(db, budget);
   const record = await db
     .select()
     .from(memoryRecords)
@@ -461,6 +463,7 @@ async function getRecordDetail(db: Db, companyId: string, recordId: string) {
     )
     .then((rows) => rows[0] ?? null);
   if (!record) return null;
+  if (bounded) await setMemoryReadStatementBudget(db, budget);
   const evidence = await db
     .select()
     .from(memoryEvidence)
@@ -471,6 +474,7 @@ async function getRecordDetail(db: Db, companyId: string, recordId: string) {
       ),
     )
     .orderBy(memoryEvidence.createdAt);
+  if (bounded) await setMemoryReadStatementBudget(db, budget);
   const [share]=await db.select({state:memoryPrivateSharePublications.state,targetScopeType:memoryPrivateSharePublications.targetScopeType,
     targetScopeId:memoryPrivateSharePublications.targetScopeId}).from(memoryPrivateSharePublications).where(and(
       eq(memoryPrivateSharePublications.companyId,companyId),eq(memoryPrivateSharePublications.sharedRecordId,recordId)));
@@ -1267,7 +1271,7 @@ export function memoryService(db: Db, options: MemoryServiceOptions = {}) {
         const tx=rawTx as unknown as Db;await setMemoryReadStatementBudget(tx,budget);
         await lockAnalyticalCompany(tx,companyId); await lockMemoryPrivacy(tx,companyId);
         await setMemoryReadStatementBudget(tx,budget); await assertActorCompanyScope(tx,companyId,actor);
-        const detail=await getRecordDetail(tx,companyId,recordId);
+        const detail=await getRecordDetail(tx,companyId,recordId,budget);
         if(!detail)return null;
         assertPrivateMemoryReadAllowed(detail.record,actor);
         assertMemoryReadActive(budget);

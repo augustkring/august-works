@@ -63,6 +63,35 @@ export type NativeBootstrapSourceClosure = {
   turnContext?: { markdownDigest: string; manifestIds: string[] };
 };
 
+function exactInteractionSources(input: {
+  issueId: string;
+  responses: readonly NativeInteractionResponseEnvelope[] | null | undefined;
+  sources: readonly Extract<NativePayloadSourceInput, { kind: "interaction" }>[] | null | undefined;
+}): Extract<NativePayloadSourceInput, { kind: "interaction" }>[] | null {
+  const responses = input.responses ?? [];
+  const sources = input.sources ?? [];
+  if (responses.length !== sources.length) return null;
+  const responseIds = new Set<string>();
+  for (const response of responses) {
+    if (!response || typeof response.interactionId !== "string" || responseIds.has(response.interactionId)) return null;
+    responseIds.add(response.interactionId);
+  }
+  const sourcesById = new Map<string, Extract<NativePayloadSourceInput, { kind: "interaction" }>>();
+  for (const raw of sources) {
+    const parsed = nativePayloadSourceInputSchema.safeParse(raw);
+    if (!parsed.success || parsed.data.kind !== "interaction" || parsed.data.issueId !== input.issueId ||
+      sourcesById.has(parsed.data.interactionId)) return null;
+    sourcesById.set(parsed.data.interactionId, parsed.data);
+  }
+  const ordered: Extract<NativePayloadSourceInput, { kind: "interaction" }>[] = [];
+  for (const response of responses) {
+    const source = sourcesById.get(response.interactionId);
+    if (!source || createHash("sha256").update(JSON.stringify(response), "utf8").digest("hex") !== source.contentHash) return null;
+    ordered.push(source);
+  }
+  return ordered;
+}
+
 /** Server-only Native output capture. The model-call identity and hashes are
  * observations; source authority still comes from sourceSet and its owners. */
 export type NativeModelOutputCapture = {
@@ -204,6 +233,8 @@ export function buildNativeBootstrapSourceSet(input: {
   candidates: readonly NativePreparedSourceCandidate[];
   runtimeInputs: readonly NativePayloadSourceInput[] | null;
   additionalInputs?: readonly NativePayloadSourceInput[] | null;
+  interactionResponses?: readonly NativeInteractionResponseEnvelope[] | null;
+  interactionSources?: readonly Extract<NativePayloadSourceInput, { kind: "interaction" }>[] | null;
   contextManifestIds: readonly { companyId: string; contextManifestId: string }[] | null;
   governedContextMarkdown?: string | null;
   contextWitnessMarkdown?: string | null;
@@ -211,6 +242,9 @@ export function buildNativeBootstrapSourceSet(input: {
   rolePackInputs: readonly NativePayloadSourceInput[] | null;
   unsupportedInputPresent: boolean;
 }): NativePayloadSourceSet | null {
+  const interactionSources = exactInteractionSources({ issueId: input.issueId,
+    responses: input.interactionResponses, sources: input.interactionSources });
+  if (!interactionSources) return null;
   const contextMarkdown = input.contextWitnessMarkdown ?? input.governedContextMarkdown;
   const context = input.contextWitness && contextMarkdown
     ? readNativeBootstrapContextWitness(input.contextWitness, { companyId: input.companyId, runId: input.runId,
@@ -267,6 +301,7 @@ export function buildNativeBootstrapSourceSet(input: {
   for (const source of input.runtimeInputs) append(source);
   if (input.additionalInputs === null) return null;
   for (const source of input.additionalInputs ?? []) append(source);
+  for (const source of interactionSources) append(source);
   if (context) {
     mergePolicy(context.policy);
     append(context.contextInput);

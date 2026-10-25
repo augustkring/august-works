@@ -14,9 +14,10 @@ import {
   heartbeatRunEvents,
   heartbeatRuns,
   issues,
+  issueThreadInteractions,
   nativeRunFinalizations,
 } from "@paperclipai/db";
-import type { ContextAuthorityDecision } from "@paperclipai/shared";
+import type { ContextAuthorityDecision, NativePayloadSourceInput } from "@paperclipai/shared";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { PROCESS_START_REQUESTED } from "../native-local-process-stop.js";
 import { recordNativeModelInputDispatchIntent, recordNativeModelInputDispatchAcknowledgement, recordNativeToolCallDispatchAssociation,
@@ -41,6 +42,9 @@ import { issueRoutes } from "../../routes/issues.js";
 import { ensureNativeCompletionContract } from "./completion-contracts.js";
 import { contextEngineService } from "../context/context-engine.js";
 import { resolveDefaultAgentWorkspaceDir } from "../../home-paths.js";
+import { issueThreadInteractionService } from "../issue-thread-interactions.js";
+import { materializeNativeInteractionResponses } from "./native-interaction-bridge.js";
+import { assertNativePayloadSourceSetCurrent } from "../native-direct-input.js";
 
 describe("native model input dispatch intent", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>;
@@ -439,6 +443,15 @@ describe("native model input dispatch intent", () => {
     const taskCaptureHolder: { value: NativeTaskSourceCapture | null } = { value: null };
     selectedTask = await getIssueExecutionContext(db, companyId, createdIssue.id, capture => { taskCaptureHolder.value = capture; });
     expect(selectedTask).not.toBeNull();
+    const interactionId = randomUUID();
+    await db.insert(issueThreadInteractions).values({ id: interactionId, companyId, issueId: createdIssue.id,
+      kind: "ask_user_questions", status: "pending", createdByAgentId: agentId, sourceRunId: seeded.runId,
+      payload: { version: 1, questions: [{ id: "choice", prompt: "Choose a path", selectionMode: "single",
+        options: [{ id: "safe", label: "Safe" }] }] } });
+    const interactionSources: Extract<NativePayloadSourceInput, { kind: "interaction" }>[] = [];
+    const interactionResponses = await materializeNativeInteractionResponses({ db, companyId, issueId: createdIssue.id,
+      runId: seeded.runId, agentId, interactionIds: [interactionId], onSourceCapture: source => interactionSources.push(source) });
+    expect(interactionSources).toHaveLength(1);
     const document = await documentService(db).upsertIssueDocument({ issueId: createdIssue.id, key: "native-bootstrap", title: "Pinned native plan",
       format: "markdown", body: "The selected Human approved plan.", createdByUserId: userId, manualInputActor: actor });
     let revisionCapture: DocumentRevisionSourceCapture | null = null;
@@ -479,6 +492,7 @@ describe("native model input dispatch intent", () => {
         { kind: "document_revision", id: revisionCapture!.input.revisionId, input: revisionCapture!.input, payloadSourceSnapshot: revisionCapture!.payloadSourceSnapshot },
       ], runtimeInputs, contextManifestIds: [{ companyId, contextManifestId: governedContext.packet.manifest!.id }],
       governedContextMarkdown: governedContext.markdown, contextWitness: governedContext.nativeBootstrapWitness,
+      interactionResponses, interactionSources,
       additionalInputs: [{ kind: "workspace_metadata", runId: seeded.runId, executionWorkspaceId: seeded.runId,
         origin: "agent_home", sourceVersion: `agent-home:${agentId}:v1`,
         contentHash: createHash("sha256").update(JSON.stringify(nativeWorkspace), "utf8").digest("hex") }],
@@ -495,6 +509,7 @@ describe("native model input dispatch intent", () => {
       taskPrompt: renderedMarkdown!, governedContextMarkdown: governedContext.markdown,
       workspace: { id: seeded.runId, ...nativeWorkspace },
       normalizedSessionId: null, provider: "claude_managed", model: "claude-sonnet-5",
+      interactionResponses,
       managedProfile: { profileId: "profile", anthropicAgentId: "agent_01", agentVersion: "1", environmentId: "environment", betaVersion: "managed-agents-2026-04-01" },
       maxSessionListCostUsd: 1, completionContract: { id: completion.row.id, sha256: completion.row.canonicalSha256,
         schemaVersion: completion.row.schemaVersion, contract: completion.contract },

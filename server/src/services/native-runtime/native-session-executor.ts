@@ -7438,7 +7438,9 @@ export async function recordNativeModelInputDispatchIntent(input: Parameters<typ
       "native_model_input_turn_source_receipt_invalid",
       "managed_opencode_source_prompt_budget_exceeded",
       "managed_opencode_source_prompt_binding_ambiguous",
-    ].includes(message) ? message : `native_model_input_dispatch_${stage}_failed`);
+    ].includes(message) ? message : stage === "intent_persist"
+      ? "native_model_input_dispatch_persistence_failed"
+      : `native_model_input_dispatch_${stage}_failed`);
   });
   return dispatchId;
 }

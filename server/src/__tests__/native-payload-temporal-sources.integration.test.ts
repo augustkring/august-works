@@ -248,17 +248,21 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
     const [scrubbedRoot] = await db.select({ content: memoryRecords.content, title: memoryRecords.title,
       deletedAt: memoryRecords.deletedAt }).from(memoryRecords)
       .where(and(eq(memoryRecords.companyId, first.companyId), eq(memoryRecords.id, privateRootId)));
-    const [scrubbedMemoryB] = await db.select({ deletedAt: memoryRecords.deletedAt,
+    const [scrubbedMemoryB] = await db.select({ content: memoryRecords.content, title: memoryRecords.title,
+      deletedAt: memoryRecords.deletedAt,
       payloadSourceSnapshotInvalidated: memoryRecords.payloadSourceSnapshotInvalidated }).from(memoryRecords)
       .where(and(eq(memoryRecords.companyId, first.companyId), eq(memoryRecords.id, memoryBId)));
-    const [scrubbedMemoryC] = await db.select({ deletedAt: memoryRecords.deletedAt,
+    const [scrubbedMemoryC] = await db.select({ content: memoryRecords.content, title: memoryRecords.title,
+      deletedAt: memoryRecords.deletedAt,
       payloadSourceSnapshotInvalidated: memoryRecords.payloadSourceSnapshotInvalidated }).from(memoryRecords)
       .where(and(eq(memoryRecords.companyId, first.companyId), eq(memoryRecords.id, memoryCId)));
     expect(retainedMemoryA?.deletedAt).toBeNull();
     expect(retainedMemoryA?.payloadSourceSnapshotInvalidated).toBe(false);
     expect(scrubbedRoot).toMatchObject({ content: "", title: null, deletedAt: expect.any(Date) });
-    expect(scrubbedMemoryB?.deletedAt).not.toBeNull();
-    expect(scrubbedMemoryC?.deletedAt).not.toBeNull();
+    expect(scrubbedMemoryB).toMatchObject({ content: "", title: null, deletedAt: expect.any(Date),
+      payloadSourceSnapshotInvalidated: true });
+    expect(scrubbedMemoryC).toMatchObject({ content: "", title: null, deletedAt: expect.any(Date),
+      payloadSourceSnapshotInvalidated: true });
 
     await memoryJobService(db).tick({ limit: 10, companyId: first.companyId });
     const [providerEraseJob] = await db.select().from(memoryJobs).where(and(eq(memoryJobs.companyId, first.companyId),

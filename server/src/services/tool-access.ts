@@ -14905,6 +14905,9 @@ export function toolAccessService(
           "OAuth callback user does not match the requested subject",
         );
       }
+      if (stateRow.createdByActorType === "user") {
+        assertSameOAuthActor(stateRow, actor);
+      }
     } else {
       assertSameOAuthActor(stateRow, actor);
     }

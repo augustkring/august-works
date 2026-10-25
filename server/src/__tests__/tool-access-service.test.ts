@@ -10799,6 +10799,7 @@ describeEmbeddedPostgres("tool access service", () => {
     await grantBoardUser(db, company.id, "oauth-operator", [
       "tools:manage_connections",
     ]);
+    await grantBoardUser(db, company.id, "connection-creator", []);
     const service = createTestToolAccessService(db);
     const initiatingActor = boardSessionActor(
       company.id,
@@ -10808,7 +10809,7 @@ describeEmbeddedPostgres("tool access service", () => {
     const connect = await service.connectGalleryApp(
       company.id,
       { galleryKey: "slack", name: "Slack bound" },
-      { actorType: "user", actorId: initiatingActor.userId },
+      { actorType: "user", actorId: "connection-creator" },
     );
     const initiatingApp = createRouteApp(db, initiatingActor);
     const startRes = await request(initiatingApp)
@@ -10843,10 +10844,17 @@ describeEmbeddedPostgres("tool access service", () => {
         "other-session",
       ),
     );
+    const providerFetch = vi.spyOn(globalThis, "fetch").mockImplementation(
+      async () => {
+        throw new Error("Wrong-session OAuth callback reached the provider");
+      },
+    );
     await request(otherSessionSameUserApp)
       .get("/api/tools/oauth/callback")
       .query({ state, code: "oauth-code" })
       .expect(403);
+    expect(providerFetch).not.toHaveBeenCalled();
+    await expect(db.select().from(toolOauthStates)).resolves.toHaveLength(1);
 
     const downgradedActor = {
       ...initiatingActor,

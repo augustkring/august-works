@@ -15,6 +15,7 @@ import { spawn, type ChildProcess } from "node:child_process";
 import fs from "node:fs/promises";
 import os from "node:os";
 import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { and, eq, or, inArray, sql } from "drizzle-orm";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import {
@@ -1486,6 +1487,59 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     });
 
     return { companyId, agentId, runId, wakeupRequestId, issueId };
+  }
+
+  async function runRecoveryWorkerProcess(databaseUrl: string) {
+    const directory = await fs.mkdtemp(path.join(os.tmpdir(), "paperclip-up05-worker-"));
+    const scriptPath = path.join(directory, "recovery-worker.mts");
+    const dbModuleUrl = new URL("../../../packages/db/src/index.ts", import.meta.url).href;
+    const heartbeatModuleUrl = new URL("../services/heartbeat.ts", import.meta.url).href;
+    const script = `
+      import { createDb, closeRegisteredClients } from ${JSON.stringify(dbModuleUrl)};
+      import { heartbeatService } from ${JSON.stringify(heartbeatModuleUrl)};
+      const url = process.env.PAPERCLIP_UP05_DATABASE_URL;
+      if (!url) throw new Error("Missing shared PostgreSQL URL");
+      const db = createDb(url);
+      try {
+        const result = await heartbeatService(db).reconcileStrandedAssignedIssues();
+        process.stdout.write(JSON.stringify({ continuationRequeued: result.continuationRequeued, issueIds: result.issueIds, skipped: result.skipped }) + "\\n");
+      } finally {
+        await closeRegisteredClients(url);
+      }
+    `;
+    await fs.writeFile(scriptPath, script, "utf8");
+
+    const testDirectory = path.dirname(fileURLToPath(import.meta.url));
+    const tsxCli = path.resolve(testDirectory, "../../node_modules/.bin/tsx");
+    const child = spawn(tsxCli, [scriptPath], {
+      cwd: path.resolve(testDirectory, "../../.."),
+      env: { ...process.env, PAPERCLIP_UP05_DATABASE_URL: databaseUrl },
+      stdio: ["ignore", "pipe", "pipe"],
+    });
+    childProcesses.add(child);
+    let stdout = "";
+    let stderr = "";
+    child.stdout?.on("data", (chunk) => { stdout += String(chunk); });
+    child.stderr?.on("data", (chunk) => { stderr += String(chunk); });
+    const timeout = setTimeout(() => child.kill("SIGKILL"), 20_000);
+    try {
+      const exit = await new Promise<{ code: number | null; signal: NodeJS.Signals | null }>((resolve, reject) => {
+        child.once("error", reject);
+        child.once("close", (code, signal) => resolve({ code, signal }));
+      });
+      if (exit.code !== 0) {
+        throw new Error(`UP05 recovery worker exited ${exit.code ?? exit.signal}: ${stderr || stdout}`);
+      }
+      return JSON.parse(stdout.trim().split("\n").at(-1)!) as {
+        continuationRequeued: number;
+        issueIds: string[];
+        skipped: number;
+      };
+    } finally {
+      clearTimeout(timeout);
+      childProcesses.delete(child);
+      await fs.rm(directory, { recursive: true, force: true });
+    }
   }
 
   it("persists the normalized failure without permanently blocking the conversation", async () => {
@@ -9831,8 +9885,8 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       return { exitCode: 0, summary: "Accepted message delivered once", provider: "test", model: "test-model" };
     });
 
-    const heartbeat = heartbeatService(db);
-    const paused = await heartbeat.reconcileStrandedAssignedIssues();
+    const databaseUrl = externalTestDatabaseUrl ?? tempDb!.connectionString;
+    const paused = await runRecoveryWorkerProcess(databaseUrl);
     expect(paused.continuationRequeued).toBe(0);
     expect(paused.skipped).toBeGreaterThan(0);
     expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId))).toHaveLength(1);
@@ -9840,9 +9894,12 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       .toMatchObject({ status: "accepted", result: { outcome: "accepted" } });
 
     await db.update(agents).set({ status: "idle" }).where(eq(agents.id, agentId));
-    const resumed = await heartbeat.reconcileStrandedAssignedIssues();
-    expect(resumed.continuationRequeued).toBe(1);
-    expect(resumed.issueIds).toEqual([issueId]);
+    const [firstWorker, secondWorker] = await Promise.all([
+      runRecoveryWorkerProcess(databaseUrl),
+      runRecoveryWorkerProcess(databaseUrl),
+    ]);
+    expect(firstWorker.continuationRequeued + secondWorker.continuationRequeued).toBe(1);
+    expect(firstWorker.issueIds.concat(secondWorker.issueIds)).toContain(issueId);
 
     const successors = (await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId)))
       .filter((run) => run.id !== runId);
@@ -9857,19 +9914,20 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       },
     });
 
-    await heartbeat.resumeQueuedRuns();
-    await heartbeat.drainActiveRunExecutions();
-    const settledSuccessor = await waitForRunToSettle(heartbeat, successor!.id);
+    const restartedHeartbeat = heartbeatService(db);
+    await restartedHeartbeat.resumeQueuedRuns();
+    await restartedHeartbeat.drainActiveRunExecutions();
+    const settledSuccessor = await waitForRunToSettle(restartedHeartbeat, successor!.id);
     expect(settledSuccessor).toMatchObject({ status: "succeeded" });
     expect(mockAdapterExecute).toHaveBeenCalledTimes(1);
-    const repeated = await heartbeat.reconcileStrandedAssignedIssues();
+    const repeated = await runRecoveryWorkerProcess(databaseUrl);
     expect(repeated.continuationRequeued).toBe(0);
     expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId))).toHaveLength(2);
     expect(await db.select().from(issueComments).where(and(
       eq(issueComments.issueId, issueId),
       eq(issueComments.body, "Accepted message delivered once"),
     ))).toHaveLength(1);
-  });
+  }, 60_000);
 
   it("recovers an answered question with its interaction-specific continuation context", async () => {
     const companyId = randomUUID();

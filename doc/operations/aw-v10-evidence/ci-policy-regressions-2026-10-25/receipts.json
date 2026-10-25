@@ -1,0 +1,56 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "3f16821eb65db73b220aefe979c35b3018b7e91a",
+  "sourceCommitMeaning": "Archive checkout identity; scoped runs may predate it. Only separately recorded unchanged-source gates establish final tested source identity.",
+  "meaning": "Current Node policy tests: 30 pass after updating the existing workflow wiring expectation to include the mandatory Help gate. Initial glob invocation ran zero tests and is excluded. This is not whole-workspace acceptance.",
+  "logs": [
+    {
+      "name": "e2e-shard-policy-real-current",
+      "exitCode": 1,
+      "exitSidecar": "e2e-shard-policy-real-current.exit",
+      "rawSha256": "868cc27bcff6d66286f08a7ea1216befdee7540079820387ea2d41b3fc3b4c07",
+      "sanitizedSha256": "868cc27bcff6d66286f08a7ea1216befdee7540079820387ea2d41b3fc3b4c07",
+      "archiveSha256": "3d00ce0fe92e8199a708d4700210bb0add7ce4e74669b07bc71a26e2ac492750",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "e2e-shard-policy-help-gate-fixed",
+      "exitCode": 0,
+      "exitSidecar": "e2e-shard-policy-help-gate-fixed.exit",
+      "rawSha256": "e5228d912e8af0c48153d7de66454ebaf2450f0ae58cfe191e9f50214fa6e4f2",
+      "sanitizedSha256": "e5228d912e8af0c48153d7de66454ebaf2450f0ae58cfe191e9f50214fa6e4f2",
+      "archiveSha256": "3619a76c28ac901adb34f9ebd0127aceef4829e5e4bff125d9d7a177da9dd2aa",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    },
+    {
+      "name": "v10-policy-script-regressions-current",
+      "exitCode": 0,
+      "exitSidecar": "v10-policy-script-regressions-current.exit",
+      "rawSha256": "ed3240110b7735a186b357712d7d08b1f12313f4a43bacd421d18c90f6558a11",
+      "sanitizedSha256": "ed3240110b7735a186b357712d7d08b1f12313f4a43bacd421d18c90f6558a11",
+      "archiveSha256": "354d2030dbca8360ec0749ddc25354398e5b58ee8ed400c5246014e6b6a0870d",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": []
+    }
+  ]
+}
