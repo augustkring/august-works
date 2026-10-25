@@ -1421,7 +1421,8 @@ class SessionToolAuthorityEpoch {
   #revoked = false;
 
   constructor(runId: string, authority: PaperclipRunnerToolAuthority, private readonly toolTrace?: NativeToolTrace,
-    private readonly onDocumentRead?: (source: NativeDocumentToolResultSource) => Promise<void>) {
+    private readonly onDocumentRead?: (source: NativeDocumentToolResultSource) => Promise<void>,
+    private readonly onNativeToolCall?: (call: { tool: string; callId: string; turnId: string }) => Promise<void>) {
     this.runId = runId;
     this.#authority = authority;
   }
@@ -1441,9 +1442,12 @@ class SessionToolAuthorityEpoch {
     return this.#authority.definitions();
   }
 
-  async execute(call: Parameters<PaperclipRunnerToolAuthority["execute"]>[0]) {
+  async execute(call: Parameters<PaperclipRunnerToolAuthority["execute"]>[0] & { turnId?: string }) {
     this.#assertCurrent();
-    const execute = () => this.#authority.execute(call, { onDocumentRead: this.onDocumentRead });
+    const execute = async () => {
+      if (call.turnId) await this.onNativeToolCall?.({ tool: call.tool, callId: call.callId, turnId: call.turnId });
+      return this.#authority.execute(call, { onDocumentRead: this.onDocumentRead });
+    };
     const result = this.toolTrace ? await this.toolTrace.execute(call, execute) : await execute();
     if (call.tool === "read_document") this.#assertCurrent();
     return result;
@@ -7162,6 +7166,77 @@ export async function recordNativeModelInputDispatchAcknowledgement(input: Param
   });
 }
 
+/** Link a backend-authenticated tool call to the one acknowledged turn whose
+ * native turn ID exactly matches. No match or an ambiguous ID stays unknown. */
+export async function recordNativeToolCallDispatchAssociation(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
+  agentId: string; turnId: string; callId: string; tool: string;
+}): Promise<boolean> {
+  if (!/^[\x21-\x7e]{1,240}$/.test(input.turnId) || !/^[\x21-\x7e]{1,240}$/.test(input.callId) ||
+    !/^[\x21-\x7e]{1,240}$/.test(input.tool)) return false;
+  try {
+    return await input.db.transaction(async tx => {
+      await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
+      const [run] = await tx.select().from(heartbeatRuns).where(and(
+        eq(heartbeatRuns.id, input.runId), eq(heartbeatRuns.companyId, input.companyId),
+        eq(heartbeatRuns.agentId, input.agentId), eq(heartbeatRuns.nativeIssueId, input.issueId),
+        eq(heartbeatRuns.runtimeMode, "native"), eq(heartbeatRuns.status, "running"),
+      )).for("update");
+      if (!run) throw new Error("native_tool_call_dispatch_binding_invalid");
+      const profile = record(run.runnerProfileJson);
+      const intents = profile.nativeModelInputDispatchIntents;
+      if (!Array.isArray(intents) || intents.length > 64) return false;
+      const matching = intents.map(value => record(value)).filter(value => value.turnId === input.turnId);
+      if (matching.length !== 1) return false;
+      const intent = matching[0]!;
+      if (typeof intent.dispatchId !== "string" ||
+        !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(intent.dispatchId) ||
+        typeof intent.turnInputDigest !== "string" || !/^[0-9a-f]{64}$/.test(intent.turnInputDigest) ||
+        !Number.isSafeInteger(intent.eventSeq) || (intent.eventSeq as number) < 0 ||
+        !Number.isSafeInteger(intent.attempt) || (intent.attempt as number) < 1) return false;
+      const prior = profile.nativeToolCallDispatchAssociations;
+      if (prior !== undefined && (!Array.isArray(prior) || prior.length > 512))
+        throw new Error("native_tool_call_dispatch_binding_invalid");
+      const associations = Array.isArray(prior) ? prior.map(value => record(value)) : [];
+      if (associations.some(value => typeof value.dispatchId !== "string" ||
+          !/^[0-9a-f]{8}-[0-9a-f]{4}-4[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/.test(value.dispatchId) ||
+          !Number.isSafeInteger(value.eventSeq) || (value.eventSeq as number) < 0 ||
+          !Number.isSafeInteger(value.attempt) || (value.attempt as number) < 1 ||
+          typeof value.turnId !== "string" || !/^[\x21-\x7e]{1,240}$/.test(value.turnId) ||
+          typeof value.callId !== "string" || !/^[\x21-\x7e]{1,240}$/.test(value.callId) ||
+          typeof value.tool !== "string" || !/^[\x21-\x7e]{1,240}$/.test(value.tool)))
+        throw new Error("native_tool_call_dispatch_binding_invalid");
+      const existing = associations.filter(value => value.callId === input.callId && value.turnId === input.turnId);
+      if (existing.length > 1) throw new Error("native_tool_call_dispatch_binding_invalid");
+      if (existing.length === 1) {
+        const priorAssociation = existing[0]!;
+        return priorAssociation.dispatchId === intent.dispatchId && priorAssociation.eventSeq === intent.eventSeq &&
+          priorAssociation.attempt === intent.attempt && priorAssociation.tool === input.tool;
+      }
+      if (associations.length >= 512) throw new Error("native_tool_call_dispatch_budget_exceeded");
+      const next = [...associations, {
+        dispatchId: intent.dispatchId, eventSeq: intent.eventSeq, attempt: intent.attempt,
+        turnId: input.turnId, callId: input.callId, tool: input.tool,
+      }];
+      if (Buffer.byteLength(JSON.stringify(next)) > 2 * 1024 * 1024)
+        throw new Error("native_tool_call_dispatch_budget_exceeded");
+      const [stored] = await tx.update(heartbeatRuns).set({
+        runnerProfileJson: { ...profile, nativeToolCallDispatchAssociations: next }, updatedAt: new Date(),
+      }).where(eq(heartbeatRuns.id, run.id)).returning({ profile: heartbeatRuns.runnerProfileJson });
+      const retained = record(stored?.profile).nativeToolCallDispatchAssociations;
+      if (!Array.isArray(retained) || nativeSha256(retained) !== nativeSha256(next))
+        throw new Error("native_tool_call_dispatch_persistence_failed");
+      await renewNativeSessionExecutionLease({ ...input, db: tx as unknown as Db });
+      return true;
+    });
+  } catch (error: unknown) {
+    const message = error instanceof Error ? error.message : "";
+    throw new Error(["native_session_lease_lost", "native_session_lease_ttl_invalid",
+      "native_tool_call_dispatch_binding_invalid", "native_tool_call_dispatch_budget_exceeded",
+      "native_tool_call_dispatch_persistence_failed"].includes(message)
+      ? message : "native_tool_call_dispatch_persistence_failed");
+  }
+}
+
 /** A fact about one document result selected for return, not delivery,
  * source permission or a complete model-input receipt. */
 export async function recordNativeDocumentToolResultIntent(input: Parameters<typeof renewNativeSessionExecutionLease>[0] & {
@@ -8343,6 +8418,13 @@ async function executePaperclipNativeSessionWithinScope(
               await renewNativeSessionExecutionLease({ db: input.db, runId,
                 companyId: input.execution.binding.companyId, issueId: input.execution.binding.issueId,
                 leaseOwner, attempt, controller });
+            },
+            onNativeToolCall: async call => {
+              await recordNativeToolCallDispatchAssociation({
+                db: input.db, runId, companyId: input.execution.binding.companyId,
+                issueId: input.execution.binding.issueId, agentId: input.execution.binding.agentId,
+                leaseOwner, attempt, controller, ...call,
+              });
             },
           })
         : null;
@@ -10649,6 +10731,7 @@ export async function createRunnerdBackend(input: {
   trace?: NativeRunTrace;
   toolTrace?: NativeToolTrace;
   onDocumentRead?: (source: NativeDocumentToolResultSource) => Promise<void>;
+  onNativeToolCall?: (call: { tool: string; callId: string; turnId: string }) => Promise<void>;
   onLog?: (stream: "stdout" | "stderr", chunk: string) => Promise<void>;
   stopTaskForReassignment?: (target: { companyId: string; issueId: string; agentId: string; runId: string | null }) => Promise<void>;
   enqueueWakeup?: (
@@ -10801,6 +10884,7 @@ async function createRunnerdBackendWithinSessionClaim(
     authority,
     input.toolTrace,
     input.onDocumentRead,
+    input.onNativeToolCall,
   );
   let dynamicTools: Awaited<
     ReturnType<SessionToolAuthorityEpoch["definitions"]>
@@ -12426,7 +12510,7 @@ async function createRunnerdBackendWithinSessionClaim(
     markSpawned?.();
   }
   const executeCurrentToolAuthority = (
-    call: Parameters<SessionToolAuthorityEpoch["execute"]>[0],
+    call: Parameters<SessionToolAuthorityEpoch["execute"]>[0] & { turnId?: string },
   ) => {
     const current = sessionToolAuthorityEpochs.get(sessionScopeId);
     if (!current) throw new Error("native_session_tool_authority_unavailable");

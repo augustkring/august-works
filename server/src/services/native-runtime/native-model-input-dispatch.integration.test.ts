@@ -16,7 +16,7 @@ import {
 } from "@paperclipai/db";
 import { startEmbeddedPostgresTestDatabase } from "../../__tests__/helpers/embedded-postgres.js";
 import { PROCESS_START_REQUESTED } from "../native-local-process-stop.js";
-import { recordNativeModelInputDispatchIntent, recordNativeModelInputDispatchAcknowledgement, recordNativeDocumentToolResultIntent } from "./native-session-executor.js";
+import { recordNativeModelInputDispatchIntent, recordNativeModelInputDispatchAcknowledgement, recordNativeToolCallDispatchAssociation, recordNativeDocumentToolResultIntent } from "./native-session-executor.js";
 import { documentService, type DocumentRevisionSourceCapture } from "../documents.js";
 import { nativeSha256 } from "./canonical.js";
 import { currentNativeControllerIdentity } from "./native-restart-recovery.js";
@@ -309,6 +309,76 @@ describe("native model input dispatch intent", () => {
     await expect(recordNativeModelInputDispatchAcknowledgement(args)).rejects.toThrow("native_model_input_ack_binding_invalid");
     const [afterDuplicate] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
     expect(afterDuplicate!.runnerProfileJson).toEqual(afterAck!.runnerProfileJson);
+  });
+
+  it("associates an actual backend tool call only with its unique acknowledged turn", async () => {
+    const seeded = await seed();
+    const turnInput = { message: { role: "user" as const, text: "identity only" } };
+    const dispatchId = await recordNativeModelInputDispatchIntent(dispatchArgs(seeded, turnInput));
+    await recordNativeModelInputDispatchAcknowledgement(acknowledgementArgs(seeded, dispatchId, turnInput, "backend-turn-exact"));
+    const call = { ...dispatchArgs(seeded, turnInput), turnId: "backend-turn-exact", callId: "provider-call-1", tool: "create_task" };
+
+    expect(await recordNativeToolCallDispatchAssociation(call)).toBe(true);
+    expect(await recordNativeToolCallDispatchAssociation({ ...call, callId: "provider-call-unknown", turnId: "unsupported-turn" })).toBe(false);
+    expect(await recordNativeToolCallDispatchAssociation(call)).toBe(true);
+    expect(await recordNativeToolCallDispatchAssociation({ ...call, tool: "update_task" })).toBe(false);
+    const secondTurnInput = { message: { role: "user" as const, text: "next turn" } };
+    const secondDispatchId = await recordNativeModelInputDispatchIntent(dispatchArgs(seeded, secondTurnInput));
+    await recordNativeModelInputDispatchAcknowledgement(acknowledgementArgs(seeded, secondDispatchId, secondTurnInput, "backend-turn-next"));
+    expect(await recordNativeToolCallDispatchAssociation({ ...call, turnId: "backend-turn-next" })).toBe(true);
+    const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
+    expect(run!.runnerProfileJson!.nativeToolCallDispatchAssociations).toEqual([
+      { dispatchId, eventSeq: seeded.eventSeq, attempt: seeded.attempt,
+        turnId: "backend-turn-exact", callId: "provider-call-1", tool: "create_task" },
+      { dispatchId: secondDispatchId, eventSeq: seeded.eventSeq, attempt: seeded.attempt,
+        turnId: "backend-turn-next", callId: "provider-call-1", tool: "create_task" },
+    ]);
+
+    const ambiguousDispatch = await recordNativeModelInputDispatchIntent(dispatchArgs(seeded, turnInput));
+    await recordNativeModelInputDispatchAcknowledgement(acknowledgementArgs(seeded, ambiguousDispatch, turnInput, "backend-turn-exact"));
+    expect(await recordNativeToolCallDispatchAssociation({ ...call, callId: "provider-call-ambiguous" })).toBe(false);
+    const [afterAmbiguity] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
+    expect(afterAmbiguity!.runnerProfileJson!.nativeToolCallDispatchAssociations).toEqual(run!.runnerProfileJson!.nativeToolCallDispatchAssociations);
+  });
+
+  it("refuses malformed association history without replacing it", async () => {
+    const seeded = await seed({ runnerProfileJson: { nativeToolCallDispatchAssociations: "malformed" } });
+    const turnInput = { message: { role: "user" as const, text: "preserve malformed fact" } };
+    const dispatchId = await recordNativeModelInputDispatchIntent(dispatchArgs(seeded, turnInput));
+    await recordNativeModelInputDispatchAcknowledgement(acknowledgementArgs(seeded, dispatchId, turnInput, "backend-turn-invalid-history"));
+    const [before] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
+    await expect(recordNativeToolCallDispatchAssociation({ ...dispatchArgs(seeded, turnInput),
+      turnId: "backend-turn-invalid-history", callId: "call-invalid-history", tool: "create_task" }))
+      .rejects.toThrow("native_tool_call_dispatch_binding_invalid");
+    const [after] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
+    expect(after!.runnerProfileJson).toEqual(before!.runnerProfileJson);
+  });
+
+  it("refuses duplicate or misbound prior call associations without changing history", async () => {
+    for (const kind of ["duplicate", "wrong_event", "wrong_attempt"] as const) {
+      const seeded = await seed();
+      const turnInput = { message: { role: "user" as const, text: `association history ${kind}` } };
+      const dispatchId = await recordNativeModelInputDispatchIntent(dispatchArgs(seeded, turnInput));
+      const turnId = `backend-turn-${kind}`;
+      await recordNativeModelInputDispatchAcknowledgement(acknowledgementArgs(seeded, dispatchId, turnInput, turnId));
+      const [run] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
+      const exact = { dispatchId, eventSeq: seeded.eventSeq, attempt: seeded.attempt, turnId,
+        callId: "provider-call-history", tool: "create_task" };
+      const history = kind === "duplicate" ? [exact, exact]
+        : [{ ...exact, ...(kind === "wrong_event" ? { eventSeq: seeded.eventSeq + 1 } : { attempt: seeded.attempt + 1 }) }];
+      await db.update(heartbeatRuns).set({ runnerProfileJson: {
+        ...run!.runnerProfileJson!, nativeToolCallDispatchAssociations: history,
+      } }).where(eq(heartbeatRuns.id, seeded.runId));
+      const [before] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
+      const call = { ...dispatchArgs(seeded, turnInput), turnId, callId: "provider-call-history", tool: "create_task" };
+      if (kind === "duplicate") {
+        await expect(recordNativeToolCallDispatchAssociation(call)).rejects.toThrow("native_tool_call_dispatch_binding_invalid");
+      } else {
+        expect(await recordNativeToolCallDispatchAssociation(call)).toBe(false);
+      }
+      const [after] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, seeded.runId));
+      expect(after!.runnerProfileJson).toEqual(before!.runnerProfileJson);
+    }
   });
 
   it("does not acknowledge after lease expiry", async () => {

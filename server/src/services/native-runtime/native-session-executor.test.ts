@@ -8123,13 +8123,18 @@ describe("runnerd provider runtime wiring", () => {
     state.execute.mockReset().mockImplementationOnce(async options => {
       await options.onSessionAdmission();
       const backendOptions = state.createBackend.mock.calls.at(-1)![1];
-      const selected = await backendOptions.dynamicToolHandler!({ tool: "read_document", callId: "model-document-read", arguments: { key: "notes" } });
+      const selected = await backendOptions.dynamicToolHandler!({ tool: "read_document", callId: "model-document-read",
+        turnId: "provider-turn-call", arguments: { key: "notes" } });
       const write = updates.findLast(row => row.table === heartbeatRuns && row.values.runnerProfileJson &&
         typeof row.values.runnerProfileJson === "object" && "nativeDocumentToolResultSources" in row.values.runnerProfileJson);
       expect(write).toBeDefined();
       const profile = write!.values.runnerProfileJson as Record<string, unknown>;
       expect(profile.nativeDocumentToolResultSources).toEqual([expect.objectContaining({ callId: "model-document-read",
         tool: "read_document", resultDigest: digest, source: null, responsibleUserId: null })]);
+      expect(profile.nativeToolCallDispatchAssociations).toEqual([{
+        dispatchId: "11111111-1111-4111-8111-111111111111", eventSeq: 1, attempt: 1,
+        turnId: "provider-turn-call", callId: "model-document-read", tool: "read_document",
+      }]);
       expect(JSON.stringify(profile)).not.toContain("PRIVATE_DOCUMENT_RESULT");
       expect(profile).not.toHaveProperty("nativeInputSourceReceipt");
       providerResult(selected);
@@ -8138,7 +8143,10 @@ describe("runnerd provider runtime wiring", () => {
         driverKind: "test", driverVersion: "1", nativeEventCount: 1, highestContiguousSourceSeq: 1, usage: null };
     });
     const executing = executePaperclipNativeSession({
-      db: leaseDb(execution, {}, {}, updates, {}, "running", false, false, failWrite),
+      db: leaseDb(execution, {}, {}, updates, { nativeModelInputDispatchIntents: [{
+        dispatchId: "11111111-1111-4111-8111-111111111111", eventSeq: 1, attempt: 1,
+        turnId: "provider-turn-call", turnInputDigest: "a".repeat(64),
+      }] }, "running", false, false, failWrite),
       execution, runnerInstanceId: `document-result-${failWrite}`, useRunnerd: true,
     });
     if (failWrite) {
