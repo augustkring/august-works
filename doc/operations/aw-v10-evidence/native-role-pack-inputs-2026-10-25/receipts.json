@@ -21,7 +21,8 @@
         "Test Files  1 failed | 1 passed (2)",
         "Tests  2 failed | 7 passed (9)",
         "Duration  30.09s (transform 10.97s, setup 134ms, import 19.42s, tests 10.24s, environment 0ms)"
-      ]
+      ],
+      "sourceCommit": "5659e399f67b993949cccc8a2a1aba913555531f"
     },
     {
       "name": "native-role-pack-source-positive-current",
@@ -40,7 +41,8 @@
         "Test Files  2 passed (2)",
         "Tests  6 passed | 3 skipped (9)",
         "Duration  30.78s (transform 12.30s, setup 208ms, import 20.79s, tests 9.54s, environment 0ms)"
-      ]
+      ],
+      "sourceCommit": "5659e399f67b993949cccc8a2a1aba913555531f"
     },
     {
       "name": "native-role-pack-bootstrap-source",
@@ -60,7 +62,8 @@
         "Test Files  1 failed (1)",
         "Tests  2 failed | 305 skipped (307)",
         "Duration  26.72s (transform 12.92s, setup 106ms, import 17.60s, tests 8.86s, environment 0ms)"
-      ]
+      ],
+      "sourceCommit": "5659e399f67b993949cccc8a2a1aba913555531f"
     },
     {
       "name": "native-role-pack-bootstrap-source-current",
@@ -79,6 +82,49 @@
         "Test Files  1 passed (1)",
         "Tests  2 passed | 305 skipped (307)",
         "Duration  26.38s (transform 13.04s, setup 69ms, import 17.63s, tests 8.56s, environment 0ms)"
+      ],
+      "sourceCommit": "5659e399f67b993949cccc8a2a1aba913555531f"
+    },
+    {
+      "name": "native-role-pack-current-server-typecheck",
+      "exitCode": 1,
+      "rawSha256": "b579ae2d66409a08de5aea350705dd9cd2a22028a165b454365ebeaf1628e4e4",
+      "sanitizedSha256": "b579ae2d66409a08de5aea350705dd9cd2a22028a165b454365ebeaf1628e4e4",
+      "archiveSha256": "155be26607ff74ffb40b0848e273ee3d139540ec39dc5e5fd1143e26f36bd290",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "87abe5e06bc8274e91d0d193b4818c42d999ae37"
+    },
+    {
+      "name": "native-role-pack-workflow-query-server-typecheck",
+      "exitCode": 0,
+      "rawSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "sanitizedSha256": "e3b0c44298fc1c149afbf4c8996fb92427ae41e4649b934ca495991b7852b855",
+      "archiveSha256": "f61f27bd17de546264aa58f40f3aafaac7021e0ef69c17f6b1b4cd7664a037ec",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "87abe5e06bc8274e91d0d193b4818c42d999ae37"
+    }
+  ],
+  "updates": [
+    {
+      "sourceCommit": "87abe5e06bc8274e91d0d193b4818c42d999ae37",
+      "meaning": "Current server typecheck0 after Role Pack and initial Workflow query changes; earlier overlap TS narrowing2 failures retained",
+      "logs": [
+        "native-role-pack-current-server-typecheck",
+        "native-role-pack-workflow-query-server-typecheck"
       ]
     }
   ]
