@@ -9885,6 +9885,8 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
       runStatus: settledSuccessor?.status,
       runErrorCode: settledSuccessor?.errorCode,
       runError: settledSuccessor?.error,
+      createdAt: settledSuccessor?.createdAt,
+      suppression: heartbeat.schedulingSuppressionSnapshot(),
       executeCalls: mockAdapterExecute.mock.calls.length,
       agentStatus: (await db.select({ status: agents.status }).from(agents).where(eq(agents.id, agentId)))[0]?.status,
       issueStatus: (await db.select({ status: issues.status, executionRunId: issues.executionRunId }).from(issues).where(eq(issues.id, issueId)))[0],

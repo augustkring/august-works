@@ -541,7 +541,7 @@ describeEmbeddedPostgres("paperclipai company import/export e2e", () => {
       "company", "import", exportDir, "--target", "new", "--new-company-name", `Denied ${sourceCompany.name}`,
       "--include", "company,agents,projects,issues", "--yes",
     ], { apiBase, configPath, paperclipHome, instanceId: paperclipInstanceId, shellHome: cliShellHome }))
-      .rejects.toThrow("Task and project source release across organizations requires an authorized publication operation");
+      .rejects.toThrow("Cross-company work import requires a current original-owner review of one complete source company and exact package");
     const companiesAfterDeniedCopy = await api<Array<{ id: string }>>(apiBase, "/api/companies");
     const sourceAgentsAfterDeniedCopy = await api<Array<{ id: string }>>(apiBase, `/api/companies/${sourceCompany.id}/agents`);
     const sourceProjectsAfterDeniedCopy = await api<Array<{ id: string }>>(apiBase, `/api/companies/${sourceCompany.id}/projects`);

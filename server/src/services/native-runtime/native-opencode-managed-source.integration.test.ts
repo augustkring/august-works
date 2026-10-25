@@ -515,6 +515,8 @@ describe("managed OpenCode source-closure binary integration", () => {
       PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND: String(profile.inputTokensUpperBound),
       PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS: String(profile.maxOutputTokens),
       PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN: `https://127.0.0.1:${address.port}` };
+    const qualifiedOpenCodeSha256 = createHash("sha256")
+      .update(await readFile(opencodeBinary)).digest("hex");
     const diagnostics: string[] = [];
     const capabilityPayload = JSON.parse(Buffer.from(minted.token.split(".")[1]!, "base64url").toString("utf8")) as Record<string, unknown>;
     const workerModelClaims = capabilityPayload.worker_model && typeof capabilityPayload.worker_model === "object"
@@ -616,9 +618,22 @@ describe("managed OpenCode source-closure binary integration", () => {
       }
     };
     const onSpawn = async ({ pid }: { pid: number }) => {
-      diagnostics.push(`runnerd host pid ${pid}`);
-      const runnerEnvironment = (await readFile(`/proc/${pid}/environ`, "utf8").catch(() => "")).split("\0");
-      diagnostics.push(`runnerd host managed environment: brokerOrigin=${runnerEnvironment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN=")) ? "present" : "missing"} inputCap=${runnerEnvironment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND=")) ? "present" : "missing"} outputCap=${runnerEnvironment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS=")) ? "present" : "missing"}`);
+      diagnostics.push(`OpenCode process pid ${pid}`);
+      const openCodeEnvironment = (await readFile(`/proc/${pid}/environ`, "utf8").catch(() => "")).split("\0");
+      const openCodeExecutableSha256 = createHash("sha256")
+        .update(await readFile(`/proc/${pid}/exe`)).digest("hex");
+      diagnostics.push(`OpenCode executable sha256: ${openCodeExecutableSha256 === qualifiedOpenCodeSha256 ? "qualified-match" : "mismatch"}`);
+      if (openCodeExecutableSha256 !== qualifiedOpenCodeSha256)
+        throw new Error("managed_opencode_executable_does_not_match_qualified_binary");
+      const openCodeManagedEnvironment = {
+        brokerOrigin: openCodeEnvironment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN=")),
+        inputCap: openCodeEnvironment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND=")),
+        outputCap: openCodeEnvironment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS=")),
+        placeholderKey: openCodeEnvironment.includes("ANTHROPIC_API_KEY=paperclip-managed-model-broker"),
+      };
+      diagnostics.push(`OpenCode managed environment: ${JSON.stringify(openCodeManagedEnvironment)}`);
+      if (!Object.values(openCodeManagedEnvironment).every(Boolean))
+        throw new Error("managed_opencode_authority_environment_missing");
       const observed = new Set<number>();
       const inspect = async () => {
         const descendants: Array<{ pid: number; parent: number }> = [];

@@ -17,6 +17,7 @@ import { pluginAgentRuntimeState } from "../services/plugin-agent-runtime-state.
 import { companySkillService } from "../services/company-skills.js";
 import { skillLifecycleService } from "../services/skill-lifecycle.js";
 import { skillEvaluationService } from "../services/skill-evaluations.js";
+import { skillResolverService } from "../services/skill-resolver.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { issueService } from "../services/issues.js";
 import { costService } from "../services/costs.js";
@@ -75,6 +76,8 @@ describe.skipIf(!support.supported)("UP04 evaluated Skill promotion and immutabl
               const startedAt=new Date();
               const [run]=await db.insert(heartbeatRuns).values({companyId:f.home,agentId,status:"running",runtimeMode:"native",
                 responsibleUserId:f.userId,nativeIssueId:issueId,startedAt,invocationSource:"on_demand"}).returning();
+              await skillResolverService(db).authorizedVersion({type:"agent",source:"none",companyId:f.home,agentId,
+                runId:run!.id,onBehalfOfUserId:f.userId},f.home,draft.skillId,versionId,true,"task");
               const prepared=await fabric.prepare({companyId:f.home,agentId,runId:run!.id,responsibleUserId:f.userId,issueId,query:testCase.input});
               expect(prepared?.manifest.skills.map(pin=>pin.versionId)).toEqual(testCase.shouldTrigger?[versionId]:[]);
               await costService(db).createEvent(f.home,{agentId,issueId,heartbeatRunId:run!.id,provider:"controlled-evaluation-fixture",model:"deterministic-fixture",
