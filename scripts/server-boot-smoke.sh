@@ -73,16 +73,16 @@ while [ "$(date +%s)" -lt "$deadline" ]; do
   fi
   # Only trust the port once this child has bound it.
   if ! grep -q "listener bound on 127.0.0.1:$port" "$log" 2>/dev/null; then sleep 0.5; continue; fi
-  body="$(curl -fsS --max-time 2 "http://127.0.0.1:$port/api/health" 2>/dev/null || true)"
+  body="$(node -e 'fetch(process.argv[1], {signal: AbortSignal.timeout(2000)}).then(async r => {if (!r.ok) process.exit(1); process.stdout.write(await r.text());}).catch(() => process.exit(1));' "http://127.0.0.1:$port/api/health" 2>/dev/null || true)"
   if [ -n "$body" ] && [ -z "$listen_ms" ]; then
     listen_ms=$(node -e 'console.log(Date.now())')
   fi
-  if printf '%s' "$body" | grep -q '"status":"ok"'; then
+  if node -e 'try {if (JSON.parse(process.argv[1]).status !== "ok") process.exit(1);} catch {process.exit(1);}' "$body"; then
     ready_ms=$(node -e 'console.log(Date.now())')
     # Exercise a real lazy worker from the plain-Node bundle. A readiness-only
     # request would miss workers that still need workspace TypeScript loading.
     avatar="$scratch/avatar.png"
-    if ! curl -fsS --max-time 25 "http://127.0.0.1:$port/api/agent-avatars/cap-v1/arctic-blue/rest.png?size=24&scale=1" -o "$avatar"; then
+    if ! node -e 'fetch(process.argv[1], {signal: AbortSignal.timeout(25000)}).then(async r => {if (!r.ok) throw new Error(`Avatar HTTP ${r.status}`); require("node:fs").writeFileSync(process.argv[2], Buffer.from(await r.arrayBuffer()));}).catch(e => {console.error(e.message); process.exit(1);});' "http://127.0.0.1:$port/api/agent-avatars/cap-v1/arctic-blue/rest.png?size=24&scale=1" "$avatar"; then
       echo "FAIL: bundled avatar worker did not return an image" >&2
       cat "$log" >&2
       exit 1

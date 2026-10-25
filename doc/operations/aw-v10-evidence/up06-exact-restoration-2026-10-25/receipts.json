@@ -22,7 +22,8 @@
         "Test Files  1 passed (1)",
         "Tests  16 passed (16)",
         "Duration  14.38s (transform 9.90s, setup 76ms, import 13.41s, tests 780ms, environment 0ms)"
-      ]
+      ],
+      "sourceCommit": "262aa27cb75fe5705140b80359c03062ce36fb65"
     },
     {
       "name": "up06-managed-checkout-final",
@@ -42,7 +43,8 @@
         "Test Files  1 passed (1)",
         "Tests  18 passed (18)",
         "Duration  14.54s (transform 9.65s, setup 74ms, import 13.32s, tests 1.03s, environment 0ms)"
-      ]
+      ],
+      "sourceCommit": "262aa27cb75fe5705140b80359c03062ce36fb65"
     },
     {
       "name": "up06-execution-workspaces-service-full3",
@@ -62,6 +64,154 @@
         "Test Files  1 passed (1)",
         "Tests  68 passed (68)",
         "Duration  32.06s (transform 10.20s, setup 82ms, import 14.32s, tests 17.52s, environment 0ms)"
+      ],
+      "sourceCommit": "262aa27cb75fe5705140b80359c03062ce36fb65"
+    },
+    {
+      "name": "up06-workspace-metadata-native-focused",
+      "exitCode": 1,
+      "exitSidecar": "up06-workspace-metadata-native-focused.exit",
+      "rawSha256": "d85363a51f30c6f6d55a90315b844a7d769408eeca3fb9f946b7b7ed0c3e2f96",
+      "sanitizedSha256": "d85363a51f30c6f6d55a90315b844a7d769408eeca3fb9f946b7b7ed0c3e2f96",
+      "archiveSha256": "a2470348168a5efb8b5e2189ffd5f74774c88c5690fce9d53c1407a940f42a78",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 2 passed | 68 skipped (71)",
+        "Duration  17.77s (transform 9.57s, setup 71ms, import 13.48s, tests 4.11s, environment 0ms)"
+      ],
+      "sourceCommit": "22b97a442cb840880c47b7a2bfb894480b947836"
+    },
+    {
+      "name": "up06-workspace-metadata-native-final-focused",
+      "exitCode": 0,
+      "exitSidecar": "up06-workspace-metadata-native-final-focused.exit",
+      "rawSha256": "155783c8a4668705afa85be743fe0b7bd2fd8a9ddd2712def42abd73abc3eac9",
+      "sanitizedSha256": "155783c8a4668705afa85be743fe0b7bd2fd8a9ddd2712def42abd73abc3eac9",
+      "archiveSha256": "b12d2eba171601e794830e297fd9b17f0ed38ccf8c6af512f4a8bf22cdef9f27",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  3 passed | 68 skipped (71)",
+        "Duration  20.37s (transform 11.28s, setup 75ms, import 15.53s, tests 4.64s, environment 0ms)"
+      ],
+      "sourceCommit": "22b97a442cb840880c47b7a2bfb894480b947836"
+    },
+    {
+      "name": "up06-workspace-metadata-route-final",
+      "exitCode": 0,
+      "exitSidecar": "up06-workspace-metadata-route-final.exit",
+      "rawSha256": "b7a3687c6539e4e0d725532c663151b093f63457a326de270676cbb9eb570bce",
+      "sanitizedSha256": "b7a3687c6539e4e0d725532c663151b093f63457a326de270676cbb9eb570bce",
+      "archiveSha256": "8e1ee339ede897916ddfbebe6a042b2593dd8374c740733867d0da41c7cc4239",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  15 passed (15)",
+        "Duration  12.87s (transform 9.26s, setup 74ms, import 12.58s, tests 91ms, environment 0ms)"
+      ],
+      "sourceCommit": "22b97a442cb840880c47b7a2bfb894480b947836"
+    },
+    {
+      "name": "up06-workspace-metadata-service-final",
+      "exitCode": 0,
+      "exitSidecar": "up06-workspace-metadata-service-final.exit",
+      "rawSha256": "18a7d55ef8cf730d0e36c23c4c666932cbdd09c12537129643014a29e5767e30",
+      "sanitizedSha256": "428af49ece4ec6e88bb4418ec78b97105ec4ef933db780b0b0065d629e134de7",
+      "archiveSha256": "e45020a2b0878df83380c448692b1b77b2bde54166d335eaee132a9cea772c1a",
+      "redactions": {
+        "ansi": 516,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  71 passed (71)",
+        "Duration  29.91s (transform 9.59s, setup 68ms, import 13.31s, tests 16.42s, environment 0ms)"
+      ],
+      "sourceCommit": "22b97a442cb840880c47b7a2bfb894480b947836"
+    },
+    {
+      "name": "up06-git-credentials-final",
+      "exitCode": 0,
+      "exitSidecar": "up06-git-credentials-final.exit",
+      "rawSha256": "0ee24a56fa7da44319610adaa1b908531720e51581227832fec989414e71412f",
+      "sanitizedSha256": "0ee24a56fa7da44319610adaa1b908531720e51581227832fec989414e71412f",
+      "archiveSha256": "2173968931520978b6aaee963bd8a042e91ac28f2d35f3ada8d97285d85494ac",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  27 passed (27)",
+        "Duration  15.85s (transform 11.52s, setup 88ms, import 15.55s, tests 72ms, environment 0ms)"
+      ],
+      "sourceCommit": "3481ef277701ef3a0d12cde2aeb09081f7e275c4"
+    },
+    {
+      "name": "up06-git-credentials-final2",
+      "exitCode": 0,
+      "exitSidecar": "up06-git-credentials-final2.exit",
+      "rawSha256": "a2a2fd3a3c7261d04b55b6f42518ca030d09db77b742e3aa9d3586fe217b4d05",
+      "sanitizedSha256": "a2a2fd3a3c7261d04b55b6f42518ca030d09db77b742e3aa9d3586fe217b4d05",
+      "archiveSha256": "714415e14218bbbaf261264918a31fe8cc9ab30528709d7c95cd46af3aa3cc48",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  28 passed (28)",
+        "Duration  16.22s (transform 11.63s, setup 93ms, import 15.86s, tests 98ms, environment 0ms)"
+      ],
+      "sourceCommit": "3481ef277701ef3a0d12cde2aeb09081f7e275c4"
+    }
+  ],
+  "updates": [
+    {
+      "sourceCommit": "22b97a442cb840880c47b7a2bfb894480b947836",
+      "meaning": "Current public workspace metadata and target identity protection; full original service71 and route15 pass, including actual PostgreSQL stale lock ordering. Earlier nonreserved-note expectation failure retained. No retrospective proof of existing ownership markers.",
+      "logs": [
+        "up06-workspace-metadata-native-focused",
+        "up06-workspace-metadata-native-final-focused",
+        "up06-workspace-metadata-route-final",
+        "up06-workspace-metadata-service-final"
+      ]
+    },
+    {
+      "sourceCommit": "3481ef277701ef3a0d12cde2aeb09081f7e275c4",
+      "meaning": "Original shared credential factory: unavailable or empty configured credentials and unknown inventory cannot fall through to another secret or server account; actual absent inventory retains configured priority behavior.",
+      "logs": [
+        "up06-git-credentials-final",
+        "up06-git-credentials-final2"
       ]
     }
   ]

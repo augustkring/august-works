@@ -23,7 +23,8 @@
         "Test Files  1 failed | 2 passed (3)",
         "Tests  1 failed | 24 passed (25)",
         "Duration  728ms (transform 55ms, setup 176ms, import 72ms, tests 151ms, environment 0ms)"
-      ]
+      ],
+      "sourceCommit": "994a4730ec84615435a5e2254059195b78f40d88"
     },
     {
       "name": "up10-bundle-controls-final",
@@ -44,7 +45,8 @@
         "Test Files  1 failed | 3 passed (4)",
         "Tests  1 failed | 32 passed (33)",
         "Duration  3.69s (transform 1.33s, setup 222ms, import 2.29s, tests 739ms, environment 0ms)"
-      ]
+      ],
+      "sourceCommit": "994a4730ec84615435a5e2254059195b78f40d88"
     },
     {
       "name": "up10-bundle-controls-final2",
@@ -65,7 +67,8 @@
         "Test Files  1 failed | 4 passed (5)",
         "Tests  1 failed | 41 passed (42)",
         "Duration  7.06s (transform 1.48s, setup 275ms, import 2.48s, tests 3.77s, environment 0ms)"
-      ]
+      ],
+      "sourceCommit": "994a4730ec84615435a5e2254059195b78f40d88"
     },
     {
       "name": "up10-bundle-controls-final3",
@@ -85,7 +88,8 @@
         "Test Files  5 passed (5)",
         "Tests  42 passed (42)",
         "Duration  12.13s (transform 1.50s, setup 576ms, import 2.65s, tests 7.84s, environment 4ms)"
-      ]
+      ],
+      "sourceCommit": "994a4730ec84615435a5e2254059195b78f40d88"
     },
     {
       "name": "up10-plugin-dev-watcher-final",
@@ -105,7 +109,8 @@
         "Test Files  1 passed (1)",
         "Tests  8 passed (8)",
         "Duration  589ms (transform 104ms, setup 71ms, import 121ms, tests 277ms, environment 0ms)"
-      ]
+      ],
+      "sourceCommit": "994a4730ec84615435a5e2254059195b78f40d88"
     },
     {
       "name": "up10-plugin-dev-watcher-root-final",
@@ -125,7 +130,8 @@
         "Test Files  1 passed (1)",
         "Tests  8 passed (8)",
         "Duration  1.05s (transform 314ms, setup 198ms, import 363ms, tests 330ms, environment 0ms)"
-      ]
+      ],
+      "sourceCommit": "994a4730ec84615435a5e2254059195b78f40d88"
     },
     {
       "name": "up10-runtime-bundle-preflight",
@@ -141,7 +147,8 @@
         "credential_field": 0,
         "url_credential": 0
       },
-      "summary": []
+      "summary": [],
+      "sourceCommit": "994a4730ec84615435a5e2254059195b78f40d88"
     },
     {
       "name": "up10-runtime-boot-preflight",
@@ -157,7 +164,8 @@
         "credential_field": 0,
         "url_credential": 0
       },
-      "summary": []
+      "summary": [],
+      "sourceCommit": "994a4730ec84615435a5e2254059195b78f40d88"
     },
     {
       "name": "up10-runtime-boot-stop-preflight",
@@ -173,7 +181,8 @@
         "credential_field": 0,
         "url_credential": 0
       },
-      "summary": []
+      "summary": [],
+      "sourceCommit": "994a4730ec84615435a5e2254059195b78f40d88"
     },
     {
       "name": "up10-runtime-worker-preflight",
@@ -189,7 +198,130 @@
         "credential_field": 0,
         "url_credential": 0
       },
-      "summary": []
+      "summary": [],
+      "sourceCommit": "994a4730ec84615435a5e2254059195b78f40d88"
+    },
+    {
+      "name": "v10-current-typecheck",
+      "exitCode": 0,
+      "exitSidecar": "v10-current-typecheck.exit",
+      "rawSha256": "5d91e37a51c0f9ebe8e4e383c42f0e98c1bb1f625e53067b16f4310e8a4a8f55",
+      "sanitizedSha256": "5d91e37a51c0f9ebe8e4e383c42f0e98c1bb1f625e53067b16f4310e8a4a8f55",
+      "archiveSha256": "fd7b0ec8abb86eb3792f3d67b112434f5f558f6a62e08c3d68b73d917d43a846",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "22b97a442cb840880c47b7a2bfb894480b947836"
+    },
+    {
+      "name": "v10-current-build",
+      "exitCode": 0,
+      "exitSidecar": "v10-current-build.exit",
+      "rawSha256": "2981bf55386c63fe175071a99acef36701a8407aa0fb8d9ddf7fafd7b3ae6f3d",
+      "sanitizedSha256": "ad41ec87bb5514a2b2c0865759ce809c56e7315082c12cd1d62d693a47f1335e",
+      "archiveSha256": "bf0d7a34322583fb9f6430e0c0ea05a3973b6b2f43ab249065d277433f3c7734",
+      "redactions": {
+        "ansi": 72,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "22b97a442cb840880c47b7a2bfb894480b947836"
+    },
+    {
+      "name": "up10-current-built-runtime-bundle",
+      "exitCode": 0,
+      "exitSidecar": "up10-current-built-runtime-bundle.exit",
+      "rawSha256": "4de5906c62ecd05af7f927d840abe3867b28cc87b25f680c824c9c2a970549fe",
+      "sanitizedSha256": "4de5906c62ecd05af7f927d840abe3867b28cc87b25f680c824c9c2a970549fe",
+      "archiveSha256": "3c26f15a42787da10fa8619b6fa2f1a64baf6aa5b19bd5343c0270d779654aad",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "22b97a442cb840880c47b7a2bfb894480b947836"
+    },
+    {
+      "name": "up10-current-built-runtime-worker-stop",
+      "exitCode": 0,
+      "exitSidecar": "up10-current-built-runtime-worker-stop.exit",
+      "rawSha256": "9728a68efa4efb54a0b4bb82eb312a33d0904ef4923878d5057f5d908082fb53",
+      "sanitizedSha256": "9728a68efa4efb54a0b4bb82eb312a33d0904ef4923878d5057f5d908082fb53",
+      "archiveSha256": "fb3d94558dde9373510742e0046f5ebef210822bac12e3ef5832f1031665965a",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "22b97a442cb840880c47b7a2bfb894480b947836"
+    },
+    {
+      "name": "up10-node-container-pull",
+      "exitCode": 0,
+      "exitSidecar": "up10-node-container-pull.exit",
+      "rawSha256": "42bf4f9b7fb84be693b8d4b57c2bfdef920549af7d0eb96e4f6ef66a52dae624",
+      "sanitizedSha256": "42bf4f9b7fb84be693b8d4b57c2bfdef920549af7d0eb96e4f6ef66a52dae624",
+      "archiveSha256": "1cf34a166523e09b3f58bf6680022117b8663660cb7c96cfa845e9cb9568d1ff",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "53e2161fbd15b5f2eeb81fb249ca82220a0d7d0d"
+    },
+    {
+      "name": "up10-amd64-node-container-artifact",
+      "exitCode": 0,
+      "exitSidecar": "up10-amd64-node-container-artifact.exit",
+      "rawSha256": "c555b10bbac0be296d833c00bcc4d78187fb8bbab2fb05499e2d9c8183467656",
+      "sanitizedSha256": "c555b10bbac0be296d833c00bcc4d78187fb8bbab2fb05499e2d9c8183467656",
+      "archiveSha256": "ac02f8d390e6461c3cb0cab07653ecf30b3c6e3315dc0fdb248634d062b3dd05",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "53e2161fbd15b5f2eeb81fb249ca82220a0d7d0d"
+    }
+  ],
+  "updates": [
+    {
+      "sourceCommit": "22b97a442cb840880c47b7a2bfb894480b947836",
+      "meaning": "Whole workspace build exits0. Fresh generated production bundle boots isolated new database, returns real worker PNG and exits0 on SIGTERM. Concurrent source development means these are checkpoint diagnostics, not final stable deployed artifact acceptance.",
+      "logs": [
+        "v10-current-typecheck",
+        "v10-current-build",
+        "up10-current-built-runtime-bundle",
+        "up10-current-built-runtime-worker-stop"
+      ]
+    },
+    {
+      "sourceCommit": "53e2161fbd15b5f2eeb81fb249ca82220a0d7d0d",
+      "meaning": "Pinned Node amd64 container, read-only actual built artifact mount, isolated fresh database, real worker image and clean SIGTERM. This is an artifact runtime check, not a build/qualification of the application production Docker image or arm64.",
+      "logs": [
+        "up10-node-container-pull",
+        "up10-amd64-node-container-artifact"
+      ]
     }
   ]
 }

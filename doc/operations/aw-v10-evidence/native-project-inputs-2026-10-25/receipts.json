@@ -1,0 +1,109 @@
+{
+  "status": "in_progress",
+  "sourceCommit": "53e2161fbd15b5f2eeb81fb249ca82220a0d7d0d",
+  "sourceCommitMeaning": "Archive checkout identity; scoped runs may predate it. Only separately recorded unchanged-source gates establish final tested source identity.",
+  "meaning": "Native Project returned-input capture through actual dispatch association and canonical Human Project owner. Legacy/current history migration deduplicates exact facts, preserves distinct records and holds budget failures. SourceProtocol remains0; no complete-source or consumption grant.",
+  "logs": [
+    {
+      "name": "native-project-input-http-retry1",
+      "exitCode": 1,
+      "exitSidecar": "native-project-input-http-retry1.exit",
+      "rawSha256": "a8612688a8f51b893c09f15ea1862eac65c94e1867220726e0a62a0af77af419",
+      "sanitizedSha256": "ee3b856472bf5f28e7091675013d2a251780f615c18b3dcec48319faa705c5b6",
+      "archiveSha256": "2c487516346a28f546e2b0f66f4c62d1a47db2149f8e3d025036f4db75b22021",
+      "redactions": {
+        "ansi": 72,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 1 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed (1)",
+        "Tests  1 failed | 16 skipped (17)",
+        "Duration  24.74s (transform 14.22s, setup 73ms, import 19.80s, tests 4.73s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "native-project-input-dispatch-final2",
+      "exitCode": 0,
+      "exitSidecar": "native-project-input-dispatch-final2.exit",
+      "rawSha256": "6f2da4557a08d492ac16579bf855d7e8d3c7c3740dac9eb46b46c2aa34387076",
+      "sanitizedSha256": "6f2da4557a08d492ac16579bf855d7e8d3c7c3740dac9eb46b46c2aa34387076",
+      "archiveSha256": "c37aea6bafdce782aa1566e3b5a179762d08ee556596606ed8a65589482a5151",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 36 skipped (37)",
+        "Duration  18.21s (transform 10.38s, setup 81ms, import 13.99s, tests 4.02s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "native-project-input-human-route",
+      "exitCode": 0,
+      "exitSidecar": "native-project-input-human-route.exit",
+      "rawSha256": "a01d6d8294d12a229e9dd8f562160f0148f978e7fcf5ff963f13c69d892c3614",
+      "sanitizedSha256": "a01d6d8294d12a229e9dd8f562160f0148f978e7fcf5ff963f13c69d892c3614",
+      "archiveSha256": "b9703ea37f4dbe787d028915a91983bba1ecc3723d284d3a9340ca5fb6c0ac09",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 13 skipped (14)",
+        "Duration  19.57s (transform 11.55s, setup 69ms, import 15.41s, tests 3.98s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "native-project-history-merge-final2",
+      "exitCode": 0,
+      "exitSidecar": "native-project-history-merge-final2.exit",
+      "rawSha256": "f553672856081feea9937f1e5324c43cff92a171389c029b7ac4a86bd45a2e03",
+      "sanitizedSha256": "f553672856081feea9937f1e5324c43cff92a171389c029b7ac4a86bd45a2e03",
+      "archiveSha256": "8f09422ea0defedb00e9dc186bf0e59b56e6c8013cc69aeba972cf069eb35048",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  51 passed (51)",
+        "Duration  33.66s (transform 11.35s, setup 127ms, import 18.76s, tests 14.54s, environment 0ms)"
+      ]
+    },
+    {
+      "name": "runner-api-qualified-project-human-final3",
+      "exitCode": 0,
+      "exitSidecar": "runner-api-qualified-project-human-final3.exit",
+      "rawSha256": "bb12d3ce3ff67d27dbe8867f36714eab135d092f61cedf36422219b97fc1d18e",
+      "sanitizedSha256": "d56edf510697565626f379d157a0a85acc22ecb17d4bf19ae684dcbeeedeff7f",
+      "archiveSha256": "d7c15a0501a481ecdee4a09393f48241d8bd84333a1356c6b51b302443de1db1",
+      "redactions": {
+        "ansi": 82,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 17 skipped (18)",
+        "Duration  32.78s (transform 19.14s, setup 71ms, import 25.98s, tests 6.61s, environment 0ms)"
+      ]
+    }
+  ]
+}
