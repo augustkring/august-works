@@ -110,11 +110,11 @@ describe("fresh native governed context", () => {
     expect(call.query).not.toContain("title-after-limit");
   });
   it("retains the exact created manifest with its delivered markdown", async () => {
-    const assembled = result("  Exact current input  ");
+    const assembled = result("  Exact current input  \n");
     const manifest = { id: "66666666-6666-4666-8666-666666666666", queryHash: "a".repeat(64), policySnapshotHash: "b".repeat(64) };
     const assemble = vi.fn<ContextAssemble>().mockResolvedValue({ ...assembled, packet: { ...assembled.packet, manifest } });
     const value = await assembleFreshNativeGovernedContext({} as Db, baseInput, { assemble });
-    expect(value).toEqual({ markdown: "Exact current input", manifest });
+    expect(value).toEqual({ markdown: "  Exact current input  \n", manifest });
   });
 
 });

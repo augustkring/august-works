@@ -29,6 +29,13 @@ export class ReadOnlyModelTransportError extends Error {
     super(`Read-only model call: ${code}`);
   }
 }
+export type ReadOnlyModelKnownUsage = { responseHash: string; usage: { inputTokens: number; outputTokens: number } };
+export class ReadOnlyModelKnownUsageError extends ReadOnlyModelTransportError {
+  constructor(
+    code: "invalid_response" | "response_limit",
+    readonly knownUsage: ReadOnlyModelKnownUsage,
+  ) { super(code); }
+}
 
 function boundedRecord(max: number) {
   return z.record(z.string(), z.unknown()).superRefine((value, context) => {
@@ -365,6 +372,39 @@ export async function anthropicManagedMessagesCall(
     }
     const text = new TextDecoder("utf-8", { fatal: true }).decode(Buffer.concat(chunks));
     if (text.includes(credential)) throw new ReadOnlyModelTransportError("credential_boundary");
+    const responseHash = createHash("sha256").update(text, "utf8").digest("hex");
+    const raw = JSON.parse(text) as unknown;
+    const rawUsage = z.object({
+      input_tokens: z.number().int().safe().nonnegative(),
+      output_tokens: z.number().int().safe().nonnegative(),
+      cache_creation_input_tokens: z.number().int().safe().nonnegative().optional(),
+      cache_read_input_tokens: z.number().int().safe().nonnegative().optional(),
+      cache_creation: z.object({ ephemeral_5m_input_tokens: z.number().int().safe().nonnegative().optional(),
+        ephemeral_1h_input_tokens: z.number().int().safe().nonnegative().optional() }).passthrough().optional(),
+    }).passthrough().safeParse(raw && typeof raw === "object" && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>).usage : undefined);
+    const topLevelTier = raw && typeof raw === "object" && !Array.isArray(raw)
+      ? (raw as Record<string, unknown>).service_tier : undefined;
+    const serverToolUse = rawUsage.success ? rawUsage.data.server_tool_use as Record<string, unknown> | undefined : undefined;
+    const knownUsage = rawUsage.success &&
+      (topLevelTier === undefined || topLevelTier === "standard") &&
+      Object.keys(rawUsage.data).every((key) => ["input_tokens", "output_tokens", "cache_creation_input_tokens",
+        "cache_read_input_tokens", "cache_creation", "service_tier", "server_tool_use"].includes(key)) &&
+      (rawUsage.data.service_tier === undefined || rawUsage.data.service_tier === "standard") &&
+      (!rawUsage.data.cache_creation || Object.keys(rawUsage.data.cache_creation).every((key) =>
+        ["ephemeral_5m_input_tokens", "ephemeral_1h_input_tokens"].includes(key))) &&
+      (!serverToolUse || (Object.keys(serverToolUse).every((key) =>
+        ["web_search_requests", "web_fetch_requests"].includes(key)) &&
+        (serverToolUse.web_search_requests ?? 0) === 0 &&
+        (serverToolUse.web_fetch_requests ?? 0) === 0)) &&
+      rawUsage.data.input_tokens <= input.maximumInputTokens &&
+      rawUsage.data.output_tokens <= request.max_tokens &&
+      (rawUsage.data.cache_creation_input_tokens ?? 0) === 0 && (rawUsage.data.cache_read_input_tokens ?? 0) === 0 &&
+      (rawUsage.data.cache_creation?.ephemeral_5m_input_tokens ?? 0) === 0 &&
+      (rawUsage.data.cache_creation?.ephemeral_1h_input_tokens ?? 0) === 0
+      ? { responseHash, usage: { inputTokens: rawUsage.data.input_tokens, outputTokens: rawUsage.data.output_tokens } }
+      : null;
+    try {
     const parsed = z.object({
       id: z.string().min(1).max(200),
       type: z.literal("message"), role: z.literal("assistant"),
@@ -391,7 +431,7 @@ export async function anthropicManagedMessagesCall(
         }).strict().optional(),
       }).strict(),
       service_tier: z.literal("standard").optional(),
-    }).strict().parse(JSON.parse(text));
+    }).strict().parse(raw);
     assertBoundedJson(parsed);
     if (parsed.usage.output_tokens > request.max_tokens || parsed.usage.input_tokens > input.maximumInputTokens ||
       (parsed.usage.cache_creation_input_tokens ?? 0) !== 0 || (parsed.usage.cache_read_input_tokens ?? 0) !== 0 ||
@@ -422,10 +462,16 @@ export async function anthropicManagedMessagesCall(
     events.push(["message_stop", { type: "message_stop" }]);
     return {
       usage: { inputTokens: parsed.usage.input_tokens, outputTokens: parsed.usage.output_tokens },
-      responseHash: createHash("sha256").update(text, "utf8").digest("hex"),
+      responseHash,
       responseContent: parsed.content,
       sse: events.map(([event, data]) => `event: ${event}\ndata: ${JSON.stringify(data)}\n\n`).join(""),
     };
+    } catch (error) {
+      if (knownUsage && !(error instanceof ReadOnlyModelKnownUsageError) &&
+        (error instanceof ReadOnlyModelTransportError || error instanceof z.ZodError))
+        throw new ReadOnlyModelKnownUsageError("invalid_response", knownUsage);
+      throw error;
+    }
   } catch (error) {
     if (error instanceof ReadOnlyModelTransportError) throw error;
     throw new ReadOnlyModelTransportError("invalid_response");

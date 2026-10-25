@@ -173,6 +173,7 @@ const state = vi.hoisted(() => ({
     async (): Promise<{
       attachments: Array<Record<string, unknown>>;
       sourceCaptures?: Array<Record<string, unknown>>;
+      requiredSavedSources?: Array<{ attachmentId: string; sha256: string }>;
       cleanup: () => Promise<void>;
     }> => ({
       attachments: [],
@@ -8057,6 +8058,57 @@ describe("runnerd provider runtime wiring", () => {
     expect(cleanup).toHaveBeenCalledTimes(1);
   });
 
+  it("refuses a selected saved source on a remote target before provider dispatch", async () => {
+    const cleanup = vi.fn(async () => undefined);
+    const attachmentId = "00000000-0000-4000-8000-000000009901";
+    const sha256 = "b".repeat(64);
+    const stagedExecution = {
+      ...execution,
+      binding: { ...execution.binding, runId: "run-selected-source-remote" },
+    } as NativeExecutionInputV1;
+    const updates: Array<{ table: unknown; values: Record<string, unknown> }> = [];
+    state.stageNativeRunnerWakeAttachments.mockResolvedValueOnce({
+      attachments: [],
+      sourceCaptures: [{
+        input: {
+          kind: "attachment",
+          issueId: stagedExecution.binding.issueId,
+          attachmentId,
+          commentId: null,
+          assetId: "00000000-0000-4000-8000-000000009904",
+          sha256,
+          byteSize: 12,
+          disposition: "remote_workspace_staging_unsupported",
+        },
+        payloadSourceSnapshot: null,
+      }],
+      requiredSavedSources: [{ attachmentId, sha256 }],
+      cleanup,
+    });
+    state.execute.mockClear();
+    state.createBackend.mockClear();
+    state.createTransport.mockClear();
+
+    await expect(executePaperclipNativeSession({
+      db: leaseDb(stagedExecution, {}, {}, updates),
+      execution: stagedExecution,
+      runnerInstanceId: "runner-selected-source-remote",
+      useRunnerd: true,
+      runnerExecutionTarget: {
+        kind: "remote",
+        transport: "sandbox",
+        environmentId: "environment-selected-source-remote",
+        remoteCwd: "/home/daytona/workspace",
+        runner: { execute: vi.fn() },
+      } as never,
+    })).rejects.toThrow("native_reconstruction_remote_workspace_staging_unsupported");
+
+    expect(state.execute).not.toHaveBeenCalled();
+    expect(state.createBackend).not.toHaveBeenCalled();
+    expect(state.createTransport).not.toHaveBeenCalled();
+    expect(cleanup).toHaveBeenCalledOnce();
+  });
+
   it.each([false, true])("records the selected turn input before provider dispatch (write fails: %s)", async failWrite => {
     const updates: Array<{ table: unknown; values: Record<string, unknown> }> = [];
     const prior = { eventSeq: 0, attempt: 1, responsibleUserId: null, turnInputDigest: "a".repeat(64) };
@@ -8135,6 +8187,7 @@ describe("runnerd provider runtime wiring", () => {
       expect(profile.nativeToolCallDispatchAssociations).toEqual([{
         dispatchId: "11111111-1111-4111-8111-111111111111", eventSeq: 1, attempt: 1,
         turnId: "provider-turn-call", callId: "model-document-read", tool: "read_document",
+        argumentsHash: nativeSha256({ key: "notes" }),
       }]);
       expect(JSON.stringify(profile)).not.toContain("PRIVATE_DOCUMENT_RESULT");
       expect(profile).not.toHaveProperty("nativeInputSourceReceipt");

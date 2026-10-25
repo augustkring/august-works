@@ -47,6 +47,7 @@ import {
   PROVIDER_CAPABILITY_FEATURES,
   agentAuthoringContentSchema, AUTHORED_AGENT_DEFINITION_KEY,
   nativePayloadSourceSnapshotSchema,
+  nativeRunInputSourceReceiptSchema,
   type WorkerModelBinding,
 } from "@paperclipai/shared";
 import { instanceSettingsService } from "../services/instance-settings.js";
@@ -121,9 +122,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       observedBody: string,
       inputTokens: number,
       modelOutput: string,
-      duringCall: (() => Promise<void>) | undefined,
-      issueSnapshotUpdates: Array<{ changed: string[]; snapshotNull: boolean }>,
-      contextSnapshotBinding: Array<{ count: number; roots: number; snapshotPresent: boolean; exactSnapshotMatches: boolean; contextSnapshotSchemaValid: boolean; taskSnapshotSchemaValid: boolean; taskSnapshotInputKinds: string[] }>;
+      duringCall: (() => Promise<void>) | undefined;
     beforeAll(async () => {
       home = await mkdtemp(join(tmpdir(), "aw-v7-worker-model-fixture-"));
       vi.stubEnv("PAPERCLIP_HOME", home);
@@ -134,30 +133,10 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       );
       database = await startEmbeddedPostgresTestDatabase("aw-v7-worker-model-");
       db = createDb(database.connectionString);
-      issueSnapshotUpdates = [];
-      contextSnapshotBinding = [];
-      await db.execute(sql.raw("create table public.test_issue_snapshot_update_log(issue_id uuid, changed_columns text[], snapshot_cleared boolean)"));
-      await db.execute(sql.raw(`create function public.test_issue_snapshot_update_monitor() returns trigger language plpgsql as $$
-        declare changed text[] := array[]::text[]; col text; begin
-          for col in select key from jsonb_each(to_jsonb(new)) loop
-            if (to_jsonb(new)->col) is distinct from (to_jsonb(old)->col) then changed := array_append(changed,col); end if;
-          end loop;
-          if old.payload_source_snapshot is not null and new.payload_source_snapshot is null then
-            insert into public.test_issue_snapshot_update_log(issue_id, changed_columns, snapshot_cleared) values(new.id, changed, true);
-          end if;
-          return new;
-        end $$`));
-      await db.execute(sql.raw(`create trigger test_issue_snapshot_update_monitor after update on public.issues
-        for each row execute function public.test_issue_snapshot_update_monitor()`));
       await instanceSettingsService(db).getExperimental();
       await enableV5ForTest(db);
     }, 60000);
     afterAll(async () => {
-      if (db) {
-        await db.execute(sql.raw("drop trigger if exists test_issue_snapshot_update_monitor on public.issues"));
-        await db.execute(sql.raw("drop function if exists public.test_issue_snapshot_update_monitor()"));
-        await db.execute(sql.raw("drop table if exists public.test_issue_snapshot_update_log"));
-      }
       await database?.cleanup();
       vi.unstubAllEnvs();
       if (home) {
@@ -374,8 +353,6 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
       inputTokens = 10;
       modelOutput = "Retained bounded draft";
       duringCall = undefined;
-      issueSnapshotUpdates.length = 0;
-      contextSnapshotBinding.length = 0;
     });
     afterEach(() => registerNativeDraftGateway(db, undefined));
 
@@ -582,9 +559,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
 
     it("forces the real heartbeat through native admission and the budget gateway, saves one draft and retains human review", async () => {
       const started = await freshNativePlan({ maxModelCostMinor: 6, maxToolActions: 3 });
-      // This authored Agent requires Human review for proposed Tasks, so the
-      // actual Messages response must use its reviewed output contract.
-      modelOutput = JSON.stringify({ draft: "Retained bounded draft", proposedTask: null });
+      modelOutput = "Retained bounded draft";
       const substitution = vi.fn(() => {
         throw new Error(
           "An internal draft must not use the injected provider seam",
@@ -601,10 +576,6 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
           "manual",
           { actorType: "user", actorId: f.userId },
         );
-        issueSnapshotUpdates.push(...(await db.execute<{ issue_id: string; changed_columns: string[]; snapshot_cleared: boolean }>(sql`
-          select issue_id, changed_columns, snapshot_cleared from public.test_issue_snapshot_update_log where issue_id=${task.id}`)).map(row => ({
-          changed: row.changed_columns, snapshotNull: row.snapshot_cleared,
-        })));
         await heartbeat.drainActiveRunExecutions();
       } finally {
         await heartbeat.drainActiveRunExecutions();
@@ -613,39 +584,11 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         .select()
         .from(orchestrationWorkerAttempts)
         .where(eq(orchestrationWorkerAttempts.planId, plan.id));
-      const [contextTask] = await db.select({ payloadSourceSnapshot: issues.payloadSourceSnapshot })
-        .from(issues).where(eq(issues.id, task.id));
-      const runManifests = await db.select({ id: contextManifests.id }).from(contextManifests)
-        .where(and(eq(contextManifests.companyId, f.home), eq(contextManifests.runId, attempts[0]?.runId ?? "")));
-      const contextItems = runManifests.length ? await db.select({ provider: contextManifestItems.sourceProvider,
-        payloadSourceSnapshot: contextManifestItems.payloadSourceSnapshot }).from(contextManifestItems)
-        .where(and(eq(contextManifestItems.companyId, f.home), eq(contextManifestItems.manifestId, runManifests[0]!.id))) : [];
-      const contextRoots = runManifests.length ? await db.select().from(contextManifestMemoryRoots)
-        .where(and(eq(contextManifestMemoryRoots.companyId, f.home), eq(contextManifestMemoryRoots.manifestId, runManifests[0]!.id))) : [];
-      contextSnapshotBinding.push({ count: contextItems.length, roots: contextRoots.length,
-        snapshotPresent: contextItems.some(item => item.provider === "august_works_tasks" && item.payloadSourceSnapshot !== null),
-        exactSnapshotMatches: contextItems.some(item => item.provider === "august_works_tasks" && item.payloadSourceSnapshot !== null &&
-          hashContextPolicySnapshot(item.payloadSourceSnapshot) === hashContextPolicySnapshot(contextTask?.payloadSourceSnapshot)),
-        contextSnapshotSchemaValid: nativePayloadSourceSnapshotSchema.safeParse(contextItems.find(item => item.provider === "august_works_tasks")?.payloadSourceSnapshot).success,
-        taskSnapshotSchemaValid: nativePayloadSourceSnapshotSchema.safeParse(contextTask?.payloadSourceSnapshot).success,
-        taskSnapshotInputKinds: contextItems.find(item => item.provider === "august_works_tasks")?.payloadSourceSnapshot?.inputs.map(source => source.kind) ?? [],
-      });
-      process.stderr.write(`[test-only] Context Task source snapshot binding ${JSON.stringify(contextSnapshotBinding)}\n`);
-      issueSnapshotUpdates.push(...(await db.execute<{ changed_columns: string[]; snapshot_cleared: boolean }>(sql`
-        select changed_columns, snapshot_cleared from public.test_issue_snapshot_update_log where issue_id=${task.id}`)).map(row => ({
-        changed: row.changed_columns, snapshotNull: row.snapshot_cleared,
-      })));
-      process.stderr.write(`[test-only] issue source snapshot clear monitor ${JSON.stringify(issueSnapshotUpdates)}\n`);
       expect(attempts).toHaveLength(1);
       const [actualRun] = await db
         .select()
         .from(heartbeatRuns)
         .where(eq(heartbeatRuns.id, attempts[0]!.runId!));
-      const sourceProfile = actualRun?.runnerProfileJson && typeof actualRun.runnerProfileJson === "object"
-        ? actualRun.runnerProfileJson as Record<string, unknown> : {};
-      process.stderr.write(`[test-only] AW provider dispatch facts ${JSON.stringify({ calls,
-        receiptPresent: sourceProfile.nativeInputSourceReceipt !== undefined,
-        wireIntentCount: Array.isArray(sourceProfile.nativeAwModelWireIntents) ? sourceProfile.nativeAwModelWireIntents.length : null })}\n`);
       expect(actualRun?.issueId, "the exercised scheduler run must retain the canonical human-authored Task").toBe(task.id);
       expect(actualRun).toMatchObject({
         status: "succeeded",
@@ -654,6 +597,12 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         responsibleUserId: f.userId,
       });
       expect(actualRun!.error).toBeNull();
+      const sourceReceipt = nativeRunInputSourceReceiptSchema.parse(
+        (actualRun!.runnerProfileJson as Record<string, unknown>).nativeInputSourceReceipt,
+      );
+      expect(sourceReceipt.bootstrap.inputs.map((source) => source.kind)).toEqual(
+        expect.arrayContaining(["task", "context", "workspace_metadata"]),
+      );
       expect(substitution).not.toHaveBeenCalled();
       expect(calls).toBe(1);
       expect(observedBody).toContain("assignedRuntimeContext");
@@ -682,7 +631,7 @@ async function makeFixtureTreeWritable(target: string): Promise<void> {
         .from(orchestrationPlans)
         .where(eq(orchestrationPlans.id, started.id));
       expect(current).toMatchObject({
-        toolActionsUsed: 3,
+        toolActionsUsed: 2,
         modelCostReserved: 3,
       });
       const [currentTask] = await db

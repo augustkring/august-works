@@ -23736,10 +23736,22 @@ export function heartbeatService(
               references: nativeBootstrapTaskMarkdownSourceMap?.references ?? null,
               candidates: nativeSourceCandidates,
               runtimeInputs: capturedAuthoredSources?.inputs ?? null,
-              additionalInputs: completionContract ? [{ kind: "completion_contract",
-                issueId: issueRef.id, contractId: completionContract.row.id,
-                revision: String(completionContract.row.revision), contentHash: completionContract.row.canonicalSha256 },
-                ...(nativeTaskWakeSource ? [nativeTaskWakeSource] : [])] : null,
+              additionalInputs: [
+                ...(completionContract ? [{ kind: "completion_contract" as const,
+                  issueId: issueRef.id, contractId: completionContract.row.id,
+                  revision: String(completionContract.row.revision), contentHash: completionContract.row.canonicalSha256 }] : []),
+                ...(nativeTaskWakeSource ? [nativeTaskWakeSource] : []),
+                { kind: "workspace_metadata" as const, runId: run.id,
+                  executionWorkspaceId: nativeExecution.binding.executionWorkspaceId,
+                  origin: persistedExecutionWorkspace ? "execution_workspace" as const :
+                    (executionWorkspace.source === "agent_home" ? "agent_home" as const : "task_session" as const),
+                  sourceVersion: persistedExecutionWorkspace?.updatedAt?.toISOString() ??
+                    (executionWorkspace.source === "agent_home" ? `agent-home:${agent.id}:v1` : `task-session:${run.id}`),
+                  contentHash: createHash("sha256").update(JSON.stringify({
+                    cwd: nativeExecution.workspace.cwd, repoUrl: nativeExecution.workspace.repoUrl,
+                    repoRef: nativeExecution.workspace.repoRef, branchName: nativeExecution.workspace.branchName,
+                  }), "utf8").digest("hex") },
+              ],
               contextManifestIds: nativeBootstrapContextManifests,
               governedContextMarkdown,
               contextWitnessMarkdown: v5Fabric?.inputContextSourceMarkdown ?? governedContextMarkdown,
@@ -23747,10 +23759,6 @@ export function heartbeatService(
               rolePackInputs: v5Fabric ? v5Fabric.inputRolePackSources : [],
               unsupportedInputPresent: Object.values(nativeBootstrapUnsupported).some(Boolean),
             });
-            console.warn("[test-only] bootstrap Context binding facts", Boolean(v5Fabric), Boolean(v5Fabric?.inputContextSourceWitness),
-              Boolean(freshGovernedContext?.sourceWitness), nativeBootstrapContextManifests?.length ?? null,
-              Boolean(governedContextMarkdown?.trim()), Boolean(v5Fabric?.inputContextSourceMarkdown?.trim()),
-              Boolean(nativeBootstrapSourceSet));
             nativeBootstrapSourceClosure = nativeBootstrapSourceSet
               ? { sourceSet: nativeBootstrapSourceSet,
                   taskEnvelopeDigest: createHash("sha256").update(JSON.stringify(nativeExecution.task), "utf8").digest("hex") }
@@ -27329,7 +27337,17 @@ export function heartbeatService(
                 // attachment source snapshots, task authority and retry state
                 // at the owner admission boundary. The dispatch worker's
                 // earlier validation is not a durable grant.
-                const { validateExecutionReconciliation } = await import("./execution-recovery-resolution.js");
+                const { canReadCurrentWorkspaceCommentSource, validateExecutionReconciliation } = await import("./execution-recovery-resolution.js");
+                const readerRaw = action.evidence.workspaceReconstructionReader;
+                const reader = readerRaw && typeof readerRaw === "object" && !Array.isArray(readerRaw)
+                  ? readerRaw as Record<string, unknown> : null;
+                const currentReader = reader?.source === "local_implicit"
+                  ? { type: "board" as const, source: "local_implicit" as const }
+                  : reader && reader.source === "session" && typeof reader.userId === "string" && typeof reader.sessionId === "string"
+                  ? { type: "board" as const, source: "session" as const, userId: reader.userId,
+                      sessionId: reader.sessionId, companyIds: [issue.companyId],
+                      authenticatedCredentialExpiresAt: typeof reader.credentialExpiresAt === "number" ? reader.credentialExpiresAt : null }
+                  : null;
                 await validateExecutionReconciliation({
                   db: tx as unknown as Db,
                   companyId: issue.companyId,
@@ -27337,6 +27355,9 @@ export function heartbeatService(
                   agentId,
                   sourceRunId,
                   decision: decision as unknown as ExecutionReconciliation,
+                  ...(currentReader ? { canReadCommentSource: (commentId: string) => canReadCurrentWorkspaceCommentSource({
+                    db: tx as unknown as Db, companyId: issue.companyId, issueId: issue.id, commentId, actor: currentReader,
+                  }) } : {}),
                 });
               } else if ((readNonEmptyString(decision.workspaceRepairEvidence)?.length ?? 0) < 20) {
                 return { kind: "skipped" as const };

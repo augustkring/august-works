@@ -2,6 +2,7 @@ import { describe, expect, it, vi } from "vitest";
 import { createHash } from "node:crypto";
 import {
   anthropicManagedMessagesCall,
+  ReadOnlyModelKnownUsageError,
   anthropicReadOnlyCall,
   readOnlyModelEnvelopeBytes,
 } from "../services/orchestration/read-only-model-transport.js";
@@ -287,6 +288,25 @@ describe("managed Anthropic Messages broker transport", () => {
     ]) await expect(anthropicManagedMessagesCall(managedRequest, {
       model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
     }, key, new AbortController().signal, { fetch: async () => json({ ...toolResponse, usage }) })).rejects.toThrow("invalid_response");
+  });
+  it("retains bounded authenticated usage when provider content names an unadvertised tool", async () => {
+    const fetch = vi.fn(async () => json({ ...toolResponse,
+      content: [{ type: "tool_use", id: "tool_fixture", name: "unlisted_tool", input: { private: "never persist" } }],
+    }));
+    const error = await anthropicManagedMessagesCall(managedRequest, {
+      model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
+    }, key, new AbortController().signal, { fetch }).catch((value: unknown) => value);
+    expect(error).toBeInstanceOf(ReadOnlyModelKnownUsageError);
+    expect(error).toMatchObject({ knownUsage: { usage: { inputTokens: 20, outputTokens: 10 } } });
+    expect(JSON.stringify(error)).not.toContain("never persist");
+  });
+  it("does not price malformed content with unqualified provider usage", async () => {
+    const error = await anthropicManagedMessagesCall(managedRequest, {
+      model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
+    }, key, new AbortController().signal, { fetch: async () => json({ ...toolResponse, service_tier: "priority",
+      content: [{ type: "tool_use", id: "tool_fixture", name: "unlisted_tool", input: {} }],
+    }) }).catch((value: unknown) => value);
+    expect(error).not.toBeInstanceOf(ReadOnlyModelKnownUsageError);
   });
   it("accepts documented standard-tier and zero-only ancillary usage counters", async () => {
     const fetch = vi.fn(async () => json({

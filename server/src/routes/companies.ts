@@ -754,8 +754,8 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
           privateWorkAdmission: "closed",
           pauseAutomations: importBody.pauseAutomations === true,
           checkCancellation,
-          onSourceReleaseReview: admittedJob ? receipt => importJobs.recordSourceReleaseReview(admittedJob!, receipt, req.actor) : undefined,
-          onSourceReleaseTargetBound: admittedJob ? companyId => importJobs.bindSourceReleaseTarget(admittedJob!, companyId, req.actor) : undefined,
+          onSourceReleaseReview: admittedJob ? async receipt => { await importJobs.recordSourceReleaseReview(admittedJob!, receipt, req.actor); } : undefined,
+          onSourceReleaseTargetBound: admittedJob ? async companyId => { await importJobs.bindSourceReleaseTarget(admittedJob!, companyId, req.actor); } : undefined,
         });
         // The import is committed. Settlement (hooks) runs before the
         // best-effort audit entry so a logging failure cannot make a

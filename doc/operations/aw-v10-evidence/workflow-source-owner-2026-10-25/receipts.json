@@ -2472,6 +2472,145 @@
         "Duration  37.71s (transform 9.99s, setup 81ms, import 14.16s, tests 23.35s, environment 0ms)"
       ],
       "sourceCommit": "9dd1402e25e0b74654f955ae707cf2bb088799c7"
+    },
+    {
+      "name": "aw-source-closure-final-green",
+      "exitCode": 0,
+      "exitSidecar": "aw-source-closure-final-green.exit",
+      "rawSha256": "bf497cdef9b5fbac41e1897fc8d2938ef0abec7e1220a349f028b978ebad487b",
+      "sanitizedSha256": "bf497cdef9b5fbac41e1897fc8d2938ef0abec7e1220a349f028b978ebad487b",
+      "archiveSha256": "94130b1bd742ff27fba056fa0dc20eed94f5af89b6040ebb883b7e7783bac093",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 64 skipped (65)",
+        "Duration  31.64s (transform 10.18s, setup 69ms, import 14.38s, tests 17.08s, environment 0ms)"
+      ],
+      "sourceCommit": "3c56d2c2bc2e4d9272482e20d9065a9d1f4ccafa"
+    },
+    {
+      "name": "aw-reader-closure-tests",
+      "exitCode": 0,
+      "exitSidecar": "aw-reader-closure-tests.exit",
+      "rawSha256": "62c9cbcd49cb2e3c7bd5a037208eccbee62fc26bede17d431c5bb7efdbbe2f87",
+      "sanitizedSha256": "62c9cbcd49cb2e3c7bd5a037208eccbee62fc26bede17d431c5bb7efdbbe2f87",
+      "archiveSha256": "d142c41eb8c2ee79fe9da7d91d778a07775ba75a4b623e3fd6164f8839797a12",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  2 passed (2)",
+        "Tests  41 passed (41)",
+        "Duration  50.94s (transform 10.26s, setup 138ms, import 17.44s, tests 33.10s, environment 0ms)"
+      ],
+      "sourceCommit": "3c56d2c2bc2e4d9272482e20d9065a9d1f4ccafa"
+    },
+    {
+      "name": "v10-latest-token-gates",
+      "exitCode": 0,
+      "exitSidecar": "v10-latest-token-gates.exit",
+      "rawSha256": "6afc6ad896a24825708eb6e5f73f4787bcb6da8c5ed681b9916431439e0bc780",
+      "sanitizedSha256": "6afc6ad896a24825708eb6e5f73f4787bcb6da8c5ed681b9916431439e0bc780",
+      "archiveSha256": "54cb5fcb68faef60e731259e2486419a024cbc683cd5dd47dca7b8ba0d18a3a9",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "3c56d2c2bc2e4d9272482e20d9065a9d1f4ccafa"
+    },
+    {
+      "name": "v10-latest-help-registry",
+      "exitCode": 0,
+      "exitSidecar": "v10-latest-help-registry.exit",
+      "rawSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "sanitizedSha256": "400154533b2f266c494a57ee480fe073567dafa2e87b826ac0cb0676b46885bc",
+      "archiveSha256": "9fc8ba837b9bf91304d8cb7d8f50559a74c76354fdbd9b6b6428562554a47350",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "3c56d2c2bc2e4d9272482e20d9065a9d1f4ccafa"
+    },
+    {
+      "name": "up06-native-runner-handoff-retry-20261025",
+      "exitCode": 0,
+      "exitSidecar": "up06-native-runner-handoff-retry-20261025.exit",
+      "rawSha256": "015bc7c3f5ffb7a722f406399241d86c00e243c63809271968319125b9ffd361",
+      "sanitizedSha256": "015bc7c3f5ffb7a722f406399241d86c00e243c63809271968319125b9ffd361",
+      "archiveSha256": "b812c05c64aa94a98d5fd59e558b5a5cc09b22d308808a840dbd7d58ea138c27",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  19 passed (19)",
+        "Duration  39.13s (transform 10.37s, setup 70ms, import 14.33s, tests 24.62s, environment 0ms)"
+      ],
+      "sourceCommit": "3c56d2c2bc2e4d9272482e20d9065a9d1f4ccafa"
+    },
+    {
+      "name": "up06-descriptor-reconstruction-latest-20261025",
+      "exitCode": 0,
+      "exitSidecar": "up06-descriptor-reconstruction-latest-20261025.exit",
+      "rawSha256": "5ba6e07511306d856aefd82e69a43f4912f8e53a5c6c2298df1c0490106e2a24",
+      "sanitizedSha256": "f4f843fa7b793f844672458d12a1d78ab796397ddca8e008d9a14f079759a73d",
+      "archiveSha256": "886b96bf71a3e4ccf05e77370d7a3ef5ecb54cbf8fb0a9be17b2517897a6de55",
+      "redactions": {
+        "ansi": 12,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 12 skipped (13)",
+        "Duration  33.34s (transform 9.92s, setup 69ms, import 14.05s, tests 19.10s, environment 0ms)"
+      ],
+      "sourceCommit": "3c56d2c2bc2e4d9272482e20d9065a9d1f4ccafa"
+    },
+    {
+      "name": "up06-remote-selected-source-20261025",
+      "exitCode": 0,
+      "exitSidecar": "up06-remote-selected-source-20261025.exit",
+      "rawSha256": "e49d0626910e5c66c6a0ddb15985a58abce1d8729d9248efa30dd8aa2f2cee2b",
+      "sanitizedSha256": "e49d0626910e5c66c6a0ddb15985a58abce1d8729d9248efa30dd8aa2f2cee2b",
+      "archiveSha256": "7c3ce730cbc4a739eecaf6154904019c13561e470e00053220e0bd53b4baa4a3",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  1 passed | 473 skipped (474)",
+        "Duration  14.03s (transform 10.19s, setup 74ms, import 13.83s, tests 8ms, environment 0ms)"
+      ],
+      "sourceCommit": "3c56d2c2bc2e4d9272482e20d9065a9d1f4ccafa"
     }
   ],
   "updates": [
@@ -2848,6 +2987,19 @@
         "jev-http-route-tests5",
         "jev-ui-consent-tests2",
         "jev-original-reservation-and-ui-typecheck"
+      ]
+    },
+    {
+      "sourceCommit": "3c56d2c2bc2e4d9272482e20d9065a9d1f4ccafa",
+      "meaning": "Scoped AW actual heartbeat/source/transport software fixture; full managed OpenCode and final stable-source gates remain pending",
+      "logs": [
+        "aw-source-closure-final-green",
+        "aw-reader-closure-tests",
+        "v10-latest-token-gates",
+        "v10-latest-help-registry",
+        "up06-native-runner-handoff-retry-20261025",
+        "up06-descriptor-reconstruction-latest-20261025",
+        "up06-remote-selected-source-20261025"
       ]
     }
   ],

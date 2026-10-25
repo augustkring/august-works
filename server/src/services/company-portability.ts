@@ -2,6 +2,7 @@ import { logger } from "../middleware/logger.js";
 import { exportCompanyStateV7 } from "./enterprise/portability.js";
 import { authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, issueReadSqlCondition, projectReadSqlCondition, type AuthorizationActor } from "./authorization.js";
 import { assertAnalyticalContextPayloadAccess } from "./analytical-context-authority.js";
+import { assertNativeDocumentRevisionCurrentSourceAccess } from "./native-direct-input.js";
 import { agentAppearanceSchema } from "@paperclipai/shared";
 import { createHash, randomUUID } from "node:crypto";
 import { promises as fs } from "node:fs";
@@ -3660,7 +3661,8 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         || ("responsibleUserId" in item && item.responsibleUserId != null)
         || ("createdByUserId" in item && item.createdByUserId != null)
         || ("privacyOwnerUserId" in item && item.privacyOwnerUserId != null)
-        || ("personalOwnerUserId" in item && item.personalOwnerUserId != null));
+        || ("personalOwnerUserId" in item && item.personalOwnerUserId != null)
+        || ("sourceProvenanceQualified" in item && item.sourceProvenanceQualified === true));
       if (claimsPrivateSource) throw unprocessable("Private or restricted work is not available for manual package release");
       return {
         tasks: new Map<string, TaskProof>(tasks.map(task => [task.slug, { source: null, visibility: "open", sources: [] }])),
@@ -4184,8 +4186,8 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
 
     const projectsSvc = projectService(db);
     const issuesSvc = issueService(db);
-    const routinesSvc = routineService(db);
     const exportActor = options.actor ?? { type: "none" as const };
+    const routinesSvc = routineService(db, { sourceActor: exportActor });
     const companyDecision = await authorizationService(db).decide({ actor: exportActor, action: "company_scope:read",
       resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true });
     if (!companyDecision.allowed) throw forbidden("Current organization access is required for export");
@@ -4195,8 +4197,9 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
       { readCondition: projectCondition, issueReadCondition: issueCondition }) : [];
     const allProjects = allProjectsRaw.filter((project) => !project.archivedAt);
     // Routine copies need their own retained native source binding before payload export.
-    const allRoutinesRaw: Awaited<ReturnType<typeof routinesSvc.list>> = [];
-    if (include.issues) warnings.push("Routine export is unavailable until retained routine source provenance is qualified.");
+    const allRoutinesRaw: Awaited<ReturnType<typeof routinesSvc.list>> = include.issues
+      ? await routinesSvc.list(companyId)
+      : [];
     const builtInRoutineRows = allRoutinesRaw.filter((routine) =>
       managedRoutineIds.has(routine.id) || routine.originKind === "built_in_agent_bundle"
     );
@@ -4629,6 +4632,9 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
             workProductsSvc.listForIssue(issue.id),
             issuesSvc.listAttachments(issue.id),
           ]);
+          for (const document of issueDocumentRows) if (document.latestRevisionId)
+            await assertNativeDocumentRevisionCurrentSourceAccess(db, { companyId, issueId: issue.id,
+              revisionId: document.latestRevisionId, actor: exportActor });
           return [issue.id, {
             comments,
             relationSummaries,
@@ -5058,6 +5064,9 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
     for (const issue of selectedIssueRows) {
       if (!(await canActorReadIssuePrivacy(db, exportActor, issue))) throw notFound("Task export source is unavailable");
       await assertAnalyticalContextPayloadAccess(db, companyId, exportActor, { issueId: issue.id });
+      for (const document of issueExportDetails.get(issue.id)?.issueDocumentRows ?? []) if (document.latestRevisionId)
+        await assertNativeDocumentRevisionCurrentSourceAccess(db, { companyId, issueId: issue.id,
+          revisionId: document.latestRevisionId, actor: exportActor });
     }
     const finalCompanyDecision = await authorizationService(db).decide({ actor: exportActor, action: "company_scope:read",
       resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true });
@@ -5633,19 +5642,26 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
         projects: plan.preview.plan.projectPlans.map(item => [item.slug, item.action]),
         issues: plan.preview.plan.issuePlans.map(item => [item.slug, item.action]),
       })).digest("hex");
-      await options.onSourceReleaseReview({
-        version: 1,
-        sourceMode: sourceCompanyIds.length ? "native_owner" : "manual_open_content",
-        sourceCompanyIds,
-        sourceItems,
-        sourceAccess: sourceCompanyIds.length ? "verified_current_acl" : "reviewed_open_external",
-        targetMode: input.target.mode,
-        targetCompanyId: input.target.mode === "existing_company" ? input.target.companyId : null,
-        previewFingerprint: plan.preview.sourceFingerprint!,
-        selectedPayloadFingerprint,
-        reviewedByUserId: importActor.userId,
-        reviewedAt: new Date().toISOString(),
-      });
+      try {
+        await options.onSourceReleaseReview({
+          version: 1,
+          sourceMode: sourceCompanyIds.length ? "native_owner" : "manual_open_content",
+          sourceCompanyIds,
+          sourceItems,
+          sourceAccess: sourceCompanyIds.length ? "verified_current_acl" : "reviewed_open_external",
+          targetMode: input.target.mode,
+          targetCompanyId: input.target.mode === "existing_company" ? input.target.companyId : null,
+          previewFingerprint: plan.preview.sourceFingerprint!,
+          selectedPayloadFingerprint,
+          reviewedByUserId: importActor.userId,
+          reviewedAt: new Date().toISOString(),
+        });
+      } catch (error) {
+        // Receipt persistence is part of preflight: the import has not written
+        // business data yet, so a failed receipt admission is a known refusal.
+        if (error instanceof HttpError) throw new ImportPreflightError(error.status, error.message, error.details);
+        throw new ImportPreflightError(500, "Source release review could not be recorded.");
+      }
     }
 
     let targetCompany: {

@@ -56,13 +56,16 @@ export type NativeBootstrapSourceClosure = {
   taskEnvelopeDigest: string;
 };
 
-/** Server-only AW document capture. The model call identity and hashes are
+/** Server-only Native output capture. The model-call identity and hashes are
  * observations; source authority still comes from sourceSet and its owners. */
-export type NativeAwModelOutputCapture = {
+export type NativeModelOutputCapture = {
   runId: string;
   sourceSet: NativePayloadSourceSet;
   dispatch: Extract<NativePayloadSourceInput, { kind: "worker_model_dispatch" }>;
+  /** Present only when the output came from the pinned managed OpenCode tool boundary. */
+  managedOpenCodeToolUse?: { callId: string; toolName: string; argumentsHash: string; responseContentHash: string };
 };
+export type NativeAwModelOutputCapture = NativeModelOutputCapture;
 
 function isClosedEmptyTaskContinuation(value: unknown, input: {
   companyId: string;

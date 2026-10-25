@@ -204,7 +204,9 @@ export function companyImportJobService(db: Db) {
               .from(companyMemberships).where(and(eq(companyMemberships.companyId, receipt.targetCompanyId!),
                 eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, actor.userId),
                 eq(companyMemberships.status, "active"))).limit(1);
-            if (!membership || membership.membershipRole === "viewer") throw forbidden("Current target company manager access is required");
+            if ((!membership || membership.membershipRole === "viewer")
+              && !(await hasCurrentInstanceAdminRole(tx, actor.userId)))
+              throw forbidden("Current target company manager access is required");
           }
         }
         const [current] = await tx.select().from(customerOperations).where(and(
@@ -219,8 +221,11 @@ export function companyImportJobService(db: Db) {
             || prior.targetMode !== receipt.targetMode || prior.targetCompanyId !== receipt.targetCompanyId
             || prior.reviewedByUserId !== receipt.reviewedByUserId
             || prior.sourceMode !== receipt.sourceMode || prior.sourceAccess !== receipt.sourceAccess
-            || JSON.stringify(prior.sourceCompanyIds) !== JSON.stringify(receipt.sourceCompanyIds)
-            || JSON.stringify(prior.sourceItems) !== JSON.stringify(receipt.sourceItems))
+            || prior.sourceCompanyIds.length !== receipt.sourceCompanyIds.length
+            || prior.sourceCompanyIds.some((id, index) => id !== receipt.sourceCompanyIds[index])
+            || prior.sourceItems.length !== receipt.sourceItems.length
+            || prior.sourceItems.some((item, index) => item.kind !== receipt.sourceItems[index]?.kind
+              || item.id !== receipt.sourceItems[index]?.id || item.slug !== receipt.sourceItems[index]?.slug))
             throw conflict("A different source release review is already recorded", { code: "import_source_review_changed" });
         }
         const [updated] = current.sourceReleaseReview ? [current] : await tx.update(customerOperations)
@@ -236,6 +241,7 @@ export function companyImportJobService(db: Db) {
 
     async bindSourceReleaseTarget(job: CompanyImportJob, companyId: string, actor: AuthorizationActor) {
       return db.transaction(async tx => {
+        if (!isUuid(companyId)) throw conflict("The created import target identifier is invalid", { code: "import_target_invalid" });
         const pinned = await pinImportCredential(tx, actor);
         if (actor.type !== "board" || actor.userId !== job.requestedByUserId) throw forbidden("The current import requester is required");
         const [current] = await tx.select().from(customerOperations).where(and(

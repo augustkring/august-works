@@ -20,7 +20,6 @@ const sha256 = (value: string) => createHash("sha256").update(value, "utf8").dig
 /** Called only by the Context manifest owner while its source-verification transaction is active. */
 export function captureNativeBootstrapContextWitness(input: { companyId: string; runId: string; agentId: string; issueId: string;
   actor: AuthorizationActor; renderedMarkdown: string; manifest: Manifest; items: Item[]; roots: Root[] }): NativeBootstrapContextWitness | null {
-  let debugStage = "identity";
   try {
   const { manifest } = input;
   if (!uuid.test(input.companyId) || !uuid.test(input.runId) || !uuid.test(input.agentId) || !uuid.test(input.issueId) ||
@@ -34,31 +33,28 @@ export function captureNativeBootstrapContextWitness(input: { companyId: string;
     return null;
 
   const policy = emptyPolicy();
-  debugStage = "item_sources";
   if (manifest.projectId) policy.projectIds.push(manifest.projectId);
   const inputs: NativePayloadSourceInput[] = [];
   const appendSnapshot = (raw: unknown, ownerKind: "issue" | "memory_record", ownerId: string) => {
     const parsed = nativePayloadSourceSnapshotSchema.safeParse(raw);
-      if (!parsed.success) { console.warn("[test-only] native bootstrap Context snapshot gate", "schema", parsed.error.issues.map(issue => issue.path[0])); throw new Error("Native bootstrap Context payload snapshot is unavailable"); }
+      if (!parsed.success) throw new Error("Native bootstrap Context payload snapshot is unavailable");
       if (parsed.data.owner.kind !== ownerKind || parsed.data.owner.companyId !== input.companyId || parsed.data.owner.id !== ownerId) {
-        console.warn("[test-only] native bootstrap Context snapshot gate", "owner");
         throw new Error("Native bootstrap Context payload snapshot is unavailable");
       }
     for (const key of Object.keys(policy) as Array<keyof NativePayloadSourcePolicy>)
       policy[key] = [...new Set([...policy[key], ...parsed.data.policy[key]])].sort();
     for (const source of parsed.data.inputs) {
-      if (source.kind === "context") { console.warn("[test-only] native bootstrap Context snapshot gate", "nested_context"); throw new Error("Nested Context source closure is unavailable"); }
+      if (source.kind === "context") throw new Error("Nested Context source closure is unavailable");
       if (!inputs.some(existing => JSON.stringify(existing) === JSON.stringify(source))) inputs.push(source);
     }
   };
   for (const item of [...input.items].sort((a, b) => a.rank - b.rank || a.id.localeCompare(b.id))) {
     if (!item.sourceVersion || !/^[0-9a-f]{64}$/i.test(item.contentHash)) {
-      console.warn("[test-only] native bootstrap Context item gate", "source_version_or_hash");
       throw new Error("Native bootstrap Context item is incomplete");
     }
     if (item.sourceProvider === "august_works_tasks") {
       const match = /^issue:\/\/([0-9a-f]{8}(?:-[0-9a-f]{4}){3}-[0-9a-f]{12})$/i.exec(item.sourceRef);
-      if (!match) { console.warn("[test-only] native bootstrap Context item gate", "task_reference"); throw new Error("Native bootstrap Task Context reference is invalid"); }
+      if (!match) throw new Error("Native bootstrap Task Context reference is invalid");
       policy.issueIds = [...new Set([...policy.issueIds, match[1]!])].sort();
       appendSnapshot(item.payloadSourceSnapshot, "issue", match[1]!);
     } else if (item.sourceProvider === "august_works_foundation") {
@@ -71,7 +67,6 @@ export function captureNativeBootstrapContextWitness(input: { companyId: string;
         throw new Error("Native bootstrap Memory Context root is unavailable");
       policy.memoryIds = [...new Set([...policy.memoryIds, match[1]!])].sort();
     } else if (item.sourceProvider !== "august_works_derived_memory") {
-      console.warn("[test-only] native bootstrap Context item gate", "unsupported_provider");
       throw new Error("Native bootstrap Context provider is unsupported");
     }
   }
@@ -80,7 +75,6 @@ export function captureNativeBootstrapContextWitness(input: { companyId: string;
     policy.memoryIds = [...new Set([...policy.memoryIds, root.memoryRecordId])].sort();
     appendSnapshot(root.payloadSourceSnapshot, "memory_record", root.memoryRecordId);
   }
-  debugStage = "witness_digest";
   if (inputs.length + Object.values(policy).reduce((sum, values) => sum + values.length, 0) > 256)
     throw new Error("Native bootstrap Context source set exceeds its bound");
 
@@ -102,7 +96,6 @@ export function captureNativeBootstrapContextWitness(input: { companyId: string;
     policySnapshotHash: manifest.policySnapshotHash, contentHash, actor: structuredClone(input.actor), policy, inputs });
   return witness;
   } catch {
-    console.warn("[test-only] native bootstrap Context witness stage", debugStage);
     return null;
   }
 }
@@ -114,12 +107,12 @@ export function readNativeBootstrapContextWitness(value: unknown, expected: {
   inputs: NativePayloadSourceInput[] } | null {
   if (!value || typeof value !== "object") return null;
   const data = witnesses.get(value as object);
-  if (!data) { console.warn("[test-only] native bootstrap Context witness read gate", "opaque_or_unminted"); return null; }
+  if (!data) return null;
   const failures = [data.companyId !== expected.companyId, data.runId !== expected.runId, data.agentId !== expected.agentId,
     data.issueId !== expected.issueId || sha256(expected.renderedMarkdown) !== data.renderedMarkdownDigest ||
     expected.manifestIds.length !== 1, expected.manifestIds[0]?.companyId !== data.companyId,
     expected.manifestIds[0]?.contextManifestId !== data.manifestId];
-  if (failures.some(Boolean)) { console.warn("[test-only] native bootstrap Context witness read gate", failures.map((failed, index) => failed ? index : null).filter(index => index !== null)); return null; }
+  if (failures.some(Boolean)) return null;
   return { actor: structuredClone(data.actor), contextInput: { kind: "context", manifestId: data.manifestId, queryHash: data.queryHash,
     policySnapshotHash: data.policySnapshotHash, contentHash: data.contentHash }, policy: structuredClone(data.policy), inputs: structuredClone(data.inputs) };
 }

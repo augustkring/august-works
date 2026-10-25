@@ -7,6 +7,8 @@ import { issueRecoveryActionReadModel } from "../services/issue-recovery-actions
 import { getExecutionBlocker } from "../services/execution-blocker.js";
 import { extractIssueReferenceIdentifiers, requiresExecutionReconciliation } from "@paperclipai/shared";
 import {
+  canReadCurrentWorkspaceCommentSource,
+  describeWorkspaceReconstruction,
   validateExecutionReconciliation,
   markExecutionReconciliation,
 } from "../services/execution-recovery-resolution.js";
@@ -290,7 +292,7 @@ import {
   type IssuePostCommitAction,
 } from "../services/issues.js";
 import { authorizationDeniedDetails, authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, issueReadSqlCondition, projectReadSqlCondition, pinCurrentBoardActor } from "../services/authorization.js";
-import { assertDirectInputSessionCurrent } from "../services/native-direct-input.js";
+import { assertDirectInputSessionCurrent, assertNativeDocumentRevisionCurrentSourceAccess } from "../services/native-direct-input.js";
 import { withCurrentTaskSourceRead } from "../services/task-source-read-scope.js";
 import { persistActivity } from "../services/activity-log.js";
 import { stalledReviewDecisionService } from "../services/stalled-review-decisions.js";
@@ -8841,6 +8843,7 @@ export function issueRoutes(
     const currentExecutionWorkspacePromise = issue.executionWorkspaceId
       ? executionWorkspacesSvc.getById(issue.executionWorkspaceId)
       : Promise.resolve(null);
+    let continuationSummaryRevisionId: string | null = null;
     const [
       { project, goal },
       ancestors,
@@ -8866,13 +8869,16 @@ export function issueRoutes(
         .then((map) => map.get(issue.id) ?? null),
       svc.getCurrentScheduledRetry(issue.id),
       svc.listAttachments(issue.id),
-      documentsSvc.getIssueDocumentByKey(
-        issue.id,
-        ISSUE_CONTINUATION_SUMMARY_DOCUMENT_KEY,
-      ),
+      documentsSvc.getIssueDocumentByKey(issue.id, ISSUE_CONTINUATION_SUMMARY_DOCUMENT_KEY, {
+        onSourceCapture: capture => { continuationSummaryRevisionId = capture?.input.revisionId ?? null; },
+      }),
       currentExecutionWorkspacePromise,
       recoveryActionsSvc.getActiveForIssue(issue.companyId, issue.id),
     ]);
+    const summaryRevisionId = continuationSummaryRevisionId ?? continuationSummary?.latestRevisionId;
+    if (summaryRevisionId) await assertNativeDocumentRevisionCurrentSourceAccess(db, {
+      companyId: issue.companyId, issueId: issue.id, revisionId: summaryRevisionId, actor: req.actor,
+    });
     const recoveryActionsByRelationIssue = await relationRecoveryActionMap(
       recoveryActionsSvc,
       issue.companyId,
@@ -9552,9 +9558,45 @@ export function issueRoutes(
       trigger: "read_projection",
       actor: getActorInfo(req),
     });
+    const evidenceRunId = active?.evidence.runId ?? active?.evidence.sourceRunId ?? null;
+    const workspaceReconstruction = req.actor.type !== "board"
+      ? {
+          state: "unavailable" as const,
+          reason: "board_authorization_required",
+          sourceRunId: typeof evidenceRunId === "string" ? evidenceRunId : null,
+          currentOwnerAgentId: issue.assigneeAgentId,
+          destruction: { state: "unknown" as const, receiptHash: null, bindingId: null, cellId: null, generation: null },
+          continuation: { available: false, mode: "unavailable" as const, stagingScope: "local_only" as const, reason: "board_authorization_required" },
+          sources: [],
+        }
+      : active && requiresExecutionReconciliation(active.cause)
+      ? await describeWorkspaceReconstruction({
+          db,
+          companyId: issue.companyId,
+          issueId: issue.id,
+          sourceRunId: evidenceRunId,
+          currentOwnerAgentId: issue.assigneeAgentId,
+          canReadCommentSource: (commentId) => req.actor.type === "board" && (req.actor.source === "session" || req.actor.source === "local_implicit")
+            ? canReadCurrentWorkspaceCommentSource({ db, companyId: issue.companyId, issueId: issue.id, commentId, actor: req.actor })
+            : Promise.resolve(false),
+          commentSourceUnavailableReason: req.actor.type === "board" && req.actor.source === "board_key"
+            ? "comment_source_requires_board_session" : undefined,
+          verifySavedSourceBytes: ({ companyId, objectKey, sha256, byteSize }) =>
+            verifySelectedSavedAttachmentBytes({ storage, companyId, objectKey, sha256, byteSize }),
+        })
+      : {
+          state: "unavailable" as const,
+          reason: "no_current_execution_recovery_action",
+          sourceRunId: typeof evidenceRunId === "string" ? evidenceRunId : null,
+          currentOwnerAgentId: issue.assigneeAgentId,
+          destruction: { state: "unknown" as const, receiptHash: null, bindingId: null, cellId: null, generation: null },
+          continuation: { available: false, mode: "unavailable" as const, stagingScope: "local_only" as const, reason: "no_current_execution_recovery_action" },
+          sources: [],
+        };
     res.json({
       active,
       actions: active ? [active] : [],
+      workspaceReconstruction,
     });
   });
 
@@ -9614,6 +9656,9 @@ export function issueRoutes(
         resolutionNote,
         executionReconciliation,
       } = req.body;
+      const canReadCurrentCommentSource = (commentId: string) => req.actor.type === "board" && (req.actor.source === "session" || req.actor.source === "local_implicit")
+        ? canReadCurrentWorkspaceCommentSource({ db, companyId: existing.companyId, issueId: existing.id, commentId, actor: req.actor })
+        : Promise.resolve(false);
       const workspaceReconstructionRequestHash = executionReconciliation?.workspaceReconstruction
         ? createHash("sha256").update(JSON.stringify({
             actionId: actionId ?? null,
@@ -9645,6 +9690,10 @@ export function issueRoutes(
             || attachment.sha256 !== selected.sha256) {
             throw conflict("A selected saved file is no longer available on this task.");
           }
+          if (attachment.issueCommentId && !await canReadCurrentCommentSource(attachment.issueCommentId))
+            throw conflict(req.actor.type === "board" && req.actor.source === "board_key"
+              ? "Comment-bound saved files require a current board session; API-key authorization cannot continue them."
+              : "A selected saved file's current comment source is no longer available.");
           selectedBytes += attachment.byteSize;
           if (selectedBytes > 64 * 1024 * 1024) throw conflict("Selected saved files exceed the reconstruction size limit.");
           await verifySelectedSavedAttachmentBytes({
@@ -9825,6 +9874,7 @@ export function issueRoutes(
               activeRecoveryAction.evidence.runId ??
               activeRecoveryAction.evidence.sourceRunId,
             decision: executionReconciliation,
+            canReadCommentSource: canReadCurrentCommentSource,
           });
         } else if (executionReconciliation) {
           throw conflict(
@@ -9889,6 +9939,12 @@ export function issueRoutes(
               ? { kind: "chat_failed_run_retry", actionId: chatRetry.actionId }
               : undefined,
             workspaceReconstructionRequestHash ?? undefined,
+            req.actor.type === "board" && req.actor.source === "local_implicit"
+              ? { source: "local_implicit" as const }
+              : req.actor.type === "board" && req.actor.source === "session" && req.actor.userId && req.actor.sessionId
+              ? { source: "session" as const, userId: req.actor.userId, sessionId: req.actor.sessionId,
+                  credentialExpiresAt: req.actor.authenticatedCredentialExpiresAt ?? null }
+              : null,
           );
         }
         let issue = lockedIssue;
@@ -10304,8 +10360,14 @@ export function issueRoutes(
     const docs = await documentsSvc.listIssueDocuments(issue.id, {
       includeSystem: req.query.includeSystem === "true",
     });
+    for (const doc of docs) if (doc.latestRevisionId) await assertNativeDocumentRevisionCurrentSourceAccess(db, {
+      companyId: issue.companyId, issueId: issue.id, revisionId: doc.latestRevisionId, actor: req.actor,
+    });
     const currentIssue = await svc.getById(issue.id);
     if (!currentIssue || !(await assertIssueReadAllowed(req, res, currentIssue))) return;
+    for (const doc of docs) if (doc.latestRevisionId) await assertNativeDocumentRevisionCurrentSourceAccess(db, {
+      companyId: issue.companyId, issueId: issue.id, revisionId: doc.latestRevisionId, actor: req.actor,
+    });
     res.json(docs);
   });
 
@@ -10331,10 +10393,14 @@ export function issueRoutes(
       });
       return;
     }
-    const doc = await documentsSvc.getIssueDocumentByKey(
-      issue.id,
-      keyParsed.data,
-    );
+    let revisionId: string | null = null;
+    const doc = await documentsSvc.getIssueDocumentByKey(issue.id, keyParsed.data, {
+      onSourceCapture: capture => { revisionId = capture?.input.revisionId ?? null; },
+    });
+    const selectedRevisionId = revisionId ?? doc?.latestRevisionId;
+    if (doc && selectedRevisionId) await assertNativeDocumentRevisionCurrentSourceAccess(db, {
+      companyId: issue.companyId, issueId: issue.id, revisionId: selectedRevisionId, actor: req.actor,
+    });
     const currentIssue = await svc.getById(issue.id);
     if (!currentIssue || !(await assertIssueReadAllowed(req, res, currentIssue))) return;
     if (!doc) {
@@ -10342,6 +10408,9 @@ export function issueRoutes(
       return;
     }
     if (!shouldIncludeDocumentAnnotations(req)) {
+      if (selectedRevisionId) await assertNativeDocumentRevisionCurrentSourceAccess(db, {
+        companyId: issue.companyId, issueId: issue.id, revisionId: selectedRevisionId, actor: req.actor,
+      });
       res.json(doc);
       return;
     }
@@ -10356,6 +10425,9 @@ export function issueRoutes(
       );
     const latestIssue = await svc.getById(issue.id);
     if (!latestIssue || !(await assertIssueReadAllowed(req, res, latestIssue))) return;
+    if (selectedRevisionId) await assertNativeDocumentRevisionCurrentSourceAccess(db, {
+      companyId: issue.companyId, issueId: issue.id, revisionId: selectedRevisionId, actor: req.actor,
+    });
     res.json({ ...doc, annotations });
   });
 
@@ -10965,8 +11037,14 @@ export function issueRoutes(
       issue.id,
       keyParsed.data,
     );
+    for (const revision of revisions) await assertNativeDocumentRevisionCurrentSourceAccess(db, {
+      companyId: issue.companyId, issueId: issue.id, revisionId: revision.id, actor: req.actor, requireLatest: false,
+    });
     const currentIssue = await svc.getById(issue.id);
     if (!currentIssue || !(await assertIssueReadAllowed(req, res, currentIssue))) return;
+    for (const revision of revisions) await assertNativeDocumentRevisionCurrentSourceAccess(db, {
+      companyId: issue.companyId, issueId: issue.id, revisionId: revision.id, actor: req.actor, requireLatest: false,
+    });
     res.json(revisions);
   });
 

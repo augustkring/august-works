@@ -822,7 +822,8 @@ describe("CompanyImport", () => {
 
     const fileCheckbox = Array.from(
       container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]'),
-    ).find((input) => !input.closest("label")?.textContent?.includes("Start imported agents"));
+    ).find((input) => !input.closest("label")?.textContent?.includes("Start imported agents")
+      && !input.closest("label")?.textContent?.includes("reviewed this exact package"));
     expect(fileCheckbox).toBeTruthy();
     await act(async () => {
       fileCheckbox!.click();

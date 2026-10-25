@@ -747,9 +747,8 @@ describe("native runner file handoff", () => {
     const body = Buffer.from("exact captured asset bytes\n");
     const stored = await storage.putFile({ companyId, namespace: `issues/${issueId}`,
       originalFilename: "captured.txt", contentType: "text/plain", body });
-    const comment = await issueService(db).addComment(issueId, "Read this exact attachment", { userId: "inbound-user" });
     const [asset] = await db.insert(assets).values({ companyId, ...stored }).returning();
-    const [attachment] = await db.insert(issueAttachments).values({ companyId, issueId, issueCommentId: comment.id,
+    const [attachment] = await db.insert(issueAttachments).values({ companyId, issueId,
       assetId: asset!.id, payloadSourceProtocolVersion: 1 }).returning();
     // This source-free structural fixture tests exact capture, not producer
     // completeness, current source permission or a qualified dispatch receipt.
@@ -760,13 +759,13 @@ describe("native runner file handoff", () => {
     const [sealed] = await db.execute<{ snapshot: NativePayloadSourceSnapshot }>(sql`select ${JSON.stringify(content)}::jsonb || jsonb_build_object(
       'digest',encode(sha256(convert_to((${JSON.stringify(content)}::jsonb)::text,'UTF8')),'hex')) as snapshot`);
     await db.update(issueAttachments).set({ payloadSourceSnapshot: sealed!.snapshot }).where(eq(issueAttachments.id, attachment!.id));
-    const wake = { issueId, paperclipWake: { comments: [{ id: comment.id, attachments: [{ id: attachment!.id }] }] } };
+    const wake = { issueId, selectedSavedSources: [{ attachmentId: attachment!.id, sha256: stored.sha256 }] };
     await db.update(heartbeatRuns).set({ contextSnapshot: wake }).where(eq(heartbeatRuns.id, runId));
     const binding = { companyId, issueId, runId, agentId, workspaceRoot, executionTargetKind: "local" as const };
     const stage = await stageNativeRunnerWakeAttachments({ db, binding, storage });
     try {
       expect(stage.sourceCaptures).toEqual([{
-        input: { kind: "attachment", issueId, attachmentId: attachment!.id, commentId: comment.id,
+        input: { kind: "attachment", issueId, attachmentId: attachment!.id, commentId: null,
           assetId: asset!.id, sha256: stored.sha256.toLowerCase(), byteSize: body.length, disposition: "delivered" },
         payloadSourceSnapshot: sealed!.snapshot,
       }]);
@@ -783,19 +782,19 @@ describe("native runner file handoff", () => {
     try {
       expect(failed.attachments[0]!.workspaceRelativePath).toBeNull();
       expect(failed.sourceCaptures).toEqual([{
-        input: { kind: "attachment", issueId, attachmentId: attachment!.id, commentId: comment.id,
-          assetId: asset!.id, sha256: "a".repeat(64), byteSize: body.length, disposition: "attachment_staging_failed" },
+        input: { kind: "attachment", issueId, attachmentId: attachment!.id, commentId: null,
+          assetId: null, sha256: null, byteSize: null, disposition: "attachment_binding_unavailable" },
         payloadSourceSnapshot: null,
       }]);
     } finally { await failed.cleanup(); }
-    // Same attachment UUID under a different wake comment is not a binding.
+    // A selected source withdrawn after capture is not staged on a later run.
     await db.update(heartbeatRuns).set({ contextSnapshot: { issueId,
-      paperclipWake: { comments: [{ id: randomUUID(), attachments: [{ id: attachment!.id }] }] } } }).where(eq(heartbeatRuns.id, runId));
+      selectedSavedSources: [{ attachmentId: attachment!.id, sha256: stored.sha256 }] } }).where(eq(heartbeatRuns.id, runId));
     for (const executionTargetKind of ["local", "remote"] as const) {
       const unavailable = await stageNativeRunnerWakeAttachments({ db, binding: { ...binding, executionTargetKind }, storage });
       try {
         expect(unavailable.sourceCaptures).toEqual([{
-          input: { kind: "attachment", issueId, attachmentId: attachment!.id, commentId: expect.any(String),
+          input: { kind: "attachment", issueId, attachmentId: attachment!.id, commentId: null,
             assetId: null, sha256: null, byteSize: null, disposition: "attachment_binding_unavailable" },
           payloadSourceSnapshot: null,
         }]);

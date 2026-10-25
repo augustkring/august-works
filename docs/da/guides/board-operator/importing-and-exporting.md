@@ -12,7 +12,7 @@ locale: da
 last_verified_at: 2026-10-25
 review_trigger: Ændringer i importkilde, kvittering, genopretning, autorisation eller opbevaring
 security_or_privacy_sensitive: true
-linked_source_files: [ui/src/App.tsx, ui/src/pages/CompanyImport.tsx, ui/src/pages/CompanyImportHistory.tsx, server/src/routes/companies.ts, server/src/services/company-import-jobs.ts, server/src/services/company-import-transfers.ts, server/src/services/company-portability.ts, server/src/services/company-export-readme.ts, packages/shared/src/customer-operations.ts, packages/shared/src/company-import-transfer.ts, cli/src/commands/client/company.ts, server/src/errors.ts, packages/shared/src/types/company-portability.ts, server/src/services/github-fetch.ts]
+linked_source_files: [ui/src/App.tsx, ui/src/pages/CompanyImport.tsx, ui/src/pages/CompanyImportHistory.tsx, server/src/routes/companies.ts, server/src/services/company-import-jobs.ts, server/src/services/company-import-transfers.ts, server/src/services/company-portability.ts, server/src/services/company-export-readme.ts, packages/shared/src/customer-operations.ts, packages/shared/src/company-import-transfer.ts, cli/src/commands/client/company.ts, server/src/errors.ts, packages/shared/src/types/company-portability.ts, packages/shared/src/validators/company-portability.ts, packages/db/src/schema/customer_operations.ts, server/src/routes/openapi.ts, server/src/services/github-fetch.ts]
 ---
 
 Blentera-virksomheder kan eksporteres som flytbare Markdown-pakker og importeres fra lokale mapper eller GitHub-arkiver. Det gør det muligt at dele virksomhedsopsætninger, kopiere opsætninger og versionsstyre agentteams.

@@ -2,24 +2,22 @@ import { createHash } from "node:crypto";
 import { isDeepStrictEqual } from "node:util";
 import { assertAuthoredProceduresCurrent } from "../agents/authoring-procedures.js";
 import { assertAuthoredAgentManifestCurrent } from "../agents/authored-definition.js";
-import { and, eq, or } from "drizzle-orm";
+import { and, eq, or, sql } from "drizzle-orm";
 import {
   agents,
   agentIdentities,
   companies,
   agentExecutionManifests,
-  documents,
   companyMemberships,
   principalPermissionGrants,
   companySecrets,
   companySecretVersions,
   heartbeatRuns,
   issues,
-  issueDocuments,
-  documentRevisions,
   orchestrationPlans,
   orchestrationWorkers,
   orchestrationWorkerAttempts,
+  orchestrationModelReservations,
   toolInvocations,
   type Db,
 } from "@paperclipai/db";
@@ -28,8 +26,10 @@ import {
   workerModelCallSchema,
   workerModelResultSchema,
   nativeRunInputSourceReceiptSchema,
+  nativePayloadSourceInputSchema,
   type WorkerModelBinding,
   type WorkerModelCall,
+  type NativePayloadSourceInput,
 } from "@paperclipai/shared";
 import {
   createRuntimeToolsToken,
@@ -52,9 +52,12 @@ import { enqueueSupervisionStop } from "../supervision/supervision-outbox.js";
 import { modelReservationService, quoteModelReservation } from "./model-reservations.js";
 import { resolvePaperclipRunnerProviderProfile } from "../native-runtime/provider-profile.js";
 import { hashContextPolicySnapshot } from "../context/context-manifest.js";
+import { assertNativeAnalyticalRunPayloadAccess } from "../analytical-context-authority.js";
+import { assertNativeDocumentRevisionCurrentSourceAccess, assertNativePayloadSourceSetCurrent } from "../native-direct-input.js";
 import {
   anthropicReadOnlyCall,
   anthropicManagedMessagesCall,
+  ReadOnlyModelKnownUsageError,
   validateAnthropicManagedMessagesRequest,
   readOnlyModelEnvelopeBytes,
   type ReadOnlyModelWireReceipt,
@@ -95,7 +98,14 @@ function managedRecord(value: unknown): Record<string, unknown> {
   return value && typeof value === "object" && !Array.isArray(value) ? value as Record<string, unknown> : {};
 }
 
+async function managedJsonbSha256(db: Db, value: unknown): Promise<string> {
+  const [row] = await db.execute<{ digest: string }>(sql`select encode(sha256(convert_to((${JSON.stringify(value)}::jsonb)::text,'UTF8')),'hex') as digest`);
+  if (!row || !/^[0-9a-f]{64}$/.test(row.digest)) throw forbidden("Managed OpenCode source receipt digest is unavailable");
+  return row.digest;
+}
+
 async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, request: Record<string, unknown>) {
+  await assertNativeAnalyticalRunPayloadAccess(db, claims.company_id, claims.run_id);
   const [run] = await db.select().from(heartbeatRuns).where(and(
     eq(heartbeatRuns.companyId, claims.company_id), eq(heartbeatRuns.id, claims.run_id),
     eq(heartbeatRuns.agentId, claims.sub), eq(heartbeatRuns.status, "running"),
@@ -119,8 +129,23 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
     receipt.data.binding.agentId !== claims.sub || receipt.data.binding.responsibleUserId !== claims.responsible_user_id ||
     !receipt.data.bootstrap.inputs.some((source) => source.kind === "task") ||
     !receipt.data.bootstrap.inputs.some((source) => source.kind === "completion_contract") ||
-    !receipt.data.bootstrap.inputs.some((source) => source.kind === "runtime_instructions"))
+    !receipt.data.bootstrap.inputs.some((source) => source.kind === "runtime_instructions") ||
+    !receipt.data.bootstrap.inputs.some((source) => source.kind === "workspace_metadata"))
     throw forbidden("Managed OpenCode source closure is missing or no longer current");
+  const sourcePolicyHash = nativeSha256(receipt.data.bootstrap);
+  const sourceActor: AuthorizationActor = { type: "agent", source: "agent_jwt", companyId: claims.company_id,
+    agentId: claims.sub, runId: claims.run_id, onBehalfOfUserId: claims.responsible_user_id };
+  const sourcePrefixes = [{ policy: receipt.data.bootstrap.policy, inputs: receipt.data.bootstrap.inputs },
+    ...receipt.data.dispatches.map((dispatch) => {
+      const currentDispatch = [...dispatch.inputs].reverse().find((source) => source.kind === "worker_model_dispatch");
+      if (!currentDispatch) throw forbidden("Managed OpenCode source prefix has no current dispatch");
+      return { policy: dispatch.policy, inputs: dispatch.inputs.filter((source) => !isDeepStrictEqual(source, currentDispatch)) };
+    })];
+  for (const sourceSet of sourcePrefixes)
+    await assertNativePayloadSourceSetCurrent(db, {
+      companyId: claims.company_id, issueId: run.nativeIssueId!, runId: claims.run_id,
+      actor: sourceActor, policy: sourceSet.policy, inputs: sourceSet.inputs,
+    });
 
   const expectedTools = schemas.map((value) => {
     const tool = managedRecord(value);
@@ -135,30 +160,60 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
       input_schema: tool.input_schema };
   }).sort((a, b) => a.name.localeCompare(b.name));
   if (!isDeepStrictEqual(actualTools, expectedTools) ||
-    actualTools.some((tool) => !["read_document", "write_document", "paperclip_finish", "paperclip_block"].includes(tool.name)))
+    actualTools.some((tool) => !["read_document", "write_document", "create_task", "paperclip_finish", "paperclip_block"].includes(tool.name)))
     throw forbidden("Managed OpenCode tool schemas do not match the exact current Native catalog");
 
   const intents = Array.isArray(profile.nativeAwModelWireIntents) ? profile.nativeAwModelWireIntents.map(managedRecord) : [];
   const captures = Array.isArray(profile.nativeToolResultSourceCaptures) ? profile.nativeToolResultSourceCaptures.map(managedRecord) : [];
   const associations = Array.isArray(profile.nativeToolCallDispatchAssociations) ? profile.nativeToolCallDispatchAssociations.map(managedRecord) : [];
+  let sawAuthorizedUserPrompt = false;
+  const priorProviderToolUses = new Set<string>();
+  const consumedProviderToolUses = new Set<string>();
   for (const messageValue of Array.isArray(request.messages) ? request.messages : []) {
     const message = managedRecord(messageValue);
     const blocks = typeof message.content === "string" ? [{ type: "text", text: message.content }] :
       Array.isArray(message.content) ? message.content.map(managedRecord) : [];
     if (message.role === "assistant") {
-      if (!intents.some((intent) => typeof intent.responseContentHash === "string" && nativeSha256(message.content) === intent.responseContentHash))
+      const contentHash = nativeSha256(message.content);
+      const matchingIntents = intents.filter((intent) => typeof intent.responseContentHash === "string" &&
+        intent.sourcePolicyHash === sourcePolicyHash && contentHash === intent.responseContentHash);
+      const qualifiedIntents = [] as Record<string, unknown>[];
+      for (const intent of matchingIntents) {
+        if (typeof intent.reservationId !== "string") continue;
+        const [reservation] = await db.select({ status: orchestrationModelReservations.status,
+          providerResponseHash: orchestrationModelReservations.providerResponseHash }).from(orchestrationModelReservations)
+          .where(and(eq(orchestrationModelReservations.companyId, claims.company_id),
+            eq(orchestrationModelReservations.id, intent.reservationId),
+            eq(orchestrationModelReservations.purpose, "worker_model"),
+            eq(orchestrationModelReservations.status, "completed")));
+        if (reservation?.status === "completed" && typeof reservation.providerResponseHash === "string")
+          qualifiedIntents.push(intent);
+      }
+      // The content hash alone is not a dispatch identity: repeated identical
+      // provider replies could otherwise make a prior assistant frame ambiguous.
+      if (qualifiedIntents.length !== 1)
         throw forbidden("Managed OpenCode assistant history is not an exact persisted provider response");
+      const toolUses = qualifiedIntents[0]!.responseToolUses;
+      if (Array.isArray(toolUses)) for (const call of toolUses) {
+        const id = managedRecord(call).id;
+        if (typeof id === "string") priorProviderToolUses.add(id);
+      }
     } else if (message.role === "user") {
       for (const block of blocks) {
         if (block.type === "text") {
           if (typeof block.text !== "string" || !prompts.includes(nativeSha256(block.text)))
             throw forbidden("Managed OpenCode user history is outside the current server-owned prompt receipts");
+          sawAuthorizedUserPrompt = true;
           continue;
         }
         if (block.type !== "tool_result" || typeof block.tool_use_id !== "string")
           throw forbidden("Managed OpenCode history contains an unsupported user content block");
+        if (!priorProviderToolUses.has(block.tool_use_id) || consumedProviderToolUses.has(block.tool_use_id))
+          throw forbidden("Managed OpenCode tool result has no preceding provider tool use in this transcript");
+        consumedProviderToolUses.add(block.tool_use_id);
         let toolName = "";
         for (const intent of intents) {
+          if (intent.sourcePolicyHash !== sourcePolicyHash) continue;
           const calls = intent.responseToolUses;
           if (Array.isArray(calls)) {
             const call = calls.map(managedRecord).find((part) => part.id === block.tool_use_id);
@@ -167,7 +222,7 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
         }
         const capture = captures.find((item) => item.managedOpenCode === true && item.callId === block.tool_use_id &&
           item.tool === toolName && typeof item.resultDigest === "string");
-        if (!capture || !["read_document", "write_document"].includes(toolName) ||
+        if (!capture || !["read_document", "write_document", "create_task"].includes(toolName) ||
           !associations.some((item) => item.callId === block.tool_use_id && item.tool === toolName && typeof item.turnId === "string"))
           throw forbidden("Managed OpenCode tool result has no original qualified invocation receipt");
         const source = managedRecord(capture.source);
@@ -176,6 +231,7 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
         let result: unknown;
         try { result = JSON.parse(content); } catch { throw forbidden("Managed OpenCode tool result is not its canonical source result"); }
         const contentHash = nativeSha256(result);
+        const returnedResultDigest = createHash("sha256").update(JSON.stringify(result), "utf8").digest("hex");
         const invocationId = source.invocationId;
         if (contentHash !== capture.resultDigest || source.kind !== "tool_result" || source.contentHash !== contentHash ||
           source.callId !== block.tool_use_id || source.toolName !== toolName || typeof invocationId !== "string")
@@ -187,33 +243,58 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
           eq(toolInvocations.resultHash, contentHash),
         ));
         if (!invocation) throw forbidden("Managed OpenCode source tool invocation is no longer current");
-        let documentRef: Record<string, unknown> | null = null;
-        if (toolName === "read_document") {
-          const priorRead = captures.find((item) => item.managedOpenCode !== true && item.callId === block.tool_use_id && item.tool === "read_document");
-          const readSource = managedRecord(priorRead?.source);
-          const inputSource = managedRecord(readSource.input);
-          if (inputSource.kind !== "document_revision" || inputSource.issueId !== run.nativeIssueId ||
-            readSource.returnedResultDigest !== capture.resultDigest) throw forbidden("Managed OpenCode document source capture is incomplete");
-          documentRef = { issueId: inputSource.issueId, documentId: inputSource.documentId, revisionId: inputSource.revisionId };
+        if (toolName === "create_task") {
+          const taskRef = managedRecord(capture.taskRef);
+          const taskId = taskRef.issueId;
+          const taskSource = receipt.data.additionalInputs.flatMap((entry) => entry.inputs).find((source): source is Extract<NativePayloadSourceInput, { kind: "task" }> =>
+            source.kind === "task" && source.issueId === taskId);
+          const [task] = typeof taskId === "string" ? await db.select({ id: issues.id, companyId: issues.companyId,
+            identifier: issues.identifier, title: issues.title, status: issues.status, priority: issues.priority,
+            projectId: issues.projectId, parentId: issues.parentId, assigneeAgentId: issues.assigneeAgentId,
+            sourceVersion: sql<string>`extract(epoch from ${issues.updatedAt})::text`, hiddenAt: issues.hiddenAt,
+            payloadSourceSnapshotInvalidated: issues.payloadSourceSnapshotInvalidated,
+          }).from(issues).where(and(eq(issues.companyId, claims.company_id), eq(issues.id, taskId), eq(issues.parentId, run.nativeIssueId!))) : [];
+          const currentTaskSourceHash = task && createHash("sha256").update(JSON.stringify({ id: task.id,
+            identifier: task.identifier ?? null, title: task.title, status: task.status, priority: task.priority }), "utf8").digest("hex");
+          if (!task || !taskSource || taskSource.sourceVersion !== task.sourceVersion ||
+            taskSource.contentHash !== currentTaskSourceHash || task.payloadSourceSnapshotInvalidated)
+            throw forbidden("Managed OpenCode created Task source is no longer current");
+          await assertV7Authorization(db, {
+            type: "agent", source: "agent_jwt", companyId: claims.company_id, agentId: claims.sub,
+            runId: claims.run_id, onBehalfOfUserId: claims.responsible_user_id,
+          }, claims.company_id, "issue:read", { type: "issue", companyId: claims.company_id,
+            issueId: task.id, projectId: task.projectId, parentIssueId: task.parentId,
+            assigneeAgentId: task.assigneeAgentId, assigneeUserId: null, status: task.status });
         } else {
-          const ref = managedRecord(capture.documentRevision);
-          if (ref.issueId !== run.nativeIssueId || typeof ref.documentId !== "string" || typeof ref.revisionId !== "string")
-            throw forbidden("Managed OpenCode document write source capture is incomplete");
-          documentRef = ref;
+          let documentRef: Record<string, unknown>;
+          if (toolName === "read_document") {
+            const priorRead = captures.find((item) => item.managedOpenCode !== true && item.callId === block.tool_use_id && item.tool === "read_document");
+            const readSource = managedRecord(priorRead?.source);
+            const inputSource = managedRecord(readSource.input);
+            if (inputSource.kind !== "document_revision" || inputSource.issueId !== run.nativeIssueId ||
+              readSource.returnedResultDigest !== returnedResultDigest) throw forbidden("Managed OpenCode document source capture is incomplete");
+            documentRef = { issueId: inputSource.issueId, documentId: inputSource.documentId, revisionId: inputSource.revisionId };
+          } else {
+            const ref = managedRecord(capture.documentRevision);
+            if (ref.issueId !== run.nativeIssueId || typeof ref.documentId !== "string" || typeof ref.revisionId !== "string")
+              throw forbidden("Managed OpenCode document write source capture is incomplete");
+            documentRef = ref;
+          }
+          await assertNativeDocumentRevisionCurrentSourceAccess(db, {
+            companyId: claims.company_id, issueId: run.nativeIssueId!,
+            revisionId: documentRef.revisionId as string,
+            actor: { type: "agent", source: "agent_jwt", companyId: claims.company_id,
+              agentId: claims.sub, runId: claims.run_id, onBehalfOfUserId: claims.responsible_user_id },
+            // The tool result binds the exact immutable revision read by the model.
+            // A later revision does not erase that historical source; the reader
+            // and every source owner still receive current ACL/erasure checks.
+            requireLatest: false,
+          });
         }
-        const [document] = await db.select({ latestRevisionId: documents.latestRevisionId,
-          revisionId: documentRevisions.id, invalidated: documentRevisions.payloadSourceSnapshotInvalidated,
-        }).from(issueDocuments)
-          .innerJoin(documents, and(eq(documents.companyId, issueDocuments.companyId), eq(documents.id, issueDocuments.documentId)))
-          .innerJoin(documentRevisions, and(eq(documentRevisions.companyId, documents.companyId),
-            eq(documentRevisions.documentId, documents.id), eq(documentRevisions.id, documentRef.revisionId as string)))
-          .where(and(eq(issueDocuments.companyId, claims.company_id), eq(issueDocuments.issueId, run.nativeIssueId!),
-            eq(issueDocuments.documentId, documentRef.documentId as string)));
-        if (!document || document.latestRevisionId !== document.revisionId || document.invalidated)
-          throw forbidden("Managed OpenCode document source is no longer current");
       }
     }
   }
+  if (!sawAuthorizedUserPrompt) throw forbidden("Managed OpenCode request is missing its server-owned task input");
 }
 
 /** A Native worker's single inference boundary. It never supplies a provider
@@ -1137,8 +1218,10 @@ export function workerModelGateway(db: Db, options: Options) {
                 prior.some((entry) => entry && typeof entry === "object" && !Array.isArray(entry) &&
                   (entry as Record<string, unknown>).reservationId === receipt.reservationId))
                 throw forbidden("The Native source receipt cannot bind this model dispatch");
+              const sourcePolicyHash = nativeSha256(sourceReceipt.data.bootstrap);
               const intents = [...prior, { reservationId: receipt.reservationId, callId: receipt.callId,
-                requestHash: receipt.requestHash, wireBodyHash: receipt.bodySha256, endpoint: receipt.endpoint, method: receipt.method }];
+                requestHash: receipt.requestHash, wireBodyHash: receipt.bodySha256, endpoint: receipt.endpoint,
+                method: receipt.method, sourcePolicyHash }];
               if (Buffer.byteLength(JSON.stringify(intents), "utf8") > 256 * 1024)
                 throw forbidden("The Native model wire receipt exceeds its bound");
               await tx.update(heartbeatRuns).set({ runnerProfileJson: { ...profile, nativeAwModelWireIntents: intents }, updatedAt: new Date() })
@@ -1162,6 +1245,12 @@ export function workerModelGateway(db: Db, options: Options) {
             ? run.runnerProfileJson as Record<string, unknown> : null;
           const previous = profile?.nativeAwModelWireIntents;
           if (!run || !profile || !Array.isArray(previous)) throw forbidden("The managed model response has no original wire intent");
+          await assertManagedOpenCodeRequestSources(tx as unknown as Db, bound,
+            qualifiedInput.request as unknown as Record<string, unknown>);
+          const sourceReceipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
+          if (!sourceReceipt.success || sourceReceipt.data.binding.responsibleUserId !== run.responsibleUserId ||
+            sourceReceipt.data.bootstrap.executionInputDigest !== await managedJsonbSha256(tx as unknown as Db, profile.nativeExecutionInput))
+            throw forbidden("The managed model response lost its exact Native input receipt");
           const matches = previous.map((value, index) => ({ value, index })).filter(({ value }) =>
             value && typeof value === "object" && !Array.isArray(value) &&
             (value as Record<string, unknown>).reservationId === reservation.id);
@@ -1170,16 +1259,59 @@ export function workerModelGateway(db: Db, options: Options) {
           if (existing.responseContentHash !== undefined && existing.responseContentHash !== responseContentHash)
             throw forbidden("The managed model response changed after its original capture");
           const responseToolUses = result.responseContent.flatMap((block) => block.type === "tool_use"
-            ? [{ id: block.id, name: block.name }] : []);
+            ? [{ id: block.id, name: block.name, argumentsHash: nativeSha256(block.input) }] : []);
+          const priorToolUseIds = new Set(previous.flatMap((value, index) => {
+            if (index === matches[0]!.index || !value || typeof value !== "object" || Array.isArray(value)) return [];
+            const calls = (value as Record<string, unknown>).responseToolUses;
+            return Array.isArray(calls) ? calls.map((call) => managedRecord(call).id).filter((id): id is string => typeof id === "string") : [];
+          }));
+          if (responseToolUses.some((call) => priorToolUseIds.has(call.id)))
+            throw forbidden("The managed model reused an earlier tool-use identifier");
           const intents = previous.map((value, index) => index === matches[0]!.index
             ? { ...existing, responseContentHash, responseBlockCount: result.responseContent.length, responseToolUses }
             : value);
-          await tx.update(heartbeatRuns).set({ runnerProfileJson: { ...profile, nativeAwModelWireIntents: intents }, updatedAt: new Date() })
+          const providerDispatch = nativePayloadSourceInputSchema.parse({ kind: "worker_model_dispatch",
+            runId: claims.run_id, reservationId: reservation.id, callId: existing.callId,
+            requestHash: existing.requestHash, wireBodyHash: existing.wireBodyHash, responseHash: result.responseHash });
+          const allInputs = [
+            ...sourceReceipt.data.bootstrap.inputs,
+            ...sourceReceipt.data.dispatches.flatMap((dispatch) => dispatch.inputs),
+            ...sourceReceipt.data.additionalInputs.flatMap((entry) => entry.inputs),
+            providerDispatch,
+          ];
+          const uniqueInputs = [...new Map(allInputs.map((source) => [JSON.stringify(source), source])).values()];
+          const policyKeys = ["issueIds", "projectIds", "runIds", "memoryIds", "foundationRevisionIds"] as const;
+          const sourcePolicy = Object.fromEntries(policyKeys.map((key) => [key, [...new Set([
+            ...sourceReceipt.data.bootstrap.policy[key],
+            ...sourceReceipt.data.dispatches.flatMap((dispatch) => dispatch.policy[key]),
+            ...sourceReceipt.data.additionalInputs.flatMap((entry) => entry.policy[key]),
+          ])].sort()])) as typeof sourceReceipt.data.bootstrap.policy;
+          const dispatch = {
+            executionInputDigest: sourceReceipt.data.bootstrap.executionInputDigest,
+            responsibleUserId: run.responsibleUserId,
+            policy: sourcePolicy,
+            inputs: nativePayloadSourceInputSchema.array().parse(uniqueInputs),
+          };
+          const { digest: _oldDigest, ...receiptBody } = sourceReceipt.data;
+          const nextReceiptBody = { ...receiptBody, dispatches: [...receiptBody.dispatches, dispatch] };
+          const nextReceipt = { ...nextReceiptBody, digest: await managedJsonbSha256(tx as unknown as Db, nextReceiptBody) };
+          if (!nativeRunInputSourceReceiptSchema.safeParse(nextReceipt).success ||
+            Buffer.byteLength(JSON.stringify(intents), "utf8") > 256 * 1024)
+            throw forbidden("The managed model source closure exceeds its bound");
+          await tx.update(heartbeatRuns).set({ runnerProfileJson: {
+            ...profile, nativeAwModelWireIntents: intents, nativeInputSourceReceipt: nextReceipt,
+          }, updatedAt: new Date() })
             .where(and(eq(heartbeatRuns.companyId, run.companyId), eq(heartbeatRuns.id, run.id), eq(heartbeatRuns.status, "running")));
         });
         await assertCurrent();
         return { reservationId: reservation.id, sse: result.sse };
-      } catch {
+      } catch (error) {
+        if (!financiallySettled && error instanceof ReadOnlyModelKnownUsageError) {
+          const outcome = await reservations.recordOutcome(claims.company_id, reservation.id, {
+            status: "completed", providerResponseHash: error.knownUsage.responseHash, usage: error.knownUsage.usage,
+          }).catch(() => null);
+          financiallySettled = outcome?.status === "completed";
+        }
         if (!financiallySettled)
           await reservations.recordOutcome(claims.company_id, reservation.id, { status: "unknown", providerResponseHash: null, usage: null }).catch(() => {});
         const reasonCode = financiallySettled ? "worker_model_result_withheld" : "worker_model_unsettled";

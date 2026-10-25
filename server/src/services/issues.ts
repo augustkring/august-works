@@ -11,13 +11,14 @@ import { Buffer } from "node:buffer";
 import { isDeepStrictEqual } from "node:util";
 import { createHash, randomUUID } from "node:crypto";
 import { suppressAnalyticalSource } from "./analytical-privacy.js";
-import { forgetMemoryForDeletedIssue, lockMemoryPrivacy } from "./memory/memory-privacy.js";
+import { forgetMemoryForDeletedIssue, lockMemoryPrivacy, canActorReadMemorySources } from "./memory/memory-privacy.js";
 import { lockBusinessEventCompany, suppressBusinessEventsForObject } from "./business-event-privacy.js";
 import { authorizationService, canActorReadHeartbeatRunPrivacy, canActorReadIssuePrivacy, canActorReadProjectPrivacy, canActorReadTypedTaskSourcePrivacy, pinCurrentBoardActor, type AuthorizationActor } from "./authorization.js";
 import { assertHumanAuthentication, isAuthenticationStateBusy } from "../auth/authenticator-assurance.js";
 import { directHumanPayloadSnapshotSql, nativePayloadSnapshotSql, captureNativeTemporalContext,
   assertDirectInputSessionCurrent as assertManualInputCredentialCurrent, readNativeIssueEffectPrefix } from "./native-direct-input.js";
 import type { NativeToolEffectClaim } from "../agent-auth-jwt.js";
+import type { NativeModelOutputCapture } from "./native-runtime/native-execution-input.js";
 import { resolveTaskWatchdogMutationScope, taskWatchdogScopeAllowsIssueMutation } from "./task-watchdog-scope.js";
 import {
   and,
@@ -9581,7 +9582,8 @@ export function issueService(db: Db) {
     createChild: async (
       parentIssueId: string,
       data: IssueChildCreateInput,
-      options: { privacyActor?: AuthorizationActor } = {},
+      options: { privacyActor?: AuthorizationActor; nativeModelOutputCapture?: NativeModelOutputCapture;
+        nativeModelOutputToolName?: string } = {},
     ) => {
       const parent = await db
         .select()
@@ -9698,7 +9700,8 @@ export function issueService(db: Db) {
         ...(inheritStrategyOnly
           ? { skipExecutionWorkspaceInheritance: true }
           : { inheritExecutionWorkspaceFromIssueId: parent.id }),
-      }, db, undefined, { privacyActor: options.privacyActor });
+      }, db, undefined, { privacyActor: options.privacyActor, nativeModelOutputCapture: options.nativeModelOutputCapture,
+        nativeModelOutputToolName: "create_task" });
 
       if (blockParentUntilDone) {
         const existingBlockers = await db
@@ -10099,7 +10102,8 @@ export function issueService(db: Db) {
       dbOrTx: Db | DbTransaction = db,
       postCommitActivityPublications?: ActivityPublication[],
       options: { manualInputActor?: AuthorizationActor; privacyActor?: AuthorizationActor; sourceAccessActor?: AuthorizationActor;
-        nativeEffectClaim?: NativeToolEffectClaim } = {},
+        nativeEffectClaim?: NativeToolEffectClaim; nativeModelOutputCapture?: NativeModelOutputCapture;
+        nativeModelOutputToolName?: string } = {},
     ) => {
       const ownedPrivacyPublications: ActivityPublication[] = [];
       const privacyPublications = postCommitActivityPublications ?? ownedPrivacyPublications;
@@ -10108,9 +10112,14 @@ export function issueService(db: Db) {
       const suppliedPrivacyActor = options.privacyActor ? { ...options.privacyActor } : null;
       const suppliedSourceAccessActor = options.sourceAccessActor ? { ...options.sourceAccessActor } : null;
       const nativeEffectClaim = options.nativeEffectClaim ?? null;
+      const nativeModelOutputCapture = options.nativeModelOutputCapture;
+      const nativeModelOutputToolName = options.nativeModelOutputToolName;
       if (nativeEffectClaim && (!suppliedPrivacyActor || suppliedPrivacyActor.type !== "agent" ||
         !suppliedPrivacyActor.nativeToolEffect || !isDeepStrictEqual(suppliedPrivacyActor.nativeToolEffect, nativeEffectClaim)))
         throw forbidden("The authenticated native Task effect is unavailable");
+      if (nativeModelOutputCapture && (!suppliedPrivacyActor || suppliedPrivacyActor.type !== "agent" ||
+        !nativeModelOutputToolName || nativeModelOutputCapture.runId !== suppliedPrivacyActor.runId))
+        throw forbidden("The authenticated native Task output capture is unavailable");
       if (manualActor && (manualActor.type !== "board" || manualActor.source !== "session" ||
           !manualActor.userId || !manualActor.sessionId || manualActor.runId ||
           data.createdByUserId !== manualActor.userId || data.createdByAgentId))
@@ -10194,9 +10203,10 @@ export function issueService(db: Db) {
           if (sourceAccessActorPinned && currentSourceAccessActor?.type === "board")
             await assertManualInputCredentialCurrent(tx, currentSourceAccessActor, sourceAccessActorExpiresAt,
               "The authenticated Task source reader credential is unavailable");
-          if (nativeEffectClaim) {
+          if (nativeEffectClaim || nativeModelOutputCapture) {
             if (!currentPrivacyActor) throw forbidden("The authenticated native Task effect is unavailable");
-            const currentPrefix = await readNativeIssueEffectPrefix(tx, currentPrivacyActor, nativeEffectClaim);
+            const currentPrefix = await readNativeIssueEffectPrefix(tx, currentPrivacyActor, nativeEffectClaim,
+              nativeModelOutputCapture, nativeModelOutputToolName);
             if (!nativeEffectPrefix || !isDeepStrictEqual(currentPrefix, nativeEffectPrefix))
               throw forbidden("Native Task input prefix changed");
           }
@@ -10242,10 +10252,11 @@ export function issueService(db: Db) {
           sourceAccessActorExpiresAt = pinned.credentialExpiresAt;
           sourceAccessActorPinned = true;
         }
-        if (nativeEffectClaim) {
+        if (nativeEffectClaim || nativeModelOutputCapture) {
           if (!currentPrivacyActor || currentPrivacyActor.type !== "agent")
             throw forbidden("The authenticated native Task effect is unavailable");
-          nativeEffectPrefix = await readNativeIssueEffectPrefix(tx, currentPrivacyActor, nativeEffectClaim);
+          nativeEffectPrefix = await readNativeIssueEffectPrefix(tx, currentPrivacyActor, nativeEffectClaim,
+            nativeModelOutputCapture, nativeModelOutputToolName);
         }
         if (currentSourceAccessActor) {
           const sourceReaderDecision = await authorizationService(tx).decide({ actor: currentSourceAccessActor,
@@ -10644,7 +10655,13 @@ export function issueService(db: Db) {
           await addCapturedSources("issue", nativeEffectPrefix.policy.issueIds);
           await addCapturedSources("project", nativeEffectPrefix.policy.projectIds);
           await addCapturedSources("run", nativeEffectPrefix.policy.runIds);
-          await addCapturedSources("issue", nativeEffectPrefix.inputs.map(input => input.issueId));
+          for (const memoryId of nativeEffectPrefix.policy.memoryIds) if (!await canActorReadMemorySources(tx,
+            companyId, { type: "none" }, memoryId)) privacy.visibility = "private";
+          if (nativeEffectPrefix.policy.foundationRevisionIds.length) {
+            const foundationAccess = await authorizationService(tx).decide({ actor: { type: "none" }, action: "foundation:read",
+              resource: { type: "company", companyId }, enforceResponsibleUserIntersection: true });
+            if (!foundationAccess.allowed) privacy.visibility = "private";
+          }
         }
         const temporalContextPolicy: NativePayloadSourcePolicy = {
           issueIds: [...new Set(privacy.sources.filter(source => source.sourceKind === "issue").map(source => source.sourceId))].sort(),
@@ -10652,12 +10669,19 @@ export function issueService(db: Db) {
           runIds: [...new Set(privacy.sources.filter(source => source.sourceKind === "run").map(source => source.sourceId))].sort(),
           memoryIds: [], foundationRevisionIds: [],
         };
+        const nativeEffectPolicy: NativePayloadSourcePolicy | null = nativeEffectPrefix ? {
+          issueIds: [...new Set([...temporalContextPolicy.issueIds, ...nativeEffectPrefix.policy.issueIds])].sort(),
+          projectIds: [...new Set([...temporalContextPolicy.projectIds, ...nativeEffectPrefix.policy.projectIds])].sort(),
+          runIds: [...new Set([...temporalContextPolicy.runIds, ...nativeEffectPrefix.policy.runIds])].sort(),
+          memoryIds: [...new Set(nativeEffectPrefix.policy.memoryIds)].sort(),
+          foundationRevisionIds: [...new Set(nativeEffectPrefix.policy.foundationRevisionIds)].sort(),
+        } : null;
         const freezeTemporalContext = !nativeEffectPrefix && privacy.temporalContextInputs !== null &&
           privacy.temporalContextInputs.length + temporalContextPolicy.issueIds.length + temporalContextPolicy.projectIds.length +
             temporalContextPolicy.runIds.length <= 256;
         const freezeNativeEffectPrefix = nativeEffectPrefix !== null &&
-          nativeEffectPrefix.inputs.length + temporalContextPolicy.issueIds.length + temporalContextPolicy.projectIds.length +
-            temporalContextPolicy.runIds.length <= 256;
+          nativeEffectPrefix.inputs.length + nativeEffectPolicy!.issueIds.length + nativeEffectPolicy!.projectIds.length +
+            nativeEffectPolicy!.runIds.length + nativeEffectPolicy!.memoryIds.length + nativeEffectPolicy!.foundationRevisionIds.length <= 256;
         if (nativeEffectPrefix && !freezeNativeEffectPrefix) throw forbidden("Native Task input prefix exceeds its bound");
         if (privateWorkAdmission === "closed" && privacy.visibility === "private") throw unprocessable("Private tasks are not available");
         if (privacy.visibility === "private" && !responsibleUserId) throw unprocessable("Private tasks require a responsible user");
@@ -10724,7 +10748,7 @@ export function issueService(db: Db) {
         if (freezeTemporalContext || freezeNativeEffectPrefix) {
           const snapshotInputs = nativeEffectPrefix?.inputs ?? privacy.temporalContextInputs!;
           const [captured] = await tx.update(issues).set({ payloadSourceSnapshot: nativePayloadSnapshotSql(
-            "issue", temporalContextPolicy, snapshotInputs,
+            "issue", nativeEffectPolicy ?? temporalContextPolicy, snapshotInputs,
           ) }).where(and(eq(issues.companyId, companyId), eq(issues.id, issue.id),
             eq(issues.payloadSourceProtocolVersion, 1), isNull(issues.payloadSourceSnapshot),
             eq(issues.payloadSourceSnapshotInvalidated, false))).returning();

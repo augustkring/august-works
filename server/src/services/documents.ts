@@ -15,10 +15,11 @@ import { lockMemoryPrivacy } from "./memory/memory-privacy.js";
 import { authorizationService, canActorReadIssuePrivacy, pinCurrentBoardActor, type AuthorizationActor } from "./authorization.js";
 import { lockIssuePrivacyTree, pinIssueMutationHuman } from "./issues.js";
 import { assertHumanAuthentication } from "../auth/authenticator-assurance.js";
-import { assertDirectInputSessionCurrent, directHumanPayloadSnapshotSql } from "./native-direct-input.js";
+import { assertDirectInputSessionCurrent, assertNativeModelOutputCaptureCurrent, directHumanPayloadSnapshotSql } from "./native-direct-input.js";
+export { assertNativeDocumentRevisionCurrentSourceAccess } from "./native-direct-input.js";
 import { persistActivity, publishActivity, type ActivityPublication } from "./activity-log.js";
 import { logger } from "../middleware/logger.js";
-import type { NativeAwModelOutputCapture } from "./native-runtime/native-execution-input.js";
+import type { NativeModelOutputCapture } from "./native-runtime/native-execution-input.js";
 
 type DocumentTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
 
@@ -27,13 +28,17 @@ type DocumentTx = Parameters<Parameters<Db["transaction"]>[0]>[0];
  * continue to validate the retained inputs. */
 async function persistNativeAwDocumentCapture(tx: DocumentTx, input: {
   companyId: string; issueId: string; documentId: string; revisionId: string; runId: string;
-  capture: NativeAwModelOutputCapture;
+  capture: NativeModelOutputCapture;
 }) {
   const capture = input.capture;
   if (capture.runId !== input.runId || capture.dispatch.runId !== input.runId ||
     capture.dispatch.kind !== "worker_model_dispatch" ||
     !nativePayloadSourceInputSchema.safeParse(capture.dispatch).success ||
-    capture.dispatch.callId !== `aw-draft:${input.runId}` ||
+    (!capture.managedOpenCodeToolUse && capture.dispatch.callId !== `aw-draft:${input.runId}`) ||
+    (capture.managedOpenCodeToolUse && (capture.managedOpenCodeToolUse.toolName !== "write_document" ||
+      !/^[\x21-\x7e]{1,240}$/.test(capture.managedOpenCodeToolUse.callId) ||
+      !/^[0-9a-f]{64}$/.test(capture.managedOpenCodeToolUse.argumentsHash) ||
+      !/^[0-9a-f]{64}$/.test(capture.managedOpenCodeToolUse.responseContentHash))) ||
     !capture.sourceSet.inputs.some(source => source.kind === "task" && source.issueId === input.issueId))
     throw forbidden("The Native draft output capture is not bound to its Task and run");
   const [run] = await tx.select().from(heartbeatRuns).where(and(
@@ -53,14 +58,25 @@ async function persistNativeAwDocumentCapture(tx: DocumentTx, input: {
     eq(orchestrationModelReservations.status, "completed"),
   )).for("share");
   const bootstrap = receipt?.success ? receipt.data.bootstrap : null;
+  const managed = capture.managedOpenCodeToolUse;
+  let managedSourceProof = false;
+  if (managed) {
+    await assertNativeModelOutputCaptureCurrent(tx as unknown as Db, input.companyId, input.issueId, capture, "write_document");
+    managedSourceProof = true;
+  }
+  const awSourceProof = !managed && !!bootstrap && !!intent &&
+    isDeepStrictEqual(bootstrap.policy, capture.sourceSet.policy) &&
+    isDeepStrictEqual(bootstrap.inputs, capture.sourceSet.inputs) &&
+    intent.endpoint === "https://api.anthropic.com/v1/messages" && intent.method === "POST";
+  const expectedReservationKey = managed
+    ? `worker-model-messages:${input.runId}:${capture.dispatch.requestHash}`
+    : `worker-model:${input.runId}:${capture.dispatch.callId}`;
   if (!run || !receipt?.success || !bootstrap || !intent || !reservation ||
     reservation.inputHash !== capture.dispatch.requestHash || reservation.providerResponseHash !== capture.dispatch.responseHash ||
-    reservation.idempotencyKey !== `worker-model:${input.runId}:${capture.dispatch.callId}` ||
+    reservation.idempotencyKey !== expectedReservationKey ||
     intent.callId !== capture.dispatch.callId || intent.requestHash !== capture.dispatch.requestHash ||
     intent.wireBodyHash !== capture.dispatch.wireBodyHash || intent.endpoint !== "https://api.anthropic.com/v1/messages" ||
-    intent.method !== "POST" ||
-    !isDeepStrictEqual(bootstrap.policy, capture.sourceSet.policy) ||
-    !isDeepStrictEqual(bootstrap.inputs, capture.sourceSet.inputs))
+    intent.method !== "POST" || !(awSourceProof || managedSourceProof))
     throw forbidden("The Native draft source or exact wire receipt changed before document capture");
 
   const inputs = [...capture.sourceSet.inputs, capture.dispatch];
@@ -310,10 +326,15 @@ export function documentService(db: Db) {
       /** Actual request actor; author attribution alone is not input capture. */
       manualInputActor?: AuthorizationActor;
       /** Server-only output witness supplied by the fixed AW text backend. */
-      nativeAwOutputCapture?: NativeAwModelOutputCapture;
+      nativeAwOutputCapture?: NativeModelOutputCapture;
+      /** Server-only output witness supplied by the pinned managed OpenCode tool boundary. */
+      nativeModelOutputCapture?: NativeModelOutputCapture;
     }) => {
       const candidate = input.manualInputActor;
-      if (input.nativeAwOutputCapture && (candidate || !input.createdByRunId || !input.createdByAgentId))
+      if (input.nativeAwOutputCapture && input.nativeModelOutputCapture)
+        throw forbidden("A Native document can carry only one model output capture");
+      const outputCapture = input.nativeModelOutputCapture ?? input.nativeAwOutputCapture;
+      if (outputCapture && (candidate || !input.createdByRunId || !input.createdByAgentId || outputCapture.runId !== input.createdByRunId))
         throw forbidden("The AW Native output capture requires its original agent run");
       const manualActor = candidate?.type === "board" && candidate.source === "session" && candidate.userId && candidate.sessionId &&
         candidate.userId === input.createdByUserId && !candidate.runId && !input.createdByAgentId && !input.createdByRunId &&
@@ -423,7 +444,7 @@ export function documentService(db: Db) {
                     companyId: issue.companyId,
                     documentId: document.id,
                     revisionNumber: 1,
-                    ...(input.nativeAwOutputCapture ? { payloadSourceProtocolVersion: 1 } : {}),
+                    ...(outputCapture ? { payloadSourceProtocolVersion: 1 } : {}),
                     title: input.title ?? null,
                     format: input.format,
                     body: input.body,
@@ -435,9 +456,9 @@ export function documentService(db: Db) {
                   })
                   .returning();
 
-                if (input.nativeAwOutputCapture) await persistNativeAwDocumentCapture(tx, {
+                if (outputCapture) await persistNativeAwDocumentCapture(tx, {
                   companyId: issue.companyId, issueId: issue.id, documentId: document.id, revisionId: revision.id,
-                  runId: input.createdByRunId!, capture: input.nativeAwOutputCapture,
+                  runId: input.createdByRunId!, capture: outputCapture,
                 });
 
                 await tx
@@ -509,7 +530,7 @@ export function documentService(db: Db) {
                 companyId: issue.companyId,
                 documentId: existing.id,
                 revisionNumber: nextRevisionNumber,
-                  ...(input.nativeAwOutputCapture ? { payloadSourceProtocolVersion: 1 } : {}),
+                  ...(outputCapture ? { payloadSourceProtocolVersion: 1 } : {}),
                 title: input.title ?? null,
                 format: input.format,
                 body: input.body,
@@ -521,9 +542,9 @@ export function documentService(db: Db) {
               })
               .returning();
 
-            if (input.nativeAwOutputCapture) await persistNativeAwDocumentCapture(tx, {
+            if (outputCapture) await persistNativeAwDocumentCapture(tx, {
               companyId: issue.companyId, issueId: issue.id, documentId: existing.id, revisionId: revision.id,
-              runId: input.createdByRunId!, capture: input.nativeAwOutputCapture,
+              runId: input.createdByRunId!, capture: outputCapture,
             });
 
             await tx
@@ -598,7 +619,7 @@ export function documentService(db: Db) {
               companyId: issue.companyId,
               documentId: document.id,
               revisionNumber: 1,
-              ...(manualActor || input.nativeAwOutputCapture ? { payloadSourceProtocolVersion: 1 } : {}),
+              ...(manualActor || outputCapture ? { payloadSourceProtocolVersion: 1 } : {}),
               title: input.title ?? null,
               format: input.format,
               body: input.body,
@@ -610,9 +631,9 @@ export function documentService(db: Db) {
             })
             .returning();
 
-          if (input.nativeAwOutputCapture) await persistNativeAwDocumentCapture(tx, {
+          if (outputCapture) await persistNativeAwDocumentCapture(tx, {
             companyId: issue.companyId, issueId: issue.id, documentId: document.id, revisionId: revision.id,
-            runId: input.createdByRunId!, capture: input.nativeAwOutputCapture,
+            runId: input.createdByRunId!, capture: outputCapture,
           });
 
           await tx

@@ -12,6 +12,7 @@ import { callCreateSkillTool } from "../skill-tools.js";
 import { callProjectTool } from "../project-tools.js";
 import { isConnectorTool, executeConnectorTool, type ConnectorAssignment } from "../connector-runtime.js";
 import { resolveNativeRuntimeMcpSnapshot } from "./runtime-context.js";
+import { nativeSha256 } from "./canonical.js";
 import { connectionIntentService } from "../connection-intents.js";
 import { RUNTIME_CONNECTION_TOOL_DEFINITIONS } from "../connection-tool-definitions.js";
 import { connectionsSearchInputSchema, connectionRequestInputSchema, CONNECTION_INTENT_AGENT_GUIDANCE,
@@ -34,7 +35,7 @@ import { assetService } from "../assets.js";
 import { workspaceFileResourceService } from "../workspace-file-resources.js";
 import { badRequest, forbidden } from "../../errors.js";
 import { searchRunnerApi } from "./runner-api-catalog.js";
-import type { NativeAwModelOutputCapture } from "./native-execution-input.js";
+import type { NativeModelOutputCapture } from "./native-execution-input.js";
 import { executeRunnerApi, validateRunnerApiCall, runnerApiUrl, RUNNER_API_MAX_BYTES, type RunnerApiFile } from "./runner-api-client.js";
 import { and, desc, eq, isNull, notInArray, sql } from "drizzle-orm";
 import type { Db } from "@paperclipai/db";
@@ -107,7 +108,9 @@ type Binding = {
   /** Controller-owned turn revocation. Never obtained from tool arguments. */
   authoritySignal?: AbortSignal;
   /** Exact AW output dispatch capture; never read from tool arguments. */
-  awOutputCapture?: { readonly value: NativeAwModelOutputCapture | null };
+  awOutputCapture?: { readonly value: NativeModelOutputCapture | null };
+  /** Exact provider-bound model output capture; never read from tool arguments. */
+  nativeModelOutputCapture?: { readonly value: NativeModelOutputCapture | null };
   /** Server-derived scope for one addressed native completion review. */
   nativeReview?: NativeReviewAssignmentContext;
   companyId: string;
@@ -379,6 +382,15 @@ export class PaperclipRunnerToolAuthority {
       typeof nativeCall.turnId === "string"
       ? { tool: nativeCall.tool, callId: nativeCall.callId, turnId: nativeCall.turnId }
       : null;
+    if (this.binding.nativeModelOutputCapture) {
+      const capture = this.binding.nativeModelOutputCapture.value;
+      const use = capture?.managedOpenCodeToolUse;
+      if (["write_document", "create_task"].includes(call.tool) && !use)
+        throw forbidden("Managed OpenCode output effect has no settled provider tool-use capture");
+      if (use && (use.callId !== call.callId || use.toolName !== call.tool ||
+        use.argumentsHash !== nativeSha256(call.arguments)))
+        throw forbidden("Managed OpenCode output effect does not match its exact provider tool use");
+    }
     return nativeBackendToolCallIdentity.run(boundNativeCall, async () => {
       this.binding.authoritySignal?.throwIfAborted();
       const documentSource: { value: DocumentRevisionSourceCapture | null } = { value: null };
@@ -386,35 +398,54 @@ export class PaperclipRunnerToolAuthority {
         () => this.#executeAdmitted(call, source => { documentSource.value = source; }, options.onProjectToolResult),
         call.tool !== "paperclip_search_assigned_tools" && (this.binding.assignedMcpTools?.has(call.tool) ?? false));
       if (call.tool === "read_document") {
+        const resultDigest = createHash("sha256").update(JSON.stringify(result)).digest("hex");
+        const exactCapture = documentSource.value?.returnedResultDigest === resultDigest ? documentSource.value : null;
+        documentSource.value = exactCapture;
         if (options.onDocumentRead) {
-          const resultDigest = createHash("sha256").update(JSON.stringify(result)).digest("hex");
           await options.onDocumentRead({ turnId: boundNativeCall?.turnId ?? null, callId: call.callId, tool: "read_document",
             resultDigest,
             // The document owner computes this from the same selected revision
             // and normalized DTO before returning. A mismatch means provenance
             // is unknown; never repair it with a later re-read.
-            source: documentSource.value?.returnedResultDigest === resultDigest ? documentSource.value : null });
+            source: exactCapture });
         }
         const captured = documentSource.value;
-        if (captured) {
-          const input = captured.input;
-          if (input.kind !== "document_revision" || input.issueId !== this.binding.issueId)
+        const returnedDocument = result && typeof result === "object" && !Array.isArray(result)
+          ? (result as Record<string, unknown>).document : null;
+        const returnedRevisionId = returnedDocument && typeof returnedDocument === "object" && !Array.isArray(returnedDocument)
+          ? (returnedDocument as Record<string, unknown>).latestRevisionId : null;
+        const selectedRevisionId = captured?.input.revisionId ?? (typeof returnedRevisionId === "string" ? returnedRevisionId : null);
+        if (selectedRevisionId) {
+          const input = captured?.input;
+          if (input && (input.kind !== "document_revision" || input.issueId !== this.binding.issueId || input.revisionId !== selectedRevisionId))
             throw forbidden("The selected document revision is outside this native Task");
-          const [current] = await this.db.select({ latestRevisionId: documents.latestRevisionId,
-            revisionId: documentRevisions.id, body: documentRevisions.body,
-            payloadSourceSnapshot: documentRevisions.payloadSourceSnapshot,
-            payloadSourceSnapshotInvalidated: documentRevisions.payloadSourceSnapshotInvalidated,
-          }).from(issueDocuments)
-            .innerJoin(documents, and(eq(documents.companyId, issueDocuments.companyId), eq(documents.id, issueDocuments.documentId)))
-            .innerJoin(documentRevisions, and(eq(documentRevisions.companyId, documents.companyId),
-              eq(documentRevisions.documentId, documents.id), eq(documentRevisions.id, input.revisionId)))
-            .where(and(eq(issueDocuments.companyId, this.binding.companyId), eq(issueDocuments.issueId, input.issueId),
-              eq(issueDocuments.documentId, input.documentId)));
-          if (!current || current.latestRevisionId !== input.revisionId ||
-            current.payloadSourceSnapshotInvalidated ||
-            createHash("sha256").update(current.body, "utf8").digest("hex") !== input.contentHash ||
-            !isDeepStrictEqual(current.payloadSourceSnapshot, captured.payloadSourceSnapshot))
-            throw forbidden("The selected document revision changed or was erased before delivery");
+          const [protocol] = await this.db.select({ version: documentRevisions.payloadSourceProtocolVersion }).from(documentRevisions)
+            .where(and(eq(documentRevisions.companyId, this.binding.companyId), eq(documentRevisions.id, selectedRevisionId)));
+          if (protocol?.version === 1 && !captured)
+            throw forbidden("The selected Native document revision source is unavailable");
+          if (captured) {
+            const source = captured.input;
+            if (!source.issueId) throw forbidden("The selected document revision is outside this native Task");
+            const [current] = await this.db.select({ latestRevisionId: documents.latestRevisionId,
+              revisionId: documentRevisions.id, body: documentRevisions.body,
+              payloadSourceSnapshot: documentRevisions.payloadSourceSnapshot,
+              payloadSourceSnapshotInvalidated: documentRevisions.payloadSourceSnapshotInvalidated,
+            }).from(issueDocuments)
+              .innerJoin(documents, and(eq(documents.companyId, issueDocuments.companyId), eq(documents.id, issueDocuments.documentId)))
+              .innerJoin(documentRevisions, and(eq(documentRevisions.companyId, documents.companyId),
+                eq(documentRevisions.documentId, documents.id), eq(documentRevisions.id, source.revisionId)))
+              .where(and(eq(issueDocuments.companyId, this.binding.companyId), eq(issueDocuments.issueId, source.issueId),
+                eq(issueDocuments.documentId, source.documentId)));
+            if (!current || current.latestRevisionId !== source.revisionId ||
+              current.payloadSourceSnapshotInvalidated ||
+              createHash("sha256").update(current.body, "utf8").digest("hex") !== source.contentHash ||
+              !isDeepStrictEqual(current.payloadSourceSnapshot, captured.payloadSourceSnapshot))
+              throw forbidden("The selected document revision changed or was erased before delivery");
+          }
+          // The callback can wait on durable receipt storage. Re-read every original
+          // source owner after that boundary, including for an exact reader with no
+          // temporal snapshot (legacy/direct Human source).
+          await this.#assertCurrentDocumentRevision(selectedRevisionId);
         }
         // The callback can wait on durable receipt storage. Recheck the original
         // native Task owner after that wait so access loss or source erasure
@@ -422,6 +453,16 @@ export class PaperclipRunnerToolAuthority {
         await this.#boundContext();
       }
       return result;
+    });
+  }
+
+  async #assertCurrentDocumentRevision(revisionId: string, requireLatest = true) {
+    const bound = await this.#boundContext();
+    const { assertNativeDocumentRevisionCurrentSourceAccess } = await import("../native-direct-input.js");
+    await assertNativeDocumentRevisionCurrentSourceAccess(this.db, {
+      companyId: this.binding.companyId, issueId: this.binding.issueId, revisionId, requireLatest,
+      actor: { type: "agent", source: "agent_jwt", companyId: this.binding.companyId,
+        agentId: this.binding.agentId, runId: this.binding.runId, onBehalfOfUserId: bound.run.responsibleUserId },
     });
   }
 
@@ -670,8 +711,12 @@ export class PaperclipRunnerToolAuthority {
           && (!statuses || statuses.size === 0 || statuses.has(task.status))
         ).slice(0, boundedLimit(input.limit)).map(redactedTask) };
       }
-      case "list_documents":
-        return { documents: await documentService(this.db).listIssueDocuments(this.binding.issueId) };
+      case "list_documents": {
+        const documents = await documentService(this.db).listIssueDocuments(this.binding.issueId);
+        for (const document of documents) if (document.latestRevisionId)
+          await this.#assertCurrentDocumentRevision(document.latestRevisionId);
+        return { documents };
+      }
       case "read_document": {
         const document = await documentService(this.db).getIssueDocumentByKey(this.binding.issueId, requiredString(input.key), {
           onSourceCapture: source => { onDocumentReadSource?.(source); },
@@ -679,8 +724,11 @@ export class PaperclipRunnerToolAuthority {
         if (!document) throw new Error("paperclip_runner_document_not_found");
         return { document };
       }
-      case "list_document_revisions":
-        return { revisions: await documentService(this.db).listIssueDocumentRevisions(this.binding.issueId, requiredString(input.key)) };
+      case "list_document_revisions": {
+        const revisions = await documentService(this.db).listIssueDocumentRevisions(this.binding.issueId, requiredString(input.key));
+        for (const revision of revisions) await this.#assertCurrentDocumentRevision(revision.id, false);
+        return { revisions };
+      }
       case "write_document": return this.#writeDocument(input);
       case "list_agents":
         return { actors: (await agentService(this.db).list(this.binding.companyId)).map(redactedActor) };
@@ -1021,7 +1069,7 @@ export class PaperclipRunnerToolAuthority {
           : requiredString(input.changeSummary),
         createdByAgentId: this.binding.agentId,
         createdByRunId: this.binding.runId,
-        nativeAwOutputCapture: this.binding.awOutputCapture?.value ?? undefined,
+        nativeModelOutputCapture: this.binding.nativeModelOutputCapture?.value ?? this.binding.awOutputCapture?.value ?? undefined,
       });
       const activity = await persistActivity(tx, {
         companyId: this.binding.companyId,
@@ -1130,9 +1178,17 @@ export class PaperclipRunnerToolAuthority {
         idempotencyKey: durableIdempotencyKey,
         onDeduplicated: () => { deduplicated = true; },
       };
+      const nativeModelOutputCapture = this.binding.nativeModelOutputCapture?.value ?? undefined;
+      const privacyActor: AuthorizationActor = {
+        type: "agent", source: "agent_jwt", companyId: this.binding.companyId,
+        agentId: this.binding.agentId, runId: this.binding.runId,
+        onBehalfOfUserId: context.run.responsibleUserId,
+      };
       const child = conversation
-        ? await issueService(tx).create(this.binding.companyId, createInput)
-        : (await issueService(tx).createChild(this.binding.issueId, createInput)).issue;
+        ? await issueService(tx).create(this.binding.companyId, createInput, tx, undefined,
+            { privacyActor, nativeModelOutputCapture, nativeModelOutputToolName: "create_task" })
+        : (await issueService(tx).createChild(this.binding.issueId, createInput,
+            { privacyActor, nativeModelOutputCapture, nativeModelOutputToolName: "create_task" })).issue;
       if (deduplicated && child.originFingerprint !== inputFingerprint) {
         throw new Error("paperclip_runner_tool_idempotency_conflict");
       }

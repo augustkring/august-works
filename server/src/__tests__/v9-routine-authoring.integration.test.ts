@@ -15,6 +15,7 @@ import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.j
 import { enableV5ForTest, seedV5Presences } from "./helpers/v5-fixtures.js";
 import { workflowService } from "../services/workflows/workflow-service.js";
 import { assertRoutineSourceAccess } from "../services/routine-source-authority.js";
+import { companyPortabilityService } from "../services/company-portability.js";
 
 describe("Conversation routine drafts use the Original owner without execution authority", () => {
   let database: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>>, db: ReturnType<typeof createDb>;
@@ -69,6 +70,41 @@ describe("Conversation routine drafts use the Original owner without execution a
       eq(companyMemberships.principalId, f.userId), eq(companyMemberships.principalType, "user")));
     await expect(create()).rejects.toMatchObject({ status: 403 });
     expect(await db.select().from(routines).where(eq(routines.companyId, f.home))).toEqual([]);
+  });
+  it("exports ordinary routines and only releases a private draft to its current source owner", async () => {
+    await create();
+    await routineService(db, { sourceActor: f.actor }).create(f.home,
+      createRoutineSchema.parse({ title: "Ordinary paused schedule", status: "paused" }), { userId: f.userId });
+
+    const ownerExport = await companyPortabilityService(db).exportBundle(f.home,
+      { include: { company: true, agents: false, projects: false, issues: true } }, { actor: f.actor });
+    expect(ownerExport.manifest.issues).toEqual(expect.arrayContaining([
+      expect.objectContaining({ recurring: true, title: input().title, description: input().description }),
+      expect.objectContaining({ recurring: true, title: "Ordinary paused schedule" }),
+    ]));
+    expect(ownerExport.files["tasks/weekly-reviewed-research/TASK.md"]).toContain(input().description);
+    expect(ownerExport.files["tasks/ordinary-paused-schedule/TASK.md"]).toContain("Ordinary paused schedule");
+
+    const otherId = `routine-export-${randomUUID()}`;
+    const now = new Date();
+    await db.insert(authUsers).values({ id: otherId, name: "Other Human", email: `${otherId}@test.invalid`, emailVerified: true, createdAt: now, updatedAt: now });
+    await db.insert(companyMemberships).values({ companyId: f.home, principalType: "user", principalId: otherId,
+      membershipRole: "viewer", status: "active" });
+    const otherActor = { type: "board" as const, source: "session" as const, userId: otherId, isInstanceAdmin: true };
+    const otherExport = await companyPortabilityService(db).exportBundle(f.home,
+      { include: { company: true, agents: false, projects: false, issues: true } }, { actor: otherActor });
+    expect(otherExport.manifest.issues.some(issue => issue.title === input().title)).toBe(false);
+    expect(otherExport.manifest.issues.some(issue => issue.title === "Ordinary paused schedule")).toBe(true);
+
+    const retiredAt = new Date();
+    await db.update(issues).set({ conversationAgentId: null, conversationUserId: null, conversationState: null,
+      conversationRetiredAt: retiredAt, status: "cancelled", cancelledAt: retiredAt, hiddenAt: retiredAt,
+      assigneeAgentId: null, assigneeUserId: null, executionRunId: null, checkoutRunId: null })
+      .where(eq(issues.id, conversationId));
+    const afterWithdrawal = await companyPortabilityService(db).exportBundle(f.home,
+      { include: { company: true, agents: false, projects: false, issues: true } }, { actor: f.actor });
+    expect(afterWithdrawal.manifest.issues.some(issue => issue.title === input().title)).toBe(false);
+    expect(afterWithdrawal.manifest.issues.some(issue => issue.title === "Ordinary paused schedule")).toBe(true);
   });
   it("rejects reclassifying the actual private conversation source as manual or another origin", async () => {
     const saved = await create();

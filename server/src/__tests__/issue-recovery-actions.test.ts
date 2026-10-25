@@ -31,7 +31,7 @@ import { errorHandler } from "../middleware/index.js";
 import { issueRoutes } from "../routes/issues.js";
 import { buildPaperclipWakePayload, heartbeatService } from "../services/heartbeat.js";
 import { deliverReconciledExecutions } from "../services/execution-recovery-resolution.js";
-import { issueRecoveryActionService } from "../services/issue-recovery-actions.js";
+import { issueRecoveryActionReadModel, issueRecoveryActionService } from "../services/issue-recovery-actions.js";
 import { recoveryService } from "../services/recovery/service.js";
 import { noticeMetadataReferencesRecoveryAction } from "../services/recovery/successful-run-handoff.js";
 import { createDeliveryWorkCoordinator } from "../services/delivery-work-coordinator.js";
@@ -74,6 +74,16 @@ function makeRecoveryActionRow(overrides: Record<string, unknown> = {}) {
     ...overrides,
   };
 }
+
+describe("recovery action projection privacy", () => {
+  it("keeps deferred reader session metadata out of Task/API projections", () => {
+    const projected = issueRecoveryActionReadModel(makeRecoveryActionRow({ evidence: {
+      sourceRunId: "run-1",
+      workspaceReconstructionReader: { source: "session", userId: "user-1", sessionId: "secret-session-id", credentialExpiresAt: 123 },
+    } }) as never);
+    expect(projected.evidence).toEqual({ sourceRunId: "run-1" });
+  });
+});
 
 describe("issueRecoveryActionService", () => {
   it("does not reactivate an action resolved between the active read and update", async () => {

@@ -1046,6 +1046,7 @@ describe.sequential("company portability routes", () => {
     await waitForCondition(() => mockCompanyPortabilityService.importBundle.mock.calls.length === 1, "import job start");
     expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledWith(importRequest, "cloud-user-1", {
       pauseAutomations: false, actor: cloudTenantActor(), privateWorkAdmission: "closed", checkCancellation: expect.any(Function),
+      onSourceReleaseReview: expect.any(Function), onSourceReleaseTargetBound: expect.any(Function),
     });
     expect(mockLogActivity).not.toHaveBeenCalled();
 
@@ -1207,7 +1208,8 @@ describe.sequential("company portability routes", () => {
     expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledWith(
       { ...importRequest, pauseAutomations: true },
       "cloud-user-1",
-      { pauseAutomations: true, actor: cloudTenantActor(), privateWorkAdmission: "closed", checkCancellation: expect.any(Function) },
+      { pauseAutomations: true, actor: cloudTenantActor(), privateWorkAdmission: "closed", checkCancellation: expect.any(Function),
+        onSourceReleaseReview: expect.any(Function), onSourceReleaseTargetBound: expect.any(Function) },
     );
   });
 
@@ -1233,6 +1235,7 @@ describe.sequential("company portability routes", () => {
     await waitForCondition(() => mockCompanyPortabilityService.importBundle.mock.calls.length === 1, "board import start");
     expect(mockCompanyPortabilityService.importBundle).toHaveBeenCalledWith(importRequest, "board-user-a", {
       pauseAutomations: false, actor: boardActor("board-user-a"), privateWorkAdmission: "closed", checkCancellation: expect.any(Function),
+      onSourceReleaseReview: expect.any(Function), onSourceReleaseTargetBound: expect.any(Function),
     });
 
     const fullResult = createImportResult("created");
@@ -1473,6 +1476,7 @@ describe.sequential("company portability routes", () => {
     expect(call[1]).toBe("board-user-a");
     expect(call[2]).toEqual({
       pauseAutomations: false, actor: boardActor("board-user-a"), privateWorkAdmission: "closed", checkCancellation: expect.any(Function),
+      onSourceReleaseReview: expect.any(Function), onSourceReleaseTargetBound: expect.any(Function),
     });
   });
 

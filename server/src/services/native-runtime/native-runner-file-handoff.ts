@@ -15,7 +15,7 @@ import path from "node:path";
 import { and, eq, inArray, isNull, sql } from "drizzle-orm";
 
 import type { Db } from "@paperclipai/db";
-import type { NativePayloadSourceInput, NativePayloadSourceSnapshot } from "@paperclipai/shared";
+import { nativePayloadSourceSnapshotSchema, type NativePayloadSourceInput, type NativePayloadSourceSnapshot } from "@paperclipai/shared";
 import {
   agents,
   assets,
@@ -35,6 +35,7 @@ import { getStorageService } from "../../storage/index.js";
 import type { StorageService } from "../../storage/types.js";
 import { readProcessStartedAt } from "../hot-restart.js";
 import { issueService } from "../issues.js";
+import { createRunSecretRedactionRegistry } from "../run-secret-redaction.js";
 import { getNativeReviewAssignment, readNativeReviewAssignmentContext } from "./native-review-participant.js";
 
 export type RemoteWorkspaceFileReader = (input: Pick<NativeRunnerFileHandoffInput, "contentRef" | "byteSize" | "sha256">) => Promise<Buffer>;
@@ -98,6 +99,9 @@ export interface NativeRunnerAttachmentSourceCapture {
 export interface NativeRunnerAttachmentStage {
   readonly sourceCaptures: readonly NativeRunnerAttachmentSourceCapture[];
   readonly attachments: readonly NativeRunnerStagedAttachment[];
+  /** Explicit recovery-owner inputs are mandatory. They cannot degrade into
+   * an unavailable prompt followed by a provider turn. */
+  readonly requiredSavedSources?: readonly { attachmentId: string; sha256: string }[];
   cleanup(): Promise<void>;
 }
 
@@ -437,11 +441,13 @@ function record(value: unknown): Record<string, unknown> {
 
 function wakeAttachmentSelections(value: unknown): Array<{
   readonly id: string;
-  readonly commentId: string;
+  readonly commentId: string | null;
+  readonly sha256?: string;
 }> {
-  const wake = record(record(value).paperclipWake);
+  const context = record(value);
+  const wake = record(context.paperclipWake);
   const comments = Array.isArray(wake.comments) ? wake.comments : [];
-  const selected: Array<{ id: string; commentId: string }> = [];
+  const selected: Array<{ id: string; commentId: string | null; sha256?: string }> = [];
   const seen = new Set<string>();
   for (const candidate of comments) {
     const comment = record(candidate);
@@ -461,7 +467,33 @@ function wakeAttachmentSelections(value: unknown): Array<{
       selected.push({ id: attachment.id, commentId: comment.id });
     }
   }
+  const savedSources = Array.isArray(context.selectedSavedSources)
+    ? context.selectedSavedSources
+    : [];
+  for (const candidate of savedSources) {
+    const source = record(candidate);
+    if (typeof source.attachmentId !== "string" || !/^[0-9a-f-]{36}$/iu.test(source.attachmentId)
+      || typeof source.sha256 !== "string" || !/^[0-9a-f]{64}$/iu.test(source.sha256)) continue;
+    const existing = selected.findIndex(selection => selection.id === source.attachmentId);
+    if (existing >= 0) {
+      selected[existing] = { ...selected[existing]!, sha256: source.sha256.toLowerCase() };
+    } else {
+      seen.add(source.attachmentId);
+      selected.push({ id: source.attachmentId, commentId: null, sha256: source.sha256.toLowerCase() });
+    }
+  }
   return selected;
+}
+
+function selectedSavedSourceSelections(value: unknown): Array<{ attachmentId: string; sha256: string }> {
+  const context = record(value);
+  return (Array.isArray(context.selectedSavedSources) ? context.selectedSavedSources : [])
+    .flatMap(candidate => {
+      const source = record(candidate);
+      return typeof source.attachmentId === "string" && /^[0-9a-f-]{36}$/iu.test(source.attachmentId)
+        && typeof source.sha256 === "string" && /^[0-9a-f]{64}$/iu.test(source.sha256)
+        ? [{ attachmentId: source.attachmentId, sha256: source.sha256.toLowerCase() }] : [];
+    });
 }
 
 async function ensurePrivateStagingDirectory(
@@ -825,6 +857,7 @@ export async function stageNativeRunnerWakeAttachments(input: {
   const [run] = await input.db
     .select({
       contextSnapshot: heartbeatRuns.contextSnapshot,
+      responsibleUserId: heartbeatRuns.responsibleUserId,
       agentStatus: agents.status,
       assigneeAgentId: issues.assigneeAgentId,
     })
@@ -880,8 +913,30 @@ export async function stageNativeRunnerWakeAttachments(input: {
     throw new Error("paperclip_runner_attachment_staging_not_authorized");
   }
   const selections = wakeAttachmentSelections(run.contextSnapshot);
+  const requiredSavedSources = selectedSavedSourceSelections(run.contextSnapshot);
   if (selections.length > MAX_NATIVE_STAGED_ATTACHMENTS) {
     throw new Error("paperclip_runner_attachment_staging_count_denied");
+  }
+  const selectedCommentIds = [...new Set(selections.flatMap(selection => selection.commentId ? [selection.commentId] : []))];
+  const readableCommentIds = new Set<string>();
+  if (selectedCommentIds.length) {
+    const currentComments = await input.db.select().from(issueComments).where(and(
+      eq(issueComments.companyId, input.binding.companyId), eq(issueComments.issueId, input.binding.issueId),
+      inArray(issueComments.id, selectedCommentIds), isNull(issueComments.deletedAt),
+    ));
+    currentComments.forEach(comment => readableCommentIds.add(comment.id));
+    // Reuse the canonical current Task source/privacy reader for the actual
+    // native run principal before staging any comment-bound attachment.
+    const sourceActor = { type: "agent" as const, source: "agent_jwt" as const,
+      companyId: input.binding.companyId, agentId: input.binding.agentId,
+      runId: input.binding.runId, onBehalfOfUserId: run.responsibleUserId };
+    try {
+      const { assertAnalyticalContextPayloadAccess } = await import("../analytical-context-authority.js");
+      await assertAnalyticalContextPayloadAccess(input.db, input.binding.companyId, sourceActor, { issueId: input.binding.issueId });
+      await createRunSecretRedactionRegistry(input.db).redactForIssue(input.binding.companyId, input.binding.issueId, currentComments);
+    } catch {
+      readableCommentIds.clear();
+    }
   }
   const workspaceRoot =
     input.binding.executionTargetKind === "local"
@@ -930,7 +985,7 @@ export async function stageNativeRunnerWakeAttachments(input: {
     });
   }
   if (selections.length === 0) {
-    return { attachments: [], sourceCaptures: [], cleanup: async () => undefined };
+    return { attachments: [], sourceCaptures: [], requiredSavedSources, cleanup: async () => undefined };
   }
 
   const rows = await input.db
@@ -938,7 +993,9 @@ export async function stageNativeRunnerWakeAttachments(input: {
       id: issueAttachments.id,
       issueCommentId: issueAttachments.issueCommentId,
       assetId: issueAttachments.assetId,
+      payloadSourceProtocolVersion: issueAttachments.payloadSourceProtocolVersion,
       payloadSourceSnapshot: issueAttachments.payloadSourceSnapshot,
+      payloadSourceSnapshotInvalidated: issueAttachments.payloadSourceSnapshotInvalidated,
       objectKey: assets.objectKey,
       filename: assets.originalFilename,
       contentType: assets.contentType,
@@ -969,7 +1026,20 @@ export async function stageNativeRunnerWakeAttachments(input: {
   const rowById = new Map(
     rows
       .filter(
-        (row) => row.issueCommentId === selectionById.get(row.id)?.commentId,
+        (row) => {
+          const selection = selectionById.get(row.id);
+          if (!selection || row.issueCommentId !== selection.commentId) return false;
+          if (row.issueCommentId && !readableCommentIds.has(row.issueCommentId)) return false;
+          if (!selection.sha256) return true;
+          const snapshot = nativePayloadSourceSnapshotSchema.safeParse(row.payloadSourceSnapshot);
+          return row.sha256.toLowerCase() === selection.sha256
+            && row.payloadSourceProtocolVersion === 1
+            && !row.payloadSourceSnapshotInvalidated
+            && snapshot.success
+            && snapshot.data.owner.kind === "attachment"
+            && snapshot.data.owner.companyId === input.binding.companyId
+            && snapshot.data.owner.id === row.id;
+        },
       )
       .map((row) => [row.id, row] as const),
   );
@@ -985,6 +1055,7 @@ export async function stageNativeRunnerWakeAttachments(input: {
   });
   if (input.binding.executionTargetKind === "remote") {
     return {
+      requiredSavedSources,
       sourceCaptures: selections.map(selection => capture(selection, rowById.get(selection.id),
         rowById.has(selection.id) ? "remote_workspace_staging_unsupported" : "attachment_binding_unavailable")),
       attachments: selections.map((selection) => {
@@ -1060,6 +1131,7 @@ export async function stageNativeRunnerWakeAttachments(input: {
       }
     }
     return {
+      requiredSavedSources,
       attachments: staged,
       sourceCaptures,
       cleanup: async () => {

@@ -206,71 +206,71 @@
       "source": "ui/src/App.tsx",
       "articleId": "company-import-export",
       "sourceSha256": "a18f03eba75b3cd5837cc27e83577a941324f1a2aadd7cb8452a0bb54db0deb8",
-      "articleSha256": "5f96284360633b6091ea69b3ac0a5f16e4e2c8e2748b596674ebf656099541a6",
+      "articleSha256": "878dcc436da18fdd2423e5e8285173e8d03f9d0869b3aeab4a428079e612945c",
       "decision": "no_change",
       "rationale": "Reviewed App.tsx: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
     {
       "source": "ui/src/pages/CompanyImport.tsx",
       "articleId": "company-import-export",
-      "sourceSha256": "69628f56a57717ea99a5e2ebc107153e83c54640484cfde280efb338b5d544d0",
-      "articleSha256": "5f96284360633b6091ea69b3ac0a5f16e4e2c8e2748b596674ebf656099541a6",
+      "sourceSha256": "e30657b4674fbcb62d537d187f877ae9a2582312d0c27956de9ad31badcafe2c",
+      "articleSha256": "878dcc436da18fdd2423e5e8285173e8d03f9d0869b3aeab4a428079e612945c",
       "decision": "updated",
-      "rationale": "The guide matches the explicit Cancel import action and exact source-release review, including the package fingerprint and the rule that leaving the page does not cancel."
+      "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
     },
     {
       "source": "ui/src/pages/CompanyImportHistory.tsx",
       "articleId": "company-import-export",
       "sourceSha256": "9906b3d6e9b78b5f3ee0a73232532e83f55cb3df54b14eca2eeafbcea6d06803",
-      "articleSha256": "5f96284360633b6091ea69b3ac0a5f16e4e2c8e2748b596674ebf656099541a6",
+      "articleSha256": "878dcc436da18fdd2423e5e8285173e8d03f9d0869b3aeab4a428079e612945c",
       "decision": "updated",
       "rationale": "The guide matches saved history receipts and explains confirmed pre-effect cancellation versus unknown outcomes requiring reconciliation."
     },
     {
       "source": "server/src/routes/companies.ts",
       "articleId": "company-import-export",
-      "sourceSha256": "2d88f2f07db516021dcccc12c41f5c30be6dd15eb2400069e8ca6a301d6c5bf0",
-      "articleSha256": "5f96284360633b6091ea69b3ac0a5f16e4e2c8e2748b596674ebf656099541a6",
+      "sourceSha256": "2d83d45977815c64345a665e1ce4b6fb8877e27a9500d4734a541e5f5f26f4c0",
+      "articleSha256": "878dcc436da18fdd2423e5e8285173e8d03f9d0869b3aeab4a428079e612945c",
       "decision": "updated",
-      "rationale": "The guide reflects current requester/source access checks, the exact-fingerprint source review, and cancellation outcome distinctions."
+      "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
     },
     {
       "source": "server/src/services/company-import-jobs.ts",
       "articleId": "company-import-export",
-      "sourceSha256": "d2c1dea6c8f7346219e1214b868b032059000b1dcb4f58e551e0d23c97289d05",
-      "articleSha256": "5f96284360633b6091ea69b3ac0a5f16e4e2c8e2748b596674ebf656099541a6",
+      "sourceSha256": "bc9e28ee635246ff5b955a5cb7db18a772d6fc0efbb64cad5bfb0e72e8d087ee",
+      "articleSha256": "878dcc436da18fdd2423e5e8285173e8d03f9d0869b3aeab4a428079e612945c",
       "decision": "updated",
-      "rationale": "The guide reflects durable cancellation requests and operation receipts bound to the reviewed request fingerprint."
+      "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
     },
     {
       "source": "server/src/services/company-import-transfers.ts",
       "articleId": "company-import-export",
       "sourceSha256": "30e1043a913d7960b2d6a4338c69ea766066c8a41ac2778e007b0743b8be52e2",
-      "articleSha256": "5f96284360633b6091ea69b3ac0a5f16e4e2c8e2748b596674ebf656099541a6",
+      "articleSha256": "878dcc436da18fdd2423e5e8285173e8d03f9d0869b3aeab4a428079e612945c",
       "decision": "no_change",
       "rationale": "Reviewed company-import-transfers.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
     {
       "source": "server/src/services/company-portability.ts",
       "articleId": "company-import-export",
-      "sourceSha256": "d50cae30949552b2486028a1b3e8ba52a2db5a3c798cecceaa943db806e37659",
-      "articleSha256": "5f96284360633b6091ea69b3ac0a5f16e4e2c8e2748b596674ebf656099541a6",
+      "sourceSha256": "742f852688f8cf4801b731f2bafde96b62ae01400afc9d784c61b24401981ff0",
+      "articleSha256": "878dcc436da18fdd2423e5e8285173e8d03f9d0869b3aeab4a428079e612945c",
       "decision": "updated",
-      "rationale": "The guide reflects original-owner native source revalidation, explicit manual review of external open content, the closed private-work gate, and safe cancellation checkpoints."
+      "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
     },
     {
       "source": "server/src/services/company-export-readme.ts",
       "articleId": "company-import-export",
       "sourceSha256": "7cb1334151504af8c56bdfb906bbae318eb468b18268cd24a85f5721f9f1a481",
-      "articleSha256": "5f96284360633b6091ea69b3ac0a5f16e4e2c8e2748b596674ebf656099541a6",
+      "articleSha256": "878dcc436da18fdd2423e5e8285173e8d03f9d0869b3aeab4a428079e612945c",
       "decision": "no_change",
       "rationale": "Reviewed company-export-readme.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
     {
       "source": "packages/shared/src/customer-operations.ts",
       "articleId": "company-import-export",
-      "sourceSha256": "04380661ffda0dc43419e19c1f8ba7a7247a09c30d9cd4cc90fd03155e9d0bfd",
-      "articleSha256": "5f96284360633b6091ea69b3ac0a5f16e4e2c8e2748b596674ebf656099541a6",
+      "sourceSha256": "29ce914bb8ed7ec869cefa628b642fccd938de8b2d7d6b686df4efdf698e9b33",
+      "articleSha256": "878dcc436da18fdd2423e5e8285173e8d03f9d0869b3aeab4a428079e612945c",
       "decision": "no_change",
       "rationale": "Reviewed customer-operations.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
@@ -278,7 +278,7 @@
       "source": "packages/shared/src/company-import-transfer.ts",
       "articleId": "company-import-export",
       "sourceSha256": "dbeeea0632b22d2bf0cd4b7e6ae7eded1883ed930a10ed48483f8c6c6576c370",
-      "articleSha256": "5f96284360633b6091ea69b3ac0a5f16e4e2c8e2748b596674ebf656099541a6",
+      "articleSha256": "878dcc436da18fdd2423e5e8285173e8d03f9d0869b3aeab4a428079e612945c",
       "decision": "no_change",
       "rationale": "Reviewed company-import-transfer.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
@@ -286,7 +286,7 @@
       "source": "cli/src/commands/client/company.ts",
       "articleId": "company-import-export",
       "sourceSha256": "2a859ee4e334ddfbdb76d32e511a76cb665fd4f46b7a8d1e689ee1e7996225d6",
-      "articleSha256": "5f96284360633b6091ea69b3ac0a5f16e4e2c8e2748b596674ebf656099541a6",
+      "articleSha256": "878dcc436da18fdd2423e5e8285173e8d03f9d0869b3aeab4a428079e612945c",
       "decision": "no_change",
       "rationale": "Reviewed company.ts: current company import/export preview, operation recovery, and activation behavior matches the article; no wording change is needed."
     },
@@ -294,23 +294,23 @@
       "source": "server/src/errors.ts",
       "articleId": "company-import-export",
       "sourceSha256": "ca1aa21e985ea9ae479038441040be65916af3fe4d3fcf533fd8cdeae2e56fca",
-      "articleSha256": "5f96284360633b6091ea69b3ac0a5f16e4e2c8e2748b596674ebf656099541a6",
+      "articleSha256": "878dcc436da18fdd2423e5e8285173e8d03f9d0869b3aeab4a428079e612945c",
       "decision": "updated",
       "rationale": "Reviewed native preflight error identity: the guide distinguishes verified rejection before effects from an unknown import outcome after effects may have started."
     },
     {
       "source": "packages/shared/src/types/company-portability.ts",
       "articleId": "company-import-export",
-      "sourceSha256": "1b0ed12dadfe3466d2b4a19b6c7e750fe7060a577bc067792cd5cbbfd281c2e1",
-      "articleSha256": "5f96284360633b6091ea69b3ac0a5f16e4e2c8e2748b596674ebf656099541a6",
+      "sourceSha256": "89f4d3e3357facc94da78a9cc327f27a48e8503433c1bda3f55d6d5774687331",
+      "articleSha256": "878dcc436da18fdd2423e5e8285173e8d03f9d0869b3aeab4a428079e612945c",
       "decision": "updated",
-      "rationale": "Reviewed the shared preview contract: the guide explains the actual GitHub sourceRevision and commit-bound sourceFingerprint without granting source publication authority."
+      "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
     },
     {
       "source": "server/src/services/github-fetch.ts",
       "articleId": "company-import-export",
       "sourceSha256": "9b65647b3ee53f51eeff5ac130ae7a5f26f7b345e5303d05cea07564280d54fb",
-      "articleSha256": "5f96284360633b6091ea69b3ac0a5f16e4e2c8e2748b596674ebf656099541a6",
+      "articleSha256": "878dcc436da18fdd2423e5e8285173e8d03f9d0869b3aeab4a428079e612945c",
       "decision": "updated",
       "rationale": "Reviewed GitHub and Enterprise API/raw transport URL owners: the guide describes commit-bound package reads and preserves unsupported source limits."
     },
@@ -942,71 +942,71 @@
       "source": "ui/src/App.tsx",
       "articleId": "company-import-export-da",
       "sourceSha256": "a18f03eba75b3cd5837cc27e83577a941324f1a2aadd7cb8452a0bb54db0deb8",
-      "articleSha256": "b7bae12646551f2af9fac23e17d61df949a2f1356218452b3627f7394318327e",
+      "articleSha256": "46050e4274e4162eba35e42e4a130c91d6d32da232fe142ca661448b94fb8116",
       "decision": "updated",
       "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
     {
       "source": "ui/src/pages/CompanyImport.tsx",
       "articleId": "company-import-export-da",
-      "sourceSha256": "69628f56a57717ea99a5e2ebc107153e83c54640484cfde280efb338b5d544d0",
-      "articleSha256": "b7bae12646551f2af9fac23e17d61df949a2f1356218452b3627f7394318327e",
+      "sourceSha256": "e30657b4674fbcb62d537d187f877ae9a2582312d0c27956de9ad31badcafe2c",
+      "articleSha256": "46050e4274e4162eba35e42e4a130c91d6d32da232fe142ca661448b94fb8116",
       "decision": "updated",
-      "rationale": "Danish guide reviewed against the current implementation. The guide matches the explicit Cancel import action and exact source-release review, including the package fingerprint and the rule that leaving the page does not cancel."
+      "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
     },
     {
       "source": "ui/src/pages/CompanyImportHistory.tsx",
       "articleId": "company-import-export-da",
       "sourceSha256": "9906b3d6e9b78b5f3ee0a73232532e83f55cb3df54b14eca2eeafbcea6d06803",
-      "articleSha256": "b7bae12646551f2af9fac23e17d61df949a2f1356218452b3627f7394318327e",
+      "articleSha256": "46050e4274e4162eba35e42e4a130c91d6d32da232fe142ca661448b94fb8116",
       "decision": "updated",
       "rationale": "Danish guide reviewed against the current implementation. The guide matches saved history receipts and explains confirmed pre-effect cancellation versus unknown outcomes requiring reconciliation."
     },
     {
       "source": "server/src/routes/companies.ts",
       "articleId": "company-import-export-da",
-      "sourceSha256": "2d88f2f07db516021dcccc12c41f5c30be6dd15eb2400069e8ca6a301d6c5bf0",
-      "articleSha256": "b7bae12646551f2af9fac23e17d61df949a2f1356218452b3627f7394318327e",
+      "sourceSha256": "2d83d45977815c64345a665e1ce4b6fb8877e27a9500d4734a541e5f5f26f4c0",
+      "articleSha256": "46050e4274e4162eba35e42e4a130c91d6d32da232fe142ca661448b94fb8116",
       "decision": "updated",
-      "rationale": "Danish guide reviewed against the current implementation. The guide reflects current requester/source access checks, the exact-fingerprint source review, and cancellation outcome distinctions."
+      "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
     },
     {
       "source": "server/src/services/company-import-jobs.ts",
       "articleId": "company-import-export-da",
-      "sourceSha256": "d2c1dea6c8f7346219e1214b868b032059000b1dcb4f58e551e0d23c97289d05",
-      "articleSha256": "b7bae12646551f2af9fac23e17d61df949a2f1356218452b3627f7394318327e",
+      "sourceSha256": "bc9e28ee635246ff5b955a5cb7db18a772d6fc0efbb64cad5bfb0e72e8d087ee",
+      "articleSha256": "46050e4274e4162eba35e42e4a130c91d6d32da232fe142ca661448b94fb8116",
       "decision": "updated",
-      "rationale": "Danish guide reviewed against the current implementation. The guide reflects durable cancellation requests and operation receipts bound to the reviewed request fingerprint."
+      "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
     },
     {
       "source": "server/src/services/company-import-transfers.ts",
       "articleId": "company-import-export-da",
       "sourceSha256": "30e1043a913d7960b2d6a4338c69ea766066c8a41ac2778e007b0743b8be52e2",
-      "articleSha256": "b7bae12646551f2af9fac23e17d61df949a2f1356218452b3627f7394318327e",
+      "articleSha256": "46050e4274e4162eba35e42e4a130c91d6d32da232fe142ca661448b94fb8116",
       "decision": "updated",
       "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
     {
       "source": "server/src/services/company-portability.ts",
       "articleId": "company-import-export-da",
-      "sourceSha256": "d50cae30949552b2486028a1b3e8ba52a2db5a3c798cecceaa943db806e37659",
-      "articleSha256": "b7bae12646551f2af9fac23e17d61df949a2f1356218452b3627f7394318327e",
+      "sourceSha256": "742f852688f8cf4801b731f2bafde96b62ae01400afc9d784c61b24401981ff0",
+      "articleSha256": "46050e4274e4162eba35e42e4a130c91d6d32da232fe142ca661448b94fb8116",
       "decision": "updated",
-      "rationale": "Danish guide reviewed against the current implementation. The guide reflects original-owner native source revalidation, explicit manual review of external open content, the closed private-work gate, and safe cancellation checkpoints."
+      "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
     },
     {
       "source": "server/src/services/company-export-readme.ts",
       "articleId": "company-import-export-da",
       "sourceSha256": "7cb1334151504af8c56bdfb906bbae318eb468b18268cd24a85f5721f9f1a481",
-      "articleSha256": "b7bae12646551f2af9fac23e17d61df949a2f1356218452b3627f7394318327e",
+      "articleSha256": "46050e4274e4162eba35e42e4a130c91d6d32da232fe142ca661448b94fb8116",
       "decision": "updated",
       "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
     {
       "source": "packages/shared/src/customer-operations.ts",
       "articleId": "company-import-export-da",
-      "sourceSha256": "04380661ffda0dc43419e19c1f8ba7a7247a09c30d9cd4cc90fd03155e9d0bfd",
-      "articleSha256": "b7bae12646551f2af9fac23e17d61df949a2f1356218452b3627f7394318327e",
+      "sourceSha256": "29ce914bb8ed7ec869cefa628b642fccd938de8b2d7d6b686df4efdf698e9b33",
+      "articleSha256": "46050e4274e4162eba35e42e4a130c91d6d32da232fe142ca661448b94fb8116",
       "decision": "updated",
       "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
@@ -1014,7 +1014,7 @@
       "source": "packages/shared/src/company-import-transfer.ts",
       "articleId": "company-import-export-da",
       "sourceSha256": "dbeeea0632b22d2bf0cd4b7e6ae7eded1883ed930a10ed48483f8c6c6576c370",
-      "articleSha256": "b7bae12646551f2af9fac23e17d61df949a2f1356218452b3627f7394318327e",
+      "articleSha256": "46050e4274e4162eba35e42e4a130c91d6d32da232fe142ca661448b94fb8116",
       "decision": "updated",
       "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
@@ -1022,7 +1022,7 @@
       "source": "cli/src/commands/client/company.ts",
       "articleId": "company-import-export-da",
       "sourceSha256": "2a859ee4e334ddfbdb76d32e511a76cb665fd4f46b7a8d1e689ee1e7996225d6",
-      "articleSha256": "b7bae12646551f2af9fac23e17d61df949a2f1356218452b3627f7394318327e",
+      "articleSha256": "46050e4274e4162eba35e42e4a130c91d6d32da232fe142ca661448b94fb8116",
       "decision": "updated",
       "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
@@ -1030,23 +1030,23 @@
       "source": "server/src/errors.ts",
       "articleId": "company-import-export-da",
       "sourceSha256": "ca1aa21e985ea9ae479038441040be65916af3fe4d3fcf533fd8cdeae2e56fca",
-      "articleSha256": "b7bae12646551f2af9fac23e17d61df949a2f1356218452b3627f7394318327e",
+      "articleSha256": "46050e4274e4162eba35e42e4a130c91d6d32da232fe142ca661448b94fb8116",
       "decision": "updated",
       "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
     {
       "source": "packages/shared/src/types/company-portability.ts",
       "articleId": "company-import-export-da",
-      "sourceSha256": "1b0ed12dadfe3466d2b4a19b6c7e750fe7060a577bc067792cd5cbbfd281c2e1",
-      "articleSha256": "b7bae12646551f2af9fac23e17d61df949a2f1356218452b3627f7394318327e",
+      "sourceSha256": "89f4d3e3357facc94da78a9cc327f27a48e8503433c1bda3f55d6d5774687331",
+      "articleSha256": "46050e4274e4162eba35e42e4a130c91d6d32da232fe142ca661448b94fb8116",
       "decision": "updated",
-      "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
+      "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
     },
     {
       "source": "server/src/services/github-fetch.ts",
       "articleId": "company-import-export-da",
       "sourceSha256": "9b65647b3ee53f51eeff5ac130ae7a5f26f7b345e5303d05cea07564280d54fb",
-      "articleSha256": "b7bae12646551f2af9fac23e17d61df949a2f1356218452b3627f7394318327e",
+      "articleSha256": "46050e4274e4162eba35e42e4a130c91d6d32da232fe142ca661448b94fb8116",
       "decision": "updated",
       "rationale": "Danish translation of company-import-export: customer scope and caveats retained from its English counterpart; English UI labels and technical identifiers stay unchanged."
     },
@@ -1841,6 +1841,54 @@
       "articleSha256": "005917d5d3f816284ad0e1480b880033ab415c5103f7ee4761b7ac92a9d46725",
       "decision": "updated",
       "rationale": "Reviewed Danish Help wording against the optional Support Assistant UI, exact approved Help evidence, explicit Anthropic processing consent, platform-owned funding and current-release fail-closed gates; the article states the no-account-state/no-action boundary and preserves independent human support."
+    },
+    {
+      "source": "packages/shared/src/validators/company-portability.ts",
+      "articleId": "company-import-export",
+      "sourceSha256": "792cff6a4abb73d5ac712fd59efe5ba9d050a542215e8e0293ce3e2ec7b6b823",
+      "articleSha256": "878dcc436da18fdd2423e5e8285173e8d03f9d0869b3aeab4a428079e612945c",
+      "decision": "updated",
+      "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
+    },
+    {
+      "source": "packages/db/src/schema/customer_operations.ts",
+      "articleId": "company-import-export",
+      "sourceSha256": "32ad8c8103ca8f2c1b4c8627f5735ef2c03c155a04c02c6d40905a46191cd670",
+      "articleSha256": "878dcc436da18fdd2423e5e8285173e8d03f9d0869b3aeab4a428079e612945c",
+      "decision": "updated",
+      "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
+    },
+    {
+      "source": "server/src/routes/openapi.ts",
+      "articleId": "company-import-export",
+      "sourceSha256": "dca81a3a8bd9b4983ea288cc816bca5cbc8c7697d89f6f3b90775d428204f388",
+      "articleSha256": "878dcc436da18fdd2423e5e8285173e8d03f9d0869b3aeab4a428079e612945c",
+      "decision": "updated",
+      "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
+    },
+    {
+      "source": "packages/shared/src/validators/company-portability.ts",
+      "articleId": "company-import-export-da",
+      "sourceSha256": "792cff6a4abb73d5ac712fd59efe5ba9d050a542215e8e0293ce3e2ec7b6b823",
+      "articleSha256": "46050e4274e4162eba35e42e4a130c91d6d32da232fe142ca661448b94fb8116",
+      "decision": "updated",
+      "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
+    },
+    {
+      "source": "packages/db/src/schema/customer_operations.ts",
+      "articleId": "company-import-export-da",
+      "sourceSha256": "32ad8c8103ca8f2c1b4c8627f5735ef2c03c155a04c02c6d40905a46191cd670",
+      "articleSha256": "46050e4274e4162eba35e42e4a130c91d6d32da232fe142ca661448b94fb8116",
+      "decision": "updated",
+      "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
+    },
+    {
+      "source": "server/src/routes/openapi.ts",
+      "articleId": "company-import-export-da",
+      "sourceSha256": "dca81a3a8bd9b4983ea288cc816bca5cbc8c7697d89f6f3b90775d428204f388",
+      "articleSha256": "46050e4274e4162eba35e42e4a130c91d6d32da232fe142ca661448b94fb8116",
+      "decision": "updated",
+      "rationale": "Reviewed the original import job and portability owner: the article now describes durable exact source-release evidence, current source ownership/access and target authority checks, manual external open-content review with canonical target provenance, and explicit cancellation request/outcome behavior."
     }
   ]
 }

@@ -262,4 +262,49 @@ describeEmbeddedPostgres("native company import job ledger", () => {
     expect((await service.get(expiredJob.job.id, expiredAuthority.actorKey))?.status).toBe("running");
   }, 90_000);
 
+  it("stores one bounded exact source-release receipt under the current target manager", async () => {
+    const authority = await seedAuthority(true);
+    const actor = authority.actor!;
+    const service = companyImportJobService(db);
+    const admitted = await service.admit(admission(authority), actor);
+    expect(await service.start(admitted.job, actor)).toBe(true);
+    const receipt = {
+      version: 1 as const,
+      sourceMode: "manual_open_content" as const,
+      sourceCompanyIds: [],
+      sourceItems: [{ kind: "issue" as const, id: "external:review", slug: "review" }],
+      sourceAccess: "reviewed_open_external" as const,
+      targetMode: "existing_company" as const,
+      targetCompanyId: authority.companyId,
+      previewFingerprint: "a".repeat(64),
+      selectedPayloadFingerprint: "b".repeat(64),
+      reviewedByUserId: authority.userId,
+      reviewedAt: new Date().toISOString(),
+    };
+    const saved = await service.recordSourceReleaseReview(admitted.job, receipt, actor);
+    expect(saved.sourceReleaseReview).toEqual(receipt);
+    const repeated = await service.recordSourceReleaseReview(admitted.job, { ...receipt,
+      reviewedAt: new Date(Date.now() + 1000).toISOString(),
+    }, actor);
+    expect(repeated.sourceReleaseReview).toEqual(receipt);
+    await expect(service.recordSourceReleaseReview(admitted.job, { ...receipt,
+      selectedPayloadFingerprint: "c".repeat(64),
+    }, actor)).rejects.toMatchObject({ status: 409, details: { code: "import_source_review_changed" } });
+    expect(await db.select({ sourceReleaseReview: customerOperations.sourceReleaseReview })
+      .from(customerOperations).where(eq(customerOperations.id, admitted.job.id))).toMatchObject([
+      { sourceReleaseReview: receipt },
+    ]);
+
+    const viewer = await seedAuthority(true);
+    const viewerActor = viewer.actor!;
+    await db.update(companyMemberships).set({ membershipRole: "viewer" }).where(and(
+      eq(companyMemberships.companyId, viewer.companyId), eq(companyMemberships.principalId, viewer.userId),
+    ));
+    const viewerJob = await service.admit(admission(viewer), viewerActor);
+    expect(await service.start(viewerJob.job, viewerActor)).toBe(true);
+    await expect(service.recordSourceReleaseReview(viewerJob.job, { ...receipt,
+      targetCompanyId: viewer.companyId, reviewedByUserId: viewer.userId,
+    }, viewerActor)).rejects.toMatchObject({ status: 403 });
+  }, 90_000);
+
 });

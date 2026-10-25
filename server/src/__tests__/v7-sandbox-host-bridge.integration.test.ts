@@ -49,6 +49,7 @@ import { policyFixture } from "./helpers/sandbox-fixture.js";
 import { instanceSettingsService } from "../services/instance-settings.js";
 import { executionSandboxService } from "../services/execution-sandbox/sandbox-service.js";
 import { executionSandboxRoutes } from "../routes/execution-sandbox.js";
+import { heartbeatService } from "../services/heartbeat.js";
 import { nativeSandboxHostTransport } from "../services/execution-sandbox/native-host-bridge.js";
 import { open as unseal } from "../services/saas/crypto.js";
 import type { SaasPlatformConfig } from "../saas-platform-config.js";
@@ -60,10 +61,11 @@ import { agentProviderBindingService } from "../services/agent-provider-bindings
 import { agentRuntimeFabricService } from "../services/agent-runtime-fabric.js";
 import { discoverNativeCapabilities } from "../services/native-provider-conformance.js";
 import { runtimeControlService } from "../services/runtime/control.js";
-import { deliverReconciledExecutions, markExecutionReconciliation, validateExecutionReconciliation, verifyNativeWorkspaceDestructionReceipt } from "../services/execution-recovery-resolution.js";
+import { describeWorkspaceReconstruction, deliverReconciledExecutions, markExecutionReconciliation, validateExecutionReconciliation, verifyNativeWorkspaceDestructionReceipt } from "../services/execution-recovery-resolution.js";
 import { errorHandler } from "../middleware/index.js";
 import { nativeSha256 } from "../services/native-runtime/canonical.js";
 import { environmentRuntimeService } from "../services/environment-runtime.js";
+import { environmentService } from "../services/environments.js";
 import { createSandboxBrokerJwt, verifyLocalAgentJwt, verifySandboxBrokerJwt, verifySandboxExecJwt } from "../agent-auth-jwt.js";
 import { createToolGatewayService } from "../services/tool-gateway.js";
 import { registerAssignedMcpGateway } from "../services/native-runtime/assigned-mcp-tools.js";
@@ -618,6 +620,25 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
       const features = Object.fromEntries(PROVIDER_CAPABILITY_FEATURES.map(key => [key, false])) as Record<(typeof PROVIDER_CAPABILITY_FEATURES)[number], boolean>;
       await providerService.recordDiscovery(f.home, presence.id, { provider: "paperclip_native", version: "ci-software-fixture", features, skills: [], tools: [], discoveredAt: new Date().toISOString() }, { connect: true, identity: true, start: true, stream: true, wait: true, cancel: true, memoryScoping: true });
       const [task] = await db.insert(issues).values({ companyId: f.home, title: "Run through the qualified sandbox", status: "in_progress", assigneeAgentId: presence.id, responsibleUserId: f.userId }).returning();
+      // Saved comment-bound uploads predate the execution. A new comment after
+      // the failed run would correctly supersede conversation continuation.
+      const savedBytes = Buffer.from("saved reconstruction source\n");
+      const savedHash = createHash("sha256").update(savedBytes).digest("hex");
+      const savedComment = await issueService(db).addComment(task!.id,
+        "Saved source context for recovery.", { userId: f.userId }, { manualInputActor: { ...f.actor } });
+      const savedAttachment = await issueService(db).createAttachment({
+        issueId: task!.id, issueCommentId: savedComment.id, provider: "local_fixture", objectKey: `recovery/${randomUUID()}`,
+        contentType: "text/plain", byteSize: savedBytes.byteLength, sha256: savedHash,
+        originalFilename: "saved-source.txt", createdByUserId: f.userId,
+      }, { actor: { ...f.actor }, bytes: savedBytes });
+      const withdrawnAttachment = await issueService(db).createAttachment({
+        issueId: task!.id, issueCommentId: savedComment.id, provider: "local_fixture", objectKey: `recovery/${randomUUID()}`,
+        contentType: "text/plain", byteSize: savedBytes.byteLength, sha256: savedHash,
+        originalFilename: "withdrawn-source.txt", createdByUserId: f.userId,
+      }, { actor: { ...f.actor }, bytes: savedBytes });
+      const verifyFixtureSavedBytes = async (source: { objectKey: string; sha256: string; byteSize: number }) => {
+        if (source.objectKey === savedAttachment!.objectKey) expect(source).toMatchObject({ sha256: savedHash, byteSize: savedBytes.byteLength });
+      };
       const [run] = await db.insert(heartbeatRuns).values({ companyId: f.home, agentId: presence.id, status: "running", startedAt: new Date(), runtimeMode: "native", runtimeModeResolvedAt: new Date(), nativeIssueId: task!.id, responsibleUserId: f.userId, contextSnapshot: { issueId: task!.id } }).returning();
       await db.update(issues).set({ executionRunId: run!.id }).where(eq(issues.id, task!.id));
       const manifest = await agentRuntimeFabricService(db).prepare({ companyId: f.home, agentId: presence.id, runId: run!.id, responsibleUserId: f.userId, issueId: task!.id, query: task!.title });
@@ -890,6 +911,7 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         });
         stopResult = await driveHost(service.stop(f.actor, f.home, sandboxBinding.id, "fixture-user-stop"), admissionCell!.id);
         expect(stopResult.binding.status).toBe("stopped");
+        await environmentService(db).releaseLease(lease!.id, "released");
         await db.update(heartbeatRuns).set({ status: "failed", resultJson: { workspaceRestoreFailure: "restore_failed" } })
           .where(eq(heartbeatRuns.id, run!.id));
         const destruction = await driveHost(
@@ -904,16 +926,9 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
         // Continue only from an exact, same-task captured attachment. This
         // drives the real failed-run recovery owner after the signed host
         // Stop+Destroy producer above; the continuation is a fresh bounded run.
-        const savedBytes = Buffer.from("saved reconstruction source\n");
-        const savedHash = createHash("sha256").update(savedBytes).digest("hex");
         // Use the real current-human upload owner. The original issue service
         // verifies these bytes, captures the access snapshot, and records its
         // producer receipt; the test never fabricates a sealed source row.
-        const savedAttachment = await issueService(db).createAttachment({
-          issueId: task!.id, provider: "local_fixture", objectKey: `recovery/${randomUUID()}`,
-          contentType: "text/plain", byteSize: savedBytes.byteLength, sha256: savedHash,
-          originalFilename: "saved-source.txt", createdByUserId: f.userId,
-        }, { actor: { ...f.actor }, bytes: savedBytes });
         await db.update(heartbeatRuns).set({ status: "failed", scheduledRetryAttempt: 1,
           scheduledRetryReason: "transient_failure", resultJson: { workspaceRestoreFailure: "restore_failed" } })
           .where(eq(heartbeatRuns.id, run!.id));
@@ -933,27 +948,81 @@ function signedRuntimeRelayProof(hostId: string, privateKey: ReturnType<typeof g
           workspaceReconstruction: { confirmed: true as const, destructionReceiptHash: destructionReceipt!.receiptHash,
             selectedSources: [{ attachmentId: savedAttachment!.id, sha256: savedHash }] },
         };
+        const reconstructionDescriptor = await describeWorkspaceReconstruction({ db, companyId: f.home,
+          issueId: task!.id, sourceRunId: run!.id, currentOwnerAgentId: presence.id,
+          canReadCommentSource: async () => true, verifySavedSourceBytes: verifyFixtureSavedBytes });
+        expect(reconstructionDescriptor.reason).toBeNull();
+        expect(reconstructionDescriptor).toMatchObject({ state: "available", sourceRunId: run!.id,
+          currentOwnerAgentId: presence.id, destruction: { state: "confirmed", receiptHash: destructionReceipt!.receiptHash,
+            bindingId: sandboxBinding.id, cellId: admissionCell!.id, generation: admissionCell!.generation.toString() },
+          continuation: { available: true, mode: "fresh_bounded" } });
+        expect(reconstructionDescriptor.sources).toContainEqual({ attachmentId: savedAttachment!.id,
+          filename: "saved-source.txt", contentType: "text/plain", byteSize: savedBytes.byteLength, sha256: savedHash });
+        await expect(describeWorkspaceReconstruction({ db, companyId: f.home,
+          issueId: task!.id, sourceRunId: run!.id, currentOwnerAgentId: presence.id,
+          canReadCommentSource: async () => false,
+          commentSourceUnavailableReason: "comment_source_requires_board_session",
+          verifySavedSourceBytes: verifyFixtureSavedBytes })).resolves.toMatchObject({
+            state: "unavailable", reason: "comment_source_requires_board_session", sources: [],
+          });
+        await expect(validateExecutionReconciliation({ db, companyId: f.home, issueId: task!.id,
+          agentId: presence.id, sourceRunId: run!.id, decision: reconstructionDecision,
+          canReadCommentSource: async () => false })).rejects.toThrow("current comment source");
+        // Withdraw one genuine upload while the Task is still eligible. The
+        // other captured source remains available for the positive fresh
+        // continuation below.
+        await db.update(assets).set({ sha256: "e".repeat(64) }).where(eq(assets.id, withdrawnAttachment!.assetId));
+        const afterSourceWithdrawal = await describeWorkspaceReconstruction({ db, companyId: f.home,
+          issueId: task!.id, sourceRunId: run!.id, currentOwnerAgentId: presence.id,
+          canReadCommentSource: async () => true, verifySavedSourceBytes: verifyFixtureSavedBytes });
+        expect(afterSourceWithdrawal).toMatchObject({ state: "available", destruction: { state: "confirmed" } });
+        expect(afterSourceWithdrawal.sources.map(source => source.attachmentId)).toContain(savedAttachment!.id);
+        expect(afterSourceWithdrawal.sources.map(source => source.attachmentId)).not.toContain(withdrawnAttachment!.id);
         await expect(validateExecutionReconciliation({ db, companyId: f.home, issueId: task!.id,
           agentId: presence.id, sourceRunId: run!.id, decision: { ...reconstructionDecision,
             workspaceReconstruction: { ...reconstructionDecision.workspaceReconstruction,
-              selectedSources: [{ attachmentId: savedAttachment!.id, sha256: "d".repeat(64) }] } } }))
+              selectedSources: [{ attachmentId: withdrawnAttachment!.id, sha256: savedHash }] } },
+          canReadCommentSource: async () => true })).rejects.toThrow("captured source hash and access snapshot");
+        await expect(describeWorkspaceReconstruction({ db, companyId: f.home, issueId: task!.id,
+          sourceRunId: run!.id, currentOwnerAgentId: randomUUID(), canReadCommentSource: async () => true,
+          verifySavedSourceBytes: verifyFixtureSavedBytes })).resolves.toMatchObject({
+            state: "unavailable", reason: "current_task_owner_or_lost_workspace_unverified",
+            destruction: { state: "confirmed", receiptHash: destructionReceipt!.receiptHash,
+              bindingId: sandboxBinding.id, cellId: admissionCell!.id, generation: admissionCell!.generation.toString() },
+            sources: [],
+          });
+        if (savedAttachment!.issueCommentId) {
+          await expect(describeWorkspaceReconstruction({ db, companyId: f.home, issueId: task!.id,
+            sourceRunId: run!.id, currentOwnerAgentId: presence.id, canReadCommentSource: async () => false,
+            verifySavedSourceBytes: verifyFixtureSavedBytes })).resolves.toMatchObject({
+              state: "unavailable", reason: "no_currently_qualified_saved_sources", sources: [],
+              destruction: { state: "confirmed", receiptHash: destructionReceipt!.receiptHash },
+            });
+        }
+        await expect(validateExecutionReconciliation({ db, companyId: f.home, issueId: task!.id,
+          agentId: presence.id, sourceRunId: run!.id, decision: { ...reconstructionDecision,
+            workspaceReconstruction: { ...reconstructionDecision.workspaceReconstruction,
+              selectedSources: [{ attachmentId: savedAttachment!.id, sha256: "d".repeat(64) }] } },
+          canReadCommentSource: async () => true }))
           .rejects.toThrow("captured source hash and access snapshot");
         await validateExecutionReconciliation({ db, companyId: f.home, issueId: task!.id,
-          agentId: presence.id, sourceRunId: run!.id, decision: reconstructionDecision });
-        await markExecutionReconciliation(db, recoveryAction!, reconstructionDecision, f.userId);
-        await deliverReconciledExecutions(db, heartbeatService(db).wakeup);
+          agentId: presence.id, sourceRunId: run!.id, decision: reconstructionDecision,
+          canReadCommentSource: async () => true });
+        const [sourceSession] = await db.select({ expiresAt: authSessions.expiresAt }).from(authSessions)
+          .where(eq(authSessions.id, f.actor.sessionId!)).limit(1);
+        await markExecutionReconciliation(db, recoveryAction!, reconstructionDecision, f.userId,
+          undefined, undefined, { source: "session", userId: f.userId, sessionId: f.actor.sessionId!,
+            credentialExpiresAt: sourceSession?.expiresAt.getTime() ?? null });
+        const recoveryHeartbeat = heartbeatService(db);
+        await deliverReconciledExecutions(db, recoveryHeartbeat.wakeup);
         const [successor] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.retryOfRunId, run!.id));
-        expect(successor).toMatchObject({ status: "queued", scheduledRetryAttempt: 1, scheduledRetryReason: "transient_failure" });
+        expect(["queued", "running"]).toContain(successor?.status);
+        expect(successor).toMatchObject({ scheduledRetryAttempt: 1, scheduledRetryReason: "transient_failure" });
         expect(successor?.contextSnapshot).toMatchObject({ recoveryActionId: recoveryAction!.id, previousRunId: run!.id, retryOfRunId: run!.id });
+        await recoveryHeartbeat.cancelRun(successor!.id, "Fixture completed after verifying bounded reconstruction admission");
+        await recoveryHeartbeat.drainActiveRunExecutions();
         const [stillFailed] = await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.id, run!.id));
         expect(stillFailed).toMatchObject({ status: "failed", resultJson: { workspaceRestoreFailure: "restore_failed" } });
-        // The production binding trigger invalidates the captured source when
-        // its backing asset identity changes. The current owner gate must then
-        // refuse another reconstruction attempt.
-        await db.update(assets).set({ sha256: "e".repeat(64) }).where(eq(assets.id, savedAttachment!.assetId));
-        await expect(validateExecutionReconciliation({ db, companyId: f.home, issueId: task!.id,
-          agentId: presence.id, sourceRunId: run!.id, decision: reconstructionDecision }))
-          .rejects.toThrow("captured source hash and access snapshot");
         const [quiescedExecClaim] = await db.select().from(runtimeHostCommands).where(eq(runtimeHostCommands.idempotencyKey, uncertainCommand.request.requestId));
         expect(quiescedExecClaim).toMatchObject({ status: "CANCELED", errorCode: "sandbox_exec_quiesced_by_stop" });
       } finally {

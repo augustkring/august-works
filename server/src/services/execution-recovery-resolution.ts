@@ -10,6 +10,7 @@ import {
   chatActions,
   environmentLeases,
   heartbeatRuns,
+  issueComments,
   agentExecutionManifests,
   assets,
   issueAttachments,
@@ -34,6 +35,33 @@ import { parseIssueExecutionState } from "./issue-execution-policy.js";
 import { isSupersededConversationRun } from "./agent-conversations.js";
 import { SANDBOX_HOST_COMMAND } from "@paperclipai/shared";
 import { nativeSha256 } from "./native-runtime/canonical.js";
+import type { AuthorizationActor } from "./authorization.js";
+
+export type WorkspaceReconstructionReader =
+  | { source: "session"; userId: string; sessionId: string; credentialExpiresAt: number | null }
+  | { source: "local_implicit" };
+
+/** Current comment reader shared by projection, resolve, and deferred owner
+ * admission. The session is rechecked by the original analytical payload
+ * reader; a recorded choice is never a durable grant. */
+export async function canReadCurrentWorkspaceCommentSource(input: {
+  db: Db; companyId: string; issueId: string; commentId: string; actor: AuthorizationActor;
+}): Promise<boolean> {
+  const [comment] = await input.db.select().from(issueComments).where(and(
+    eq(issueComments.companyId, input.companyId), eq(issueComments.issueId, input.issueId),
+    eq(issueComments.id, input.commentId), isNull(issueComments.deletedAt),
+  )).limit(1);
+  if (!comment) return false;
+  try {
+    const { assertAnalyticalContextPayloadAccess } = await import("./analytical-context-authority.js");
+    const { createRunSecretRedactionRegistry } = await import("./run-secret-redaction.js");
+    await assertAnalyticalContextPayloadAccess(input.db, input.companyId, input.actor, { issueId: input.issueId });
+    await createRunSecretRedactionRegistry(input.db).redactForIssue(input.companyId, input.issueId, comment);
+    return true;
+  } catch {
+    return false;
+  }
+}
 
 /** An operator records observed outcomes; this is not permission to blindly retry. */
 export async function validateExecutionReconciliation(input: {
@@ -43,6 +71,7 @@ export async function validateExecutionReconciliation(input: {
   agentId: string | null;
   sourceRunId: unknown;
   decision: ExecutionReconciliation | undefined;
+  canReadCommentSource?: (commentId: string) => Promise<boolean>;
 }) {
   const { db, companyId, issueId, agentId, decision } = input;
   if (!decision || decision.runId !== input.sourceRunId || !agentId) {
@@ -129,6 +158,9 @@ export async function validateExecutionReconciliation(input: {
     if (assetRows.length !== selectedIds.length) throw conflict("A selected saved file belongs to another source or company.");
     const assetById = new Map(assetRows.map(asset => [asset.id, asset]));
     for (const attachment of attachmentRows) {
+      if (attachment.issueCommentId && (!input.canReadCommentSource || !await input.canReadCommentSource(attachment.issueCommentId))) {
+        throw conflict("A selected saved file's current comment source is no longer authorized.");
+      }
       const snapshot = nativePayloadSourceSnapshotSchema.safeParse(attachment.payloadSourceSnapshot);
       const asset = assetById.get(attachment.assetId);
       const selectedSource = selected.find(source => source.attachmentId === attachment.id);
@@ -302,7 +334,7 @@ export async function verifyNativeWorkspaceDestructionReceipt(input: {
           && request.scope?.cellGeneration === generation
           && result?.action === "destroy" && result.destroyed === true && command.completedAt !== null;
       });
-      if (!destroyCommand) continue;
+      if (!destroyCommand?.completedAt) continue;
       const [laterStart] = await input.db.select({ id: runtimeHostCommands.id }).from(runtimeHostCommands).where(and(
         eq(runtimeHostCommands.runtimeHostId, host.id), eq(runtimeHostCommands.companyId, input.companyId),
         eq(runtimeHostCommands.runtimeCellId, cell.id), eq(runtimeHostCommands.cellGeneration, BigInt(generation)),
@@ -340,6 +372,117 @@ export async function verifyNativeWorkspaceDestructionReceipt(input: {
   return { receiptHash: nativeSha256({ schema: "paperclip.native-workspace-destruction.v1", receipts: receiptParts }), ...first };
 }
 
+/** Read-only reconstruction picker projection. It deliberately reports only
+ * source metadata already visible on this task and only after current producer
+ * provenance, ownership, and object metadata still agree. */
+export async function describeWorkspaceReconstruction(input: {
+  db: Db;
+  companyId: string;
+  issueId: string;
+  sourceRunId: unknown;
+  currentOwnerAgentId: string | null;
+  canReadCommentSource?: (commentId: string) => Promise<boolean>;
+  commentSourceUnavailableReason?: string;
+  verifySavedSourceBytes: (source: { companyId: string; objectKey: string; sha256: string; byteSize: number }) => Promise<void>;
+}) {
+  const unavailable = (reason: string, receipt?: Awaited<ReturnType<typeof verifyNativeWorkspaceDestructionReceipt>> | null) => ({
+    state: "unavailable" as const, reason,
+    sourceRunId: typeof input.sourceRunId === "string" ? input.sourceRunId : null,
+    currentOwnerAgentId: input.currentOwnerAgentId,
+    destruction: { state: receipt ? "confirmed" as const : "unknown" as const,
+      receiptHash: receipt?.receiptHash ?? null, bindingId: receipt?.bindingId ?? null,
+      cellId: receipt?.cellId ?? null, generation: receipt?.generation ?? null },
+    continuation: { available: false, mode: "unavailable" as const, stagingScope: "local_only" as const, reason }, sources: [],
+  });
+  if (typeof input.sourceRunId !== "string" || !input.currentOwnerAgentId) return unavailable("current_owner_or_source_unknown");
+  const [task] = await input.db.select().from(issues).where(and(eq(issues.companyId, input.companyId), eq(issues.id, input.issueId))).limit(1);
+  const [run] = await input.db.select().from(heartbeatRuns).where(and(eq(heartbeatRuns.companyId, input.companyId), eq(heartbeatRuns.id, input.sourceRunId))).limit(1);
+  if (!run) return unavailable("current_task_owner_or_lost_workspace_unverified");
+  const receipt = await verifyNativeWorkspaceDestructionReceipt({ db: input.db, companyId: input.companyId, runId: run.id });
+  if (!task || task.assigneeAgentId !== input.currentOwnerAgentId || run.agentId !== input.currentOwnerAgentId
+    || (run.nativeIssueId ?? run.contextSnapshot?.issueId) !== input.issueId
+    || !["failed", "interrupted", "timed_out", "cancelled"].includes(run.status)
+    || !hasWorkspaceRestoreFailure(run.resultJson)) return unavailable("current_task_owner_or_lost_workspace_unverified", receipt);
+  if (!receipt) return unavailable("confirmed_native_destruction_receipt_unavailable");
+  const [binding] = await input.db.select({ id: runtimeSandboxBindings.id, status: runtimeSandboxBindings.status }).from(runtimeSandboxBindings).where(and(
+    eq(runtimeSandboxBindings.companyId, input.companyId), eq(runtimeSandboxBindings.id, receipt.bindingId),
+    eq(runtimeSandboxBindings.runtimeCellId, receipt.cellId), eq(runtimeSandboxBindings.cellGeneration, receipt.generation),
+  )).limit(1);
+  if (!binding || !["stopped", "deleted"].includes(binding.status)) return unavailable("destroyed_binding_is_live_or_changing", receipt);
+  if (task.status !== "todo") return unavailable("task_not_eligible_for_fresh_continuation", receipt);
+  for (const pid of [run.processPid, run.processGroupId ? -run.processGroupId : null]) {
+    if (!pid) continue;
+    try { process.kill(pid, 0); }
+    catch (error) { if ((error as NodeJS.ErrnoException).code === "ESRCH") continue; return unavailable("prior_process_ownership_unverified", receipt); }
+    return unavailable("prior_process_still_running", receipt);
+  }
+  const [coordinator] = await input.db.select().from(nativeRunFinalizations).where(and(
+    eq(nativeRunFinalizations.companyId, input.companyId), eq(nativeRunFinalizations.runId, run.id),
+  )).limit(1);
+  if (coordinator?.leaseOwner || coordinator?.failureDetail?.successorRunId) return unavailable("prior_continuation_or_coordinator_exists", receipt);
+  const [lease] = await input.db.select({ id: environmentLeases.id }).from(environmentLeases).where(and(
+    eq(environmentLeases.companyId, input.companyId), eq(environmentLeases.heartbeatRunId, run.id), isNull(environmentLeases.releasedAt),
+  )).limit(1);
+  if (lease) return unavailable("prior_environment_authority_not_released", receipt);
+  const attachmentRows = await input.db.select({
+    id: issueAttachments.id, companyId: issueAttachments.companyId, issueId: issueAttachments.issueId,
+    issueCommentId: issueAttachments.issueCommentId, assetId: issueAttachments.assetId,
+    payloadSourceProtocolVersion: issueAttachments.payloadSourceProtocolVersion,
+    payloadSourceSnapshot: issueAttachments.payloadSourceSnapshot,
+    payloadSourceSnapshotInvalidated: issueAttachments.payloadSourceSnapshotInvalidated,
+    objectKey: assets.objectKey, sha256: assets.sha256, byteSize: assets.byteSize,
+    contentType: assets.contentType, originalFilename: assets.originalFilename, createdByUserId: assets.createdByUserId,
+  }).from(issueAttachments).innerJoin(assets, and(eq(assets.companyId, issueAttachments.companyId), eq(assets.id, issueAttachments.assetId))).where(and(
+    eq(issueAttachments.companyId, input.companyId), eq(issueAttachments.issueId, input.issueId),
+  )).orderBy(desc(issueAttachments.createdAt)).limit(33);
+  if (attachmentRows.length > 32) return unavailable("saved_source_review_limit_exceeded", receipt);
+  const sources: Array<{ attachmentId: string; filename: string; contentType: string; byteSize: number; sha256: string }> = [];
+  let commentSourceCredentialUnavailable = false;
+  for (const attachment of attachmentRows) {
+    if (!Number.isSafeInteger(attachment.byteSize) || attachment.byteSize < 0 || attachment.byteSize > 32 * 1024 * 1024) continue;
+    const snapshot = nativePayloadSourceSnapshotSchema.safeParse(attachment.payloadSourceSnapshot);
+    if (attachment.payloadSourceProtocolVersion !== 1 || attachment.payloadSourceSnapshotInvalidated || !snapshot.success
+      || snapshot.data.owner.kind !== "attachment" || snapshot.data.owner.companyId !== input.companyId
+      || snapshot.data.owner.id !== attachment.id) continue;
+    const asset = { id: attachment.assetId, sha256: attachment.sha256, byteSize: attachment.byteSize,
+      createdByUserId: attachment.createdByUserId };
+    const captured = snapshot.data.inputs.some((source) => source.kind === "attachment" && source.attachmentId === attachment.id
+      && source.disposition === "delivered" && source.assetId === asset.id && source.sha256 === asset.sha256 && source.byteSize === asset.byteSize);
+    let uploaded = false;
+    if (!captured && asset.createdByUserId) {
+      const [row] = await input.db.select({ id: activityLog.id }).from(activityLog).where(and(
+        eq(activityLog.companyId, input.companyId), eq(activityLog.action, "attachment.payload_source_captured"),
+        eq(activityLog.entityType, "issue"), eq(activityLog.entityId, input.issueId),
+        eq(activityLog.actorType, "user"), eq(activityLog.actorId, asset.createdByUserId),
+        sql`${activityLog.details}->>'producer' = 'direct_manual_upload'`,
+        sql`${activityLog.details}->>'attachmentId' = ${attachment.id}`, sql`${activityLog.details}->>'assetId' = ${asset.id}`,
+        sql`${activityLog.details}->>'contentHash' = ${snapshot.data.owner.contentHash}`, sql`${activityLog.details}->>'digest' = ${snapshot.data.digest}`,
+      )).limit(1);
+      uploaded = Boolean(row);
+    }
+    if (!captured && !uploaded) continue;
+    if (attachment.issueCommentId && (!input.canReadCommentSource || !await input.canReadCommentSource(attachment.issueCommentId))) {
+      commentSourceCredentialUnavailable = true;
+      continue;
+    }
+    try { await input.verifySavedSourceBytes({ companyId: input.companyId, objectKey: attachment.objectKey, sha256: asset.sha256, byteSize: asset.byteSize }); }
+    catch { continue; }
+    sources.push({ attachmentId: attachment.id, filename: attachment.originalFilename ?? "Saved file",
+      contentType: attachment.contentType, byteSize: attachment.byteSize, sha256: asset.sha256 });
+  }
+  if (!sources.length) return unavailable(
+    commentSourceCredentialUnavailable ? input.commentSourceUnavailableReason ?? "no_currently_qualified_saved_sources" : "no_currently_qualified_saved_sources",
+    receipt,
+  );
+  if (sources.reduce((total, source) => total + source.byteSize, 0) > 64 * 1024 * 1024) {
+    return unavailable("qualified_saved_sources_exceed_reconstruction_limits", receipt);
+  }
+  return { state: "available" as const, reason: null,
+    sourceRunId: run.id, currentOwnerAgentId: task.assigneeAgentId,
+    destruction: { state: "confirmed" as const, receiptHash: receipt.receiptHash, bindingId: receipt.bindingId, cellId: receipt.cellId, generation: receipt.generation },
+    continuation: { available: true, mode: "fresh_bounded" as const, stagingScope: "local_only" as const, reason: null }, sources };
+}
+
 /** Durable delivery marker lives on the existing source-scoped recovery action. */
 export async function markExecutionReconciliation(
   db: Db,
@@ -351,6 +494,7 @@ export async function markExecutionReconciliation(
   actorId: string,
   deliveryOwner?: { kind: "chat_failed_run_retry"; actionId: string },
   requestHash?: string,
+  workspaceReader?: WorkspaceReconstructionReader | null,
 ) {
   if (deliveryOwner) {
     const [retry] = await db
@@ -397,6 +541,7 @@ export async function markExecutionReconciliation(
           recordedAt: new Date().toISOString(),
         },
         ...(decision.workspaceReconstruction && requestHash ? { workspaceReconstructionRequestHash: requestHash } : {}),
+        ...(decision.workspaceReconstruction ? { workspaceReconstructionReader: workspaceReader ?? null } : {}),
         continuationDelivery: deliveryOwner ? "delegated" : "pending",
         ...(deliveryOwner ? { continuationDeliveryOwner: deliveryOwner } : {}),
       },
@@ -458,6 +603,16 @@ export async function deliverReconciledExecutions(
         continue;
       }
       try {
+        const readerEvidence = action.evidence.workspaceReconstructionReader;
+        const reader = readerEvidence && typeof readerEvidence === "object" && !Array.isArray(readerEvidence)
+          ? readerEvidence as Record<string, unknown> : null;
+        const currentReader = reader?.source === "local_implicit"
+          ? { type: "board" as const, source: "local_implicit" as const }
+          : reader && reader.source === "session" && typeof reader.userId === "string" && typeof reader.sessionId === "string"
+          ? { type: "board" as const, source: "session" as const, userId: reader.userId,
+              sessionId: reader.sessionId, companyIds: [action.companyId],
+              authenticatedCredentialExpiresAt: typeof reader.credentialExpiresAt === "number" ? reader.credentialExpiresAt : null }
+          : null;
         await validateExecutionReconciliation({
           db,
           companyId: action.companyId,
@@ -465,6 +620,9 @@ export async function deliverReconciledExecutions(
           agentId: task.assigneeAgentId,
           sourceRunId: decision.runId,
           decision,
+          ...(currentReader ? { canReadCommentSource: (commentId: string) => canReadCurrentWorkspaceCommentSource({
+            db, companyId: action.companyId, issueId: task.id, commentId, actor: currentReader,
+          }) } : {}),
         });
       } catch {
         await db.update(issueRecoveryActions).set({
