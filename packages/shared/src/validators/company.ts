@@ -10,6 +10,9 @@ const feedbackDataSharingTermsVersionSchema = z.string().min(1).nullable().optio
 export const companyLocaleSchema = z.enum(["en", "da"]);
 
 export const companyTimeZoneSchema = z.string().trim().min(1).max(128).refine((timeZone) => {
+  // Intl accepts fixed UTC offsets too, but schedules require a timezone name
+  // with IANA daylight-saving rules rather than an offset-only representation.
+  if (/^[+-]\d{2}(?::?\d{2})?$/.test(timeZone)) return false;
   try {
     new Intl.DateTimeFormat("en", { timeZone }).format();
     return true;

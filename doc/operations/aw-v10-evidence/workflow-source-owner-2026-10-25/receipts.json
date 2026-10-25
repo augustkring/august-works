@@ -3487,6 +3487,143 @@
       },
       "summary": [],
       "sourceCommit": "b76e4884dbb5836940bad531895953cc20acaf28"
+    },
+    {
+      "name": "v10-general-workspaces-b-after-v5-retry-20261025",
+      "exitCode": 1,
+      "exitSidecar": "v10-general-workspaces-b-after-v5-retry-20261025.log.exit",
+      "rawSha256": "daca2ceda0581c7e6133960aab6b77cadac389f12e0a73fc5afe06ea10ad038f",
+      "sanitizedSha256": "8d348dafa0c45761bea85dd16789d0e0d905dab345d04558e19b76608bb28d58",
+      "archiveSha256": "ca83a6bf8637f7bc3624489f695b5d8e2fc7649ae79bcc947e46abed87a47183",
+      "redactions": {
+        "ansi": 16156,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 2 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed | 59 passed (60)",
+        "Tests  2 failed | 1299 passed | 5 skipped (1306)",
+        "Duration  172.34s (transform 4.03s, setup 0ms, import 24.37s, tests 140.56s, environment 5ms)"
+      ],
+      "sourceCommit": "b641c8d65e18e274acfe3ad327dbebc821c0e428"
+    },
+    {
+      "name": "adapter-utils-t2-t15-worker-29c443dec-20261025",
+      "exitCode": 0,
+      "exitSidecar": "adapter-utils-t2-t15-worker-29c443dec-20261025.log.exit",
+      "rawSha256": "e8c98de840e60cf91ec3d1ac126f137e4d41b732fbc9a564a98713d6bea81c4b",
+      "sanitizedSha256": "f8e9f7e20084a36bb46d495e50490659b609fa876b7fa1263cc5b647e0d92b08",
+      "archiveSha256": "7da6a5b00943f62d08fbedb922d148f4a03f7eb3918c1b9a59c087693e285653",
+      "redactions": {
+        "ansi": 496,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  2 passed | 36 skipped (38)",
+        "Duration  5.91s (transform 1.66s, setup 0ms, import 2.38s, tests 3.40s, environment 0ms)"
+      ],
+      "sourceCommit": "b641c8d65e18e274acfe3ad327dbebc821c0e428"
+    },
+    {
+      "name": "adapter-utils-full-worker-29c443dec-20261025",
+      "exitCode": 0,
+      "exitSidecar": "adapter-utils-full-worker-29c443dec-20261025.log.exit",
+      "rawSha256": "22fa8ac7f431823930ec9ee47904146534f7843856caa167acc9061ad6265d68",
+      "sanitizedSha256": "11022951236f5799eeb7e2601d14272a4e66dfbcd85de2c3a0e62390de061817",
+      "archiveSha256": "44a78c281087069b883d30446a1a398f472629d339296ea2ee2a4a432892260f",
+      "redactions": {
+        "ansi": 2564,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  60 passed (60)",
+        "Tests  1301 passed | 5 skipped (1306)",
+        "Duration  157.04s (transform 3.84s, setup 0ms, import 22.89s, tests 126.81s, environment 5ms)"
+      ],
+      "sourceCommit": "b641c8d65e18e274acfe3ad327dbebc821c0e428"
+    },
+    {
+      "name": "v10-general-workspaces-b-remaining-valid-env-29c443dec-20261025",
+      "exitCode": 0,
+      "exitSidecar": "v10-general-workspaces-b-remaining-valid-env-29c443dec-20261025.log.exit",
+      "rawSha256": "f764f4879d8afa1fa09a100cbf283bbd5c5d86c6ab061273c20adba4347e1a27",
+      "sanitizedSha256": "0be3034c186e4c0e3fa212525be677d42af4e59e71374c4bfa39c0f6623f5c88",
+      "archiveSha256": "4af9a5c40533436bd8e41b0aba39484edadd3f33e6866092a17deccba602a1c1",
+      "redactions": {
+        "ansi": 2308,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Duration  3.98s (transform 1.95s, setup 0ms, import 2.83s, tests 215ms, environment 1ms)",
+        "Test Files  1 passed (1)",
+        "Tests  2 passed (2)",
+        "Duration  186ms (transform 47ms, setup 0ms, import 34ms, tests 34ms, environment 0ms)"
+      ],
+      "sourceCommit": "b641c8d65e18e274acfe3ad327dbebc821c0e428"
+    },
+    {
+      "name": "v10-server-build-stop-context-20261025",
+      "exitCode": 2,
+      "exitSidecar": "v10-server-build-stop-context-20261025.exit",
+      "rawSha256": "95bb38a9de1effc99bb228512718d883d69fe7120cab013fe84554bfb3fe4545",
+      "sanitizedSha256": "95bb38a9de1effc99bb228512718d883d69fe7120cab013fe84554bfb3fe4545",
+      "archiveSha256": "40cc50b7c405875e3b7e45699b01c26bb20d26b2e5eed9bc37853e9b19b555cf",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "b641c8d65e18e274acfe3ad327dbebc821c0e428"
+    },
+    {
+      "name": "v10-server-build-stop-context-retry-20261025",
+      "exitCode": 2,
+      "exitSidecar": "v10-server-build-stop-context-retry-20261025.exit",
+      "rawSha256": "4bd467c25b9156f271fdcaa1ea60f0d3d6d45b01f637cc7ca1aebf3fcfd7d9c0",
+      "sanitizedSha256": "4bd467c25b9156f271fdcaa1ea60f0d3d6d45b01f637cc7ca1aebf3fcfd7d9c0",
+      "archiveSha256": "33cb63035cf26b69f1088672d6910f2fb35ba16d767246196649860a9dbaffc3",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "b641c8d65e18e274acfe3ad327dbebc821c0e428"
+    },
+    {
+      "name": "v10-module-boundaries-096",
+      "exitCode": 0,
+      "exitSidecar": "v10-module-boundaries-096.exit",
+      "rawSha256": "935dd5340a4daa50d11012fcb35360c0b991990728b27a26e94fcdf025ae93ca",
+      "sanitizedSha256": "935dd5340a4daa50d11012fcb35360c0b991990728b27a26e94fcdf025ae93ca",
+      "archiveSha256": "28ffaeb6deae42b712200366e5abf9e845dcf6f1559cde1626bd85ecb9f3086d",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [],
+      "sourceCommit": "b641c8d65e18e274acfe3ad327dbebc821c0e428"
     }
   ],
   "updates": [
@@ -4040,6 +4177,19 @@
         "v10-token-gates-b76",
         "v10-coverage-b76",
         "v10-help-docs-b76"
+      ]
+    },
+    {
+      "sourceCommit": "b641c8d65e18e274acfe3ad327dbebc821c0e428",
+      "meaning": "Historical composed workspaces-B diagnostic: shared/skills/DB at b76e4884d; adapter-utils and remaining projects at 29c443dec. Source was verified inside isolated worker before each snapshot. Later company-default schema/shared/UI changes require fresh affected gates; this is not final unchanged-source acceptance. Failed initial and malformed-env runs remain diagnostic only.",
+      "logs": [
+        "v10-general-workspaces-b-after-v5-retry-20261025",
+        "adapter-utils-t2-t15-worker-29c443dec-20261025",
+        "adapter-utils-full-worker-29c443dec-20261025",
+        "v10-general-workspaces-b-remaining-valid-env-29c443dec-20261025",
+        "v10-server-build-stop-context-20261025",
+        "v10-server-build-stop-context-retry-20261025",
+        "v10-module-boundaries-096"
       ]
     }
   ],

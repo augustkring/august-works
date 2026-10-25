@@ -79,7 +79,11 @@ function AccountExperienceLanguageSelectBound({
     // company selection from applying its own default.
     readRevision.current = languageRevision.current;
     if (isExperienceLocale(fallbackLocale) && fallbackLocale !== currentLanguage) {
-      void i18n.changeLanguage(fallbackLocale).catch(() => setHydrationFailed(true));
+      void i18n.changeLanguage(fallbackLocale).then(() => {
+        if ((i18n.resolvedLanguage ?? i18n.language) === fallbackLocale) {
+          readRevision.current = languageRevision.current;
+        }
+      }).catch(() => setHydrationFailed(true));
     }
   }, [userId, preferenceReady, locale, companyLocale, companyId, currentLanguage, i18n]);
 

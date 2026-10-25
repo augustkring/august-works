@@ -3293,14 +3293,20 @@ export function routineService(
       let secretId: string | null = null;
       let publicId: string | null = null;
       let nextRunAt: Date | null = null;
+      let scheduleTimeZone: string | null = null;
 
       if (input.kind === "schedule") {
         assertScheduleCompatibleVariables(routine.variables ?? []);
-        const timeZone = input.timezone || "UTC";
-        assertTimeZone(timeZone);
+        const [companyDefaults] = await db
+          .select({ timezone: companies.timezone })
+          .from(companies)
+          .where(eq(companies.id, routine.companyId))
+          .limit(1);
+        scheduleTimeZone = input.timezone ?? companyDefaults?.timezone ?? "UTC";
+        assertTimeZone(scheduleTimeZone);
         const error = validateCron(input.cronExpression);
         if (error) throw unprocessable(error);
-        nextRunAt = nextCronTickInTimeZone(input.cronExpression, timeZone, new Date());
+        nextRunAt = nextCronTickInTimeZone(input.cronExpression, scheduleTimeZone, new Date());
       }
 
       if (input.kind === "webhook") {
@@ -3327,7 +3333,7 @@ export function routineService(
             enabled: input.enabled ?? true,
             setupPending: input.kind === "webhook" && input.setupPending === true,
             cronExpression: input.kind === "schedule" ? input.cronExpression : null,
-            timezone: input.kind === "schedule" ? (input.timezone || "UTC") : null,
+            timezone: input.kind === "schedule" ? scheduleTimeZone : null,
             nextRunAt,
             publicId,
             secretId,

@@ -416,11 +416,15 @@ async function assertManagedOpenCodeRequestSources(db: Db, claims: BoundClaims, 
         } else if (toolName === "self_remember") {
           const memorySources = consumedEntry.inputs.filter((value): value is Extract<NativePayloadSourceInput, { kind: "memory" }> =>
             value.kind === "memory");
+          const rememberResults = consumedEntry.inputs.filter((value): value is Extract<NativePayloadSourceInput, { kind: "tool_result" }> =>
+            value.kind === "tool_result" && value.toolName === "paperclip-self:remember");
           if (memorySources.length !== 1 || !consumedEntry.policy.memoryIds.includes(memorySources[0]!.memoryId))
             throw forbidden("Managed OpenCode Memory result source is incomplete");
+          if (rememberResults.length !== 1) throw forbidden("Managed OpenCode Memory result source is incomplete");
           await assertNativeMemorySourceInputCurrent(db, { companyId: claims.company_id,
             actor: { type: "agent", source: "agent_jwt", companyId: claims.company_id, agentId: claims.sub,
-              runId: claims.run_id, onBehalfOfUserId: claims.responsible_user_id }, source: memorySources[0]! });
+              runId: claims.run_id, onBehalfOfUserId: claims.responsible_user_id }, source: memorySources[0]!,
+            transitionEvidence: rememberResults[0]! });
         } else {
           let documentRef: Record<string, unknown>;
           if (toolName === "read_document") {

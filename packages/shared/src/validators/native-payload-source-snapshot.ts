@@ -31,7 +31,15 @@ export const nativePayloadSourcePolicySchema = z.object({
 export const nativePayloadSourceInputSchema = z.discriminatedUnion("kind", [
   z.object({ kind: z.literal("task"), issueId: id, sourceVersion: text, contentHash: sha256 }).strict(),
   z.object({ kind: z.literal("project"), projectId: id, sourceVersion: text, contentHash: sha256 }).strict(),
-  z.object({ kind: z.literal("memory"), memoryId: id, sourceVersion: text, contentHash: sha256 }).strict(),
+  z.object({ kind: z.literal("memory"), memoryId: id, sourceVersion: text, contentHash: sha256,
+    reviewStateAtCapture: z.enum(["pending", "accepted", "rejected"]).optional(),
+    verificationStateAtCapture: z.enum(["unverified", "corroborated", "human_verified", "system_verified"]).optional(),
+    reviewTransitionStateHash: sha256.optional(),
+  }).strict().superRefine((input, ctx) => {
+    const fields = [input.reviewStateAtCapture, input.verificationStateAtCapture, input.reviewTransitionStateHash];
+    if (fields.some(value => value !== undefined) && fields.some(value => value === undefined))
+      ctx.addIssue({ code: "custom", message: "Memory review transition capture must be complete." });
+  }),
   z.object({ kind: z.literal("foundation_revision"), foundationDocumentId: id, documentId: id, revisionId: id, contentHash: sha256 }).strict(),
   z.object({ kind: z.literal("comment"), issueId: id, commentId: id, sourceVersion: text, contentHash: sha256 }).strict(),
   z.object({ kind: z.literal("interaction"), issueId: id, interactionId: id, sourceVersion: text, contentHash: sha256 }).strict(),

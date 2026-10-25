@@ -3,7 +3,7 @@ import { createHash, randomUUID } from "node:crypto";
 import { chmod, lstat, mkdir, mkdtemp, readFile, readdir, readlink, rm, stat, writeFile } from "node:fs/promises";
 import { createServer as createHttpsServer } from "node:https";
 import { tmpdir } from "node:os";
-import { dirname, join } from "node:path";
+import { basename, dirname, join } from "node:path";
 
 import express from "express";
 import request from "supertest";
@@ -49,12 +49,14 @@ import { environmentRuntimeService } from "../../services/environment-runtime.js
 import { documentService } from "../../services/documents.js";
 import { memoryService, type MemoryMutationActor } from "../../services/memory/memory-service.js";
 import { canActorReadMemorySources } from "../../services/memory/memory-privacy.js";
+import { assertNativeMemoryOutputSnapshotCurrent } from "../../services/native-direct-input.js";
 import type { AuthorizationActor } from "../../services/authorization.js";
 import { instanceSettingsService } from "../../services/instance-settings.js";
 import { orchestrationService } from "../../services/orchestration/orchestration-service.js";
 import { workerModelGateway } from "../../services/orchestration/worker-model-gateway.js";
 import { createToolGatewayService } from "../../services/tool-gateway.js";
 import { recordNativeLocalProcessStopAfterExit } from "../../services/native-local-process-stop.js";
+import { managedOpenCodeRuntimeDirectory } from "../../services/native-runtime/runtime-asset-retention.js";
 import { getAssignedMcpGateway, registerAssignedMcpGateway } from "../../services/native-runtime/assigned-mcp-tools.js";
 import { hashContextPolicySnapshot } from "../../services/context/context-manifest.js";
 import { discoverNativeCapabilities } from "../../services/native-provider-conformance.js";
@@ -339,14 +341,21 @@ export async function runManagedNativeOpenCodeFixture(input: {
       companyIds: [companyId], sessionId: bobSessionId, memberships: [bobMembership] };
     const aliceMemoryActor = { principal: { type: "user" as const, userId: aliceUserId }, authorizationActor: human };
     const bobMemoryActor = { principal: { type: "user" as const, userId: bobUserId }, authorizationActor: bobActor };
+    const privateRootRef: { current: ManagedNativePrivateRoot | null } = { current: null };
+    let privateRootTask: typeof issues.$inferSelect | null = null;
+    let privateRootBindingId: string | null = null;
+    let privateRootMemoryActor: MemoryMutationActor | null = null;
+    let managedMemoryBindingKey: string | null = null;
     const containsRemember = modelSteps.some(step => step.tool === "self_remember");
     if (containsRemember) {
       const memories = memoryService(db);
+      managedMemoryBindingKey = `managed-opencode-${randomUUID()}`;
       const binding = await memories.createCompanyBinding(companyId, {
-        key: `managed-opencode-${randomUUID()}`, name: "Managed OpenCode E2E Memory", providerKey: "local",
+        key: managedMemoryBindingKey, name: "Managed OpenCode E2E Memory", providerKey: "local",
       }, aliceMemoryActor);
       await memories.addBindingTarget(companyId, binding.id, { targetType: "company", targetId: companyId }, aliceMemoryActor);
       await memories.addBindingTarget(companyId, binding.id, { targetType: "agent", targetId: agentId }, aliceMemoryActor);
+      if (input.privateContextContent) privateRootBindingId = binding.id;
     }
     const profileId = randomUUID();
     const model = "fixture-managed-opencode-v1";
@@ -391,10 +400,6 @@ export async function runManagedNativeOpenCodeFixture(input: {
     humanApp.use(express.json());
     humanApp.use((req, _res, next) => { req.actor = human as typeof req.actor; next(); });
     humanApp.use("/api", issueRoutes(db, {} as never)); humanApp.use(errorHandler);
-    const privateRootRef: { current: ManagedNativePrivateRoot | null } = { current: null };
-    let privateRootTask: typeof issues.$inferSelect | null = null;
-    let privateRootBindingId: string | null = null;
-    let privateRootMemoryActor: MemoryMutationActor | null = null;
     if (input.privateContextContent) {
       // The ordinary HTTP admission path deliberately rejects private work.
       // For this source-closure fixture, create the private root through the
@@ -418,15 +423,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
         { companyId, principalType: "user", principalId: aliceUserId, permissionKey: "company_scope:read" },
         { companyId, principalType: "agent", principalId: agentId, permissionKey: "company_scope:read" },
       ]).onConflictDoNothing();
-      const privateMemoryService = memoryService(db);
-      const binding = await privateMemoryService.createCompanyBinding(companyId, {
-        key: `managed-opencode-private-context-${randomUUID()}`, name: "Managed OpenCode private-root Memory",
-        providerKey: "local",
-      }, sourceActor);
-      await privateMemoryService.addBindingTarget(companyId, binding.id,
-        { targetType: "agent", targetId: agentId }, sourceActor);
       privateRootTask = privateTask as typeof issues.$inferSelect;
-      privateRootBindingId = binding.id;
       privateRootMemoryActor = sourceActor;
     }
     const createTaskResponse = await request(humanApp).post(`/api/companies/${companyId}/issues`)
@@ -506,6 +503,13 @@ export async function runManagedNativeOpenCodeFixture(input: {
       .where(and(eq(completionContracts.companyId, companyId), eq(completionContracts.issueId, task.id)));
     if (!contractRow) throw new Error("Native completion contract was not persisted.");
     const prepared = await prepareNativeHeartbeatRun({ db, run: run!, issue: task, environmentLeaseId: acquiredEnvironment.lease.id });
+    const managedOpenCodeRunHome = managedOpenCodeRuntimeDirectory({ companyId, runId: run!.id });
+    const expectedOpenCodeDataHome = () => {
+      const actualSessionId = configDirectory
+        ? basename(dirname(dirname(configDirectory)))
+        : prepared.normalizedSessionId;
+      return join(managedOpenCodeRunHome, actualSessionId, "data");
+    };
     let runtimeInputs: NativePayloadSourceInput[] = [];
     const agent = (await db.select().from(agents).where(eq(agents.id, agentId)))[0]!;
     const runtimeContext = await buildRetainedNativeRuntimeContext({ db, agent, runId: run!.id,
@@ -567,6 +571,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
 
     let responseCount = 0;
     const fakeFetchEntrances: Array<{ host: string; path: string; apiKeyHeader: boolean; bearerHeader: boolean }> = [];
+    let qualifiedManagedProcessAtFirstProviderRequest = false;
     const modelCalls: Array<Record<string, unknown>> = [];
     const contextResultConsumers: Array<{ callId: string; consumed: boolean }> = [];
     const brokerRequests: string[] = [];
@@ -587,6 +592,10 @@ export async function runManagedNativeOpenCodeFixture(input: {
           apiKeyHeader: requestHeaders.has("x-api-key"), bearerHeader: requestHeaders.has("authorization") });
         expect(String(url)).toBe("https://api.anthropic.com/v1/messages");
         expect(requestHeaders.get("x-api-key")).toBe(credential);
+        if (responseCount === 0) {
+          qualifiedManagedProcessAtFirstProviderRequest = openCodeProcessFacts.some(fact => fact.shaMatchesQualifiedBinary &&
+            fact.managedEnvironment.dataHomeMatchesManagedRun);
+        }
         const body = JSON.parse(String(init.body)) as Record<string, unknown>;
         modelCalls.push(body);
         responseCount += 1;
@@ -625,8 +634,15 @@ export async function runManagedNativeOpenCodeFixture(input: {
         }
         const selected = findTool(step.tool);
         if (!selected) throw new Error(`OpenCode wire omitted the governed ${step.tool} tool.`);
+        const modelToolInput = { ...(step.input ?? {}) };
+        if (step.tool === "self_remember") {
+          if (!managedMemoryBindingKey) throw new Error("managed_fixture_memory_binding_unavailable");
+          if (modelToolInput.bindingKey !== undefined && modelToolInput.bindingKey !== managedMemoryBindingKey)
+            throw new Error("managed_fixture_memory_binding_key_mismatch");
+          modelToolInput.bindingKey = managedMemoryBindingKey;
+        }
         return new Response(JSON.stringify({ id: "msg_managed_e2e_finish", type: "message", role: "assistant", model, stop_reason: "tool_use",
-          content: [{ type: "tool_use", id: step.id ?? `managed-e2e-${step.tool}-${responseCount}`, name: selected.name, input: step.input ?? {} }],
+          content: [{ type: "tool_use", id: step.id ?? `managed-e2e-${step.tool}-${responseCount}`, name: selected.name, input: modelToolInput }],
           usage: { input_tokens: 120, output_tokens: 42 } }), { status: 200, headers: { "content-type": "application/json" } });
       },
     });
@@ -1017,6 +1033,7 @@ export async function runManagedNativeOpenCodeFixture(input: {
       normalizedSessionId: string; sourceInstanceId: string;
     } | null = null;
     const processTreeTimers: ReturnType<typeof setInterval>[] = [];
+    const observedOpenCodePids = new Set<number>();
     let managedProviderConfigReported = false;
     const pgMonitor = postgres(input.connectionString, { max: 1 });
     let pgMonitorTimer: ReturnType<typeof setInterval> | undefined;
@@ -1129,12 +1146,43 @@ export async function runManagedNativeOpenCodeFixture(input: {
               inputCap: environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND=")),
               outputCap: environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS=")),
               placeholderKey: environment.includes("ANTHROPIC_API_KEY=paperclip-managed-model-broker"),
+              dataHomeMatchesManagedRun: environment.includes(`XDG_DATA_HOME=${expectedOpenCodeDataHome()}`),
             };
-            openCodeProcessFacts.push({ shaMatchesQualifiedBinary: openCodeShaMatches, managedEnvironment: openCodeManagedEnvironment });
+            if (!observedOpenCodePids.has(childPid)) {
+              observedOpenCodePids.add(childPid);
+              openCodeProcessFacts.push({ shaMatchesQualifiedBinary: openCodeShaMatches, managedEnvironment: openCodeManagedEnvironment });
+            }
           }
-          diagnostics.push(`runner descendant pid=${childPid} parent=${parentPid} executable=${executable} comm=${comm.trim()} openCode=${isOpenCodeProcess ? "yes" : "no"} brokerOrigin=${environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN=")) ? "present" : "missing"} inputCap=${environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND=")) ? "present" : "missing"} outputCap=${environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS=")) ? "present" : "missing"} placeholderKey=${environment.includes("ANTHROPIC_API_KEY=paperclip-managed-model-broker") ? "present" : "missing"}`);
+          diagnostics.push(`runner descendant pid=${childPid} parent=${parentPid} executable=${executable} comm=${comm.trim()} openCode=${isOpenCodeProcess ? "yes" : "no"} brokerOrigin=${environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN=")) ? "present" : "missing"} inputCap=${environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND=")) ? "present" : "missing"} outputCap=${environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS=")) ? "present" : "missing"} placeholderKey=${environment.includes("ANTHROPIC_API_KEY=paperclip-managed-model-broker") ? "present" : "missing"} dataHomeMatchesManagedRun=${environment.includes(`XDG_DATA_HOME=${expectedOpenCodeDataHome()}`) ? "yes" : "no"}`);
           if (isOpenCodeProcess)
             diagnostics.push(`OpenCode child qualification: ${JSON.stringify({ shaMatchesQualifiedBinary: openCodeShaMatches, managedEnvironment: openCodeManagedEnvironment })}`);
+        }
+        // Runnerd may own the process boundary and omit the provider PID from
+        // its reported tree. Inspect live /proc entries for the exact pinned
+        // executable, then retain only booleans about its managed environment.
+        for (const entry of await readdir("/proc", { withFileTypes: true }).catch(() => [])) {
+          if (!entry.isDirectory() || !/^\d+$/.test(entry.name)) continue;
+          const childPid = Number(entry.name);
+          if (observedOpenCodePids.has(childPid)) continue;
+          const executablePath = await readlink(`/proc/${childPid}/exe`).catch(() => "");
+          if (!/(?:^|\/)opencode(?:[-.]|$)/i.test(executablePath)) continue;
+          const [runningHash, environmentText] = await Promise.all([
+            readFile(`/proc/${childPid}/exe`).then(bytes => createHash("sha256").update(bytes).digest("hex")).catch(() => ""),
+            readFile(`/proc/${childPid}/environ`, "utf8").catch(() => ""),
+          ]);
+          const environment = environmentText.split("\0");
+          const managedEnvironment = {
+            brokerOrigin: environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_BROKER_ORIGIN=")),
+            inputCap: environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_INPUT_TOKENS_UPPER_BOUND=")),
+            outputCap: environment.some(value => value.startsWith("PAPERCLIP_MANAGED_MODEL_MAX_OUTPUT_TOKENS=")),
+            placeholderKey: environment.includes("ANTHROPIC_API_KEY=paperclip-managed-model-broker"),
+            dataHomeMatchesManagedRun: environment.includes(`XDG_DATA_HOME=${expectedOpenCodeDataHome()}`),
+          };
+          observedOpenCodePids.add(childPid);
+          openCodeProcessFacts.push({ shaMatchesQualifiedBinary: runningHash === qualifiedOpenCodeSha256, managedEnvironment });
+          diagnostics.push(`OpenCode process qualification: ${JSON.stringify({
+            shaMatchesQualifiedBinary: runningHash === qualifiedOpenCodeSha256, managedEnvironment,
+          })}`);
         }
       };
       const timer = setInterval(() => { void inspect(); }, 250);
@@ -1380,11 +1428,35 @@ export async function runManagedNativeOpenCodeFixture(input: {
           } catch { /* bounded failure diagnostic */ }
           let canReadSources = false;
           let aliceCanRead = false;
+          let aliceOutputSourceValidation: "passed" | "failed" | "not_applicable" = "not_applicable";
+          const sourceFailureLabels = [
+            "The Native output reader is unavailable", "The Native output source chain exceeds its bound",
+            "The Native output capture is unavailable", "The Native output capture is not bound to its settled provider tool use",
+            "The Native output capture lacks its consumed source components", "The Native consumed source set is unavailable",
+            "The Native consumed source graph contains a cycle", "The Native consumed source receipt is unavailable",
+            "The Native consumed source dispatch is unavailable", "The Native consumed source prefix is unavailable",
+            "The Native consumed source family is unsupported", "A Native output Task source is unavailable",
+            "A Native output Task source changed", "A Native output document source is unavailable",
+            "A Native output Context source is unavailable", "A Native output model dispatch is unavailable",
+          ];
+          let aliceOutputSourceFailure: string | null = null;
           if (memoryId) {
             try { canReadSources = await canActorReadMemorySources(db, companyId, aliceMemoryActor.authorizationActor, memoryId); }
             catch { canReadSources = false; }
             try { aliceCanRead = Boolean(await memoryService(db).get(companyId, memoryId, aliceMemoryActor)); }
             catch { aliceCanRead = false; }
+            const parsedSnapshot = nativePayloadSourceSnapshotSchema.safeParse(memory?.payloadSourceSnapshot);
+            if (parsedSnapshot.success) {
+              try {
+                await assertNativeMemoryOutputSnapshotCurrent(db, { companyId, recordId: memoryId,
+                  snapshot: parsedSnapshot.data, actor: aliceMemoryActor.authorizationActor });
+                aliceOutputSourceValidation = "passed";
+              } catch (error) {
+                aliceOutputSourceValidation = "failed";
+                aliceOutputSourceFailure = error instanceof Error
+                  ? sourceFailureLabels.find(label => error.message === label) ?? "unclassified" : "non_error_throw";
+              }
+            }
           }
           const snapshotOwner = snapshot.owner && typeof snapshot.owner === "object" ? snapshot.owner as Record<string, unknown> : {};
           return { gatewayInvocationFound: Boolean(invocation),
@@ -1407,7 +1479,8 @@ export async function runManagedNativeOpenCodeFixture(input: {
               metadata.nativeManagedMemoryInvocationId === invocation?.id,
             deleted: memory?.deletedAt !== null && memory?.deletedAt !== undefined,
             revoked: memory?.revokedAt !== null && memory?.revokedAt !== undefined,
-            canActorReadMemorySources: canReadSources, aliceMemoryServiceRead: aliceCanRead };
+            canActorReadMemorySources: canReadSources, aliceMemoryServiceRead: aliceCanRead,
+            aliceOutputSourceValidation, aliceOutputSourceFailure };
         }));
         const writeInvocationStatusCounts = Object.fromEntries(["executing", "succeeded", "failed", "cancelled"].map(status =>
           [status, invocations.filter(value => value.toolName === "write_document" && value.status === status).length]));
@@ -1429,6 +1502,9 @@ export async function runManagedNativeOpenCodeFixture(input: {
       }
       completedNativeFinalization = (result as unknown as Record<string, unknown>).nativeFinalization as NonNullable<typeof completedNativeFinalization>;
       expect(responseCount).toBeGreaterThanOrEqual(2);
+      expect(qualifiedManagedProcessAtFirstProviderRequest,
+        `qualified OpenCode process must use the run-owned data home before the first provider response; observed=${JSON.stringify(openCodeProcessFacts)}`)
+        .toBe(true);
       const assertManagedConfigCleanup = async () => {
         expect((await stat(configDirectory)).mode & 0o777).toBe(0o700);
         expect((await stat(join(configDirectory, ".gitignore"))).mode & 0o777).toBe(0o400);

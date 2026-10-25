@@ -132,6 +132,7 @@ export function RoutineTriggers() {
           key={routine.id}
           routineId={routine.id}
           companyId={routine.companyId}
+          companyTimezone={selectedCompany?.id === routine.companyId ? selectedCompany.timezone : undefined}
           routineTitle={routine.title}
           trigger={trigger}
           onExit={closeSetup}
@@ -316,6 +317,7 @@ export function RoutineTriggers() {
 function TriggerSetup({
   routineId,
   companyId,
+  companyTimezone,
   routineTitle,
   trigger,
   onExit,
@@ -323,6 +325,7 @@ function TriggerSetup({
 }: {
   routineId: string;
   companyId: string;
+  companyTimezone?: string;
   routineTitle: string;
   trigger?: RoutineTrigger;
   onExit: () => void;
@@ -350,7 +353,7 @@ function TriggerSetup({
     return (
       saved ?? {
         ...defaultTriggerDraft,
-        timezone: selectedCompany?.timezone ?? Intl.DateTimeFormat().resolvedOptions().timeZone,
+        timezone: companyTimezone ?? "UTC",
         created: false,
       }
     );

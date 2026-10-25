@@ -6,81 +6,91 @@
     "admin",
     "security_admin"
   ],
-  "customerOutcome": "Find company identity and currently available cross-company defaults through their existing Original owner. Company-wide locale/timezone defaults are not configured here.",
+  "customerOutcome": "Manage company identity and set the English/Danish language fallback and IANA timezone used for newly created company schedules.",
   "entryConditions": [
-    "Current authenticated principal and selected company; current Native company administration eligibility is rechecked.",
-    "Effective rollout and each destination’s Original resource authority remain necessary; directory visibility is not a grant."
+    "Current authenticated principal and selected company; current company membership and role are rechecked for locale/timezone changes.",
+    "Existing CEO permissions for company branding do not grant authority to change company defaults."
   ],
   "exitConditions": [
-    "Open an authorized destination and complete material work in that Original owner.",
-    "Missing category jobs remain implementation gaps; navigation, an empty state or a contract does not claim configuration or evidence."
+    "Persist company identity and defaults through the canonical Company writer, or preserve entered values and report a validation, permission or system error.",
+    "New schedules inherit the company timezone only when the Routine writer receives no explicit timezone; existing schedules are not rewritten."
   ],
   "content": {
     "h1": "Company",
-    "supportingCopy": "Find company identity and currently available cross-company defaults through their existing Original owner. Company-wide locale/timezone defaults are not configured here.",
+    "supportingCopy": "Company language is the fallback when a member has no personal language preference; company timezone is the default for new schedules that omit a timezone. Existing schedules and explicit account preferences remain unchanged.",
     "customerTerms": [
       "General",
       "Company identity",
+      "Default language",
+      "Default timezone",
       "New-agent approval and interaction defaults"
     ],
     "displayedState": [
       "Stable category heading: General",
-      "Company name, description, logo, new-hire approval and interaction resolver settings",
-      "No company locale/timezone editor is present in the mapped owner",
-      "Only authorized entries are shown; an empty category does not imply support for missing jobs."
+      "Company name and description, with current persisted values prefilled",
+      "Company default language (English or Danish) and timezone (IANA timezone identifier)",
+      "Appearance, new-hire approval and interaction resolver settings remain in their existing sections"
     ]
   },
   "inputs": [
     {
-      "id": "search",
-      "label": "Search company settings",
-      "dataType": "Text",
-      "required": false,
-      "default": "Empty",
-      "help": "Names, purposes and old aliases are searchable.",
-      "validation": "Local matching over authorized entries only, at most 180 characters; no API query text",
-      "autofillOrPrefill": "No automatic content collection"
+      "id": "company-locale",
+      "label": "Default language",
+      "dataType": "Single select",
+      "required": true,
+      "default": "Current company locale; en for legacy rows",
+      "help": "Used when a member has no personal language preference; does not replace an explicit account preference.",
+      "validation": "Only en and da are accepted by the Company API.",
+      "autofillOrPrefill": "Prefilled from the selected company"
+    },
+    {
+      "id": "company-timezone",
+      "label": "Default timezone",
+      "dataType": "IANA timezone identifier",
+      "required": true,
+      "default": "Current company timezone; UTC for legacy rows",
+      "help": "Used for new schedules only when a caller omits a timezone. Existing schedules keep their own timezone.",
+      "validation": "Must be accepted by the runtime's IANA timezone database.",
+      "autofillOrPrefill": "Prefilled from the selected company"
     }
   ],
   "actions": {
     "primary": {
-      "label": "Open an authorized settings owner",
-      "operation": "Navigate to the exact current Original domain owner; no mutation occurs on this category surface."
+      "label": "Save changes",
+      "operation": "PATCH the selected company through the existing Company writer; current owner/administrator membership is required for locale/timezone changes."
     },
     "secondary": [
-      "Search currently authorized entries locally.",
-      "Return to Company without retaining private results across account or company changes.",
-      "Retry the same bounded read after refreshing authority."
+      "Save the locale and timezone together with the other General changes.",
+      "Correct an invalid timezone or refresh company authority before retrying."
     ],
     "destructiveOrIrreversible": []
   },
   "systemWork": {
     "canonicalReadDomains": [
-      "Current Company navigation authority and feature admission",
-      "Company identity and existing company defaults",
-      "Company-wide locale/timezone configuration has no current Company owner"
+      "Current authenticated company membership and role",
+      "Current Company identity, locale and timezone"
     ],
-    "canonicalWriteOperation": "Company identity/default mutations only through the existing Company writer",
-    "authorityEffect": "The category directory grants no permission, approval, provider access or configuration. Each destination repeats its Original authority and source checks.",
-    "asyncWork": "The bounded Company navigation read filters entries by current company administration, per-action authorization and feature availability, then rechecks eligibility before responding.",
-    "receipt": "Current company identity and observed time only; no destination operation receipt is manufactured."
+    "canonicalWriteOperation": "Company identity/default mutations only through the existing Company writer; new schedule timezone fallback resolves in the existing Routine writer",
+    "authorityEffect": "The settings screen grants no authority. Locale/timezone writes require current owner/administrator membership; CEO-safe branding permissions do not extend to those defaults.",
+    "asyncWork": "The Company route validates locale/timezone, rechecks the current actor and company scope, then persists through the existing Company service.",
+    "receipt": "Company changes are shown from the persisted Company response; a newly created schedule stores the explicit timezone or the company default resolved by the Routine writer."
   },
   "states": {
-    "loading": "Announce loading only while the current identity/company request is pending.",
-    "empty": "Explain that no controls are currently available for this access and enabled-capability set; requested settings may not yet be supported.",
+    "loading": "Keep controls associated with the selected company while its current values load.",
+    "empty": "No selected company is available; do not show another company's settings.",
     "partial": "Retain trustworthy available results and name unavailable dependencies or sources.",
-    "stale": "Hide retained controls during background checks and live authority/source-loss invalidations; query epochs reject late prior responses.",
+    "stale": "Do not save values for a prior company after selection changes; refresh values from the current company response.",
     "validation_error": "Preserve other entered values, identify the field problem and associate it programmatically with the control.",
     "system_error": "Explain that the operation is unconfirmed, preserve entered data, and offer a valid retry/refresh or support route.",
     "permission_denied": "Suppress retained private data and unavailable controls; do not infer additional grants from profile or navigation.",
     "recovering": "Re-resolve canonical state/version and the original request identity before permitting another effect.",
-    "success": "Show only the current Company navigation result. This screen creates no configuration-success or first-value claim."
+    "success": "Show company defaults from the persisted Company response. Do not imply that changing the company timezone rewrites existing schedules or that changing company language overwrites personal language preferences."
   },
   "navigation": {
-    "back": "Return to Company or the invoking control through the current company route.",
-    "cancelOrSaveExit": "There is no mutation on this screen; local search is discarded when account/company changes.",
+    "back": "Return to Company through the current company route.",
+    "cancelOrSaveExit": "Keep unsaved values local; discard them when the user changes company or leaves settings.",
     "deepLink": "/:companyPrefix/company/settings#company-section-general",
-    "resume": "Reload current authorized entries, then reopen the Original object/request; never replay a prior mutation."
+    "resume": "Reload current company values; never replay a prior mutation automatically."
   },
   "accessibility": {
     "initialFocus": "Focus the Company page heading after the current authorized read; a category hash deep link moves focus to that category heading.",
@@ -100,11 +110,10 @@
   },
   "privacySecurity": {
     "dataShown": [
-      "Current authorized category labels, purposes, paths and restricted-access context.",
-      "Only minimal status for enabled and authorized destination owners."
+      "Company identity and locale/timezone defaults returned by the Company API."
     ],
     "dataCollected": [
-      "No server-side search text or configuration values on this category screen."
+      "Company language/timezone values are persisted by the existing Company owner; no server-side search text is stored."
     ],
     "sensitiveFields": [
       "Membership, role, configuration, provider, security metadata and source references remain in their Original owner."
@@ -125,16 +134,16 @@
   },
   "acceptance": {
     "functional": [
-      "On the exact artifact, verify the General category keeps its stable label and exposes only entries returned by the Original Company navigation owner.",
-      "Verify each mapped destination resolves to the named existing owner, denial is enforced there, and missing jobs are not presented as configured or complete.",
+      "On the exact artifact, verify the General category keeps its stable label and exposes the Company writer's identity, language and timezone controls.",
+      "Verify only English and Danish are accepted, invalid IANA timezones are rejected, and unauthorized members cannot change company defaults.",
+      "Verify account language preferences and existing schedule timezones remain unchanged, while newly created schedules inherit the company timezone only when their caller omits a timezone.",
       "Verify account/company switching and permission withdrawal remove prior private entries before a late response can restore them."
     ],
     "accessibility": [
       "Verify keyboard navigation, focus order, screen-reader names/status and 200/400% zoom manually on the exact artifact; this contract is not conformance evidence."
     ],
     "securityPrivacy": [
-      "Verify current company administration, per-entry action/feature gates, cross-tenant refusal, authority withdrawal and no private search/destination data persistence or logging.",
-      "Verify configuration effects remain in each named Original owner; category/link visibility grants no authority."
+      "Verify current company owner/administrator authorization, cross-tenant refusal, and no configuration writes from unauthorized members."
     ],
     "usability": [
       "Run representative exploratory and pre-registered confirmatory setting journeys for the exact artifact, including empty, restricted and unavailable states; source checks alone do not qualify usability."

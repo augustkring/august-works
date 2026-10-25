@@ -14,7 +14,7 @@ describe("company schemas without the retired settings", () => {
     });
   });
 
-  it.each(["Mars/Olympus", "", "Not_A_Timezone"]) ("rejects invalid company timezone %s", (timezone) => {
+  it.each(["Mars/Olympus", "", "Not_A_Timezone", "+01:00"])("rejects invalid company timezone %s", (timezone) => {
     expect(updateCompanySchema.safeParse({ timezone }).success).toBe(false);
   });
 

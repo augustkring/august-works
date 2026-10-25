@@ -42,7 +42,7 @@ it("initializes from the current account preference when there is no browser cho
   localStorage.removeItem(EXPERIENCE_LOCALE_KEY);
   await i18n.changeLanguage("en");
   getPreferences.mockResolvedValue({ keyboardShortcuts: false, locale: "da" });
-  await mount();
+  await mount("user-1", "en");
   await vi.waitFor(() => expect(i18n.resolvedLanguage).toBe("da"));
   expect(host.textContent).toContain("Sprog");
   expect(getPreferences).toHaveBeenCalledWith("user-1");

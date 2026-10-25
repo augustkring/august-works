@@ -425,7 +425,7 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
     await assertSameCompanyCeoAgentOrBoard(req, companyId, "company defaults");
     if (req.actor.type !== "board" || req.actor.source === "local_implicit" || req.actor.isInstanceAdmin) return;
     const membership = req.actor.memberships?.find((item) => item.companyId === companyId && item.status === "active");
-    if (!membership || !["owner", "admin"].includes(membership.membershipRole)) {
+    if (membership?.membershipRole !== "owner" && membership?.membershipRole !== "admin") {
       throw forbidden("Only a company owner or administrator can change company defaults");
     }
   }

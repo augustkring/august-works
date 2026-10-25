@@ -4,11 +4,16 @@ import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
 import { afterEach, it, expect, vi } from "vitest";
 import { Enterprise } from "./Enterprise";
+import { i18n } from "@/i18n";
 import { enterpriseApi } from "@/api/enterprise";
 const fixture = vi.hoisted(() => ({
   company: "11111111-1111-4111-8111-111111111111",
   user: "owner-one",
 }));
+function setInputValue(input: HTMLInputElement, value: string) {
+  Object.getOwnPropertyDescriptor(HTMLInputElement.prototype, "value")!.set!.call(input, value);
+  input.dispatchEvent(new Event("input", { bubbles: true }));
+}
 vi.mock("@/context/CompanyContext", () => ({
   useCompany: () => ({ selectedCompanyId: fixture.company }),
 }));
@@ -49,12 +54,16 @@ vi.mock("@/api/enterprise", () => ({
         issuer: "https://idp.test.invalid",
         domain: "test.invalid",
         entryPoint: "https://idp.test.invalid/sso",
-        certificate: "fixture",
+        certificate: `-----BEGIN CERTIFICATE-----\n${"A".repeat(120)}\n-----END CERTIFICATE-----`,
       },
       operatingEnvelope: {
         awProcessingRegions: ["dk-cph1"],
         providers: [],
-        limitations: [],
+        dedicatedPlacement: "none",
+        retentionPolicyDescription: "Company-reviewed retention terms for this UI fixture.",
+        contractEvidence: null,
+        supportAccess: "native_scoped_owner_approval",
+        limitations: ["Qualification evidence is not present in this test fixture."],
       },
       qualification: null,
     })),
@@ -73,8 +82,12 @@ vi.mock("@/api/enterprise", () => ({
 (
   globalThis as { IS_REACT_ACT_ENVIRONMENT?: boolean }
 ).IS_REACT_ACT_ENVIRONMENT = true;
-afterEach(() => vi.clearAllMocks());
+afterEach(() => {
+  vi.clearAllMocks();
+  void i18n.changeLanguage("en");
+});
 it("uses native member choices, prevents owner SCIM lifecycle and clears one-time tokens after account changes", async () => {
+  await act(async () => i18n.changeLanguage("en"));
   const container = document.createElement("div"),
     root = createRoot(container),
     client = new QueryClient({
@@ -145,5 +158,65 @@ it("uses native member choices, prevents owner SCIM lifecycle and clears one-tim
     await act(async () => root.unmount());
     client.clear();
     fixture.user = "owner-one";
+  }
+});
+
+it("requires reviewed operating facts and sends the exact recorded envelope in Danish", async () => {
+  await act(async () => i18n.changeLanguage("da"));
+  const container = document.createElement("div"),
+    root = createRoot(container),
+    client = new QueryClient({
+      defaultOptions: { queries: { retry: false, gcTime: 0 } },
+    });
+  try {
+    await act(async () =>
+      root.render(
+        <QueryClientProvider client={client}>
+          <Enterprise />
+        </QueryClientProvider>,
+      ),
+    );
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(container.textContent).toContain("Virksomhedens driftsforhold");
+    expect(container.textContent).toContain("Platformskvalificering er påkrævet for aktivering.");
+    const confirm = [...container.querySelectorAll<HTMLInputElement>('input[type="checkbox"]')]
+      .find((input) => input.parentElement?.textContent?.includes("Jeg har kontrolleret disse driftsforhold"))!;
+    await act(async () => confirm.click());
+    const region = container.querySelector<HTMLInputElement>('input[aria-label="Vælg behandlingsregion dk-cph1"]')!;
+    await act(async () => region.click());
+    const reason = container.querySelector<HTMLInputElement>('input[minlength="10"]')!;
+    await act(async () => {
+      setInputValue(reason, "Reviewed operating facts for this company.");
+    });
+    const save = [...container.querySelectorAll("button")].find((button) => button.textContent === "Gem politikkladde")!;
+    expect(save.disabled).toBe(false);
+    expect([...container.querySelectorAll(":invalid")].map((element) => (element as HTMLInputElement).outerHTML)).toEqual([]);
+    const submitForm = async () => act(async () => container.querySelector("form")!.dispatchEvent(new Event("submit", { bubbles: true, cancelable: true })));
+    await submitForm();
+    expect(container.querySelector('[role="alert"]')?.textContent).toBe("Vælg mindst én faktisk behandlingsregion for virksomheden.");
+    expect(enterpriseApi.configure).not.toHaveBeenCalled();
+
+    await act(async () => region.click());
+    await submitForm();
+    await act(async () => {
+      await new Promise((resolve) => setTimeout(resolve, 20));
+    });
+    expect(enterpriseApi.configure).toHaveBeenCalledTimes(1);
+    const [, , payload] = vi.mocked(enterpriseApi.configure).mock.calls[0]!;
+    expect(payload.expectedVersion).toBe(1);
+    expect(payload.operatingEnvelope).toEqual({
+      awProcessingRegions: ["dk-cph1"],
+      providers: [],
+      dedicatedPlacement: "none",
+      retentionPolicyDescription: "Company-reviewed retention terms for this UI fixture.",
+      contractEvidence: null,
+      supportAccess: "native_scoped_owner_approval",
+      limitations: ["Qualification evidence is not present in this test fixture."],
+    });
+  } finally {
+    await act(async () => root.unmount());
+    client.clear();
   }
 });

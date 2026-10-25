@@ -34,6 +34,14 @@ describe("Native payload source snapshot structural boundary", () => {
       versionId: "catalog-release-2026.10", skillKey: "native/review", contentHash: hash }] }).success).toBe(false);
   });
 
+  it("accepts only complete review-transition provenance on a Memory input", () => {
+    const base = { kind: "memory" as const, memoryId: randomUUID(), sourceVersion: "before-review", contentHash: hash };
+    expect(nativePayloadSourceSnapshotSchema.safeParse(snapshot([base])).success).toBe(true);
+    expect(nativePayloadSourceSnapshotSchema.safeParse(snapshot([{ ...base, reviewStateAtCapture: "pending" }])).success).toBe(false);
+    expect(nativePayloadSourceSnapshotSchema.safeParse(snapshot([{ ...base, reviewStateAtCapture: "pending",
+      verificationStateAtCapture: "unverified", reviewTransitionStateHash: hash }])).success).toBe(true);
+  });
+
   it("does not default missing roots or turn historical NULL into known empty provenance", () => {
     const value = snapshot();
     expect(nativePayloadSourceSnapshotSchema.safeParse(null).success).toBe(false);

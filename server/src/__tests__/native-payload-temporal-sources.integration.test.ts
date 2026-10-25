@@ -5,12 +5,13 @@ import { execFileSync } from "node:child_process";
 import { join } from "node:path";
 import { and, eq } from "drizzle-orm";
 import { afterAll, beforeAll, describe, expect, it, vi } from "vitest";
-import { contextManifestItems, createDb, documents, documentRevisions, issueDocuments, issues, memoryJobs, memoryRecords } from "@paperclipai/db";
+import { companyMemberships, contextManifestItems, createDb, documents, documentRevisions, issueDocuments, issues, memoryJobs, memoryRecords } from "@paperclipai/db";
+import { nativePayloadSourceSnapshotSchema } from "@paperclipai/shared";
 import { canActorReadIssuePrivacy } from "../services/authorization.js";
 import { issueService } from "../services/issues.js";
 import { memoryService } from "../services/memory/memory-service.js";
 import { memoryJobService } from "../services/memory/memory-jobs.js";
-import { assertNativeDocumentRevisionCurrentSourceAccess } from "../services/native-direct-input.js";
+import { assertNativeDocumentRevisionCurrentSourceAccess, assertNativeMemoryOutputSnapshotCurrent } from "../services/native-direct-input.js";
 import { managedOpenCodeRuntimeDirectory } from "../services/native-runtime/runtime-asset-retention.js";
 import { startEmbeddedPostgresTestDatabase } from "./helpers/embedded-postgres.js";
 import { makeFixtureTreeWritable, runManagedNativeOpenCodeFixture } from "./helpers/managed-native-opencode-e2e-fixture.js";
@@ -156,6 +157,24 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
     const memories = memoryService(db);
     expect((await memories.get(first.companyId, memoryAId, first.aliceMemoryActor))?.record.id).toBe(memoryAId);
     expect((await memories.get(first.companyId, memoryAId, first.bobMemoryActor))?.record.id).toBe(memoryAId);
+    const [memoryA] = await db.select({ payloadSourceSnapshot: memoryRecords.payloadSourceSnapshot }).from(memoryRecords)
+      .where(and(eq(memoryRecords.companyId, first.companyId), eq(memoryRecords.id, memoryAId)));
+    const snapshot = nativePayloadSourceSnapshotSchema.parse(memoryA?.payloadSourceSnapshot);
+    await expect(assertNativeMemoryOutputSnapshotCurrent(db, { companyId: first.companyId, recordId: memoryAId,
+      snapshot, actor: first.bobMemoryActor.authorizationActor })).resolves.toBeUndefined();
+    const bobMembershipFilter = and(eq(companyMemberships.companyId, first.companyId),
+      eq(companyMemberships.principalType, "user"), eq(companyMemberships.principalId, first.bobUserId));
+    try {
+      await db.update(companyMemberships).set({ status: "suspended" }).where(bobMembershipFilter);
+      await expect(memories.get(first.companyId, memoryAId, first.bobMemoryActor)).rejects.toMatchObject({ status: 403 });
+      await expect(assertNativeMemoryOutputSnapshotCurrent(db, { companyId: first.companyId, recordId: memoryAId,
+        snapshot, actor: first.bobMemoryActor.authorizationActor })).rejects.toMatchObject({ status: 403 });
+    } finally {
+      await db.update(companyMemberships).set({ status: "active" }).where(bobMembershipFilter);
+    }
+    expect((await memories.get(first.companyId, memoryAId, first.bobMemoryActor))?.record.id).toBe(memoryAId);
+    await expect(assertNativeMemoryOutputSnapshotCurrent(db, { companyId: first.companyId, recordId: memoryAId,
+      snapshot, actor: first.bobMemoryActor.authorizationActor })).resolves.toBeUndefined();
     expect((await memories.get(first.companyId, memoryBId, first.aliceMemoryActor))?.record.id).toBe(memoryBId);
     expect(await memories.get(first.companyId, memoryBId, first.bobMemoryActor)).toBeNull();
   });
@@ -190,9 +209,9 @@ nativeOpenCodeTemporalDescribe("Native model outputs retain only the source clos
   it("erases exact Task and Memory copies while preserving independent earlier Task, Memory, and document", async () => {
     const { first, second, documentKey, taskAId, taskBId, memoryAId, memoryBId, privateRootId, memoryCId } = temporal;
     const providerDb = join(managedOpenCodeRuntimeDirectory({ companyId: first.companyId, runId: first.runId }),
-      "managed-session-1", "data", "opencode.db");
+      first.nativeFinalization.normalizedSessionId, "data", "opencode", "opencode.db");
     const laterProviderDb = join(managedOpenCodeRuntimeDirectory({ companyId: second.companyId, runId: second.runId }),
-      "managed-session-1", "data", "opencode.db");
+      second.nativeFinalization.normalizedSessionId, "data", "opencode", "opencode.db");
     expect((await readFile(providerDb)).byteLength).toBeGreaterThan(0);
     expect((await readFile(laterProviderDb)).byteLength).toBeGreaterThan(0);
     const memories = memoryService(db);

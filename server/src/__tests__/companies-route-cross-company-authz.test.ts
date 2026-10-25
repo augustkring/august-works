@@ -77,7 +77,18 @@ async function createApp(actor: Record<string, unknown>) {
     (req as any).actor = actor;
     next();
   });
-  app.use("/api/companies", companyRoutes({} as any));
+  const db = {
+    select: () => ({
+      from: () => ({
+        where: () => ({
+          limit: async () => actor.type === "agent"
+            ? [{ companyId: actor.companyId, role: "ceo" }]
+            : [],
+        }),
+      }),
+    }),
+  };
+  app.use("/api/companies", companyRoutes(db as any));
   app.use(errorHandler);
   return app;
 }
@@ -318,7 +329,7 @@ describe.sequential("company route cross-company authorization", () => {
   it("rejects unauthenticated company-default changes and invalid timezones before persistence", async () => {
     const unauthenticated = await createApp({ type: "none", source: "none" });
     await request(unauthenticated).patch(`/api/companies/${companyAId}`)
-      .send({ locale: "da", timezone: "Europe/Copenhagen" }).expect(403);
+      .send({ locale: "da", timezone: "Europe/Copenhagen" }).expect(401);
     expect(mockCompanyService.update).not.toHaveBeenCalled();
 
     const member = await createApp(boardActor({
@@ -328,6 +339,29 @@ describe.sequential("company route cross-company authorization", () => {
     }));
     await request(member).patch(`/api/companies/${companyAId}`)
       .send({ timezone: "Mars/Olympus" }).expect(400);
+    expect(mockCompanyService.update).not.toHaveBeenCalled();
+
+    vi.clearAllMocks();
+    resetMockDefaults();
+    const foreignTenantAdmin = await createApp(boardActor({
+      userId: "settings-admin-a",
+      companyIds: [companyAId],
+      memberships: [{ companyId: companyAId, membershipRole: "admin", status: "active" }],
+    }));
+    await request(foreignTenantAdmin).patch(`/api/companies/${companyBId}`)
+      .send({ locale: "da" }).expect(403);
+    expect(mockCompanyService.update).not.toHaveBeenCalled();
+
+    vi.clearAllMocks();
+    resetMockDefaults();
+    const operator = await createApp(boardActor({
+      userId: "settings-operator",
+      companyIds: [companyAId],
+      memberships: [{ companyId: companyAId, membershipRole: "operator", status: "active" }],
+    }));
+    const denied = await request(operator).patch(`/api/companies/${companyAId}`)
+      .send({ locale: "da" }).expect(403);
+    expect(denied.body.error).toContain("owner or administrator");
     expect(mockCompanyService.update).not.toHaveBeenCalled();
   });
 
@@ -395,7 +429,8 @@ describe.sequential("company route cross-company authorization", () => {
     const app = await createApp(companyACeoActor());
 
     await request(app).get(`/api/companies/${companyAId}`).expect(200);
-    await request(app).patch(`/api/companies/${companyAId}`).send({ description: "Branding" }).expect(200);
+    const branding = await request(app).patch(`/api/companies/${companyAId}`).send({ description: "Branding" });
+    expect(branding.status, JSON.stringify(branding.body)).toBe(200);
     await request(app).patch(`/api/companies/${companyAId}/branding`).send({ description: "Branding" }).expect(200);
     await request(app).post(`/api/companies/${companyAId}/export`).send(exportRequest).expect(200);
     await request(app).post(`/api/companies/${companyAId}/exports/preview`).send(exportRequest).expect(200);
