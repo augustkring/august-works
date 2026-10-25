@@ -1337,7 +1337,7 @@ export async function withReadMemoryTemporalSources<T>(db: Db | DbTransaction, a
   if (!binding?.valid) throw forbidden("Captured Memory Context source binding is unavailable");
   const contextInputs = snapshot.data.inputs.filter((input): input is Extract<typeof input, { kind: "context" }> => input.kind === "context");
   const { assertNativeMemoryOutputSnapshotCurrent, assertNativeTemporalContextInputsCurrent } = await import("./native-direct-input.js");
-  if (dispatch) await assertNativeMemoryOutputSnapshotCurrent(db as Db, { companyId, recordId, snapshot: snapshot.data });
+  if (dispatch) await assertNativeMemoryOutputSnapshotCurrent(db as Db, { companyId, recordId, snapshot: snapshot.data, actor });
   await assertNativeTemporalContextInputsCurrent(db as Db, companyId, contextInputs);
   const scope: MemoryTemporalReadScope = { db: db as object, companyId, recordId, actorKey: routineActorKey(actor),
     issueIds: new Set(row.sourceIssueIds), runIds: new Set(snapshot.data.policy.runIds),

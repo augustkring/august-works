@@ -1,6 +1,10 @@
 import { randomUUID } from "node:crypto";
+import { fork, type ChildProcess } from "node:child_process";
+import { once } from "node:events";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
 import { eq, sql } from "drizzle-orm";
-import { afterAll, afterEach, beforeAll, describe, expect, it } from "vitest";
+import { afterAll, afterEach, beforeAll, describe, expect, it, vi } from "vitest";
 import { PROVIDER_QUOTA_MONITOR_SERVICE_NAME } from "@paperclipai/shared";
 import {
   activityLog,
@@ -30,6 +34,8 @@ import { normalizeIssueExecutionPolicy, parseIssueExecutionState } from "../serv
 
 const embeddedPostgresSupport = await getEmbeddedPostgresTestSupport();
 const describeEmbeddedPostgres = embeddedPostgresSupport.supported ? describe : describe.skip;
+const scheduledWorkerPath = fileURLToPath(new URL("./fixtures/scheduled-work-recovery-worker.ts", import.meta.url));
+const tsxLoaderPath = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../../cli/node_modules/tsx/dist/loader.mjs");
 
 if (!embeddedPostgresSupport.supported) {
   console.warn(
@@ -97,6 +103,46 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
       await new Promise((resolve) => setTimeout(resolve, 50));
     }
     throw new Error("Timed out waiting for issue monitor heartbeat side effects to settle");
+  }
+
+  function startMonitorWorker(companyId: string, issueId: string) {
+    return fork(scheduledWorkerPath, [], {
+      cwd: path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../.."),
+      execArgv: ["--import", tsxLoaderPath],
+      env: {
+        PATH: process.env.PATH ?? "",
+        NODE_ENV: process.env.NODE_ENV ?? "test",
+        PAPERCLIP_TEST_DATABASE_URL: tempDb!.connectionString,
+        PAPERCLIP_TEST_COMPANY_ID: companyId,
+        PAPERCLIP_TEST_MONITOR_ISSUE_ID: issueId,
+        PAPERCLIP_TEST_SCHEDULED_KIND: "monitor",
+      },
+      stdio: ["ignore", "ignore", "ignore", "ipc"],
+    });
+  }
+
+  async function waitForMonitorWorkerMessage(child: ChildProcess, type: string, timeoutMs = 15_000) {
+    return new Promise<Record<string, unknown>>((resolve, reject) => {
+      const timer = setTimeout(() => reject(new Error(`Timed out waiting for scheduled monitor worker ${type}`)), timeoutMs);
+      const onMessage = (message: unknown) => {
+        if (!message || typeof message !== "object") return;
+        const value = message as Record<string, unknown>;
+        if (value.type === "worker_error") {
+          clearTimeout(timer);
+          reject(new Error(`Scheduled monitor worker error: ${String(value.message)}`));
+        } else if (value.type === type) {
+          clearTimeout(timer);
+          resolve(value);
+        }
+      };
+      const onExit = (code: number | null, signal: NodeJS.Signals | null) => {
+        clearTimeout(timer);
+        reject(new Error(`Scheduled monitor worker exited before ${type} (${code ?? signal})`));
+      };
+      child.on("message", onMessage);
+      child.once("exit", onExit);
+      child.once("error", error => { clearTimeout(timer); reject(error); });
+    });
   }
 
   async function cleanupRows() {
@@ -319,6 +365,55 @@ describeEmbeddedPostgres("issue monitor scheduler", () => {
       await independentDb.$client.end({ timeout: 0 }).catch(() => undefined);
     }
   });
+
+  it("recovers a direct-writer monitor deadline after OS restart and dispatches one effect", async () => {
+    const { companyId, issueId, agentId } = await seedFixture({ bindBodySnapshot: true });
+    const savedDeadline = new Date(Date.now() + 60_000);
+    await db.update(issues).set({ monitorNextCheckAt: savedDeadline }).where(eq(issues.id, issueId));
+    const first = startMonitorWorker(companyId, issueId);
+    const children = [first];
+    try {
+      const ready = await waitForMonitorWorkerMessage(first, "ready");
+      expect(ready.nextWakeAt).toBe(savedDeadline.getTime());
+
+      // This writer has no in-process database-work notification. An explicit
+      // reconciliation wake must discover the durable deadline change.
+      const dueDeadline = new Date(Date.now() + 1_500);
+      await db.execute(sql`update issues set monitor_next_check_at = ${dueDeadline.toISOString()}::timestamptz
+        where company_id = ${companyId}::uuid and id = ${issueId}::uuid`);
+      const reconciled = waitForMonitorWorkerMessage(first, "reconciled");
+      first.send({ type: "wake" });
+      expect((await reconciled).nextRunAt).toBe(dueDeadline.toISOString());
+
+      const firstExit = once(first, "exit");
+      first.kill("SIGKILL");
+      await firstExit;
+      await new Promise(resolve => setTimeout(resolve, Math.max(0, dueDeadline.getTime() - Date.now()) + 100));
+
+      // Fresh OS processes restore from the due persisted timestamp and race the
+      // original monitor claim; only the winning issue owner emits effects.
+      const second = startMonitorWorker(companyId, issueId);
+      const third = startMonitorWorker(companyId, issueId);
+      children.push(second, third);
+      await Promise.all([waitForMonitorWorkerMessage(second, "ready"), waitForMonitorWorkerMessage(third, "ready")]);
+      await vi.waitFor(async () => {
+        expect(await db.select().from(agentWakeupRequests).where(eq(agentWakeupRequests.agentId, agentId))).toHaveLength(1);
+        expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId))).toHaveLength(1);
+      }, { timeout: 15_000 });
+      const [issue] = await db.select().from(issues).where(eq(issues.id, issueId));
+      expect(issue?.monitorNextCheckAt).toBeNull();
+      expect(issue?.monitorAttemptCount).toBe(1);
+    } finally {
+      await Promise.all(children.slice(1).map(async child => {
+        if (child.exitCode !== null || child.signalCode !== null) return;
+        const exit = once(child, "exit");
+        child.send({ type: "stop" });
+        await Promise.race([exit, new Promise(resolve => setTimeout(resolve, 3_000))]);
+        if (child.exitCode === null && child.signalCode === null) child.kill("SIGKILL");
+      }));
+      if (first.exitCode === null && first.signalCode === null) first.kill("SIGKILL");
+    }
+  }, 90_000);
 
   it.each(["unknown", "exhausted"] as const)("does not replay a quota monitor with %s execution evidence", async (kind) => {
     const sourceRunId = randomUUID();

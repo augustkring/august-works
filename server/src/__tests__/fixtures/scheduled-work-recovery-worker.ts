@@ -10,10 +10,14 @@ async function main() {
   const connectionString = process.env.PAPERCLIP_TEST_DATABASE_URL;
   const companyId = process.env.PAPERCLIP_TEST_COMPANY_ID;
   const routineId = process.env.PAPERCLIP_TEST_ROUTINE_ID;
+  const monitorIssueId = process.env.PAPERCLIP_TEST_MONITOR_ISSUE_ID;
+  const scheduledKind = process.env.PAPERCLIP_TEST_SCHEDULED_KIND === "monitor" ? "monitor" : "routine";
   const actorJson = process.env.PAPERCLIP_TEST_ROUTINE_ACTOR;
-  if (!connectionString || !companyId || !routineId || !actorJson) throw new Error("Scheduled recovery worker configuration is incomplete");
+  if (!connectionString || !companyId || (scheduledKind === "routine" && (!routineId || !actorJson))
+    || (scheduledKind === "monitor" && !monitorIssueId)) throw new Error("Scheduled recovery worker configuration is incomplete");
   const db = createDb(connectionString, { maxConnections: 8 });
-  const actor = JSON.parse(actorJson) as AuthorizationActor;
+  const actor = actorJson ? JSON.parse(actorJson) as AuthorizationActor
+    : { type: "board", source: "local_implicit", userId: "local-board" } as const;
   const routines = routineService(db, { sourceActor: actor });
   const heartbeat = heartbeatService(db);
   const coordinator = createDeliveryWorkCoordinator({ owner: db, canRun: () => true,
@@ -21,8 +25,25 @@ async function main() {
   let recoveryAck = false;
   const workers = registerScheduledWork(coordinator, db, {
     retryMs: 60_000,
-    tickTimers: signal => heartbeat.tickIssueMonitors(new Date(), signal),
+    tickTimers: async signal => {
+      const result = await heartbeat.tickIssueMonitors(new Date(), signal);
+      if (scheduledKind === "monitor") {
+        if (recoveryAck) {
+          recoveryAck = false;
+          const [issue] = await db.execute<{ monitor_next_check_at: Date | string | null }>(sql`
+            select monitor_next_check_at from issues where company_id = ${companyId}::uuid
+              and id = ${monitorIssueId}::uuid`);
+          process.send?.({ type: "reconciled", nextRunAt: issue?.monitor_next_check_at == null
+            ? null : new Date(issue.monitor_next_check_at).toISOString() });
+        }
+        if (result.triggered > 0) process.send?.({ type: "monitor_triggered", issueId: monitorIssueId });
+      }
+    },
     tickRoutines: async signal => {
+      if (scheduledKind === "monitor") {
+        await routines.tickScheduledTriggers(new Date(), signal);
+        return;
+      }
       await routines.tickScheduledTriggers(new Date(), signal);
       const [run] = await db.select({ id: routineRuns.id, status: routineRuns.status,
         linkedIssueId: routineRuns.linkedIssueId }).from(routineRuns)
@@ -46,7 +67,7 @@ async function main() {
       const value = message as Record<string, unknown>;
       if (value.type === "wake") {
         recoveryAck = true;
-        workers.routines.wake();
+        (scheduledKind === "monitor" ? workers.timers : workers.routines).wake();
       } else if (value.type === "stop") {
         await coordinator.stop();
         await db.$client.end({ timeout: 1 }).catch(() => undefined);

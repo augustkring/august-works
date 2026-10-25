@@ -218,11 +218,20 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
     const capturedSnapshot=nativePayloadSourceSnapshotSchema.safeParse(row.payloadSourceSnapshot);
     let capturedContextIds: string[] | null = null;
     let capturedReadRunIds = row.sourceRunIds;
+    const rawSnapshot = row.payloadSourceSnapshot && typeof row.payloadSourceSnapshot === "object" && !Array.isArray(row.payloadSourceSnapshot)
+      ? row.payloadSourceSnapshot as Record<string, unknown> : null;
+    const rawInputs = Array.isArray(rawSnapshot?.inputs) ? rawSnapshot.inputs : [];
+    const claimsModelOutput = rawInputs.some(value => value && typeof value === "object" && !Array.isArray(value) &&
+      (value as Record<string, unknown>).kind === "worker_model_dispatch");
+    if (row.payloadSourceProtocolVersion === 1 && claimsModelOutput && (!capturedSnapshot.success || row.payloadSourceSnapshotInvalidated ||
+      capturedSnapshot.data.owner.kind !== "memory_record" || capturedSnapshot.data.owner.companyId !== companyId ||
+      capturedSnapshot.data.owner.id !== row.id)) return false;
     if (capturedSnapshot.success && row.payloadSourceProtocolVersion===1 && !row.payloadSourceSnapshotInvalidated &&
       capturedSnapshot.data.owner.kind==="memory_record" && capturedSnapshot.data.owner.companyId===companyId &&
       capturedSnapshot.data.owner.id===row.id) {
-      const dispatch = capturedSnapshot.data.inputs.find((value): value is Extract<typeof value, { kind: "worker_model_dispatch" }> =>
-        value.kind === "worker_model_dispatch");
+      const dispatches = capturedSnapshot.data.inputs.flatMap((value, index) =>
+        value.kind === "worker_model_dispatch" ? [{ value, index }] : []);
+      const dispatch = dispatches.at(-1)?.value;
       const expectedRunIds = dispatch
         ? [...new Set([...capturedSnapshot.data.policy.runIds, dispatch.runId])].sort()
         : row.sourceRunIds;
@@ -231,14 +240,20 @@ async function inspectMemorySourceAccess(db:Db,companyId:string,actor:Authorizat
         isDeepStrictEqual([...row.sourceRunIds].sort(),expectedRunIds) &&
         isDeepStrictEqual(capturedSnapshot.data.policy.memoryIds,[...row.sourceMemoryIds].sort()) &&
         isDeepStrictEqual(capturedSnapshot.data.policy.foundationRevisionIds,[...row.sourceFoundationRevisionIds].sort());
-      if (exactPolicy && dispatch && actor) {
+      if (dispatch) {
+        // A dispatch-qualified model output is readable only through the
+        // exact body-bound model/tool receipt. Falling back to legacy Run ACL
+        // would turn invalid provenance into broad read authority.
+        if (!exactPolicy || dispatches.length > 64 || dispatches.at(-1)!.index !== capturedSnapshot.data.inputs.length - 1 || !actor ||
+          dispatches.filter(value => isDeepStrictEqual(value.value, dispatch)).length !== 1)
+          return false;
         try {
           const { assertNativeMemoryOutputSnapshotCurrent } = await import("../native-direct-input.js");
-          await assertNativeMemoryOutputSnapshotCurrent(db, { companyId, recordId: row.id, snapshot: capturedSnapshot.data });
+          await assertNativeMemoryOutputSnapshotCurrent(db, { companyId, recordId: row.id, snapshot: capturedSnapshot.data, actor });
           capturedContextIds = capturedSnapshot.data.inputs.filter((value): value is Extract<typeof value, { kind: "context" }> =>
             value.kind === "context").map(value => value.manifestId).sort();
           capturedReadRunIds = capturedSnapshot.data.policy.runIds;
-        } catch { /* Unknown or stale output binding keeps the legacy conservative read path. */ }
+        } catch { return false; }
       } else if (exactPolicy && !dispatch && capturedSnapshot.data.policy.runIds.length > 0 &&
         capturedSnapshot.data.inputs.every(value => value.kind === "context")) {
         capturedContextIds = capturedSnapshot.data.inputs.map(value => value.kind === "context" ? value.manifestId : "").sort();

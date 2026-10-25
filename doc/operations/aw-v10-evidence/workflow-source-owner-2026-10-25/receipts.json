@@ -3071,6 +3071,70 @@
         "Duration  34.00s (transform 11.05s, setup 74ms, import 15.03s, tests 18.78s, environment 0ms)"
       ],
       "sourceCommit": "a969b7c6c5663de66d14d33aa3a34197214b90b2"
+    },
+    {
+      "name": "v10-worker-ui-cli-a969b7c6c",
+      "exitCode": 1,
+      "exitSidecar": "v10-worker-ui-cli-a969b7c6c.exit",
+      "rawSha256": "f8efcd72b9d8fc12ccae1182c217f9d1d232b5d568074ff3e25396b24eedbf4b",
+      "sanitizedSha256": "96810373fe4e7b5bcd4be202484ac078d614ae9d7b61c0c0a7315fcefa445ae3",
+      "archiveSha256": "e96a6a5f4476ccd10f711e22c7bde67dc6e0ba674c5b49544dcf608dd7e06de6",
+      "redactions": {
+        "ansi": 112317,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "\u23af\u23af\u23af\u23af\u23af\u23af Failed Tests 19 \u23af\u23af\u23af\u23af\u23af\u23af\u23af",
+        "Test Files  1 failed | 823 passed (824)",
+        "Tests  19 failed | 8153 passed (8172)",
+        "Duration  1256.07s (transform 36.69s, setup 5.10s, import 563.16s, tests 288.30s, environment 293.13s)"
+      ],
+      "sourceCommit": "1f81be97df99692ce7e2d1beff8718ad000fae96"
+    },
+    {
+      "name": "v10-worker-cli-a969b7c6c",
+      "exitCode": 1,
+      "exitSidecar": "v10-worker-cli-a969b7c6c.exit",
+      "rawSha256": "c26541b787cb5c8e81cce4ed4f6f0efbf5e1c945bc7ff620a0a5a6e537c015af",
+      "sanitizedSha256": "a71389f3e7e230f934fee7b76c86ac4c0008f9071ce2bc968ee7679fa8b4c5f1",
+      "archiveSha256": "cebd36268d86bc315b78b5744eb140a0ae93ccdccdb2edc7f322be80e6a982ad",
+      "redactions": {
+        "ansi": 14039,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 failed | 62 passed (63)",
+        "Tests  521 passed | 1 skipped (522)",
+        "Duration  155.29s (transform 4.06s, setup 0ms, import 28.83s, tests 119.56s, environment 5ms)"
+      ],
+      "sourceCommit": "1f81be97df99692ce7e2d1beff8718ad000fae96"
+    },
+    {
+      "name": "sidebar-focused-after-router-toast-fixtures-20261025",
+      "exitCode": 0,
+      "exitSidecar": "sidebar-focused-after-router-toast-fixtures-20261025.log.exit",
+      "rawSha256": "79652ac60d8394170ca0d43a1da08058601e967751e0143e867afd05c8dc5c57",
+      "sanitizedSha256": "79652ac60d8394170ca0d43a1da08058601e967751e0143e867afd05c8dc5c57",
+      "archiveSha256": "d9ed2b40162102c13f3491cb4c653c50b156eb95d2c291baa79c267678bdc306",
+      "redactions": {
+        "ansi": 0,
+        "bearer": 0,
+        "jwt": 0,
+        "credential_field": 0,
+        "url_credential": 0
+      },
+      "summary": [
+        "Test Files  1 passed (1)",
+        "Tests  28 passed (28)",
+        "Duration  4.85s (transform 1.89s, setup 23ms, import 2.90s, tests 1.18s, environment 597ms)"
+      ],
+      "sourceCommit": "1f81be97df99692ce7e2d1beff8718ad000fae96"
     }
   ],
   "updates": [
@@ -3555,6 +3619,15 @@
       "meaning": "Real PostgreSQL Routine scheduling recovery across SIGKILL and two fresh Node processes, parent SQL deadline change and explicit heartbeat wake; one canonical terminal occurrence/effect.",
       "logs": [
         "up13-os-process-restart-routine-20261025"
+      ]
+    },
+    {
+      "sourceCommit": "1f81be97df99692ce7e2d1beff8718ad000fae96",
+      "meaning": "Actual isolated UI and CLI failures at a969b7c6c, followed by focused Sidebar fixture pass; these are scoped checkpoint receipts, not final acceptance.",
+      "logs": [
+        "v10-worker-ui-cli-a969b7c6c",
+        "v10-worker-cli-a969b7c6c",
+        "sidebar-focused-after-router-toast-fixtures-20261025"
       ]
     }
   ],

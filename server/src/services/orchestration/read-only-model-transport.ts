@@ -48,11 +48,12 @@ const managedTextBlockSchema = z.object({ type: z.literal("text"), text: z.strin
   cache_control: managedCacheControlSchema.optional() }).strict();
 const managedContentBlockSchema = z.discriminatedUnion("type", [
   managedTextBlockSchema,
-  z.object({ type: z.literal("tool_use"), id: z.string().min(1).max(200), name: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/), input: boundedRecord(128) }).strict(),
+  z.object({ type: z.literal("tool_use"), id: z.string().min(1).max(200), name: z.string().regex(/^[a-zA-Z0-9_-]{1,128}$/),
+    input: boundedRecord(128), cache_control: managedCacheControlSchema.optional() }).strict(),
   z.object({
     type: z.literal("tool_result"), tool_use_id: z.string().min(1).max(200),
     content: z.union([z.string().max(262144), z.array(managedTextBlockSchema).max(128)]).optional(),
-    is_error: z.boolean().optional(),
+    is_error: z.boolean().optional(), cache_control: managedCacheControlSchema.optional(),
   }).strict(),
 ]);
 
@@ -108,17 +109,20 @@ export function validateAnthropicManagedMessagesRequest(
     request.stream !== true ||
     (request.model !== undefined && request.model !== input.model)
   ) throw new ReadOnlyModelTransportError("invalid_response");
-  const stripCacheHint = (block: z.infer<typeof managedContentBlockSchema>) => {
-    if (block.type !== "text" || block.cache_control === undefined) return block;
+  const stripTextCacheHint = (block: z.infer<typeof managedTextBlockSchema>) => {
+    if (block.cache_control === undefined) return block;
     const { cache_control: _cacheControl, ...textBlock } = block;
     return textBlock;
   };
+  const stripCacheHint = (block: z.infer<typeof managedContentBlockSchema>) => {
+    const { cache_control: _cacheControl, ...contentBlock } = block;
+    if (block.type === "tool_result" && Array.isArray(block.content)) {
+      return { ...contentBlock, content: block.content.map(stripTextCacheHint) };
+    }
+    return contentBlock;
+  };
   const normalized = { ...request,
-    ...(Array.isArray(request.system) ? { system: request.system.map((block) => {
-      if (block.cache_control === undefined) return block;
-      const { cache_control: _cacheControl, ...textBlock } = block;
-      return textBlock;
-    }) } : {}),
+    ...(Array.isArray(request.system) ? { system: request.system.map(stripTextCacheHint) } : {}),
     messages: request.messages.map((message) => ({ ...message,
       ...(Array.isArray(message.content) ? { content: message.content.map(stripCacheHint) } : {}) })) };
   const providerRequest = { ...normalized, model: input.model, stream: false, service_tier: "standard_only" };

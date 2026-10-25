@@ -47,12 +47,14 @@ export interface NativeIssueEffectPrefix {
  * Messages response, recorded tool-use block, dispatch association, and exact
  * run receipt source set. The caller never supplies this object. */
 export async function assertNativeModelOutputCaptureCurrent(db: Db | Transaction, companyId: string, issueId: string,
-  capture: NativeModelOutputCapture, expectedToolName: string): Promise<void> {
-  await assertNativeModelOutputCaptureCurrentInScope(db, companyId, issueId, capture, expectedToolName, nativeSourceReadScope(), 0);
+  capture: NativeModelOutputCapture, expectedToolName: string, currentReader?: AuthorizationActor): Promise<void> {
+  if (currentReader && currentReader.companyId !== companyId) throw forbidden("The Native output reader is unavailable");
+  await assertNativeModelOutputCaptureCurrentInScope(db, companyId, issueId, capture, expectedToolName, nativeSourceReadScope(), 0, currentReader);
 }
 
 async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction, companyId: string, issueId: string,
-  capture: NativeModelOutputCapture, expectedToolName: string, scope: NativeSourceReadScope, depth: number): Promise<void> {
+  capture: NativeModelOutputCapture, expectedToolName: string, scope: NativeSourceReadScope, depth: number,
+  currentReader?: AuthorizationActor): Promise<void> {
   if (depth > 8 || scope.work > 512) throw forbidden("The Native output source chain exceeds its bound");
   nativeSourceReadWork(scope);
   const use = capture.managedOpenCodeToolUse;
@@ -99,7 +101,10 @@ async function assertNativeModelOutputCaptureCurrentInScope(db: Db | Transaction
     wire.wireBodyHash !== capture.dispatch.wireBodyHash || wire.endpoint !== "https://api.anthropic.com/v1/messages" || wire.method !== "POST")
     throw forbidden("The Native output capture is not bound to its settled provider tool use");
 
-  const actor: AuthorizationActor = { type: "agent", source: "none", companyId,
+  // The producer identity authenticates the immutable receipt above. Current
+  // source ACL checks use the actual requesting reader so terminal producer
+  // runs do not make otherwise-readable retained Memory inputs inaccessible.
+  const actor: AuthorizationActor = currentReader ?? { type: "agent", source: "none", companyId,
     agentId: run.agentId, runId: run.id, onBehalfOfUserId: run.responsibleUserId };
   for (const issueSourceId of capture.sourceSet.policy.issueIds) {
     nativeSourceReadWork(scope);
@@ -504,7 +509,7 @@ export async function assertNativePayloadSourceSetCurrent(db: Db | Transaction, 
         managedOpenCodeToolUse: { callId: captureCallId, toolName: nativeProviderToolName(captureTool),
           argumentsHash: use[0]!.argumentsHash as string, responseContentHash: intent[0]!.responseContentHash as string } };
       await assertNativeModelOutputCaptureCurrentInScope(db, input.companyId, input.issueId, outputCapture,
-        capture.tool, scope, 0);
+        capture.tool, scope, 0, input.actor);
       checked = true;
     }
   }
@@ -807,11 +812,9 @@ function profileRunExecution(run: typeof heartbeatRuns.$inferSelect): Record<str
     ? profile.nativeExecutionInput as Record<string, unknown> : null;
 }
 
-/** There is not yet a provider-owned witness for the complete input delivered to
- * the model. The server's pre-startTurn dispatch envelope omits driver-owned
- * runtime state, files, system prompts and provider history. Keep output
- * snapshots fail-closed until the actual provider wire owner can attest those
- * inputs together with their source closure. */
+/** Resolve the exact source prefix associated with a server-owned settled
+ * provider tool use. The managed provider capture attests the model dispatch
+ * and response association; callers cannot manufacture this carrier. */
 export async function readNativeIssueEffectPrefix(tx: Transaction, actor: AuthorizationActor,
   claim: NativeToolEffectClaim | null, capture?: NativeModelOutputCapture, expectedToolName?: string): Promise<NativeIssueEffectPrefix> {
   if (!capture || actor.type !== "agent" || typeof actor.companyId !== "string" || typeof actor.agentId !== "string" || actor.runId !== capture.runId ||
@@ -828,13 +831,14 @@ export async function readNativeIssueEffectPrefix(tx: Transaction, actor: Author
  * exact server-owned row for the settled Native provider tool-use. */
 export async function assertNativeMemoryToolInvocationCurrent(db: Db | Transaction, input: {
   companyId: string; issueId: string; actor: AuthorizationActor; capture: NativeModelOutputCapture;
-  invocationId: string; status: "executing" | "succeeded"; resultHash?: string | null;
+  invocationId: string; status: "executing" | "succeeded"; resultHash?: string | null; currentReader?: AuthorizationActor;
 }): Promise<void> {
   const use = input.capture.managedOpenCodeToolUse;
   if (input.actor.type !== "agent" || input.actor.companyId !== input.companyId ||
     input.actor.agentId == null || input.actor.runId !== input.capture.runId ||
     use?.toolName !== "paperclip-self:remember") throw forbidden("Native Memory output binding is unavailable");
-  await assertNativeModelOutputCaptureCurrent(db, input.companyId, input.issueId, input.capture, "paperclip-self:remember");
+  await assertNativeModelOutputCaptureCurrent(db, input.companyId, input.issueId, input.capture,
+    "paperclip-self:remember", input.currentReader ?? input.actor);
   const [erased] = await db.select({ key: memoryDeletionMarkers.key }).from(memoryDeletionMarkers).where(and(
     eq(memoryDeletionMarkers.companyId, input.companyId), eq(memoryDeletionMarkers.kind, "source"),
     eq(memoryDeletionMarkers.key, `memory-run-source-erasure:v1:${input.capture.runId}`),
@@ -858,7 +862,7 @@ export async function assertNativeMemoryToolInvocationCurrent(db: Db | Transacti
  * effect binding. The producer dispatch/invocation are provenance, while only
  * retained_run entries in the consumed policy grant whole-Run reads. */
 export async function assertNativeMemoryOutputSnapshotCurrent(db: Db | Transaction, input: {
-  companyId: string; recordId: string; snapshot: NativePayloadSourceSnapshot;
+  companyId: string; recordId: string; snapshot: NativePayloadSourceSnapshot; actor: AuthorizationActor;
 }): Promise<void> {
   const [ownerBinding] = await db.execute<{ valid: boolean }>(sql`select
     public.aw_native_payload_body_hash('memory_record',to_jsonb(m))=${input.snapshot.owner.contentHash}
@@ -913,9 +917,9 @@ export async function assertNativeMemoryOutputSnapshotCurrent(db: Db | Transacti
   const capture: NativeModelOutputCapture = { runId: run.id, sourceSet: { policy: input.snapshot.policy, inputs: sourceInputs },
     dispatch, managedOpenCodeToolUse: { callId, toolName: "paperclip-self:remember",
       argumentsHash: use!.argumentsHash as string, responseContentHash: intentMatches[0]!.responseContentHash as string } };
-  await assertNativeModelOutputCaptureCurrent(db, input.companyId, run.nativeIssueId, capture, "paperclip-self:remember");
+  await assertNativeModelOutputCaptureCurrent(db, input.companyId, run.nativeIssueId, capture, "paperclip-self:remember", input.actor);
   await assertNativeMemoryToolInvocationCurrent(db, { companyId: input.companyId, issueId: run.nativeIssueId,
-    actor: inputActor, capture, invocationId, status: "succeeded", resultHash: invocation.resultHash });
+    actor: inputActor, capture, invocationId, status: "succeeded", resultHash: invocation.resultHash, currentReader: input.actor });
 }
 
 export interface NativeTemporalContextCapture {
@@ -1292,7 +1296,7 @@ async function assertNativeDocumentRevisionCurrentSourceAccessInScope(db: Db, in
       intent.sourcePolicyHash !== nativeSha256(receipt.data.bootstrap) || intent.endpoint !== "https://api.anthropic.com/v1/messages" || intent.method !== "POST"))
       throw forbidden("The Native document managed provider receipt is unavailable");
     if (managed && managedCapture) await assertNativeModelOutputCaptureCurrentInScope(db, input.companyId, input.issueId,
-      managedCapture, "write_document", scope, depth + 1);
+      managedCapture, "write_document", scope, depth + 1, input.actor);
   } else if (snapshot.inputs.length > 0) {
     throw forbidden("A Native document source is missing its original model dispatch");
   }

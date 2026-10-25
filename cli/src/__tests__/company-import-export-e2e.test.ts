@@ -272,6 +272,26 @@ async function waitForServer(
   );
 }
 
+async function ensureWorkspaceBuildDependencies(repoRoot: string) {
+  const buildScript = path.join(repoRoot, "scripts", "ensure-plugin-build-deps.mjs");
+  const startedAt = Date.now();
+  try {
+    await execFileAsync(process.execPath, [buildScript], {
+      cwd: repoRoot,
+      timeout: 120_000,
+      maxBuffer: 10 * 1024 * 1024,
+    });
+  } catch (error) {
+    const result = error as Error & { stdout?: string; stderr?: string };
+    throw new Error(
+      `Failed to prepare the workspace build dependencies before starting the company import/export CLI fixture.\n` +
+      `stdout:\n${result.stdout ?? ""}\nstderr:\n${result.stderr ?? ""}\n${result.message}`,
+      { cause: error },
+    );
+  }
+  return Date.now() - startedAt;
+}
+
 describeEmbeddedPostgres("paperclipai company import/export e2e", () => {
   let tempRoot = "";
   let configPath = "";
@@ -282,6 +302,7 @@ describeEmbeddedPostgres("paperclipai company import/export e2e", () => {
   let paperclipInstanceId = "";
   let serverProcess: ServerProcess | null = null;
   let tempDb: Awaited<ReturnType<typeof startEmbeddedPostgresTestDatabase>> | null = null;
+  let serverOutput = { stdout: [] as string[], stderr: [] as string[] };
 
   beforeAll(async () => {
     tempRoot = mkdtempSync(path.join(os.tmpdir(), "paperclip-company-cli-e2e-"));
@@ -300,7 +321,10 @@ describeEmbeddedPostgres("paperclipai company import/export e2e", () => {
     apiBase = `http://127.0.0.1:${port}`;
 
     const repoRoot = path.resolve(path.dirname(fileURLToPath(import.meta.url)), "../../..");
-    const output = { stdout: [] as string[], stderr: [] as string[] };
+    const buildPreparationMs = await ensureWorkspaceBuildDependencies(repoRoot);
+    console.info(`[company-import-export-e2e] Workspace build prerequisites ready in ${buildPreparationMs}ms`);
+    serverOutput = { stdout: [], stderr: [] };
+    const output = serverOutput;
     const child = spawn(
       "pnpm",
       ["paperclipai", "run", "--config", configPath],
@@ -322,8 +346,10 @@ describeEmbeddedPostgres("paperclipai company import/export e2e", () => {
       output.stderr.push(String(chunk));
     });
 
+    const serverStartedAt = Date.now();
     await waitForServer(apiBase, child, output);
-  }, 60_000);
+    console.info(`[company-import-export-e2e] Server health ready in ${Date.now() - serverStartedAt}ms after spawn`);
+  }, 180_000);
 
   afterAll(async () => {
     await stopServerProcess(serverProcess);
@@ -451,30 +477,39 @@ describeEmbeddedPostgres("paperclipai company import/export e2e", () => {
     expect(readFileSync(path.join(exportDir, "COMPANY.md"), "utf8")).toContain(sourceCompany.name);
     expect(readFileSync(path.join(exportDir, ".paperclip.yaml"), "utf8")).toContain('schema: "paperclip/v1"');
 
-    const importedNew = await runCliJson<{
+    let importedNew: {
       company: { id: string; name: string; action: string };
       agents: Array<{ id: string | null; action: string; name: string }>;
-    }>(
-      [
-        "company",
-        "import",
-        exportDir,
-        "--target",
-        "new",
-        "--new-company-name",
-        `Imported ${sourceCompany.name}`,
-        "--include",
-        "company,agents",
-        "--yes",
-      ],
-      {
-        apiBase,
-        configPath,
-        paperclipHome,
-        instanceId: paperclipInstanceId,
-        shellHome: cliShellHome,
-      },
-    );
+    };
+    try {
+      importedNew = await runCliJson(
+        [
+          "company",
+          "import",
+          exportDir,
+          "--target",
+          "new",
+          "--new-company-name",
+          `Imported ${sourceCompany.name}`,
+          "--include",
+          "company,agents",
+          "--yes",
+        ],
+        {
+          apiBase,
+          configPath,
+          paperclipHome,
+          instanceId: paperclipInstanceId,
+          shellHome: cliShellHome,
+        },
+      );
+    } catch (error) {
+      const safeDiagnostics = serverOutput.stdout
+        .join("")
+        .split(/\r?\n/)
+        .filter((line) => line.includes("company import domain operation requires reconciliation"));
+      throw new Error(`${error instanceof Error ? error.message : String(error)}\n${safeDiagnostics.join("\n")}`, { cause: error });
+    }
 
     expect(importedNew.company.action).toBe("created");
     expect(importedNew.agents).toHaveLength(1);

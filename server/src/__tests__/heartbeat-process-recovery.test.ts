@@ -9792,6 +9792,115 @@ describeEmbeddedPostgres("heartbeat orphaned process recovery", () => {
     });
   });
 
+  it("retains an accepted recipient message while paused and delivers one successor after resume", async () => {
+    const companyId = randomUUID();
+    const agentId = randomUUID();
+    const issueId = randomUUID();
+    const interactionId = randomUUID();
+    const resolvedAt = new Date("2026-03-19T00:05:00.000Z");
+    const issuePrefix = `T${companyId.replace(/-/g, "").slice(0, 6).toUpperCase()}`;
+
+    await db.insert(companies).values({
+      id: companyId,
+      name: "Paperclip",
+      issuePrefix,
+      defaultResponsibleUserId: "responsible-user",
+      requireBoardApprovalForNewAgents: false,
+    });
+    await db.insert(agents).values({
+      id: agentId,
+      companyId,
+      name: "CodexCoder",
+      role: "engineer",
+      status: "paused",
+      adapterType: "codex_local",
+      adapterConfig: mockedCodexAdapterConfig,
+      runtimeConfig: { heartbeat: { wakeOnDemand: true, maxConcurrentRuns: 1 } },
+      permissions: {},
+    });
+    await db.insert(issues).values({
+      id: issueId,
+      companyId,
+      title: "Accepted recipient message waits for resume",
+      status: "in_review",
+      priority: "medium",
+      assigneeAgentId: agentId,
+      responsibleUserId: "responsible-user",
+      issueNumber: 1,
+      identifier: `${issuePrefix}-1`,
+    });
+    await db.insert(issueThreadInteractions).values({
+      id: interactionId,
+      companyId,
+      issueId,
+      kind: "request_confirmation",
+      status: "accepted",
+      continuationPolicy: "wake_assignee_on_accept",
+      createdByAgentId: agentId,
+      resolvedByUserId: "responsible-user",
+      resolvedAt,
+      updatedAt: resolvedAt,
+      payload: { version: 1, prompt: "Approve the plan?" },
+      result: { outcome: "accepted" },
+    });
+
+    const heartbeat = heartbeatService(db);
+    const paused = await heartbeat.reconcileStrandedAssignedIssues();
+    expect(paused.continuationRequeued).toBe(0);
+    expect(paused.skipped).toBeGreaterThan(0);
+    expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId))).toHaveLength(0);
+    expect((await db.select().from(issueThreadInteractions).where(eq(issueThreadInteractions.id, interactionId)))[0])
+      .toMatchObject({ status: "accepted", result: { outcome: "accepted" } });
+
+    await db.update(agents).set({ status: "idle" }).where(eq(agents.id, agentId));
+    const resumed = await heartbeat.reconcileStrandedAssignedIssues();
+    expect(resumed.continuationRequeued).toBe(1);
+    expect(resumed.issueIds).toEqual([issueId]);
+
+    mockAdapterExecute.mockImplementationOnce(async (input) => {
+      await db.insert(issueComments).values({
+        companyId,
+        issueId,
+        authorAgentId: agentId,
+        createdByRunId: input.runId,
+        body: "Accepted message delivered once",
+      });
+      await db.update(issues).set({ status: "done" }).where(eq(issues.id, issueId));
+      return { exitCode: 0, summary: "Accepted message delivered once", provider: "test", model: "test-model" };
+    });
+    const [successor] = await db.select().from(heartbeatRuns)
+      .where(and(eq(heartbeatRuns.agentId, agentId), eq(heartbeatRuns.status, "queued")));
+    expect(successor).toMatchObject({
+      contextSnapshot: {
+        issueId,
+        interactionId,
+        interactionStatus: "accepted",
+        source: "issue.interaction_continuation_recovery",
+      },
+    });
+
+    await heartbeat.resumeQueuedRuns();
+    const settledSuccessor = await waitForRunToSettle(heartbeat, successor!.id);
+    console.log("up05-paused-accepted-diagnostic", {
+      runStatus: settledSuccessor?.status,
+      runErrorCode: settledSuccessor?.errorCode,
+      runError: settledSuccessor?.error,
+      executeCalls: mockAdapterExecute.mock.calls.length,
+      agentStatus: (await db.select({ status: agents.status }).from(agents).where(eq(agents.id, agentId)))[0]?.status,
+      issueStatus: (await db.select({ status: issues.status, executionRunId: issues.executionRunId }).from(issues).where(eq(issues.id, issueId)))[0],
+      wake: successor?.wakeupRequestId ? (await db.select({ status: agentWakeupRequests.status, error: agentWakeupRequests.error }).from(agentWakeupRequests).where(eq(agentWakeupRequests.id, successor.wakeupRequestId)))[0] : null,
+    });
+    expect(settledSuccessor).toMatchObject({ status: "succeeded" });
+    expect(mockAdapterExecute).toHaveBeenCalledTimes(1);
+    const repeated = await heartbeat.reconcileStrandedAssignedIssues();
+    expect(repeated.continuationRequeued).toBe(0);
+    expect(await db.select().from(heartbeatRuns).where(eq(heartbeatRuns.agentId, agentId))).toHaveLength(1);
+    expect(await db.select().from(issueComments).where(and(
+      eq(issueComments.issueId, issueId),
+      eq(issueComments.body, "Accepted message delivered once"),
+    ))).toHaveLength(1);
+  });
+
   it("recovers an answered question with its interaction-specific continuation context", async () => {
     const companyId = randomUUID();
     const agentId = randomUUID();

@@ -1197,7 +1197,7 @@ export function workerModelGateway(db: Db, options: Options) {
         maximumEnvelopeBytes: state.profile.maximumEnvelopeBytes,
       });
       const requestSourceBinding = await assertManagedOpenCodeRequestSources(db, bound,
-        qualifiedInput.request as unknown as Record<string, unknown>);
+        qualifiedInput.providerRequest as unknown as Record<string, unknown>);
       const inputHash = nativeSha256(qualifiedInput.providerRequest);
       const callId = `messages:${inputHash}`;
       const reservations = modelReservationService(db, {
@@ -1337,7 +1337,8 @@ export function workerModelGateway(db: Db, options: Options) {
               const intents = [...prior, { reservationId: receipt.reservationId, callId: receipt.callId,
                 requestHash: receipt.requestHash, wireBodyHash: receipt.bodySha256, endpoint: receipt.endpoint,
                 method: receipt.method, sourcePolicyHash, sourceDispatchDigest,
-                sourceSetHash: requestSourceBinding.sourceSetHash }];
+                sourceSetHash: requestSourceBinding.sourceSetHash,
+                idempotencyKey: reservation.idempotencyKey }];
               if (Buffer.byteLength(JSON.stringify(intents), "utf8") > 256 * 1024)
                 throw forbidden("The Native model wire receipt exceeds its bound");
               managedFailureStage = "wire_intent_write";
@@ -1367,7 +1368,7 @@ export function workerModelGateway(db: Db, options: Options) {
           if (!run || !profile || !Array.isArray(previous)) throw forbidden("The managed model response has no original wire intent");
           managedFailureStage = "response_history_revalidation";
           await assertManagedOpenCodeRequestSources(tx as unknown as Db, bound,
-            qualifiedInput.request as unknown as Record<string, unknown>);
+            qualifiedInput.providerRequest as unknown as Record<string, unknown>);
           managedFailureStage = "response_receipt_binding";
           const sourceReceipt = nativeRunInputSourceReceiptSchema.safeParse(profile.nativeInputSourceReceipt);
           if (!sourceReceipt.success || sourceReceipt.data.binding.responsibleUserId !== run.responsibleUserId ||

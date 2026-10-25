@@ -336,4 +336,33 @@ describe("managed Anthropic Messages broker transport", () => {
     key, new AbortController().signal, { fetch })).rejects.toThrow("invalid_response");
     expect(fetch).toHaveBeenCalledTimes(1);
   });
+  it("strips only block-level ephemeral hints from tool history and leaves tool arguments untouched", async () => {
+    const requestWithToolHints = { ...managedRequest,
+      messages: [
+        { role: "assistant", content: [{ type: "tool_use", id: "tool_fixture", name: "paperclip__task_read",
+          input: { cache_control: { type: "ephemeral" } }, cache_control: { type: "ephemeral" } }] },
+        { role: "user", content: [{ type: "tool_result", tool_use_id: "tool_fixture",
+          content: [{ type: "text", text: "done", cache_control: { type: "ephemeral" } }],
+          cache_control: { type: "ephemeral" } }] },
+      ],
+    };
+    const fetch = vi.fn(async () => json(toolResponse));
+    await anthropicManagedMessagesCall(requestWithToolHints, {
+      model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000,
+    }, key, new AbortController().signal, { fetch });
+    const [, init] = fetch.mock.calls[0]! as unknown as [string, RequestInit];
+    const body = JSON.parse(String(init.body)) as Record<string, unknown>;
+    expect(body.messages).toEqual([
+      { role: "assistant", content: [{ type: "tool_use", id: "tool_fixture", name: "paperclip__task_read",
+        input: { cache_control: { type: "ephemeral" } } }] },
+      { role: "user", content: [{ type: "tool_result", tool_use_id: "tool_fixture",
+        content: [{ type: "text", text: "done" }] }] },
+    ]);
+    await expect(anthropicManagedMessagesCall({ ...requestWithToolHints,
+      messages: [{ role: "assistant", content: [{ type: "tool_use", id: "tool_fixture", name: "paperclip__task_read",
+        input: {}, cache_control: { type: "ephemeral", ttl: "5m" } }] }],
+    }, { model: request.model, maxOutputTokens: 256, maximumEnvelopeBytes: 4096, maximumInputTokens: 1000 },
+    key, new AbortController().signal, { fetch })).rejects.toThrow("invalid_response");
+    expect(fetch).toHaveBeenCalledTimes(1);
+  });
 });

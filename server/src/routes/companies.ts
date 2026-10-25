@@ -39,7 +39,7 @@ import {
   type CompanyImportTransferPartUploadResult,
   type CompanyImportTransferStatus,
 } from "@paperclipai/shared/company-import-transfer";
-import { badRequest, conflict, forbidden, notFound, unprocessable, ImportPreflightError, ImportSourceChangedError } from "../errors.js";
+import { badRequest, conflict, forbidden, notFound, unprocessable, HttpError, ImportPreflightError, ImportSourceChangedError } from "../errors.js";
 import { PORTABLE_ZIP_UPLOAD_LIMIT_BYTES } from "../http/body-limits.js";
 import { logger } from "../middleware/logger.js";
 import { validate } from "../middleware/validate.js";
@@ -315,6 +315,21 @@ export function companyRoutes(db: Db, storage?: StorageService, options?: Compan
       const unknownOutcome = error instanceof ImportCancellationError
         ? error.effectsStarted
         : domainInvoked() && !(error instanceof ImportPreflightError) && !(error instanceof ImportSourceChangedError);
+      if (unknownOutcome) {
+        const failure = error as { code?: unknown };
+        const details = error instanceof HttpError && typeof error.details === "object" && error.details !== null
+          ? error.details as { code?: unknown }
+          : null;
+        logger.error({
+          operationId: job.id,
+          failureClass: error instanceof Error ? error.name : typeof error,
+          ...(error instanceof HttpError ? { httpStatus: error.status } : {}),
+          ...(typeof details?.code === "string" && /^[a-z0-9_]{1,80}$/.test(details.code)
+            ? { failureCode: details.code } : {}),
+          ...(typeof failure.code === "string" && /^[A-Z0-9_]{1,32}$/.test(failure.code)
+            ? { systemCode: failure.code } : {}),
+        }, "company import domain operation requires reconciliation");
+      }
       try { await importJobs.fail(job, unknownOutcome, error instanceof ImportCancellationError && !error.effectsStarted
         ? "import_cancelled" : error instanceof ImportSourceChangedError ? "import_preview_source_changed" : "import_rejected"); }
       catch { logger.warn({ operationId: job.id }, "import outcome could not be saved; durable active operation is retained"); }

@@ -5765,7 +5765,9 @@ export function companyPortabilityService(db: Db, storage?: StorageService) {
           : null,
       });
       checkpointTargetCompanyId = created.id;
-      await options?.onSourceReleaseTargetBound?.(created.id);
+      if (sourceReleaseReviewed && sourceReleaseNeeded) {
+        await options?.onSourceReleaseTargetBound?.(created.id);
+      }
       if (mode === "agent_safe" && options?.sourceCompanyId) {
         await cancellationCheckpoint();
         await access.copyActiveUserMemberships(options.sourceCompanyId, created.id);

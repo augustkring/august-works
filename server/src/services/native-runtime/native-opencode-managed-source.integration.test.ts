@@ -26,6 +26,7 @@ import {
   orchestrationWorkerAttempts,
   orchestrationWorkers,
   nativeRunFinalizations,
+  toolInvocations,
 } from "@paperclipai/db";
 import { nativePayloadSourceSnapshotSchema, nativeRunInputSourceReceiptSchema,
   type NativePayloadSourceInput } from "@paperclipai/shared";
@@ -719,6 +720,33 @@ describe("managed OpenCode source-closure binary integration", () => {
         });
       if (result.exitCode !== 0) {
         preserveDebugArtifacts = true;
+        const [failedRun] = await db.select({ runnerProfileJson: heartbeatRuns.runnerProfileJson })
+          .from(heartbeatRuns).where(eq(heartbeatRuns.id, run!.id));
+        const failedProfile = failedRun?.runnerProfileJson && typeof failedRun.runnerProfileJson === "object"
+          ? failedRun.runnerProfileJson as Record<string, unknown> : {};
+        const failedIntents = Array.isArray(failedProfile.nativeAwModelWireIntents) ? failedProfile.nativeAwModelWireIntents : [];
+        const writeUses = failedIntents.flatMap(value => {
+          const intent = value && typeof value === "object" ? value as Record<string, unknown> : {};
+          return Array.isArray(intent.responseToolUses) ? intent.responseToolUses.flatMap(useValue => {
+            const use = useValue && typeof useValue === "object" ? useValue as Record<string, unknown> : {};
+            return toolName(use.name) === "write_document" && use.id === "managed-e2e-write-1" ? [use] : [];
+          }) : [];
+        });
+        const associations = Array.isArray(failedProfile.nativeToolCallDispatchAssociations)
+          ? failedProfile.nativeToolCallDispatchAssociations as Array<Record<string, unknown>> : [];
+        const captures = Array.isArray(failedProfile.nativeToolResultSourceCaptures)
+          ? failedProfile.nativeToolResultSourceCaptures as Array<Record<string, unknown>> : [];
+        const invocations = await db.select({ toolName: toolInvocations.toolName, status: toolInvocations.status })
+          .from(toolInvocations).where(and(eq(toolInvocations.companyId, companyId), eq(toolInvocations.runId, run!.id)));
+        diagnostics.push(`managed write capture facts: ${JSON.stringify({ providerWriteUseCount: writeUses.length,
+          matchingAssociationCount: associations.filter(value => value.callId === "managed-e2e-write-1" &&
+            toolName(value.tool) === "write_document").length,
+          matchingCaptureCount: captures.filter(value => value.callId === "managed-e2e-write-1" &&
+            value.managedOpenCode === true && toolName(value.tool) === "write_document").length,
+          succeededCanonicalInvocationCount: invocations.filter(value => value.toolName === "write_document" &&
+            value.status === "succeeded").length,
+          managedToolResultErrorCodes: diagnostics.flatMap(line => [...line.matchAll(/managed_opencode_tool_result_[a-z_]+/g)]
+            .map(match => match[0]).filter((value, index, all) => all.indexOf(value) === index)) })}`);
         throw new Error(`managed_opencode_runner_exit_${result.exitCode}; providerResponses=${responseCount}; fakeFetchEntrances=${JSON.stringify(fakeFetchEntrances)}\n${diagnostics.join("\n")}\nBroker: ${brokerRequests.join(", ")}\nArtifacts: ${runRoot}`);
       }
       expect(responseCount).toBeGreaterThanOrEqual(2);
