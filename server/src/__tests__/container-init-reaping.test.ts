@@ -79,9 +79,9 @@ describe("server image init", () => {
     expect(lines.length, "Dockerfile must declare an ENTRYPOINT").toBeGreaterThan(0);
     for (const line of lines) {
       expect(
-        (JSON.parse(line.slice("ENTRYPOINT ".length)) as string[]).slice(0, 2),
+        (JSON.parse(line.slice("ENTRYPOINT ".length)) as string[]).slice(0, 3),
         "node must not inherit PID 1: wrap the entrypoint in tini so adopted orphans are reaped",
-      ).toEqual(["/usr/bin/tini", "--"]);
+      ).toEqual(["/usr/bin/tini", "-s", "--"]);
     }
   });
 
@@ -89,7 +89,7 @@ describe("server image init", () => {
     // tini must wrap docker-entrypoint.sh, not replace it -- the entrypoint is
     // what remaps the node UID/GID and repairs volume ownership before exec'ing.
     expect(entrypoints(dockerStage(dockerfile, "production"))).toEqual([
-      'ENTRYPOINT ["/usr/bin/tini", "--", "docker-entrypoint.sh"]',
+      'ENTRYPOINT ["/usr/bin/tini", "-s", "--", "docker-entrypoint.sh"]',
     ]);
     expect(dockerfile).toMatch(/^FROM production AS cloud$/m);
   });
@@ -97,7 +97,7 @@ describe("server image init", () => {
   it("runs the SaaS control plane as a fixed nonroot user behind tini", () => {
     const stage = dockerStage(dockerfile, "saas");
     expect(aptPackages(dockerfile, "saas")).toContain("tini");
-    expect(entrypoints(stage)).toEqual(['ENTRYPOINT ["/usr/bin/tini", "--"]']);
+    expect(entrypoints(stage)).toEqual(['ENTRYPOINT ["/usr/bin/tini", "-s", "--"]']);
     expect(stage).toMatch(/^USER node$/m);
     expect(stage).toMatch(/^CMD \["node",/m);
   });

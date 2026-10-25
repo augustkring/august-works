@@ -945,6 +945,11 @@ jobs:
       - name: Build
         run: pnpm build
 
+      - name: Boot the production runtime bundle
+        run: |
+          pnpm --filter @paperclipai/server build:runtime
+          bash scripts/server-boot-smoke.sh node server/dist-runtime/index.mjs
+
   verify_serialized_server:
     name: Verify serialized server suites (${{ matrix.shard_label }})
     needs: [gate]

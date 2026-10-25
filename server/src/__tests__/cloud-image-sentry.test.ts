@@ -180,7 +180,7 @@ describe("cloud image Sentry probe: the server's tsx loader", () => {
       expect(result.status, "the probe must fail loudly, not boot a broken image").not.toBe(0);
       expect(
         result.stderr,
-        "the error must name the exact path the production CMD boots through",
+        "the error must name the exact loader path workers require",
       ).toContain(path.join("node_modules", "tsx", "dist", "loader.mjs"));
       expect(result.stdout, "a failed probe must not print a version string").toBe("");
     } finally {

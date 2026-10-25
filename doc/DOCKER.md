@@ -32,6 +32,12 @@ docker build -t paperclip-local \
   --build-arg USER_UID=$(id -u) --build-arg USER_GID=$(id -g) .
 ```
 
+The production image starts `server/dist-runtime/index.mjs` with plain Node.
+`pnpm --filter @paperclipai/server build:runtime` bundles the compiled server
+and workspace packages while retaining third-party dependencies and source-relative
+assets. After building, `bash scripts/server-boot-smoke.sh node server/dist-runtime/index.mjs`
+checks startup and migrations against an isolated temporary instance.
+
 ## Standard images and downstream composition
 
 The Docker workflow publishes the standard `production` target for Linux AMD64
